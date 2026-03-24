@@ -24,13 +24,13 @@ This is a resource allocation and queuing estimation problem. The algorithm does
 | Field | Value |
 |---|---|
 | Event type | USA Fencing regional and national competitions |
-| Duration | 2 to 4 days |
+| Duration | 2 to 4 days (Summer Nationals support planned for a future version) |
 | Day window | 8:00 AM start — 10:00 PM hard finish |
 | Latest start | 4:00 PM — no competition may begin after this |
 | Start granularity | 30-minute increments: 08:00, 08:30 … 16:00 |
 | Valid start slots | 17 per day (08:00 through 16:00 inclusive) |
-| Max fencers/event | 400 |
-| Min fencers/event | 6 |
+| Max fencers/event | 500 |
+| Min fencers/event | 2 |
 
 ---
 
@@ -70,7 +70,7 @@ NOTE: initial_analysis() is stateless — re-runs on any config change.
 
 ```
 GENDER     = { MEN, WOMEN }
-CATEGORY   = { Y10, Y12, Y14, CADET, JUNIOR, VETERAN, DIV1, DIV1A, DIV2, DIV3 }
+CATEGORY   = { Y8, Y10, Y12, Y14, CADET, JUNIOR, VETERAN, DIV1, DIV1A, DIV2, DIV3 }
 WEAPON     = { FOIL, EPEE, SABRE }
 EVENT_TYPE = { INDIVIDUAL, TEAM }
 
@@ -78,26 +78,41 @@ REF_POLICY = { ONE, TWO, AUTO }
   // ONE  = always 1 ref per pool (hard)
   // TWO  = always 2 refs per pool (hard; fallback to ONE with WARN)
   // AUTO = prefer 2 if available, fall back to 1 (default)
+  //
+  // Pod captain rule: when running DEs, one ref per ~8 strips serves as
+  //   "pod captain" and is not available for pool reffing (they manage DE
+  //   table bouts). Generally 8 strips → 1 pod captain removed from
+  //   available pool referee count during DE phases.
 
-DE_MODE = { SINGLE_BLOCK, THREE_BLOCK }
-  // SINGLE_BLOCK = all strips held for entire DE (default)
-  // THREE_BLOCK  = strips released progressively per phase
+DE_MODE = { SINGLE_BLOCK, STAGED_DE_BLOCKS }
+  // SINGLE_BLOCK    = strips allocated as a single block and progressively
+  //                   released as the DE table advances (default)
+  //                   Optional: designate a finals strip (see de_finals_strip_id)
+  // STAGED_DE_BLOCKS = strips explicitly partitioned into three phases:
+  //                   DE_PRELIMS → DE_ROUND_OF_16 → DE_FINALS, each with
+  //                   its own strip count and release policy
 
 DE_STRIP_REQUIREMENT = { HARD, IF_AVAILABLE }
   // HARD         = wait for required strip count before starting block
   // IF_AVAILABLE = use available strips, accept duration penalty if short
 
-VIDEO_POLICY = { REQUIRED, BEST_EFFORT }
+VIDEO_POLICY = { REQUIRED, BEST_EFFORT, FINALS_ONLY }
   // REQUIRED     = video strips must be used for DE_ROUND_OF_16, DE_FINALS,
   //                and bronze bout (TEAM); delay block start if unavailable
   // BEST_EFFORT  = use video strips when free, fall back to any strip (default)
+  // FINALS_ONLY  = video strips required for DE_FINALS and bronze bout only;
+  //                DE_ROUND_OF_16 treated as BEST_EFFORT
   // Note: DE_PRELIMS and SINGLE_BLOCK mode NEVER use video strips
   // Note: pool phases NEVER use video strips
 
-VET_AGE_GROUP = { VET40, VET50, VET60, VET70, VET80 }
+VET_AGE_GROUP = { VET40, VET50, VET60, VET70, VET80, VET_COMBINED }
   // Only applicable when category == VETERAN
   // Determines default video replay thresholds (see DEFAULT_VIDEO_BY_CATEGORY)
   // Full veteran category expansion (separate CATEGORY values) deferred to v6
+  // Age crossover rule: there is NO crossover between veteran age groups
+  //   (e.g. VET40 and VET50 fencers do not cross over), EXCEPT VET_COMBINED
+  //   which allows fencers from all veteran age groups to compete together
+  //   and thus crosses over with all other VETERAN age groups.
 
 CUT_MODE = { DISABLED, PERCENTAGE, COUNT }
   // DISABLED    = 100% of fencers promoted to DE (default for most categories)
@@ -111,7 +126,8 @@ WEIGHT_SCALE: LIKELY=1.0  SOMETIMES=0.6  RARELY=0.3
 
 ```
 STRIP {
-  id
+  id               // String: letter(s) + digit, e.g. "A1", "B3", "ZZ4"
+                   // Letters: A–ZZ (single then double); digit: 1–4
   video_capable    // bool — organiser marks at setup; permanent venue equipment
 }
 
@@ -173,7 +189,7 @@ COMPETITION {
   id, gender, category, weapon, event_type
 
   // Organiser inputs
-  fencer_count            // 6–400
+  fencer_count            // 2–500
   ref_policy              // REF_POLICY (default: AUTO)
   earliest_start          // minutes from T=0
   latest_end              // minutes from T=0
@@ -197,7 +213,14 @@ COMPETITION {
                           // applies to DE_ROUND_OF_16, DE_FINALS, and bronze bout
                           // SINGLE_BLOCK and DE_PRELIMS always ignore this
 
-  // THREE_BLOCK only:
+  // Optional designated finals strip (all DE modes):
+  de_finals_strip_id          // String or NULL: specific strip ID reserved for gold bout
+                              //   e.g. "A1"; NULL = no designated strip (default)
+  de_finals_strip_requirement // DE_STRIP_REQUIREMENT: only relevant if de_finals_strip_id set
+                              //   HARD = delay finals until that strip is free
+                              //   IF_AVAILABLE = use it if free, otherwise any strip
+
+  // STAGED_DE_BLOCKS only:
   de_round_of_16_strips       // int (typically 4)
   de_round_of_16_requirement  // DE_STRIP_REQUIREMENT
   de_finals_strips            // int (typically 1)
@@ -326,7 +349,7 @@ SCHEDULE_RESULT {
   // SINGLE_BLOCK:
   de_start, de_end, de_strips_count
 
-  // THREE_BLOCK:
+  // STAGED_DE_BLOCKS:
   de_prelims_start, de_prelims_end, de_prelims_strips     // NULL if bracket<=16
   de_round_of_16_start, de_round_of_16_end, de_round_of_16_strips
   de_finals_start, de_finals_end, de_finals_strips
@@ -406,6 +429,7 @@ Rules: team events require matching individual; all competitions gender-specific
 
 ```
 CROSSOVER_GRAPH = {
+  Y8     : { Y10:    1.0 },
   Y10    : { Y12:    1.0 },
   Y12    : { Y14:    1.0 },
   Y14    : { CADET:  1.0, DIV2: 1.0, DIV3: 1.0, DIV1A: 0.6 },
@@ -423,8 +447,8 @@ CROSSOVER_GRAPH = {
 // Ops Manual Group 1 Mandatory: "For any one weapon, these pairs must not
 // be held on the same day." Same-weapon = INFINITY. Cross-weapon = 0.0.
 GROUP_1_MANDATORY = {
-  (DIV1, JUNIOR), (DIV1, CADET), (JUNIOR, CADET),   // Div1/Junior/Cadet
-  (Y10, Y12), (Y12, Y14), (Y14, CADET),             // adjacent age groups
+  (DIV1, JUNIOR), (DIV1, CADET), (JUNIOR, CADET),          // Div1/Junior/Cadet
+  (Y8, Y10), (Y10, Y12), (Y12, Y14), (Y14, CADET),         // adjacent age groups
 }
 
 FUNCTION build_penalty_matrix(graph):
@@ -475,6 +499,7 @@ Group 1 Mandatory pairs (marked ★) are INFINITY when same-weapon, per Ops Manu
 
 | Pair (same gender) | Same-weapon | Cross-weapon | Type | Notes |
 |---|---|---|---|---|
+| Y8 ↔ Y10 | ∞ ★ | 0.0 | Group 1 | Adjacent age groups |
 | Y10 ↔ Y12 | ∞ ★ | 0.0 | Group 1 | Adjacent age groups |
 | Y12 ↔ Y14 | ∞ ★ | 0.0 | Group 1 | Adjacent age groups |
 | Y14 ↔ CADET | ∞ ★ | 0.0 | Group 1 | Adjacent age groups |
@@ -496,6 +521,7 @@ Group 1 Mandatory pairs (marked ★) are INFINITY when same-weapon, per Ops Manu
 | VET ↔ DIV1 | 0.3 | 0.0 | Direct | Rare crossover |
 | JUNIOR ↔ DIV1A | 0.3 | 0.0 | Direct | Rare crossover |
 | DIV1 ↔ DIV1A | 0.3 | 0.0 | Direct | Rare crossover |
+| Y8 ↔ Y12 | 0.3 | 0.0 | Indirect | Via Y10 |
 | Y10 ↔ Y14 | 0.3 | 0.0 | Indirect | Via Y12 |
 | Y12 ↔ CADET | 0.3 | 0.0 | Indirect | Via Y14 |
 | Y12 ↔ DIV2 | 0.3 | 0.0 | Indirect | Via Y14 |
@@ -1381,7 +1407,7 @@ IF none: append BOTTLENECK(DE_FINALS_BRONZE_NO_STRIP, INFO)
 ELSE: MARK bronze_strip occupied until de_end
 ```
 
-### 10.5 THREE_BLOCK Execution
+### 10.5 STAGED_DE_BLOCKS Execution
 
 ```
 // Refs released at end of each block and reallocated for next.
@@ -1471,8 +1497,8 @@ IF competition.event_type == TEAM:
 
 | DE_VIDEO_POLICY | Gold Strip | Bronze Strip (TEAM only) | Bronze Missing Severity |
 |---|---|---|---|
-| REQUIRED (THREE_BLOCK) | Video, HARD | Video, IF_AVAILABLE | WARN |
-| BEST_EFFORT (THREE_BLOCK) | Video preferred, any fallback | Video preferred, any fallback | INFO |
+| REQUIRED (STAGED_DE_BLOCKS) | Video, HARD | Video, IF_AVAILABLE | WARN |
+| BEST_EFFORT (STAGED_DE_BLOCKS) | Video preferred, any fallback | Video preferred, any fallback | INFO |
 | SINGLE_BLOCK (any) | Any strip | Any non-gold strip | INFO |
 
 ---
@@ -1544,7 +1570,7 @@ FUNCTION constraint_score(competition, all_competitions, config):
   window_tightness = 840 / (competition.latest_end - competition.earliest_start)
   sabre_min        = MIN(config.referee_availability[d].sabre_refs FOR d)
   sabre_scarcity   = IF weapon==SABRE THEN sabre_comps/MAX(sabre_min,1) ELSE 0
-  video_scarcity   = IF de_mode==THREE_BLOCK AND de_video_policy==REQUIRED
+  video_scarcity   = IF de_mode==STAGED_DE_BLOCKS AND de_video_policy==REQUIRED
                      THEN video_comps_requiring/MAX(video_strips_total,1) ELSE 0
   ref_weight       = {TWO:2.0, AUTO:1.0, ONE:0.5}[ref_policy]
   RETURN crossover_count + window_tightness + sabre_scarcity
@@ -2049,8 +2075,8 @@ FUNCTION validate(competitions[], config):
     // Same-day completion feasibility
     CALL validate_same_day_completion(c, config)
 
-    // Video strip availability (THREE_BLOCK only)
-    IF c.de_mode==THREE_BLOCK AND c.de_video_policy==REQUIRED:
+    // Video strip availability (STAGED_DE_BLOCKS only)
+    IF c.de_mode==STAGED_DE_BLOCKS AND c.de_video_policy==REQUIRED:
       IF config.video_strips_total < c.de_round_of_16_strips: RAISE
       IF config.video_strips_total < c.de_finals_strips: RAISE
       IF c.event_type==TEAM AND config.video_strips_total < c.de_finals_strips+1:
@@ -2117,9 +2143,9 @@ FUNCTION validate_same_day_completion(competition, config):
 | cut_mode, cut_value | As configured |
 | de_mode, de_video_policy | DE configuration |
 | de_start, de_end, de_strips_count | SINGLE_BLOCK |
-| de_prelims_start/end/strips | THREE_BLOCK PRELIMS (NULL if bracket≤16) |
-| de_round_of_16_start/end/strips | THREE_BLOCK R16 |
-| de_finals_start/end/strips | THREE_BLOCK FINALS |
+| de_prelims_start/end/strips | STAGED_DE_BLOCKS PRELIMS (NULL if bracket≤16) |
+| de_round_of_16_start/end/strips | STAGED_DE_BLOCKS R16 |
+| de_finals_start/end/strips | STAGED_DE_BLOCKS FINALS |
 | de_bronze_start/end/strip_id | TEAM only; NULL or delayed time if unavailable |
 | de_total_end | MAX(finals_end, bronze_end) |
 | pool/de duration actual vs baseline | Diagnostics |
@@ -2244,7 +2270,6 @@ The following items were evaluated during the v5.2 review and explicitly exclude
 | Rest day between Junior↔Cadet (JO) and Junior↔Div1 | Ops Manual Group 2 | JO-specific rule. At NACs, Junior and Cadet are typically adjacent with no rest day. Organizers handle manually for JO events. |
 | Two-round pool format for 203+ fencers | USA Fencing 2024-25 format updates | Rare edge case (only Div1 Men's Epee/Foil currently). Requires significant pool duration model changes. |
 | Parafencing events | USA Fencing 2024-25 | Different equipment, rules, and scheduling needs. Out of scope for v5.2. |
-| Y8 (Youth 8 and under) events | USA Fencing 2024-25 | Not yet standard at national level. If adopted, requires catalogue expansion. |
 | Repechage format | Ops Manual Appendix | Modern NACs use simple DE. Documented as intentional omission. |
 | Coach coverage model | Community feedback | Coaches unable to cover multiple events is a real concern but modeling club/coach resources is out of scope. |
 | Schedule publication timing | Community feedback | Process issue, not an algorithm issue. Early estimation is a design goal but not enforced by the scheduler. |
