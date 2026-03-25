@@ -1,6 +1,6 @@
 # FENCING TOURNAMENT SCHEDULER
 ## Product Requirements Document & Algorithm Specification
-### Version 5.3 | USA Fencing Regional & National Events
+### Version 6.0 | USA Fencing Regional & National Events
 *For implementation in Cursor / Claude Code*
 
 ---
@@ -40,19 +40,36 @@ This is a resource allocation and queuing estimation problem. The algorithm does
 ```
 PHASE 1 — CONFIGURATION (interactive)
   1a.  Select competitions from fixed catalogue
-  1b.  Input fencer counts per competition
-  1c.  Input per-day referee availability (foil_epee_refs + sabre_refs per day)
-  1d.  Mark which strips are video-capable
-  1e.  Set tournament-level: allow_sabre_ref_fillin (bool, default FALSE)
-  1f.  Per competition: ref_policy, de_mode, de_video_policy,
+  1b.  Input fencer counts per competition (ESTIMATED or CAPPED)
+  1c.  Input strip count + mark video-capable strips
+  1d.  Input number of days
+  1e.  Per competition: ref_policy, de_mode, de_video_policy,
        de_round_of_16_strips/requirement, de_finals_strips/requirement,
        cut_mode, cut_value
+  1f.  Set pod captain override (optional — algorithm defaults apply,
+       see Section 8.1 pod captain rules)
   1g.  Configure TOURNAMENT_CONFIG duration tables, gaps, thresholds
   1h.  PRE-VALIDATION → hard errors surfaced immediately
+       (referee availability NOT required at this stage)
   1i.  INITIAL ANALYSIS → strip deficit warnings, concurrent pair suggestions,
-       video strip peak demand warnings, cut summary, proximity warnings
+       video strip peak demand warnings, cut summary, proximity warnings,
+       gender equity cap validation (Pass 7, capped events only)
   1j.  Organiser reviews suggestions, enables flighting, confirms pairs
   1k.  Confirm final configuration
+
+PHASE 1.5 — REFEREE CALCULATION (interactive)
+  1.5a.  Engine calculates optimal refs needed per day, split by weapon type
+         (foil/epee + sabre) — see calculate_optimal_refs() in Section 8.1
+         Definition of "optimal": minimum refs to complete all events within
+         the day window (8AM–10PM).
+  1.5b.  Present to user: "You need X foil/epee refs and Y sabre refs on day N"
+  1.5c.  Engine suggests sabre ref fill-in when sabre refs are short
+         (replaces the former allow_sabre_ref_fillin tournament-level toggle)
+  1.5d.  User enters ACTUAL referee availability per day
+         (adjusts from optimal; split by foil/epee vs sabre)
+  1.5e.  Engine re-runs analysis with actual refs, flags bottlenecks
+  1.5f.  User can ACCEPT imperfect schedule with warnings
+         (see accepted_warnings in SCHEDULE_RESULT, Section 2.8)
 
 PHASE 2 — SCHEDULING (automated)
   2a.  schedule_all() runs
@@ -61,6 +78,7 @@ PHASE 2 — SCHEDULING (automated)
   2d.  Summary output presented
 
 NOTE: initial_analysis() is stateless — re-runs on any config change.
+NOTE: Configurations and results can be saved and reloaded (see Section 20).
 ```
 
 ---
@@ -80,10 +98,10 @@ REF_POLICY = { ONE, TWO, AUTO }
   // TWO  = always 2 refs per pool (hard; fallback to ONE with WARN)
   // AUTO = prefer 2 if available, fall back to 1 (default)
   //
-  // Pod captain rule: when running DEs, one ref per ~8 strips serves as
-  //   "pod captain" and is not available for pool reffing (they manage DE
-  //   table bouts). Generally 8 strips → 1 pod captain removed from
-  //   available pool referee count during DE phases.
+  // Pod captain rule: see Section 8.1 for pod captain sizing algorithm.
+  //   Pod captains manage DE table bouts and are removed from available
+  //   referee count during DE phases. Pod size (4 or 8 strips) is
+  //   determined algorithmically with user override (POD_CAPTAIN_OVERRIDE).
 
 DE_MODE = { SINGLE_BLOCK, STAGED_DE_BLOCKS }
   // SINGLE_BLOCK    = strips allocated as a single block and progressively
@@ -114,6 +132,17 @@ VET_AGE_GROUP = { VET40, VET50, VET60, VET70, VET80, VET_COMBINED }
   //   (e.g. VET40 and VET50 fencers do not cross over), EXCEPT VET_COMBINED
   //   which allows fencers from all veteran age groups to compete together
   //   and thus crosses over with all other VETERAN age groups.
+
+FENCER_COUNT_TYPE = { ESTIMATED, CAPPED }
+  // ESTIMATED = organiser's best guess (default)
+  // CAPPED    = hard registration cap; triggers gender equity validation
+  //             (see initial_analysis() Pass 7)
+
+POD_CAPTAIN_OVERRIDE = { AUTO, DISABLED, FORCE_4 }
+  // AUTO     = algorithmic: 4-strip pods if ≤32 fencers in SINGLE_BLOCK DE
+  //            or during round-of-16 in STAGED_DE_BLOCKS; 8-strip pods otherwise
+  // DISABLED = no pod captains removed from referee pool during DEs
+  // FORCE_4  = always use 4-strip pods even when algorithm would use 8
 
 CUT_MODE = { DISABLED, PERCENTAGE, COUNT }
   // DISABLED    = 100% of fencers promoted to DE (default for most categories)
@@ -157,9 +186,16 @@ DAY_REFEREE_AVAILABILITY {
   day               // 0-indexed
   foil_epee_refs    // count qualified for FOIL + EPEE only
   sabre_refs        // count qualified for SABRE (and FOIL + EPEE by rule)
+  source            // OPTIMAL | ACTUAL
+                    //   OPTIMAL = output of calculate_optimal_refs() (Phase 1.5a)
+                    //   ACTUAL  = user-adjusted values (Phase 1.5d)
 }
 
-// One entry per tournament day — organiser inputs at setup.
+// Dual role (v6):
+//   Phase 1.5a: Engine produces OPTIMAL entries via calculate_optimal_refs().
+//   Phase 1.5d: User adjusts to ACTUAL availability. Engine re-runs analysis.
+//   Phase 2:    Scheduling uses ACTUAL values (or OPTIMAL if user accepts as-is).
+//
 // Rest day rule: no enforcement by algorithm.
 //   3-day tournaments: no rest day requirement.
 //   4+ day tournaments: organiser reduces counts on rest days.
@@ -168,13 +204,14 @@ DAY_REFEREE_AVAILABILITY {
 //   Sabre-qualified refs → can do SABRE, FOIL, EPEE
 //   Foil/epee refs       → can do FOIL and EPEE ONLY
 //   Default: foil/epee refs NEVER assigned to sabre strips
-//   Override: if allow_sabre_ref_fillin == TRUE, foil/epee refs may fill
-//             sabre strips when sabre refs insufficient — always WARN
+//   Fill-in: when actual sabre refs < optimal, engine suggests foil/epee
+//     fill-in during Phase 1.5c. If user accepts, fill-in is enabled
+//     for the affected days — always WARN.
 //   Bronze bout on sabre strip: MUST use sabre-qualified ref
 //     fill-in rule does NOT apply to bronze bout regardless of setting
 //
 // Non-sabre strip priority: foil_epee refs first, sabre refs as fallback
-// Sabre strip priority: sabre refs first, fill-in if enabled and insufficient
+// Sabre strip priority: sabre refs first, fill-in if accepted and insufficient
 
 FUNCTION refs_available_on_day(day, weapon, config):
   avail = config.referee_availability[day]
@@ -191,6 +228,8 @@ COMPETITION {
 
   // Organiser inputs
   fencer_count            // 2–500
+  fencer_count_type       // FENCER_COUNT_TYPE: ESTIMATED (default) or CAPPED
+                          // CAPPED triggers gender equity cap validation in initial_analysis()
   ref_policy              // REF_POLICY (default: AUTO)
   earliest_start          // minutes from T=0
   latest_end              // minutes from T=0
@@ -251,7 +290,20 @@ TOURNAMENT_CONFIG {
   strips_total                // derived: LENGTH(strips)
   video_strips_total          // derived: COUNT(s WHERE s.video_capable)
   referee_availability[]      // DAY_REFEREE_AVAILABILITY per day
+                              // NOT required during Phase 1 (config).
+                              // Populated by calculate_optimal_refs() in Phase 1.5a,
+                              // then adjusted by user in Phase 1.5d.
+                              // Must be set before Phase 2 (scheduling).
   allow_sabre_ref_fillin      // bool (default: FALSE)
+                              // v6: absorbed into Phase 1.5 flow. Engine suggests
+                              // fill-in when actual sabre refs < optimal. If user
+                              // accepts, this is set TRUE for affected days.
+
+  // Pod captain configuration (v6)
+  pod_captain_override        // POD_CAPTAIN_OVERRIDE enum (default: AUTO)
+                              //   AUTO = algorithmic (see Section 8.1 pod captain rules)
+                              //   DISABLED = no pod captains during DEs
+                              //   FORCE_4 = always 4-strip pods (even when algorithm says 8)
 
   // Time constants
   DAY_START_MINS         = 480    // 8:00 AM
@@ -364,6 +416,16 @@ SCHEDULE_RESULT {
   de_duration_baseline, de_duration_actual
   sabre_fillin_used        // bool
   constraint_relaxation_level  // 0=none, 1=proximity, 2=soft crossover, 3=hard crossover
+
+  // Accepted-with-warnings flags (set when user accepts imperfect schedule)
+  accepted_warnings[]      // list of accepted soft constraint violations, if any:
+    // { cause: BOTTLENECK cause code, severity: WARN/INFO, message: String }
+    // Possible causes:
+    //   GENDER_EQUITY_CAP_VIOLATION — USA Fencing guideline violation
+    //   REFEREE_INSUFFICIENT_ACCEPTED — fewer refs than optimal for this event
+    //   VIDEO_STRIP_CONTENTION — video not available for events that want it
+    //   STRIP_CONTENTION — insufficient strips for some time slots
+    //   Any other WARN-level bottleneck the user chose to accept
 }
 ```
 
@@ -394,6 +456,10 @@ PROXIMITY_PREFERENCE_UNMET        // INFO
 CONSTRAINT_RELAXED                // WARN — soft constraints relaxed to find day
 CONCURRENT_PAIR_NOT_LARGEST       // WARN — flighted is not largest on day
 CONCURRENT_PAIR_MANUAL_NEEDED     // WARN — tied pool counts, organiser must designate
+GENDER_EQUITY_CAP_VIOLATION       // WARN — capped event pair violates allowable cap difference
+REGIONAL_QUALIFIER_CAPPED         // ERROR — regional qualifier (RYC, RJCC, ROC, SYC, SJCC) cannot cap entries
+REFEREE_INSUFFICIENT_ACCEPTED     // WARN — user accepted schedule with fewer refs than optimal
+SCHEDULE_ACCEPTED_WITH_WARNINGS   // INFO — user accepted imperfect schedule
 ```
 
 ---
@@ -1196,7 +1262,87 @@ FUNCTION resolve_refs_per_pool(competition, available_refs, n_pools):
 
 ---
 
-## 8. SABRE REFEREE FILL-IN
+## 8. REFEREE ALLOCATION
+
+### 8.1 Optimal Referee Calculation & Pod Captain Rules (v6)
+
+```
+// Pod captain rules:
+//   During DE phases, one referee per pod serves as "pod captain" (manages
+//   DE table bouts) and is not available for pool reffing.
+//
+//   Pod size determination (when pod_captain_override == AUTO):
+//     - SINGLE_BLOCK DE with ≤32 fencers in bracket: 4-strip pods
+//     - STAGED_DE_BLOCKS round-of-16 phase: 4-strip pods
+//     - All other DE phases: 8-strip pods
+//   Pod captain count = CEIL(de_strips / pod_size)
+//
+//   Overrides (pod_captain_override):
+//     DISABLED → pod_captains = 0
+//     FORCE_4  → always use pod_size = 4
+
+FUNCTION pod_captains_needed(competition, de_phase, de_strips, config):
+  IF config.pod_captain_override == DISABLED: RETURN 0
+  IF config.pod_captain_override == FORCE_4:
+    RETURN CEIL(de_strips / 4)
+
+  // AUTO mode
+  IF competition.de_mode == SINGLE_BLOCK:
+    bracket = compute_bracket_size(competition)
+    pod_size = IF bracket <= 32 THEN 4 ELSE 8
+  ELSE:  // STAGED_DE_BLOCKS
+    IF de_phase == DE_ROUND_OF_16:
+      pod_size = 4
+    ELSE:
+      pod_size = 8
+  RETURN CEIL(de_strips / pod_size)
+
+// Calculate optimal referee counts per day.
+// "Optimal" = minimum refs to complete all events within the day window.
+// This function is called in Phase 1.5a, before the user provides actual
+// referee availability. It uses the preliminary day assignments from
+// initial_analysis() to estimate which events land on which day.
+//
+// For each day, sums the peak concurrent referee demand across all events
+// assigned to that day, accounting for pool refs, DE refs, and pod captains.
+
+FUNCTION calculate_optimal_refs(competitions[], config):
+  // Preliminary day assignment (greedy, using penalty scoring from Section 12)
+  day_assignments = preliminary_day_assign(competitions, config)
+
+  optimal = []
+  FOR each day d in 0..config.days_available-1:
+    day_comps = [c FOR c IN competitions WHERE day_assignments[c.id] == d]
+
+    // Estimate peak concurrent demand by simulating the schedule
+    // without referee constraints (infinite refs available)
+    simulated = simulate_day_schedule(day_comps, config, infinite_refs=TRUE)
+
+    // Peak demand per time slot
+    peak_foil_epee = 0; peak_sabre = 0
+    FOR each time_slot in simulated.slots:
+      fe_demand = 0; s_demand = 0
+      FOR each active_phase in time_slot.active_phases:
+        c = active_phase.competition
+        refs = active_phase.refs_needed
+        IF active_phase.is_de:
+          refs += pod_captains_needed(c, active_phase.de_phase,
+                                      active_phase.strips, config)
+        IF c.weapon == SABRE:
+          s_demand += refs
+        ELSE:
+          fe_demand += refs
+      peak_foil_epee = MAX(peak_foil_epee, fe_demand)
+      peak_sabre = MAX(peak_sabre, s_demand)
+
+    optimal.APPEND(DAY_REFEREE_AVAILABILITY {
+      day: d, foil_epee_refs: peak_foil_epee,
+      sabre_refs: peak_sabre, source: OPTIMAL })
+
+  RETURN optimal
+```
+
+### 8.2 Sabre Referee Fill-In
 
 ```
 FUNCTION allocate_refs_for_sabre(refs_needed, start, end, day, state, config):
@@ -1289,7 +1435,47 @@ FUNCTION initial_analysis(competitions[], config):
     suggestions.APPEND({ type:CUT_SUMMARY, id:c.id,
       entry:c.fencer_count, promoted, bracket:compute_bracket_size(c) })
 
+  // Pass 7 — gender equity cap validation (capped events only)
+  // Per USA Fencing Athlete Handbook 2024-25 (p14-15):
+  //   Required beginning 2025-26 season.
+  //   Regional qualifiers (RYC, RJCC, ROC, SYC, SJCC) cannot cap entries at all.
+  //
+  // Allowable cap difference table (compares pools in larger vs smaller event):
+  //   3 or fewer pools (≤21 fencers): caps must be equal
+  //   4-7 pools (22-49 fencers):      max 1 pool difference
+  //   8-11 pools (50-77 fencers):     max 2 pools difference
+  //   12+ pools (78+ fencers):        max 3 pools difference
+  //
+  // Assumes pools of 5-7, targeted 6-7.
+  capped = [c FOR c IN competitions WHERE c.fencer_count_type == CAPPED]
+  FOR each c in capped:
+    IF is_regional_qualifier(c):
+      append BOTTLENECK(REGIONAL_QUALIFIER_CAPPED, ERROR,
+        "{c.id}: regional qualifiers cannot cap entries")
+
+  // Compare men's vs women's capped events in same age/weapon category
+  FOR each (category, weapon) group:
+    mens   = [c FOR c IN capped WHERE c.gender==MEN AND c.category==category AND c.weapon==weapon]
+    womens = [c FOR c IN capped WHERE c.gender==WOMEN AND c.category==category AND c.weapon==weapon]
+    IF LENGTH(mens)==0 OR LENGTH(womens)==0: CONTINUE
+    m = mens[0]; w = womens[0]
+    m_pools = compute_pool_structure(m).n_pools
+    w_pools = compute_pool_structure(w).n_pools
+    larger_pools = MAX(m_pools, w_pools)
+    pool_diff = ABS(m_pools - w_pools)
+    allowed = gender_equity_allowable_diff(larger_pools)
+    IF pool_diff > allowed:
+      append BOTTLENECK(GENDER_EQUITY_CAP_VIOLATION, WARN,
+        "{m.id} vs {w.id}: cap difference is {pool_diff} pools, "
+        "max allowed is {allowed} for {larger_pools}-pool larger event")
+
   RETURN { warnings, suggestions }
+
+FUNCTION gender_equity_allowable_diff(larger_pools):
+  IF larger_pools <= 3: RETURN 0    // must be equal
+  IF larger_pools <= 7: RETURN 1
+  IF larger_pools <= 11: RETURN 2
+  RETURN 3                          // 12+ pools
 ```
 
 ### 9.2 Flight Structure
@@ -2089,21 +2275,25 @@ FUNCTION post_schedule_warnings(schedule, config):
 FUNCTION validate(competitions[], config):
 
   // ── Referee availability ──────────────────────────────────
-  IF LENGTH(config.referee_availability) != days_available: RAISE
-  FOR each day d:
-    IF avail.foil_epee_refs<0 OR avail.sabre_refs<0: RAISE
-    IF avail.sabre_refs==0: WARN "No sabre refs on day {d}"
-    IF avail.foil_epee_refs+avail.sabre_refs==0: WARN "No refs on day {d}"
+  // v6: referee_availability is optional during Phase 1 (pre-validation).
+  // It is populated by calculate_optimal_refs() in Phase 1.5a, then
+  // adjusted by the user. Full validation runs before Phase 2 scheduling.
+  IF config.referee_availability IS NOT EMPTY:
+    IF LENGTH(config.referee_availability) != days_available: RAISE
+    FOR each day d:
+      IF avail.foil_epee_refs<0 OR avail.sabre_refs<0: RAISE
+      IF avail.sabre_refs==0: WARN "No sabre refs on day {d}"
+      IF avail.foil_epee_refs+avail.sabre_refs==0: WARN "No refs on day {d}"
 
-  // ── Zero refs for weapon with selected competitions ───────
-  weapons_selected = DISTINCT(c.weapon FOR c IN competitions)
-  FOR each w in weapons_selected:
-    IF w == SABRE:
-      IF SUM(avail.sabre_refs FOR avail IN config.referee_availability) == 0:
-        RAISE "No sabre refs on any day but sabre competitions are selected"
-    ELSE:
-      IF SUM(avail.foil_epee_refs + avail.sabre_refs FOR avail IN config.referee_availability) == 0:
-        RAISE "No refs for {w} on any day but {w} competitions are selected"
+    // ── Zero refs for weapon with selected competitions ───────
+    weapons_selected = DISTINCT(c.weapon FOR c IN competitions)
+    FOR each w in weapons_selected:
+      IF w == SABRE:
+        IF SUM(avail.sabre_refs FOR avail IN config.referee_availability) == 0:
+          RAISE "No sabre refs on any day but sabre competitions are selected"
+      ELSE:
+        IF SUM(avail.foil_epee_refs + avail.sabre_refs FOR avail IN config.referee_availability) == 0:
+          RAISE "No refs for {w} on any day but {w} competitions are selected"
 
   // ── Per-competition ───────────────────────────────────────
   FOR each competition c:
@@ -2243,7 +2433,8 @@ FUNCTION validate_same_day_completion(competition, config):
 | DE_FINALS_MIN_MINS | 30 | No | Finals hard floor |
 | MAX_FENCERS | 400 | No | Per competition max |
 | MIN_FENCERS | 6 | No | Per competition min |
-| allow_sabre_ref_fillin | FALSE | Yes | Tournament-level override |
+| allow_sabre_ref_fillin | FALSE | Yes | v6: absorbed into Phase 1.5 flow; engine suggests when sabre refs short |
+| pod_captain_override | AUTO | Yes | AUTO/DISABLED/FORCE_4 — see Section 8.1 |
 
 ---
 
@@ -2312,8 +2503,11 @@ FUNCTION video_guaranteed_round(competition):
 | Item | Status | Notes |
 |---|---|---|
 | POOL_TABLE | ✅ RESOLVED | Full table for all fencer counts 6–400 hardcoded in Section 7.1. Single pool override (n≤10) documented. |
+| Save/load configurations | 🔲 v6 | Save tournament configuration + schedule results for later reloading and re-running. Serialization format, storage backend, and versioning TBD. |
+| Full veteran category expansion | 🔲 v6 | Expand VET40-80 as separate CATEGORY values with per-group crossover differences. Carried from v5.3 exclusions. |
+| `is_regional_qualifier()` definition | 🔲 v6 | Need mapping of competition IDs to tournament types (RYC, RJCC, ROC, SYC, SJCC) for gender equity cap validation. May require catalogue extension. |
 
-*All other items resolved. See version history for closed items.*
+*See version history for closed items.*
 
 ---
 
