@@ -1,6 +1,6 @@
 # FENCING TOURNAMENT SCHEDULER
 ## Product Requirements Document & Algorithm Specification
-### Version 5.2 | USA Fencing Regional & National Events
+### Version 5.3 | USA Fencing Regional & National Events
 *For implementation in Cursor / Claude Code*
 
 ---
@@ -18,6 +18,7 @@ This is a resource allocation and queuing estimation problem. The algorithm does
 - Not a seeding engine — DE bracket seeding is out of scope
 - Not a real-time system — all outputs are pre-tournament estimates
 - Not a free-form entry tool — competitions are selected from a fixed catalogue only
+- Not a repechage system — modern NACs use simple single-elimination DE; repechage brackets are not modelled
 
 ### Tournament Profile
 
@@ -557,6 +558,7 @@ All day-assignment decisions are scored. Lowest total penalty wins. INFINITY har
 | 0.2 | Same age/sex different weapons same day | Group 3 | Per pair, low weight (Ops Manual Group 3, "if possible") |
 | 0.0 | 2-day gap proximity | Proximity | Neutral |
 | -0.4 | Consecutive-day proximity bonus | Proximity | Same gender+weapon, adjacent pair, day gap=1 |
+| 1.5 | No rest day between JR↔CDT or JR↔D1 | Rest day | Same weapon, consecutive days, no gap day (Ops Manual Group 2) |
 
 Notes:
 - Pattern B (5.0) is below INFINITY so scheduler degrades gracefully when no better day exists
@@ -1659,6 +1661,9 @@ FUNCTION total_day_penalty(competition, day, estimated_start, state, level):
   // Smaller events on last day when ref shortage (Ops Manual Group 3)
   total += last_day_ref_shortage_penalty(competition, day, state, config)
 
+  // Rest day preference for JR↔CDT and JR↔D1 (Ops Manual Group 2)
+  total += rest_day_penalty(competition, day, state)
+
   // Proximity (skipped at level >= 1)
   IF level < 1:
     total += proximity_penalty(competition, day, state.schedule)
@@ -1731,7 +1736,34 @@ FUNCTION last_day_ref_shortage_penalty(competition, day, state, config):
   RETURN 0.0
 ```
 
-### 12.8 Early Start Penalty (8AM Patterns)
+### 12.8 Rest Day Preference (Ops Manual Group 2)
+
+```
+// "Rest day between Junior and Cadet, and between Junior and Div1"
+// (same weapon only). Penalizes consecutive-day scheduling of these
+// pairs when no rest day separates them. This counteracts the proximity
+// bonus that would otherwise reward consecutive scheduling.
+
+REST_DAY_PAIRS = { (JUNIOR, CADET), (JUNIOR, DIV1) }
+
+FUNCTION rest_day_penalty(competition, day, state):
+  total = 0.0
+  FOR each r in state.schedule:
+    c2 = competition_by_id(r.competition_id)
+    IF c2.gender != competition.gender: CONTINUE
+    IF c2.weapon != competition.weapon: CONTINUE
+    pair = (competition.category, c2.category)
+    IF pair NOT IN REST_DAY_PAIRS AND REVERSE(pair) NOT IN REST_DAY_PAIRS: CONTINUE
+
+    day_gap = ABS(day - r.assigned_day)
+    IF day_gap == 1:
+      // Consecutive days with no rest day — discourage
+      total += 1.5
+    // day_gap >= 2 is fine — at least one rest day exists
+  RETURN total
+```
+
+### 12.9 Early Start Penalty (8AM Patterns)
 
 ```
 // Computes 8AM Pattern A, B, and C penalties.
@@ -1791,7 +1823,7 @@ FUNCTION early_start_penalty(competition, day, estimated_start, state):
   RETURN total
 ```
 
-### 12.9 Find Earlier Slot Same Day
+### 12.10 Find Earlier Slot Same Day
 
 ```
 // When a competition's projected end time breaches the day deadline,
@@ -1832,7 +1864,7 @@ FUNCTION find_earlier_slot_same_day(competition, pool_structure, day, state):
   RETURN NULL   // no earlier slot fits
 ```
 
-### 12.10 Allocate Pool Resources for Concurrent Pair
+### 12.11 Allocate Pool Resources for Concurrent Pair
 
 ```
 // Allocates strips and refs for the priority competition in a concurrent pair.
@@ -1951,11 +1983,27 @@ FUNCTION schedule_competition(competition, state, config):
     allocate_refs(day, weapon, ref_res.refs_needed, T, pool_end, state)
 
   // ── DEADLINE CHECK — attempt reschedule if breached ─────
+  // Retry guard: at most MAX_RESCHEDULE_ATTEMPTS (default 3) re-runs.
+  // Each attempt tries an earlier slot; the slot search itself is bounded
+  // by 17 slots/day (DAY_START to LATEST_START_OFFSET in SLOT_MINS steps).
+  // Convergence: each retry uses a strictly earlier start, so the sequence
+  // is monotonically decreasing and terminates.
+  reschedule_attempts = 0
+  MAX_RESCHEDULE_ATTEMPTS = 3
+
+  LABEL retry_from_pool_allocation:
   IF pool_end > DAY_END(day):
+    reschedule_attempts += 1
+    IF reschedule_attempts > MAX_RESCHEDULE_ATTEMPTS:
+      append BOTTLENECK(DEADLINE_BREACH_UNRESOLVABLE, ERROR,
+        "Exhausted {MAX_RESCHEDULE_ATTEMPTS} reschedule attempts")
+      RAISE SchedulingError
     earlier_slot = find_earlier_slot_same_day(competition, pool_structure, day, state)
     IF earlier_slot exists:
-      // Reschedule to earlier_slot and re-run pool allocation
-      append BOTTLENECK(DEADLINE_BREACH, WARN, "Rescheduled to earlier slot")
+      append BOTTLENECK(DEADLINE_BREACH, WARN,
+        "Rescheduled to earlier slot (attempt {reschedule_attempts})")
+      not_before = earlier_slot
+      GOTO retry_from_pool_allocation  // re-run pool + DE allocation
     ELSE:
       append BOTTLENECK(DEADLINE_BREACH_UNRESOLVABLE, ERROR)
       RAISE SchedulingError
@@ -1974,10 +2022,17 @@ FUNCTION schedule_competition(competition, state, config):
     RAISE SchedulingError(SAME_DAY_VIOLATION)
 
   IF de_total_end > competition.latest_end OR de_total_end > DAY_END(day):
+    reschedule_attempts += 1
+    IF reschedule_attempts > MAX_RESCHEDULE_ATTEMPTS:
+      append BOTTLENECK(DEADLINE_BREACH_UNRESOLVABLE, ERROR,
+        "Exhausted {MAX_RESCHEDULE_ATTEMPTS} reschedule attempts")
+      RAISE SchedulingError
     earlier_slot = find_earlier_slot_same_day(competition, pool_structure, day, state)
     IF earlier_slot exists:
-      append BOTTLENECK(DEADLINE_BREACH, WARN, "Rescheduled to earlier slot")
-      // Re-run from pool allocation with new start time
+      append BOTTLENECK(DEADLINE_BREACH, WARN,
+        "Rescheduled to earlier slot (attempt {reschedule_attempts})")
+      not_before = earlier_slot
+      GOTO retry_from_pool_allocation  // re-run pool + DE allocation
     ELSE:
       append BOTTLENECK(DEADLINE_BREACH_UNRESOLVABLE, ERROR)
       RAISE SchedulingError
@@ -2183,6 +2238,7 @@ FUNCTION validate_same_day_completion(competition, config):
 | INDIV_TEAM_MIN_GAP_MINS | 120 | Yes | Individual 2h before team |
 | EARLY_START_THRESHOLD | 10 | Yes | 8AM window in minutes |
 | THRESHOLD_MINS | 10 | Yes | Min delay worth flagging |
+| MAX_RESCHEDULE_ATTEMPTS | 3 | Yes | Deadline reschedule retry limit per competition (Section 13) |
 | DE_REFS | 1 | No | DE always 1 ref per strip |
 | DE_FINALS_MIN_MINS | 30 | No | Finals hard floor |
 | MAX_FENCERS | 400 | No | Per competition max |
@@ -2328,8 +2384,8 @@ Per S2, S3, S4: the April 2024 NAC saw Division 1 Men's Epee and Junior Team Men
 
 **A.2.9 — Internal Consistency Issues (P1)**
 Additional issues found via automated consistency analysis (see `prd-review-research.md` Section 3 for full details):
-- ~~3 functions called but never defined~~ — RESOLVED: defined in Sections 12.8, 12.9, 12.10
-- ~~12 bottleneck cause codes never emitted~~ — RESOLVED: emit points added in Sections 11.1, 12.4, 12.8, 12.9, 13, 9.1
+- ~~3 functions called but never defined~~ — RESOLVED: defined in Sections 12.9, 12.10, 12.11
+- ~~12 bottleneck cause codes never emitted~~ — RESOLVED: emit points added in Sections 11.1, 12.4, 12.9, 12.10, 13, 9.1
 - ~~`use_single_pool_override` missing from struct~~ — RESOLVED: added to Section 2.4
 - ~~Flight B strip over-allocation~~ — RESOLVED: Flight B now uses FLOOR(n_pools/2)
 - ~~No bracket_size=2 entry~~ — RESOLVED: added `2:15` to all weapons in de_duration_table
@@ -2346,8 +2402,8 @@ Additional issues found via automated consistency analysis (see `prd-review-rese
 | Team/individual not same day (per weapon) | 1-Mandatory | 5 Penalty Weights | ✅ Ordering penalty + weapon-scoped crossover |
 | First/last day shorter | 2-Desirable | 14 post_schedule_warnings | ✅ WARN if first/last day longer than middle days (4+ day events) |
 | Balance ROW weapon and epee per day | 2-Desirable | 12.5 weapon_balance_penalty | ✅ 0.5 penalty for all-ROW or all-epee day |
-| Rest day Junior↔Cadet (JO) | 2-Desirable | 6 Proximity | ⚠️ Proximity bonus only, no rest-day rule |
-| Rest day Junior↔Div1 | 2-Desirable | 6 Proximity | ⚠️ Proximity bonus only |
+| Rest day Junior↔Cadet (JO) | 2-Desirable | 12.8 rest_day_penalty | ✅ 1.5 penalty for consecutive days without rest day |
+| Rest day Junior↔Div1 | 2-Desirable | 12.8 rest_day_penalty | ✅ 1.5 penalty for consecutive days without rest day |
 | Adjacent age groups not widely separated | 2-Desirable | 6 Proximity | ✅ Proximity penalty for day_gap≥3 |
 | Team after individual | 2-Desirable | 5 Penalty Weights | ✅ 8.0 penalty for wrong order |
 | Y14/Cadet/Junior+team not same day | 2-Desirable | 4.1 Crossover Graph | ✅ Covered by weapon-scoped crossover |
@@ -2359,4 +2415,4 @@ Additional issues found via automated consistency analysis (see `prd-review-rese
 
 ---
 
-*END OF SPECIFICATION — v5.2*
+*END OF SPECIFICATION — v5.3*
