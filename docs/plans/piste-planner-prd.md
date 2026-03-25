@@ -377,9 +377,9 @@ SEQUENCING_CONSTRAINT
 SAME_DAY_DEMOGRAPHIC_CONFLICT
 UNAVOIDABLE_CROSSOVER_CONFLICT
 SAME_TIME_CROSSOVER
-8AM_PATTERN_A                     // same-day 8AM high crossover
-8AM_PATTERN_B                     // consecutive-day 8AM — critical
-8AM_PATTERN_C                     // individual+team consecutive 8AM
+SCHEDULED_8AM_SAME_DAY_CROSSOVER   // same-day 8AM high crossover
+SCHEDULED_8AM_CONSECUTIVE_DAYS     // consecutive-day 8AM — critical
+SCHEDULED_8AM_INDV_TEAM            // individual+team consecutive 8AM
 INDIV_TEAM_ORDERING
 DEADLINE_BREACH                   // rescheduled to earlier slot same day
 DEADLINE_BREACH_UNRESOLVABLE      // cannot fit in day — hard fail
@@ -1786,8 +1786,8 @@ FUNCTION early_start_penalty(competition, day, estimated_start, state):
     xpen = crossover_penalty(competition, c2)
 
     IF xpen >= 1.0:
-      total += 2.0   // 8AM_PATTERN_A
-      append BOTTLENECK(8AM_PATTERN_A, WARN,
+      total += 2.0   // SCHEDULED_8AM_SAME_DAY_CROSSOVER
+      append BOTTLENECK(SCHEDULED_8AM_SAME_DAY_CROSSOVER, WARN,
         "{competition.id} and {c2.id} both 8AM on day {day}, crossover {xpen}")
 
   // Pattern B: consecutive-day 8AM high crossover
@@ -1801,8 +1801,8 @@ FUNCTION early_start_penalty(competition, day, estimated_start, state):
     xpen = crossover_penalty(competition, c2)
 
     IF xpen >= 1.0:
-      total += 5.0   // 8AM_PATTERN_B — critical
-      append BOTTLENECK(8AM_PATTERN_B, WARN,
+      total += 5.0   // SCHEDULED_8AM_CONSECUTIVE_DAYS — critical
+      append BOTTLENECK(SCHEDULED_8AM_CONSECUTIVE_DAYS, WARN,
         "{competition.id} (day {day}) and {c2.id} (day {r.assigned_day}) "
         "both 8AM on consecutive days, crossover {xpen}")
 
@@ -1816,8 +1816,8 @@ FUNCTION early_start_penalty(competition, day, estimated_start, state):
 
     IF competition.category == c2.category AND competition.gender == c2.gender:
       IF competition.event_type != c2.event_type:   // one IND, one TEAM
-        total += 2.0   // 8AM_PATTERN_C
-        append BOTTLENECK(8AM_PATTERN_C, WARN,
+        total += 2.0   // SCHEDULED_8AM_INDV_TEAM
+        append BOTTLENECK(SCHEDULED_8AM_INDV_TEAM, WARN,
           "{competition.id} and {c2.id} ind+team both 8AM consecutive days")
 
   RETURN total
