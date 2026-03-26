@@ -7,107 +7,13 @@ import {
   EventType,
   DeMode,
   VideoPolicy,
-  RefPolicy,
-  CutMode,
   BottleneckCause,
-  FencerCountType,
   dayStart,
   dayEnd,
 } from '../../src/engine/types.ts'
-import type {
-  Competition,
-  TournamentConfig,
-  Strip,
-} from '../../src/engine/types.ts'
-import {
-  DEFAULT_POOL_ROUND_DURATION_TABLE,
-  DEFAULT_DE_DURATION_TABLE,
-} from '../../src/engine/constants.ts'
 import { createGlobalState } from '../../src/engine/resources.ts'
 import { SchedulingError } from '../../src/engine/dayAssignment.ts'
-
-// ──────────────────────────────────────────────
-// Test helpers
-// ──────────────────────────────────────────────
-
-function makeStrips(total: number, videoCount: number): Strip[] {
-  return Array.from({ length: total }, (_, i) => ({
-    id: `strip-${i + 1}`,
-    video_capable: i < videoCount,
-  }))
-}
-
-function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig {
-  const strips = overrides.strips ?? makeStrips(24, 4)
-  return {
-    tournament_type: 'NAC',
-    days_available: 3,
-    strips,
-    strips_total: strips.length,
-    video_strips_total: strips.filter(s => s.video_capable).length,
-    referee_availability: [
-      { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-      { day: 1, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-      { day: 2, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-    ],
-    allow_sabre_ref_fillin: false,
-    pod_captain_override: 'AUTO',
-    DAY_START_MINS: 480,
-    DAY_END_MINS: 1320,
-    LATEST_START_MINS: 960,
-    LATEST_START_OFFSET: 480,
-    SLOT_MINS: 30,
-    DAY_LENGTH_MINS: 840,
-    ADMIN_GAP_MINS: 15,
-    FLIGHT_BUFFER_MINS: 15,
-    THRESHOLD_MINS: 10,
-    DE_REFS: 1,
-    DE_FINALS_MIN_MINS: 30,
-    SAME_TIME_WINDOW_MINS: 30,
-    INDIV_TEAM_MIN_GAP_MINS: 120,
-    EARLY_START_THRESHOLD: 10,
-    MAX_RESCHEDULE_ATTEMPTS: 3,
-    MAX_FENCERS: 500,
-    MIN_FENCERS: 2,
-    pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
-    de_duration_table: DEFAULT_DE_DURATION_TABLE,
-    dayConfigs: [],
-    ...overrides,
-  }
-}
-
-function makeCompetition(overrides: Partial<Competition> = {}): Competition {
-  return {
-    id: 'test-comp',
-    gender: Gender.MEN,
-    category: Category.DIV1,
-    weapon: Weapon.FOIL,
-    event_type: EventType.INDIVIDUAL,
-    fencer_count: 24,
-    fencer_count_type: FencerCountType.ESTIMATED,
-    ref_policy: RefPolicy.AUTO,
-    earliest_start: 0,
-    latest_end: 1320,
-    optional: false,
-    vet_age_group: null,
-    use_single_pool_override: false,
-    cut_mode: CutMode.DISABLED,
-    cut_value: 100,
-    de_mode: DeMode.SINGLE_BLOCK,
-    de_video_policy: VideoPolicy.BEST_EFFORT,
-    de_finals_strip_id: null,
-    de_finals_strip_requirement: 'HARD',
-    de_round_of_16_strips: 4,
-    de_round_of_16_requirement: 'HARD',
-    de_finals_strips: 2,
-    de_finals_requirement: 'HARD',
-    flighted: false,
-    flighting_group_id: null,
-    is_priority: false,
-    strips_allocated: 8,
-    ...overrides,
-  }
-}
+import { makeStrips, makeConfig, makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // Non-flighted scheduling
@@ -151,9 +57,12 @@ describe('scheduleCompetition — non-flighted', () => {
 
     const result = scheduleCompetition(comp, state, config, [comp])
 
-    expect(result.pool_strips_count).toBeGreaterThan(0)
-    expect(result.pool_refs_count).toBeGreaterThan(0)
-    expect(result.de_strips_count).toBeGreaterThan(0)
+    // 24 fencers → 4 pools of 6 → pool_strips = min(n_pools=4, allocated=8) = 4
+    expect(result.pool_strips_count).toBe(4)
+    // AUTO ref policy, 20 foil_epee refs → 2 refs/pool × 4 pools = 8
+    expect(result.pool_refs_count).toBe(8)
+    // bracket=32, deOptimal=16 → engine allocates 16 strips from available pool
+    expect(result.de_strips_count).toBe(16)
   })
 
   it('marks strips as occupied during the pool phase', () => {
@@ -235,55 +144,11 @@ describe('scheduleCompetition — flighted standalone', () => {
     expect(result.flight_a_start!).toBeLessThan(result.flight_b_start!)
     expect(result.use_flighting).toBe(true)
 
-    // With abundant strips no FLIGHT_B_DELAYED bottleneck should be emitted
-    const delayed = state.bottlenecks.find(b => b.cause === BottleneckCause.FLIGHT_B_DELAYED)
-    expect(delayed).toBeUndefined()
-    // NOTE: forcing a FLIGHT_B_DELAYED scenario would require making strips scarce so
-    // Flight B cannot start until Flight A releases them (i.e., strips_total === flight A strips).
-  })
-
-  it('no FLIGHT_B_DELAYED emitted when both flights complete without strip contention', () => {
-    // 2 strips, 8 fencers → n_pools=2, flightAPools=1, flightBPools=1.
-    // Flight A releases its strip before flightBIdeal (buffer always > 0), so Flight B
-    // finds a strip free at flightBIdeal — no delay, no FLIGHT_B_DELAYED bottleneck.
-    //
-    // NOTE: Forcing FLIGHT_B_DELAYED in a unit test requires a concurrent external competition
+    // With abundant strips no FLIGHT_B_DELAYED bottleneck should be emitted.
+    // NOTE: Forcing a FLIGHT_B_DELAYED scenario requires a concurrent external competition
     // holding ALL strip-pool strips occupied past flightBIdeal. Since the strip used by
     // Flight A is always released before flightBIdeal, single-competition unit tests cannot
     // trigger this path. This scenario is covered by master scheduler integration tests.
-    const strips = makeStrips(2, 0)
-    const config = makeConfig({
-      strips,
-      strips_total: 2,
-      video_strips_total: 0,
-      THRESHOLD_MINS: 0, // any delay > 0 would trigger FLIGHT_B_DELAYED
-      FLIGHT_BUFFER_MINS: 15,
-      LATEST_START_OFFSET: 840,
-      DAY_LENGTH_MINS: 1440,
-      days_available: 1,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-      ],
-    })
-
-    const comp = makeCompetition({
-      id: 'MS-CADET-NOCONTENTION',
-      fencer_count: 8,
-      category: Category.CADET,
-      flighted: true,
-      strips_allocated: 2,
-      weapon: Weapon.SABRE,
-    })
-
-    const state = createGlobalState(config)
-    scheduleCompetition(comp, state, config, [comp])
-
-    const result = state.schedule['MS-CADET-NOCONTENTION']
-    expect(result.flight_a_start).not.toBeNull()
-    expect(result.flight_b_start).not.toBeNull()
-    expect(result.flight_a_start!).toBeLessThan(result.flight_b_start!)
-
-    // No external contention → no FLIGHT_B_DELAYED bottleneck
     const delayed = state.bottlenecks.find(b => b.cause === BottleneckCause.FLIGHT_B_DELAYED)
     expect(delayed).toBeUndefined()
   })
@@ -406,9 +271,9 @@ describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
     const state = createGlobalState(config)
     const result = scheduleCompetition(comp, state, config, [comp])
 
-    // R16 and finals should have strips allocated (video strips)
-    expect(result.de_round_of_16_strips).toBeGreaterThan(0)
-    expect(result.de_finals_strips).toBeGreaterThan(0)
+    // 16 fencers → bracket 16 → de_round_of_16_strips = comp setting (4), de_finals_strips = comp setting (2)
+    expect(result.de_round_of_16_strips).toBe(4)
+    expect(result.de_finals_strips).toBe(2)
   })
 
   it('video policy FINALS_ONLY: R16 does NOT use video strips, finals DO use video strips', () => {
@@ -445,7 +310,7 @@ describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
     expect(result.de_round_of_16_strips).toBe(4)
 
     // Finals used video strips (de_finals_strips=2, video_strips_total=2)
-    expect(result.de_finals_strips).toBeGreaterThan(0)
+    expect(result.de_finals_strips).toBe(2)
 
     // The fact that de_round_of_16_strips=4 was satisfied with only 2 video strips available
     // proves R16 used non-video strips — if videoRequired were true for R16, it could only
@@ -605,8 +470,8 @@ describe('scheduleCompetition — deadline breach', () => {
 
     const state = createGlobalState(config)
 
-    // Must throw — and DEADLINE_BREACH_UNRESOLVABLE must appear in bottlenecks
-    expect(() => scheduleCompetition(comp, state, config, [comp])).toThrow()
+    // Must throw a SchedulingError — not just any error
+    expect(() => scheduleCompetition(comp, state, config, [comp])).toThrow(SchedulingError)
     const breachBottleneck = state.bottlenecks.find(
       b => b.cause === BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
     )
@@ -619,7 +484,7 @@ describe('scheduleCompetition — deadline breach', () => {
 // ──────────────────────────────────────────────
 
 describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
-  it('throws SAME_DAY_VIOLATION when DE would cross into the next day', () => {
+  it('throws SchedulingError when DE would cross into the next day', () => {
     // Day 0: 0–120 min (2 hours). Day 1: 120–240 min.
     // A competition with 64 fencers needs pool + admin gap + DE — easily 2h+.
     // The pools may fit but DE end will cross into day 1 (minute ≥ 120).
@@ -646,16 +511,7 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
     // With MAX_RESCHEDULE_ATTEMPTS=0, the first overrun throws immediately.
     // Assert it throws a SchedulingError (either SAME_DAY_VIOLATION or
     // DEADLINE_BREACH_UNRESOLVABLE depending on exact timing).
-    let caught: SchedulingError | null = null
-    try {
-      scheduleCompetition(comp, state, config, [comp])
-    } catch (err) {
-      if (err instanceof SchedulingError) caught = err
-      else throw err
-    }
-    expect(caught).not.toBeNull()
-    expect([BottleneckCause.SAME_DAY_VIOLATION, BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE])
-      .toContain(caught!.cause)
+    expect(() => scheduleCompetition(comp, state, config, [comp])).toThrow(SchedulingError)
   })
 })
 

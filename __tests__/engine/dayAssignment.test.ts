@@ -18,110 +18,28 @@ import {
   EventType,
   DeMode,
   VideoPolicy,
-  RefPolicy,
-  CutMode,
   BottleneckCause,
 } from '../../src/engine/types.ts'
 import type {
   Competition,
-  TournamentConfig,
   GlobalState,
-  Strip,
-  ScheduleResult,
   PoolStructure,
 } from '../../src/engine/types.ts'
 import {
-  DEFAULT_POOL_ROUND_DURATION_TABLE,
-  DEFAULT_DE_DURATION_TABLE,
-} from '../../src/engine/constants.ts'
-import { makeScheduleResult } from '../helpers/factories.ts'
+  makeStrips,
+  makeConfig,
+  makeCompetition,
+  makeScheduleResult,
+  DAY_START_8AM,
+} from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
-// Test helpers
+// Test helpers (dayAssignment-specific)
 // ──────────────────────────────────────────────
 
-function makeStrips(total: number, videoCount: number): Strip[] {
-  return Array.from({ length: total }, (_, i) => ({
-    id: `strip-${i + 1}`,
-    video_capable: i < videoCount,
-  }))
-}
-
-function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig {
-  const strips = overrides.strips ?? makeStrips(24, 4)
+function makeGlobalState(scheduleEntries: Record<string, ReturnType<typeof makeScheduleResult>> = {}): GlobalState {
   return {
-    tournament_type: 'NAC',
-    days_available: 3,
-    strips,
-    strips_total: strips.length,
-    video_strips_total: strips.filter(s => s.video_capable).length,
-    referee_availability: [
-      { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-      { day: 1, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-      { day: 2, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-    ],
-    allow_sabre_ref_fillin: false,
-    pod_captain_override: 'AUTO',
-    DAY_START_MINS: 480,
-    DAY_END_MINS: 1320,
-    LATEST_START_MINS: 960,
-    LATEST_START_OFFSET: 480,
-    SLOT_MINS: 30,
-    DAY_LENGTH_MINS: 840,
-    ADMIN_GAP_MINS: 15,
-    FLIGHT_BUFFER_MINS: 15,
-    THRESHOLD_MINS: 10,
-    DE_REFS: 1,
-    DE_FINALS_MIN_MINS: 30,
-    SAME_TIME_WINDOW_MINS: 30,
-    INDIV_TEAM_MIN_GAP_MINS: 120,
-    EARLY_START_THRESHOLD: 10,
-    MAX_RESCHEDULE_ATTEMPTS: 3,
-    MAX_FENCERS: 500,
-    MIN_FENCERS: 2,
-    pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
-    de_duration_table: DEFAULT_DE_DURATION_TABLE,
-    dayConfigs: [],
-    ...overrides,
-  }
-}
-
-function makeCompetition(overrides: Partial<Competition> = {}): Competition {
-  return {
-    id: 'test-comp',
-    gender: Gender.MEN,
-    category: Category.DIV1,
-    weapon: Weapon.FOIL,
-    event_type: EventType.INDIVIDUAL,
-    fencer_count: 50,
-    fencer_count_type: 'ESTIMATED',
-    ref_policy: RefPolicy.AUTO,
-    earliest_start: 480,
-    latest_end: 1320,
-    optional: false,
-    vet_age_group: null,
-    use_single_pool_override: false,
-    cut_mode: CutMode.DISABLED,
-    cut_value: 100,
-    de_mode: DeMode.SINGLE_BLOCK,
-    de_video_policy: VideoPolicy.BEST_EFFORT,
-    de_finals_strip_id: null,
-    de_finals_strip_requirement: 'HARD',
-    de_round_of_16_strips: 4,
-    de_round_of_16_requirement: 'HARD',
-    de_finals_strips: 2,
-    de_finals_requirement: 'HARD',
-    flighted: false,
-    flighting_group_id: null,
-    is_priority: false,
-    strips_allocated: 8,
-    ...overrides,
-  }
-}
-
-function makeGlobalState(scheduleEntries: Record<string, ScheduleResult> = {}): GlobalState {
-  return {
-    strip_free_at: Array(24).fill(480),
+    strip_free_at: Array(24).fill(DAY_START_8AM),
     refs_in_use_by_day: {},
     schedule: scheduleEntries,
     bottlenecks: [],
@@ -325,7 +243,7 @@ describe('totalDayPenalty', () => {
     expect(penalty).toBeGreaterThanOrEqual(10.0)
   })
 
-  it('Individual + Team wrong order (team before individual, same day) → adds 8.0', () => {
+  it('penalises scheduling team event before its individual counterpart on same day', () => {
     // TEAM event scheduled before INDIVIDUAL counterpart on same day → 8.0 penalty
     const teamComp = makeCompetition({
       id: 'div1-m-foil-team',
@@ -342,29 +260,15 @@ describe('totalDayPenalty', () => {
       event_type: EventType.INDIVIDUAL,
     })
 
-    // Individual starts at 900 (later), team proposed at 480 (earlier) → wrong order
-    const scheduleResult = makeScheduleResult('div1-m-foil-ind', 0)
-    scheduleResult.pool_start = 900
-
-    const state = makeGlobalState({ 'div1-m-foil-ind': { ...scheduleResult } })
     const allComps = [teamComp, indComp]
 
-    // Team starts at 480, individual at 900: team is before individual on same day
-    // gap = individual_start - team_start = 900 - 480 = 420 > 120, no ordering penalty from this
-    // But if team starts AFTER individual (wrong order): team_start=900, ind at 480 → gap<0
-    const scheduleResult2 = makeScheduleResult('div1-m-foil-ind', 0)
-    scheduleResult2.pool_start = 480
+    // individual at 500, team at 480 → gap = ind_start - team_start = 20 ≤ 30 → 8.0
+    const scheduleResult = makeScheduleResult('div1-m-foil-ind', 0)
+    scheduleResult.pool_start = 500
 
-    const state2 = makeGlobalState({ 'div1-m-foil-ind': { ...scheduleResult2 } })
-    // Team proposed at 900 (after individual at 480) → BUT individual should be before team
-    // Actually PRD: if team starts at same time as individual (gap<=30) OR gap<0 → 8.0
-    // Let's test: individual at 480, team at 500 (gap of 20 between them ≤ 30) → 8.0
-    const scheduleResult3 = makeScheduleResult('div1-m-foil-ind', 0)
-    scheduleResult3.pool_start = 500 // individual starts at 500, team at 480 → gap = ind - team = 20 ≤ 30
+    const state = makeGlobalState({ 'div1-m-foil-ind': { ...scheduleResult } })
 
-    const state3 = makeGlobalState({ 'div1-m-foil-ind': { ...scheduleResult3 } })
-
-    const penalty = totalDayPenalty(teamComp, 0, 480, state3, 0, allComps, config)
+    const penalty = totalDayPenalty(teamComp, 0, 480, state, 0, allComps, config)
     // team_start=480, ind_start=500 → gap = ind_start - team_start = 20 ≤ 30 → 8.0
     expect(penalty).toBeGreaterThanOrEqual(8.0)
   })
