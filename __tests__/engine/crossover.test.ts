@@ -10,75 +10,7 @@ import {
 import { Category, Gender, Weapon, EventType } from '../../src/engine/types.ts'
 import { CROSSOVER_GRAPH } from '../../src/engine/constants.ts'
 import type { Competition, ScheduleResult } from '../../src/engine/types.ts'
-
-// ──────────────────────────────────────────────
-// Test helpers
-// ──────────────────────────────────────────────
-
-type CompetitionKey = Pick<Competition, 'category' | 'gender' | 'weapon' | 'event_type' | 'id'>
-
-function makeComp(
-  id: string,
-  category: Category,
-  gender: Gender,
-  weapon: Weapon,
-  event_type: EventType = EventType.INDIVIDUAL,
-): CompetitionKey {
-  return { id, category, gender, weapon, event_type }
-}
-
-function makeScheduleResult(competition_id: string, assigned_day: number): ScheduleResult {
-  return {
-    competition_id,
-    assigned_day,
-    use_flighting: false,
-    is_priority: false,
-    flighting_group_id: null,
-    pool_start: null,
-    pool_end: null,
-    pool_strips_count: 0,
-    pool_refs_count: 0,
-    flight_a_start: null,
-    flight_a_end: null,
-    flight_a_strips: 0,
-    flight_a_refs: 0,
-    flight_b_start: null,
-    flight_b_end: null,
-    flight_b_strips: 0,
-    flight_b_refs: 0,
-    entry_fencer_count: 0,
-    promoted_fencer_count: 0,
-    bracket_size: 0,
-    cut_mode: 'DISABLED' as const,
-    cut_value: 0,
-    de_mode: 'SINGLE_BLOCK' as const,
-    de_video_policy: 'BEST_EFFORT' as const,
-    de_start: null,
-    de_end: null,
-    de_strips_count: 0,
-    de_prelims_start: null,
-    de_prelims_end: null,
-    de_prelims_strips: 0,
-    de_round_of_16_start: null,
-    de_round_of_16_end: null,
-    de_round_of_16_strips: 0,
-    de_finals_start: null,
-    de_finals_end: null,
-    de_finals_strips: 0,
-    de_bronze_start: null,
-    de_bronze_end: null,
-    de_bronze_strip_id: null,
-    de_total_end: null,
-    conflict_score: 0,
-    pool_duration_baseline: 0,
-    pool_duration_actual: 0,
-    de_duration_baseline: 0,
-    de_duration_actual: 0,
-    sabre_fillin_used: false,
-    constraint_relaxation_level: 0,
-    accepted_warnings: [],
-  }
-}
+import { makeComp, makeScheduleResult } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // buildPenaltyMatrix
@@ -139,6 +71,9 @@ describe('crossoverPenalty', () => {
       c2: makeComp('b', Category.Y12, Gender.MEN, Weapon.FOIL),
       expected: Infinity,
     },
+    // Expected values below come from CROSSOVER_GRAPH edge weights in constants.ts.
+    // Soft penalties (0.3, 0.6, 1.0) reflect how closely related two categories are;
+    // higher weight = stronger scheduling conflict.
     {
       label: 'Same gender, same weapon, CADET↔DIV2 → 1.0',
       c1: makeComp('a', Category.CADET, Gender.WOMEN, Weapon.EPEE),
@@ -162,6 +97,12 @@ describe('crossoverPenalty', () => {
       c1: makeComp('a', Category.Y14, Gender.MEN, Weapon.FOIL),
       c2: makeComp('b', Category.DIV1A, Gender.MEN, Weapon.FOIL),
       expected: 0.6,
+    },
+    {
+      label: 'Same gender, same weapon, Y8↔VETERAN (unrelated categories) → 0.0',
+      c1: makeComp('a', Category.Y8, Gender.MEN, Weapon.FOIL),
+      c2: makeComp('b', Category.VETERAN, Gender.MEN, Weapon.FOIL),
+      expected: 0.0,
     },
   ])('$label', ({ c1, c2, expected }) => {
     expect(crossoverPenalty(c1, c2)).toBe(expected)
@@ -242,6 +183,15 @@ describe('proximityPenalty', () => {
     }
     const result = proximityPenalty(div1, 3, schedule, [y10 as Competition])
     expect(result).toBe(0.0)
+  })
+
+  it('day_gap=4 → clamped to 3, same penalty as gap=3 (0.5 × 1.0)', () => {
+    const schedule: Record<string, ScheduleResult> = {
+      junior: makeScheduleResult('junior', 0),
+    }
+    // div1 proposed day=4, junior on day=0 → gap=4, clamped to 3 → 0.5 * 1.0
+    const result = proximityPenalty(div1, 4, schedule, [junior as Competition])
+    expect(result).toBeCloseTo(0.5)
   })
 })
 
@@ -336,8 +286,7 @@ describe('findIndividualCounterpart', () => {
       other as Competition,
       team as Competition,
     ])
-    expect(result).toBeDefined()
-    expect(result!.id).toBe('d1-ind')
+    expect(result?.id).toBe('d1-ind')
   })
 
   it('returns undefined when no match exists', () => {

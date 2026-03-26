@@ -22,6 +22,9 @@ export function computePoolStructure(
   fencerCount: number,
   useSinglePoolOverride = false,
 ): PoolStructure {
+  if (fencerCount <= 1) {
+    throw new Error(`computePoolStructure: fencerCount must be > 1, got ${fencerCount}`)
+  }
   if (fencerCount <= 9 || (fencerCount === 10 && useSinglePoolOverride)) {
     return { n_pools: 1, pool_sizes: [fencerCount], pool_round_duration: 0 }
   }
@@ -138,6 +141,9 @@ export function computeDeFencerCount(
   cutValue: number,
   eventType: EventType,
 ): number {
+  if (fencerCount <= 1) {
+    throw new Error(`computeDeFencerCount: fencerCount must be > 1, got ${fencerCount}`)
+  }
   if (eventType === EventType.TEAM) return fencerCount
 
   let promoted: number

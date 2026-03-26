@@ -71,6 +71,10 @@ describe('computePoolStructure', () => {
     expect(result.n_pools).toBe(2)
     expect(result.pool_sizes).toEqual([6, 5])
   })
+
+  it.each([0, 1, -5])('n=%i → throws (fencerCount must be > 1)', (n) => {
+    expect(() => computePoolStructure(n)).toThrow(/fencerCount must be > 1/)
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -100,6 +104,27 @@ describe('weightedPoolDuration', () => {
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
     // (168 * 1 + 120 * 1) / 2 = 144
     expect(result).toBe(144)
+  })
+
+  it('uniform pool sizes (all 6s) → equals single-size duration', () => {
+    const structure = computePoolStructure(24) // 4×6
+    const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
+    expect(result).toBe(120)
+  })
+
+  it('n=100 → weighted average of 10×7 and 5×6 pools', () => {
+    const structure = computePoolStructure(100) // 10×7 + 5×6
+    const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
+    // (10*168 + 5*120) / 15 = 2280 / 15 = 152
+    expect(result).toBe(152)
+  })
+
+  it('SABRE 1×7 + 1×6 → weighted average of 84 and 60 = 72', () => {
+    const structure = computePoolStructure(13) // 1×7 + 1×6
+    const result = weightedPoolDuration(structure, Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE)
+    // SABRE base=60 for pool of 6. Pool of 7: round(60 * 21/15) = 84
+    // (84 + 60) / 2 = 72
+    expect(result).toBe(72)
   })
 })
 
@@ -149,6 +174,13 @@ describe('estimatePoolDuration', () => {
     expect(result.penalised).toBe(true)
   })
 
+  it('nPools=0 → zero duration, no penalty (degenerate but valid upstream)', () => {
+    const result = estimatePoolDuration(0, baseline, 4, 4, 1)
+    expect(result.actual_duration).toBe(0)
+    expect(result.effective_parallelism).toBe(0)
+    expect(result.penalised).toBe(false)
+  })
+
   it('no double-duty when refsPerPool > 1', () => {
     // 4 pools, 4 strips, 6 refs, refsPerPool=2: staffable=min(4,4,3)=3, dd=0 (rpp!=1)
     const result = estimatePoolDuration(4, baseline, 4, 6, 2)
@@ -181,6 +213,14 @@ describe('computeDeFencerCount', () => {
       expect(result).toBe(8)
     },
   )
+
+  it.each([0, 1, -3])('fencerCount=%i → throws (must be > 1)', (n) => {
+    expect(() => computeDeFencerCount(n, CutMode.DISABLED, 0, EventType.INDIVIDUAL)).toThrow(/fencerCount must be > 1/)
+  })
+
+  it('fencerCount=1 TEAM → also throws', () => {
+    expect(() => computeDeFencerCount(1, CutMode.DISABLED, 0, EventType.TEAM)).toThrow(/fencerCount must be > 1/)
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -206,7 +246,7 @@ describe('resolveRefsPerPool', () => {
     // wants 8 refs (2 per pool), only 6 available → falls back to 1 ref/pool
     const result = resolveRefsPerPool(RefPolicy.TWO, 4, 6)
     expect(result.refs_per_pool).toBe(1)
-    expect(result.shortfall).toBeGreaterThan(0)
+    expect(result.shortfall).toBe(2)
   })
 
   it('Policy AUTO, 4 pools, 8 refs → refs_per_pool=2, no shortfall', () => {

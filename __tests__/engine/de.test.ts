@@ -10,7 +10,10 @@ import { CutMode, EventType, Weapon } from '../../src/engine/types.ts'
 import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
 
 describe('nextPowerOf2', () => {
+  // n<=0 returns 1: bracket size must be at least 1 (degenerate input → smallest valid bracket)
   const cases: [number, number][] = [
+    [0, 1],
+    [-5, 1],
     [1, 1],
     [2, 2],
     [3, 4],
@@ -65,29 +68,20 @@ describe('dePhasesForBracket', () => {
 })
 
 describe('deBlockDurations', () => {
-  it('bracket 64, total 120 min → prelims + r16 + finals sum to ~120, finals ≥ 30', () => {
-    const result = deBlockDurations(64, 120)
-    expect(result.prelims_dur + result.r16_dur + result.finals_dur).toBe(120)
-    expect(result.finals_dur).toBeGreaterThanOrEqual(30)
-    expect(result.prelims_dur).toBeGreaterThan(0)
-    expect(result.r16_dur).toBeGreaterThan(0)
+  // Exact values verified by hand against deBlockDurations algorithm:
+  // 1. Compute bout counts (totalBouts, r16Bouts, prelimsBouts)
+  // 2. Allocate proportionally via Math.round
+  // 3. Enforce 30-min finals floor, redistribute remainder
+  it('bracket 64, total 120 min → exact phase split', () => {
+    expect(deBlockDurations(64, 120)).toEqual({ prelims_dur: 3, r16_dur: 87, finals_dur: 30 })
   })
 
-  it('bracket 32, total 90 min → no prelims, r16 + finals sum to ~90', () => {
-    const result = deBlockDurations(32, 90)
-    expect(result.prelims_dur).toBe(0)
-    expect(result.r16_dur + result.finals_dur).toBe(90)
-    expect(result.finals_dur).toBeGreaterThanOrEqual(30)
-    expect(result.r16_dur).toBeGreaterThan(0)
+  it('bracket 32, total 90 min → exact phase split', () => {
+    expect(deBlockDurations(32, 90)).toEqual({ prelims_dur: 0, r16_dur: 60, finals_dur: 30 })
   })
 
-  it('bracket 8, total 45 min → no prelims, finals ≥ 30', () => {
-    // totalBouts=4, prelims=0, r16=3, finals=1
-    // Proportional finals = round(45*1/4)=11 → floored to 30, remaining=15 goes to r16
-    const result = deBlockDurations(8, 45)
-    expect(result.prelims_dur).toBe(0)
-    expect(result.r16_dur + result.finals_dur).toBe(45)
-    expect(result.finals_dur).toBeGreaterThanOrEqual(30)
+  it('bracket 8, total 45 min → exact phase split', () => {
+    expect(deBlockDurations(8, 45)).toEqual({ prelims_dur: 0, r16_dur: 15, finals_dur: 30 })
   })
 })
 
