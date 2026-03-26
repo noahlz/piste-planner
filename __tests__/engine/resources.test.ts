@@ -1,0 +1,469 @@
+import { describe, it, expect } from 'vitest'
+import {
+  createGlobalState,
+  allocateStrips,
+  releaseStrips,
+  findAvailableStrips,
+  allocateRefs,
+  releaseRefs,
+  allocateRefsForSabre,
+  earliestResourceWindow,
+  snapToSlot,
+} from '../../src/engine/resources.ts'
+import { Weapon } from '../../src/engine/types.ts'
+import type { TournamentConfig, Strip } from '../../src/engine/types.ts'
+import {
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
+  DEFAULT_DE_DURATION_TABLE,
+} from '../../src/engine/constants.ts'
+
+// ──────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────
+
+function makeStrips(total: number, videoCount: number): Strip[] {
+  return Array.from({ length: total }, (_, i) => ({
+    id: `strip-${i + 1}`,
+    video_capable: i < videoCount,
+  }))
+}
+
+function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig {
+  const strips = overrides.strips ?? makeStrips(24, 4)
+  return {
+    tournament_type: 'NAC',
+    days_available: 2,
+    strips,
+    strips_total: strips.length,
+    video_strips_total: strips.filter(s => s.video_capable).length,
+    referee_availability: [
+      { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
+      { day: 1, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
+    ],
+    allow_sabre_ref_fillin: false,
+    pod_captain_override: 'AUTO',
+    DAY_START_MINS: 480,
+    DAY_END_MINS: 1320,
+    LATEST_START_MINS: 960,
+    LATEST_START_OFFSET: 480,
+    SLOT_MINS: 30,
+    DAY_LENGTH_MINS: 840,
+    ADMIN_GAP_MINS: 15,
+    FLIGHT_BUFFER_MINS: 15,
+    THRESHOLD_MINS: 10,
+    DE_REFS: 1,
+    DE_FINALS_MIN_MINS: 30,
+    SAME_TIME_WINDOW_MINS: 30,
+    INDIV_TEAM_MIN_GAP_MINS: 120,
+    EARLY_START_THRESHOLD: 10,
+    MAX_RESCHEDULE_ATTEMPTS: 3,
+    MAX_FENCERS: 500,
+    MIN_FENCERS: 2,
+    pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
+    de_duration_table: DEFAULT_DE_DURATION_TABLE,
+    dayConfigs: [],
+    ...overrides,
+  }
+}
+
+// ──────────────────────────────────────────────
+// snapToSlot
+// ──────────────────────────────────────────────
+
+describe('snapToSlot', () => {
+  it('0 → 0 (already on boundary)', () => {
+    expect(snapToSlot(0)).toBe(0)
+  })
+
+  it('15 → 30 (halfway, rounds up)', () => {
+    expect(snapToSlot(15)).toBe(30)
+  })
+
+  it('30 → 30 (on boundary, no change)', () => {
+    expect(snapToSlot(30)).toBe(30)
+  })
+
+  it('31 → 60 (just past boundary)', () => {
+    expect(snapToSlot(31)).toBe(60)
+  })
+
+  it('45 → 60', () => {
+    expect(snapToSlot(45)).toBe(60)
+  })
+
+  it('60 → 60 (on boundary)', () => {
+    expect(snapToSlot(60)).toBe(60)
+  })
+
+  it('480 → 480 (day start, already aligned)', () => {
+    expect(snapToSlot(480)).toBe(480)
+  })
+
+  it('495 → 510 (15 min past hour)', () => {
+    expect(snapToSlot(495)).toBe(510)
+  })
+})
+
+// ──────────────────────────────────────────────
+// createGlobalState
+// ──────────────────────────────────────────────
+
+describe('createGlobalState', () => {
+  it('24 strips → strip_free_at has 24 entries', () => {
+    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const state = createGlobalState(config)
+    expect(state.strip_free_at).toHaveLength(24)
+  })
+
+  it('all strip_free_at entries initialized to day 0 start (t=0 in scheduling time model)', () => {
+    // dayStart(0, config) = 0 when dayConfigs is empty (PRD Section 12.1: T=0 = Day 0 start)
+    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const state = createGlobalState(config)
+    expect(state.strip_free_at.every(t => t === 0)).toBe(true)
+  })
+
+  it('schedule starts empty', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    expect(Object.keys(state.schedule)).toHaveLength(0)
+  })
+
+  it('bottlenecks starts empty', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    expect(state.bottlenecks).toHaveLength(0)
+  })
+
+  it('refs_in_use_by_day starts empty', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    expect(Object.keys(state.refs_in_use_by_day)).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// allocateStrips / releaseStrips
+// ──────────────────────────────────────────────
+
+describe('allocateStrips / releaseStrips', () => {
+  it('allocate 4 strips at t=0 for 120 min → those strips have free_at=120', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateStrips(state, [0, 1, 2, 3], 120)
+    expect(state.strip_free_at[0]).toBe(120)
+    expect(state.strip_free_at[1]).toBe(120)
+    expect(state.strip_free_at[2]).toBe(120)
+    expect(state.strip_free_at[3]).toBe(120)
+  })
+
+  it('unallocated strips remain at initial value after allocation', () => {
+    // dayStart(0, config) = 0 when dayConfigs is empty
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateStrips(state, [0, 1, 2, 3], 120)
+    expect(state.strip_free_at[4]).toBe(0)
+  })
+
+  it('allocate then re-allocate strip → free_at updated to later time', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateStrips(state, [0], 120)
+    allocateStrips(state, [0], 240)
+    expect(state.strip_free_at[0]).toBe(240)
+  })
+
+  it('releaseStrips — strips already at endTime remain unchanged (idempotent)', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateStrips(state, [0, 1, 2, 3], 120)
+    releaseStrips(state, [0, 1, 2, 3], 120)
+    // already at 120, release is a no-op
+    expect(state.strip_free_at[0]).toBe(120)
+  })
+
+  it('releaseStrips — strips with free_at past endTime are not rolled back', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateStrips(state, [0], 240)
+    releaseStrips(state, [0], 120)
+    // strip is busy until 240; releasing at 120 should be a no-op
+    expect(state.strip_free_at[0]).toBe(240)
+  })
+})
+
+// ──────────────────────────────────────────────
+// findAvailableStrips
+// ──────────────────────────────────────────────
+
+describe('findAvailableStrips', () => {
+  it('24 strips, 20 allocated until t=600 → 4 available at t=480', () => {
+    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const state = createGlobalState(config)
+    // Allocate first 20 strips until t=600
+    allocateStrips(state, Array.from({ length: 20 }, (_, i) => i), 600)
+    const result = findAvailableStrips(state, config, 4, 480, false)
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.stripIndices).toHaveLength(4)
+    }
+  })
+
+  it('video_required=false → non-video strips preferred (returned first)', () => {
+    // 4 video strips at indices 0-3, 20 non-video at 4-23
+    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const state = createGlobalState(config)
+    const result = findAvailableStrips(state, config, 4, 480, false)
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      // All returned strips should be non-video (indices 4+)
+      expect(result.stripIndices.every(i => i >= 4)).toBe(true)
+    }
+  })
+
+  it('video_required=true → only video-capable strips returned', () => {
+    // First 4 strips are video-capable
+    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const state = createGlobalState(config)
+    const result = findAvailableStrips(state, config, 2, 480, true)
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.stripIndices.every(i => config.strips[i].video_capable)).toBe(true)
+    }
+  })
+
+  it('video_required=true but all video strips busy → WAIT_UNTIL with earliest video free time', () => {
+    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const state = createGlobalState(config)
+    // Allocate all 4 video strips (indices 0-3) until t=660
+    allocateStrips(state, [0, 1, 2, 3], 660)
+    const result = findAvailableStrips(state, config, 2, 480, true)
+    expect(result.type).toBe('WAIT_UNTIL')
+    if (result.type === 'WAIT_UNTIL') {
+      expect(result.waitUntil).toBe(660)
+    }
+  })
+
+  it('not enough strips available at time → WAIT_UNTIL', () => {
+    // Only 2 strips available but need 4
+    const config = makeConfig({ strips: makeStrips(4, 0) })
+    const state = createGlobalState(config)
+    allocateStrips(state, [0, 1], 600)
+    const result = findAvailableStrips(state, config, 4, 480, false)
+    expect(result.type).toBe('WAIT_UNTIL')
+  })
+
+  it('video_required=false: when non-video strips are busy, falls back to video strips', () => {
+    // 4 video (0-3) and 4 non-video (4-7). Non-video all busy.
+    const config = makeConfig({ strips: makeStrips(8, 4) })
+    const state = createGlobalState(config)
+    allocateStrips(state, [4, 5, 6, 7], 600) // all non-video busy
+    const result = findAvailableStrips(state, config, 2, 480, false)
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      // Should fall back to video strips
+      expect(result.stripIndices.every(i => config.strips[i].video_capable)).toBe(true)
+    }
+  })
+})
+
+// ──────────────────────────────────────────────
+// allocateRefs / releaseRefs
+// ──────────────────────────────────────────────
+
+describe('allocateRefs / releaseRefs', () => {
+  it('allocate 3 foil refs on day 0 → foil_epee_in_use increases by 3', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateRefs(state, 0, Weapon.FOIL, 3, 480, 600)
+    expect(state.refs_in_use_by_day[0].foil_epee_in_use).toBe(3)
+  })
+
+  it('allocate 3 epee refs on day 0 → foil_epee_in_use increases by 3', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateRefs(state, 0, Weapon.EPEE, 3, 480, 600)
+    expect(state.refs_in_use_by_day[0].foil_epee_in_use).toBe(3)
+  })
+
+  it('allocate sabre refs on day 0 → sabre_in_use increases', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateRefs(state, 0, Weapon.SABRE, 4, 480, 600)
+    expect(state.refs_in_use_by_day[0].sabre_in_use).toBe(4)
+  })
+
+  it('allocateRefs records a release_event at endTime', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateRefs(state, 0, Weapon.FOIL, 3, 480, 600)
+    const events = state.refs_in_use_by_day[0].release_events
+    expect(events.some(e => e.time === 600 && e.type === 'foil_epee' && e.count === 3)).toBe(true)
+  })
+
+  it('releaseRefs foil: foil_epee_in_use decreases', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateRefs(state, 0, Weapon.FOIL, 3, 480, 600)
+    releaseRefs(state, 0, Weapon.FOIL, 3, 600)
+    expect(state.refs_in_use_by_day[0].foil_epee_in_use).toBe(0)
+  })
+
+  it('releaseRefs sabre: sabre_in_use decreases', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateRefs(state, 0, Weapon.SABRE, 4, 480, 600)
+    releaseRefs(state, 0, Weapon.SABRE, 4, 600)
+    expect(state.refs_in_use_by_day[0].sabre_in_use).toBe(0)
+  })
+
+  it('releaseRefs does not go below zero', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    allocateRefs(state, 0, Weapon.FOIL, 2, 480, 600)
+    releaseRefs(state, 0, Weapon.FOIL, 5, 600) // release more than allocated
+    expect(state.refs_in_use_by_day[0].foil_epee_in_use).toBe(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// allocateRefsForSabre
+// ──────────────────────────────────────────────
+
+describe('allocateRefsForSabre', () => {
+  it('sufficient sabre refs → OK, records SABRE release event', () => {
+    const config = makeConfig({ allow_sabre_ref_fillin: false })
+    const state = createGlobalState(config)
+    const result = allocateRefsForSabre(4, 480, 600, 0, state, config)
+    expect(result.type).toBe('OK')
+    expect(state.refs_in_use_by_day[0].sabre_in_use).toBe(4)
+  })
+
+  it('insufficient sabre refs, fill-in disabled → INSUFFICIENT', () => {
+    // Only 2 sabre refs on day 0; need 5
+    const config = makeConfig({
+      allow_sabre_ref_fillin: false,
+      referee_availability: [{ day: 0, foil_epee_refs: 20, sabre_refs: 2, source: 'ACTUAL' }],
+    })
+    const state = createGlobalState(config)
+    const result = allocateRefsForSabre(5, 480, 600, 0, state, config)
+    expect(result.type).toBe('INSUFFICIENT')
+  })
+
+  it('sabre shortfall, fill-in enabled, fe refs cover → OK with SABRE_REF_FILLIN bottleneck', () => {
+    const config = makeConfig({
+      allow_sabre_ref_fillin: true,
+      referee_availability: [{ day: 0, foil_epee_refs: 20, sabre_refs: 2, source: 'ACTUAL' }],
+    })
+    const state = createGlobalState(config)
+    // Need 5 sabre refs; only 2 available; fill-in covers the 3 shortfall
+    const result = allocateRefsForSabre(5, 480, 600, 0, state, config)
+    expect(result.type).toBe('OK')
+    if (result.type === 'OK') {
+      const fillinBottleneck = result.bottlenecks.find(b => b.cause === 'SABRE_REF_FILLIN')
+      expect(fillinBottleneck).toBeDefined()
+    }
+    // fillin tracked separately
+    expect(state.refs_in_use_by_day[0].fillin_in_use).toBe(3)
+    expect(state.refs_in_use_by_day[0].sabre_in_use).toBe(2)
+  })
+
+  it('sabre shortfall, fill-in enabled, but combined still insufficient → INSUFFICIENT', () => {
+    const config = makeConfig({
+      allow_sabre_ref_fillin: true,
+      referee_availability: [{ day: 0, foil_epee_refs: 2, sabre_refs: 1, source: 'ACTUAL' }],
+    })
+    const state = createGlobalState(config)
+    // Need 10; only 1 sabre + 2 fe = 3 available
+    const result = allocateRefsForSabre(10, 480, 600, 0, state, config)
+    expect(result.type).toBe('INSUFFICIENT')
+  })
+})
+
+// ──────────────────────────────────────────────
+// earliestResourceWindow
+// ──────────────────────────────────────────────
+
+describe('earliestResourceWindow', () => {
+  // PRD Section 12.1: T=0 = Day 0 08:00 AM. dayStart(0, config) = 0 * 840 = 0.
+  // LATEST_START_OFFSET=480 → latest start = 0 + 480 = 480 (equivalent to 4pm wall clock).
+  // Day 0 end = 0 + 840 = 840.
+
+  it('strips and refs all free → returns notBefore (snapped to slot)', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    // notBefore=60 (1hr into day 0), already on slot boundary
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 60, 0, state, config, 'comp-1', 'POOL')
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.startTime).toBe(60)
+    }
+  })
+
+  it('strips busy until t=120 → returns t=120 (snapped to slot)', () => {
+    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const state = createGlobalState(config)
+    // notBefore=0; all 24 strips busy until t=120
+    allocateStrips(state, Array.from({ length: 24 }, (_, i) => i), 120)
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.startTime).toBe(120)
+    }
+  })
+
+  it('delay > THRESHOLD_MINS → STRIP_CONTENTION bottleneck emitted', () => {
+    // notBefore=0; strips busy until t=60 (60-min delay > THRESHOLD_MINS=10)
+    const config = makeConfig({ strips: makeStrips(24, 4), THRESHOLD_MINS: 10 })
+    const state = createGlobalState(config)
+    allocateStrips(state, Array.from({ length: 24 }, (_, i) => i), 60)
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      const stripContention = result.bottlenecks.find(b => b.cause === 'STRIP_CONTENTION')
+      expect(stripContention).toBeDefined()
+    }
+  })
+
+  it('start time exceeds DAY_START + LATEST_START_OFFSET → NO_WINDOW', () => {
+    // dayStart(0)=0, LATEST_START_OFFSET=480 → latestStart=480
+    // Strips busy until 500 (past latest start)
+    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const state = createGlobalState(config)
+    allocateStrips(state, Array.from({ length: 24 }, (_, i) => i), 500)
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    expect(result.type).toBe('NO_WINDOW')
+  })
+
+  it('refs constrained → REFEREE_CONTENTION bottleneck when delay > THRESHOLD', () => {
+    // 24 strips free, but refs all in use until t=60
+    const config = makeConfig({
+      strips: makeStrips(24, 4),
+      referee_availability: [{ day: 0, foil_epee_refs: 4, sabre_refs: 0, source: 'ACTUAL' as const }],
+    })
+    const state = createGlobalState(config)
+    // Allocate all 4 foil/epee refs until t=60
+    allocateRefs(state, 0, Weapon.FOIL, 4, 0, 60)
+    // Request 4 strips + 4 refs at t=0 — strips free but refs busy until t=60
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.startTime).toBe(60) // snapped from 60 → 60 (already on boundary)
+      const refContention = result.bottlenecks.find(
+        (b: { cause: string }) => b.cause === 'REFEREE_CONTENTION' || b.cause === 'STRIP_AND_REFEREE_CONTENTION',
+      )
+      expect(refContention).toBeDefined()
+    }
+  })
+
+  it('notBefore not on slot boundary → snapped up to next slot', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    // notBefore=15 (not on 30-min boundary) → snaps to 30
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 15, 0, state, config, 'comp-1', 'POOL')
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      // 15 snaps to 30
+      expect(result.startTime).toBe(30)
+    }
+  })
+})
