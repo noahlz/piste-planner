@@ -18,8 +18,11 @@ import {
 } from '../../src/engine/constants.ts'
 
 // ──────────────────────────────────────────────
-// Helpers
+// Constants & Helpers
 // ──────────────────────────────────────────────
+
+const STANDARD_STRIPS_TOTAL = 24
+const STANDARD_VIDEO_STRIPS = 4
 
 function makeStrips(total: number, videoCount: number): Strip[] {
   return Array.from({ length: total }, (_, i) => ({
@@ -109,35 +112,20 @@ describe('snapToSlot', () => {
 // ──────────────────────────────────────────────
 
 describe('createGlobalState', () => {
-  it('24 strips → strip_free_at has 24 entries', () => {
-    const config = makeConfig({ strips: makeStrips(24, 4) })
-    const state = createGlobalState(config)
-    expect(state.strip_free_at).toHaveLength(24)
-  })
-
-  it('all strip_free_at entries initialized to day 0 start (t=0 in scheduling time model)', () => {
+  it('strip_free_at has one entry per strip, all initialized to 0', () => {
     // dayStart(0, config) = 0 when dayConfigs is empty (PRD Section 12.1: T=0 = Day 0 start)
-    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS) })
     const state = createGlobalState(config)
+    expect(state.strip_free_at).toHaveLength(STANDARD_STRIPS_TOTAL)
     expect(state.strip_free_at.every(t => t === 0)).toBe(true)
   })
 
-  it('schedule starts empty', () => {
+  it('schedule, bottlenecks, and refs_in_use_by_day start empty', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
-    expect(Object.keys(state.schedule)).toHaveLength(0)
-  })
-
-  it('bottlenecks starts empty', () => {
-    const config = makeConfig()
-    const state = createGlobalState(config)
-    expect(state.bottlenecks).toHaveLength(0)
-  })
-
-  it('refs_in_use_by_day starts empty', () => {
-    const config = makeConfig()
-    const state = createGlobalState(config)
-    expect(Object.keys(state.refs_in_use_by_day)).toHaveLength(0)
+    expect(state.schedule).toEqual({})
+    expect(state.bottlenecks).toEqual([])
+    expect(state.refs_in_use_by_day).toEqual({})
   })
 })
 
@@ -196,21 +184,21 @@ describe('allocateStrips / releaseStrips', () => {
 // ──────────────────────────────────────────────
 
 describe('findAvailableStrips', () => {
-  it('24 strips, 20 allocated until t=600 → 4 available at t=480', () => {
-    const config = makeConfig({ strips: makeStrips(24, 4) })
+  it('24 strips, 20 allocated until t=600 → 4 available at t=480 (indices 20-23)', () => {
+    const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS) })
     const state = createGlobalState(config)
     // Allocate first 20 strips until t=600
     allocateStrips(state, Array.from({ length: 20 }, (_, i) => i), 600)
     const result = findAvailableStrips(state, config, 4, 480, false)
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
-      expect(result.stripIndices).toHaveLength(4)
+      expect(result.stripIndices).toEqual([20, 21, 22, 23])
     }
   })
 
   it('video_required=false → non-video strips preferred (returned first)', () => {
     // 4 video strips at indices 0-3, 20 non-video at 4-23
-    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS) })
     const state = createGlobalState(config)
     const result = findAvailableStrips(state, config, 4, 480, false)
     expect(result.type).toBe('FOUND')
@@ -222,7 +210,7 @@ describe('findAvailableStrips', () => {
 
   it('video_required=true → only video-capable strips returned', () => {
     // First 4 strips are video-capable
-    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS) })
     const state = createGlobalState(config)
     const result = findAvailableStrips(state, config, 2, 480, true)
     expect(result.type).toBe('FOUND')
@@ -232,7 +220,7 @@ describe('findAvailableStrips', () => {
   })
 
   it('video_required=true but all video strips busy → WAIT_UNTIL with earliest video free time', () => {
-    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS) })
     const state = createGlobalState(config)
     // Allocate all 4 video strips (indices 0-3) until t=660
     allocateStrips(state, [0, 1, 2, 3], 660)
@@ -338,7 +326,7 @@ describe('allocateRefsForSabre', () => {
     expect(state.refs_in_use_by_day[0].sabre_in_use).toBe(4)
   })
 
-  it('insufficient sabre refs, fill-in disabled → INSUFFICIENT', () => {
+  it('insufficient sabre refs, fill-in disabled → INSUFFICIENT, state not mutated', () => {
     // Only 2 sabre refs on day 0; need 5
     const config = makeConfig({
       allow_sabre_ref_fillin: false,
@@ -347,6 +335,12 @@ describe('allocateRefsForSabre', () => {
     const state = createGlobalState(config)
     const result = allocateRefsForSabre(5, 480, 600, 0, state, config)
     expect(result.type).toBe('INSUFFICIENT')
+    // Verify no partial allocation occurred
+    const dayRefs = state.refs_in_use_by_day[0]
+    if (dayRefs) {
+      expect(dayRefs.sabre_in_use).toBe(0)
+      expect(dayRefs.foil_epee_in_use).toBe(0)
+    }
   })
 
   it('sabre shortfall, fill-in enabled, fe refs cover → OK with SABRE_REF_FILLIN bottleneck', () => {
@@ -400,10 +394,10 @@ describe('earliestResourceWindow', () => {
   })
 
   it('strips busy until t=120 → returns t=120 (snapped to slot)', () => {
-    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS) })
     const state = createGlobalState(config)
-    // notBefore=0; all 24 strips busy until t=120
-    allocateStrips(state, Array.from({ length: 24 }, (_, i) => i), 120)
+    // notBefore=0; all strips busy until t=120
+    allocateStrips(state, Array.from({ length: STANDARD_STRIPS_TOTAL }, (_, i) => i), 120)
     const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
@@ -413,9 +407,9 @@ describe('earliestResourceWindow', () => {
 
   it('delay > THRESHOLD_MINS → STRIP_CONTENTION bottleneck emitted', () => {
     // notBefore=0; strips busy until t=60 (60-min delay > THRESHOLD_MINS=10)
-    const config = makeConfig({ strips: makeStrips(24, 4), THRESHOLD_MINS: 10 })
+    const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS), THRESHOLD_MINS: 10 })
     const state = createGlobalState(config)
-    allocateStrips(state, Array.from({ length: 24 }, (_, i) => i), 60)
+    allocateStrips(state, Array.from({ length: STANDARD_STRIPS_TOTAL }, (_, i) => i), 60)
     const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
@@ -427,9 +421,9 @@ describe('earliestResourceWindow', () => {
   it('start time exceeds DAY_START + LATEST_START_OFFSET → NO_WINDOW', () => {
     // dayStart(0)=0, LATEST_START_OFFSET=480 → latestStart=480
     // Strips busy until 500 (past latest start)
-    const config = makeConfig({ strips: makeStrips(24, 4) })
+    const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS) })
     const state = createGlobalState(config)
-    allocateStrips(state, Array.from({ length: 24 }, (_, i) => i), 500)
+    allocateStrips(state, Array.from({ length: STANDARD_STRIPS_TOTAL }, (_, i) => i), 500)
     const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
     expect(result.type).toBe('NO_WINDOW')
   })
@@ -437,7 +431,7 @@ describe('earliestResourceWindow', () => {
   it('refs constrained → REFEREE_CONTENTION bottleneck when delay > THRESHOLD', () => {
     // 24 strips free, but refs all in use until t=60
     const config = makeConfig({
-      strips: makeStrips(24, 4),
+      strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS),
       referee_availability: [{ day: 0, foil_epee_refs: 4, sabre_refs: 0, source: 'ACTUAL' as const }],
     })
     const state = createGlobalState(config)
@@ -448,8 +442,9 @@ describe('earliestResourceWindow', () => {
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
       expect(result.startTime).toBe(60) // snapped from 60 → 60 (already on boundary)
+      // Only refs are constrained (strips are free), so cause must be exactly REFEREE_CONTENTION
       const refContention = result.bottlenecks.find(
-        (b: { cause: string }) => b.cause === 'REFEREE_CONTENTION' || b.cause === 'STRIP_AND_REFEREE_CONTENTION',
+        (b: { cause: string }) => b.cause === 'REFEREE_CONTENTION',
       )
       expect(refContention).toBeDefined()
     }
@@ -465,5 +460,21 @@ describe('earliestResourceWindow', () => {
       // 15 snaps to 30
       expect(result.startTime).toBe(30)
     }
+  })
+
+  it('MAX_RESCHEDULE_ATTEMPTS exhausted → NO_WINDOW', () => {
+    // Force repeated WAIT_UNTIL responses by having only 2 strips but requesting 4.
+    // Each iteration advances candidate, but strips never become sufficient within day bounds.
+    const config = makeConfig({
+      strips: makeStrips(2, 0),
+      MAX_RESCHEDULE_ATTEMPTS: 1,
+      LATEST_START_OFFSET: 120,
+      DAY_LENGTH_MINS: 120,
+    })
+    const state = createGlobalState(config)
+    // Both strips busy until well past day end
+    allocateStrips(state, [0, 1], 9999)
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    expect(result.type).toBe('NO_WINDOW')
   })
 })

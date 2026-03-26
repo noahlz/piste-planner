@@ -61,6 +61,9 @@ describe('suggestFlightingGroups', () => {
     expect(suggestions).toHaveLength(1)
     expect(suggestions[0].priority_competition_id).toBe('large')
     expect(suggestions[0].flighted_competition_id).toBe('small')
+    // Priority gets its pool count (20), flighted gets remainder (24-20=4)
+    expect(suggestions[0].strips_for_priority).toBe(20)
+    expect(suggestions[0].strips_for_flighted).toBe(4)
     // No MANUAL_NEEDED bottleneck when pool counts differ
     expect(bottlenecks.some(b => b.cause === BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED)).toBe(false)
   })
@@ -141,6 +144,18 @@ describe('calculateFlightedStrips', () => {
     expect(result.strips_for_priority + result.strips_for_flighted).toBe(24)
   })
 
+  it('priority pool count equals strips_total → flighted gets 0 cleanly', () => {
+    // Priority: 168 fencers → ceil(168/7)=24 pools = exactly strips_total; flighted gets 0
+    const priority = makeCompetition({ id: 'pri', fencer_count: 168 }) // 24 pools
+    const flighted = makeCompetition({ id: 'flt', fencer_count: 84 })  // 12 pools
+
+    const result = calculateFlightedStrips(priority, flighted, 24)
+
+    expect(result.strips_for_priority).toBe(24)
+    expect(result.strips_for_flighted).toBe(0)
+    expect(result.strips_for_priority + result.strips_for_flighted).toBe(24)
+  })
+
   it('priority pool count capped at strips_total when it would exceed', () => {
     // Priority with more pools than total strips: capped at strips_total, flighted gets 0
     const priority = makeCompetition({ id: 'pri', fencer_count: 210 }) // 30 pools > 24
@@ -169,9 +184,10 @@ describe('validateFlightingGroup', () => {
 
     const bottlenecks = validateFlightingGroup(group, [c1, c2, c3], dayAssignments)
 
-    // flt1 and flt2 are both flighted on day 0
-    const multipleFlighted = bottlenecks.find(b => b.competition_id === 'flt1' || b.competition_id === 'flt2')
-    expect(multipleFlighted).toBeDefined()
+    // Implementation emits one bottleneck per flighted competition on the day
+    const multipleFlighted = bottlenecks.filter(b => b.cause === BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY)
+    expect(multipleFlighted).toHaveLength(2)
+    expect(multipleFlighted.map(b => b.competition_id).sort()).toEqual(['flt1', 'flt2'])
   })
 
   it('flighted competition is not largest by pool count on the day → FLIGHTING_GROUP_NOT_LARGEST warning', () => {
@@ -219,6 +235,7 @@ describe('validateFlightingGroup', () => {
       b => b.cause === BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
     )
     expect(conflictWarning).toBeDefined()
+    expect(conflictWarning?.severity).toBe(BottleneckSeverity.WARN)
     expect(conflictWarning?.message).toMatch(/crossover/i)
   })
 
