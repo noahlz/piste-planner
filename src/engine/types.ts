@@ -132,6 +132,7 @@ export const BottleneckCause = {
   REFEREE_INSUFFICIENT_ACCEPTED: 'REFEREE_INSUFFICIENT_ACCEPTED',
   SAME_DAY_VIOLATION: 'SAME_DAY_VIOLATION',
   SCHEDULE_ACCEPTED_WITH_WARNINGS: 'SCHEDULE_ACCEPTED_WITH_WARNINGS',
+  CUT_SUMMARY: 'CUT_SUMMARY',
 } as const
 export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCause]
 

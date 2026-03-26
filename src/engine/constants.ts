@@ -1,4 +1,4 @@
-import { Category, CutMode, VideoPolicy, Weapon } from './types.ts'
+import { Category, CutMode, TournamentType, VideoPolicy, Weapon } from './types.ts'
 
 // ──────────────────────────────────────────────
 // Scheduling time constants (all values in minutes from midnight)
@@ -214,3 +214,15 @@ export const REST_DAY_PAIRS: [Category, Category][] = [
   [Category.JUNIOR, Category.CADET],
   [Category.JUNIOR, Category.DIV1],
 ]
+
+// ──────────────────────────────────────────────
+// Regional qualifier tournament types — cannot cap fencer registrations per handbook.
+// ──────────────────────────────────────────────
+
+export const REGIONAL_QUALIFIER_TYPES: ReadonlySet<string> = new Set<string>([
+  TournamentType.RYC,
+  TournamentType.RJCC,
+  TournamentType.ROC,
+  TournamentType.SYC,
+  TournamentType.SJCC,
+])
