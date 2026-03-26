@@ -7,7 +7,15 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
     coverage: {
       provider: 'v8',
-      exclude: ['src/engine/types.ts', 'src/engine/constants.ts'],
+      exclude: [
+        'src/engine/types.ts',
+        'src/engine/constants.ts',
+        'eslint.config.js',
+        'vite.config.ts',
+        'vitest.config.ts',
+        'src/App.tsx',
+        'src/main.tsx',
+      ],
     },
   },
 })
