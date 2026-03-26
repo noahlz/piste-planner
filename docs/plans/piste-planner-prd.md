@@ -78,7 +78,6 @@ PHASE 2 — SCHEDULING (automated)
   2d.  Summary output presented
 
 NOTE: initial_analysis() is stateless — re-runs on any config change.
-NOTE: Configurations and results can be saved and reloaded (see Section 20).
 ```
 
 ---
@@ -127,11 +126,21 @@ VIDEO_POLICY = { REQUIRED, BEST_EFFORT, FINALS_ONLY }
 VET_AGE_GROUP = { VET40, VET50, VET60, VET70, VET80, VET_COMBINED }
   // Only applicable when category == VETERAN
   // Determines default video replay thresholds (see DEFAULT_VIDEO_BY_CATEGORY)
-  // Full veteran category expansion (separate CATEGORY values) deferred to v6
+  // Full veteran category expansion (separate CATEGORY values) deferred to a future version
   // Age crossover rule: there is NO crossover between veteran age groups
   //   (e.g. VET40 and VET50 fencers do not cross over), EXCEPT VET_COMBINED
   //   which allows fencers from all veteran age groups to compete together
   //   and thus crosses over with all other VETERAN age groups.
+
+TOURNAMENT_TYPE = { NAC, RYC, RJCC, ROC, SYC, SJCC }
+  // NAC  = National Athletic Championships (default)
+  // RYC  = Regional Youth Circuit
+  // RJCC = Regional Junior/Cadet Circuit
+  // ROC  = Regional Olympic Circuit
+  // SYC  = Summer Youth Circuit
+  // SJCC = Summer Junior/Cadet Circuit
+  // Regional qualifiers (RYC, RJCC, ROC, SYC, SJCC) may not cap entries
+  //   per USA Fencing Athlete Handbook 2024-25 (p14-15)
 
 FENCER_COUNT_TYPE = { ESTIMATED, CAPPED }
   // ESTIMATED = organiser's best guess (default)
@@ -191,7 +200,7 @@ DAY_REFEREE_AVAILABILITY {
                     //   ACTUAL  = user-adjusted values (Phase 1.5d)
 }
 
-// Dual role (v6):
+// Dual role:
 //   Phase 1.5a: Engine produces OPTIMAL entries via calculate_optimal_refs().
 //   Phase 1.5d: User adjusts to ACTUAL availability. Engine re-runs analysis.
 //   Phase 2:    Scheduling uses ACTUAL values (or OPTIMAL if user accepts as-is).
@@ -243,7 +252,7 @@ COMPETITION {
   use_single_pool_override  // bool (default FALSE; valid only when fencer_count <= 10)
 
   // Pool cut configuration
-  cut_mode                // CUT_MODE (default per category — see Section 6.4)
+  cut_mode                // CUT_MODE (default per category — see Section 18)
   cut_value               // float (percentage) or int (count); ignored if DISABLED
                           // minimum 2 promoted fencers always enforced
 
@@ -285,6 +294,9 @@ COMPETITION {
 
 ```
 TOURNAMENT_CONFIG {
+  tournament_type             // TOURNAMENT_TYPE (default: NAC)
+                              // determines whether entry caps are permitted
+                              // (see is_regional_qualifier() in Section 9.1)
   days_available
   strips[]                    // list of STRIP objects
   strips_total                // derived: LENGTH(strips)
@@ -295,11 +307,11 @@ TOURNAMENT_CONFIG {
                               // then adjusted by user in Phase 1.5d.
                               // Must be set before Phase 2 (scheduling).
   allow_sabre_ref_fillin      // bool (default: FALSE)
-                              // v6: absorbed into Phase 1.5 flow. Engine suggests
+                              // Absorbed into Phase 1.5 flow. Engine suggests
                               // fill-in when actual sabre refs < optimal. If user
                               // accepts, this is set TRUE for affected days.
 
-  // Pod captain configuration (v6)
+  // Pod captain configuration
   pod_captain_override        // POD_CAPTAIN_OVERRIDE enum (default: AUTO)
                               //   AUTO = algorithmic (see Section 8.1 pod captain rules)
                               //   DISABLED = no pod captains during DEs
@@ -694,6 +706,16 @@ FUNCTION get_proximity_weight(cat1, cat2):
 ```
 // When individual and team events of the same category are on different days,
 // prefer team the day AFTER individual (day_gap == 1, team_day > individual_day).
+
+FUNCTION find_individual_counterpart(competition, schedule):
+  // Given a TEAM competition, returns the INDIVIDUAL competition in the schedule
+  // with the same category, gender, and weapon. Used by individual_team_proximity_penalty
+  // to compute day-gap bonuses/penalties and by the INDIV_TEAM_MIN_GAP constraint.
+  // Returns NULL if no matching individual competition is scheduled.
+  // STUB: implement as schedule.find(c WHERE c.event_type==INDIVIDUAL
+  //         AND c.category==competition.category
+  //         AND c.gender==competition.gender
+  //         AND c.weapon==competition.weapon)
 
 FUNCTION individual_team_proximity_penalty(competition, proposed_day, schedule):
   IF competition.event_type == TEAM:
@@ -1229,9 +1251,7 @@ FUNCTION compute_de_fencer_count(competition):
     CASE DISABLED:    RETURN competition.fencer_count
     CASE PERCENTAGE:  RETURN MAX(ROUND(competition.fencer_count * cut_value/100), 2)
     CASE COUNT:       RETURN MAX(MIN(cut_value, competition.fencer_count), 2)
-
-// bracket_size = next_power_of_2(compute_de_fencer_count(competition))
-// NOT next_power_of_2(entry fencer_count)
+// See compute_bracket_size() in Section 10.1 for bracket derivation.
 ```
 
 ### 7.5 Referee Policy Resolution
@@ -1264,7 +1284,7 @@ FUNCTION resolve_refs_per_pool(competition, available_refs, n_pools):
 
 ## 8. REFEREE ALLOCATION
 
-### 8.1 Optimal Referee Calculation & Pod Captain Rules (v6)
+### 8.1 Optimal Referee Calculation & Pod Captain Rules
 
 ```
 // Pod captain rules:
@@ -1370,6 +1390,17 @@ FUNCTION allocate_refs_for_sabre(refs_needed, start, end, day, state, config):
 // Fill-in applies to pool phase and DE blocks.
 // Fill-in does NOT apply to bronze bout — sabre bronze requires sabre-qualified ref.
 // Fill-in refs tracked separately (fillin_in_use) to accurately report sabre availability.
+
+FUNCTION allocate_refs_for_sabre_or_weapon(day, weapon, refs_needed, start, end, allow_fillin, state, config):
+  // Unified ref allocation entry point for DE finals and bronze bout, covering both
+  // sabre and non-sabre weapons. For sabre, delegates to allocate_refs_for_sabre()
+  // with the allow_fillin flag (bronze bout always passes allow_fillin=FALSE).
+  // For non-sabre (FOIL, EPEE), allocates directly from the foil/epee ref pool —
+  // no fill-in concept applies since there is no weapon restriction.
+  // STUB: implement as:
+  //   IF weapon == SABRE: RETURN allocate_refs_for_sabre(refs_needed, start, end, day, state, config)
+  //                       with allow_fillin controlling fill-in eligibility
+  //   ELSE: allocate refs_needed from foil_epee pool; RETURN OK or INSUFFICIENT
 ```
 
 ---
@@ -1476,6 +1507,12 @@ FUNCTION gender_equity_allowable_diff(larger_pools):
   IF larger_pools <= 7: RETURN 1
   IF larger_pools <= 11: RETURN 2
   RETURN 3                          // 12+ pools
+
+FUNCTION is_regional_qualifier(competition):
+  // Regional qualifiers (RYC, RJCC, ROC, SYC, SJCC) cannot cap entries.
+  // Tournament type is stored on config, not on individual competitions —
+  //   all competitions in a tournament share the same tournament type.
+  RETURN config.tournament_type IN { RYC, RJCC, ROC, SYC, SJCC }
 ```
 
 ### 9.2 Flight Structure
@@ -1503,8 +1540,22 @@ flight_b_start    = flight_a_start + flight_b_offset
 FUNCTION next_power_of_2(n):
   p=1; WHILE p<n: p=p*2; RETURN p
 
-// bracket_size = next_power_of_2(compute_de_fencer_count(competition))
-// NOT next_power_of_2(entry fencer_count)
+FUNCTION compute_bracket_size(competition):
+  // Returns the DE bracket size: the smallest power of 2 >= the promoted fencer count.
+  // Cuts must be applied first — bracket is based on promoted fencers, not raw entry count.
+  // Example: 100 entries at 20% cut → 20 promoted → bracket 32.
+  // STUB: implement as next_power_of_2(compute_de_fencer_count(competition))
+  RETURN next_power_of_2(compute_de_fencer_count(competition))
+
+FUNCTION de_phases_for_bracket(bracket_size):
+  // Returns the ordered set of DE phases applicable for the given bracket size.
+  // Mirrors the phase applicability rules below:
+  //   bracket > 32  → [DE_PRELIMS, DE_ROUND_OF_16, DE_FINALS]
+  //   bracket == 32 → [DE_ROUND_OF_16, DE_FINALS]
+  //   bracket <= 16 → [DE_FINALS]   (for small brackets, skip round of 16 — it collapses into finals)
+  //   bracket <= 8  → [DE_FINALS]
+  // SINGLE_BLOCK mode never calls this function — phase set is irrelevant there.
+  // STUB: implement using the phase applicability thresholds below.
 
 // Phase applicability:
 //   bracket > 32   → DE_PRELIMS + DE_ROUND_OF_16 + DE_FINALS
@@ -1571,6 +1622,14 @@ FUNCTION select_strips(strips_needed, video_required, not_before, state):
     candidates = SORT(non_video, BY free_at) + SORT(video, BY free_at)
     candidates = candidates[0..strips_needed-1]
   RETURN candidates
+
+FUNCTION all_free_strips_at(time, state):
+  // Fallback used in STAGED_DE_BLOCKS when select_strips_for_phase returns WAIT_UNTIL
+  // and the requirement is IF_AVAILABLE (not HARD). Returns all strips that are free
+  // at the given time, regardless of video capability. Used to avoid stalling the
+  // schedule when the target strip count is unavailable — the caller then scales
+  // duration by the actual strip count returned.
+  // STUB: implement as FILTER(config.strips, free at time in state)
 ```
 
 ### 10.4 SINGLE_BLOCK Execution
@@ -1798,6 +1857,15 @@ FUNCTION assign_day(competition, pool_info, state):
 ### 12.4 Day Penalty Scoring
 
 ```
+FUNCTION comparable(competition, c2):
+  // Returns TRUE if the two competitions should have individual+team ordering
+  // constraints applied between them. Called only after category and weapon are
+  // already confirmed equal; this function checks the remaining conditions.
+  // Ordering constraints only apply within the same gender group — a men's
+  // individual and women's team event in the same category do not impose ordering
+  // on each other (they are separate draw populations).
+  // STUB: implement as competition.gender == c2.gender
+
 FUNCTION total_day_penalty(competition, day, estimated_start, state, level):
   total = 0.0
 
@@ -2275,7 +2343,7 @@ FUNCTION post_schedule_warnings(schedule, config):
 FUNCTION validate(competitions[], config):
 
   // ── Referee availability ──────────────────────────────────
-  // v6: referee_availability is optional during Phase 1 (pre-validation).
+  // referee_availability is optional during Phase 1 (pre-validation).
   // It is populated by calculate_optimal_refs() in Phase 1.5a, then
   // adjusted by the user. Full validation runs before Phase 2 scheduling.
   IF config.referee_availability IS NOT EMPTY:
@@ -2433,7 +2501,7 @@ FUNCTION validate_same_day_completion(competition, config):
 | DE_FINALS_MIN_MINS | 30 | No | Finals hard floor |
 | MAX_FENCERS | 400 | No | Per competition max |
 | MIN_FENCERS | 6 | No | Per competition min |
-| allow_sabre_ref_fillin | FALSE | Yes | v6: absorbed into Phase 1.5 flow; engine suggests when sabre refs short |
+| allow_sabre_ref_fillin | FALSE | Yes | Absorbed into Phase 1.5 flow; engine suggests fill-in when sabre refs short |
 | pod_captain_override | AUTO | Yes | AUTO/DISABLED/FORCE_4 — see Section 8.1 |
 
 ---
@@ -2498,32 +2566,20 @@ FUNCTION video_guaranteed_round(competition):
 
 ---
 
-## 20. OPEN ITEMS
+## 20. OUT OF SCOPE / EXPLICIT EXCLUSIONS
 
-| Item | Status | Notes |
-|---|---|---|
-| POOL_TABLE | ✅ RESOLVED | Full table for all fencer counts 6–400 hardcoded in Section 7.1. Single pool override (n≤10) documented. |
-| Save/load configurations | 🔲 v6 | Save tournament configuration + schedule results for later reloading and re-running. Serialization format, storage backend, and versioning TBD. |
-| Full veteran category expansion | 🔲 v6 | Expand VET40-80 as separate CATEGORY values with per-group crossover differences. Carried from v5.3 exclusions. |
-| `is_regional_qualifier()` definition | 🔲 v6 | Need mapping of competition IDs to tournament types (RYC, RJCC, ROC, SYC, SJCC) for gender equity cap validation. May require catalogue extension. |
-
-*See version history for closed items.*
-
----
-
-## 21. OUT OF SCOPE / EXPLICIT EXCLUSIONS
-
-The following items were evaluated during the v5.2 review and explicitly excluded. They may be revisited in future versions.
+The following items were explicitly excluded. They may be revisited in future versions.
 
 | Item | Source | Reason for Exclusion |
 |---|---|---|
 | Rest day between Junior↔Cadet (JO) and Junior↔Div1 | Ops Manual Group 2 | JO-specific rule. At NACs, Junior and Cadet are typically adjacent with no rest day. Organizers handle manually for JO events. |
 | Two-round pool format for 203+ fencers | USA Fencing 2024-25 format updates | Rare edge case (only Div1 Men's Epee/Foil currently). Requires significant pool duration model changes. |
-| Parafencing events | USA Fencing 2024-25 | Different equipment, rules, and scheduling needs. Out of scope for v5.2. |
+| Parafencing events | USA Fencing 2024-25 | Different equipment, rules, and scheduling needs. Out of scope. |
 | Repechage format | Ops Manual Appendix | Modern NACs use simple DE. Documented as intentional omission. |
 | Coach coverage model | Community feedback | Coaches unable to cover multiple events is a real concern but modeling club/coach resources is out of scope. |
 | Schedule publication timing | Community feedback | Process issue, not an algorithm issue. Early estimation is a design goal but not enforced by the scheduler. |
-| Full veteran category expansion (VET40-80 as CATEGORY values) | Ops Manual | Partial solution via `vet_age_group` field (Section 2.4). Full expansion deferred to v6 when per-group crossover differences need modeling. |
+| Full veteran category expansion (VET40-80 as CATEGORY values) | Ops Manual | Partial solution via `vet_age_group` field (Section 2.4). Full expansion deferred to a future version when per-group crossover differences need modeling. |
+| Save/load configurations | Product feature | Serialization format, storage backend, and versioning are application-layer concerns, not scheduling algorithm problems. Deferred to a future application specification. |
 
 ---
 
@@ -2550,44 +2606,7 @@ Full research document: [`prd-review-research.md`](./prd-review-research.md)
 | S9 | Academy of Fencing Masters: "How to Make USA Fencing National Events Work for Everyone" | [Link](https://academyoffencingmasters.com/blog/how-to-make-usa-fencing-national-events-work-for-everyone/) |
 | S10 | Fencing Time tournament software documentation | [Link](https://www.fencingtime.com/Home/VerHistory) |
 
-### A.2 Critical Findings Requiring PRD Changes
-
-**A.2.1 — Weapon Scoping (P0) — RESOLVED**
-Crossover penalties are now weapon-scoped. `crossover_penalty()` in Section 4.1 checks weapon: same-weapon pairs use the penalty graph; cross-weapon pairs return 0.0. Group 1 mandatory pairs (Div1/Junior/Cadet, adjacent age groups) are INFINITY for same-weapon. See `GROUP_1_MANDATORY` set in Section 4.1.
-
-**A.2.2 — Time-System Mismatch in LATEST_START Check (P0) — RESOLVED**
-Added `LATEST_START_OFFSET = 480` derived constant. Section 11.1 now uses `DAY_START(day) + LATEST_START_OFFSET`.
-
-**A.2.3 — DIV1↔DIV1A Indirect Penalty Not Producible (P0) — RESOLVED**
-Added `DIV1: { DIV1A: 0.3 }` as a direct edge in CROSSOVER_GRAPH. Table entry updated from "Indirect" to "Direct".
-
-**A.2.4 — DE Bracket=32 Phase Boundary (P0) — RESOLVED**
-Changed phase applicability text to "bracket > 32" (formula was already correct).
-
-**A.2.5 — Veteran Category Expansion (P1) — RESOLVED**
-Added `vet_age_group` field (VET40/50/60/70/80) to COMPETITION struct (Section 2.4). Used for video replay defaults (Section 19). Full category expansion deferred to v6.
-
-**A.2.6 — Video Replay Category Defaults (P1) — RESOLVED**
-Added DEFAULT_VIDEO_BY_CATEGORY table in Section 19 with `default_video_policy()` and `video_guaranteed_round()` functions. Encodes Ops Manual thresholds per category and vet age group.
-
-**A.2.7 — Pool Duration Source — RESOLVED**
-Comment added to `pool_round_duration_table` in Section 2.5 documenting that FOIL/EPEE differentiation is based on empirical observation, not Ops Manual timing.
-
-**A.2.8 — Community-Validated Scheduling Conflicts — RESOLVED**
-Per S2, S3, S4: the April 2024 NAC saw Division 1 Men's Epee and Junior Team Men's Epee overlap. Now addressed: weapon-scoped crossover penalties make same-weapon Div1↔Junior an INFINITY hard block (Group 1 mandatory).
-
-**A.2.9 — Internal Consistency Issues (P1)**
-Additional issues found via automated consistency analysis (see `prd-review-research.md` Section 3 for full details):
-- ~~3 functions called but never defined~~ — RESOLVED: defined in Sections 12.9, 12.10, 12.11
-- ~~12 bottleneck cause codes never emitted~~ — RESOLVED: emit points added in Sections 11.1, 12.4, 12.9, 12.10, 13, 9.1
-- ~~`use_single_pool_override` missing from struct~~ — RESOLVED: added to Section 2.4
-- ~~Flight B strip over-allocation~~ — RESOLVED: Flight B now uses FLOOR(n_pools/2)
-- ~~No bracket_size=2 entry~~ — RESOLVED: added `2:15` to all weapons in de_duration_table
-- ~~Zero refs not hard-errored~~ — RESOLVED: hard validation error in Section 15
-- ~~REQUIRED+SINGLE_BLOCK silently ignored~~ — RESOLVED: validation WARN in Section 15
-- ~~INDIV_TEAM_MIN_GAP naming inconsistency~~ — RESOLVED: renamed to INDIV_TEAM_MIN_GAP_MINS everywhere
-
-### A.3 Ops Manual Scheduling Criteria Coverage Matrix
+### A.2 Ops Manual Scheduling Criteria Coverage Matrix
 
 | Ops Manual Criterion | Group | PRD Section | Status |
 |---|---|---|---|
@@ -2609,4 +2628,4 @@ Additional issues found via automated consistency analysis (see `prd-review-rese
 
 ---
 
-*END OF SPECIFICATION — v5.3*
+*END OF SPECIFICATION — v6.0*
