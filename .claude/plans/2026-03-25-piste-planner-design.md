@@ -68,8 +68,8 @@ piste-planner/
 │   ├── engine/                 # Pure TS scheduling engine (no React imports)
 │   │   ├── types.ts            # All PRD enums + data types
 │   │   ├── constants.ts        # PRD Section 17 constants, duration tables
-│   │   ├── catalogue.ts        # 78 fixed competitions, template definitions
-│   │   ├── crossover.ts        # build_penalty_matrix(), crossover_penalty()
+│   │   ├── catalogue.ts        # 84 fixed competitions, template definitions
+│   │   ├── crossover.ts        # build_penalty_matrix(), crossover_penalty(), proximity_penalty()
 │   │   ├── pools.ts            # Pool sizing, construction, cut logic (Section 7)
 │   │   ├── de.ts               # DE duration estimation, bracket sizing (Section 10)
 │   │   ├── refs.ts             # calculate_optimal_refs(), pod captain sizing (Section 8)
@@ -116,7 +116,7 @@ Each engine file maps to 1–2 PRD sections for traceability.
 | **Landing** | — | "New Tournament" / "Load Configuration" |
 | **Step 1: Tournament Setup** | 1a–1d | Tournament type, days, per-day start/end times, strip count + video count, template selection → competition checklist |
 | **Step 2: Event Configuration** | 1e–1g | Fencer counts (inline editable table), per-competition overrides (defaults hidden, customized badges visible, bulk actions), global config overrides (duration tables, gaps) |
-| **Step 3: Referee Setup** | 1.5a–1.5f | Optimal refs calculated and displayed. Side-by-side optimal vs actual per day, split by foil/epee and sabre. Sabre fill-in suggestions when actual < optimal. |
+| **Step 3: Referee Setup** | 1.5a–1.5f | Optimal refs calculated and displayed. Side-by-side optimal vs actual per day, split by foil/epee and sabre. Per-day sabre fill-in toggle: engine suggests when actual sabre refs < optimal on a given day, user accepts/rejects per day. |
 | **Step 4: Analysis & Flighting** | 1h–1k | Pre-validation errors (block progress). Initial analysis: strip deficit warnings, flighting suggestions (auto with manual override), video demand warnings, cut summary, gender equity validation. User accepts/modifies/confirms. |
 | **Schedule Output** | 2a–2d | USA Fencing-style grid, Gantt accordion per day, diagnostics panel, strip layout grid. Actions: Save, Share, Start New. |
 
@@ -131,7 +131,8 @@ Each engine file maps to 1–2 PRD sections for traceability.
 
 - `day_start_time`: default 8:00 AM, configurable per day in 30-minute increments.
 - `day_end_time`: default 10:00 PM, configurable per day in 30-minute increments.
-- `latest_start_time`: calculated automatically as `day_end_time - 6 hours`. Not user-configurable — hard constraint.
+- `latest_start_time`: fixed at 4:00 PM (960 minutes from midnight). Not derived from `day_end_time` — this is a hard constant per PRD Section 17 (`LATEST_START_MINS`). Not user-configurable.
+- **Engine note:** The PRD's time model (`DAY_START(d) = d * 840`) assumes fixed 14-hour days. With configurable per-day windows, the engine must use per-day offset lookups instead of the `d * 840` formula. `DAY_START(d)` and `DAY_END(d)` become functions that read the per-day config.
 
 ---
 
@@ -144,12 +145,12 @@ Preset tournament configurations based on common NAC/ROC/RYC/RJCC formats. User 
 | Template | Days | Events |
 |---|---|---|
 | NAC Youth | 3 | Y10, Y12, Y14, Cadet — all weapons, both genders, individual |
-| NAC Cadet/Junior | 3 | Cadet + Junior — all weapons, both genders, individual + team |
+| NAC Cadet/Junior | 3 | Cadet (individual + team) + Junior (individual + team) — all weapons, both genders |
 | NAC Div1/Junior | 3 | Div1 + Junior — all weapons, both genders, individual + team |
 | NAC Vet/Div1/Junior | 3–4 | Veteran (all age groups + combined) + Div1 + Junior — all weapons, both genders, individual + team |
 | ROC Div1A/Vet | 2 | Div1A + Veteran (age groups, no combined) — all weapons, both genders, individual only |
 | ROC Div1A/Div2/Vet | 2 | Div1A + Div2 + Veteran (age groups, no combined) — all weapons, both genders, individual only |
-| ROC Mega | 2–3 | Y10, Y12, Y14, Cadet, Junior, Div1A, Div2 — all weapons, both genders, individual only (no Div1, no Vet Combined, no Y8, no Div3) |
+| ROC Mega | 2–3 | Y10, Y12, Y14, Cadet, Junior, Div1A, Div2 — all weapons, both genders, individual only (no Div1, no Vet Combined, no Div3) |
 | RYC Weekend | 2 | Y10–Y14 — all weapons, both genders |
 | RJCC Weekend | 2 | Cadet + Junior — all weapons, both genders |
 | Blank | — | Empty |
@@ -159,6 +160,7 @@ Preset tournament configurations based on common NAC/ROC/RYC/RJCC formats. User 
 - Filterable table with checkboxes.
 - Filter dropdowns: gender, weapon, category, event type.
 - Template pre-populates selections; user adds/removes freely.
+- **Veteran age groups:** When VETERAN category is checked, auto-expand sub-rows for each age group (VET40, VET50, VET60, VET70, VET80, VET_COMBINED). Each is a separate competition with its own fencer count and settings. Age group determines default video policy (see PRD Section 19).
 
 ### Fencer Counts
 
@@ -186,7 +188,7 @@ PRD defines sensible defaults per category (Sections 18, 19). Most organizers wo
 
 | Setting | Default | Notes |
 |---|---|---|
-| `tournament_type` | NAC | Determines if capping is allowed |
+| `tournament_type` | NAC | NAC / RYC / RJCC / ROC / SYC / SJCC. Determines if capping is allowed |
 | `days_available` | — | 2–4 days |
 | `day_start_time` | 8:00 AM | Per-day override available |
 | `day_end_time` | 10:00 PM | Per-day override available |
@@ -198,6 +200,16 @@ PRD defines sensible defaults per category (Sections 18, 19). Most organizers wo
 | `pool_round_duration_table` | Per weapon | Epee:120, Foil:90, Sabre:60 |
 | `de_duration_table` | Per weapon × bracket size | See PRD Section 2.5 |
 
+**Advanced settings** (collapsible panel, hidden by default):
+
+| Setting | Default | Notes |
+|---|---|---|
+| `SAME_TIME_WINDOW_MINS` | 30 | Within this = "same time" for penalty scoring |
+| `INDIV_TEAM_MIN_GAP_MINS` | 120 | Individual must precede team by this gap |
+| `EARLY_START_THRESHOLD` | 10 | Minutes from day start that counts as "8AM start" |
+| `THRESHOLD_MINS` | 10 | Minimum delay worth flagging as bottleneck |
+| `MAX_RESCHEDULE_ATTEMPTS` | 3 | Deadline reschedule retry limit per competition |
+
 **Per-competition settings** (override individually):
 
 | Setting | Default | Notes |
@@ -206,7 +218,7 @@ PRD defines sensible defaults per category (Sections 18, 19). Most organizers wo
 | `fencer_count_type` | ESTIMATED | ESTIMATED or CAPPED |
 | `ref_policy` | AUTO | ONE / TWO / AUTO |
 | `de_mode` | SINGLE_BLOCK | SINGLE_BLOCK or STAGED_DE_BLOCKS |
-| `de_video_policy` | Per category | REQUIRED (Div1/Junior/Cadet), BEST_EFFORT (others) |
+| `de_video_policy` | Per category | REQUIRED / BEST_EFFORT / FINALS_ONLY. Defaults: REQUIRED (Div1/Junior/Cadet), BEST_EFFORT (others) |
 | `de_finals_strip_id` | NULL | Specific strip for gold bout |
 | `de_finals_strip_requirement` | — | HARD / IF_AVAILABLE (only if finals strip set) |
 | `de_round_of_16_strips` | 4 | STAGED only |
@@ -223,7 +235,7 @@ PRD defines sensible defaults per category (Sections 18, 19). Most organizers wo
 |---|---|
 | `foil_epee_refs` | Calculated optimal |
 | `sabre_refs` | Calculated optimal |
-| `allow_sabre_ref_fillin` | FALSE (engine suggests when needed) |
+| `allow_sabre_ref_fillin` | FALSE | Per-day toggle. Engine suggests when actual sabre refs < optimal on a given day. User accepts/rejects per day. |
 
 ---
 
@@ -366,7 +378,7 @@ TDD is optional for: `catalogue.ts`, `constants.ts` (data, not logic), store sli
 - Unit tests for every engine module against PRD expected behavior.
 - Table-driven tests for: pool sizing (Section 7), DE duration estimation (Section 10), crossover penalty matrix (Section 4), cut promotion counts (Section 18).
 - Integration tests for `schedule_all()` using each template tournament config.
-- Edge cases: min/max fencer counts (2 and 500), single-day tournaments, zero video strips, all events on one day, sabre fill-in accepted vs rejected.
+- Edge cases: min/max fencer counts (2 and 500), small pools (2–5 fencers), single-day tournaments, zero video strips, all events on one day, sabre fill-in accepted vs rejected per day.
 
 ### Store Tests
 
@@ -398,3 +410,13 @@ Component tests use [@testing-library/react](https://testing-library.com/docs/re
 - [ ] Evaluate Frappe Gantt vs React Modern Gantt during implementation.
 - [ ] Determine Gantt bar color scheme (by category or weapon) during implementation.
 - [ ] Verify TAP reporter package availability for Vitest.
+- [x] Add Cadet team events to PRD catalogue (84 total, up from 78) (completed 2026-03-25).
+- [x] Extend fencer count range to 2–500 in PRD (pool table, validation, constants) (completed 2026-03-25).
+- [x] Fix SYC acronym: Super Youth Circuit (not Summer) (completed 2026-03-25).
+- [x] Add FINALS_ONLY video policy to per-competition settings (completed 2026-03-25).
+- [x] Add Advanced settings panel for configurable engine constants (completed 2026-03-25).
+- [x] Change sabre fill-in to per-day toggle (completed 2026-03-25).
+- [x] Add proximity_penalty() to crossover.ts file mapping (completed 2026-03-25).
+- [x] Add veteran age group auto-expand in competition checklist (completed 2026-03-25).
+- [x] Add SYC/SJCC to tournament type dropdown (completed 2026-03-25).
+- [x] Clarify configurable time model with fixed LATEST_START_MINS (completed 2026-03-25).

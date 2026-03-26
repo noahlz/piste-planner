@@ -137,7 +137,7 @@ TOURNAMENT_TYPE = { NAC, RYC, RJCC, ROC, SYC, SJCC }
   // RYC  = Regional Youth Circuit
   // RJCC = Regional Junior/Cadet Circuit
   // ROC  = Regional Olympic Circuit
-  // SYC  = Summer Youth Circuit
+  // SYC  = Super Youth Circuit
   // SJCC = Summer Junior/Cadet Circuit
   // Regional qualifiers (RYC, RJCC, ROC, SYC, SJCC) may not cap entries
   //   per USA Fencing Athlete Handbook 2024-25 (p14-15)
@@ -478,17 +478,17 @@ SCHEDULE_ACCEPTED_WITH_WARNINGS   // INFO — user accepted imperfect schedule
 
 ## 3. FIXED COMPETITION CATALOGUE
 
-Competitions are selected from this fixed list only. 78 total competitions maximum.
+Competitions are selected from this fixed list only. 84 total competitions maximum.
 
 - 60 individual events (10 categories × 3 weapons × 2 genders)
-- 18 team events (Junior, Veteran, DIV1 × 3 weapons × 2 genders)
+- 24 team events (Cadet, Junior, Veteran, DIV1 × 3 weapons × 2 genders)
 
 | Category | Individual | Team | ID Format |
 |---|---|---|---|
 | Y10 | ✓ | — | Y10-{G}-{W}-IND |
 | Y12 | ✓ | — | Y12-{G}-{W}-IND |
 | Y14 | ✓ | — | Y14-{G}-{W}-IND |
-| CADET | ✓ | — | CDT-{G}-{W}-IND |
+| CADET | ✓ | ✓ | CDT-{G}-{W}-{T} |
 | JUNIOR | ✓ | ✓ | JR-{G}-{W}-{T} |
 | VETERAN | ✓ | ✓ | VET-{G}-{W}-{T} |
 | DIV1 | ✓ | ✓ | D1-{G}-{W}-{T} |
@@ -735,9 +735,10 @@ FUNCTION individual_team_proximity_penalty(competition, proposed_day, schedule):
 
 ## 7.1 Valid Pool Compositions
 
-Valid pool sizes: 5, 6, 7, 8, 9, and 10 (single pool override only).
+Valid pool sizes: 2, 3, 4, 5, 6, 7, 8, 9, and 10 (single pool override only).
 
 Valid combinations:
+- `n <= 5` → 1 pool of n (mandatory single pool)
 - `n == 8` → 1 pool of 8 (default single pool)
 - `n == 9` → 1 pool of 9 (default single pool)
 - `n <= 10` → organiser may override to 1 pool of n (use_single_pool_override)
@@ -745,7 +746,7 @@ Valid combinations:
 - 5+7 is NOT valid. 8 and 9 never appear in mixed combinations.
 
 ```
-BOUT_COUNTS = { 5:10, 6:15, 7:21, 8:28, 9:36, 10:45 }
+BOUT_COUNTS = { 2:1, 3:3, 4:6, 5:10, 6:15, 7:21, 8:28, 9:36, 10:45 }
 
 // Single pool override field on COMPETITION:
 //   use_single_pool_override  // bool (default FALSE)
@@ -754,6 +755,8 @@ BOUT_COUNTS = { 5:10, 6:15, 7:21, 8:28, 9:36, 10:45 }
 
 FUNCTION compute_pool_structure(competition):
   n = competition.fencer_count
+  IF n <= 5:
+    RETURN { n_pools:1, pool_sizes:[n], pool_round_duration:pool_duration_for_size(weapon,n) }
   IF competition.use_single_pool_override AND n <= 10:
     RETURN { n_pools:1, pool_sizes:[n], pool_round_duration:pool_duration_for_size(weapon,n) }
   IF n NOT IN POOL_TABLE:
@@ -761,10 +764,14 @@ FUNCTION compute_pool_structure(competition):
   RETURN POOL_TABLE[n]
 ```
 
-### POOL_TABLE — Complete Lookup (6–400 fencers)
+### POOL_TABLE — Complete Lookup (2–500 fencers)
 
 | n | Pools | Composition | Single Pool Override |
 |---|---|---|---|
+| 2 | 1 | 1x2 | — |
+| 3 | 1 | 1x3 | — |
+| 4 | 1 | 1x4 | — |
+| 5 | 1 | 1x5 | — |
 | 6 | 1 | 1x6 | 1x6 (if enabled) |
 | 7 | 1 | 1x7 | 1x7 (if enabled) |
 | 8 | 1 | 1x8 | 1x8 (if enabled) |
@@ -1160,6 +1167,12 @@ FUNCTION compute_pool_structure(competition):
 | 398 | 57 | 56x7+1x6 | — |
 | 399 | 57 | 57x7 | — |
 | 400 | 58 | 52x7+6x6 | — |
+
+**401–500 fencers:** Follow the same 6+7 mix pattern. For `n` fencers:
+- `n_pools = CEIL(n / 7)` if `n MOD 7 == 0`, else solve `7a + 6b = n` where `a + b = n_pools`
+- Formula: `n_pools = n - 5 * FLOOR(n / 6)` (simplified); or equivalently: `a = n - 6 * n_pools`, `b = n_pools - a`
+- Range: 59 pools (401) through 72 pools (500)
+- Example: 500 fencers → `n_pools = 72`, composition = `68x7 + 4x6` (68×7 + 4×6 = 476 + 24 = 500)
 
 ### 7.2 Pool Duration Estimation
 
@@ -2365,7 +2378,7 @@ FUNCTION validate(competitions[], config):
 
   // ── Per-competition ───────────────────────────────────────
   FOR each competition c:
-    IF c.fencer_count < 6 OR c.fencer_count > 400: RAISE
+    IF c.fencer_count < 2 OR c.fencer_count > 500: RAISE
     IF c.earliest_start < DAY_START(0): RAISE
     IF c.latest_end > DAY_END(days-1): RAISE
     IF c.latest_end <= c.earliest_start: RAISE
@@ -2499,8 +2512,8 @@ FUNCTION validate_same_day_completion(competition, config):
 | MAX_RESCHEDULE_ATTEMPTS | 3 | Yes | Deadline reschedule retry limit per competition (Section 13) |
 | DE_REFS | 1 | No | DE always 1 ref per strip |
 | DE_FINALS_MIN_MINS | 30 | No | Finals hard floor |
-| MAX_FENCERS | 400 | No | Per competition max |
-| MIN_FENCERS | 6 | No | Per competition min |
+| MAX_FENCERS | 500 | No | Per competition max |
+| MIN_FENCERS | 2 | No | Per competition min |
 | allow_sabre_ref_fillin | FALSE | Yes | Absorbed into Phase 1.5 flow; engine suggests fill-in when sabre refs short |
 | pod_captain_override | AUTO | Yes | AUTO/DISABLED/FORCE_4 — see Section 8.1 |
 
