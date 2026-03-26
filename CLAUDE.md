@@ -8,7 +8,7 @@
 ## Test Safety
 
 - Prefix test commands with `timeout 120` — engine tests complete in <2s; a hang means a code bug (unbounded loop)
-- Redirect output: `pnpm --silent test > /tmp/test.log 2>&1` — read log only on failure
+- Redirect output: `pnpm --silent test > ./tmp/test.log 2>&1` — read log only on failure
 
 ## Code Rules
 
