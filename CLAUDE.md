@@ -20,3 +20,4 @@
 
 - Use the test-quality-reviewer agent after adding or editing tests (scoped to the new / changed tests).
 - Use the react-code-reviewer agent after adding or editing React code
+- Use sub-agent development (and agent teams, if possible) when executing plans.

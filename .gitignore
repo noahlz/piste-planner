@@ -143,3 +143,6 @@ vite.config.ts.timestamp-*
 
 # MacOs cruft
 .DS_Store
+
+# Ad hoc tmp files
+tmp/
