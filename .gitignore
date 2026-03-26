@@ -140,3 +140,6 @@ vite.config.ts.timestamp-*
 
 # Claude Configs
 .claude/settings.*.json
+
+# MacOs cruft
+.DS_Store
