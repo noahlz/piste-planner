@@ -478,13 +478,14 @@ SCHEDULE_ACCEPTED_WITH_WARNINGS   // INFO — user accepted imperfect schedule
 
 ## 3. FIXED COMPETITION CATALOGUE
 
-Competitions are selected from this fixed list only. 84 total competitions maximum.
+Competitions are selected from this fixed list only. 90 total competitions maximum.
 
-- 60 individual events (10 categories × 3 weapons × 2 genders)
+- 66 individual events (11 categories × 3 weapons × 2 genders)
 - 24 team events (Cadet, Junior, Veteran, DIV1 × 3 weapons × 2 genders)
 
 | Category | Individual | Team | ID Format |
 |---|---|---|---|
+| Y8 | ✓ | — | Y8-{G}-{W}-IND |
 | Y10 | ✓ | — | Y10-{G}-{W}-IND |
 | Y12 | ✓ | — | Y12-{G}-{W}-IND |
 | Y14 | ✓ | — | Y14-{G}-{W}-IND |
