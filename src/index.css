@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  /* Piste Planner brand palette — design spec Section 10 */
+  --color-background: #faf9f6;
+  --color-border: #475569;
+  --color-accent: #3b82f6;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-background);
+}
