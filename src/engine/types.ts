@@ -325,6 +325,8 @@ export interface PoolDurationResult {
   actual_duration: number
   baseline: number
   effective_parallelism: number
+  double_duty_pairs: number
+  uncompensated: number
   penalised: boolean
 }
 
