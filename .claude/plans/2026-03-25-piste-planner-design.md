@@ -20,19 +20,20 @@ A single-page browser-only web application for planning USA Fencing regional and
 
 ## 2. Tech Stack
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Build | **Vite** | Fast HMR, zero-config TypeScript |
-| UI | **React 19** | Functional components |
-| State | **Zustand** | Lightweight, slice-based store |
-| Styling | **Tailwind CSS** | Custom palette for paper/fencing theme |
-| Package manager | **pnpm** | Strict, fast, disk-efficient |
-| Unit tests | **Vitest** | Native Vite integration, TAP output via `--reporter=tap-flat` |
-| Coverage | **Vitest + v8** | Built-in `--coverage` with v8 provider |
-| Linting | **ESLint 9** (flat config) | `typescript-eslint` + `eslint-plugin-react-hooks` |
-| Formatting | **Prettier** | Runs on `.ts`, `.tsx`, `.json`, `.css` |
-| Gantt visualization | **Frappe Gantt** or **React Modern Gantt** | Evaluate during implementation; read-only timeline |
-| Strip layout | **Custom CSS Grid** | Too simple to justify a dependency |
+| Layer | Choice | Docs | Notes |
+|---|---|---|---|
+| Build | **Vite** | [vite.dev](https://vite.dev) | Fast HMR, zero-config TypeScript. Vite is the modern successor to webpack/CRA — it serves source files over native ES modules during dev for near-instant startup, and bundles with Rollup for production. |
+| UI | **React 19** | [react.dev](https://react.dev) | The industry-standard component library. We use functional components with hooks throughout — no class components. |
+| State | **Zustand** | [github.com/pmndrs/zustand](https://github.com/pmndrs/zustand) | Minimal global state library (~3KB). Think of it as a lightweight alternative to Redux — you define a store with slices of state and actions, then any component can subscribe to just the part it needs. No boilerplate, no context providers. |
+| Styling | **Tailwind CSS** | [tailwindcss.com/docs](https://tailwindcss.com/docs) | Utility-first CSS framework. Instead of writing separate CSS files, you apply small utility classes directly in JSX (e.g. `className="bg-white border rounded p-4"`). We configure a custom color palette for the paper/fencing theme. |
+| Package manager | **pnpm** | [pnpm.io](https://pnpm.io) | Faster and more disk-efficient than npm/yarn. Uses a content-addressable store so packages are never duplicated across projects. |
+| Unit tests | **Vitest** | [vitest.dev](https://vitest.dev) | Testing framework built on Vite — same config, same transforms, much faster than Jest for TypeScript projects. Uses a Jest-compatible API (`describe`, `it`, `expect`) so the syntax is familiar. |
+| Component tests | **@testing-library/react** | [testing-library.com/docs/react-testing-library/intro](https://testing-library.com/docs/react-testing-library/intro/) | The standard for testing React components. Renders components into a virtual DOM and provides queries based on what users see (text, roles, labels) rather than implementation details like class names or component internals. |
+| Coverage | **Vitest + v8** | [vitest.dev/guide/coverage](https://vitest.dev/guide/coverage) | Built-in `--coverage` with v8 provider. Reports line/branch/function coverage per file. |
+| Linting | **ESLint 9** (flat config) | [eslint.org](https://eslint.org) | Static analysis tool that catches common bugs and enforces code style. We use `typescript-eslint` for TypeScript rules and `eslint-plugin-react-hooks` to enforce React hooks rules. |
+| Formatting | **Prettier** | [prettier.io](https://prettier.io) | Opinionated code formatter. Runs automatically on save/commit to keep all code consistently formatted. Runs on `.ts`, `.tsx`, `.json`, `.css`. |
+| Gantt visualization | **Frappe Gantt** | [github.com/frappe/gantt](https://github.com/frappe/gantt) | Lightweight open-source JS Gantt library (MIT). Zero dependencies, clean aesthetic. Evaluate vs React Modern Gantt during implementation; read-only use only. |
+| Strip layout | **Custom CSS Grid** | [MDN CSS Grid](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout) | Too simple to justify a dependency — just styled rectangles in groups of 4. |
 
 ### Test Execution
 
@@ -352,37 +353,48 @@ store/
 
 ## 11. Testing Strategy
 
-### Engine Tests (Highest Priority)
+### Test-Driven Development (TDD)
+
+Engine modules are built test-first. For each engine function, write a failing test that captures the PRD's expected behavior before writing the implementation. This is especially important given the PRD may have gaps or ambiguities — a failing test makes the expected behavior explicit and surfaces spec issues early.
+
+TDD applies to: `pools.ts`, `de.ts`, `refs.ts`, `crossover.ts`, `dayAssignment.ts`, `scheduler.ts`, `validation.ts`, `analysis.ts`.
+
+TDD is optional for: `catalogue.ts`, `constants.ts` (data, not logic), store slices, and UI components.
+
+### Engine Tests (Highest Priority — Test-First)
 
 - Unit tests for every engine module against PRD expected behavior.
-- Table-driven tests for pool sizing, DE duration estimation, crossover penalty calculations.
-- Integration tests for `schedule_all()` with template-based configs.
-- Edge cases: min/max fencer counts, single-day tournaments, zero video strips, all events on one day.
+- Table-driven tests for: pool sizing (Section 7), DE duration estimation (Section 10), crossover penalty matrix (Section 4), cut promotion counts (Section 18).
+- Integration tests for `schedule_all()` using each template tournament config.
+- Edge cases: min/max fencer counts (2 and 500), single-day tournaments, zero video strips, all events on one day, sabre fill-in accepted vs rejected.
 
 ### Store Tests
 
-- Stale tracking: verify mutations in config slices set downstream stale flags.
-- Serialization round-trip: save → load → state matches.
-- URL encoding round-trip: encode → decode → state matches.
+- Stale tracking: mutations in config slices set downstream `isStale` flags correctly.
+- Serialization round-trip: save → JSON → load → state matches original.
+- URL encoding round-trip: encode → base64url → decode → state matches original.
+- Schema validation: reject malformed JSON, unknown fields, out-of-range values.
 
-### Component Tests (Lighter Touch)
+### Component Tests — @testing-library/react
 
-- Wizard navigation: forward/back, step validation gates.
-- Schedule grid renders correct events in correct cells.
-- Warning/error icons appear on correct events.
-- File upload/download triggers correct store hydration.
+Component tests use [@testing-library/react](https://testing-library.com/docs/react-testing-library/intro/) with Vitest. Tests query the DOM by user-visible text and ARIA roles — never by class names or internal component state.
+
+- Wizard navigation: forward/back buttons advance/retreat steps; validation gates block progress when required fields are missing.
+- Schedule grid: correct events appear in correct weapon/gender column cells.
+- Warning/error icons: appear on event entries that have bottlenecks.
+- File load: uploading a `.piste.json` hydrates the store and renders the schedule.
 
 ### Coverage Targets
 
 - `engine/`: 90%+
 - `store/`: 70%+
-- `components/`: smoke-level
+- `components/`: smoke-level (key user flows covered, not exhaustive)
 
 ---
 
 ## 12. Pending Items
 
-- [ ] Rename `CONCURRENT_PAIR` → `FLIGHTING_GROUP` throughout the PRD (~20 references).
+- [x] Rename `CONCURRENT_PAIR` → `FLIGHTING_GROUP` throughout the PRD (completed 2026-03-25).
 - [ ] Evaluate Frappe Gantt vs React Modern Gantt during implementation.
 - [ ] Determine Gantt bar color scheme (by category or weapon) during implementation.
 - [ ] Verify TAP reporter package availability for Vitest.

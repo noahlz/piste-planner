@@ -51,10 +51,10 @@ PHASE 1 — CONFIGURATION (interactive)
   1g.  Configure TOURNAMENT_CONFIG duration tables, gaps, thresholds
   1h.  PRE-VALIDATION → hard errors surfaced immediately
        (referee availability NOT required at this stage)
-  1i.  INITIAL ANALYSIS → strip deficit warnings, concurrent pair suggestions,
+  1i.  INITIAL ANALYSIS → strip deficit warnings, flighting group suggestions,
        video strip peak demand warnings, cut summary, proximity warnings,
        gender equity cap validation (Pass 7, capped events only)
-  1j.  Organiser reviews suggestions, enables flighting, confirms pairs
+  1j.  Organiser reviews suggestions, enables flighting, confirms flighting groups
   1k.  Confirm final configuration
 
 PHASE 1.5 — REFEREE CALCULATION (interactive)
@@ -278,11 +278,11 @@ COMPETITION {
   //   always IF_AVAILABLE for strip count (1 strip), simultaneous with gold,
   //   always requires sabre-qualified ref on sabre weapon (no fill-in)
 
-  // Flighting & pairing (set during configuration phase)
+  // Flighting & flighting groups (set during configuration phase)
   flighted                // bool (default: FALSE)
-  concurrent_pair_id      // ID of paired competition (NULL if unpaired)
+  flighting_group_id      // ID of flighting group (NULL if not in a group)
   is_priority             // bool
-  strips_allocated        // strips assigned in a concurrent pair
+  strips_allocated        // strips assigned in a flighting group
 
   // HARD RULE: all phases (Flight A, Flight B, DE_PRELIMS, DE_ROUND_OF_16,
   // DE_FINALS, bronze) must complete on the same calendar day.
@@ -350,10 +350,10 @@ TOURNAMENT_CONFIG {
 }
 ```
 
-### 2.6 CONCURRENT_PAIR
+### 2.6 FLIGHTING_GROUP
 
 ```
-CONCURRENT_PAIR {
+FLIGHTING_GROUP {
   priority_competition_id  // gets first pick of strips, runs uninterrupted
   flighted_competition_id  // flights around the priority event
   strips_for_priority      // strip count claimed by priority event
@@ -366,7 +366,7 @@ CONCURRENT_PAIR {
 //   If two competitions tie on pool count, organiser must designate manually
 //   Suggesting a non-largest competition as flighted → WARN in initial_analysis()
 //   Priority competition always scheduled before its flighted partner
-//   Any two competitions may be paired — demographic conflicts flagged but not blocked
+//   Any two competitions may be grouped — demographic conflicts flagged but not blocked
 ```
 
 ### 2.7 GLOBAL_STATE
@@ -392,7 +392,7 @@ GLOBAL_STATE {
 ```
 SCHEDULE_RESULT {
   competition_id, assigned_day
-  use_flighting, is_priority, concurrent_pair_id
+  use_flighting, is_priority, flighting_group_id
 
   // Pool phase — NOT flighted:
   pool_start, pool_end, pool_strips_count, pool_refs_count
@@ -466,8 +466,8 @@ SABRE_REF_FILLIN                  // WARN
 DE_FINALS_BRONZE_NO_STRIP         // WARN (REQUIRED) / INFO (BEST_EFFORT)
 PROXIMITY_PREFERENCE_UNMET        // INFO
 CONSTRAINT_RELAXED                // WARN — soft constraints relaxed to find day
-CONCURRENT_PAIR_NOT_LARGEST       // WARN — flighted is not largest on day
-CONCURRENT_PAIR_MANUAL_NEEDED     // WARN — tied pool counts, organiser must designate
+FLIGHTING_GROUP_NOT_LARGEST       // WARN — flighted is not largest on day
+FLIGHTING_GROUP_MANUAL_NEEDED     // WARN — tied pool counts, organiser must designate
 GENDER_EQUITY_CAP_VIOLATION       // WARN — capped event pair violates allowable cap difference
 REGIONAL_QUALIFIER_CAPPED         // ERROR — regional qualifier (RYC, RJCC, ROC, SYC, SJCC) cannot cap entries
 REFEREE_INSUFFICIENT_ACCEPTED     // WARN — user accepted schedule with fewer refs than optimal
@@ -1405,7 +1405,7 @@ FUNCTION allocate_refs_for_sabre_or_weapon(day, weapon, refs_needed, start, end,
 
 ---
 
-## 9. FLIGHTING & CONCURRENT PAIRS
+## 9. FLIGHTING & FLIGHTING GROUPS
 
 ### 9.1 Initial Analysis
 
@@ -1426,14 +1426,14 @@ FUNCTION initial_analysis(competitions[], config):
         pools_per_flight:CEIL(ps.n_pools/2),
         gap_estimate:snap_to_slot(pool_round_dur+FLIGHT_BUFFER_MINS) })
 
-  // Pass 2 — concurrent pair suggestions
+  // Pass 2 — flighting group suggestions
   FOR each pair (c1, c2):
     c1p=n_pools(c1); c2p=n_pools(c2)
     IF c1p+c2p > strips_total AND c1p<=strips_total AND c2p<=strips_total:
       pri=(c1p>=c2p)?c1:c2; flt=(c1p>=c2p)?c2:c1
-      IF c1p==c2p: flag CONCURRENT_PAIR_MANUAL_NEEDED
+      IF c1p==c2p: flag FLIGHTING_GROUP_MANUAL_NEEDED
       xpen=crossover_penalty(c1,c2)
-      suggestions.APPEND({ type:CONCURRENT_PAIR, priority_id:pri.id,
+      suggestions.APPEND({ type:FLIGHTING_GROUP, priority_id:pri.id,
         flighted_id:flt.id, xpen, demographic_warning:xpen>0 })
 
   // Pass 3 — validate only one flighted per day (estimate day assignments)
@@ -1445,7 +1445,7 @@ FUNCTION initial_analysis(competitions[], config):
       flighted = flighted_on_day[0]
       largest  = MAX by n_pools among competitions on day d
       IF flighted.id != largest.id:
-        warnings.APPEND({ issue:CONCURRENT_PAIR_NOT_LARGEST,
+        warnings.APPEND({ issue:FLIGHTING_GROUP_NOT_LARGEST,
           flighted:flighted.id, largest:largest.id })
 
   // Pass 4 — video strip peak demand
@@ -1455,10 +1455,10 @@ FUNCTION initial_analysis(competitions[], config):
     warnings.APPEND({ issue:VIDEO_STRIP_PEAK_DEMAND,
       demand:video_demand.peak, available:config.video_strips_total })
 
-  // Pass 5 — concurrent pair video conflict
-  FOR each pair (pri, flt):
+  // Pass 5 — flighting group video conflict
+  FOR each group (pri, flt):
     IF both have de_video_policy==REQUIRED:
-      warnings.APPEND({ issue:CONCURRENT_PAIR_VIDEO_CONFLICT })
+      warnings.APPEND({ issue:FLIGHTING_GROUP_VIDEO_CONFLICT })
 
   // Pass 6 — cut summary (informational)
   FOR each competition c WHERE c.cut_mode != DISABLED:
@@ -2118,18 +2118,18 @@ FUNCTION find_earlier_slot_same_day(competition, pool_structure, day, state):
   RETURN NULL   // no earlier slot fits
 ```
 
-### 12.11 Allocate Pool Resources for Concurrent Pair
+### 12.11 Allocate Pool Resources for Flighting Group
 
 ```
-// Allocates strips and refs for the priority competition in a concurrent pair.
+// Allocates strips and refs for the priority competition in a flighting group.
 // The priority event gets its dedicated strips; the flighted partner gets the remainder.
 
 FUNCTION allocate_pool_resources_paired(competition, pool_dur, not_before, state):
-  pair = get_concurrent_pair(competition)
-  priority_strips = pair.strips_for_priority
-  flighted_strips = pair.strips_for_flighted
+  group = get_flighting_group(competition)
+  priority_strips = group.strips_for_priority
+  flighted_strips = group.strips_for_flighted
 
-  IF competition.id == pair.priority_competition_id:
+  IF competition.id == group.priority_competition_id:
     // Priority event: allocate its dedicated strip count
     T, strips, _ = earliest_resource_window(
       priority_strips, DE_REFS * priority_strips,
@@ -2204,7 +2204,7 @@ FUNCTION schedule_competition(competition, state, config):
   pool_dur     = estimate_pool_duration(competition, pool_structure,
                    avail_strips, avail_refs, ref_res)
 
-  IF competition.concurrent_pair_id != NULL:
+  IF competition.flighting_group_id != NULL:
     allocate_pool_resources_paired(competition, pool_dur, not_before, state)
   ELSE IF competition.flighted:
     T_a, strips_a, _ = earliest_resource_window(
@@ -2412,13 +2412,13 @@ FUNCTION validate(competitions[], config):
   FOR each (ind, team) pair (same gender, category):
     IF ind_dur + INDIV_TEAM_MIN_GAP_MINS + team_de_dur > DAY_LENGTH_MINS: RAISE
 
-  // ── Concurrent pair integrity ─────────────────────────────
-  FOR each pair:
+  // ── Flighting group integrity ─────────────────────────────
+  FOR each group:
     IF strips_allocated_sum > strips_total: RAISE
     IF either strips_allocated < 1: RAISE
-    // Priority event in a concurrent pair must not require flighting
-    priority = get_priority_competition(pair)
-    IF priority.flighted: RAISE "Priority event in concurrent pair cannot also be flighted"
+    // Priority event in a flighting group must not require flighting
+    priority = get_priority_competition(group)
+    IF priority.flighted: RAISE "Priority event in flighting group cannot also be flighted"
 
 FUNCTION validate_same_day_completion(competition, config):
   pool_structure = compute_pool_structure(competition)
@@ -2448,7 +2448,7 @@ FUNCTION validate_same_day_completion(competition, config):
 |---|---|
 | competition_id | Catalogue ID |
 | assigned_day | 0-indexed |
-| use_flighting / is_priority / concurrent_pair_id | Pairing metadata |
+| use_flighting / is_priority / flighting_group_id | Flighting group metadata |
 | pool_start, pool_end | Non-flighted pool phase |
 | flight_a/b_start, flight_a/b_end | Flighted pool phase (same day guaranteed) |
 | entry_fencer_count / promoted_fencer_count | Cut results |
