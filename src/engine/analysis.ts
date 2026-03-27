@@ -1,4 +1,4 @@
-import { BottleneckCause, BottleneckSeverity, CutMode, FencerCountType, VideoPolicy, DeMode } from './types.ts'
+import { BottleneckCause, BottleneckSeverity, CutMode, VideoPolicy, DeMode } from './types.ts'
 import type { AnalysisResult, Bottleneck, Competition, TournamentConfig } from './types.ts'
 import { computePoolStructure, computeDeFencerCount } from './pools.ts'
 import { computeBracketSize } from './de.ts'
@@ -15,7 +15,7 @@ export function isRegionalQualifier(config: TournamentConfig): boolean {
 
 /**
  * Returns the maximum allowable pool count difference between men's and women's
- * capped events sharing the same age/weapon group (PRD Section 9.1).
+ * events sharing the same age/weapon group (PRD Section 9.1).
  *
  * Threshold is based on the LARGER pool count of the two events:
  *   ≤3 pools → 0  (must be equal)
@@ -167,28 +167,12 @@ export function initialAnalysis(
     })
   }
 
-  // ── Pass 7: gender equity cap validation ─────────────────────────────────
-  const capped = competitions.filter((c: Competition) => c.fencer_count_type === FencerCountType.CAPPED)
-
-  // Regional qualifiers cannot cap entries at all
-  if (isRegionalQualifier(config)) {
-    for (const comp of capped) {
-      warnings.push({
-        competition_id: comp.id,
-        phase: 'ENTRY',
-        cause: BottleneckCause.REGIONAL_QUALIFIER_CAPPED,
-        severity: BottleneckSeverity.ERROR,
-        delay_mins: 0,
-        message: `${comp.id}: regional qualifiers (${config.tournament_type}) cannot cap entries`,
-      })
-    }
-  }
-
-  // Compare men's vs women's capped events in the same (category, weapon) group
+  // ── Pass 7: gender equity validation ────────────────────────────────────
+  // Compare men's vs women's events in the same (category, weapon) group
   // Build lookup: key = `${category}:${weapon}` → { men?, women? }
   type GenderPair = { men?: Competition; women?: Competition }
   const byGroup = new Map<string, GenderPair>()
-  for (const comp of capped) {
+  for (const comp of competitions) {
     const key = `${comp.category}:${comp.weapon}`
     const pair = byGroup.get(key) ?? {}
     if (comp.gender === 'MEN') pair.men = comp
@@ -213,7 +197,7 @@ export function initialAnalysis(
         cause: BottleneckCause.GENDER_EQUITY_CAP_VIOLATION,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
-        message: `${men.id} vs ${women.id}: cap difference is ${poolDiff} pools, max allowed is ${allowed} for ${largerPools}-pool larger event`,
+        message: `${men.id} vs ${women.id}: pool count difference is ${poolDiff}, max allowed is ${allowed} for ${largerPools}-pool larger event`,
       })
     }
   }

@@ -81,12 +81,6 @@ export const TournamentType = {
 } as const
 export type TournamentType = (typeof TournamentType)[keyof typeof TournamentType]
 
-export const FencerCountType = {
-  ESTIMATED: 'ESTIMATED',
-  CAPPED: 'CAPPED',
-} as const
-export type FencerCountType = (typeof FencerCountType)[keyof typeof FencerCountType]
-
 export const PodCaptainOverride = {
   AUTO: 'AUTO',
   DISABLED: 'DISABLED',
@@ -128,7 +122,6 @@ export const BottleneckCause = {
   FLIGHTING_GROUP_MANUAL_NEEDED: 'FLIGHTING_GROUP_MANUAL_NEEDED',
   MULTIPLE_FLIGHTED_SAME_DAY: 'MULTIPLE_FLIGHTED_SAME_DAY',
   GENDER_EQUITY_CAP_VIOLATION: 'GENDER_EQUITY_CAP_VIOLATION',
-  REGIONAL_QUALIFIER_CAPPED: 'REGIONAL_QUALIFIER_CAPPED',
   REFEREE_INSUFFICIENT_ACCEPTED: 'REFEREE_INSUFFICIENT_ACCEPTED',
   SAME_DAY_VIOLATION: 'SAME_DAY_VIOLATION',
   SCHEDULE_ACCEPTED_WITH_WARNINGS: 'SCHEDULE_ACCEPTED_WITH_WARNINGS',
@@ -166,7 +159,6 @@ export interface Competition {
   weapon: Weapon
   event_type: EventType
   fencer_count: number
-  fencer_count_type: FencerCountType
   ref_policy: RefPolicy
   earliest_start: number
   latest_end: number

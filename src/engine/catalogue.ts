@@ -1,5 +1,6 @@
 import type { CatalogueEntry, VetAgeGroup } from './types.ts'
 import { Category, EventType, Gender, Weapon } from './types.ts'
+import { NAC_FENCER_DEFAULTS, REGIONAL_FENCER_DEFAULTS } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // ID generation helpers
@@ -190,5 +191,32 @@ export const TEMPLATES: Record<string, string[]> = {
   // 2 categories × 3 weapons × 2 genders = 12 (individual only per spec)
   'RJCC Weekend': ids([Category.CADET, Category.JUNIOR], [EventType.INDIVIDUAL]),
 
+  // Junior Olympics: Cadet IND + Junior IND + Junior TEAM = (2×IND + 1×TEAM) × 3 weapons × 2 genders = 18
+  'Junior Olympics': [
+    ...ids([Category.CADET, Category.JUNIOR], [EventType.INDIVIDUAL]),
+    ...ids([Category.JUNIOR], [EventType.TEAM]),
+  ],
+
   Blank: [],
+}
+
+// ──────────────────────────────────────────────
+// Template → fencer count defaults mapping.
+// NAC/JO templates use NAC-scale counts; regional templates use smaller counts.
+// ──────────────────────────────────────────────
+
+type FencerDefaultTable = Partial<Record<`${Category}:${EventType}`, number>>
+
+export const TEMPLATE_FENCER_DEFAULTS: Record<string, FencerDefaultTable> = {
+  'NAC Youth': NAC_FENCER_DEFAULTS,
+  'NAC Cadet/Junior': NAC_FENCER_DEFAULTS,
+  'NAC Div1/Junior': NAC_FENCER_DEFAULTS,
+  'NAC Vet/Div1/Junior': NAC_FENCER_DEFAULTS,
+  'Junior Olympics': NAC_FENCER_DEFAULTS,
+  'ROC Div1A/Vet': REGIONAL_FENCER_DEFAULTS,
+  'ROC Div1A/Div2/Vet': REGIONAL_FENCER_DEFAULTS,
+  'ROC Mega': REGIONAL_FENCER_DEFAULTS,
+  'RYC Weekend': REGIONAL_FENCER_DEFAULTS,
+  'RJCC Weekend': REGIONAL_FENCER_DEFAULTS,
+  Blank: {},
 }

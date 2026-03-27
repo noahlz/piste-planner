@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { validateConfig, validateSameDayCompletion } from '../../src/engine/validation.ts'
 import type { TournamentConfig, ValidationError } from '../../src/engine/types.ts'
 import {
-  Category, CutMode, DeMode, EventType,
-  FencerCountType, TournamentType, VideoPolicy,
+  Category, CutMode, DeMode, EventType, VideoPolicy,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 
@@ -118,27 +117,6 @@ describe('validateConfig — team event without matching individual', () => {
     })
     const errors = validateConfig(makeConfig(), [individual, team])
     expect(errors.filter((e: ValidationError) => e.field === 'event_type' && e.severity === 'ERROR')).toHaveLength(0)
-  })
-})
-
-describe('validateConfig — CAPPED fencer count on regional qualifier', () => {
-  const REGIONAL_QUALIFIERS: TournamentType[] = ['RYC', 'RJCC', 'ROC', 'SYC', 'SJCC']
-
-  it.each(REGIONAL_QUALIFIERS)(
-    'returns error for CAPPED fencer_count_type on %s',
-    (tournament_type) => {
-      const config = makeConfig({ tournament_type })
-      const comp = makeCompetition({ fencer_count_type: FencerCountType.CAPPED })
-      const errors = validateConfig(config, [comp])
-      expect(errors.some((e: ValidationError) => e.field === 'fencer_count_type' && e.severity === 'ERROR')).toBe(true)
-    },
-  )
-
-  it('does not error for CAPPED on NAC', () => {
-    const config = makeConfig({ tournament_type: TournamentType.NAC })
-    const comp = makeCompetition({ fencer_count_type: FencerCountType.CAPPED })
-    const errors = validateConfig(config, [comp])
-    expect(errors.filter((e: ValidationError) => e.field === 'fencer_count_type' && e.severity === 'ERROR')).toHaveLength(0)
   })
 })
 

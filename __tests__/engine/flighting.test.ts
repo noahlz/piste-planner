@@ -19,7 +19,6 @@ function makeCompetition(overrides: Partial<Competition> = {}): Competition {
     weapon: 'FOIL',
     event_type: 'INDIVIDUAL',
     fencer_count: 42,
-    fencer_count_type: 'ESTIMATED',
     ref_policy: 'AUTO',
     earliest_start: 0,
     latest_end: 840,

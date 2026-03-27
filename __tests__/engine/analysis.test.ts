@@ -5,7 +5,6 @@ import {
   BottleneckCause,
   BottleneckSeverity,
   TournamentType,
-  FencerCountType,
   CutMode,
   DeMode,
   VideoPolicy,
@@ -283,7 +282,7 @@ describe('initialAnalysis — Pass 6: cut summary', () => {
 // ──────────────────────────────────────────────
 
 describe('initialAnalysis — Pass 7: gender equity', () => {
-  it("Men's Foil capped at 128, Women's Foil capped at 64 → GENDER_EQUITY_CAP_VIOLATION warning", () => {
+  it("Men's Foil 128 vs Women's Foil 64 → GENDER_EQUITY_CAP_VIOLATION warning", () => {
     const config = makeConfig({ tournament_type: TournamentType.NAC })
     // 128 fencers → ceil(128/7)=19 pools; 64 fencers → ceil(64/7)=10 pools
     // |19 - 10| = 9 > genderEquityAllowableDiff(19) = 3 → violation
@@ -293,7 +292,6 @@ describe('initialAnalysis — Pass 7: gender equity', () => {
       weapon: 'FOIL',
       category: 'DIV1',
       fencer_count: 128,
-      fencer_count_type: FencerCountType.CAPPED,
     })
     const womens = makeCompetition({
       id: 'women-foil',
@@ -301,7 +299,6 @@ describe('initialAnalysis — Pass 7: gender equity', () => {
       weapon: 'FOIL',
       category: 'DIV1',
       fencer_count: 64,
-      fencer_count_type: FencerCountType.CAPPED,
     })
     const result = initialAnalysis(config, [mens, womens], { 'men-foil': 0, 'women-foil': 0 })
 
@@ -312,7 +309,7 @@ describe('initialAnalysis — Pass 7: gender equity', () => {
     expect(violation?.severity).toBe(BottleneckSeverity.WARN)
   })
 
-  it('equal caps (both 128 fencers) → no GENDER_EQUITY_CAP_VIOLATION', () => {
+  it('equal fencer counts (both 128) → no GENDER_EQUITY_CAP_VIOLATION', () => {
     const config = makeConfig({ tournament_type: TournamentType.NAC })
     const mens = makeCompetition({
       id: 'men-foil',
@@ -320,7 +317,6 @@ describe('initialAnalysis — Pass 7: gender equity', () => {
       weapon: 'FOIL',
       category: 'DIV1',
       fencer_count: 128,
-      fencer_count_type: FencerCountType.CAPPED,
     })
     const womens = makeCompetition({
       id: 'women-foil',
@@ -328,7 +324,6 @@ describe('initialAnalysis — Pass 7: gender equity', () => {
       weapon: 'FOIL',
       category: 'DIV1',
       fencer_count: 128,
-      fencer_count_type: FencerCountType.CAPPED,
     })
     const result = initialAnalysis(config, [mens, womens], { 'men-foil': 0, 'women-foil': 0 })
 
@@ -336,37 +331,6 @@ describe('initialAnalysis — Pass 7: gender equity', () => {
       (w: Bottleneck) => w.cause === BottleneckCause.GENDER_EQUITY_CAP_VIOLATION,
     )
     expect(violation).toBeUndefined()
-  })
-
-  it('regional qualifier with CAPPED fencer_count_type → REGIONAL_QUALIFIER_CAPPED error', () => {
-    const config = makeConfig({ tournament_type: TournamentType.RYC })
-    const comp = makeCompetition({
-      id: 'ryc-capped',
-      fencer_count: 64,
-      fencer_count_type: FencerCountType.CAPPED,
-    })
-    const result = initialAnalysis(config, [comp], { 'ryc-capped': 0 })
-
-    const err = result.warnings.find(
-      (w: Bottleneck) => w.cause === BottleneckCause.REGIONAL_QUALIFIER_CAPPED,
-    )
-    expect(err).toBeDefined()
-    expect(err?.severity).toBe(BottleneckSeverity.ERROR)
-  })
-
-  it('NAC with CAPPED fencer_count_type → no REGIONAL_QUALIFIER_CAPPED error', () => {
-    const config = makeConfig({ tournament_type: TournamentType.NAC })
-    const comp = makeCompetition({
-      id: 'nac-capped',
-      fencer_count: 64,
-      fencer_count_type: FencerCountType.CAPPED,
-    })
-    const result = initialAnalysis(config, [comp], { 'nac-capped': 0 })
-
-    const err = result.warnings.find(
-      (w: Bottleneck) => w.cause === BottleneckCause.REGIONAL_QUALIFIER_CAPPED,
-    )
-    expect(err).toBeUndefined()
   })
 })
 

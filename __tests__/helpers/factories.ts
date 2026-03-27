@@ -2,7 +2,7 @@ import type { Competition, ScheduleResult, TournamentConfig, Strip } from '../..
 import {
   Category, Gender, Weapon,
   EventType, CutMode, DeMode, VideoPolicy,
-  FencerCountType, RefPolicy, DeStripRequirement,
+  RefPolicy, DeStripRequirement,
 } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -82,7 +82,6 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
     weapon: Weapon.FOIL,
     event_type: EventType.INDIVIDUAL,
     fencer_count: 24,
-    fencer_count_type: FencerCountType.ESTIMATED,
     ref_policy: RefPolicy.AUTO,
     earliest_start: 0,
     latest_end: 9999,
