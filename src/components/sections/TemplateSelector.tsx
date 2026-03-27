@@ -7,15 +7,15 @@ export function TemplateSelector() {
   const applyTemplate = useStore((s) => s.applyTemplate)
 
   return (
-    <div className="rounded border border-border bg-white p-4">
-      <h2 className="mb-4 text-lg font-semibold text-slate-800">Template</h2>
+    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-header">Template</h2>
       <div>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="template-select">
+        <label className="block text-sm font-medium text-header" htmlFor="template-select">
           Apply Template
         </label>
         <select
           id="template-select"
-          className="mt-1 w-full rounded border border-border px-2 py-1"
+          className="mt-1 w-full rounded-md border border-slate-200 bg-card px-3 py-1.5 text-sm text-body focus:ring-2 focus:ring-accent focus:border-accent focus:outline-none"
           defaultValue=""
           onChange={(e) => {
             if (e.target.value) applyTemplate(e.target.value)

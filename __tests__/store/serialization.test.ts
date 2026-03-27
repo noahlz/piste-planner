@@ -8,6 +8,7 @@ import {
 } from '../../src/store/serialization.ts'
 import type { SerializedState } from '../../src/store/serialization.ts'
 import { useStore } from '../../src/store/store.ts'
+import type { StoreState } from '../../src/store/store.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -126,7 +127,7 @@ describe('validateSchema', () => {
   })
 
   it('rejects missing schemaVersion', () => {
-    const data = validSerializedData() as Record<string, unknown>
+    const data = validSerializedData() as unknown as Record<string, unknown>
     delete data.schemaVersion
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
@@ -196,7 +197,7 @@ describe('validateSchema', () => {
   })
 
   it('rejects missing required fields', () => {
-    const data = validSerializedData() as Record<string, unknown>
+    const data = validSerializedData() as unknown as Record<string, unknown>
     delete data.tournament
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
@@ -228,7 +229,7 @@ describe('deserializeState', () => {
   })
 
   it('rejects missing schemaVersion', () => {
-    const data = validSerializedData() as Record<string, unknown>
+    const data = validSerializedData() as unknown as Record<string, unknown>
     delete data.schemaVersion
     const result = deserializeState(JSON.stringify(data))
     expect('error' in result).toBe(true)

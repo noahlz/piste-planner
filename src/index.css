@@ -3,11 +3,23 @@
 @theme {
   /* Piste Planner brand palette — design spec Section 10 */
   --color-background: #faf9f6;
+  --color-card: #ffffff;
   --color-border: #475569;
   --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
+  --color-warning: #fef3c7;
+  --color-warning-text: #92400e;
+  --color-error: #fee2e2;
+  --color-error-text: #991b1b;
+  --color-info: #dbeafe;
+  --color-info-text: #1e40af;
+  --color-header: #1e293b;
+  --color-body: #475569;
+  --color-muted: #94a3b8;
 }
 
 body {
   margin: 0;
   background-color: var(--color-background);
+  color: var(--color-body);
 }

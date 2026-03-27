@@ -12,7 +12,7 @@ import type {
   AnalysisResult,
   ScheduleResult,
 } from '../engine/types.ts'
-import { findCompetition, TEMPLATES } from '../engine/catalogue.ts'
+import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
@@ -203,13 +203,18 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
   }
 }
 
-/** Builds a default CompetitionConfig from a catalogue entry's category. */
-function defaultConfigForId(id: string): CompetitionConfig | null {
+type FencerDefaultTable = Partial<Record<string, number>>
+
+/** Builds a default CompetitionConfig from a catalogue entry's category.
+ *  When fencerDefaults is provided (e.g. from a template), uses it to
+ *  populate fencer_count instead of defaulting to 0. */
+function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): CompetitionConfig | null {
   const entry = findCompetition(id)
   if (!entry) return null
   const cut = DEFAULT_CUT_BY_CATEGORY[entry.category]
+  const defaultCount = fencerDefaults?.[`${entry.category}:${entry.event_type}`] ?? 0
   return {
-    fencer_count: 0,
+    fencer_count: defaultCount,
     ref_policy: 'AUTO',
     cut_mode: cut.mode,
     cut_value: cut.value,
@@ -271,7 +276,14 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
 
     applyTemplate: (templateName) => {
       const ids = TEMPLATES[templateName] ?? []
-      get().selectCompetitions(ids)
+      const fencerDefaults = TEMPLATE_FENCER_DEFAULTS[templateName] ?? {}
+      const map: Record<string, CompetitionConfig> = {}
+      for (const id of ids) {
+        const config = defaultConfigForId(id, fencerDefaults)
+        if (config) map[id] = config
+      }
+      set({ selectedCompetitions: map })
+      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     setGlobalOverrides: (partial) => {

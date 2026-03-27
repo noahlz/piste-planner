@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
 import type { DayRefConfig } from '../../src/store/store.ts'
-import { TournamentType, PodCaptainOverride, CutMode, VideoPolicy, BottleneckSeverity, BottleneckCause } from '../../src/engine/types.ts'
+import { TournamentType, PodCaptainOverride, BottleneckSeverity, BottleneckCause } from '../../src/engine/types.ts'
 import type { ValidationError, Bottleneck, AnalysisResult, ScheduleResult } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import { DEFAULT_CUT_BY_CATEGORY, DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../src/engine/constants.ts'

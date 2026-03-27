@@ -2,44 +2,7 @@ import { useStore } from '../../store/store.ts'
 import { CATALOGUE } from '../../engine/catalogue.ts'
 import type { CatalogueEntry } from '../../engine/types.ts'
 import { Category, EventType, Gender, Weapon } from '../../engine/types.ts'
-
-// ──────────────────────────────────────────────
-// Display name mappings
-// ──────────────────────────────────────────────
-
-const CATEGORY_DISPLAY: Record<Category, string> = {
-  [Category.Y8]: 'Y8',
-  [Category.Y10]: 'Y10',
-  [Category.Y12]: 'Y12',
-  [Category.Y14]: 'Y14',
-  [Category.CADET]: 'Cadet',
-  [Category.JUNIOR]: 'Junior',
-  [Category.VETERAN]: 'Veteran',
-  [Category.DIV1]: 'Div 1',
-  [Category.DIV1A]: 'Div 1A',
-  [Category.DIV2]: 'Div 2',
-  [Category.DIV3]: 'Div 3',
-}
-
-const GENDER_DISPLAY: Record<Gender, string> = {
-  [Gender.MEN]: "Men's",
-  [Gender.WOMEN]: "Women's",
-}
-
-const WEAPON_DISPLAY: Record<Weapon, string> = {
-  [Weapon.FOIL]: 'Foil',
-  [Weapon.EPEE]: 'Epee',
-  [Weapon.SABRE]: 'Sabre',
-}
-
-const EVENT_TYPE_DISPLAY: Record<EventType, string> = {
-  [EventType.INDIVIDUAL]: 'Individual',
-  [EventType.TEAM]: 'Team',
-}
-
-export function competitionLabel(entry: CatalogueEntry): string {
-  return `${CATEGORY_DISPLAY[entry.category]} ${GENDER_DISPLAY[entry.gender]} ${WEAPON_DISPLAY[entry.weapon]} ${EVENT_TYPE_DISPLAY[entry.event_type]}`
-}
+import { competitionLabel, CATEGORY_DISPLAY, GENDER_DISPLAY, WEAPON_DISPLAY } from '../competitionLabels.ts'
 
 // ──────────────────────────────────────────────
 // Catalogue grouping
@@ -133,15 +96,15 @@ export function CompetitionMatrix() {
   }
 
   return (
-    <div className="rounded border border-border bg-white p-4">
-      <h2 className="mb-4 text-lg font-semibold text-slate-800">Competition Selection</h2>
+    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-header">Competition Selection</h2>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {GROUPS.map((group) => (
-          <div key={`${group.gender}-${group.weapon}`} className="rounded border border-slate-200 p-3">
-            <h3 className="mb-2 text-sm font-semibold text-slate-700">{group.label}</h3>
+          <div key={`${group.gender}-${group.weapon}`} className="rounded-md border border-slate-200 p-3">
+            <h3 className="mb-2 text-sm font-semibold text-header">{group.label}</h3>
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-slate-500">
+                <tr className="text-xs text-muted">
                   <th className="pb-1 text-left font-medium">Category</th>
                   <th className="pb-1 text-center font-medium">Ind</th>
                   <th className="pb-1 text-center font-medium">Team</th>
@@ -149,8 +112,8 @@ export function CompetitionMatrix() {
               </thead>
               <tbody>
                 {group.categories.map((row) => (
-                  <tr key={row.category}>
-                    <td className="py-0.5 text-slate-600">{row.label}</td>
+                  <tr key={row.category} className="even:bg-slate-50">
+                    <td className="py-0.5 text-body">{row.label}</td>
                     <td className="py-0.5 text-center">
                       {row.individual && (
                         <input
@@ -158,6 +121,7 @@ export function CompetitionMatrix() {
                           checked={selectedIds.has(row.individual.id)}
                           onChange={(e) => toggle(row.individual!.id, e.target.checked)}
                           aria-label={competitionLabel(row.individual)}
+                          className="accent-accent"
                         />
                       )}
                     </td>
@@ -168,6 +132,7 @@ export function CompetitionMatrix() {
                           checked={selectedIds.has(row.team.id)}
                           onChange={(e) => toggle(row.team!.id, e.target.checked)}
                           aria-label={competitionLabel(row.team)}
+                          className="accent-accent"
                         />
                       )}
                     </td>
@@ -178,7 +143,7 @@ export function CompetitionMatrix() {
           </div>
         ))}
       </div>
-      <p className="mt-2 text-xs text-slate-400">
+      <p className="mt-2 text-xs text-muted">
         {selectedIds.size} competition{selectedIds.size !== 1 ? 's' : ''} selected
       </p>
     </div>

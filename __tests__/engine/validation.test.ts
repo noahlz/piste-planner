@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { validateConfig, validateSameDayCompletion } from '../../src/engine/validation.ts'
 import type { TournamentConfig, ValidationError } from '../../src/engine/types.ts'
 import {
-  Category, CutMode, DeMode, EventType,
-  TournamentType, VideoPolicy,
+  Category, CutMode, DeMode, EventType, VideoPolicy,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 

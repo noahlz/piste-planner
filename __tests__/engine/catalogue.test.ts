@@ -44,6 +44,7 @@ const EXPECTED_TEMPLATE_SIZES: [string, number][] = [
   ['ROC Mega', 42],
   ['RYC Weekend', 18],
   ['RJCC Weekend', 12],
+  ['Junior Olympics', 18],
   ['Blank', 0],
 ]
 

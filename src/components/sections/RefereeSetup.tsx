@@ -1,4 +1,47 @@
 import { useStore } from '../../store/store.ts'
+import { findCompetition } from '../../engine/catalogue.ts'
+import { computePoolStructure } from '../../engine/pools.ts'
+
+/**
+ * Suggests referee counts based on selected competitions and strip count.
+ * Heuristic: one ref per strip in use. Sabre competitions need sabre refs;
+ * foil/epee competitions need foil/epee refs. Distributes evenly across days.
+ */
+function suggestRefs(state: ReturnType<typeof useStore.getState>) {
+  const { selectedCompetitions, days_available, strips_total } = state
+  const entries = Object.entries(selectedCompetitions)
+  if (entries.length === 0 || days_available === 0 || strips_total === 0) return null
+
+  // Count total pools by weapon type
+  let sabrePools = 0
+  let foilEpeePools = 0
+  for (const [id, config] of entries) {
+    const entry = findCompetition(id)
+    if (!entry || config.fencer_count < 2) continue
+    const ps = computePoolStructure(config.fencer_count, config.use_single_pool_override)
+    if (entry.weapon === 'SABRE') {
+      sabrePools += ps.n_pools
+    } else {
+      foilEpeePools += ps.n_pools
+    }
+  }
+
+  const totalPools = sabrePools + foilEpeePools
+  if (totalPools === 0) return null
+
+  // Distribute pools evenly across days, then cap at strips_total
+  const poolsPerDay = Math.ceil(totalPools / days_available)
+  const stripsInUse = Math.min(poolsPerDay, strips_total)
+
+  // Split refs proportionally by weapon type (one ref per strip in use)
+  const sabreRatio = sabrePools / totalPools
+  const sabreRefs = Math.max(1, Math.round(stripsInUse * sabreRatio))
+  const foilEpeeRefs = Math.max(1, stripsInUse - sabreRefs)
+
+  return { foil_epee_refs: foilEpeeRefs, sabre_refs: sabreRefs }
+}
+
+const INLINE_INPUT = 'w-20 rounded-md border border-slate-200 px-2 py-0.5 text-right text-body focus:ring-2 focus:ring-accent focus:outline-none'
 
 export function RefereeSetup() {
   const daysAvailable = useStore((s) => s.days_available)
@@ -6,21 +49,44 @@ export function RefereeSetup() {
   const setDayRefs = useStore((s) => s.setDayRefs)
   const toggleSabreFillin = useStore((s) => s.toggleSabreFillin)
 
+  function handleSuggest() {
+    const state = useStore.getState()
+    const suggestion = suggestRefs(state)
+    if (!suggestion) return
+    for (let i = 0; i < state.days_available; i++) {
+      setDayRefs(i, suggestion)
+    }
+  }
+
   if (daysAvailable === 0) {
     return (
-      <div className="rounded border border-border bg-white p-4">
-        <h2 className="mb-2 text-lg font-semibold text-slate-800">Referee Setup</h2>
-        <p className="text-sm text-slate-400">Set tournament days above to configure referees.</p>
+      <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+        <h2 className="mb-2 text-lg font-semibold text-header">Referee Setup</h2>
+        <p className="text-sm text-muted">Set tournament days above to configure referees.</p>
       </div>
     )
   }
 
   return (
-    <div className="rounded border border-border bg-white p-4">
-      <h2 className="mb-4 text-lg font-semibold text-slate-800">Referee Setup</h2>
+    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-header">Referee Setup</h2>
+        <div className="group relative">
+          <button
+            type="button"
+            onClick={handleSuggest}
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:outline-none"
+          >
+            Suggest
+          </button>
+          <div className="pointer-events-none absolute right-0 top-full z-10 mt-1 hidden w-64 rounded-md border border-slate-200 bg-card p-2 text-xs text-body shadow-md group-hover:block">
+            Estimates referee counts based on selected competitions, strip count, and weapon mix. One ref per strip in use, split proportionally between sabre and foil/epee.
+          </div>
+        </div>
+      </div>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs text-slate-500">
+          <tr className="border-b border-slate-200 text-xs text-muted">
             <th className="pb-2 text-left font-medium">Day</th>
             <th className="pb-2 text-right font-medium">Foil/Epee Refs</th>
             <th className="pb-2 text-right font-medium">Sabre Refs</th>
@@ -35,13 +101,13 @@ export function RefereeSetup() {
               allow_sabre_ref_fillin: false,
             }
             return (
-              <tr key={i} className="border-b border-slate-100">
-                <td className="py-1.5 text-slate-600">Day {i + 1}</td>
+              <tr key={i} className="border-b border-slate-100 even:bg-slate-50">
+                <td className="py-1.5 text-body">Day {i + 1}</td>
                 <td className="py-1.5 text-right">
                   <input
                     type="number"
                     min={0}
-                    className="w-20 rounded border border-border px-2 py-0.5 text-right"
+                    className={INLINE_INPUT}
                     value={ref.foil_epee_refs}
                     onChange={(e) =>
                       setDayRefs(i, { foil_epee_refs: Number(e.target.value) })
@@ -53,7 +119,7 @@ export function RefereeSetup() {
                   <input
                     type="number"
                     min={0}
-                    className="w-20 rounded border border-border px-2 py-0.5 text-right"
+                    className={INLINE_INPUT}
                     value={ref.sabre_refs}
                     onChange={(e) =>
                       setDayRefs(i, { sabre_refs: Number(e.target.value) })
@@ -67,6 +133,7 @@ export function RefereeSetup() {
                     checked={ref.allow_sabre_ref_fillin}
                     onChange={() => toggleSabreFillin(i)}
                     aria-label={`Sabre fill-in for Day ${i + 1}`}
+                    className="accent-accent"
                   />
                 </td>
               </tr>

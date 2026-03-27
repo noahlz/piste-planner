@@ -2,7 +2,7 @@ import { useStore } from '../../store/store.ts'
 import { findCompetition } from '../../engine/catalogue.ts'
 import { DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../engine/constants.ts'
 import { DeMode, VideoPolicy } from '../../engine/types.ts'
-import { competitionLabel } from './CompetitionMatrix.tsx'
+import { competitionLabel } from '../competitionLabels.ts'
 import { DefaultLabel } from '../common/DefaultLabel.tsx'
 
 const DE_MODE_OPTIONS: { value: DeMode; label: string }[] = [
@@ -18,6 +18,8 @@ const VIDEO_POLICY_OPTIONS: { value: VideoPolicy; label: string }[] = [
 
 const DEFAULT_DE_MODE: DeMode = DeMode.SINGLE_BLOCK
 
+const INLINE_SELECT = 'rounded-md border border-slate-200 px-2 py-0.5 text-sm text-body focus:ring-2 focus:ring-accent focus:outline-none'
+
 export function CompetitionOverrides() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
   const updateCompetition = useStore((s) => s.updateCompetition)
@@ -26,19 +28,19 @@ export function CompetitionOverrides() {
 
   if (sortedIds.length === 0) {
     return (
-      <div className="rounded border border-border bg-white p-4">
-        <h2 className="mb-2 text-lg font-semibold text-slate-800">Competition Overrides</h2>
-        <p className="text-sm text-slate-400">Select competitions above to configure overrides.</p>
+      <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+        <h2 className="mb-2 text-lg font-semibold text-header">Competition Overrides</h2>
+        <p className="text-sm text-muted">Select competitions above to configure overrides.</p>
       </div>
     )
   }
 
   return (
-    <div className="rounded border border-border bg-white p-4">
-      <h2 className="mb-4 text-lg font-semibold text-slate-800">Competition Overrides</h2>
+    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-header">Competition Overrides</h2>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs text-slate-500">
+          <tr className="border-b border-slate-200 text-xs text-muted">
             <th className="pb-2 text-left font-medium">Competition</th>
             <th className="pb-2 text-left font-medium">DE Mode</th>
             <th className="pb-2 text-left font-medium">Video Policy</th>
@@ -54,11 +56,11 @@ export function CompetitionOverrides() {
               : undefined
 
             return (
-              <tr key={id} className="border-b border-slate-100">
-                <td className="py-1.5 text-slate-600">{label}</td>
+              <tr key={id} className="border-b border-slate-100 even:bg-slate-50">
+                <td className="py-1.5 text-body">{label}</td>
                 <td className="py-1.5">
                   <select
-                    className="rounded border border-border px-2 py-0.5"
+                    className={INLINE_SELECT}
                     value={config.de_mode}
                     onChange={(e) =>
                       updateCompetition(id, { de_mode: e.target.value as DeMode })
@@ -75,7 +77,7 @@ export function CompetitionOverrides() {
                 </td>
                 <td className="py-1.5">
                   <select
-                    className="rounded border border-border px-2 py-0.5"
+                    className={INLINE_SELECT}
                     value={config.de_video_policy}
                     onChange={(e) =>
                       updateCompetition(id, {

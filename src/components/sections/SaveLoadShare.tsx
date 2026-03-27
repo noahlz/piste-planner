@@ -8,6 +8,9 @@ import {
 
 const URL_SIZE_WARNING_BYTES = 2048
 
+const BTN_PRIMARY = 'rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:outline-none'
+const BTN_SECONDARY = 'rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-body transition-colors hover:bg-slate-200 focus:ring-2 focus:ring-accent focus:outline-none'
+
 export function SaveLoadShare() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -72,17 +75,17 @@ export function SaveLoadShare() {
   const urlExceedsLimit = shareUrl != null && new Blob([shareUrl]).size > URL_SIZE_WARNING_BYTES
 
   return (
-    <div className="rounded border border-border bg-white p-4">
-      <h2 className="mb-4 text-lg font-semibold text-slate-800">Save / Load / Share</h2>
+    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-header">Save / Load / Share</h2>
 
       <div className="space-y-4">
         {/* Save */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-slate-600">Save Configuration</h3>
+          <h3 className="mb-2 text-sm font-medium text-body">Save Configuration</h3>
           <button
             type="button"
             onClick={handleSave}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className={BTN_PRIMARY}
           >
             Save to File
           </button>
@@ -90,16 +93,16 @@ export function SaveLoadShare() {
 
         {/* Load */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-slate-600">Load Configuration</h3>
+          <h3 className="mb-2 text-sm font-medium text-body">Load Configuration</h3>
           <input
             ref={fileInputRef}
             type="file"
             accept=".json,.piste.json"
             onChange={handleFileChange}
-            className="block text-sm text-slate-600 file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            className="block text-sm text-body file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-body file:cursor-pointer hover:file:bg-slate-200"
           />
           {loadError && (
-            <p className="mt-2 text-sm text-red-600" role="alert">
+            <p className="mt-2 text-sm text-error-text" role="alert">
               {loadError}
             </p>
           )}
@@ -107,11 +110,11 @@ export function SaveLoadShare() {
 
         {/* Share */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-slate-600">Share via URL</h3>
+          <h3 className="mb-2 text-sm font-medium text-body">Share via URL</h3>
           <button
             type="button"
             onClick={handleShare}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className={BTN_PRIMARY}
           >
             Generate Link
           </button>
@@ -123,18 +126,18 @@ export function SaveLoadShare() {
                   type="text"
                   readOnly
                   value={shareUrl}
-                  className="flex-1 rounded border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700"
+                  className="flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-body"
                 />
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                  className={BTN_SECONDARY}
                 >
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
               </div>
               {urlExceedsLimit && (
-                <p className="text-xs text-amber-600" role="status">
+                <p className="text-xs text-warning-text" role="status">
                   Warning: URL exceeds 2KB and may not work in all browsers. Consider saving to file
                   instead.
                 </p>

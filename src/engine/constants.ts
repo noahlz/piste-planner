@@ -1,4 +1,4 @@
-import { Category, CutMode, TournamentType, VideoPolicy, Weapon } from './types.ts'
+import { Category, CutMode, EventType, TournamentType, VideoPolicy, Weapon } from './types.ts'
 
 // ──────────────────────────────────────────────
 // Scheduling time constants (all values in minutes from midnight)
@@ -129,6 +129,50 @@ export const DEFAULT_VIDEO_POLICY_BY_CATEGORY: Record<Category, VideoPolicy> = {
   [Category.DIV1A]: VideoPolicy.BEST_EFFORT,
   [Category.DIV2]: VideoPolicy.BEST_EFFORT,
   [Category.DIV3]: VideoPolicy.BEST_EFFORT,
+}
+
+// ──────────────────────────────────────────────
+// Default fencer counts by category and event type.
+// Derived from P75 of empirical NAC/Summer Nationals and regional data,
+// rounded to nearest 10, skewed towards larger events.
+// ──────────────────────────────────────────────
+
+type FencerDefaultKey = `${Category}:${EventType}`
+
+export const NAC_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>> = {
+  [`${Category.Y8}:${EventType.INDIVIDUAL}`]: 10,
+  [`${Category.Y10}:${EventType.INDIVIDUAL}`]: 80,
+  [`${Category.Y12}:${EventType.INDIVIDUAL}`]: 170,
+  [`${Category.Y14}:${EventType.INDIVIDUAL}`]: 100,
+  [`${Category.CADET}:${EventType.INDIVIDUAL}`]: 230,
+  [`${Category.CADET}:${EventType.TEAM}`]: 30,
+  [`${Category.JUNIOR}:${EventType.INDIVIDUAL}`]: 260,
+  [`${Category.JUNIOR}:${EventType.TEAM}`]: 30,
+  [`${Category.VETERAN}:${EventType.INDIVIDUAL}`]: 30,
+  [`${Category.VETERAN}:${EventType.TEAM}`]: 20,
+  [`${Category.DIV1}:${EventType.INDIVIDUAL}`]: 210,
+  [`${Category.DIV1}:${EventType.TEAM}`]: 40,
+  [`${Category.DIV1A}:${EventType.INDIVIDUAL}`]: 20,
+  [`${Category.DIV2}:${EventType.INDIVIDUAL}`]: 20,
+  [`${Category.DIV3}:${EventType.INDIVIDUAL}`]: 140,
+}
+
+export const REGIONAL_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>> = {
+  [`${Category.Y8}:${EventType.INDIVIDUAL}`]: 10,
+  [`${Category.Y10}:${EventType.INDIVIDUAL}`]: 20,
+  [`${Category.Y12}:${EventType.INDIVIDUAL}`]: 40,
+  [`${Category.Y14}:${EventType.INDIVIDUAL}`]: 50,
+  [`${Category.CADET}:${EventType.INDIVIDUAL}`]: 40,
+  [`${Category.CADET}:${EventType.TEAM}`]: 10,
+  [`${Category.JUNIOR}:${EventType.INDIVIDUAL}`]: 40,
+  [`${Category.JUNIOR}:${EventType.TEAM}`]: 10,
+  [`${Category.VETERAN}:${EventType.INDIVIDUAL}`]: 20,
+  [`${Category.VETERAN}:${EventType.TEAM}`]: 10,
+  [`${Category.DIV1}:${EventType.INDIVIDUAL}`]: 50,
+  [`${Category.DIV1}:${EventType.TEAM}`]: 10,
+  [`${Category.DIV1A}:${EventType.INDIVIDUAL}`]: 40,
+  [`${Category.DIV2}:${EventType.INDIVIDUAL}`]: 40,
+  [`${Category.DIV3}:${EventType.INDIVIDUAL}`]: 20,
 }
 
 // ──────────────────────────────────────────────

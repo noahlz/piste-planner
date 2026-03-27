@@ -50,13 +50,13 @@ export function ActionButtons() {
   }
 
   return (
-    <div className="rounded border border-border bg-white p-4">
-      <h2 className="mb-4 text-lg font-semibold text-slate-800">Actions</h2>
+    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-header">Actions</h2>
       <div className="flex gap-3">
         <button
           type="button"
           onClick={handleValidate}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:outline-none"
         >
           Validate
         </button>
@@ -64,7 +64,7 @@ export function ActionButtons() {
           type="button"
           onClick={handleSchedule}
           disabled={hasHardErrors}
-          className="rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           Generate Schedule
         </button>
