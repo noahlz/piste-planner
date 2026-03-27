@@ -338,7 +338,7 @@ TOURNAMENT_CONFIG {
   // Note: Ops Manual gives identical bout timing for foil and epee (6.5 min/bout).
   // The FOIL/EPEE differentiation below reflects empirical observation that epee
   // pools consistently run longer in practice (longer bouts, more priority calls).
-  pool_round_duration_table = { EPEE:120, FOIL:90, SABRE:60 }
+  pool_round_duration_table = { EPEE:120, FOIL:105, SABRE:75 }
 
   // DE duration = total wall-clock first bout → medal (bracket of promoted fencers)
   de_duration_table = {

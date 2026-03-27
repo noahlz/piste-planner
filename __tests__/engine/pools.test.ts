@@ -86,8 +86,8 @@ describe('poolDurationForSize', () => {
     { weapon: Weapon.EPEE, size: 6, expected: 120 },
     { weapon: Weapon.EPEE, size: 5, expected: 80 },
     { weapon: Weapon.EPEE, size: 7, expected: 168 },
-    { weapon: Weapon.FOIL, size: 6, expected: 90 },
-    { weapon: Weapon.SABRE, size: 6, expected: 60 },
+    { weapon: Weapon.FOIL, size: 6, expected: 105 },
+    { weapon: Weapon.SABRE, size: 6, expected: 75 },
   ])('$weapon pool size $size → $expected min', ({ weapon, size, expected }) => {
     const result = poolDurationForSize(weapon, size, DEFAULT_POOL_ROUND_DURATION_TABLE)
     expect(result).toBe(expected)
@@ -119,12 +119,36 @@ describe('weightedPoolDuration', () => {
     expect(result).toBe(152)
   })
 
-  it('SABRE 1×7 + 1×6 → weighted average of 84 and 60 = 72', () => {
+  it('SABRE 1×7 + 1×6 → weighted average of 105 and 75 = 90', () => {
     const structure = computePoolStructure(13) // 1×7 + 1×6
     const result = weightedPoolDuration(structure, Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE)
-    // SABRE base=60 for pool of 6. Pool of 7: round(60 * 21/15) = 84
-    // (84 + 60) / 2 = 72
-    expect(result).toBe(72)
+    // SABRE base=75 for pool of 6. Pool of 7: round(75 * 21/15) = 105
+    // (105 + 75) / 2 = 90
+    expect(result).toBe(90)
+  })
+
+  it('single pool of 8 EPEE → double-stripped, halved', () => {
+    const structure = computePoolStructure(8) // 1×8
+    const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
+    // poolDurationForSize(EPEE, 8) = round(120 * 28/15) = 224
+    // Single pool of 8+ → halved: round(224 / 2) = 112
+    expect(result).toBe(112)
+  })
+
+  it('single pool of 9 SABRE → double-stripped, halved', () => {
+    const structure = computePoolStructure(9) // 1×9
+    const result = weightedPoolDuration(structure, Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE)
+    // poolDurationForSize(SABRE, 9) = round(75 * 36/15) = 180
+    // Single pool of 9+ → halved: round(180 / 2) = 90
+    expect(result).toBe(90)
+  })
+
+  it('single pool of 7 is NOT double-stripped', () => {
+    const structure = computePoolStructure(7) // 1×7
+    const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
+    // poolDurationForSize(EPEE, 7) = round(120 * 21/15) = 168
+    // Pool of 7 → no halving
+    expect(result).toBe(168)
   })
 })
 

@@ -118,9 +118,9 @@ describe('scheduleAll — template integration', () => {
   it('RYC Weekend (2 days, 18 events): all events scheduled', () => {
     const config = makeConfig({
       days_available: 2,
-      strips: makeStrips(48, 2),
+      strips: makeStrips(56, 2),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 36, sabre_refs: 18, source: 'ACTUAL' as const,
       })),
     })
     const comps = competitionsFromTemplate('RYC Weekend', 8)

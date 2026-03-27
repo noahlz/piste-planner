@@ -50,31 +50,39 @@ The PRD's pool duration formula uses a 6-person-pool baseline even for tiny pool
 
 Most within ±0.6h of actual. The model works well here.
 
-**Exception: Foil 41-80** runs ~1-1.6h longer than predicted. The 90-min foil pool baseline may be too low — foil pools in this range consistently take longer than modeled.
+**Exception: Foil 41-80** runs ~1-1.6h longer than predicted. The 90-min foil pool baseline was too low — foil pools in this range consistently take longer than modeled.
 
-### 3. Large events (120+ fencers): PRD significantly underestimates
+### 3. Large events (120+ fencers): Distinguishing pool baseline vs. resource contention vs. flighting
 
-This is the concerning area:
+Initial analysis showed large gaps at 200+ fencers across all weapons. Deeper investigation revealed three distinct causes:
 
-| Weapon | Fencers | Actual | PRD | Gap |
-|--------|---------|--------|-----|-----|
-| Foil | 121-160 | 7.0h | 5.3h | +1.7h |
-| Foil | 201+ | 8.0h | 6.3h | +1.6h |
-| Sabre | 161-200 | 6.0h | 3.7h | +2.3h |
-| Sabre | 201+ | 6.3h | 3.7h | +2.6h |
+**Pool baselines too low (actionable):** Foil and sabre pool round durations reflect actual bout time, not scheduling overhead. Empirical data across the 40-199 fencer range (where flighting is rare) consistently shows pools running longer than the original baselines predicted. Adjusted: FOIL 90→105, SABRE 60→75.
 
-**Root causes:**
+**DE duration gaps are resource contention (not actionable on the DE table):** The `estimate_pool_duration` function already models strip/ref contention dynamically. Inflating the DE duration baseline would double-count the problem.
 
-- The PRD's ideal-parallelism assumption breaks down — real events have strip contention, so pools run in waves
-- The `estimate_pool_duration` function handles this via strip-count scaling, but the DE duration table for sabre at large brackets looks far too low (120 mins for both 128 and 256 brackets, vs empirical need of ~180-240 mins)
-- Sabre's 60-min pool baseline is dramatically too low for 160+ fencer events
+**200+ fencer events are typically flighted:** Sabre duration by 20-fencer buckets:
 
-## Recommendations
+| Fencers | N | Median |
+|---------|---|--------|
+| 120-139 | 60 | 5.1h |
+| 140-159 | 48 | 5.3h |
+| 160-179 | 32 | 6.2h |
+| 180-199 | 31 | 6.0h |
+| 200-219 | 29 | 6.0h |
+| 220-239 | 23 | 6.3h |
+| 240-259 | 10 | 6.6h |
+| 260-279 | 7 | 5.9h |
+| 280-299 | 8 | 6.3h |
+| 300-319 | 5 | 6.0h |
 
-1. **Sabre DE durations need upward revision** — the 128→120min and 256→120min values are the biggest source of error. Suggest 128→160, 256→200.
-2. **Sabre pool baseline** — consider raising from 60 to 75 mins, or accept that the strip-contention model must account for the gap.
-3. **Foil pool baseline** — consider raising from 90 to 105 mins based on consistent under-prediction at 40+ fencers.
-4. **Small-event overestimation** is harmless for scheduling (extra buffer), so low priority.
+The duration curve **flattens at 200+** and events in the 260-300 range run *shorter* than 160-199 — strong evidence of flighting. A linear extrapolation from the 60-199 range (non-flighted) predicts 200 fencers → 6.4h, but actual 200+ events median at 6.3h. The flighting mechanism breaks events into parallel flights, capping duration growth.
+
+## Changes Made
+
+1. **Foil pool baseline**: 90 → **105** mins — consistent under-prediction at 40+ fencers
+2. **Sabre pool baseline**: 60 → **75** mins — consistent under-prediction at 40+ fencers
+3. **Sabre DE durations**: Unchanged (128→120, 256→120) — empirical gap is from resource contention and flighting, both modeled dynamically by the scheduler
+4. **Small-event overestimation**: No change — harmless buffer
 
 ## Data Quality Note
 

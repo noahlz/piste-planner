@@ -77,7 +77,14 @@ export function weightedPoolDuration(
     (sum, size) => sum + poolDurationForSize(weapon, size, durationTable),
     0,
   )
-  return Math.round(totalWeighted / pool_sizes.length)
+  const avg = Math.round(totalWeighted / pool_sizes.length)
+
+  // Single pool of 8+ fencers is double-stripped, halving the effective duration
+  if (pool_sizes.length === 1 && pool_sizes[0] >= 8) {
+    return Math.round(avg / 2)
+  }
+
+  return avg
 }
 
 /**

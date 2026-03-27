@@ -54,8 +54,8 @@ export const BOUT_COUNTS: Record<number, number> = {
 
 export const DEFAULT_POOL_ROUND_DURATION_TABLE: Record<Weapon, number> = {
   [Weapon.EPEE]: 120,
-  [Weapon.FOIL]: 90,
-  [Weapon.SABRE]: 60,
+  [Weapon.FOIL]: 105,
+  [Weapon.SABRE]: 75,
 }
 
 // ──────────────────────────────────────────────
