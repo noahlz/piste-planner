@@ -1,3 +1,4 @@
+import { useRef, useState, useEffect } from 'react'
 import { useStore } from '../../store/store.ts'
 import { WizardStep1 } from './WizardStep1.tsx'
 import { WizardStep2 } from './WizardStep2.tsx'
@@ -29,7 +30,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
                   isCurrent
                     ? 'bg-accent text-white shadow-sm'
                     : isCompleted
-                      ? 'bg-green-600 text-white'
+                      ? 'bg-success text-white'
                       : 'border-2 border-slate-300 text-muted'
                 }`}
               >
@@ -47,7 +48,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
                   isCurrent
                     ? 'font-semibold text-accent'
                     : isCompleted
-                      ? 'font-medium text-green-700'
+                      ? 'font-medium text-success'
                       : 'text-muted'
                 }`}
               >
@@ -58,6 +59,48 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
         )
       })}
     </nav>
+  )
+}
+
+function ScrollableStepContent({ children }: { children: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const [showMore, setShowMore] = useState(false)
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    const container = scrollRef.current
+    if (!sentinel || !container) return
+
+    // Reset scroll position when step content changes
+    container.scrollTop = 0
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowMore(!entry.isIntersecting),
+      { root: container, threshold: 0.1 },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [children])
+
+  return (
+    <div className="relative">
+      <div
+        ref={scrollRef}
+        className="max-h-[60vh] overflow-y-auto"
+      >
+        {children}
+        {/* Sentinel at the bottom — when not visible, the "more" badge appears */}
+        <div ref={sentinelRef} className="h-1" />
+      </div>
+      {showMore && (
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 flex justify-center pb-2">
+          <span className="pointer-events-auto rounded-full bg-accent/80 px-3 py-1 text-xs font-medium text-white shadow-md">
+            Scroll for more ↓
+          </span>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -89,14 +132,14 @@ export function WizardShell() {
   ]
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-6 flex justify-center">
+    <div className="mx-auto max-w-4xl p-4">
+      <div className="mb-4 flex justify-center">
         <StepIndicator currentStep={wizardStep} />
       </div>
 
-      <div className="min-h-[300px]">{stepContent[wizardStep]}</div>
+      <ScrollableStepContent>{stepContent[wizardStep]}</ScrollableStepContent>
 
-      <div className="mt-8 flex justify-between">
+      <div className="mt-5 flex justify-between">
         <button
           type="button"
           onClick={handleBack}

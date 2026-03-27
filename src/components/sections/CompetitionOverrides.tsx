@@ -28,7 +28,7 @@ export function CompetitionOverrides() {
 
   if (sortedIds.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
         <h2 className="mb-2 text-lg font-semibold text-header">Competition Overrides</h2>
         <p className="text-sm text-muted">Select competitions above to configure overrides.</p>
       </div>
@@ -36,7 +36,7 @@ export function CompetitionOverrides() {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold text-header">Competition Overrides</h2>
       <table className="w-full text-sm">
         <thead>

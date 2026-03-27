@@ -96,7 +96,7 @@ export function CompetitionMatrix() {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold text-header">Competition Selection</h2>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {GROUPS.map((group) => (

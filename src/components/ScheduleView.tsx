@@ -32,7 +32,7 @@ export function ScheduleView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {scheduleStale && (
         <div className="rounded-md border border-amber-200 bg-warning px-4 py-3 text-sm text-warning-text">
           Results are outdated. Go back to adjust inputs or click Regenerate.
@@ -46,7 +46,7 @@ export function ScheduleView() {
         <button
           type="button"
           onClick={handleRegenerate}
-          className="rounded-md bg-green-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none"
+          className="rounded-md bg-success px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-success-hover focus:ring-2 focus:ring-success focus:ring-offset-2 focus:outline-none"
         >
           Regenerate
         </button>

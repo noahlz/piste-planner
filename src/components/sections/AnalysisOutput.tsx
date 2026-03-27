@@ -29,7 +29,7 @@ export function AnalysisOutput() {
 
   if (!hasContent) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
         <h2 className="text-lg font-semibold text-muted">Analysis Output</h2>
         <p className="text-sm text-muted">Run Validate to see results.</p>
       </div>
@@ -39,8 +39,8 @@ export function AnalysisOutput() {
   const sortedErrors = groupBySeverity(validationErrors)
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-header">Analysis Output</h2>
+    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
+      <h2 className="mb-2 text-lg font-semibold text-header">Analysis Output</h2>
 
       {sortedErrors.length > 0 && (
         <div className="mb-4">
@@ -95,14 +95,14 @@ export function AnalysisOutput() {
                       <button
                         type="button"
                         onClick={() => acceptSuggestion(i)}
-                        className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
+                        className="rounded-md bg-success px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-success-hover focus:ring-2 focus:ring-success focus:outline-none"
                       >
                         Accept
                       </button>
                       <button
                         type="button"
                         onClick={() => rejectSuggestion(i)}
-                        className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:outline-none"
+                        className="rounded-md bg-danger px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-danger-hover focus:ring-2 focus:ring-danger focus:outline-none"
                       >
                         Reject
                       </button>
@@ -111,8 +111,8 @@ export function AnalysisOutput() {
                     <span
                       className={`rounded-md px-2 py-0.5 text-xs font-medium ${
                         state === 'accepted'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
+                          ? 'bg-success/10 text-success'
+                          : 'bg-danger/10 text-danger'
                       }`}
                     >
                       {state === 'accepted' ? 'Accepted' : 'Rejected'}

@@ -25,7 +25,7 @@ export function WizardStep4() {
   }, [analysisStale])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <AnalysisOutput />
       <ActionButtons />
     </div>

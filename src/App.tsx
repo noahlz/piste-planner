@@ -19,7 +19,7 @@ function LayoutToggle() {
             : 'text-muted hover:text-body'
         }`}
       >
-        Kitchen Sink
+        Single Page
       </button>
       <button
         type="button"

@@ -8,6 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       exclude: [
+        'dist/**',
         'src/engine/types.ts',
         'src/engine/constants.ts',
         'eslint.config.js',

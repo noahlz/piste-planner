@@ -7,7 +7,7 @@ export function TemplateSelector() {
   const applyTemplate = useStore((s) => s.applyTemplate)
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold text-header">Template</h2>
       <div>
         <label className="block text-sm font-medium text-header" htmlFor="template-select">

@@ -5,8 +5,12 @@
   --color-background: #faf9f6;
   --color-card: #ffffff;
   --color-border: #475569;
-  --color-accent: #3b82f6;
-  --color-accent-hover: #2563eb;
+  --color-accent: #6b7fa8;
+  --color-accent-hover: #576d91;
+  --color-success: #5a8a6a;
+  --color-success-hover: #4a7559;
+  --color-danger: #a35b5b;
+  --color-danger-hover: #8c4d4d;
   --color-warning: #fef3c7;
   --color-warning-text: #92400e;
   --color-error: #fee2e2;
@@ -22,4 +26,8 @@ body {
   margin: 0;
   background-color: var(--color-background);
   color: var(--color-body);
+}
+
+button:not(:disabled) {
+  cursor: pointer;
 }

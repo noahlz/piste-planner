@@ -176,11 +176,11 @@ describe('Layout toggle', () => {
     expect(screen.getByText('Tournament')).toBeInTheDocument()
   })
 
-  it('clicking Kitchen Sink button switches back to kitchen-sink layout', () => {
+  it('clicking Single Page button switches back to kitchen-sink layout', () => {
     useStore.getState().setLayoutMode('wizard')
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Kitchen Sink' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Single Page' }))
 
     expect(useStore.getState().layoutMode).toBe('kitchen-sink')
     // Wizard step labels should no longer be visible
@@ -215,7 +215,7 @@ describe('Layout toggle', () => {
     expect(useStore.getState().strips_total).toBe(18)
 
     // Switch back to kitchen-sink
-    fireEvent.click(screen.getByRole('button', { name: 'Kitchen Sink' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Single Page' }))
 
     expect(useStore.getState().strips_total).toBe(18)
   })
@@ -226,7 +226,7 @@ describe('Layout toggle', () => {
     render(<App />)
 
     // Switch to kitchen-sink and back to wizard
-    fireEvent.click(screen.getByRole('button', { name: 'Kitchen Sink' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Single Page' }))
     fireEvent.click(screen.getByRole('button', { name: 'Wizard' }))
 
     // Wizard step is still 2

@@ -4,7 +4,7 @@ import { CompetitionMatrix } from '../sections/CompetitionMatrix.tsx'
 
 export function WizardStep1() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <TournamentSetup />
       <TemplateSelector />
       <CompetitionMatrix />

@@ -60,7 +60,7 @@ export function RefereeSetup() {
 
   if (daysAvailable === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
         <h2 className="mb-2 text-lg font-semibold text-header">Referee Setup</h2>
         <p className="text-sm text-muted">Set tournament days above to configure referees.</p>
       </div>
@@ -68,7 +68,7 @@ export function RefereeSetup() {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-header">Referee Setup</h2>
         <div className="group relative">

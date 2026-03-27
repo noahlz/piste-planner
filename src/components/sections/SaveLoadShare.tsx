@@ -75,7 +75,7 @@ export function SaveLoadShare() {
   const urlExceedsLimit = shareUrl != null && new Blob([shareUrl]).size > URL_SIZE_WARNING_BYTES
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold text-header">Save / Load / Share</h2>
 
       <div className="space-y-4">

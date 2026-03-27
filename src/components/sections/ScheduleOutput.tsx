@@ -36,7 +36,7 @@ export function ScheduleOutput() {
 
   if (entries.length === 0 && bottlenecks.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
         <h2 className="text-lg font-semibold text-muted">Schedule Output</h2>
         <p className="text-sm text-muted">Run Generate Schedule to see results.</p>
       </div>
@@ -67,7 +67,7 @@ export function ScheduleOutput() {
   })
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
       <h2 className="mb-4 text-lg font-semibold text-header">Schedule Output</h2>
 
       {entries.length > 0 && (

@@ -3,7 +3,7 @@ import { CompetitionOverrides } from '../sections/CompetitionOverrides.tsx'
 
 export function WizardStep2() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <FencerCounts />
       <CompetitionOverrides />
     </div>
