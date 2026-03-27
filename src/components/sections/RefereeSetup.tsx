@@ -1,45 +1,4 @@
 import { useStore } from '../../store/store.ts'
-import { findCompetition } from '../../engine/catalogue.ts'
-import { computePoolStructure } from '../../engine/pools.ts'
-
-/**
- * Suggests referee counts based on selected competitions and strip count.
- * Heuristic: one ref per strip in use. Sabre competitions need sabre refs;
- * foil/epee competitions need foil/epee refs. Distributes evenly across days.
- */
-function suggestRefs(state: ReturnType<typeof useStore.getState>) {
-  const { selectedCompetitions, days_available, strips_total } = state
-  const entries = Object.entries(selectedCompetitions)
-  if (entries.length === 0 || days_available === 0 || strips_total === 0) return null
-
-  // Count total pools by weapon type
-  let sabrePools = 0
-  let foilEpeePools = 0
-  for (const [id, config] of entries) {
-    const entry = findCompetition(id)
-    if (!entry || config.fencer_count < 2) continue
-    const ps = computePoolStructure(config.fencer_count, config.use_single_pool_override)
-    if (entry.weapon === 'SABRE') {
-      sabrePools += ps.n_pools
-    } else {
-      foilEpeePools += ps.n_pools
-    }
-  }
-
-  const totalPools = sabrePools + foilEpeePools
-  if (totalPools === 0) return null
-
-  // Distribute pools evenly across days, then cap at strips_total
-  const poolsPerDay = Math.ceil(totalPools / days_available)
-  const stripsInUse = Math.min(poolsPerDay, strips_total)
-
-  // Split refs proportionally by weapon type (one ref per strip in use)
-  const sabreRatio = sabrePools / totalPools
-  const sabreRefs = Math.max(1, Math.round(stripsInUse * sabreRatio))
-  const foilEpeeRefs = Math.max(1, stripsInUse - sabreRefs)
-
-  return { foil_epee_refs: foilEpeeRefs, sabre_refs: sabreRefs }
-}
 
 const INLINE_INPUT = 'w-20 rounded-md border border-slate-200 px-2 py-0.5 text-right text-body focus:ring-2 focus:ring-accent focus:outline-none'
 
@@ -48,15 +7,7 @@ export function RefereeSetup() {
   const dayRefs = useStore((s) => s.dayRefs)
   const setDayRefs = useStore((s) => s.setDayRefs)
   const toggleSabreFillin = useStore((s) => s.toggleSabreFillin)
-
-  function handleSuggest() {
-    const state = useStore.getState()
-    const suggestion = suggestRefs(state)
-    if (!suggestion) return
-    for (let i = 0; i < state.days_available; i++) {
-      setDayRefs(i, suggestion)
-    }
-  }
+  const suggestAllRefs = useStore((s) => s.suggestAllRefs)
 
   if (daysAvailable === 0) {
     return (
@@ -74,7 +25,7 @@ export function RefereeSetup() {
         <div className="group relative">
           <button
             type="button"
-            onClick={handleSuggest}
+            onClick={suggestAllRefs}
             className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:outline-none"
           >
             Suggest

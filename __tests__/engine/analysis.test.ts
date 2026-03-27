@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { initialAnalysis, genderEquityAllowableDiff, isRegionalQualifier } from '../../src/engine/analysis.ts'
-import { makeConfig, makeCompetition } from '../helpers/factories.ts'
+import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 import {
   BottleneckCause,
   BottleneckSeverity,
@@ -44,6 +44,57 @@ describe('genderEquityAllowableDiff', () => {
 function makeBigComp(id: string, fencerCount: number, overrides: Partial<Competition> = {}): Competition {
   return makeCompetition({ id, fencer_count: fencerCount, ...overrides })
 }
+
+// ──────────────────────────────────────────────
+// Pass 0 — capacity warning
+// ──────────────────────────────────────────────
+
+describe('initialAnalysis — Pass 0: capacity warning', () => {
+  it('warns when estimated pools/day exceeds strips_total', () => {
+    // 4 competitions × 4 pools each = 16 pools, 1 day, 8 strips → warning
+    const config = makeConfig({
+      strips: makeStrips(8, 0),
+      days_available: 1,
+      dayConfigs: [{ day_start_time: 480, day_end_time: 1320 }],
+    })
+    const competitions = Array.from({ length: 4 }, (_, i) =>
+      makeCompetition({
+        id: `COMP-${i}`,
+        fencer_count: 24, // 24 fencers → 4 pools of 6
+      }),
+    )
+    const dayAssignments: Record<string, number> = {}
+    for (const c of competitions) dayAssignments[c.id] = 0
+
+    const result = initialAnalysis(config, competitions, dayAssignments)
+
+    const capacityWarnings = result.warnings.filter(
+      (w) => w.phase === 'CAPACITY' && w.cause === BottleneckCause.STRIP_CONTENTION,
+    )
+    expect(capacityWarnings.length).toBe(1)
+    expect(capacityWarnings[0].severity).toBe(BottleneckSeverity.WARN)
+    expect(capacityWarnings[0].message).toContain('strips')
+  })
+
+  it('does not warn when pools/day fits within strip count', () => {
+    // 2 competitions × 4 pools each = 8 pools, 1 day, 10 strips → no warning
+    const config = makeConfig({
+      strips: makeStrips(10, 0),
+      days_available: 1,
+      dayConfigs: [{ day_start_time: 480, day_end_time: 1320 }],
+    })
+    const competitions = [
+      makeCompetition({ id: 'A', fencer_count: 24 }),
+      makeCompetition({ id: 'B', fencer_count: 24 }),
+    ]
+    const dayAssignments: Record<string, number> = { A: 0, B: 0 }
+
+    const result = initialAnalysis(config, competitions, dayAssignments)
+
+    const capacityWarnings = result.warnings.filter((w) => w.phase === 'CAPACITY')
+    expect(capacityWarnings.length).toBe(0)
+  })
+})
 
 // ──────────────────────────────────────────────
 // Pass 1 — strip deficit

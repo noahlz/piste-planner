@@ -20,6 +20,8 @@ import { createGlobalState } from './resources.ts'
 import { scheduleCompetition } from './scheduleOne.ts'
 import { constraintScore, SchedulingError } from './dayAssignment.ts'
 
+const VALID_BOTTLENECK_CAUSES = new Set(Object.values(BottleneckCause))
+
 // ──────────────────────────────────────────────
 // scheduleAll — PRD Section 14
 // ──────────────────────────────────────────────
@@ -34,10 +36,9 @@ export interface ScheduleAllResult {
  * priority (mandatory before optional, most constrained first), schedules each
  * competition, and returns results with bottlenecks.
  *
- * Error handling: mandatory events that fail to schedule re-throw SchedulingError
- * (fail-fast). Optional events that fail are silently skipped — the bottleneck is
- * still recorded in state. On re-throw, partial results are lost since state is
- * not returned; callers needing partial results should wrap this call.
+ * Error handling: competitions that fail to schedule are recorded as ERROR-severity
+ * bottlenecks and skipped. Remaining competitions continue scheduling. Non-SchedulingError
+ * exceptions are re-thrown.
  */
 export function scheduleAll(
   competitions: Competition[],
@@ -55,11 +56,25 @@ export function scheduleAll(
       scheduleCompetition(comp, state, config, competitions)
     } catch (err) {
       if (err instanceof SchedulingError) {
-        // Already recorded as bottleneck by scheduleCompetition/dayAssignment;
-        // optional events that fail to schedule are silently skipped.
-        if (!comp.optional) {
-          // Re-throw for mandatory events — caller must handle
-          throw err
+        // Only add an ERROR bottleneck if scheduleCompetition didn't already record one
+        // (some throw sites in scheduleOne.ts push a bottleneck before throwing)
+        const alreadyRecorded = state.bottlenecks.some(
+          (b) => b.competition_id === comp.id && b.severity === BottleneckSeverity.ERROR,
+        )
+        if (!alreadyRecorded) {
+          const rawCause = typeof err.cause === 'string' ? err.cause : null
+          const cause =
+            rawCause && VALID_BOTTLENECK_CAUSES.has(rawCause as BottleneckCause)
+              ? (rawCause as BottleneckCause)
+              : BottleneckCause.RESOURCE_EXHAUSTION
+          state.bottlenecks.push({
+            competition_id: comp.id,
+            phase: 'SCHEDULING',
+            cause,
+            severity: BottleneckSeverity.ERROR,
+            delay_mins: 0,
+            message: err.message,
+          })
         }
       } else {
         throw err

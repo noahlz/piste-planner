@@ -46,6 +46,28 @@ export function initialAnalysis(
   const warnings: Bottleneck[] = []
   const suggestions: string[] = []
 
+  // ── Pass 0: capacity warning — pools/day vs strips_total ────────────────
+  // Sum pools per day from dayAssignments, warn if any day exceeds strip count.
+  const poolsByDay = new Map<number, number>()
+  for (const comp of competitions) {
+    const day = dayAssignments[comp.id]
+    if (day === undefined) continue
+    const ps = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
+    poolsByDay.set(day, (poolsByDay.get(day) ?? 0) + ps.n_pools)
+  }
+  for (const [day, totalPools] of poolsByDay) {
+    if (totalPools > config.strips_total) {
+      warnings.push({
+        competition_id: '',
+        phase: 'CAPACITY',
+        cause: BottleneckCause.STRIP_CONTENTION,
+        severity: BottleneckSeverity.WARN,
+        delay_mins: 0,
+        message: `Day ${day + 1}: ~${totalPools} pools assigned but only ${config.strips_total} strips available. Consider adding strips, reducing competitions, or enabling flighting.`,
+      })
+    }
+  }
+
   // ── Pass 1: strip deficit → flighting suggestions ────────────────────────
   for (const comp of competitions) {
     const ps = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)

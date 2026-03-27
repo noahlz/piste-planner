@@ -368,3 +368,58 @@ describe('postScheduleWarnings', () => {
     expect(warnings).toHaveLength(0)
   })
 })
+
+// ──────────────────────────────────────────────
+// scheduleAll — graceful degradation (BUG-1)
+// ──────────────────────────────────────────────
+
+describe('scheduleAll — graceful degradation on resource exhaustion', () => {
+  it('returns partial schedule with ERROR bottleneck when mandatory competition fails', () => {
+    // 1 day with limited strips — small competitions fit, but later ones
+    // exhaust resources and fail to schedule
+    const config = makeConfig({
+      tournament_type: 'RJCC',
+      days_available: 1,
+      strips: makeStrips(4, 0),
+      referee_availability: [{ day: 0, foil_epee_refs: 10, sabre_refs: 10, source: 'ACTUAL' as const }],
+    })
+
+    // Many competitions all wanting 4 strips each on a single day —
+    // early ones succeed, later ones can't fit
+    const competitions: Competition[] = Array.from({ length: 10 }, (_, i) =>
+      makeCompetition({
+        id: `COMP-${i}`,
+        gender: i % 2 === 0 ? 'MEN' : 'WOMEN',
+        category: 'CADET',
+        weapon: i % 3 === 0 ? 'FOIL' : i % 3 === 1 ? 'EPEE' : 'SABRE',
+        event_type: 'INDIVIDUAL',
+        fencer_count: 16,
+        strips_allocated: 4,
+      }),
+    )
+
+    // Should NOT throw — should return partial results
+    const result = scheduleAll(competitions, config)
+
+    // At least some competitions should have been scheduled
+    expect(Object.keys(result.schedule).length).toBeGreaterThan(0)
+    // But not all — some should have failed
+    expect(Object.keys(result.schedule).length).toBeLessThan(competitions.length)
+    // Failed competitions produce ERROR bottlenecks
+    const errorBottlenecks = result.bottlenecks.filter(
+      (b) => b.severity === BottleneckSeverity.ERROR,
+    )
+    expect(errorBottlenecks.length).toBeGreaterThan(0)
+    for (const b of errorBottlenecks) {
+      expect(b.competition_id).toMatch(/^COMP-\d+$/)
+      expect(b.message).toEqual(expect.stringContaining('No'))
+      expect(b.phase).toBe('SCHEDULING')
+    }
+  })
+
+  it('still throws non-SchedulingError exceptions', () => {
+    expect(() =>
+      scheduleAll([], null as unknown as Parameters<typeof scheduleAll>[1]),
+    ).toThrow(TypeError)
+  })
+})
