@@ -75,6 +75,7 @@ export interface CompetitionSlice {
   globalOverrides: GlobalOverrides
 
   selectCompetitions: (ids: string[]) => void
+  addCompetition: (id: string) => void
   updateCompetition: (id: string, partial: Partial<CompetitionConfig>) => void
   removeCompetition: (id: string) => void
   applyTemplate: (templateName: string) => void
@@ -234,6 +235,15 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
         if (config) map[id] = config
       }
       set({ selectedCompetitions: map })
+      get().markStale({ analysisStale: true, scheduleStale: true })
+    },
+
+    addCompetition: (id) => {
+      const config = defaultConfigForId(id)
+      if (!config) return
+      set((state) => ({
+        selectedCompetitions: { ...state.selectedCompetitions, [id]: config },
+      }))
       get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
