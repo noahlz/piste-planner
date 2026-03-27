@@ -1,8 +1,7 @@
-import { BottleneckSeverity, CutMode, DeMode, EventType, FencerCountType, VideoPolicy } from './types.ts'
+import { BottleneckSeverity, CutMode, DeMode, EventType, VideoPolicy } from './types.ts'
 import type { Competition, TournamentConfig, ValidationError } from './types.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration } from './de.ts'
-import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
 
 function err(field: string, message: string): ValidationError {
   return { field, message, severity: BottleneckSeverity.ERROR }
@@ -75,14 +74,6 @@ export function validateConfig(
       errors.push(err('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} is below minimum ${config.MIN_FENCERS}`))
     } else if (comp.fencer_count > config.MAX_FENCERS) {
       errors.push(err('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} exceeds maximum ${config.MAX_FENCERS}`))
-    }
-
-    // CAPPED fencer count is prohibited at regional qualifiers
-    if (
-      comp.fencer_count_type === FencerCountType.CAPPED &&
-      REGIONAL_QUALIFIER_TYPES.has(config.tournament_type)
-    ) {
-      errors.push(err('fencer_count_type', `${comp.id}: CAPPED fencer_count_type is not allowed at regional qualifier ${config.tournament_type}`))
     }
 
     // Team events must not use cuts
