@@ -146,3 +146,6 @@ vite.config.ts.timestamp-*
 
 # Ad hoc tmp files
 tmp/
+
+# Git worktrees
+.worktrees/
