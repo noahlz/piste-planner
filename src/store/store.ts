@@ -331,7 +331,7 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
 
 function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
-    layoutMode: 'kitchen-sink',
+    layoutMode: 'wizard',
     wizardStep: 0,
     analysisStale: false,
     scheduleStale: false,
