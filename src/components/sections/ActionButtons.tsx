@@ -1,3 +1,6 @@
+import { ShieldCheck, Play } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { useStore } from '../../store/store.ts'
 import { buildTournamentConfig } from '../../store/buildConfig.ts'
 import { validateConfig } from '../../engine/validation.ts'
@@ -50,25 +53,20 @@ export function ActionButtons() {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
-      <h2 className="mb-2 text-lg font-semibold text-header">Actions</h2>
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={handleValidate}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:outline-none"
-        >
+    <Card>
+      <CardHeader>
+        <CardTitle>Actions</CardTitle>
+      </CardHeader>
+      <CardContent className="flex gap-3">
+        <Button variant="default" onClick={handleValidate}>
+          <ShieldCheck className="mr-2 h-4 w-4" />
           Validate
-        </button>
-        <button
-          type="button"
-          onClick={handleSchedule}
-          disabled={hasHardErrors}
-          className="rounded-md bg-success px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-success-hover focus:ring-2 focus:ring-success focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        </Button>
+        <Button variant="success" onClick={handleSchedule} disabled={hasHardErrors}>
+          <Play className="mr-2 h-4 w-4" />
           Generate Schedule
-        </button>
-      </div>
-    </div>
+        </Button>
+      </CardContent>
+    </Card>
   )
 }

@@ -1,8 +1,13 @@
+import { useState } from 'react'
 import { useStore } from '../../store/store.ts'
 import { CATALOGUE } from '../../engine/catalogue.ts'
 import type { CatalogueEntry } from '../../engine/types.ts'
 import { Category, EventType, Gender, Weapon } from '../../engine/types.ts'
 import { competitionLabel, CATEGORY_DISPLAY, GENDER_DISPLAY, WEAPON_DISPLAY } from '../competitionLabels.ts'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Toggle } from '@/components/ui/toggle'
+import { Badge } from '@/components/ui/badge'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 // ──────────────────────────────────────────────
 // Catalogue grouping
@@ -84,68 +89,121 @@ export function CompetitionMatrix() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
   const addCompetition = useStore((s) => s.addCompetition)
   const removeCompetition = useStore((s) => s.removeCompetition)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const selectedIds = new Set(Object.keys(selectedCompetitions))
 
-  function toggle(id: string, checked: boolean) {
-    if (checked) {
-      addCompetition(id)
-    } else {
+  function toggle(id: string) {
+    if (selectedIds.has(id)) {
       removeCompetition(id)
+    } else {
+      addCompetition(id)
     }
   }
 
+  function toggleCollapsed(groupKey: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) {
+        next.delete(groupKey)
+      } else {
+        next.add(groupKey)
+      }
+      return next
+    })
+  }
+
+  function countSelected(group: WeaponGenderGroup): number {
+    let count = 0
+    for (const row of group.categories) {
+      if (row.individual && selectedIds.has(row.individual.id)) count++
+      if (row.team && selectedIds.has(row.team.id)) count++
+    }
+    return count
+  }
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-header">Competition Selection</h2>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {GROUPS.map((group) => (
-          <div key={`${group.gender}-${group.weapon}`} className="rounded-md border border-slate-200 p-3">
-            <h3 className="mb-2 text-sm font-semibold text-header">{group.label}</h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-muted">
-                  <th className="pb-1 text-left font-medium">Category</th>
-                  <th className="pb-1 text-center font-medium">Ind</th>
-                  <th className="pb-1 text-center font-medium">Team</th>
-                </tr>
-              </thead>
-              <tbody>
-                {group.categories.map((row) => (
-                  <tr key={row.category} className="even:bg-slate-50">
-                    <td className="py-0.5 text-body">{row.label}</td>
-                    <td className="py-0.5 text-center">
-                      {row.individual && (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(row.individual.id)}
-                          onChange={(e) => toggle(row.individual!.id, e.target.checked)}
-                          aria-label={competitionLabel(row.individual)}
-                          className="accent-accent"
-                        />
-                      )}
-                    </td>
-                    <td className="py-0.5 text-center">
-                      {row.team && (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(row.team.id)}
-                          onChange={(e) => toggle(row.team!.id, e.target.checked)}
-                          aria-label={competitionLabel(row.team)}
-                          className="accent-accent"
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-      </div>
-      <p className="mt-2 text-xs text-muted">
-        {selectedIds.size} competition{selectedIds.size !== 1 ? 's' : ''} selected
-      </p>
-    </div>
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Competition Selection</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {GROUPS.map((group) => {
+            const groupKey = `${group.gender}-${group.weapon}`
+            const isCollapsed = collapsed.has(groupKey)
+            const selected = countSelected(group)
+            // Skip categories where neither individual nor team exists
+            const visibleRows = group.categories.filter(
+              (row) => row.individual || row.team,
+            )
+
+            return (
+              <div key={groupKey} className="rounded-md border p-2">
+                <button
+                  type="button"
+                  onClick={() => toggleCollapsed(groupKey)}
+                  className="flex w-full items-center justify-between text-sm font-semibold text-card-foreground"
+                >
+                  <span className="flex items-center gap-1.5">
+                    {isCollapsed ? (
+                      <ChevronRight className="size-4" />
+                    ) : (
+                      <ChevronDown className="size-4" />
+                    )}
+                    {group.label}
+                  </span>
+                  {selected > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {selected}
+                    </Badge>
+                  )}
+                </button>
+
+                {!isCollapsed && (
+                  <div className="mt-2 space-y-1">
+                    {visibleRows.map((row) => (
+                      <div
+                        key={row.category}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="text-card-foreground">{row.label}</span>
+                        <div className="flex gap-1">
+                          {row.individual && (
+                            <Toggle
+                              variant="outline"
+                              pressed={selectedIds.has(row.individual.id)}
+                              onPressedChange={() => toggle(row.individual!.id)}
+                              aria-label={competitionLabel(row.individual)}
+                              className="h-6 w-7 px-0 text-xs"
+                            >
+                              I
+                            </Toggle>
+                          )}
+                          {row.team && (
+                            <Toggle
+                              variant="outline"
+                              pressed={selectedIds.has(row.team.id)}
+                              onPressedChange={() => toggle(row.team!.id)}
+                              aria-label={competitionLabel(row.team)}
+                              className="h-6 w-7 px-0 text-xs"
+                            >
+                              T
+                            </Toggle>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {selectedIds.size} competition{selectedIds.size !== 1 ? 's' : ''} selected
+        </p>
+      </CardContent>
+    </Card>
   )
 }

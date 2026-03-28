@@ -5,11 +5,12 @@ import {
   deserializeState,
   encodeToUrl,
 } from '../../store/serialization.ts'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Download, Upload, Share2, Copy, Check } from 'lucide-react'
 
 const URL_SIZE_WARNING_BYTES = 2048
-
-const BTN_PRIMARY = 'rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:outline-none'
-const BTN_SECONDARY = 'rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-body transition-colors hover:bg-slate-200 focus:ring-2 focus:ring-accent focus:outline-none'
 
 export function SaveLoadShare() {
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -75,32 +76,38 @@ export function SaveLoadShare() {
   const urlExceedsLimit = shareUrl != null && new Blob([shareUrl]).size > URL_SIZE_WARNING_BYTES
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-header">Save / Load / Share</h2>
-
-      <div className="space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle>Save / Load / Share</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
         {/* Save */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-body">Save Configuration</h3>
-          <button
-            type="button"
-            onClick={handleSave}
-            className={BTN_PRIMARY}
-          >
+          <h3 className="mb-2 text-sm font-medium text-foreground">Save Configuration</h3>
+          <Button type="button" onClick={handleSave}>
+            <Download className="mr-2 h-4 w-4" />
             Save to File
-          </button>
+          </Button>
         </div>
 
         {/* Load */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-body">Load Configuration</h3>
+          <h3 className="mb-2 text-sm font-medium text-foreground">Load Configuration</h3>
           <input
             ref={fileInputRef}
             type="file"
             accept=".json,.piste.json"
             onChange={handleFileChange}
-            className="block text-sm text-body file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-body file:cursor-pointer hover:file:bg-slate-200"
+            className="hidden"
           />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Load from File
+          </Button>
           {loadError && (
             <p className="mt-2 text-sm text-error-text" role="alert">
               {loadError}
@@ -110,31 +117,33 @@ export function SaveLoadShare() {
 
         {/* Share */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-body">Share via URL</h3>
-          <button
-            type="button"
-            onClick={handleShare}
-            className={BTN_PRIMARY}
-          >
+          <h3 className="mb-2 text-sm font-medium text-foreground">Share via URL</h3>
+          <Button type="button" onClick={handleShare}>
+            <Share2 className="mr-2 h-4 w-4" />
             Generate Link
-          </button>
+          </Button>
 
           {shareUrl && (
             <div className="mt-2 space-y-2">
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
+                <Input
                   readOnly
                   value={shareUrl}
-                  className="flex-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-body"
+                  className="flex-1 bg-muted text-xs"
                 />
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className={BTN_SECONDARY}
-                >
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
+                <Button type="button" variant="outline" onClick={handleCopy}>
+                  {copied ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
               </div>
               {urlExceedsLimit && (
                 <p className="text-xs text-warning-text" role="status">
@@ -145,7 +154,7 @@ export function SaveLoadShare() {
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }

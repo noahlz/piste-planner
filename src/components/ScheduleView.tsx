@@ -2,6 +2,9 @@ import { useStore } from '../store/store.ts'
 import { buildTournamentConfig } from '../store/buildConfig.ts'
 import { scheduleAll } from '../engine/scheduler.ts'
 import { BottleneckCause, BottleneckSeverity } from '../engine/types.ts'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { ScheduleOutput } from './sections/ScheduleOutput.tsx'
 import { SaveLoadShare } from './sections/SaveLoadShare.tsx'
 
@@ -34,22 +37,22 @@ export function ScheduleView() {
   return (
     <div className="space-y-4">
       {scheduleStale && (
-        <div className="rounded-md border border-amber-200 bg-warning px-4 py-3 text-sm text-warning-text">
-          Results are outdated. Go back to adjust inputs or click Regenerate.
-        </div>
+        <Alert className="border-amber-200 bg-warning text-warning-text">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Results are outdated. Go back to adjust inputs or click Regenerate.
+          </AlertDescription>
+        </Alert>
       )}
 
       <ScheduleOutput />
       <SaveLoadShare />
 
       <div className="flex justify-center">
-        <button
-          type="button"
-          onClick={handleRegenerate}
-          className="rounded-md bg-success px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-success-hover focus:ring-2 focus:ring-success focus:ring-offset-2 focus:outline-none"
-        >
+        <Button variant="success" onClick={handleRegenerate}>
+          <RefreshCw className="mr-1.5 h-4 w-4" />
           Regenerate
-        </button>
+        </Button>
       </div>
     </div>
   )

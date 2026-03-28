@@ -130,7 +130,7 @@ describe('uiSlice', () => {
   describe('initial state', () => {
     it('has correct defaults', () => {
       const state = useStore.getState()
-      expect(state.layoutMode).toBe('kitchen-sink')
+      expect(state.layoutMode).toBe('wizard')
       expect(state.wizardStep).toBe(0)
       expect(state.analysisStale).toBe(false)
       expect(state.scheduleStale).toBe(false)

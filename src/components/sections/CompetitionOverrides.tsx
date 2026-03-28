@@ -4,6 +4,10 @@ import { DEFAULT_CUT_BY_CATEGORY, DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../..
 import { CutMode, DeMode, VideoPolicy } from '../../engine/types.ts'
 import { competitionLabel } from '../competitionLabels.ts'
 import { DefaultLabel } from '../common/DefaultLabel.tsx'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const DE_MODE_OPTIONS: { value: DeMode; label: string }[] = [
   { value: DeMode.SINGLE_BLOCK, label: 'Single Block' },
@@ -24,9 +28,6 @@ const CUT_MODE_OPTIONS: { value: CutMode; label: string }[] = [
 
 const DEFAULT_DE_MODE: DeMode = DeMode.SINGLE_BLOCK
 
-const INLINE_SELECT = 'rounded-md border border-slate-200 px-2 py-0.5 text-sm text-body focus:ring-2 focus:ring-accent focus:outline-none'
-const INLINE_NUMBER = `${INLINE_SELECT} w-16 text-right`
-
 export function CompetitionOverrides() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
   const updateCompetition = useStore((s) => s.updateCompetition)
@@ -35,134 +36,149 @@ export function CompetitionOverrides() {
 
   if (sortedIds.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
-        <h2 className="mb-2 text-lg font-semibold text-header">Competition Overrides</h2>
-        <p className="text-sm text-muted">Select competitions above to configure overrides.</p>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Competition Overrides</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Select competitions above to configure overrides.</p>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-header">Competition Overrides</h2>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 text-xs text-muted">
-            <th className="pb-2 text-left font-medium">Competition</th>
-            <th className="pb-2 text-left font-medium">DE Mode</th>
-            <th className="pb-2 text-left font-medium">Video Policy</th>
-            <th className="pb-2 text-left font-medium">Cut Mode</th>
-            <th className="pb-2 text-left font-medium">Cut Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedIds.map((id) => {
-            const entry = findCompetition(id)
-            const label = entry ? competitionLabel(entry) : id
-            const config = selectedCompetitions[id]
-            const defaultVideoPolicy = entry
-              ? DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category]
-              : undefined
+    <Card>
+      <CardHeader>
+        <CardTitle>Competition Overrides</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Competition</TableHead>
+              <TableHead>DE Mode</TableHead>
+              <TableHead>Video Policy</TableHead>
+              <TableHead>Cut Mode</TableHead>
+              <TableHead>Cut Value</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedIds.map((id) => {
+              const entry = findCompetition(id)
+              const label = entry ? competitionLabel(entry) : id
+              const config = selectedCompetitions[id]
+              const defaultVideoPolicy = entry
+                ? DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category]
+                : undefined
 
-            return (
-              <tr key={id} className="border-b border-slate-100 even:bg-slate-50">
-                <td className="py-1.5 text-body">{label}</td>
-                <td className="py-1.5">
-                  <select
-                    className={INLINE_SELECT}
-                    value={config.de_mode}
-                    onChange={(e) =>
-                      updateCompetition(id, { de_mode: e.target.value as DeMode })
-                    }
-                    aria-label={`DE mode for ${label}`}
-                  >
-                    {DE_MODE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <DefaultLabel isDefault={config.de_mode === DEFAULT_DE_MODE} />
-                </td>
-                <td className="py-1.5">
-                  <select
-                    className={INLINE_SELECT}
-                    value={config.de_video_policy}
-                    onChange={(e) =>
-                      updateCompetition(id, {
-                        de_video_policy: e.target.value as VideoPolicy,
-                      })
-                    }
-                    aria-label={`Video policy for ${label}`}
-                  >
-                    {VIDEO_POLICY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <DefaultLabel
-                    isDefault={defaultVideoPolicy === config.de_video_policy}
-                  />
-                </td>
-                <td className="py-1.5">
-                  <select
-                    className={INLINE_SELECT}
-                    value={config.cut_mode}
-                    onChange={(e) =>
-                      updateCompetition(id, { cut_mode: e.target.value as CutMode })
-                    }
-                    aria-label={`Cut mode for ${label}`}
-                  >
-                    {CUT_MODE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <DefaultLabel
-                    isDefault={
-                      entry
-                        ? config.cut_mode === DEFAULT_CUT_BY_CATEGORY[entry.category].mode
-                        : false
-                    }
-                  />
-                </td>
-                <td className="py-1.5">
-                  {config.cut_mode !== CutMode.DISABLED && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        min={1}
-                        max={config.cut_mode === CutMode.PERCENTAGE ? 100 : undefined}
-                        className={INLINE_NUMBER}
-                        value={config.cut_value}
-                        onChange={(e) => {
-                          const raw = Number(e.target.value)
-                          if (!Number.isFinite(raw) || raw < 1) return
-                          updateCompetition(id, { cut_value: raw })
-                        }}
-                        aria-label={`Cut value for ${label}`}
-                      />
-                      <span className="text-xs text-muted">
-                        {config.cut_mode === CutMode.PERCENTAGE ? '%' : 'fencers'}
-                      </span>
-                      <DefaultLabel
-                        isDefault={
-                          entry
-                            ? config.cut_mode === DEFAULT_CUT_BY_CATEGORY[entry.category].mode &&
-                              config.cut_value === DEFAULT_CUT_BY_CATEGORY[entry.category].value
-                            : false
-                        }
-                      />
-                    </div>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+              return (
+                <TableRow key={id}>
+                  <TableCell className="text-foreground">{label}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={config.de_mode}
+                      onValueChange={(value) =>
+                        updateCompetition(id, { de_mode: value as DeMode })
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[140px]" aria-label={`DE mode for ${label}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DE_MODE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <DefaultLabel isDefault={config.de_mode === DEFAULT_DE_MODE} />
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={config.de_video_policy}
+                      onValueChange={(value) =>
+                        updateCompetition(id, { de_video_policy: value as VideoPolicy })
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[130px]" aria-label={`Video policy for ${label}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VIDEO_POLICY_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <DefaultLabel
+                      isDefault={defaultVideoPolicy === config.de_video_policy}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={config.cut_mode}
+                      onValueChange={(value) =>
+                        updateCompetition(id, { cut_mode: value as CutMode })
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[120px]" aria-label={`Cut mode for ${label}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CUT_MODE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <DefaultLabel
+                      isDefault={
+                        entry
+                          ? config.cut_mode === DEFAULT_CUT_BY_CATEGORY[entry.category].mode
+                          : false
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    {config.cut_mode !== CutMode.DISABLED && (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={config.cut_mode === CutMode.PERCENTAGE ? 100 : undefined}
+                          className="h-8 w-16 text-right"
+                          value={config.cut_value}
+                          onChange={(e) => {
+                            const raw = Number(e.target.value)
+                            if (!Number.isFinite(raw) || raw < 1) return
+                            updateCompetition(id, { cut_value: raw })
+                          }}
+                          aria-label={`Cut value for ${label}`}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {config.cut_mode === CutMode.PERCENTAGE ? '%' : 'fencers'}
+                        </span>
+                        <DefaultLabel
+                          isDefault={
+                            entry
+                              ? config.cut_mode === DEFAULT_CUT_BY_CATEGORY[entry.category].mode &&
+                                config.cut_value === DEFAULT_CUT_BY_CATEGORY[entry.category].value
+                              : false
+                          }
+                        />
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 }

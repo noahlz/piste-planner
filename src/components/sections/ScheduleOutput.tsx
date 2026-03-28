@@ -1,11 +1,28 @@
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useStore } from '../../store/store.ts'
 import { BottleneckSeverity } from '../../engine/types.ts'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
-const SEVERITY_STYLES: Record<string, string> = {
-  ERROR: 'text-error-text bg-error border-red-200',
-  WARN: 'text-warning-text bg-warning border-amber-200',
-  INFO: 'text-info-text bg-info border-blue-200',
+const SEVERITY_CLASSES: Record<string, string> = {
+  ERROR: 'border-red-200 bg-error text-error-text',
+  WARN: 'border-amber-200 bg-warning text-warning-text',
+  INFO: 'border-blue-200 bg-info text-info-text',
 }
+
+const SEVERITY_ICON = {
+  ERROR: AlertCircle,
+  WARN: AlertTriangle,
+  INFO: Info,
+} as const
 
 function formatMinutes(mins: number | null): string {
   if (mins === null) return '\u2014'
@@ -36,10 +53,14 @@ export function ScheduleOutput() {
 
   if (entries.length === 0 && bottlenecks.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
-        <h2 className="text-lg font-semibold text-muted">Schedule Output</h2>
-        <p className="text-sm text-muted">Run Generate Schedule to see results.</p>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-muted-foreground">Schedule Output</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Run Generate Schedule to see results.</p>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -67,64 +88,73 @@ export function ScheduleOutput() {
   })
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-card p-3 shadow-sm">
-      <h2 className="mb-4 text-lg font-semibold text-header">Schedule Output</h2>
+    <Card>
+      <CardHeader>
+        <CardTitle>Schedule Output</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {entries.length > 0 && (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Competition</TableHead>
+                  <TableHead className="text-right">Day</TableHead>
+                  <TableHead className="text-right">Pool Start</TableHead>
+                  <TableHead className="text-right">Pool End</TableHead>
+                  <TableHead className="text-right">DE Start</TableHead>
+                  <TableHead className="text-right">DE End</TableHead>
+                  <TableHead className="text-right">Strips</TableHead>
+                  <TableHead className="text-right">Bottlenecks</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sorted.map((r) => (
+                  <TableRow
+                    key={r.competition_id}
+                    className={rowTintClass(r.competition_id, worstSeverity)}
+                  >
+                    <TableCell className="font-mono text-xs text-foreground">{r.competition_id}</TableCell>
+                    <TableCell className="text-right text-foreground">{r.assigned_day + 1}</TableCell>
+                    <TableCell className="text-right text-foreground">{formatMinutes(r.pool_start)}</TableCell>
+                    <TableCell className="text-right text-foreground">{formatMinutes(r.pool_end)}</TableCell>
+                    <TableCell className="text-right text-foreground">{formatMinutes(r.de_start)}</TableCell>
+                    <TableCell className="text-right text-foreground">{formatMinutes(r.de_total_end)}</TableCell>
+                    <TableCell className="text-right text-foreground">{r.pool_strips_count}</TableCell>
+                    <TableCell className="text-right text-foreground">
+                      {bottleneckCounts[r.competition_id] ?? 0}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
-      {entries.length > 0 && (
-        <div className="mb-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs text-muted">
-                <th className="px-2 pb-2 text-left font-medium">Competition</th>
-                <th className="px-2 pb-2 text-right font-medium">Day</th>
-                <th className="px-2 pb-2 text-right font-medium">Pool Start</th>
-                <th className="px-2 pb-2 text-right font-medium">Pool End</th>
-                <th className="px-2 pb-2 text-right font-medium">DE Start</th>
-                <th className="px-2 pb-2 text-right font-medium">DE End</th>
-                <th className="px-2 pb-2 text-right font-medium">Strips</th>
-                <th className="px-2 pb-2 text-right font-medium">Bottlenecks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((r) => (
-                <tr
-                  key={r.competition_id}
-                  className={`border-b border-slate-100 last:border-b-0 ${rowTintClass(r.competition_id, worstSeverity)}`}
-                >
-                  <td className="px-2 py-1.5 font-mono text-xs text-body">{r.competition_id}</td>
-                  <td className="px-2 py-1.5 text-right text-body">{r.assigned_day + 1}</td>
-                  <td className="px-2 py-1.5 text-right text-body">{formatMinutes(r.pool_start)}</td>
-                  <td className="px-2 py-1.5 text-right text-body">{formatMinutes(r.pool_end)}</td>
-                  <td className="px-2 py-1.5 text-right text-body">{formatMinutes(r.de_start)}</td>
-                  <td className="px-2 py-1.5 text-right text-body">{formatMinutes(r.de_total_end)}</td>
-                  <td className="px-2 py-1.5 text-right text-body">{r.pool_strips_count}</td>
-                  <td className="px-2 py-1.5 text-right text-body">
-                    {bottleneckCounts[r.competition_id] ?? 0}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {bottlenecks.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-header">Bottlenecks</h3>
-          <ul className="space-y-1">
-            {bottlenecks.map((b, i) => (
-              <li
-                key={`${b.competition_id}-${b.cause}-${i}`}
-                className={`rounded-md border px-3 py-1.5 text-sm ${SEVERITY_STYLES[b.severity] ?? ''}`}
-              >
-                <span className="font-mono text-xs">{b.competition_id || 'global'}</span>{' '}
-                <span className="font-medium">[{b.phase}]</span>{' '}
-                <span className="text-xs uppercase">{b.cause}</span>: {b.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+        {bottlenecks.length > 0 && (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-card-foreground">Bottlenecks</h3>
+            <div className="space-y-1">
+              {bottlenecks.map((b, i) => {
+                const Icon = SEVERITY_ICON[b.severity as keyof typeof SEVERITY_ICON] ?? Info
+                return (
+                  <Alert
+                    key={`${b.competition_id}-${b.cause}-${i}`}
+                    className={SEVERITY_CLASSES[b.severity] ?? ''}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <AlertDescription>
+                      <span className="font-mono text-xs">{b.competition_id || 'global'}</span>{' '}
+                      <span className="font-medium">[{b.phase}]</span>{' '}
+                      <span className="text-xs uppercase">{b.cause}</span>: {b.message}
+                    </AlertDescription>
+                  </Alert>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

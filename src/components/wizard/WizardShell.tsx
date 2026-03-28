@@ -1,5 +1,8 @@
 import { useRef, useState, useEffect } from 'react'
 import { useStore } from '../../store/store.ts'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Check, ChevronLeft, ChevronRight, ChevronsDown } from 'lucide-react'
 import { WizardStep1 } from './WizardStep1.tsx'
 import { WizardStep2 } from './WizardStep2.tsx'
 import { WizardStep3 } from './WizardStep3.tsx'
@@ -20,7 +23,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
             {i > 0 && (
               <div
                 className={`mx-1.5 h-0.5 w-8 rounded-full ${
-                  i <= currentStep ? 'bg-accent' : 'bg-slate-200'
+                  i <= currentStep ? 'bg-primary' : 'bg-slate-200'
                 }`}
               />
             )}
@@ -28,17 +31,14 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
                   isCurrent
-                    ? 'bg-accent text-white shadow-sm'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : isCompleted
-                      ? 'bg-success text-white'
-                      : 'border-2 border-slate-300 text-muted'
+                      ? 'bg-success text-success-foreground'
+                      : 'border-2 border-muted-foreground/30 text-muted-foreground'
                 }`}
               >
                 {isCompleted ? (
-                  // Checkmark for completed steps
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
+                  <Check className="h-4 w-4" />
                 ) : (
                   i + 1
                 )}
@@ -46,10 +46,10 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
               <span
                 className={`text-xs ${
                   isCurrent
-                    ? 'font-semibold text-accent'
+                    ? 'font-semibold text-primary'
                     : isCompleted
                       ? 'font-medium text-success'
-                      : 'text-muted'
+                      : 'text-muted-foreground'
                 }`}
               >
                 {label}
@@ -95,9 +95,10 @@ function ScrollableStepContent({ children }: { children: React.ReactNode }) {
       </div>
       {showMore && (
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 flex justify-center pb-2">
-          <span className="pointer-events-auto rounded-full bg-accent/80 px-3 py-1 text-xs font-medium text-white shadow-md">
-            Scroll for more ↓
-          </span>
+          <Badge className="pointer-events-auto gap-1 shadow-md">
+            <ChevronsDown className="h-3 w-3" />
+            Scroll for more
+          </Badge>
         </div>
       )}
     </div>
@@ -140,24 +141,23 @@ export function WizardShell() {
       <ScrollableStepContent>{stepContent[wizardStep]}</ScrollableStepContent>
 
       <div className="mt-5 flex justify-between">
-        <button
-          type="button"
+        <Button
+          variant="outline"
           onClick={handleBack}
           disabled={wizardStep === 0}
-          className="rounded-md border border-slate-200 bg-card px-5 py-2 text-sm font-medium text-body transition-colors hover:bg-slate-50 focus:ring-2 focus:ring-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
         >
+          <ChevronLeft className="mr-1 h-4 w-4" />
           Back
-        </button>
+        </Button>
 
         {wizardStep < 4 && (
-          <button
-            type="button"
+          <Button
             onClick={handleForward}
             disabled={forwardDisabled}
-            className="rounded-md bg-accent px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             {wizardStep === 3 ? 'View Schedule' : 'Next'}
-          </button>
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
         )}
       </div>
     </div>
