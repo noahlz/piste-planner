@@ -15,6 +15,7 @@ import type {
 } from '../engine/types.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { suggestRefs } from './refSuggestion.ts'
+import { suggestStrips as computeStripSuggestion } from './stripSuggestion.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
@@ -46,6 +47,7 @@ export interface TournamentSlice {
   dayConfigs: DayConfig[]
   strips_total: number
   video_strips_total: number
+  include_finals_strip: boolean
   pod_captain_override: PodCaptainOverride
 
   setTournamentType: (type: TournamentType) => void
@@ -53,6 +55,8 @@ export interface TournamentSlice {
   updateDayConfig: (dayIndex: number, partial: Partial<DayConfig>) => void
   setStrips: (total: number) => void
   setVideoStrips: (total: number) => void
+  setIncludeFinalsStrip: (include: boolean) => void
+  suggestStrips: () => void
   setPodCaptainOverride: (override: PodCaptainOverride) => void
 }
 
@@ -165,6 +169,7 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
     dayConfigs: [],
     strips_total: 0,
     video_strips_total: 0,
+    include_finals_strip: false,
     pod_captain_override: 'AUTO',
 
     setTournamentType: (type) => {
@@ -200,6 +205,24 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
     setVideoStrips: (total) => {
       set({ video_strips_total: total })
       get().markStale({ analysisStale: true, scheduleStale: true })
+    },
+
+    setIncludeFinalsStrip: (include) => {
+      set({ include_finals_strip: include })
+      get().markStale({ analysisStale: true, scheduleStale: true })
+    },
+
+    suggestStrips: () => {
+      const state = get()
+      const suggested = computeStripSuggestion(
+        state.selectedCompetitions,
+        state.include_finals_strip,
+      )
+      if (suggested !== null) {
+        set({ strips_total: suggested })
+        get().markStale({ analysisStale: true, scheduleStale: true })
+        autoSuggestRefs(get as GetState, set as SetState)
+      }
     },
 
     setPodCaptainOverride: (override) => {
