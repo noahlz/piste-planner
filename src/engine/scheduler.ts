@@ -19,6 +19,7 @@ import {
 import { createGlobalState } from './resources.ts'
 import { scheduleCompetition } from './scheduleOne.ts'
 import { constraintScore, SchedulingError } from './dayAssignment.ts'
+import { validateConfig } from './validation.ts'
 
 const VALID_BOTTLENECK_CAUSES = new Set(Object.values(BottleneckCause))
 
@@ -46,7 +47,25 @@ export function scheduleAll(
 ): ScheduleAllResult {
   const state = createGlobalState(config)
 
-  // TODO: validate(competitions, config) — Task 5A
+  const validationErrors = validateConfig(config, competitions)
+
+  // Convert validation results to bottlenecks. ERROR-severity failures abort
+  // scheduling immediately; WARN-severity issues are carried forward as bottlenecks.
+  for (const ve of validationErrors) {
+    state.bottlenecks.push({
+      competition_id: '',
+      phase: 'VALIDATION',
+      cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      severity: ve.severity,
+      delay_mins: 0,
+      message: ve.message,
+    })
+  }
+
+  const hasErrors = validationErrors.some(ve => ve.severity === BottleneckSeverity.ERROR)
+  if (hasErrors) {
+    return { schedule: state.schedule, bottlenecks: state.bottlenecks }
+  }
 
   const allSorted = sortWithPairs(competitions, config)
 
@@ -81,6 +100,9 @@ export function scheduleAll(
       }
     }
   }
+
+  const postWarnings = postScheduleWarnings(state.schedule, config)
+  state.bottlenecks.push(...postWarnings)
 
   return {
     schedule: state.schedule,

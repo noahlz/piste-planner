@@ -1,9 +1,7 @@
 # Piste Planner
 
-- PRD: `.claude/plans/piste-planner-prd.md` 
+- Gap closure plan: `.claude/plans/2026-03-27-gap-closure.md`
 - Execution plan: `.claude/plans/2026-03-25-engine-execution-plan.md`
-
-> Verify the Plan's algorithmic claims against the PRD before implementing, but don't treat the PRD as gospel. Surface any issues to the user i.e. if the PRD requirements has flaws / contradicts other requirements in a unresolveable way.
 
 ## Test Safety
 

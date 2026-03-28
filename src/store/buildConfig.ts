@@ -136,8 +136,31 @@ function buildCompetitions(state: StoreState): Competition[] {
       flighting_group_id: null,
       is_priority: false,
       strips_allocated: 0,
-      // TODO: Apply accepted flighting suggestions from state.flightingSuggestionStates
     })
+  }
+
+  // Apply accepted flighting suggestions, mutating the competition objects already in the array.
+  for (let i = 0; i < state.flightingSuggestions.length; i++) {
+    if (state.flightingSuggestionStates[i] !== 'accepted') continue
+
+    const group = state.flightingSuggestions[i]
+    const groupId = `${group.priority_competition_id}+${group.flighted_competition_id}`
+
+    const priority = competitions.find((c) => c.id === group.priority_competition_id)
+    if (priority) {
+      priority.flighted = true
+      priority.is_priority = true
+      priority.flighting_group_id = groupId
+      priority.strips_allocated = group.strips_for_priority
+    }
+
+    const flighted = competitions.find((c) => c.id === group.flighted_competition_id)
+    if (flighted) {
+      flighted.flighted = true
+      flighted.is_priority = false
+      flighted.flighting_group_id = groupId
+      flighted.strips_allocated = group.strips_for_flighted
+    }
   }
 
   return competitions

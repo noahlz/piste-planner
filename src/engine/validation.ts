@@ -159,11 +159,14 @@ export function validateConfig(
   }
 
   // ── Same population: N individual events for same category+gender+weapon ──
+  // Veteran events include vet_age_group in the key because each age group is a distinct population.
 
   const populationCounts = new Map<string, number>()
   for (const comp of competitions) {
     if (comp.event_type === EventType.INDIVIDUAL) {
-      const key = `${comp.category}|${comp.gender}|${comp.weapon}`
+      const key = comp.vet_age_group !== null
+        ? `${comp.category}|${comp.gender}|${comp.weapon}|${comp.vet_age_group}`
+        : `${comp.category}|${comp.gender}|${comp.weapon}`
       populationCounts.set(key, (populationCounts.get(key) ?? 0) + 1)
     }
   }

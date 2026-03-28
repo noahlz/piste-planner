@@ -2,6 +2,8 @@ import { PodCaptainOverride, DeMode, Weapon } from './types.ts'
 import type { TournamentConfig, DayRefereeAvailability, Competition } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { computeBracketSize } from './de.ts'
+import { constraintScore } from './dayAssignment.ts'
+import { crossoverPenalty } from './crossover.ts'
 
 /**
  * Returns the number of pod captains needed for a DE phase.
@@ -100,14 +102,67 @@ function peakDeRefDemand(comp: Competition, config: TournamentConfig): number {
 }
 
 /**
+ * Assigns competitions to days using a greedy constraint-scored algorithm (PRD Section 12).
+ *
+ * Sort order: most-constrained competitions first (highest constraintScore).
+ * Per competition: assign to the day with the lowest total crossoverPenalty against
+ * competitions already assigned to that day. Ties broken by lowest day index.
+ *
+ * This is a lightweight preliminary assignment — no GlobalState, no time-slot
+ * simulation — sufficient for ref-estimation purposes.
+ */
+export function preliminaryDayAssign(
+  competitions: Competition[],
+  config: TournamentConfig,
+): Map<string, number> {
+  const days = config.days_available
+  const assignments = new Map<string, number>()
+
+  // Sort by constraintScore descending: most constrained goes first
+  const sorted = [...competitions].sort(
+    (a, b) => constraintScore(b, competitions, config) - constraintScore(a, competitions, config),
+  )
+
+  // dayBuckets[d] holds competitions already assigned to day d
+  const dayBuckets: Competition[][] = Array.from({ length: days }, () => [])
+
+  for (const comp of sorted) {
+    let bestDay = 0
+    let bestPenalty = Infinity
+
+    for (let d = 0; d < days; d++) {
+      // Sum crossover penalties against all competitions already on this day
+      let dayPenalty = 0
+      for (const assigned of dayBuckets[d]) {
+        dayPenalty += crossoverPenalty(comp, assigned)
+        // Short-circuit: once we exceed the current best, no point continuing
+        if (dayPenalty > bestPenalty) break
+      }
+
+      // Lower penalty wins; ties broken by lowest day index (d < bestDay is guaranteed by iteration order)
+      if (dayPenalty < bestPenalty) {
+        bestPenalty = dayPenalty
+        bestDay = d
+      }
+    }
+
+    assignments.set(comp.id, bestDay)
+    dayBuckets[bestDay].push(comp)
+  }
+
+  return assignments
+}
+
+/**
  * Calculates optimal referee counts per day (Phase 1.5a).
  *
  * PRD Section 8.1: simulates the day schedule with infinite refs and finds
  * peak concurrent demand per weapon type per day.
  *
  * Implementation approach:
- * 1. Assign each competition to a day via greedy round-robin (simplified
- *    preliminary_day_assign — sufficient for ref estimation without full scheduler)
+ * 1. Assign each competition to a day via preliminaryDayAssign — a greedy
+ *    constraint-scored assignment that separates high-crossover competitions
+ *    across days (sufficient for ref estimation without full scheduler)
  * 2. For each day, sum peak concurrent demand across all competitions:
  *    - Pool phase demand: n_pools refs (all pools run concurrently with infinite refs)
  *    - DE phase demand: strips * DE_REFS + pod captains
@@ -115,23 +170,13 @@ function peakDeRefDemand(comp: Competition, config: TournamentConfig): number {
  *    all competitions on the day. Since competitions share the day sequentially,
  *    we take each competition's own peak (pool vs DE) and sum across concurrent
  *    competitions — conservative but valid for minimum ref estimation.
- *
- * TODO: Replace round-robin day assignment with preliminary_day_assign (PRD Section 12)
- * and per-competition peak sum with simulate_day_schedule time-slot simulation
- * (PRD Section 8.1) when the scheduler layer (Task 4) is available.
  */
 export function calculateOptimalRefs(
   competitions: Competition[],
   config: TournamentConfig,
 ): DayRefereeAvailability[] {
+  const dayAssignments = preliminaryDayAssign(competitions, config)
   const days = config.days_available
-
-  // Greedy round-robin day assignment — approximates preliminary_day_assign
-  // without requiring full scheduling context (sufficient for ref estimation)
-  const dayAssignments = new Map<string, number>()
-  competitions.forEach((comp, idx) => {
-    dayAssignments.set(comp.id, idx % days)
-  })
 
   const result: DayRefereeAvailability[] = []
 

@@ -224,5 +224,5 @@ export function initialAnalysis(
     }
   }
 
-  return { warnings, suggestions }
+  return { warnings, suggestions, flightingSuggestions: flightingSuggestions.suggestions }
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
-import type { Strip, Competition } from '../../src/engine/types.ts'
+import type { Strip, Competition, FlightingGroup } from '../../src/engine/types.ts'
 import {
   DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
   SLOT_MINS, DAY_LENGTH_MINS, DE_REFS, DE_FINALS_MIN_MINS,
@@ -293,6 +293,143 @@ describe('buildTournamentConfig', () => {
       expect(config.MIN_FENCERS).toBe(MIN_FENCERS)
       expect(config.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
       expect(config.de_duration_table).toEqual(DEFAULT_DE_DURATION_TABLE)
+    })
+  })
+
+  describe('flighting suggestions', () => {
+    function twoCompState() {
+      return {
+        ...minimalState(),
+        selectedCompetitions: {
+          'D1-M-FOIL-IND': {
+            fencer_count: 64,
+            ref_policy: 'AUTO',
+            cut_mode: 'PERCENTAGE',
+            cut_value: 20,
+            de_mode: 'SINGLE_BLOCK',
+            de_video_policy: 'REQUIRED',
+            use_single_pool_override: false,
+          },
+          'CDT-W-EPEE-IND': {
+            fencer_count: 32,
+            ref_policy: 'ONE',
+            cut_mode: 'DISABLED',
+            cut_value: 100,
+            de_mode: 'SINGLE_BLOCK',
+            de_video_policy: 'BEST_EFFORT',
+            use_single_pool_override: false,
+          },
+        },
+      }
+    }
+
+    it('leaves competitions unflighted when flightingSuggestions is empty', () => {
+      const state = storeWith({ ...twoCompState(), flightingSuggestions: [], flightingSuggestionStates: [] })
+      const { competitions } = buildTournamentConfig(state)
+
+      for (const comp of competitions) {
+        expect(comp.flighted).toBe(false)
+        expect(comp.flighting_group_id).toBeNull()
+        expect(comp.is_priority).toBe(false)
+        expect(comp.strips_allocated).toBe(0)
+      }
+    })
+
+    it('leaves competitions unflighted when suggestion state is pending', () => {
+      const suggestion: FlightingGroup = {
+        priority_competition_id: 'D1-M-FOIL-IND',
+        flighted_competition_id: 'CDT-W-EPEE-IND',
+        strips_for_priority: 6,
+        strips_for_flighted: 4,
+      }
+      const state = storeWith({
+        ...twoCompState(),
+        flightingSuggestions: [suggestion],
+        flightingSuggestionStates: ['pending'],
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      for (const comp of competitions) {
+        expect(comp.flighted).toBe(false)
+      }
+    })
+
+    it('leaves competitions unflighted when suggestion state is rejected', () => {
+      const suggestion: FlightingGroup = {
+        priority_competition_id: 'D1-M-FOIL-IND',
+        flighted_competition_id: 'CDT-W-EPEE-IND',
+        strips_for_priority: 6,
+        strips_for_flighted: 4,
+      }
+      const state = storeWith({
+        ...twoCompState(),
+        flightingSuggestions: [suggestion],
+        flightingSuggestionStates: ['rejected'],
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      for (const comp of competitions) {
+        expect(comp.flighted).toBe(false)
+      }
+    })
+
+    it('applies accepted flighting suggestion to both competitions', () => {
+      const suggestion: FlightingGroup = {
+        priority_competition_id: 'D1-M-FOIL-IND',
+        flighted_competition_id: 'CDT-W-EPEE-IND',
+        strips_for_priority: 6,
+        strips_for_flighted: 4,
+      }
+      const state = storeWith({
+        ...twoCompState(),
+        flightingSuggestions: [suggestion],
+        flightingSuggestionStates: ['accepted'],
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      const expectedGroupId = 'D1-M-FOIL-IND+CDT-W-EPEE-IND'
+      const priority = competitions.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
+      const flighted = competitions.find((c: Competition) => c.id === 'CDT-W-EPEE-IND')
+
+      expect(priority).toBeDefined()
+      expect(priority!.flighted).toBe(true)
+      expect(priority!.is_priority).toBe(true)
+      expect(priority!.flighting_group_id).toBe(expectedGroupId)
+      expect(priority!.strips_allocated).toBe(6)
+
+      expect(flighted).toBeDefined()
+      expect(flighted!.flighted).toBe(true)
+      expect(flighted!.is_priority).toBe(false)
+      expect(flighted!.flighting_group_id).toBe(expectedGroupId)
+      expect(flighted!.strips_allocated).toBe(4)
+    })
+
+    it('only applies accepted suggestions, leaving rejected ones unchanged', () => {
+      const accepted: FlightingGroup = {
+        priority_competition_id: 'D1-M-FOIL-IND',
+        flighted_competition_id: 'CDT-W-EPEE-IND',
+        strips_for_priority: 6,
+        strips_for_flighted: 4,
+      }
+      const state = storeWith({
+        ...twoCompState(),
+        flightingSuggestions: [accepted],
+        flightingSuggestionStates: ['accepted'],
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      const priority = competitions.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
+      expect(priority!.flighted).toBe(true)
+
+      // A second scenario: same suggestions but both rejected
+      const stateRejected = storeWith({
+        ...twoCompState(),
+        flightingSuggestions: [accepted],
+        flightingSuggestionStates: ['rejected'],
+      })
+      const { competitions: compsRejected } = buildTournamentConfig(stateRejected)
+      const priorityRejected = compsRejected.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
+      expect(priorityRejected!.flighted).toBe(false)
     })
   })
 })
