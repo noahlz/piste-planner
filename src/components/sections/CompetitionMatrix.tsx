@@ -1,13 +1,14 @@
-import { useState } from 'react'
 import { useStore } from '../../store/store.ts'
 import { CATALOGUE } from '../../engine/catalogue.ts'
 import type { CatalogueEntry } from '../../engine/types.ts'
 import { Category, EventType, Gender, Weapon } from '../../engine/types.ts'
 import { competitionLabel, CATEGORY_DISPLAY, GENDER_DISPLAY, WEAPON_DISPLAY } from '../competitionLabels.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Toggle } from '@/components/ui/toggle'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Badge } from '@/components/ui/badge'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { RotateCcw } from 'lucide-react'
 
 // ──────────────────────────────────────────────
 // Catalogue grouping
@@ -89,29 +90,9 @@ export function CompetitionMatrix() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
   const addCompetition = useStore((s) => s.addCompetition)
   const removeCompetition = useStore((s) => s.removeCompetition)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const selectCompetitions = useStore((s) => s.selectCompetitions)
 
   const selectedIds = new Set(Object.keys(selectedCompetitions))
-
-  function toggle(id: string) {
-    if (selectedIds.has(id)) {
-      removeCompetition(id)
-    } else {
-      addCompetition(id)
-    }
-  }
-
-  function toggleCollapsed(groupKey: string) {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(groupKey)) {
-        next.delete(groupKey)
-      } else {
-        next.add(groupKey)
-      }
-      return next
-    })
-  }
 
   function countSelected(group: WeaponGenderGroup): number {
     let count = 0
@@ -124,78 +105,104 @@ export function CompetitionMatrix() {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-lg">Competition Selection</CardTitle>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => selectCompetitions([])}
+                aria-label="Clear Selections"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear Selections</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
           {GROUPS.map((group) => {
             const groupKey = `${group.gender}-${group.weapon}`
-            const isCollapsed = collapsed.has(groupKey)
             const selected = countSelected(group)
-            // Skip categories where neither individual nor team exists
             const visibleRows = group.categories.filter(
               (row) => row.individual || row.team,
             )
 
             return (
-              <div key={groupKey} className="rounded-md border p-2">
-                <button
-                  type="button"
-                  onClick={() => toggleCollapsed(groupKey)}
-                  className="flex w-full items-center justify-between text-sm font-semibold text-card-foreground"
-                >
-                  <span className="flex items-center gap-1.5">
-                    {isCollapsed ? (
-                      <ChevronRight className="size-4" />
-                    ) : (
-                      <ChevronDown className="size-4" />
-                    )}
-                    {group.label}
-                  </span>
+              <div key={groupKey} className="rounded-md border">
+                <div className="flex items-center justify-between rounded-t-md bg-muted px-2 py-1 text-xs font-semibold uppercase tracking-wide text-card-foreground">
+                  <span>{group.label}</span>
                   {selected > 0 && (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
                       {selected}
                     </Badge>
                   )}
-                </button>
+                </div>
 
-                {!isCollapsed && (
-                  <div className="mt-2 space-y-1">
-                    {visibleRows.map((row) => (
-                      <div
-                        key={row.category}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-card-foreground">{row.label}</span>
-                        <div className="flex gap-1">
-                          {row.individual && (
-                            <Toggle
-                              variant="outline"
-                              pressed={selectedIds.has(row.individual.id)}
-                              onPressedChange={() => toggle(row.individual!.id)}
-                              aria-label={competitionLabel(row.individual)}
-                              className="h-6 w-7 px-0 text-xs"
-                            >
-                              I
-                            </Toggle>
-                          )}
-                          {row.team && (
-                            <Toggle
-                              variant="outline"
-                              pressed={selectedIds.has(row.team.id)}
-                              onPressedChange={() => toggle(row.team!.id)}
-                              aria-label={competitionLabel(row.team)}
-                              className="h-6 w-7 px-0 text-xs"
-                            >
-                              T
-                            </Toggle>
-                          )}
+                <div className="space-y-px px-1.5 py-1">
+                  {visibleRows.map((row) => {
+                      const value: string[] = []
+                      if (row.individual && selectedIds.has(row.individual.id)) value.push(row.individual.id)
+                      if (row.team && selectedIds.has(row.team.id)) value.push(row.team.id)
+
+                      return (
+                        <div
+                          key={row.category}
+                          className="flex items-center gap-1.5 py-px text-xs"
+                        >
+                          <span className="w-14 shrink-0 text-foreground">{row.label}</span>
+                          <ToggleGroup
+                            type="multiple"
+                            variant="outline"
+                            size="sm"
+                            value={value}
+                            onValueChange={(next: string[]) => {
+                              const nextSet = new Set(next)
+                              // Sync individual toggle
+                              if (row.individual) {
+                                if (nextSet.has(row.individual.id) && !selectedIds.has(row.individual.id)) {
+                                  addCompetition(row.individual.id)
+                                } else if (!nextSet.has(row.individual.id) && selectedIds.has(row.individual.id)) {
+                                  removeCompetition(row.individual.id)
+                                }
+                              }
+                              // Sync team toggle
+                              if (row.team) {
+                                if (nextSet.has(row.team.id) && !selectedIds.has(row.team.id)) {
+                                  addCompetition(row.team.id)
+                                } else if (!nextSet.has(row.team.id) && selectedIds.has(row.team.id)) {
+                                  removeCompetition(row.team.id)
+                                }
+                              }
+                            }}
+                          >
+                            {row.individual && (
+                              <ToggleGroupItem
+                                value={row.individual.id}
+                                aria-label={competitionLabel(row.individual)}
+                                className="h-6 px-2 text-[11px]"
+                              >
+                                Individual
+                              </ToggleGroupItem>
+                            )}
+                            {row.team && (
+                              <ToggleGroupItem
+                                value={row.team.id}
+                                aria-label={competitionLabel(row.team)}
+                                className="h-6 px-2 text-[11px]"
+                              >
+                                Team
+                              </ToggleGroupItem>
+                            )}
+                          </ToggleGroup>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
-                )}
               </div>
             )
           })}

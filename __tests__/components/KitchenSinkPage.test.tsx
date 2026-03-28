@@ -52,7 +52,8 @@ describe('KitchenSinkPage render tests', () => {
 
   it('renders template selector', () => {
     render(<KitchenSinkPage />)
-    expect(document.getElementById('template-select')).toBeInTheDocument()
+    // Template selector is now a ToggleGroup — check for a template name button
+    expect(screen.getByRole('radio', { name: 'RYC Weekend' })).toBeInTheDocument()
   })
 
   it('renders Validate button', () => {

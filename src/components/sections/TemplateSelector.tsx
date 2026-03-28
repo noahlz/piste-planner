@@ -1,14 +1,22 @@
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { LayoutTemplate } from 'lucide-react'
 import { useStore } from '../../store/store.ts'
 import { TEMPLATES } from '../../engine/catalogue.ts'
 
-const TEMPLATE_NAMES = Object.keys(TEMPLATES)
+// "Blank" template is redundant — the reset button on Competition Selection handles clearing
+const TEMPLATE_NAMES = Object.keys(TEMPLATES).filter((n) => n !== 'Blank')
 
 export function TemplateSelector() {
   const applyTemplate = useStore((s) => s.applyTemplate)
+  const [selected, setSelected] = useState('')
+
+  function handleChange(value: string) {
+    if (!value) return
+    setSelected(value)
+    applyTemplate(value)
+  }
 
   return (
     <Card>
@@ -19,21 +27,20 @@ export function TemplateSelector() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div>
-          <Label htmlFor="template-select">Apply Template</Label>
-          <Select onValueChange={(v) => applyTemplate(v)}>
-            <SelectTrigger id="template-select" className="mt-1 w-full">
-              <SelectValue placeholder="Select a template..." />
-            </SelectTrigger>
-            <SelectContent>
-              {TEMPLATE_NAMES.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={selected}
+          onValueChange={handleChange}
+          className="flex-wrap"
+        >
+          {TEMPLATE_NAMES.map((name) => (
+            <ToggleGroupItem key={name} value={name} className="text-xs">
+              {name}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       </CardContent>
     </Card>
   )

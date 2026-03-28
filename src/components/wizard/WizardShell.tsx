@@ -1,7 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useStore } from '../../store/store.ts'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Check, ChevronLeft, ChevronRight, ChevronsDown } from 'lucide-react'
 import { WizardStep1 } from './WizardStep1.tsx'
 import { WizardStep2 } from './WizardStep2.tsx'
@@ -94,11 +93,11 @@ function ScrollableStepContent({ children }: { children: React.ReactNode }) {
         <div ref={sentinelRef} className="h-1" />
       </div>
       {showMore && (
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 flex justify-center pb-2">
-          <Badge className="pointer-events-auto gap-1 shadow-md">
+        <div className="flex justify-end pb-1 pt-1">
+          <span className="flex items-center gap-1 text-xs font-medium text-primary">
+            More
             <ChevronsDown className="h-3 w-3" />
-            Scroll for more
-          </Badge>
+          </span>
         </div>
       )}
     </div>

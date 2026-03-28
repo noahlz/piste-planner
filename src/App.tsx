@@ -12,12 +12,12 @@ function LayoutToggle() {
 
   return (
     <Tabs value={layoutMode} onValueChange={(v) => setLayoutMode(v as typeof layoutMode)}>
-      <TabsList>
-        <TabsTrigger value="kitchen-sink">
+      <TabsList className="bg-slate-700">
+        <TabsTrigger value="kitchen-sink" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
           <LayoutDashboard className="mr-1.5 h-4 w-4" />
           Single Page
         </TabsTrigger>
-        <TabsTrigger value="wizard">
+        <TabsTrigger value="wizard" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
           <Wand2 className="mr-1.5 h-4 w-4" />
           Wizard
         </TabsTrigger>
@@ -43,8 +43,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-card px-8 py-4 shadow-sm">
-        <h1 className="text-2xl font-semibold text-card-foreground">Piste Planner</h1>
+      <header className="flex items-center justify-between bg-slate-800 px-8 py-3 shadow-md">
+        <h1 className="text-2xl font-semibold text-white">Piste Planner</h1>
         <LayoutToggle />
       </header>
       {layoutMode === 'wizard' ? <WizardShell /> : <KitchenSinkPage />}
