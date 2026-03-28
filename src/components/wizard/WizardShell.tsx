@@ -8,11 +8,11 @@ import { WizardStep3 } from './WizardStep3.tsx'
 import { WizardStep4 } from './WizardStep4.tsx'
 import { ScheduleView } from '../ScheduleView.tsx'
 
-const STEP_LABELS = ['Tournament', 'Fencers', 'Referees', 'Analysis', 'Schedule'] as const
+const STEP_LABELS = ['Tournament', 'Fencers', 'Refs & Strips', 'Analysis', 'Schedule'] as const
 
 function StepIndicator({ currentStep }: { currentStep: number }) {
   return (
-    <nav className="flex items-center gap-1">
+    <nav className="flex items-start">
       {STEP_LABELS.map((label, i) => {
         const isCurrent = i === currentStep
         const isCompleted = i < currentStep
@@ -21,12 +21,12 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
           <div key={label} className="flex items-center">
             {i > 0 && (
               <div
-                className={`mx-1.5 h-0.5 w-8 rounded-full ${
+                className={`h-0.5 w-10 rounded-full mb-auto mt-[14px] ${
                   i <= currentStep ? 'bg-primary' : 'bg-slate-200'
                 }`}
               />
             )}
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex w-16 flex-col items-center gap-1">
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
                   isCurrent
@@ -43,7 +43,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
                 )}
               </div>
               <span
-                className={`text-xs ${
+                className={`text-center text-[10px] leading-tight ${
                   isCurrent
                     ? 'font-semibold text-primary'
                     : isCompleted
@@ -86,7 +86,7 @@ function ScrollableStepContent({ children }: { children: React.ReactNode }) {
     <div className="relative">
       <div
         ref={scrollRef}
-        className="max-h-[60vh] overflow-y-auto"
+        className="min-h-[30vh] max-h-[calc(100vh-12rem)] overflow-y-auto"
       >
         {children}
         {/* Sentinel at the bottom — when not visible, the "more" badge appears */}
@@ -144,6 +144,7 @@ export function WizardShell() {
           variant="outline"
           onClick={handleBack}
           disabled={wizardStep === 0}
+          className="border-[var(--accent-hover)] text-[var(--accent-hover)]"
         >
           <ChevronLeft className="mr-1 h-4 w-4" />
           Back
@@ -153,6 +154,7 @@ export function WizardShell() {
           <Button
             onClick={handleForward}
             disabled={forwardDisabled}
+            className="bg-[var(--accent-hover)] hover:bg-[var(--accent-hover)]/90"
           >
             {wizardStep === 3 ? 'View Schedule' : 'Next'}
             <ChevronRight className="ml-1 h-4 w-4" />

@@ -162,8 +162,8 @@ function EventRow({
               className={cn(
                 'h-6 rounded-md border px-2 text-[11px] transition-colors',
                 isSelected
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
+                  ? 'border-orange-500 bg-orange-500 text-white'
+                  : 'border-input bg-background text-foreground hover:bg-orange-50 hover:text-orange-700',
               )}
               onClick={() => onToggle(entry.id, !isSelected)}
             >
@@ -216,14 +216,14 @@ export function CompetitionMatrix() {
   return (
     <Card className="pt-0 gap-0">
       <CardHeader className="flex flex-row items-center gap-2 bg-foreground/10 rounded-t-xl py-2">
-        <CardTitle className="text-lg">Competition Selection</CardTitle>
+        <CardTitle>Competition Selection</CardTitle>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => selectCompetitions([])}
+                onClick={() => { selectCompetitions([]); setSelectedTemplate('') }}
                 aria-label="Clear Selections"
               >
                 <RotateCcw className="h-4 w-4" />

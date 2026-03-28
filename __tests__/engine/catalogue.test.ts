@@ -41,10 +41,10 @@ const EXPECTED_TEMPLATE_SIZES: [string, number][] = [
   // VET: 6 age groups × IND + 1 TEAM = 7 event types; D1 + JR: 1 IND + 1 TEAM each
   // Total: (6+1+1+1+1+1) × 3 weapons × 2 genders = 66
   ['NAC Vet/Div1/Junior', 66],
-  // D1A IND (6) + VET IND (6 age groups × 6 = 36) = 42
-  ['ROC Div1A/Vet', 42],
-  // D1A IND (6) + D2 IND (6) + VET IND (36) = 48
-  ['ROC Div1A/Div2/Vet', 48],
+  // D1A IND (6) + VET Combined IND (6) = 12 (ROC only has Vet Combined)
+  ['ROC Div1A/Vet', 12],
+  // D1A IND (6) + D2 IND (6) + VET Combined IND (6) = 18
+  ['ROC Div1A/Div2/Vet', 18],
   ['ROC Mega', 42],
   ['RYC Weekend', 18],
   ['RJCC Weekend', 12],

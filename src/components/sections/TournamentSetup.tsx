@@ -2,10 +2,7 @@ import { useStore } from '../../store/store.ts'
 import { TournamentType } from '../../engine/types.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { CircleHelp } from 'lucide-react'
 
 // 6:00 AM (360) through 11:00 PM (1380) in 30-minute increments
 const TIME_OPTIONS: number[] = Array.from({ length: 35 }, (_, i) => 360 + i * 30)
@@ -29,20 +26,6 @@ const TOURNAMENT_TYPE_LABELS: Record<TournamentType, string> = {
 
 const TOURNAMENT_TYPES = Object.values(TournamentType)
 
-function HelpTip({ text }: { text: string }) {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <CircleHelp className="inline h-3.5 w-3.5 text-muted-foreground cursor-help" />
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs text-xs">
-          {text}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  )
-}
 
 export function TournamentSetup() {
   const tournamentType = useStore((s) => s.tournament_type)
@@ -57,31 +40,36 @@ export function TournamentSetup() {
         <CardTitle>Tournament Setup</CardTitle>
       </CardHeader>
       <CardContent className="pt-3 pb-3">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <div className="space-y-1">
-            <Label htmlFor="tournament-type" className="text-xs">
-              Tournament Type
-            </Label>
-            <Select
-              value={tournamentType}
-              onValueChange={(value: string) => setTournamentType(value as TournamentType)}
-            >
-              <SelectTrigger id="tournament-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TOURNAMENT_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {TOURNAMENT_TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="grid grid-cols-2 items-start gap-x-4 gap-y-2">
+          <div>
+            <div className="flex items-center gap-3">
+              <Label htmlFor="tournament-type" className="text-xs shrink-0">
+                Type
+              </Label>
+              <Select
+                value={tournamentType}
+                onValueChange={(value: string) => setTournamentType(value as TournamentType)}
+              >
+                <SelectTrigger id="tournament-type" className="w-fit shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TOURNAMENT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {TOURNAMENT_TYPE_LABELS[t]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Affects event grouping rules, rest-day requirements, and scheduling priorities.
+            </p>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="days-available" className="text-xs">
-              Tournament Length (Days)
+          <div className="flex items-center gap-3">
+            <Label htmlFor="days-available" className="text-xs shrink-0">
+              Duration
             </Label>
             <Select
               value={String(daysAvailable)}
@@ -91,9 +79,9 @@ export function TournamentSetup() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="2">2 Days</SelectItem>
-                <SelectItem value="3">3 Days</SelectItem>
-                <SelectItem value="4">4 Days</SelectItem>
+                <SelectItem value="2">2 days</SelectItem>
+                <SelectItem value="3">3 days</SelectItem>
+                <SelectItem value="4">4 days</SelectItem>
               </SelectContent>
             </Select>
           </div>

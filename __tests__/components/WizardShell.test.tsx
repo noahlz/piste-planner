@@ -151,7 +151,7 @@ describe('WizardShell navigation', () => {
 
     expect(screen.getByText('Tournament')).toBeInTheDocument()
     expect(screen.getByText('Fencers')).toBeInTheDocument()
-    expect(screen.getByText('Referees')).toBeInTheDocument()
+    expect(screen.getByText('Refs & Strips')).toBeInTheDocument()
     expect(screen.getByText('Analysis')).toBeInTheDocument()
     expect(screen.getByText('Schedule')).toBeInTheDocument()
   })

@@ -185,6 +185,17 @@ function ids(categories: Category[], eventTypes: EventType[]): string[] {
   return result
 }
 
+// ROC veterans only have Combined (no individual age group breakdown)
+function vetCombinedIds(): string[] {
+  const result: string[] = []
+  for (const weapon of ALL_WEAPONS) {
+    for (const gender of ALL_GENDERS) {
+      result.push(makeId(Category.VETERAN, gender, weapon, EventType.INDIVIDUAL, VetAgeGroupEnum.VET_COMBINED))
+    }
+  }
+  return result
+}
+
 export const TEMPLATES: Record<string, string[]> = {
   // 4 categories × 3 weapons × 2 genders × IND = 24
   'NAC Youth': ids([Category.Y10, Category.Y12, Category.Y14, Category.CADET], [
@@ -209,13 +220,16 @@ export const TEMPLATES: Record<string, string[]> = {
     EventType.TEAM,
   ]),
 
-  // 2 categories × 3 weapons × 2 genders × IND = 12
-  'ROC Div1A/Vet': ids([Category.DIV1A, Category.VETERAN], [EventType.INDIVIDUAL]),
+  // ROC veterans are Combined only (no individual age groups)
+  'ROC Div1A/Vet': [
+    ...ids([Category.DIV1A], [EventType.INDIVIDUAL]),
+    ...vetCombinedIds(),
+  ],
 
-  // 3 categories × 3 weapons × 2 genders × IND = 18
-  'ROC Div1A/Div2/Vet': ids([Category.DIV1A, Category.DIV2, Category.VETERAN], [
-    EventType.INDIVIDUAL,
-  ]),
+  'ROC Div1A/Div2/Vet': [
+    ...ids([Category.DIV1A, Category.DIV2], [EventType.INDIVIDUAL]),
+    ...vetCombinedIds(),
+  ],
 
   // 7 categories × 3 weapons × 2 genders × IND = 42
   'ROC Mega': ids(
