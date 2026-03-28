@@ -1,21 +1,33 @@
-# Piste Planner
+_Piste Planner_ is USA Fencing tournament schedule planner. Computes pool rounds, DE brackets, strip assignments, and referee allocations for multi-day tournaments (NACs, RYCs, etc.).
 
-- Gap closure plan: `.claude/plans/2026-03-27-gap-closure.md`
-- Execution plan: `.claude/plans/2026-03-25-engine-execution-plan.md`
+## Technology 
 
-## Test Safety
+React + TypeScript + Vite. UI: shadcn/ui (Radix), Tailwind CSS v4, Zustand. Testing: Vitest + React Testing Library.
 
-- Prefix test commands with `timeout 120` — engine tests complete in <2s; a hang means a code bug (unbounded loop)
-- Redirect output: `pnpm --silent test > ./tmp/test.log 2>&1` — read log only on failure
+## Structure
 
-## Code Rules
+- `src/engine/` — pure scheduling engine (no UI, no state). Types in `types.ts`, constants in `constants.ts`. Time values are minutes-from-midnight.
+- `src/store/` — Zustand store. `buildConfig.ts` bridges store state to engine types.
+- `src/components/` — React UI with wizard and single-page layouts.
+- `__tests__/` — mirrors `src/`. Factories in `__tests__/helpers/factories.ts`.
 
-- Types use `as const` objects, NOT TypeScript enums (erasableSyntaxOnly compatibility)
+## Commands
+
+```bash
+timeout 120 pnpm --silent test > ./tmp/test.log 2>&1          # all tests
+timeout 120 pnpm --silent vitest run path/to/file > ./tmp/test.log 2>&1  # single file
+```
+
+Read `./tmp/test.log` only on failure.
+
+## Rules
+
+- `as const` objects, NOT TypeScript enums (`erasableSyntaxOnly`)
 - Engine functions are pure — no global state, no singletons
-- Never write unbounded loops; prefer direct computation or add max-iteration guards
+- No unbounded loops — use direct computation or max-iteration guards
 
 ## Methodology
 
-- Use the test-quality-reviewer agent after adding or editing tests (scoped to the new / changed tests).
-- Use the react-code-reviewer agent after adding or editing React code
-- Use sub-agent development (and agent teams, if possible) when executing plans.
+- test-quality-reviewer agent after adding/editing tests
+- react-code-reviewer agent after adding/editing React code
+- Sub-agent development when executing plans
