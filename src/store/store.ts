@@ -15,6 +15,8 @@ import type {
 } from '../engine/types.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { suggestRefs } from './refSuggestion.ts'
+import { calculateOptimalRefs } from '../engine/refs.ts'
+import { buildTournamentConfig } from './buildConfig.ts'
 import { suggestStrips as computeStripSuggestion } from './stripSuggestion.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
@@ -421,6 +423,20 @@ function createRefereeSlice(set: SetState, get: GetState): RefereeSlice {
     suggestAllRefs: () => {
       const state = get()
       if (state.days_available === 0 || state.strips_total === 0) return
+
+      // Calculate and store optimal refs from the engine
+      const { config, competitions } = buildTournamentConfig(state as StoreState)
+      if (competitions.length > 0) {
+        const optimal = calculateOptimalRefs(competitions, config)
+        set({
+          optimalRefs: optimal.map((o) => ({
+            foil_epee_refs: o.foil_epee_refs,
+            sabre_refs: o.sabre_refs,
+            allow_sabre_ref_fillin: false,
+          })),
+        })
+      }
+
       const suggestion = suggestRefs(
         state.selectedCompetitions,
         state.days_available,
