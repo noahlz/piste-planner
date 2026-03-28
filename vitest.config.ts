@@ -11,6 +11,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
+    exclude: [
+      '.worktrees/**',
+      '.claude/worktrees/**',
+      'node_modules/**',
+    ],
     coverage: {
       provider: 'v8',
       exclude: [
