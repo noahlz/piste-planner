@@ -1,5 +1,5 @@
-import type { CatalogueEntry } from '../engine/types.ts'
-import { Category, EventType, Gender, Weapon } from '../engine/types.ts'
+import type { CatalogueEntry, VetAgeGroup } from '../engine/types.ts'
+import { Category, EventType, Gender, Weapon, VetAgeGroup as VetAgeGroupEnum } from '../engine/types.ts'
 
 export const CATEGORY_DISPLAY: Record<Category, string> = {
   [Category.Y8]: 'Y8',
@@ -13,6 +13,13 @@ export const CATEGORY_DISPLAY: Record<Category, string> = {
   [Category.DIV1A]: 'Div 1A',
   [Category.DIV2]: 'Div 2',
   [Category.DIV3]: 'Div 3',
+}
+
+// USA Fencing uses "Senior" for DIV1 team events — the age group is the same,
+// but the official name differs between individual ("Div 1") and team ("Senior").
+export function categoryDisplay(category: Category, eventType: EventType): string {
+  if (category === Category.DIV1 && eventType === EventType.TEAM) return 'Senior'
+  return CATEGORY_DISPLAY[category]
 }
 
 export const GENDER_DISPLAY: Record<Gender, string> = {
@@ -31,6 +38,21 @@ const EVENT_TYPE_DISPLAY: Record<EventType, string> = {
   [EventType.TEAM]: 'Team',
 }
 
+export const VET_AGE_GROUP_DISPLAY: Record<VetAgeGroup, string> = {
+  [VetAgeGroupEnum.VET40]: 'V40',
+  [VetAgeGroupEnum.VET50]: 'V50',
+  [VetAgeGroupEnum.VET60]: 'V60',
+  [VetAgeGroupEnum.VET70]: 'V70',
+  [VetAgeGroupEnum.VET80]: 'V80',
+  [VetAgeGroupEnum.VET_COMBINED]: 'Combined',
+}
+
+export function vetAgeGroupDisplay(vetAgeGroup: VetAgeGroup): string {
+  return VET_AGE_GROUP_DISPLAY[vetAgeGroup]
+}
+
 export function competitionLabel(entry: CatalogueEntry): string {
-  return `${CATEGORY_DISPLAY[entry.category]} ${GENDER_DISPLAY[entry.gender]} ${WEAPON_DISPLAY[entry.weapon]} ${EVENT_TYPE_DISPLAY[entry.event_type]}`
+  const cat = categoryDisplay(entry.category, entry.event_type)
+  const vetSuffix = entry.vet_age_group ? ` ${VET_AGE_GROUP_DISPLAY[entry.vet_age_group]}` : ''
+  return `${cat}${vetSuffix} ${GENDER_DISPLAY[entry.gender]} ${WEAPON_DISPLAY[entry.weapon]} ${EVENT_TYPE_DISPLAY[entry.event_type]}`
 }

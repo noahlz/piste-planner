@@ -53,8 +53,8 @@ export function ActionButtons() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="pt-0 gap-0">
+      <CardHeader className="bg-foreground/10 rounded-t-xl py-2">
         <CardTitle>Actions</CardTitle>
       </CardHeader>
       <CardContent className="flex gap-3">

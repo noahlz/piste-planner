@@ -93,7 +93,7 @@ function ScrollableStepContent({ children }: { children: React.ReactNode }) {
         <div ref={sentinelRef} className="h-1" />
       </div>
       {showMore && (
-        <div className="flex justify-end pb-1 pt-1">
+        <div className="flex justify-center pb-1 pt-1">
           <span className="flex items-center gap-1 text-xs font-medium text-primary">
             More
             <ChevronsDown className="h-3 w-3" />

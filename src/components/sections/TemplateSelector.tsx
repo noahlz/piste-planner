@@ -5,8 +5,7 @@ import { LayoutTemplate } from 'lucide-react'
 import { useStore } from '../../store/store.ts'
 import { TEMPLATES } from '../../engine/catalogue.ts'
 
-// "Blank" template is redundant — the reset button on Competition Selection handles clearing
-const TEMPLATE_NAMES = Object.keys(TEMPLATES).filter((n) => n !== 'Blank')
+const TEMPLATE_NAMES = Object.keys(TEMPLATES)
 
 export function TemplateSelector() {
   const applyTemplate = useStore((s) => s.applyTemplate)

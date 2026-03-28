@@ -1,54 +1,62 @@
+import { useState } from 'react'
 import { useStore } from '../../store/store.ts'
-import { CATALOGUE } from '../../engine/catalogue.ts'
+import { CATALOGUE, ALL_VET_AGE_GROUPS, TEMPLATES } from '../../engine/catalogue.ts'
 import type { CatalogueEntry } from '../../engine/types.ts'
 import { Category, EventType, Gender, Weapon } from '../../engine/types.ts'
-import { competitionLabel, CATEGORY_DISPLAY, GENDER_DISPLAY, WEAPON_DISPLAY } from '../competitionLabels.ts'
+import { competitionLabel, categoryDisplay, vetAgeGroupDisplay, GENDER_DISPLAY, WEAPON_DISPLAY } from '../competitionLabels.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { RotateCcw } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { RotateCcw, ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+const TEMPLATE_NAMES = Object.keys(TEMPLATES)
 
 // ──────────────────────────────────────────────
 // Catalogue grouping
 // ──────────────────────────────────────────────
 
-interface WeaponGenderGroup {
-  gender: Gender
-  weapon: Weapon
-  label: string
-  categories: CategoryRow[]
-}
-
-interface CategoryRow {
-  category: Category
-  label: string
-  individual: CatalogueEntry | undefined
-  team: CatalogueEntry | undefined
-}
-
-const CATEGORY_ORDER: Category[] = [
+// Veteran excluded — gets its own row with age group + team buttons
+const INDIVIDUAL_CATEGORY_ORDER: Category[] = [
   Category.Y8,
   Category.Y10,
   Category.Y12,
   Category.Y14,
   Category.CADET,
   Category.JUNIOR,
-  Category.VETERAN,
   Category.DIV1,
   Category.DIV1A,
   Category.DIV2,
   Category.DIV3,
 ]
 
-// Pre-index catalogue by composite key for O(1) lookup
+const TEAM_CATEGORY_ORDER: Category[] = [
+  Category.CADET,
+  Category.JUNIOR,
+  Category.DIV1,
+]
+
+interface WeaponGenderGroup {
+  gender: Gender
+  weapon: Weapon
+  label: string
+  individualEntries: CatalogueEntry[]
+  teamEntries: CatalogueEntry[]
+  veteranEntries: CatalogueEntry[] // age group individuals + team
+}
+
+// Index non-veteran entries by composite key for group building
 const CATALOGUE_INDEX = new Map<string, CatalogueEntry>()
 for (const entry of CATALOGUE) {
-  CATALOGUE_INDEX.set(
-    `${entry.gender}-${entry.weapon}-${entry.category}-${entry.event_type}`,
-    entry,
-  )
+  if (entry.category !== Category.VETERAN) {
+    CATALOGUE_INDEX.set(
+      `${entry.gender}-${entry.weapon}-${entry.category}-${entry.event_type}`,
+      entry,
+    )
+  }
 }
 
 function lookup(
@@ -70,21 +78,103 @@ const GROUP_ORDER: Array<{ gender: Gender; weapon: Weapon }> = [
   { gender: Gender.MEN, weapon: Weapon.SABRE },
 ]
 
+function buildVeteranEntries(gender: Gender, weapon: Weapon): CatalogueEntry[] {
+  // Age group individuals first, then team
+  const entries: CatalogueEntry[] = []
+  for (const entry of CATALOGUE) {
+    if (
+      entry.category === Category.VETERAN &&
+      entry.gender === gender &&
+      entry.weapon === weapon &&
+      entry.event_type === EventType.INDIVIDUAL
+    ) {
+      entries.push(entry)
+    }
+  }
+  // Sort by age group order
+  const agOrder = ALL_VET_AGE_GROUPS as readonly string[]
+  entries.sort((a, b) => agOrder.indexOf(a.vet_age_group!) - agOrder.indexOf(b.vet_age_group!))
+
+  // Append team entry
+  for (const entry of CATALOGUE) {
+    if (
+      entry.category === Category.VETERAN &&
+      entry.gender === gender &&
+      entry.weapon === weapon &&
+      entry.event_type === EventType.TEAM
+    ) {
+      entries.push(entry)
+    }
+  }
+  return entries
+}
+
 const GROUPS: WeaponGenderGroup[] = GROUP_ORDER.map(({ gender, weapon }) => ({
   gender,
   weapon,
   label: `${GENDER_DISPLAY[gender]} ${WEAPON_DISPLAY[weapon]}`,
-  categories: CATEGORY_ORDER.map((category) => ({
-    category,
-    label: CATEGORY_DISPLAY[category],
-    individual: lookup(gender, weapon, category, EventType.INDIVIDUAL),
-    team: lookup(gender, weapon, category, EventType.TEAM),
-  })),
+  individualEntries: INDIVIDUAL_CATEGORY_ORDER
+    .map((cat) => lookup(gender, weapon, cat, EventType.INDIVIDUAL))
+    .filter((e): e is CatalogueEntry => e !== undefined),
+  teamEntries: TEAM_CATEGORY_ORDER
+    .map((cat) => lookup(gender, weapon, cat, EventType.TEAM))
+    .filter((e): e is CatalogueEntry => e !== undefined),
+  veteranEntries: buildVeteranEntries(gender, weapon),
 }))
 
 // ──────────────────────────────────────────────
 // Component
 // ──────────────────────────────────────────────
+
+function buttonLabel(entry: CatalogueEntry): string {
+  if (entry.category === Category.VETERAN) {
+    if (entry.event_type === EventType.TEAM) return 'Team'
+    if (entry.vet_age_group) return vetAgeGroupDisplay(entry.vet_age_group)
+  }
+  return categoryDisplay(entry.category, entry.event_type)
+}
+
+function EventRow({
+  label,
+  entries,
+  selectedIds,
+  onToggle,
+}: {
+  label: string
+  entries: CatalogueEntry[]
+  selectedIds: Set<string>
+  onToggle: (id: string, selected: boolean) => void
+}) {
+  return (
+    <div className="flex border-b last:border-b-0">
+      <span className="w-20 shrink-0 border-r px-2 py-1.5 text-[11px] font-medium text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1 px-2 py-1.5">
+        {entries.map((entry) => {
+          const isSelected = selectedIds.has(entry.id)
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              aria-label={competitionLabel(entry)}
+              aria-pressed={isSelected}
+              className={cn(
+                'h-6 rounded-md border px-2 text-[11px] transition-colors',
+                isSelected
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
+              )}
+              onClick={() => onToggle(entry.id, !isSelected)}
+            >
+              {buttonLabel(entry)}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export function CompetitionMatrix() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
@@ -96,16 +186,36 @@ export function CompetitionMatrix() {
 
   function countSelected(group: WeaponGenderGroup): number {
     let count = 0
-    for (const row of group.categories) {
-      if (row.individual && selectedIds.has(row.individual.id)) count++
-      if (row.team && selectedIds.has(row.team.id)) count++
+    for (const e of group.individualEntries) {
+      if (selectedIds.has(e.id)) count++
+    }
+    for (const e of group.teamEntries) {
+      if (selectedIds.has(e.id)) count++
+    }
+    for (const e of group.veteranEntries) {
+      if (selectedIds.has(e.id)) count++
     }
     return count
   }
 
+  function handleToggle(id: string, selected: boolean) {
+    if (selected) addCompetition(id)
+    else removeCompetition(id)
+  }
+
+  const applyTemplate = useStore((s) => s.applyTemplate)
+  const [templateOpen, setTemplateOpen] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+
+  function handleTemplateChange(value: string) {
+    if (!value) return
+    setSelectedTemplate(value)
+    applyTemplate(value)
+  }
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-3">
+    <Card className="pt-0 gap-0">
+      <CardHeader className="flex flex-row items-center gap-2 bg-foreground/10 rounded-t-xl py-2">
         <CardTitle className="text-lg">Competition Selection</CardTitle>
         <TooltipProvider>
           <Tooltip>
@@ -122,15 +232,43 @@ export function CompetitionMatrix() {
             <TooltipContent>Clear Selections</TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {selectedIds.size} selected
+        </span>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-2 pb-3">
+        <Collapsible open={templateOpen} onOpenChange={setTemplateOpen} className="mb-1.5">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronRight className={cn('h-3 w-3 transition-transform', templateOpen && 'rotate-90')} />
+              Presets…
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              value={selectedTemplate}
+              onValueChange={handleTemplateChange}
+              className="mt-2 flex-wrap justify-start"
+            >
+              {TEMPLATE_NAMES.map((name) => (
+                <ToggleGroupItem key={name} value={name} className="text-xs">
+                  {name}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </CollapsibleContent>
+        </Collapsible>
+
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
           {GROUPS.map((group) => {
             const groupKey = `${group.gender}-${group.weapon}`
             const selected = countSelected(group)
-            const visibleRows = group.categories.filter(
-              (row) => row.individual || row.team,
-            )
 
             return (
               <div key={groupKey} className="rounded-md border">
@@ -143,73 +281,30 @@ export function CompetitionMatrix() {
                   )}
                 </div>
 
-                <div className="space-y-px px-1.5 py-1">
-                  {visibleRows.map((row) => {
-                      const value: string[] = []
-                      if (row.individual && selectedIds.has(row.individual.id)) value.push(row.individual.id)
-                      if (row.team && selectedIds.has(row.team.id)) value.push(row.team.id)
-
-                      return (
-                        <div
-                          key={row.category}
-                          className="flex items-center gap-1.5 py-px text-xs"
-                        >
-                          <span className="w-14 shrink-0 text-foreground">{row.label}</span>
-                          <ToggleGroup
-                            type="multiple"
-                            variant="outline"
-                            size="sm"
-                            value={value}
-                            onValueChange={(next: string[]) => {
-                              const nextSet = new Set(next)
-                              // Sync individual toggle
-                              if (row.individual) {
-                                if (nextSet.has(row.individual.id) && !selectedIds.has(row.individual.id)) {
-                                  addCompetition(row.individual.id)
-                                } else if (!nextSet.has(row.individual.id) && selectedIds.has(row.individual.id)) {
-                                  removeCompetition(row.individual.id)
-                                }
-                              }
-                              // Sync team toggle
-                              if (row.team) {
-                                if (nextSet.has(row.team.id) && !selectedIds.has(row.team.id)) {
-                                  addCompetition(row.team.id)
-                                } else if (!nextSet.has(row.team.id) && selectedIds.has(row.team.id)) {
-                                  removeCompetition(row.team.id)
-                                }
-                              }
-                            }}
-                          >
-                            {row.individual && (
-                              <ToggleGroupItem
-                                value={row.individual.id}
-                                aria-label={competitionLabel(row.individual)}
-                                className="h-6 px-2 text-[11px]"
-                              >
-                                Individual
-                              </ToggleGroupItem>
-                            )}
-                            {row.team && (
-                              <ToggleGroupItem
-                                value={row.team.id}
-                                aria-label={competitionLabel(row.team)}
-                                className="h-6 px-2 text-[11px]"
-                              >
-                                Team
-                              </ToggleGroupItem>
-                            )}
-                          </ToggleGroup>
-                        </div>
-                      )
-                    })}
-                  </div>
+                <div>
+                  <EventRow
+                    label="Individual"
+                    entries={group.individualEntries}
+                    selectedIds={selectedIds}
+                    onToggle={handleToggle}
+                  />
+                  <EventRow
+                    label="Team"
+                    entries={group.teamEntries}
+                    selectedIds={selectedIds}
+                    onToggle={handleToggle}
+                  />
+                  <EventRow
+                    label="Veteran"
+                    entries={group.veteranEntries}
+                    selectedIds={selectedIds}
+                    onToggle={handleToggle}
+                  />
+                </div>
               </div>
             )
           })}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {selectedIds.size} competition{selectedIds.size !== 1 ? 's' : ''} selected
-        </p>
       </CardContent>
     </Card>
   )

@@ -317,10 +317,11 @@ describe('competitionSlice', () => {
 
     it('replaces previous selections', () => {
       useStore.getState().selectCompetitions([CADET_MF])
-      useStore.getState().applyTemplate('Blank')
+      useStore.getState().applyTemplate('RYC Weekend')
 
       const state = useStore.getState()
-      expect(state.selectedCompetitions).toEqual({})
+      const templateIds = TEMPLATES['RYC Weekend']
+      expect(Object.keys(state.selectedCompetitions).sort()).toEqual([...templateIds].sort())
     })
 
     it('marks both stale flags', () => {

@@ -92,12 +92,13 @@ describe('scheduleAll — template integration', () => {
     expect(errors).toHaveLength(0)
   })
 
-  it('ROC Div1A/Vet (2 days, 12 events): all events fit in 2 days', () => {
+  it('ROC Div1A/Vet (2 days, 42 events): all events fit in 2 days', () => {
+    // 42 events (D1A: 6 IND + VET: 36 IND across 6 age groups), small fields of 8
     const config = makeConfig({
       days_available: 2,
-      strips: makeStrips(48, 4),
+      strips: makeStrips(96, 4),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 80, sabre_refs: 40, source: 'ACTUAL' as const,
       })),
     })
     const comps = competitionsFromTemplate('ROC Div1A/Vet', 8)

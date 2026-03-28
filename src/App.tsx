@@ -44,7 +44,7 @@ function App() {
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between bg-slate-800 px-8 py-3 shadow-md">
-        <h1 className="text-2xl font-semibold text-white">Piste Planner</h1>
+        <h1 className="text-2xl font-bold italic text-white">Piste Planner 🤺</h1>
         <LayoutToggle />
       </header>
       {layoutMode === 'wizard' ? <WizardShell /> : <KitchenSinkPage />}

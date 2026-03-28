@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { CATALOGUE, TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
-import { Category, EventType, Gender, Weapon } from '../../src/engine/types.ts'
+import { Category, EventType, Gender, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
 import type { CatalogueEntry } from '../../src/engine/types.ts'
 
-const CATALOGUE_CATEGORIES: Category[] = [
+// Non-veteran individual categories (each has exactly 6 entries: 3 weapons × 2 genders)
+const NON_VET_INDIVIDUAL_CATEGORIES: Category[] = [
   Category.Y8,
   Category.Y10,
   Category.Y12,
   Category.Y14,
   Category.CADET,
   Category.JUNIOR,
-  Category.VETERAN,
   Category.DIV1,
   Category.DIV1A,
   Category.DIV2,
@@ -38,19 +38,22 @@ const EXPECTED_TEMPLATE_SIZES: [string, number][] = [
   ['NAC Youth', 24],
   ['NAC Cadet/Junior', 24],
   ['NAC Div1/Junior', 24],
-  ['NAC Vet/Div1/Junior', 36],
-  ['ROC Div1A/Vet', 12],
-  ['ROC Div1A/Div2/Vet', 18],
+  // VET: 6 age groups × IND + 1 TEAM = 7 event types; D1 + JR: 1 IND + 1 TEAM each
+  // Total: (6+1+1+1+1+1) × 3 weapons × 2 genders = 66
+  ['NAC Vet/Div1/Junior', 66],
+  // D1A IND (6) + VET IND (6 age groups × 6 = 36) = 42
+  ['ROC Div1A/Vet', 42],
+  // D1A IND (6) + D2 IND (6) + VET IND (36) = 48
+  ['ROC Div1A/Div2/Vet', 48],
   ['ROC Mega', 42],
   ['RYC Weekend', 18],
   ['RJCC Weekend', 12],
   ['Junior Olympics', 18],
-  ['Blank', 0],
 ]
 
 describe('CATALOGUE', () => {
-  it('has exactly 90 entries', () => {
-    expect(CATALOGUE).toHaveLength(90)
+  it('has exactly 120 entries', () => {
+    expect(CATALOGUE).toHaveLength(120)
   })
 
   it('has no duplicate IDs', () => {
@@ -68,14 +71,14 @@ describe('CATALOGUE', () => {
     }
   })
 
-  it('contains all 66 individual events (11 categories × 3 weapons × 2 genders)', () => {
+  it('contains all 96 individual events (10 non-vet categories × 6 + 6 vet age groups × 6)', () => {
     const individuals = CATALOGUE.filter(
       (e: CatalogueEntry) => e.event_type === EventType.INDIVIDUAL,
     )
-    expect(individuals).toHaveLength(66)
+    expect(individuals).toHaveLength(96)
   })
 
-  it('contains all 24 team events (4 categories × 3 weapons × 2 genders)', () => {
+  it('contains all 24 team events (3 non-vet categories × 6 + 1 vet category × 6)', () => {
     const teams = CATALOGUE.filter((e: CatalogueEntry) => e.event_type === EventType.TEAM)
     expect(teams).toHaveLength(24)
   })
@@ -100,12 +103,30 @@ describe('CATALOGUE', () => {
     expect(y8Team).toHaveLength(0)
   })
 
-  it('covers all expected individual categories with 6 events each', () => {
-    for (const cat of CATALOGUE_CATEGORIES) {
+  it('covers all non-veteran individual categories with 6 events each (3 weapons × 2 genders)', () => {
+    for (const cat of NON_VET_INDIVIDUAL_CATEGORIES) {
       const entries = CATALOGUE.filter(
         (e: CatalogueEntry) => e.category === cat && e.event_type === EventType.INDIVIDUAL,
       )
       expect(entries).toHaveLength(6)
+    }
+  })
+
+  it('veteran individual entries: 36 total (6 age groups × 3 weapons × 2 genders)', () => {
+    const vetInd = CATALOGUE.filter(
+      (e: CatalogueEntry) =>
+        e.category === Category.VETERAN && e.event_type === EventType.INDIVIDUAL,
+    )
+    expect(vetInd).toHaveLength(36)
+  })
+
+  it('veteran individual entries all have a non-null vet_age_group', () => {
+    const vetInd = CATALOGUE.filter(
+      (e: CatalogueEntry) =>
+        e.category === Category.VETERAN && e.event_type === EventType.INDIVIDUAL,
+    )
+    for (const e of vetInd) {
+      expect(e.vet_age_group).not.toBeNull()
     }
   })
 
@@ -164,6 +185,17 @@ describe('CATALOGUE', () => {
           vet_age_group: null,
         },
       ],
+      [
+        'VET-M-FOIL-IND-V40',
+        {
+          id: 'VET-M-FOIL-IND-V40',
+          gender: Gender.MEN,
+          category: Category.VETERAN,
+          weapon: Weapon.FOIL,
+          event_type: EventType.INDIVIDUAL,
+          vet_age_group: VetAgeGroup.VET40,
+        },
+      ],
     ]
     for (const [id, expected] of checks) {
       const entry = findCompetition(id)
@@ -184,6 +216,25 @@ describe('CATALOGUE', () => {
     for (const id of expected) {
       expect(findCompetition(id), `Missing individual: ${id}`).toBeDefined()
     }
+  })
+
+  it('uses correct ID format for veteran individual events (age group suffix)', () => {
+    const expected = [
+      'VET-M-FOIL-IND-V40',
+      'VET-W-EPEE-IND-V50',
+      'VET-M-SABRE-IND-V60',
+      'VET-W-FOIL-IND-V70',
+      'VET-M-EPEE-IND-V80',
+      'VET-W-SABRE-IND-VCMB',
+    ]
+    for (const id of expected) {
+      expect(findCompetition(id), `Missing veteran individual: ${id}`).toBeDefined()
+    }
+  })
+
+  it('old veteran individual ID format (no age group suffix) is not in catalogue', () => {
+    expect(findCompetition('VET-M-FOIL-IND')).toBeUndefined()
+    expect(findCompetition('VET-W-EPEE-IND')).toBeUndefined()
   })
 
   it('uses correct ID format for team events', () => {
@@ -217,8 +268,23 @@ describe('findCompetition', () => {
     })
   })
 
+  it('returns the full entry for a veteran individual ID (with age group suffix)', () => {
+    expect(findCompetition('VET-M-FOIL-IND-V40')).toEqual({
+      id: 'VET-M-FOIL-IND-V40',
+      gender: Gender.MEN,
+      category: Category.VETERAN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+  })
+
   it('returns undefined for an unknown ID', () => {
     expect(findCompetition('INVALID-ID')).toBeUndefined()
+  })
+
+  it('returns undefined for old veteran individual ID format (no age group suffix)', () => {
+    expect(findCompetition('VET-M-FOIL-IND')).toBeUndefined()
   })
 })
 

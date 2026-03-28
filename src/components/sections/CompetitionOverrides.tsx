@@ -36,8 +36,8 @@ export function CompetitionOverrides() {
 
   if (sortedIds.length === 0) {
     return (
-      <Card>
-        <CardHeader>
+      <Card className="pt-0 gap-0">
+        <CardHeader className="bg-foreground/10 rounded-t-xl py-2">
           <CardTitle>Competition Overrides</CardTitle>
         </CardHeader>
         <CardContent>

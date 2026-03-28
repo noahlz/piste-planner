@@ -1,5 +1,5 @@
 import type { CatalogueEntry, VetAgeGroup } from './types.ts'
-import { Category, EventType, Gender, Weapon } from './types.ts'
+import { Category, EventType, Gender, Weapon, VetAgeGroup as VetAgeGroupEnum } from './types.ts'
 import { NAC_FENCER_DEFAULTS, REGIONAL_FENCER_DEFAULTS } from './constants.ts'
 
 // ──────────────────────────────────────────────
@@ -30,13 +30,25 @@ const EVENT_TYPE_CODE: Record<EventType, string> = {
   [EventType.TEAM]: 'TEAM',
 }
 
+const VET_AGE_GROUP_CODE: Record<VetAgeGroup, string> = {
+  [VetAgeGroupEnum.VET40]: 'V40',
+  [VetAgeGroupEnum.VET50]: 'V50',
+  [VetAgeGroupEnum.VET60]: 'V60',
+  [VetAgeGroupEnum.VET70]: 'V70',
+  [VetAgeGroupEnum.VET80]: 'V80',
+  [VetAgeGroupEnum.VET_COMBINED]: 'VCMB',
+}
+
 function makeId(
   category: Category,
   gender: Gender,
   weapon: Weapon,
   eventType: EventType,
+  vetAgeGroup: VetAgeGroup | null = null,
 ): string {
-  return `${CATEGORY_PREFIX[category]}-${GENDER_CODE[gender]}-${weapon}-${EVENT_TYPE_CODE[eventType]}`
+  const base = `${CATEGORY_PREFIX[category]}-${GENDER_CODE[gender]}-${weapon}-${EVENT_TYPE_CODE[eventType]}`
+  if (vetAgeGroup) return `${base}-${VET_AGE_GROUP_CODE[vetAgeGroup]}`
+  return base
 }
 
 function makeEntry(
@@ -47,7 +59,7 @@ function makeEntry(
   vetAgeGroup: VetAgeGroup | null = null,
 ): CatalogueEntry {
   return {
-    id: makeId(category, gender, weapon, eventType),
+    id: makeId(category, gender, weapon, eventType, vetAgeGroup),
     gender,
     category,
     weapon,
@@ -60,6 +72,7 @@ function makeEntry(
 // Catalogue generation
 // ──────────────────────────────────────────────
 
+// Veteran is excluded — expanded separately with per-age-group entries
 const INDIVIDUAL_CATEGORIES: Category[] = [
   Category.Y8,
   Category.Y10,
@@ -67,19 +80,29 @@ const INDIVIDUAL_CATEGORIES: Category[] = [
   Category.Y14,
   Category.CADET,
   Category.JUNIOR,
-  Category.VETERAN,
   Category.DIV1,
   Category.DIV1A,
   Category.DIV2,
   Category.DIV3,
 ]
 
+// Veteran is excluded — generated as a single team entry (no age group split for teams)
 const TEAM_CATEGORIES: Category[] = [
   Category.CADET,
   Category.JUNIOR,
-  Category.VETERAN,
   Category.DIV1,
 ]
+
+const ALL_VET_AGE_GROUPS: VetAgeGroup[] = [
+  VetAgeGroupEnum.VET40,
+  VetAgeGroupEnum.VET50,
+  VetAgeGroupEnum.VET60,
+  VetAgeGroupEnum.VET70,
+  VetAgeGroupEnum.VET80,
+  VetAgeGroupEnum.VET_COMBINED,
+]
+
+export { ALL_VET_AGE_GROUPS }
 
 const ALL_WEAPONS: Weapon[] = [Weapon.FOIL, Weapon.EPEE, Weapon.SABRE]
 const ALL_GENDERS: Gender[] = [Gender.MEN, Gender.WOMEN]
@@ -87,7 +110,7 @@ const ALL_GENDERS: Gender[] = [Gender.MEN, Gender.WOMEN]
 function buildCatalogue(): CatalogueEntry[] {
   const entries: CatalogueEntry[] = []
 
-  // 66 individual events: 11 categories × 3 weapons × 2 genders
+  // 60 non-veteran individual events: 10 categories × 3 weapons × 2 genders
   for (const category of INDIVIDUAL_CATEGORIES) {
     for (const weapon of ALL_WEAPONS) {
       for (const gender of ALL_GENDERS) {
@@ -96,12 +119,28 @@ function buildCatalogue(): CatalogueEntry[] {
     }
   }
 
-  // 24 team events: 4 categories × 3 weapons × 2 genders
+  // 36 veteran individual events: 6 age groups × 3 weapons × 2 genders
+  for (const vetAgeGroup of ALL_VET_AGE_GROUPS) {
+    for (const weapon of ALL_WEAPONS) {
+      for (const gender of ALL_GENDERS) {
+        entries.push(makeEntry(Category.VETERAN, gender, weapon, EventType.INDIVIDUAL, vetAgeGroup))
+      }
+    }
+  }
+
+  // 18 non-veteran team events: 3 categories × 3 weapons × 2 genders
   for (const category of TEAM_CATEGORIES) {
     for (const weapon of ALL_WEAPONS) {
       for (const gender of ALL_GENDERS) {
         entries.push(makeEntry(category, gender, weapon, EventType.TEAM))
       }
+    }
+  }
+
+  // 6 veteran team events: 1 × 3 weapons × 2 genders (no age group split for teams)
+  for (const weapon of ALL_WEAPONS) {
+    for (const gender of ALL_GENDERS) {
+      entries.push(makeEntry(Category.VETERAN, gender, weapon, EventType.TEAM))
     }
   }
 
@@ -131,7 +170,14 @@ function ids(categories: Category[], eventTypes: EventType[]): string[] {
     for (const weapon of ALL_WEAPONS) {
       for (const gender of ALL_GENDERS) {
         for (const eventType of eventTypes) {
-          result.push(makeId(category, gender, weapon, eventType))
+          // Veteran individual events expand to all age groups
+          if (category === Category.VETERAN && eventType === EventType.INDIVIDUAL) {
+            for (const vag of ALL_VET_AGE_GROUPS) {
+              result.push(makeId(category, gender, weapon, eventType, vag))
+            }
+          } else {
+            result.push(makeId(category, gender, weapon, eventType))
+          }
         }
       }
     }
@@ -196,8 +242,6 @@ export const TEMPLATES: Record<string, string[]> = {
     ...ids([Category.CADET, Category.JUNIOR], [EventType.INDIVIDUAL]),
     ...ids([Category.JUNIOR], [EventType.TEAM]),
   ],
-
-  Blank: [],
 }
 
 // ──────────────────────────────────────────────
@@ -218,5 +262,4 @@ export const TEMPLATE_FENCER_DEFAULTS: Record<string, FencerDefaultTable> = {
   'ROC Mega': REGIONAL_FENCER_DEFAULTS,
   'RYC Weekend': REGIONAL_FENCER_DEFAULTS,
   'RJCC Weekend': REGIONAL_FENCER_DEFAULTS,
-  Blank: {},
 }
