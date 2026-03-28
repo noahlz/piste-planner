@@ -11,35 +11,13 @@ https://noahlz.github.io/piste-planner
 - Node.js 22+
 - [pnpm](https://pnpm.io/)
 
-### Install Dependencies
+### Commands
 
 ```bash
 pnpm install
-```
-
-### Run Dev Server
-
-```bash
-pnpm dev
-```
-
-### Run Tests
-
-```bash
-pnpm test
-```
-
-### Build
-
-```bash
 pnpm build
-```
-
-### Lint & Format
-
-```bash
-pnpm lint
-pnpm format
+pnpm test
+pnpm dev     # Run site locally
 ```
 
 ## Authors
