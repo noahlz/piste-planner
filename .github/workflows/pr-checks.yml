@@ -1,0 +1,32 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.json'
+      - '**/*.css'
+      - 'pnpm-lock.yaml'
+    paths-ignore:
+      - '.claude/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec tsc -b --noEmit
+
+      - run: pnpm test:coverage -- --coverage.thresholds.lines=70 --coverage.thresholds.functions=70 --coverage.thresholds.branches=70 --coverage.thresholds.statements=70
