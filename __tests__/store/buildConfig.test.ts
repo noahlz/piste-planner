@@ -202,7 +202,7 @@ describe('buildTournamentConfig', () => {
             de_video_policy: 'BEST_EFFORT',
             use_single_pool_override: false,
           },
-        },
+        } as const,
       })
       const { competitions } = buildTournamentConfig(state)
       expect(competitions).toHaveLength(2)
@@ -319,7 +319,7 @@ describe('buildTournamentConfig', () => {
             de_video_policy: 'BEST_EFFORT',
             use_single_pool_override: false,
           },
-        },
+        } as const,
       }
     }
 
