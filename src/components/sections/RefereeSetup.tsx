@@ -2,7 +2,7 @@ import { useStore } from '../../store/store.ts'
 import { PodCaptainOverride } from '../../engine/types.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/ui/number-input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -79,26 +79,18 @@ export function RefereeSetup() {
                 <TableRow key={i}>
                   <TableCell>Day {i + 1}</TableCell>
                   <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      min={0}
-                      className="ml-auto w-20 text-right"
+                    <NumberInput
                       value={ref.foil_epee_refs}
-                      onChange={(e) =>
-                        setDayRefs(i, { foil_epee_refs: Number(e.target.value) })
-                      }
+                      onChange={(v) => setDayRefs(i, { foil_epee_refs: v })}
+                      min={0}
                       aria-label={`Foil/Epee refs for Day ${i + 1}`}
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      min={0}
-                      className="ml-auto w-20 text-right"
+                    <NumberInput
                       value={ref.sabre_refs}
-                      onChange={(e) =>
-                        setDayRefs(i, { sabre_refs: Number(e.target.value) })
-                      }
+                      onChange={(v) => setDayRefs(i, { sabre_refs: v })}
+                      min={0}
                       aria-label={`Sabre refs for Day ${i + 1}`}
                     />
                   </TableCell>
