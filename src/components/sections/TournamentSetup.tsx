@@ -51,11 +51,6 @@ export function TournamentSetup() {
   const setDays = useStore((s) => s.setDays)
   const dayConfigs = useStore((s) => s.dayConfigs)
   const updateDayConfig = useStore((s) => s.updateDayConfig)
-  const stripsTotal = useStore((s) => s.strips_total)
-  const setStrips = useStore((s) => s.setStrips)
-  const videoStripsTotal = useStore((s) => s.video_strips_total)
-  const setVideoStrips = useStore((s) => s.setVideoStrips)
-
   return (
     <Card className="pt-0 gap-0">
       <CardHeader className="bg-foreground/10 rounded-t-xl py-2">
@@ -64,9 +59,8 @@ export function TournamentSetup() {
       <CardContent className="pt-3 pb-3">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div className="space-y-1">
-            <Label htmlFor="tournament-type" className="flex items-center gap-1 text-xs">
+            <Label htmlFor="tournament-type" className="text-xs">
               Tournament Type
-              <HelpTip text="The type of USA Fencing tournament determines scheduling constraints like mandatory same-day pairings and rest-day requirements." />
             </Label>
             <Select
               value={tournamentType}
@@ -86,50 +80,24 @@ export function TournamentSetup() {
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="days-available" className="flex items-center gap-1 text-xs">
+            <Label htmlFor="days-available" className="text-xs">
               Tournament Length (Days)
-              <HelpTip text="Number of competition days (2–4). Events will be distributed across these days." />
             </Label>
-            <Input
-              id="days-available"
-              type="number"
-              min={2}
-              max={4}
-              value={daysAvailable}
-              onChange={(e) => {
-                const v = Number(e.target.value)
-                if (v >= 2 && v <= 4) setDays(v)
-              }}
-            />
+            <Select
+              value={String(daysAvailable)}
+              onValueChange={(v: string) => setDays(Number(v))}
+            >
+              <SelectTrigger id="days-available">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2">2 Days</SelectItem>
+                <SelectItem value="3">3 Days</SelectItem>
+                <SelectItem value="4">4 Days</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="strips-total" className="flex items-center gap-1 text-xs">
-              # of Strips
-              <HelpTip text="Total number of fencing strips available at the venue. Determines how many bouts can run simultaneously." />
-            </Label>
-            <Input
-              id="strips-total"
-              type="number"
-              min={0}
-              value={stripsTotal}
-              onChange={(e) => setStrips(Number(e.target.value))}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="video-strips" className="flex items-center gap-1 text-xs">
-              # with Video
-              <HelpTip text="Number of strips equipped with video replay. Events with video requirements will be scheduled on these strips." />
-            </Label>
-            <Input
-              id="video-strips"
-              type="number"
-              min={0}
-              value={videoStripsTotal}
-              onChange={(e) => setVideoStrips(Number(e.target.value))}
-            />
-          </div>
         </div>
 
         {dayConfigs.length > 0 && (
