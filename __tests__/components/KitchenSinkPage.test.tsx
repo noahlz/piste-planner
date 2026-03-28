@@ -37,12 +37,12 @@ describe('KitchenSinkPage render tests', () => {
 
   it('renders strips input', () => {
     render(<KitchenSinkPage />)
-    expect(document.getElementById('strips-total')).toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: 'Number of strips' })).toBeInTheDocument()
   })
 
   it('renders video strips input', () => {
     render(<KitchenSinkPage />)
-    expect(document.getElementById('video-strips')).toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: 'Number of video strips' })).toBeInTheDocument()
   })
 
   it('renders pod captain select', () => {
@@ -198,10 +198,8 @@ describe('KitchenSinkPage user flow tests', () => {
     useStore.getState().applyTemplate('RYC Weekend')
     render(<KitchenSinkPage />)
 
-    // Step 2: Set strips
-    fireEvent.change(document.getElementById('strips-total') as HTMLInputElement, {
-      target: { value: '12' },
-    })
+    // Step 2: Set strips (Radix-style: call store directly)
+    useStore.getState().setStrips(12)
 
     // Step 3: Enter some fencer counts
     const fencerInputs = screen.getAllByRole('spinbutton', { name: /Fencer count for/ })
@@ -232,18 +230,18 @@ describe('KitchenSinkPage store integration tests', () => {
 
   it('changing days input updates store state', () => {
     render(<KitchenSinkPage />)
-    const daysInput = document.getElementById('days-available') as HTMLInputElement
-
-    fireEvent.change(daysInput, { target: { value: '2' } })
+    // Days is now a Radix Select; call store directly (matches tournament_type test pattern)
+    useStore.getState().setDays(2)
 
     expect(useStore.getState().days_available).toBe(2)
   })
 
   it('changing strips input updates store state', () => {
     render(<KitchenSinkPage />)
-    const stripsInput = document.getElementById('strips-total') as HTMLInputElement
+    const stripsInput = screen.getByRole('spinbutton', { name: 'Number of strips' })
 
     fireEvent.change(stripsInput, { target: { value: '20' } })
+    fireEvent.blur(stripsInput)
 
     expect(useStore.getState().strips_total).toBe(20)
   })
@@ -258,6 +256,7 @@ describe('KitchenSinkPage store integration tests', () => {
     // Find the fencer count input for first competition and change it
     const input = screen.getAllByRole('spinbutton', { name: /Fencer count for/ })[0]
     fireEvent.change(input, { target: { value: '64' } })
+    fireEvent.blur(input)
 
     expect(useStore.getState().selectedCompetitions[firstId].fencer_count).toBe(64)
   })
