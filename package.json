@@ -1,6 +1,7 @@
 {
   "name": "piste-planner",
   "private": true,
+  "packageManager": "pnpm@10.28.0",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
