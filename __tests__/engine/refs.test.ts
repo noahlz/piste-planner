@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { podCaptainsNeeded, refsAvailableOnDay, calculateOptimalRefs } from '../../src/engine/refs.ts'
-import { PodCaptainOverride, DeMode, Weapon } from '../../src/engine/types.ts'
+import { podCaptainsNeeded, refsAvailableOnDay, calculateOptimalRefs, preliminaryDayAssign } from '../../src/engine/refs.ts'
+import { PodCaptainOverride, DeMode, Weapon, Category, Gender } from '../../src/engine/types.ts'
 import type { TournamentConfig, DayRefereeAvailability, Competition } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -155,6 +155,64 @@ describe('refsAvailableOnDay', () => {
 
   it('out-of-bounds day index → 0', () => {
     expect(refsAvailableOnDay(99, Weapon.FOIL, config)).toBe(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// preliminaryDayAssign
+// ──────────────────────────────────────────────
+
+describe('preliminaryDayAssign', () => {
+  it('single competition → assigned to day 0', () => {
+    const config = makeConfig({ days_available: 2 })
+    const comp = makeCompetition({ id: 'foil-1', weapon: Weapon.FOIL })
+    const result = preliminaryDayAssign([comp], config)
+    expect(result.get('foil-1')).toBe(0)
+  })
+
+  it('two non-conflicting competitions → both can land on day 0', () => {
+    // Different genders: no crossover penalty → greedy assigns both to lowest-penalty day
+    const config = makeConfig({ days_available: 2 })
+    const comps = [
+      makeCompetition({ id: 'men-foil', weapon: Weapon.FOIL, gender: Gender.MEN }),
+      makeCompetition({ id: 'women-foil', weapon: Weapon.FOIL, gender: Gender.WOMEN }),
+    ]
+    const result = preliminaryDayAssign(comps, config)
+    // No crossover between genders — both should land on day 0 (lowest index first)
+    expect(result.get('men-foil')).toBe(0)
+    expect(result.get('women-foil')).toBe(0)
+  })
+
+  it('two conflicting same-gender competitions → assigned to different days', () => {
+    // CADET + JUNIOR same gender+weapon have crossover penalty > 0
+    const config = makeConfig({ days_available: 2 })
+    const comps = [
+      makeCompetition({ id: 'men-cadet-foil', weapon: Weapon.FOIL, gender: Gender.MEN, category: Category.CADET }),
+      makeCompetition({ id: 'men-junior-foil', weapon: Weapon.FOIL, gender: Gender.MEN, category: Category.JUNIOR }),
+    ]
+    const result = preliminaryDayAssign(comps, config)
+    // Crossover between CADET+JUNIOR (same gender+weapon) forces them onto different days
+    expect(result.get('men-cadet-foil')).not.toBe(result.get('men-junior-foil'))
+  })
+
+  it('constraint-scored assignment avoids conflicts that round-robin would create', () => {
+    // Input order is arranged so round-robin (idx % 2) puts MEN_CADET and MEN_JUNIOR
+    // on the same day (idx 0 and 2 both → day 0). They have Infinity crossover
+    // (GROUP_1_MANDATORY pair), so round-robin produces an avoidable conflict.
+    //
+    // Constraint-scored processes the most-constrained events first and assigns
+    // MEN_JUNIOR to day 1 (lowest penalty against day 0 which already has MEN_CADET).
+    const config = makeConfig({ days_available: 2 })
+    const comps = [
+      makeCompetition({ id: 'men-cadet', weapon: Weapon.FOIL, gender: Gender.MEN, category: Category.CADET }),
+      makeCompetition({ id: 'women-div1', weapon: Weapon.FOIL, gender: Gender.WOMEN, category: Category.DIV1 }),
+      makeCompetition({ id: 'men-junior', weapon: Weapon.FOIL, gender: Gender.MEN, category: Category.JUNIOR }),
+      makeCompetition({ id: 'women-junior', weapon: Weapon.FOIL, gender: Gender.WOMEN, category: Category.JUNIOR }),
+    ]
+    const result = preliminaryDayAssign(comps, config)
+
+    // Constraint-scored separates the Infinity-crossover pair (MEN_CADET + MEN_JUNIOR)
+    expect(result.get('men-cadet')).not.toBe(result.get('men-junior'))
   })
 })
 

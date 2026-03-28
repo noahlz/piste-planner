@@ -347,6 +347,7 @@ export interface ValidationError {
 export interface AnalysisResult {
   warnings: Bottleneck[]
   suggestions: string[]
+  flightingSuggestions?: FlightingGroup[]
 }
 
 export interface CatalogueEntry {

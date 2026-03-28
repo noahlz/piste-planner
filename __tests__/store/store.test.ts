@@ -476,6 +476,10 @@ describe('analysisSlice', () => {
           },
         ],
         suggestions: ['Consider adding more strips', 'Flight the cadet events'],
+        flightingSuggestions: [
+          { priority_competition_id: 'A', flighted_competition_id: 'B', strips_for_priority: 6, strips_for_flighted: 4 },
+          { priority_competition_id: 'C', flighted_competition_id: 'D', strips_for_priority: 5, strips_for_flighted: 5 },
+        ],
       }
 
       useStore.getState().setAnalysisResults(errors, result)
@@ -484,7 +488,8 @@ describe('analysisSlice', () => {
       expect(state.validationErrors).toEqual(errors)
       expect(state.warnings).toEqual(result.warnings)
       expect(state.suggestions).toEqual(result.suggestions)
-      // One state per suggestion, all start as pending
+      expect(state.flightingSuggestions).toEqual(result.flightingSuggestions)
+      // One state per flighting suggestion, all start as pending
       expect(state.flightingSuggestionStates).toEqual(['pending', 'pending'])
     })
   })
@@ -494,6 +499,10 @@ describe('analysisSlice', () => {
       const result: AnalysisResult = {
         warnings: [],
         suggestions: ['Suggestion A', 'Suggestion B'],
+        flightingSuggestions: [
+          { priority_competition_id: 'A', flighted_competition_id: 'B', strips_for_priority: 6, strips_for_flighted: 4 },
+          { priority_competition_id: 'C', flighted_competition_id: 'D', strips_for_priority: 5, strips_for_flighted: 5 },
+        ],
       }
       useStore.getState().setAnalysisResults([], result)
 
@@ -510,6 +519,10 @@ describe('analysisSlice', () => {
       const result: AnalysisResult = {
         warnings: [],
         suggestions: ['Suggestion A', 'Suggestion B'],
+        flightingSuggestions: [
+          { priority_competition_id: 'A', flighted_competition_id: 'B', strips_for_priority: 6, strips_for_flighted: 4 },
+          { priority_competition_id: 'C', flighted_competition_id: 'D', strips_for_priority: 5, strips_for_flighted: 5 },
+        ],
       }
       useStore.getState().setAnalysisResults([], result)
 
@@ -535,6 +548,9 @@ describe('analysisSlice', () => {
           },
         ],
         suggestions: ['do something'],
+        flightingSuggestions: [
+          { priority_competition_id: 'A', flighted_competition_id: 'B', strips_for_priority: 6, strips_for_flighted: 4 },
+        ],
       }
       useStore.getState().setAnalysisResults(
         [{ field: 'f', message: 'm', severity: BottleneckSeverity.ERROR }],

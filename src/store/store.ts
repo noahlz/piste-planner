@@ -10,6 +10,7 @@ import type {
   ValidationError,
   Bottleneck,
   AnalysisResult,
+  FlightingGroup,
   ScheduleResult,
 } from '../engine/types.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
@@ -129,6 +130,7 @@ export interface AnalysisSlice {
   validationErrors: ValidationError[]
   warnings: Bottleneck[]
   suggestions: string[]
+  flightingSuggestions: FlightingGroup[]
   flightingSuggestionStates: SuggestionState[]
 
   setAnalysisResults: (errors: ValidationError[], result: AnalysisResult) => void
@@ -417,6 +419,7 @@ function createAnalysisSlice(set: SetState, _get: GetState): AnalysisSlice {
     validationErrors: [],
     warnings: [],
     suggestions: [],
+    flightingSuggestions: [],
     flightingSuggestionStates: [],
 
     setAnalysisResults: (errors, result) => {
@@ -424,7 +427,8 @@ function createAnalysisSlice(set: SetState, _get: GetState): AnalysisSlice {
         validationErrors: errors,
         warnings: result.warnings,
         suggestions: result.suggestions,
-        flightingSuggestionStates: result.suggestions.map(() => SuggestionState.PENDING),
+        flightingSuggestions: result.flightingSuggestions ?? [],
+        flightingSuggestionStates: (result.flightingSuggestions ?? []).map(() => SuggestionState.PENDING),
       })
     },
 
@@ -449,6 +453,7 @@ function createAnalysisSlice(set: SetState, _get: GetState): AnalysisSlice {
         validationErrors: [],
         warnings: [],
         suggestions: [],
+        flightingSuggestions: [],
         flightingSuggestionStates: [],
       })
     },
