@@ -116,6 +116,7 @@ Overlapping age categories MUST be on **different days** (per weapon and gender)
 ### Team Events Require a Matching Individual
 
 - Every team competition must have a corresponding individual competition in the same age category, gender, and weapon
+- If user selects Team, the corresponding Individual event is automatically enabled and cannot be disabled unless team is first disabled.
 - Validated before scheduling begins (see [`analysis.ts`](src/engine/analysis.ts))
 
 ### Team Events Cannot Use Cuts
@@ -320,7 +321,7 @@ Flighting splits a large competition's pool round into two flights, using **half
 | Age Category | Default Cut | Notes |
 |---|---|---|
 | Y8, Y10, Y12 | Disabled (100% advance) | |
-| Y14, Cadet, Junior, Div 1 | 20% cut (80% advance) | Except at ROCs → 100% advance |
+| Y14, Cadet, Junior, Div 1 | 20% cut (80% advance) | Except at ROCs, SYC, RJCC → 100% advance |
 | Div 1A | Disabled (100% advance) | Except at Summer Nationals → 80% advance |
 | Div 2, Div 3 | Disabled (100% advance) | |
 | Veteran | Disabled (100% advance) | |
@@ -529,8 +530,11 @@ If resources unavailable at ideal time, scan forward in 30-minute slots. If end 
 
 (see [`constants.ts`](src/engine/constants.ts), [`catalogue.ts`](src/engine/catalogue.ts))
 
+Selecting the tournament type enables / disables events available in the tournament picker. For example, NACs do not have Div 1A. Only NACs have Team events. ROCs do not have Vet Age or Team events. Regional types (ROC, RYC, RJCC) can be combined — their available events are merged.
+
 ### NAC (North American Cup)
 
+- All possible events except Div 1A.
 - Full crossover rules apply (Group 1 mandatory separations, rest day preferences)
 - Default cuts: Y14/Cadet/Junior/Div 1 at 80% advancement to DE
 - Staged DEs with video replay for Cadet, Junior, Div 1
@@ -542,6 +546,7 @@ If resources unavailable at ideal time, scan forward in 30-minute slots. If end 
 - Uses VET_COMBINED (no individual veteran age-group breakdown)
 - Div 1A and Veteran categories are the primary focus
 - 100% advancement to DE for Div 1A and Veteran
+- Can be combined with RJCC and RYC
 
 ### RYC (Regional Youth Circuit)
 
@@ -549,10 +554,11 @@ If resources unavailable at ideal time, scan forward in 30-minute slots. If end 
 - 100% advancement to DE
 - Smaller fields; regional-scale fencer defaults
 - Y10 preferred in first time slot
+- Can be combined with RJCC and ROC
 
 ### SYC (Super Youth Circuit)
 
-- Youth categories (Y10, Y12, Y14)
+- Youth (Y10, Y12, Y14), Cadet and Junior categories
 - 100% advancement to DE
 - Regional-scale fencer defaults
 
@@ -560,6 +566,7 @@ If resources unavailable at ideal time, scan forward in 30-minute slots. If end 
 
 - Cadet and Junior individual events
 - Default 100% advancement to DE
+- Can be combined with ROC and RYC
 
 ### Gender Equity
 
