@@ -47,8 +47,7 @@ Piste Planner models tournament scheduling as a resource-constrained bin-packing
 - **Competition list**: each competition has a gender, age category, weapon, event type (individual or team), and estimated fencer count (see [`types.ts`](src/engine/types.ts) for data model)
 - **Venue resources**:
   - **General strips**: used for pools or DEs; total count is optional — engine can suggest based on the largest single competition's pool count (see [`analysis.ts`](src/engine/analysis.ts))
-  - **Finals strip**: if there is 1 additional strip beyond the general strips, it is the finals strip
-  - **Video-capable strips**: subset of general strips equipped for video replay
+  - **Video strip count** (NACs only): 4, 8 (default), 12, or 16. These strips are used for the Video stage of staged DEs. Default of 8 covers a standard Round of 16. Multiple events in the video stage contend for these strips.
 - **Referees**:
   - **Total referee count**: optional — engine can suggest based on strip count (see [`refs.ts`](src/engine/refs.ts))
   - **3-weapon refs**: default — all refs are assumed 3-weapon (can officiate foil, epee, and sabre)
@@ -56,9 +55,8 @@ Piste Planner models tournament scheduling as a resource-constrained bin-packing
   - **Refs per pool**: 1 or 2 (default: 2) — configured before auto-suggest runs
 - **Tournament duration**: 2–4 days
 - **Per-competition options**:
-  - **DE mode**: "Staged DEs" (a middle stage + Finals run separately) or "Single Stage DE" (all DE rounds run as fast as possible)
-  - **Staged DE flavor**: user picks the middle stage — Round of 16, Round of 8, or Round of 4; Finals is always the final stage
-  - **Video replay policy**: user picks the starting round for guaranteed video replay (16, 8, 4, or Gold/Bronze only). Defaults vary by age category per Ops Manual Ch.4, p.25 (see [Video Replay Policy](#video-replay-policy) below)
+  - **DE mode**: determined by tournament type — NACs use "Staged DEs" (Prelim + Video stages); all other types use "Single Stage DE" (all DE rounds run as fast as possible)
+  - **Video stage** (NACs only): the round at which DEs move to video strips, determined by age category per Ops Manual Ch.4, p.25 (see [Video Replay Policy](#video-replay-policy))
   - **Cut-to-DE**: % cut (e.g., cut 20% → promote 80%) or promoted count (e.g., promote top 256)
   - **Start time**: defaults to 8:00 AM; user can adjust per day
   - **Latest end time**: violation produces a warning with estimated finish time, not a scheduling failure
@@ -67,8 +65,8 @@ Piste Planner models tournament scheduling as a resource-constrained bin-packing
 ### Outputs
 
 - **Day assignment** for each competition
-- **Pool round timing**: start and end times per competition (and per flight if flighted)
-- **DE phase timing**: middle stage and finals blocks with strip allocations
+- **Pool round timing**: start and end times per competition
+- **DE phase timing**: prelim and video stage blocks with strip allocations (NACs); single block (all others)
 - **Bottleneck diagnostics**: warnings and errors identifying resource conflicts, constraint relaxations, or policy violations
 
 All times are minutes from midnight (e.g., 480 = 8:00 AM). The scheduling day runs from 8:00 AM to 10:00 PM (14 hours). Pool rounds cannot start after 4:00 PM. (see [`constants.ts`](src/engine/constants.ts))
@@ -329,27 +327,27 @@ Flighting splits a large competition's pool round into two flights, using **half
 
 ### DE Modes
 
+Determined by event type. NACs always use Staged DEs, with the stage round starting per the Video Policy (NACs always have video). All other event types use Single Stage.
+
 - **Single Stage DE**: all DE rounds run on allocated strips as fast as possible
-  - Gold medal bout is part of the single stage
-  - If a finals strip exists, there may be slight contention for it
   - Video replay is not applicable
   - Optimal strips: `floor(bracketSize / 2)`
-- **Staged DEs**: DE runs in distinct phases, each requiring its own resource window
-  - User picks one middle stage: Round of 16, Round of 8, or Round of 4
-  - Finals is always the final stage
-  - Structure: [Prelim DEs →] Middle Stage → Finals
-  - Video replay can be applied starting from the middle stage
+- **Staged DEs** (NACs only): two phases — **Prelim** and **Video**
+  - The Video stage round is determined by age category (see [Video Replay Policy](#video-replay-policy))
+  - Structure: Prelim DEs → Video stage (on video strips)
+  - Multiple events in the Video stage contend for the available video strips
 
 ### DE Phase Breakdown (for Staged DEs)
 
-- Bracket ≥ 64: Prelims + middle stage + Finals
-- Bracket 16–63: Middle stage + Finals
-- Bracket < 16: Finals only
-- Duration split proportionally by bout count; finals minimum: 30 minutes
+- Bracket above the video round: Prelim phase on general strips, then Video phase on video strips
+- Bracket at or below the video round: Video phase only
+- Duration split proportionally by bout count
 
 ### Video Replay Policy
 
 At national tournaments, video replay is guaranteed from a specific DE round per age category. At local/regional tournaments, video replay is optional. (Ops Manual Ch.4, p.25)
+
+As such, video strips are automatic when the type is NAC. For all other tournament types, video strips might be available but are never guaranteed, and so *do not affect scheduling.*
 
 | Age Category | Guaranteed From | Notes |
 |---|---|---|
@@ -358,15 +356,10 @@ At national tournaments, video replay is guaranteed from a specific DE round per
 | Vet 50, Vet 60, Vet 70 | Round of 8 | |
 | Div 1A, Div 2, Div 3 | Round of 4 | |
 | Vet 40, Vet 80, Vet Combined | Round of 4 | |
-| Teams | Gold/Bronze only | |
+| Teams | Gold/Bronze only | Gold medal bout scheduling not tracked — negligible impact |
 
-- Phases before the guaranteed round do not require video-capable strips
-- User can adjust the starting round per competition in the setup
-
-### Bronze Medal Bout
-
-- Team events include a bronze medal bout at finals time on a separate strip
-- Bronze bouts only receive video if the finals phase requires it
+- Phases before the video round run on general strips
+- The video round and beyond run on video strips
 
 ---
 
@@ -377,11 +370,11 @@ At national tournaments, video replay is guaranteed from a specific DE round per
 ### Video Strip Preservation
 
 - When assigning strips for competitions that do NOT require video, non-video strips are selected first
-- This preserves video-capable strips for Cadet, Junior, and Div 1 staged DEs
+- This preserves video-capable strips for NAC staged DEs (Cadet, Junior, Div 1)
 
 ### Resource Windows
 
-- For each phase (pool round, DE middle stage, finals), the engine finds the earliest time slot where both strips AND refs are simultaneously available
+- For each phase (pool round, DE prelim, DE video stage), the engine finds the earliest time slot where both strips AND refs are simultaneously available
 - If resources aren't available at the ideal time, the engine scans forward in 30-minute slots
 - If delay exceeds a threshold, a bottleneck diagnostic is emitted (strip contention, ref contention, or both)
 
@@ -413,7 +406,7 @@ At national tournaments, video replay is guaranteed from a specific DE round per
 
 - Toggle: "Use Pod Captains to manage DEs"
 - When enabled: 1 pod captain per 8 strips, drawn from the referee pool
-- Pod captains supervise groups of strips during staged DE phases
+- Pod captains supervise groups of strips during DE phases (NACs)
 
 ---
 
@@ -424,7 +417,7 @@ The engine can auto-suggest configuration values to help organizers start with r
 ### Strip Count Suggestion
 
 - Finds the competition with the most pools (peak strip demand)
-- Suggests that number of strips, optionally +1 for a dedicated finals strip
+- Suggests that number of strips as the baseline
 
 ### Referee Suggestion
 
@@ -496,7 +489,7 @@ Score factors:
 - **Crossover count**: how many other competitions this one conflicts with
 - **Window tightness**: how narrow the allowed time window is
 - **Sabre scarcity**: for sabre events, ratio of sabre competitions to 3-weapon refs across days
-- **Video scarcity**: for staged DE events requiring video, ratio of video-needing events to video strips
+- **Video scarcity** (NACs only): ratio of staged DE events requiring video to video strips
 - **Referee intensity**: events requiring 2 refs/pool score higher (2.0) than 1 ref/pool (0.5)
 
 Within this ordering:
@@ -517,8 +510,7 @@ Once a day is chosen, find the earliest time window with strips and refs availab
 
 1. **Pool round**: allocate resource window for all pools (or half strips if flighted); reserve strips and refs
 2. **Admin gap**: 30-minute mandatory gap between pool end and DE start, snapped to next 30-minute slot
-3. **DE phases** (if staged): for each phase (prelims, middle stage, finals), find resource window with required strips (including video if applicable); reserve refs
-4. **Bronze bout** (team events): allocate separate strip at finals time
+3. **DE phases** (NACs, staged): Prelim phase on general strips, then Video phase on video strips; reserve refs for each
 
 If resources unavailable at ideal time, scan forward in 30-minute slots. If end time would breach the day boundary, retry with an earlier start slot (up to 3 attempts). If all retries fail, a deadline breach warning is recorded.
 
@@ -541,7 +533,7 @@ If resources unavailable at ideal time, scan forward in 30-minute slots. If end 
 
 - Full crossover rules apply (Group 1 mandatory separations, rest day preferences)
 - Default cuts: Y14/Cadet/Junior/Div 1 at 80% advancement to DE
-- Video replay required for Cadet, Junior, Div 1
+- Staged DEs with video replay for Cadet, Junior, Div 1
 - Typically 3–4 day events with large fields (100+ fencers in major categories)
 - Predefined templates for common NAC formats (Youth, Cadet/Junior, Div1/Junior, etc.)
 
