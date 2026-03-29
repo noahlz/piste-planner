@@ -529,7 +529,7 @@ Analysis passes run before the main scheduling loop: (see [`analysis.ts`](src/en
 3. Flighting suggestions — identifies same-day pairs that would benefit from flighting
 4. Multiple-flighting conflicts — warns if more than one flighted competition lands on the same day
 5. Video strip demand — warns if peak video-strip need exceeds video-capable strips
-6. Gender equity (see [Gender Equity](#gender-equity)) — checks pool count differences between men's and women's events (Athlete Handbook p.15)
+6. Gender equity (see [Gender Equity](#gender-equity)) — informational warning when pool count differences between men's and women's events exceed Athlete Handbook caps (p.15)
 7. Cut summaries — informational breakdown of advancement numbers per competition
 
 ### Phase 3: Priority Ordering
@@ -624,9 +624,9 @@ Selecting the tournament type enables / disables events available in the tournam
 - 100% advancement to DE
 - Can be combined with ROC and RYC
 
-### Gender Equity
+### Gender Equity (Informational Warning Only)
 
-Per the USA Fencing Athlete Handbook (p.15, "Regional Tournament Capping Structure"; beginning 2025–26, mandatory for regional tournaments), when men's and women's events exist in the same age category and weapon, the difference in pool count is bounded:
+The USA Fencing Athlete Handbook (p.15, "Regional Tournament Capping Structure"; beginning 2025–26, mandatory for regional tournaments) caps the pool count difference between men's and women's events in the same age category and weapon:
 
 | Pools in larger event | Maximum pool count difference |
 |---|---|
@@ -635,7 +635,9 @@ Per the USA Fencing Athlete Handbook (p.15, "Regional Tournament Capping Structu
 | 8–11 | 2 |
 | 12+ | 3 |
 
-Violations emit a warning. Applies only when comparing events of different gender in the same age/weapon category.
+This is a **registration/capping guideline**, not a scheduling rule. It tells organizers when entry caps are too far apart — it does not affect how events are placed on strips or time slots. The engine surfaces violations as an informational warning during pre-scheduling analysis. It has no effect on day assignment, strip allocation, or penalty scoring.
+
+True strip-time equity (ensuring men's and women's events get balanced simultaneous strip usage) is a separate concern not addressed by this rule or the engine.
 
 ---
 
@@ -684,6 +686,18 @@ The constant exists in `constants.ts` but is not consumed by `totalDayPenalty` o
 ### Limitation: REGIONAL_CUT_OVERRIDES not applied
 
 The constant is defined but not consumed. Regional tournaments (ROC/SYC/RJCC/SJCC) should override default cuts for Y14/Cadet/Junior/Div 1 to 100% advancement, but this isn't implemented.
+
+### TODO: Remove saber ref fill-in concept from engine
+
+The engine has an `allow_saber_ref_fillin` config flag and `allocateRefsForSaber()` function (`resources.ts`) that lets foil/epee-only refs substitute for 3-weapon refs on saber events when saber refs are insufficient. This concept should not exist — saber events must only use 3-weapon refs, period. If there aren't enough, that's a resource validation error, not something to work around.
+
+**Remove:**
+- `allow_saber_ref_fillin` from `SchedulerConfig` (`types.ts`)
+- `saber_fillin_used` from `CompetitionScheduleResult` (`types.ts`)
+- `SABER_REF_FILLIN` from `BottleneckCause` (`types.ts`)
+- `allocateRefsForSaber()` function (`resources.ts`) — inline the simple 3-weapon-only allocation
+- `toggleSaberFillin` store action and per-day UI toggle (`store.ts`, `RefereeSetup.tsx`)
+- All corresponding tests (`resources.test.ts`, `store.test.ts`, `WizardShell.test.tsx`, etc.)
 
 ---
 
