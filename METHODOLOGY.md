@@ -659,13 +659,11 @@ The `assignDay`/`totalDayPenalty` scoring considers crossover penalties, proximi
 
 **Fix needed**: Add a day-capacity heuristic to scoring. Estimate total strip-hours consumed by already-assigned events and penalize days nearing capacity.
 
-### Limitation: Staged DE serializes video strip usage
+### Correct behavior: Staged DE serializes video strip usage
 
-Multiple events with `STAGED_DE_BLOCKS` on the same day must take turns using video strips for DE_ROUND_OF_16 and DE_FINALS phases. With 4–8 video strips and 6+ events requiring staged DE on one day, the cumulative DE duration exceeds the day boundary.
+Video strips are allocated as a block to one event at a time — real tournaments do not interleave events on video strips. For example, Vet 40 Men's Epee (needing only 2 video strips) waits for Div 1 Women's Foil to finish before using them, even when strips are physically idle. The engine's `STAGED_DE_BLOCKS` mode correctly models this block-allocation behavior.
 
-**Impact**: Tournaments with many Cadet/Junior/Div 1 events (which all require video) are especially affected.
-
-**Fix needed**: Include video-strip budget in day assignment scoring — penalize days that already have many staged-DE events assigned.
+When many events requiring staged DE land on the same day, the cumulative serialized duration can exceed the day boundary. This is not a bug — it means the day is genuinely overloaded with video-dependent events. The fix belongs in day assignment (item 2 above): penalize days that already have many staged-DE events assigned, spreading video load across days.
 
 ### Not yet implemented: Resource precondition validation
 
