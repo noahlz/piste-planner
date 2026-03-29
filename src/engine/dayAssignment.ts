@@ -16,7 +16,7 @@ import {
   dayStart,
 } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState, PoolStructure } from './types.ts'
-import { REST_DAY_PAIRS } from './constants.ts'
+import { HIGH_CROSSOVER_THRESHOLD, REST_DAY_PAIRS, SOFT_SEPARATION_PAIRS } from './constants.ts'
 import {
   crossoverPenalty,
   proximityPenalty,
@@ -141,13 +141,13 @@ export function earlyStartPenalty(
     if (dayGap === 0) {
       // Pattern A: same day, both early start, high crossover
       const xpen = crossoverPenalty(competition, c2)
-      if (xpen >= 1.0) {
+      if (xpen >= HIGH_CROSSOVER_THRESHOLD) {
         total += 2.0
       }
     } else if (dayGap === 1) {
       // Pattern B: consecutive days, both early start, high crossover
       const xpen = crossoverPenalty(competition, c2)
-      if (xpen >= 1.0) {
+      if (xpen >= HIGH_CROSSOVER_THRESHOLD) {
         total += 5.0
       }
 
@@ -233,7 +233,9 @@ export function crossWeaponSameDemographicPenalty(
     const c2 = allCompetitions.find(c => c.id === compId)
     if (!c2) continue
 
+    // Cross-weapon overlap only meaningful for Veteran events (METHODOLOGY.md §Cross-Weapon)
     if (
+      competition.category === Category.VETERAN &&
       c2.gender === competition.gender &&
       c2.category === competition.category &&
       c2.weapon !== competition.weapon
@@ -356,8 +358,7 @@ export function totalDayPenalty(
     // Same-time penalty: always applied regardless of level
     const c2Start = sr.pool_start ?? null
     if (c2Start !== null && Math.abs(estimatedStart - c2Start) <= config.SAME_TIME_WINDOW_MINS && xpen > 0) {
-      // High crossover (≥1.0) → +10.0; low crossover → +4.0
-      total += xpen >= 1.0 ? 10.0 : 4.0
+      total += xpen >= HIGH_CROSSOVER_THRESHOLD ? 10.0 : 4.0
     }
 
     // Individual+Team ordering penalty (same demographic)

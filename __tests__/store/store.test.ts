@@ -209,7 +209,7 @@ describe('competitionSlice', () => {
     it('globalOverrides has default values', () => {
       const state = useStore.getState()
       expect(state.globalOverrides).toEqual({
-        ADMIN_GAP_MINS: 15,
+        ADMIN_GAP_MINS: 30,
         FLIGHT_BUFFER_MINS: 15,
         THRESHOLD_MINS: 10,
       })

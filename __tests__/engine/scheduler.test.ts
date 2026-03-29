@@ -67,11 +67,13 @@ function competitionsFromTemplate(templateName: string, fencerCount = 24): Compe
 
 describe('scheduleAll — template integration', () => {
   it('NAC Youth (3 days, 24 events): all events scheduled, no day overflow', () => {
+    // Refs increased from 40/20 to 60/30 to accommodate the larger ADMIN_GAP_MINS (30 min),
+    // which raises each competition's total duration and tightens daily resource budgets.
     const config = makeConfig({
       days_available: 3,
       strips: makeStrips(64, 4),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 40, sabre_refs: 20, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 60, sabre_refs: 30, source: 'ACTUAL' as const,
       })),
     })
     // fencer_count=10: minimum that produces ≥2 promoted fencers with 20% PERCENTAGE cut

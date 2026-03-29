@@ -635,11 +635,11 @@ describe('assignDay', () => {
 
 describe('crossWeaponSameDemographicPenalty', () => {
   it('same gender+category, different weapon on same day → 0.2 per competing comp', () => {
-    const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
-    const otherWeapon = makeCompetition({ id: 'div1-m-epee', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE })
+    const comp = makeCompetition({ id: 'vet-m-foil', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL })
+    const otherWeapon = makeCompetition({ id: 'vet-m-epee', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.EPEE })
 
-    const sr = makeScheduleResult('div1-m-epee', 0)
-    const state = makeGlobalState({ 'div1-m-epee': { ...sr } })
+    const sr = makeScheduleResult('vet-m-epee', 0)
+    const state = makeGlobalState({ 'vet-m-epee': { ...sr } })
     const allComps = [comp, otherWeapon]
 
     const penalty = crossWeaponSameDemographicPenalty(comp, 0, state, allComps)
@@ -647,13 +647,13 @@ describe('crossWeaponSameDemographicPenalty', () => {
   })
 
   it('same gender+category, different weapon, two competing comps on same day → 0.4', () => {
-    const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
-    const epee1 = makeCompetition({ id: 'div1-m-epee-1', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE })
-    const epee2 = makeCompetition({ id: 'div1-m-epee-2', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE })
+    const comp = makeCompetition({ id: 'vet-m-foil', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL })
+    const epee1 = makeCompetition({ id: 'vet-m-epee-1', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.EPEE })
+    const epee2 = makeCompetition({ id: 'vet-m-epee-2', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.EPEE })
 
     const state = makeGlobalState({
-      'div1-m-epee-1': { ...makeScheduleResult('div1-m-epee-1', 0) },
-      'div1-m-epee-2': { ...makeScheduleResult('div1-m-epee-2', 0) },
+      'vet-m-epee-1': { ...makeScheduleResult('vet-m-epee-1', 0) },
+      'vet-m-epee-2': { ...makeScheduleResult('vet-m-epee-2', 0) },
     })
     const allComps = [comp, epee1, epee2]
 

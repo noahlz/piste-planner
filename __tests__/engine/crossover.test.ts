@@ -75,10 +75,10 @@ describe('crossoverPenalty', () => {
     // Soft penalties (0.3, 0.6, 1.0) reflect how closely related two categories are;
     // higher weight = stronger scheduling conflict.
     {
-      label: 'Same gender, same weapon, CADET↔DIV2 → 1.0',
+      label: 'Same gender, same weapon, CADET↔DIV2 → 0.8',
       c1: makeComp('a', Category.CADET, Gender.WOMEN, Weapon.EPEE),
       c2: makeComp('b', Category.DIV2, Gender.WOMEN, Weapon.EPEE),
-      expected: 1.0,
+      expected: 0.8,
     },
     {
       label: 'Same gender, different weapon, Y10↔Y12 → 0.0',
@@ -87,10 +87,10 @@ describe('crossoverPenalty', () => {
       expected: 0.0,
     },
     {
-      label: 'Same gender, same weapon, VET↔DIV1 → 0.3',
+      label: 'Same gender, same weapon, VET↔DIV1 → 0.8',
       c1: makeComp('a', Category.VETERAN, Gender.WOMEN, Weapon.SABRE),
       c2: makeComp('b', Category.DIV1, Gender.WOMEN, Weapon.SABRE),
-      expected: 0.3,
+      expected: 0.8,
     },
     {
       label: 'Same gender, same weapon, Y14↔DIV1A → 0.6',

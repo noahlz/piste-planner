@@ -154,8 +154,7 @@ These factors influence day assignment through a weighted penalty system. The au
   - Y12 → Y14: 0.8 (nearly all Y12 fencers also enter Y14)
   - Cadet → Junior: 0.8 (typical overlap at NACs)
   - Junior → Div 1A: 0.8 (almost always)
-  - Veteran → Div 1: 0.3 (moderate overlap)
-  - Div 1 → Div 1A: 0.3 (moderate overlap)
+  - Veteran → Div 1: 0.8 (high overlap at NACs)
 - Two-hop indirect relationships computed automatically, capped at 0.3
 - When two high-crossover competitions are on the same day within 30 minutes: **strong penalty** (10.0)
 - Lower crossover within 30 minutes: **moderate penalty** (4.0)
@@ -566,6 +565,12 @@ Selecting the tournament type enables / disables events available in the tournam
 
 - Cadet and Junior individual events
 - Default 100% advancement to DE
+- Can be combined with ROC and RYC
+
+### SJCC (Super Junior-Cadet Circuit)
+
+- Cadet and Junior individual events (identical to RJCC)
+- 100% advancement to DE
 - Can be combined with ROC and RYC
 
 ### Gender Equity

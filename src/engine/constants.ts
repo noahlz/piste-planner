@@ -1,4 +1,4 @@
-import { Category, CutMode, EventType, TournamentType, VideoPolicy, Weapon } from './types.ts'
+import { Category, CutMode, EventType, TournamentType, VetAgeGroup, VideoPolicy, Weapon } from './types.ts'
 
 // ──────────────────────────────────────────────
 // Scheduling time constants (all values in minutes from midnight)
@@ -10,7 +10,7 @@ export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start af
 export const LATEST_START_OFFSET = 480 // offset from DAY_START to LATEST_START
 export const SLOT_MINS = 30
 export const DAY_LENGTH_MINS = 840 // DAY_END_MINS - DAY_START_MINS
-export const ADMIN_GAP_MINS = 15
+export const ADMIN_GAP_MINS = 30
 export const FLIGHT_BUFFER_MINS = 15
 export const THRESHOLD_MINS = 10
 
@@ -180,48 +180,61 @@ export const REGIONAL_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>>
 // Used to detect scheduling conflicts between same-gender competitions.
 // ──────────────────────────────────────────────
 
+// Maximum edge weight is 0.8 (capped per METHODOLOGY.md).
+// Two-hop indirect edges are computed in crossover.ts, capped at 0.3.
 export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>> = {
-  [Category.Y8]: { [Category.Y10]: 1.0 },
-  [Category.Y10]: { [Category.Y12]: 1.0 },
-  [Category.Y12]: { [Category.Y14]: 1.0 },
+  [Category.Y8]: { [Category.Y10]: 0.8 },
+  [Category.Y10]: { [Category.Y12]: 0.8 },
+  [Category.Y12]: { [Category.Y14]: 0.8 },
   [Category.Y14]: {
-    [Category.CADET]: 1.0,
-    [Category.DIV2]: 1.0,
-    [Category.DIV3]: 1.0,
+    [Category.CADET]: 0.8,
+    [Category.DIV2]: 0.8,
+    [Category.DIV3]: 0.8,
     [Category.DIV1A]: 0.6,
   },
   [Category.CADET]: {
-    [Category.JUNIOR]: 1.0,
-    [Category.DIV1]: 1.0,
-    [Category.DIV2]: 1.0,
-    [Category.DIV3]: 1.0,
+    [Category.JUNIOR]: 0.8,
+    [Category.DIV1]: 0.8,
+    [Category.DIV2]: 0.8,
+    [Category.DIV3]: 0.8,
     [Category.DIV1A]: 0.6,
   },
-  [Category.JUNIOR]: { [Category.DIV1]: 1.0, [Category.DIV1A]: 0.3 },
+  [Category.JUNIOR]: { [Category.DIV1]: 0.8, [Category.DIV1A]: 0.8 },
   [Category.VETERAN]: {
-    [Category.DIV1]: 0.3,
-    [Category.DIV2]: 1.0,
-    [Category.DIV3]: 1.0,
-    [Category.DIV1A]: 1.0,
+    [Category.DIV1]: 0.8,
+    [Category.DIV2]: 0.8,
+    [Category.DIV3]: 0.8,
+    [Category.DIV1A]: 0.8,
   },
-  [Category.DIV3]: { [Category.DIV2]: 1.0, [Category.DIV1A]: 1.0 },
-  [Category.DIV2]: { [Category.DIV1A]: 1.0 },
-  [Category.DIV1]: { [Category.DIV1A]: 0.3 },
+  [Category.DIV3]: { [Category.DIV2]: 0.8, [Category.DIV1A]: 0.8 },
+  [Category.DIV2]: { [Category.DIV1A]: 0.8 },
+  // DIV1→DIV1A removed: Div 1 is NAC-only, Div 1A is ROC-only — never coexist in a tournament
+  [Category.DIV1]: {},
   [Category.DIV1A]: {},
 }
 
 // ──────────────────────────────────────────────
-// Group 1 mandatory same-day pairings (both competitions must be scheduled same day)
+// Group 1 mandatory different-day separations (Ops Manual Ch.4, pp.26–27).
+// Pairs listed here return Infinity penalty for same-day placement.
+// Y8/Y10 intentionally omitted — Y8 CAN and SHOULD be on the same day as Y10.
+// DIV1/CADET moved to SOFT_SEPARATION_PAIRS — "allowed in rare cases."
 // ──────────────────────────────────────────────
 
 export const GROUP_1_MANDATORY: [Category, Category][] = [
   [Category.DIV1, Category.JUNIOR],
-  [Category.DIV1, Category.CADET],
   [Category.JUNIOR, Category.CADET],
-  [Category.Y8, Category.Y10],
   [Category.Y10, Category.Y12],
   [Category.Y12, Category.Y14],
   [Category.Y14, Category.CADET],
+]
+
+// ──────────────────────────────────────────────
+// Soft separation pairs: high penalty but not hard-blocked.
+// DIV1↔CADET is "allowed in rare cases" per Ops Manual.
+// ──────────────────────────────────────────────
+
+export const SOFT_SEPARATION_PAIRS: { pair: [Category, Category]; penalty: number }[] = [
+  { pair: [Category.DIV1, Category.CADET], penalty: 5.0 },
 ]
 
 // ──────────────────────────────────────────────
@@ -268,5 +281,81 @@ export const REGIONAL_QUALIFIER_TYPES: ReadonlySet<string> = new Set<string>([
   TournamentType.RJCC,
   TournamentType.ROC,
   TournamentType.SYC,
+  TournamentType.SJCC,
+])
+
+// ──────────────────────────────────────────────
+// High crossover threshold — edges at or above this trigger stronger penalties
+// in dayAssignment.ts (same-time 10.0, early-start 5.0/2.0).
+// ──────────────────────────────────────────────
+
+export const HIGH_CROSSOVER_THRESHOLD = 0.8
+
+// ──────────────────────────────────────────────
+// Video stage round: the DE round at which video replay begins per category.
+// At NACs these are guaranteed; at other tournaments they're best-effort.
+// (Ops Manual Ch.4, p.25)
+// ──────────────────────────────────────────────
+
+type VideoStageKey = Category | `${Category}:${VetAgeGroup}`
+
+export const VIDEO_STAGE_ROUND: Partial<Record<VideoStageKey, number>> = {
+  [Category.DIV1]: 16,
+  [Category.JUNIOR]: 16,
+  [Category.CADET]: 16,
+  [Category.Y10]: 8,
+  [Category.Y12]: 8,
+  [Category.Y14]: 8,
+  [`${Category.VETERAN}:${VetAgeGroup.VET50}`]: 8,
+  [`${Category.VETERAN}:${VetAgeGroup.VET60}`]: 8,
+  [`${Category.VETERAN}:${VetAgeGroup.VET70}`]: 8,
+  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: 4,
+  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: 4,
+  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: 4,
+  [Category.DIV1A]: 4,
+  [Category.DIV2]: 4,
+  [Category.DIV3]: 4,
+}
+
+// ──────────────────────────────────────────────
+// Flighting eligibility — only these categories with 200+ fencers may be flighted.
+// (METHODOLOGY.md §Flighting)
+// ──────────────────────────────────────────────
+
+export const FLIGHTING_ELIGIBLE_CATEGORIES: ReadonlySet<Category> = new Set<Category>([
+  Category.CADET,
+  Category.JUNIOR,
+  Category.DIV1,
+])
+
+export const FLIGHTING_MIN_FENCERS = 200
+
+// ──────────────────────────────────────────────
+// Individual/Team hard blocks: pairs that MUST NOT be on the same day
+// (same weapon and gender). (METHODOLOGY.md §Individual/Team Separation)
+// ──────────────────────────────────────────────
+
+export const INDIV_TEAM_HARD_BLOCKS: { indivCategory: Category; teamCategory: Category }[] = [
+  { indivCategory: Category.VETERAN, teamCategory: Category.VETERAN },
+  { indivCategory: Category.DIV1, teamCategory: Category.JUNIOR },
+  { indivCategory: Category.JUNIOR, teamCategory: Category.DIV1 },
+]
+
+// ──────────────────────────────────────────────
+// Regional cut overrides: at ROC/SYC/RJCC/SJCC, these categories use 100% advancement
+// instead of the default 20% cut. (METHODOLOGY.md §Default Cuts by Age Category)
+// ──────────────────────────────────────────────
+
+export const REGIONAL_CUT_OVERRIDES: Partial<Record<Category, { mode: CutMode; value: number }>> = {
+  [Category.Y14]: { mode: CutMode.DISABLED, value: 100 },
+  [Category.CADET]: { mode: CutMode.DISABLED, value: 100 },
+  [Category.JUNIOR]: { mode: CutMode.DISABLED, value: 100 },
+  [Category.DIV1]: { mode: CutMode.DISABLED, value: 100 },
+}
+
+export const REGIONAL_CUT_TOURNAMENT_TYPES: ReadonlySet<string> = new Set<string>([
+  TournamentType.ROC,
+  TournamentType.SYC,
+  TournamentType.RJCC,
   TournamentType.SJCC,
 ])
