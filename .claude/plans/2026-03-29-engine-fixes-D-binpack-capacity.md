@@ -140,10 +140,16 @@ In `totalDayPenalty()`, add two new penalty components (after existing penalties
   - > 0.95 → 20.0 (strongly discourage, but not Infinity — the engine can still override at higher relaxation levels)
 
 **Video-strip capacity penalty** (only for events with STAGED_DE_BLOCKS):
-- Count staged-DE events already on this day
-- Each additional staged-DE event adds serialized video time; estimate serialized hours
-- If serialized video hours > 70% of day → penalty 5.0
-- If > 90% → penalty 15.0
+
+Video strips are shared between events when capacity allows — two events can overlap on video strips as long as there are enough strips for both at the same time. Staged DE phases naturally release strips as rounds progress (R16 needs 8 strips, R8 needs 4, QF needs 2, finals needs 1), so later rounds free up strips for other events. The engine already handles this correctly at the strip-scheduling level via per-strip `strip_free_at` tracking.
+
+For the day-assignment penalty, estimate **peak video strip demand** rather than counting events:
+- For each staged-DE event already on this day, compute its video strip demand profile over time (R16 strips × R16 duration, R8 strips × R8 duration, etc.)
+- Estimate the candidate event's video strip demand profile
+- Find the peak concurrent video strip demand if the candidate were added
+- If peak demand > `video_strips_total`: penalty 15.0 (guaranteed contention — events will serialize waiting for strips)
+- If peak demand > 0.7 × `video_strips_total`: penalty 5.0 (tight — small scheduling shifts could cause contention)
+- If peak demand ≤ 0.7 × `video_strips_total`: no video penalty (plenty of room for overlap)
 
 - [ ] **Step 4: Run dayAssignment tests to verify pass**
 
@@ -175,7 +181,7 @@ Update METHODOLOGY.md with the new bin-pack capacity model:
     - VET Combined/60/70/80 (0.6) — lightest, 2h start offset (medication timing for older athletes)
     - DIV1A/DIV2/DIV3 (0.7) — lighter, can start early
   - Document the capacity penalty curve (thresholds at 60%, 80%, 95%)
-  - Document video-strip serialization as correct behavior (block allocation, not dynamic sharing) — update or replace the existing "Correct behavior" note with the full model
+  - Document the cascading video strip release model: staged DE phases release strips as rounds progress (R16→R8→QF→Finals), freed strips become available to other events. Multiple events can overlap on video strips when total concurrent demand fits within `video_strips_total`. Update or replace the existing "Correct behavior: Staged DE serializes video strip usage" note with the full model
 - Move "Limitation: Day assignment is penalty-driven, not capacity-aware" from "Known Engine Limitations" to "Resolved" section.
 - Update integration test header comments — remove limitation notes that no longer apply.
 - Run full integration suite — verify all 7 scenarios pass and compare ERROR bottleneck counts to pre-fix baseline.
