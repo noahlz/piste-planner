@@ -19,7 +19,7 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
     strips_total: 12,
     video_strips_total: 2,
     referee_availability: [],
-    allow_sabre_ref_fillin: false,
+    allow_saber_ref_fillin: false,
     pod_captain_override: PodCaptainOverride.AUTO,
     DAY_START_MINS: 480,
     DAY_END_MINS: 1320,
@@ -45,8 +45,8 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
   }
 }
 
-function makeAvailability(day: number, foil_epee_refs: number, sabre_refs: number): DayRefereeAvailability {
-  return { day, foil_epee_refs, sabre_refs, source: 'ACTUAL' }
+function makeAvailability(day: number, foil_epee_refs: number, saber_refs: number): DayRefereeAvailability {
+  return { day, foil_epee_refs, saber_refs, source: 'ACTUAL' }
 }
 
 // Minimal Competition factory — only fields refs.ts needs
@@ -133,19 +133,19 @@ describe('refsAvailableOnDay', () => {
     ],
   })
 
-  it('SABRE weapon → sabre_refs only', () => {
+  it('SABRE weapon → saber_refs only', () => {
     expect(refsAvailableOnDay(0, Weapon.SABRE, config)).toBe(5)
   })
 
-  it('FOIL weapon → foil_epee_refs + sabre_refs (sabre refs cross over)', () => {
+  it('FOIL weapon → foil_epee_refs + saber_refs (saber refs cross over)', () => {
     expect(refsAvailableOnDay(0, Weapon.FOIL, config)).toBe(15)
   })
 
-  it('EPEE weapon → foil_epee_refs + sabre_refs (sabre refs cross over)', () => {
+  it('EPEE weapon → foil_epee_refs + saber_refs (saber refs cross over)', () => {
     expect(refsAvailableOnDay(0, Weapon.EPEE, config)).toBe(15)
   })
 
-  it('day 1, SABRE → 3 sabre refs only', () => {
+  it('day 1, SABRE → 3 saber refs only', () => {
     expect(refsAvailableOnDay(1, Weapon.SABRE, config)).toBe(3)
   })
 
@@ -243,15 +243,15 @@ describe('calculateOptimalRefs', () => {
     const comp = makeCompetition({ id: 'foil-1', weapon: Weapon.FOIL, fencer_count: 20, earliest_start: 0, latest_end: 840 })
     const result = calculateOptimalRefs([comp], config)
     expect(result[0].foil_epee_refs).toBe(5)
-    expect(result[0].sabre_refs).toBe(0)
+    expect(result[0].saber_refs).toBe(0)
   })
 
-  it('sabre competition → sabre demand = 5, foil_epee demand = 0', () => {
+  it('saber competition → saber demand = 5, foil_epee demand = 0', () => {
     const config = makeConfig({ days_available: 1 })
-    // 20-fencer sabre comp: same structure as foil, peak from DE phase = 5
-    const comp = makeCompetition({ id: 'sabre-1', weapon: Weapon.SABRE, fencer_count: 20, earliest_start: 0, latest_end: 840 })
+    // 20-fencer saber comp: same structure as foil, peak from DE phase = 5
+    const comp = makeCompetition({ id: 'saber-1', weapon: Weapon.SABRE, fencer_count: 20, earliest_start: 0, latest_end: 840 })
     const result = calculateOptimalRefs([comp], config)
-    expect(result[0].sabre_refs).toBe(5)
+    expect(result[0].saber_refs).toBe(5)
     expect(result[0].foil_epee_refs).toBe(0)
   })
 
@@ -271,18 +271,18 @@ describe('calculateOptimalRefs', () => {
     ]
     const result = calculateOptimalRefs(comps, config)
     expect(result[0].foil_epee_refs).toBe(30)
-    expect(result[0].sabre_refs).toBe(0)
+    expect(result[0].saber_refs).toBe(0)
   })
 
-  it('2 sabre competitions on day 0 → summed sabre demand = 10', () => {
+  it('2 saber competitions on day 0 → summed saber demand = 10', () => {
     const config = makeConfig({ days_available: 1 })
-    // Each 18-fencer sabre comp: peak = max(3 pools, 5 DE refs) = 5. Sum = 10.
+    // Each 18-fencer saber comp: peak = max(3 pools, 5 DE refs) = 5. Sum = 10.
     const comps = [
-      makeCompetition({ id: 'sabre-1', weapon: Weapon.SABRE, fencer_count: 18 }),
-      makeCompetition({ id: 'sabre-2', weapon: Weapon.SABRE, fencer_count: 18 }),
+      makeCompetition({ id: 'saber-1', weapon: Weapon.SABRE, fencer_count: 18 }),
+      makeCompetition({ id: 'saber-2', weapon: Weapon.SABRE, fencer_count: 18 }),
     ]
     const result = calculateOptimalRefs(comps, config)
-    expect(result[0].sabre_refs).toBe(10)
+    expect(result[0].saber_refs).toBe(10)
     expect(result[0].foil_epee_refs).toBe(0)
   })
 
@@ -290,9 +290,9 @@ describe('calculateOptimalRefs', () => {
     const config = makeConfig({ days_available: 2 })
     const result = calculateOptimalRefs([], config)
     expect(result[0].foil_epee_refs).toBe(0)
-    expect(result[0].sabre_refs).toBe(0)
+    expect(result[0].saber_refs).toBe(0)
     expect(result[1].foil_epee_refs).toBe(0)
-    expect(result[1].sabre_refs).toBe(0)
+    expect(result[1].saber_refs).toBe(0)
   })
 
   it('known small config: 1 foil comp, 3 pools → pool demand is 3, DE demand may exceed', () => {

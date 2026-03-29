@@ -69,21 +69,21 @@ function isGroup1Mandatory(a: Category, b: Category): boolean {
 /**
  * Returns the penalty for scheduling two competitions on the same day.
  * Returns Infinity when the pairing would be a hard conflict.
+ *
+ * GROUP_1_MANDATORY is checked before the PENALTY_MATRIX because some mandatory
+ * pairs (e.g. Div1↔Div1A) have no edge in CROSSOVER_GRAPH and would otherwise
+ * return 0 before the hard-conflict check is reached.
  */
 export function crossoverPenalty(c1: CompFields, c2: CompFields): number {
   if (c1.category === c2.category && c1.gender === c2.gender && c1.weapon === c2.weapon) {
     return Infinity
   }
   if (c1.gender !== c2.gender) return 0.0
-
-  const basePenalty = PENALTY_MATRIX.get(pairKey(c1.category, c2.category)) ?? 0.0
-  if (basePenalty === 0.0) return 0.0
-
   if (c1.weapon !== c2.weapon) return 0.0
 
   if (isGroup1Mandatory(c1.category, c2.category)) return Infinity
 
-  return basePenalty
+  return PENALTY_MATRIX.get(pairKey(c1.category, c2.category)) ?? 0.0
 }
 
 // ──────────────────────────────────────────────

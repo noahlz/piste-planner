@@ -149,7 +149,7 @@ export interface Strip {
 export interface DayRefereeAvailability {
   day: number
   foil_epee_refs: number
-  sabre_refs: number
+  saber_refs: number
   source: 'OPTIMAL' | 'ACTUAL'
 }
 
@@ -194,7 +194,7 @@ export interface TournamentConfig {
   strips_total: number
   video_strips_total: number
   referee_availability: DayRefereeAvailability[]
-  allow_sabre_ref_fillin: boolean
+  allow_saber_ref_fillin: boolean
   pod_captain_override: PodCaptainOverride
   DAY_START_MINS: number
   DAY_END_MINS: number
@@ -227,13 +227,13 @@ export interface FlightingGroup {
 
 export interface ReleaseEvent {
   time: number
-  type: 'foil_epee' | 'sabre' | 'fillin'
+  type: 'foil_epee' | 'saber' | 'fillin'
   count: number
 }
 
 export interface RefsInUseByDay {
   foil_epee_in_use: number
-  sabre_in_use: number
+  saber_in_use: number
   fillin_in_use: number
   release_events: ReleaseEvent[]
 }
@@ -290,7 +290,7 @@ export interface ScheduleResult {
   pool_duration_actual: number
   de_duration_baseline: number
   de_duration_actual: number
-  sabre_fillin_used: boolean
+  saber_fillin_used: boolean
   constraint_relaxation_level: number
   accepted_warnings: AcceptedWarning[]
 }

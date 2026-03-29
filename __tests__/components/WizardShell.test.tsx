@@ -166,28 +166,30 @@ describe('Layout toggle', () => {
     expect(useStore.getState().layoutMode).toBe('wizard')
   })
 
-  it('switching to wizard layout renders wizard content', () => {
+  it('switching to wizard layout renders wizard content', async () => {
     useStore.getState().setLayoutMode('kitchen-sink')
-    const { rerender } = render(<App />)
+    render(<App />)
 
     // Radix Tabs doesn't reliably fire onValueChange with fireEvent in jsdom;
-    // call the store action directly and re-render to verify the UI effect.
-    useStore.getState().setLayoutMode('wizard')
-    rerender(<App />)
+    // call the store action directly and let React process the re-render inside act().
+    await act(() => {
+      useStore.getState().setLayoutMode('wizard')
+    })
 
     expect(useStore.getState().layoutMode).toBe('wizard')
     // Wizard step labels should now be visible in the UI
     expect(screen.getByText('Tournament')).toBeInTheDocument()
   })
 
-  it('switching to kitchen-sink layout hides wizard content', () => {
+  it('switching to kitchen-sink layout hides wizard content', async () => {
     useStore.getState().setLayoutMode('wizard')
-    const { rerender } = render(<App />)
+    render(<App />)
 
     // Radix Tabs doesn't reliably fire onValueChange with fireEvent in jsdom;
-    // call the store action directly and re-render to verify the UI effect.
-    useStore.getState().setLayoutMode('kitchen-sink')
-    rerender(<App />)
+    // call the store action directly and let React process the re-render inside act().
+    await act(() => {
+      useStore.getState().setLayoutMode('kitchen-sink')
+    })
 
     expect(useStore.getState().layoutMode).toBe('kitchen-sink')
     // Wizard step labels should no longer be visible
@@ -268,8 +270,8 @@ describe('Stale banner', () => {
     useStore.getState().setDays(2)
     useStore.getState().setStrips(12)
     useStore.getState().applyTemplate('RYC Weekend')
-    useStore.getState().setDayRefs(0, { foil_epee_refs: 8, sabre_refs: 4 })
-    useStore.getState().setDayRefs(1, { foil_epee_refs: 8, sabre_refs: 4 })
+    useStore.getState().setDayRefs(0, { foil_epee_refs: 8, saber_refs: 4 })
+    useStore.getState().setDayRefs(1, { foil_epee_refs: 8, saber_refs: 4 })
     useStore.getState().markStale({ scheduleStale: true })
 
     // Verify no prior output

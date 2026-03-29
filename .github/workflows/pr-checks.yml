@@ -9,8 +9,7 @@ on:
       - '**/*.json'
       - '**/*.css'
       - 'pnpm-lock.yaml'
-    paths-ignore:
-      - '.claude/**'
+      - '!.claude/**'
 
 jobs:
   test:

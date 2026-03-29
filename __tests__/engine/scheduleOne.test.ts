@@ -383,7 +383,7 @@ describe('scheduleCompetition — deadline breach', () => {
       days_available: 1,
       LATEST_START_OFFSET: 840,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
       ],
     })
     const comp = makeCompetition({
@@ -407,23 +407,23 @@ describe('scheduleCompetition — deadline breach', () => {
   })
 
   it('successfully reschedules to an earlier slot and emits DEADLINE_BREACH warning', () => {
-    // Day is 240 min. With earliest_start=180, pool phase starts at 180 and
-    // overruns dayEnd (180 + ~90 = 270 > 240). findEarlierSlotSameDay finds
-    // time 0 (strips free), retry from 0 succeeds (~90 + 15 + 60 = 165 < 240).
+    // Day is 255 min. With earliest_start=180, pool phase starts at 180 and
+    // overruns dayEnd (180 + ~90 = 270 > 255). findEarlierSlotSameDay finds
+    // time 0 (strips free), retry from 0 succeeds (~90 + 30 + 60 = 180 < 255).
     const config = makeConfig({
-      DAY_LENGTH_MINS: 240,
-      LATEST_START_OFFSET: 240,
+      DAY_LENGTH_MINS: 255,
+      LATEST_START_OFFSET: 255,
       days_available: 1,
       MAX_RESCHEDULE_ATTEMPTS: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
       ],
     })
     const comp = makeCompetition({
       id: 'MF-RESCHEDULE',
       fencer_count: 24,
       earliest_start: 180, // forces late pool start → overruns dayEnd
-      latest_end: 240,
+      latest_end: 255,
       strips_allocated: 8,
     })
 
@@ -457,7 +457,7 @@ describe('scheduleCompetition — deadline breach', () => {
       dayConfigs: [{ day_start_time: 0, day_end_time: 30 }],
       days_available: 1,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
       ],
     })
     const comp = makeCompetition({
@@ -494,8 +494,8 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
       days_available: 2,
       MAX_RESCHEDULE_ATTEMPTS: 0, // no retries — forces immediate SAME_DAY_VIOLATION
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
       ],
     })
     const comp = makeCompetition({
@@ -525,7 +525,7 @@ describe('scheduleCompetition — individual+team sequencing', () => {
     const config = makeConfig({
       days_available: 1,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
       ],
     })
 

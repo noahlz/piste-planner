@@ -97,43 +97,43 @@ describe('constraintScore', () => {
     expect(score).toBeGreaterThan(looseScore)
   })
 
-  it('sabre competition with low sabre ref availability → higher score', () => {
-    const sabreComp = makeCompetition({
-      id: 'cadet-m-sabre',
+  it('saber competition with low saber ref availability → higher score', () => {
+    const saberComp = makeCompetition({
+      id: 'cadet-m-saber',
       category: Category.CADET,
       gender: Gender.MEN,
       weapon: Weapon.SABRE,
     })
 
-    // Many sabre competitions competing for few sabre refs
+    // Many saber competitions competing for few saber refs
     const manySabreComps: Competition[] = [
       makeCompetition({ id: 's1', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.SABRE }),
       makeCompetition({ id: 's2', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.SABRE }),
       makeCompetition({ id: 's3', category: Category.CADET, gender: Gender.WOMEN, weapon: Weapon.SABRE }),
       makeCompetition({ id: 's4', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.SABRE }),
-      sabreComp,
+      saberComp,
     ]
 
-    // Low sabre ref config (1 sabre ref, high scarcity)
+    // Low saber ref config (1 saber ref, high scarcity)
     const lowSabreConfig = makeConfig({
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 1, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, sabre_refs: 1, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 20, sabre_refs: 1, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, saber_refs: 1, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, saber_refs: 1, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 20, saber_refs: 1, source: 'ACTUAL' },
       ],
     })
 
     // Same weapon, abundant refs
     const highSabreConfig = makeConfig({
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 20, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, sabre_refs: 20, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 20, sabre_refs: 20, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, saber_refs: 20, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, saber_refs: 20, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 20, saber_refs: 20, source: 'ACTUAL' },
       ],
     })
 
-    const lowScore = constraintScore(sabreComp, manySabreComps, lowSabreConfig)
-    const highScore = constraintScore(sabreComp, manySabreComps, highSabreConfig)
+    const lowScore = constraintScore(saberComp, manySabreComps, lowSabreConfig)
+    const highScore = constraintScore(saberComp, manySabreComps, highSabreConfig)
     expect(lowScore).toBeGreaterThan(highScore)
   })
 
@@ -400,23 +400,21 @@ describe('earlyStartPenalty', () => {
     // Pattern B fires when xpen >= 1.0; Pattern C fires independently.
     // The additive 2.0 from Pattern C is verified by comparing with a hypothetical
     // non-team pair: if we remove the ind+team relationship, only Pattern B (5.0) remains.
-    const div1AComp = makeCompetition({
-      id: 'div1a-m-foil',
-      category: Category.DIV1A, // DIV1↔DIV1A is soft crossover < 1.0 (0.3)
+    const y10Comp = makeCompetition({
+      id: 'y10-m-foil',
+      category: Category.Y10, // DIV1↔Y10 has zero crossover (no graph path)
       gender: Gender.MEN,
       weapon: Weapon.FOIL,
       event_type: EventType.INDIVIDUAL,
     })
-    const sr2 = makeScheduleResult('div1a-m-foil', 0)
+    const sr2 = makeScheduleResult('y10-m-foil', 0)
     sr2.pool_start = 480
-    const state2 = makeGlobalState({ 'div1a-m-foil': { ...sr2 } })
-    const allComps2 = [teamComp, div1AComp]
+    const state2 = makeGlobalState({ 'y10-m-foil': { ...sr2 } })
+    const allComps2 = [teamComp, y10Comp]
 
-    // Only Pattern C applies (ind+team same demo? No — different category now)
-    // DIV1 crossover DIV1A = 0.3 < 1.0 → Pattern B does NOT fire
-    // But Pattern C requires same category → doesn't fire either → 0.0
+    // DIV1↔Y10 crossover = 0.0 → Pattern B does NOT fire
+    // Pattern C requires same category → doesn't fire either → 0.0
     const penaltyNoPatternsB = earlyStartPenalty(teamComp, 1, 1320, state2, allComps2, configWithDayConfigs)
-    // DIV1 crossover with DIV1A = 0.3 < 1.0, so neither Pattern B nor C → 0.0
     expect(penaltyNoPatternsB).toBe(0.0)
   })
 
@@ -436,22 +434,22 @@ describe('earlyStartPenalty', () => {
 // ──────────────────────────────────────────────
 
 describe('weaponBalancePenalty', () => {
-  it('all ROW weapons (foil+sabre) on day → 0.5 penalty', () => {
+  it('all ROW weapons (foil+saber) on day → 0.5 penalty', () => {
     const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
 
-    // Day already has foil and sabre (both ROW), no epee
+    // Day already has foil and saber (both ROW), no epee
     const foilSr = { ...makeScheduleResult('foil-other', 0) }
-    const sabreSr = { ...makeScheduleResult('sabre-other', 0) }
+    const saberSr = { ...makeScheduleResult('saber-other', 0) }
 
     const state = makeGlobalState({
       'foil-other': foilSr,
-      'sabre-other': sabreSr,
+      'saber-other': saberSr,
     })
 
     // Need allComps to look up weapon for each schedule entry
     const allComps: Competition[] = [
       makeCompetition({ id: 'foil-other', weapon: Weapon.FOIL, category: Category.JUNIOR, gender: Gender.MEN }),
-      makeCompetition({ id: 'sabre-other', weapon: Weapon.SABRE, category: Category.CADET, gender: Gender.MEN }),
+      makeCompetition({ id: 'saber-other', weapon: Weapon.SABRE, category: Category.CADET, gender: Gender.MEN }),
       comp,
     ]
 
@@ -536,7 +534,7 @@ describe('assignDay', () => {
     // Three unrelated competitions (different genders/weapons) → no conflicts
     const comp1 = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, fencer_count: 30 })
     const comp2 = makeCompetition({ id: 'div1-w-epee', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.EPEE, fencer_count: 30 })
-    const comp3 = makeCompetition({ id: 'cadet-m-sabre', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE, fencer_count: 30 })
+    const comp3 = makeCompetition({ id: 'cadet-m-saber', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE, fencer_count: 30 })
 
     const config = makeConfig({ days_available: 2 })
     const state = makeGlobalState()
@@ -635,11 +633,11 @@ describe('assignDay', () => {
 
 describe('crossWeaponSameDemographicPenalty', () => {
   it('same gender+category, different weapon on same day → 0.2 per competing comp', () => {
-    const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
-    const otherWeapon = makeCompetition({ id: 'div1-m-epee', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE })
+    const comp = makeCompetition({ id: 'vet-m-foil', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL })
+    const otherWeapon = makeCompetition({ id: 'vet-m-epee', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.EPEE })
 
-    const sr = makeScheduleResult('div1-m-epee', 0)
-    const state = makeGlobalState({ 'div1-m-epee': { ...sr } })
+    const sr = makeScheduleResult('vet-m-epee', 0)
+    const state = makeGlobalState({ 'vet-m-epee': { ...sr } })
     const allComps = [comp, otherWeapon]
 
     const penalty = crossWeaponSameDemographicPenalty(comp, 0, state, allComps)
@@ -647,13 +645,13 @@ describe('crossWeaponSameDemographicPenalty', () => {
   })
 
   it('same gender+category, different weapon, two competing comps on same day → 0.4', () => {
-    const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
-    const epee1 = makeCompetition({ id: 'div1-m-epee-1', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE })
-    const epee2 = makeCompetition({ id: 'div1-m-epee-2', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE })
+    const comp = makeCompetition({ id: 'vet-m-foil', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL })
+    const epee1 = makeCompetition({ id: 'vet-m-epee-1', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.EPEE })
+    const epee2 = makeCompetition({ id: 'vet-m-epee-2', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.EPEE })
 
     const state = makeGlobalState({
-      'div1-m-epee-1': { ...makeScheduleResult('div1-m-epee-1', 0) },
-      'div1-m-epee-2': { ...makeScheduleResult('div1-m-epee-2', 0) },
+      'vet-m-epee-1': { ...makeScheduleResult('vet-m-epee-1', 0) },
+      'vet-m-epee-2': { ...makeScheduleResult('vet-m-epee-2', 0) },
     })
     const allComps = [comp, epee1, epee2]
 
@@ -684,6 +682,18 @@ describe('crossWeaponSameDemographicPenalty', () => {
     const penalty = crossWeaponSameDemographicPenalty(comp, 0, state, allComps)
     expect(penalty).toBe(0.0)
   })
+
+  it('non-VETERAN category, different weapon on same day → 0.0 (penalty is VETERAN-only)', () => {
+    const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
+    const otherWeapon = makeCompetition({ id: 'div1-m-epee', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE })
+
+    const sr = makeScheduleResult('div1-m-epee', 0)
+    const state = makeGlobalState({ 'div1-m-epee': { ...sr } })
+    const allComps = [comp, otherWeapon]
+
+    const penalty = crossWeaponSameDemographicPenalty(comp, 0, state, allComps)
+    expect(penalty).toBe(0.0)
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -707,9 +717,9 @@ describe('lastDayRefShortagePenalty', () => {
     const config = makeConfig({
       days_available: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
       ],
     })
     const state = makeGlobalState()
@@ -724,9 +734,9 @@ describe('lastDayRefShortagePenalty', () => {
     const config = makeConfig({
       days_available: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 5, sabre_refs: 3, source: 'ACTUAL' }, // last day — far below average
+        { day: 0, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 5, saber_refs: 3, source: 'ACTUAL' }, // last day — far below average
       ],
     })
     const state = makeGlobalState()
@@ -740,9 +750,9 @@ describe('lastDayRefShortagePenalty', () => {
     const config = makeConfig({
       days_available: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 5, sabre_refs: 3, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 5, saber_refs: 3, source: 'ACTUAL' },
       ],
     })
     const state = makeGlobalState()
@@ -756,9 +766,9 @@ describe('lastDayRefShortagePenalty', () => {
     const config = makeConfig({
       days_available: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 5, sabre_refs: 3, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 5, saber_refs: 3, source: 'ACTUAL' },
       ],
     })
     const state = makeGlobalState()

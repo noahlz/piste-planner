@@ -38,7 +38,7 @@ export function buildTournamentConfig(state: StoreState): {
 
   const referee_availability = buildRefereeAvailability(state.dayRefs)
 
-  const allow_sabre_ref_fillin = state.dayRefs.some(d => d.allow_sabre_ref_fillin)
+  const allow_saber_ref_fillin = state.dayRefs.some(d => d.allow_saber_ref_fillin)
 
   const config: TournamentConfig = {
     tournament_type: state.tournament_type,
@@ -47,7 +47,7 @@ export function buildTournamentConfig(state: StoreState): {
     strips_total: state.strips_total,
     video_strips_total: state.video_strips_total,
     referee_availability,
-    allow_sabre_ref_fillin,
+    allow_saber_ref_fillin,
     pod_captain_override: state.pod_captain_override,
     dayConfigs: state.dayConfigs,
 
@@ -93,7 +93,7 @@ function buildRefereeAvailability(
   return dayRefs.map((ref, i) => ({
     day: i,
     foil_epee_refs: ref.foil_epee_refs,
-    sabre_refs: ref.sabre_refs,
+    saber_refs: ref.saber_refs,
     source: 'ACTUAL' as const,
   }))
 }

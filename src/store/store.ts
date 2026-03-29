@@ -104,14 +104,14 @@ export interface UiSlice {
 
 export interface DayRefConfig {
   foil_epee_refs: number
-  sabre_refs: number
-  allow_sabre_ref_fillin: boolean
+  saber_refs: number
+  allow_saber_ref_fillin: boolean
 }
 
 const DEFAULT_DAY_REF_CONFIG: DayRefConfig = {
   foil_epee_refs: 0,
-  sabre_refs: 0,
-  allow_sabre_ref_fillin: false,
+  saber_refs: 0,
+  allow_saber_ref_fillin: false,
 }
 
 export interface RefereeSlice {
@@ -120,7 +120,7 @@ export interface RefereeSlice {
   manuallyEditedDays: Set<number>
 
   setDayRefs: (dayIndex: number, refs: Partial<DayRefConfig>) => void
-  toggleSabreFillin: (dayIndex: number) => void
+  toggleSaberFillin: (dayIndex: number) => void
   setOptimalRefs: (refs: DayRefConfig[]) => void
   suggestAllRefs: () => void
 }
@@ -274,7 +274,7 @@ function autoSuggestRefs(get: GetState, set: SetState) {
   let changed = false
   const updated = extended.map((dc, i) => {
     if (state.manuallyEditedDays.has(i)) return dc
-    if (dc.foil_epee_refs === suggestion.foil_epee_refs && dc.sabre_refs === suggestion.sabre_refs) return dc
+    if (dc.foil_epee_refs === suggestion.foil_epee_refs && dc.saber_refs === suggestion.saber_refs) return dc
     changed = true
     return { ...dc, ...suggestion }
   })
@@ -405,11 +405,11 @@ function createRefereeSlice(set: SetState, get: GetState): RefereeSlice {
       get().markStale({ scheduleStale: true })
     },
 
-    toggleSabreFillin: (dayIndex) => {
+    toggleSaberFillin: (dayIndex) => {
       set((state) => {
         const extended = ensureDayRefs(state.dayRefs, dayIndex + 1)
         const updated = extended.map((dc, i) =>
-          i === dayIndex ? { ...dc, allow_sabre_ref_fillin: !dc.allow_sabre_ref_fillin } : dc,
+          i === dayIndex ? { ...dc, allow_saber_ref_fillin: !dc.allow_saber_ref_fillin } : dc,
         )
         return { dayRefs: updated }
       })
@@ -431,8 +431,8 @@ function createRefereeSlice(set: SetState, get: GetState): RefereeSlice {
         set({
           optimalRefs: optimal.map((o) => ({
             foil_epee_refs: o.foil_epee_refs,
-            sabre_refs: o.sabre_refs,
-            allow_sabre_ref_fillin: false,
+            saber_refs: o.saber_refs,
+            allow_saber_ref_fillin: false,
           })),
         })
       }

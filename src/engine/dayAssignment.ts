@@ -16,7 +16,7 @@ import {
   dayStart,
 } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState, PoolStructure } from './types.ts'
-import { REST_DAY_PAIRS } from './constants.ts'
+import { HIGH_CROSSOVER_THRESHOLD, REST_DAY_PAIRS } from './constants.ts'
 import {
   crossoverPenalty,
   proximityPenalty,
@@ -56,7 +56,7 @@ type ConstraintLevel = (typeof CONSTRAINT_LEVELS)[number]
  * Components:
  * - crossover_count: how many other competitions conflict with this one
  * - window_tightness: 840 / (latest_end - earliest_start)
- * - sabre_scarcity: for SABRE weapon — ratio of sabre comps to min sabre refs
+ * - saber_scarcity: for SABRE weapon — ratio of saber comps to min saber refs
  * - video_scarcity: for STAGED_DE + REQUIRED video — ratio of video comps to video strips
  * - ref_weight: TWO→2.0, AUTO→1.0, ONE→0.5
  */
@@ -73,10 +73,10 @@ export function constraintScore(
   // Guard: avoid divide-by-zero for competitions with zero-width windows
   const windowTightness = windowMins > 0 ? 840 / windowMins : 840
 
-  const sabreComps = allCompetitions.filter(c => c.weapon === Weapon.SABRE).length
-  const sabreMin = Math.min(...config.referee_availability.map(r => r.sabre_refs))
-  const sabreScarcity =
-    competition.weapon === Weapon.SABRE ? sabreComps / Math.max(sabreMin, 1) : 0
+  const saberComps = allCompetitions.filter(c => c.weapon === Weapon.SABRE).length
+  const saberMin = Math.min(...config.referee_availability.map(r => r.saber_refs))
+  const saberScarcity =
+    competition.weapon === Weapon.SABRE ? saberComps / Math.max(saberMin, 1) : 0
 
   const videoCompsRequiring = allCompetitions.filter(
     c => c.de_mode === DeMode.STAGED_DE_BLOCKS && c.de_video_policy === VideoPolicy.REQUIRED,
@@ -94,7 +94,7 @@ export function constraintScore(
   }
   const refWeight = refWeightMap[competition.ref_policy] ?? 1.0
 
-  return crossoverCount + windowTightness + sabreScarcity + videoScarcity + refWeight
+  return crossoverCount + windowTightness + saberScarcity + videoScarcity + refWeight
 }
 
 // ──────────────────────────────────────────────
@@ -141,13 +141,13 @@ export function earlyStartPenalty(
     if (dayGap === 0) {
       // Pattern A: same day, both early start, high crossover
       const xpen = crossoverPenalty(competition, c2)
-      if (xpen >= 1.0) {
+      if (xpen >= HIGH_CROSSOVER_THRESHOLD) {
         total += 2.0
       }
     } else if (dayGap === 1) {
       // Pattern B: consecutive days, both early start, high crossover
       const xpen = crossoverPenalty(competition, c2)
-      if (xpen >= 1.0) {
+      if (xpen >= HIGH_CROSSOVER_THRESHOLD) {
         total += 5.0
       }
 
@@ -173,7 +173,7 @@ export function earlyStartPenalty(
 
 /**
  * Penalises unbalanced weapon distribution on a day.
- * If the proposed competition would make either ROW (foil+sabre) or epee
+ * If the proposed competition would make either ROW (foil+saber) or epee
  * have zero representation → +0.5 (minority group absent).
  */
 export function weaponBalancePenalty(
@@ -233,7 +233,9 @@ export function crossWeaponSameDemographicPenalty(
     const c2 = allCompetitions.find(c => c.id === compId)
     if (!c2) continue
 
+    // Cross-weapon overlap only meaningful for Veteran events (METHODOLOGY.md §Cross-Weapon)
     if (
+      competition.category === Category.VETERAN &&
       c2.gender === competition.gender &&
       c2.category === competition.category &&
       c2.weapon !== competition.weapon
@@ -356,8 +358,7 @@ export function totalDayPenalty(
     // Same-time penalty: always applied regardless of level
     const c2Start = sr.pool_start ?? null
     if (c2Start !== null && Math.abs(estimatedStart - c2Start) <= config.SAME_TIME_WINDOW_MINS && xpen > 0) {
-      // High crossover (≥1.0) → +10.0; low crossover → +4.0
-      total += xpen >= 1.0 ? 10.0 : 4.0
+      total += xpen >= HIGH_CROSSOVER_THRESHOLD ? 10.0 : 4.0
     }
 
     // Individual+Team ordering penalty (same demographic)
@@ -442,13 +443,13 @@ function estimateStartOnDay(
     availableRefs,
   )
 
-  const videoRequired = competition.de_video_policy === VideoPolicy.REQUIRED
-
+  // Pools never require video strips — only DE phases do.
+  // scheduleCompetition passes videoRequired=false for pool allocation.
   const result = earliestResourceWindow(
     competition.strips_allocated,
     refResolution.refs_needed,
     competition.weapon,
-    videoRequired,
+    false,
     notBefore,
     day,
     state,

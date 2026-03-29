@@ -27,7 +27,7 @@ import {
 import { computeBracketSize, calculateDeDuration, dePhasesForBracket, deBlockDurations } from './de.ts'
 import { refsAvailableOnDay } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
-import { earliestResourceWindow, allocateStrips, allocateRefs, allocateRefsForSabre, snapToSlot } from './resources.ts'
+import { earliestResourceWindow, allocateStrips, allocateRefs, allocateRefsForSaber, snapToSlot } from './resources.ts'
 import { assignDay, findEarlierSlotSameDay, SchedulingError } from './dayAssignment.ts'
 
 export function scheduleCompetition(
@@ -127,7 +127,7 @@ export function scheduleCompetition(
     pool_duration_actual: 0,
     de_duration_baseline: totalDeBase,
     de_duration_actual: 0,
-    sabre_fillin_used: false,
+    saber_fillin_used: false,
     constraint_relaxation_level: 0,
     accepted_warnings: [],
   }
@@ -732,15 +732,15 @@ function allocateBronzeBout(
   // Allocate bronze strip
   allocateStrips(state, [bronzeIdx], finalsEnd)
 
-  // Allocate ref for bronze (no fill-in for sabre)
+  // Allocate ref for bronze (no fill-in for saber)
   if (competition.weapon === Weapon.SABRE) {
-    const sabreResult = allocateRefsForSabre(
+    const saberResult = allocateRefsForSaber(
       1, finalsStart, finalsEnd, day, state,
-      { ...config, allow_sabre_ref_fillin: false },
+      { ...config, allow_saber_ref_fillin: false },
       competition.id, 'DE_FINALS_BRONZE',
     )
-    if (sabreResult.type === 'OK') {
-      state.bottlenecks.push(...sabreResult.bottlenecks)
+    if (saberResult.type === 'OK') {
+      state.bottlenecks.push(...saberResult.bottlenecks)
     }
   } else {
     allocateRefs(state, day, competition.weapon, 1, finalsStart, finalsEnd)

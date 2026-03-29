@@ -67,11 +67,15 @@ function competitionsFromTemplate(templateName: string, fencerCount = 24): Compe
 
 describe('scheduleAll — template integration', () => {
   it('NAC Youth (3 days, 24 events): all events scheduled, no day overflow', () => {
+    // Refs increased from 40/20 to 60/30 to accommodate the larger ADMIN_GAP_MINS (30 min),
+    // which raises each competition's total duration and tightens daily resource budgets.
     const config = makeConfig({
       days_available: 3,
-      strips: makeStrips(64, 4),
+      // 8 video strips needed: Cadet events use STAGED_DE_BLOCKS with video REQUIRED,
+      // so multiple Cadet DE R16/finals phases compete for video strips on the same day.
+      strips: makeStrips(64, 8),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 40, sabre_refs: 20, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 60, saber_refs: 30, source: 'ACTUAL' as const,
       })),
     })
     // fencer_count=10: minimum that produces ≥2 promoted fencers with 20% PERCENTAGE cut
@@ -100,7 +104,7 @@ describe('scheduleAll — template integration', () => {
       days_available: 2,
       strips: makeStrips(96, 4),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 80, sabre_refs: 40, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 80, saber_refs: 40, source: 'ACTUAL' as const,
       })),
     })
     const comps = competitionsFromTemplate('ROC Div1A/Vet', 8)
@@ -123,7 +127,7 @@ describe('scheduleAll — template integration', () => {
       days_available: 2,
       strips: makeStrips(56, 2),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 36, sabre_refs: 18, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 36, saber_refs: 18, source: 'ACTUAL' as const,
       })),
     })
     const comps = competitionsFromTemplate('RYC Weekend', 8)
@@ -152,7 +156,7 @@ describe('scheduleAll — constraint scenarios', () => {
       days_available: 3,
       strips: makeStrips(16, 2),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' as const,
       })),
     })
     // 6 small events across different demographics on constrained strips
@@ -179,7 +183,7 @@ describe('scheduleAll — constraint scenarios', () => {
       days_available: 2,
       strips: makeStrips(48, 0), // no video strips
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 30, sabre_refs: 15, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' as const,
       })),
     })
     // Small non-conflicting events with BEST_EFFORT video on zero video strips
@@ -205,7 +209,7 @@ describe('scheduleAll — constraint scenarios', () => {
       days_available: 2,
       strips: makeStrips(32, 4),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' as const,
       })),
     })
     // 6 small events across different weapons/genders to minimize crossover
@@ -405,7 +409,7 @@ describe('scheduleAll — validation integration', () => {
       days_available: 2,
       strips: makeStrips(24, 4),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' as const,
       })),
     })
     const comps = [
@@ -444,7 +448,7 @@ describe('scheduleAll — graceful degradation on resource exhaustion', () => {
       days_available: 2,
       strips: makeStrips(4, 0),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 10, sabre_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 10, saber_refs: 10, source: 'ACTUAL' as const,
       })),
     })
 
@@ -508,7 +512,7 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
       days_available: 4,
       strips: makeStrips(64, 4),
       referee_availability: Array.from({ length: 4 }, (_, i) => ({
-        day: i, foil_epee_refs: 40, sabre_refs: 20, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 40, saber_refs: 20, source: 'ACTUAL' as const,
       })),
     })
 
@@ -550,7 +554,7 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
       days_available: 3,
       strips: makeStrips(32, 4),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, sabre_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' as const,
       })),
     })
     const comps = [

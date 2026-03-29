@@ -54,8 +54,8 @@ function minimalState(): Partial<StoreState> {
       THRESHOLD_MINS: 5,
     },
     dayRefs: [
-      { foil_epee_refs: 12, sabre_refs: 6, allow_sabre_ref_fillin: false },
-      { foil_epee_refs: 10, sabre_refs: 5, allow_sabre_ref_fillin: true },
+      { foil_epee_refs: 12, saber_refs: 6, allow_saber_ref_fillin: false },
+      { foil_epee_refs: 10, saber_refs: 5, allow_saber_ref_fillin: true },
     ],
     flightingSuggestionStates: [],
   }
@@ -221,13 +221,13 @@ describe('buildTournamentConfig', () => {
       expect(config.referee_availability[0]).toEqual({
         day: 0,
         foil_epee_refs: 12,
-        sabre_refs: 6,
+        saber_refs: 6,
         source: 'ACTUAL',
       })
       expect(config.referee_availability[1]).toEqual({
         day: 1,
         foil_epee_refs: 10,
-        sabre_refs: 5,
+        saber_refs: 5,
         source: 'ACTUAL',
       })
     })
@@ -240,24 +240,24 @@ describe('buildTournamentConfig', () => {
     })
   })
 
-  describe('allow_sabre_ref_fillin', () => {
-    it('is true when any day has allow_sabre_ref_fillin', () => {
+  describe('allow_saber_ref_fillin', () => {
+    it('is true when any day has allow_saber_ref_fillin', () => {
       const state = storeWith(minimalState())
       const { config } = buildTournamentConfig(state)
-      // Day 1 has allow_sabre_ref_fillin: true
-      expect(config.allow_sabre_ref_fillin).toBe(true)
+      // Day 1 has allow_saber_ref_fillin: true
+      expect(config.allow_saber_ref_fillin).toBe(true)
     })
 
-    it('is false when no day has allow_sabre_ref_fillin', () => {
+    it('is false when no day has allow_saber_ref_fillin', () => {
       const state = storeWith({
         ...minimalState(),
         dayRefs: [
-          { foil_epee_refs: 12, sabre_refs: 6, allow_sabre_ref_fillin: false },
-          { foil_epee_refs: 10, sabre_refs: 5, allow_sabre_ref_fillin: false },
+          { foil_epee_refs: 12, saber_refs: 6, allow_saber_ref_fillin: false },
+          { foil_epee_refs: 10, saber_refs: 5, allow_saber_ref_fillin: false },
         ],
       })
       const { config } = buildTournamentConfig(state)
-      expect(config.allow_sabre_ref_fillin).toBe(false)
+      expect(config.allow_saber_ref_fillin).toBe(false)
     })
   })
 
