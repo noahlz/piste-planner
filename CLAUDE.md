@@ -20,6 +20,12 @@ timeout 120 pnpm --silent vitest run path/to/file > ./tmp/test.log 2>&1  # singl
 
 Read `./tmp/test.log` only on failure.
 
+## Glossary
+
+Tournament types: NAC (North American Cup), ROC (Regional Open Circuit), RYC (Regional Youth Circuit), RJCC (Regional Junior-Cadet Circuit), SYC (Super Youth Circuit).
+
+OR framing: strips are queues, referees are workers. During pools each pool is work; during DEs each bout is work. Strips are general-purpose (pools or DEs).
+
 ## Rules
 
 - `as const` objects, NOT TypeScript enums (`erasableSyntaxOnly`)
