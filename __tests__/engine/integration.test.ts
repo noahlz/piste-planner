@@ -13,8 +13,9 @@
  *   consider total strip-hours remaining on a day, so it overloads days when
  *   many large events have similar penalty profiles. This causes DE phases to
  *   overrun day boundaries even with generous resources.
- * - Staged DE (STAGED_DE_BLOCKS) serializes video-strip usage across events,
- *   compounding the day-overload problem for Cadet/Junior/Div1 events.
+ * - Staged DE (STAGED_DE_BLOCKS) correctly serializes video-strip usage across
+ *   events (block allocation, not dynamic sharing). When too many staged-DE
+ *   events land on the same day, this compounds the day-overload problem.
  * - Refs must be >= max pool count of any single event (engine doesn't wave pools).
  */
 import { describe, it, expect } from 'vitest'
@@ -192,6 +193,7 @@ function assertScheduleIntegrity(
 
 describe('Realistic tournament integration', () => {
 
+  // Source: https://fencingtimelive.com/tournaments/eventSchedule/CEEB23D736774CA6AA20D0988372A7D6
   describe('B1: Feb 2026 NAC — Div1/Junior/Veteran (4 days, 24 events)', () => {
     const fencerCounts = {
       'D1-M-EPEE-IND': 310, 'D1-M-FOIL-IND': 260, 'D1-M-SABRE-IND': 210,
@@ -214,6 +216,7 @@ describe('Realistic tournament integration', () => {
     })
   })
 
+  // Source: https://fencingtimelive.com/tournaments/eventSchedule/EE514470341F42279A49312868171FFF
   describe('B2: Nov 2025 NAC — Div1/Cadet/Y-14 + Cadet Teams (4 days, 24 events)', () => {
     const fencerCounts = {
       'D1-M-EPEE-IND': 310, 'D1-M-FOIL-IND': 280, 'D1-M-SABRE-IND': 200,
@@ -236,6 +239,7 @@ describe('Realistic tournament integration', () => {
     })
   })
 
+  // Source: https://fencingtimelive.com/tournaments/eventSchedule/4E2874CB40914BDCB0286561FA5531D4
   describe('B3: March 2026 NAC — Y10/Y12/Y14/Div2 (4 days, 24 events)', () => {
     const fencerCounts = {
       'Y14-M-EPEE-IND': 260, 'Y14-M-FOIL-IND': 270, 'Y14-M-SABRE-IND': 280,
@@ -257,6 +261,7 @@ describe('Realistic tournament integration', () => {
     })
   })
 
+  // Source: https://fencingtimelive.com/tournaments/eventSchedule/A502062C3346472AAA8C63C3366DC4BE
   describe('B4: Jan 2026 SYC — Y8/Y10/Y12/Y14/Cadet (3 days, 30 events)', () => {
     const fencerCounts = {
       'Y14-M-EPEE-IND': 190, 'Y14-M-FOIL-IND': 170, 'Y14-M-SABRE-IND': 200,
@@ -280,6 +285,7 @@ describe('Realistic tournament integration', () => {
     })
   })
 
+  // Source: https://fencingtimelive.com/tournaments/eventSchedule/EB2CCA52D45B4BB08F66DCC79C0C2063
   describe('B5: Jan 2026 SJCC — Cadet/Junior (3 days, 12 events)', () => {
     const fencerCounts = {
       'JR-M-EPEE-IND': 120, 'JR-M-FOIL-IND': 120, 'JR-M-SABRE-IND': 120,
@@ -297,6 +303,7 @@ describe('Realistic tournament integration', () => {
     })
   })
 
+  // Source: https://fencingtimelive.com/tournaments/eventSchedule/C023BCB957844F6BAC9AD10BE8316CAA
   describe('B6: Sep 2025 ROC — 9 categories (3 days, 54 events)', () => {
     const fencerCounts = {
       'JR-M-EPEE-IND': 120, 'JR-M-FOIL-IND': 90, 'JR-M-SABRE-IND': 120,
@@ -328,6 +335,7 @@ describe('Realistic tournament integration', () => {
     })
   })
 
+  // Source: https://fencingtimelive.com/tournaments/eventSchedule/3BC857E223F2428ABEB1DA24D7D1DE28
   describe('B7: Oct 2025 NAC — Div1/Junior/Cadet (4 days, 18 events)', () => {
     const fencerCounts = {
       'D1-M-EPEE-IND': 320, 'D1-M-FOIL-IND': 260, 'D1-M-SABRE-IND': 220,

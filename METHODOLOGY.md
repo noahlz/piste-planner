@@ -659,13 +659,24 @@ The `assignDay`/`totalDayPenalty` scoring considers crossover penalties, proximi
 
 **Fix needed**: Add a day-capacity heuristic to scoring. Estimate total strip-hours consumed by already-assigned events and penalize days nearing capacity.
 
-### Limitation: Staged DE serializes video strip usage
+### Correct behavior: Video strip sharing with cascading release
 
-Multiple events with `STAGED_DE_BLOCKS` on the same day must take turns using video strips for DE_ROUND_OF_16 and DE_FINALS phases. With 4–8 video strips and 6+ events requiring staged DE on one day, the cumulative DE duration exceeds the day boundary.
+Video strips are allocated as a block per DE phase, not dynamically shared bout-by-bout. However, multiple events **can** overlap on video strips when there are enough strips to accommodate both events' concurrent demand.
 
-**Impact**: Tournaments with many Cadet/Junior/Div 1 events (which all require video) are especially affected.
+Staged DE phases naturally release strips as rounds progress:
 
-**Fix needed**: Include video-strip budget in day assignment scoring — penalize days that already have many staged-DE events assigned.
+| Phase | Bouts | Strips needed |
+|-------|-------|---------------|
+| Round of 16 | 8 simultaneous | 8 |
+| Round of 8 | 4 simultaneous | 4 |
+| Quarterfinals | 2 simultaneous | 2 |
+| Finals | 1 | 1 |
+
+When an event advances from R16 (8 strips) to R8 (4 strips), the freed 4 strips become available to other events. For example, with 8 video strips: Div 1 Women's Foil finishes R16 and moves to R8 (needs 4), freeing 4 strips. Vet 40 Men's Epee can then use 2 of those freed strips for its required top-4 video bouts.
+
+The engine models this correctly via per-strip `strip_free_at` tracking — each strip is individually tracked, so cascading release happens naturally as phases complete and strips are returned to the pool.
+
+The constraint is **peak concurrent demand**: if the total video strips needed by all overlapping DE phases at any point in time exceeds `video_strips_total`, events must wait (serialize). When many video-dependent events land on the same day, this serialization can push DE phases past the day boundary. The fix belongs in day assignment (item 2 above): penalize days where peak video strip demand approaches capacity, spreading video load across days.
 
 ### Not yet implemented: Resource precondition validation
 
