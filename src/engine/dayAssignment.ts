@@ -16,7 +16,7 @@ import {
   dayStart,
 } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState, PoolStructure } from './types.ts'
-import { HIGH_CROSSOVER_THRESHOLD, REST_DAY_PAIRS, SOFT_SEPARATION_PAIRS } from './constants.ts'
+import { HIGH_CROSSOVER_THRESHOLD, REST_DAY_PAIRS } from './constants.ts'
 import {
   crossoverPenalty,
   proximityPenalty,

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { KitchenSinkPage } from '../../src/components/KitchenSinkPage.tsx'
 import { useStore } from '../../src/store/store.ts'
 import { serializeState } from '../../src/store/serialization.ts'
@@ -114,7 +114,9 @@ describe('KitchenSinkPage user flow tests', () => {
   it('selecting a template checks competition toggles', () => {
     render(<KitchenSinkPage />)
     // Radix Select doesn't work with fireEvent in jsdom; call store directly
-    useStore.getState().applyTemplate('RYC Weekend')
+    act(() => {
+      useStore.getState().applyTemplate('RYC Weekend')
+    })
 
     const templateIds = TEMPLATES['RYC Weekend']
     const state = useStore.getState()
@@ -199,7 +201,9 @@ describe('KitchenSinkPage user flow tests', () => {
     render(<KitchenSinkPage />)
 
     // Step 2: Set strips (Radix-style: call store directly)
-    useStore.getState().setStrips(12)
+    act(() => {
+      useStore.getState().setStrips(12)
+    })
 
     // Step 3: Enter some fencer counts
     const fencerInputs = screen.getAllByRole('spinbutton', { name: /Fencer count for/ })
@@ -223,7 +227,9 @@ describe('KitchenSinkPage store integration tests', () => {
   it('changing tournament type updates store state', () => {
     render(<KitchenSinkPage />)
     // Radix Select doesn't work with fireEvent in jsdom; call store directly
-    useStore.getState().setTournamentType('RYC' as import('../../src/engine/types.ts').TournamentType)
+    act(() => {
+      useStore.getState().setTournamentType('RYC' as import('../../src/engine/types.ts').TournamentType)
+    })
 
     expect(useStore.getState().tournament_type).toBe('RYC')
   })
@@ -231,7 +237,9 @@ describe('KitchenSinkPage store integration tests', () => {
   it('changing days input updates store state', () => {
     render(<KitchenSinkPage />)
     // Days is now a Radix Select; call store directly (matches tournament_type test pattern)
-    useStore.getState().setDays(2)
+    act(() => {
+      useStore.getState().setDays(2)
+    })
 
     expect(useStore.getState().days_available).toBe(2)
   })
@@ -264,7 +272,9 @@ describe('KitchenSinkPage store integration tests', () => {
   it('applying template marks store as stale', () => {
     render(<KitchenSinkPage />)
     // Radix Select doesn't work with fireEvent in jsdom; call store directly
-    useStore.getState().applyTemplate('RYC Weekend')
+    act(() => {
+      useStore.getState().applyTemplate('RYC Weekend')
+    })
 
     expect(useStore.getState().analysisStale).toBe(true)
     expect(useStore.getState().scheduleStale).toBe(true)

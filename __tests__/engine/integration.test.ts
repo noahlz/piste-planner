@@ -22,7 +22,7 @@ import {
   EventType, DeMode, VideoPolicy,
   CutMode, BottleneckSeverity,
 } from '../../src/engine/types.ts'
-import type { Competition } from '../../src/engine/types.ts'
+import type { Competition, TournamentType } from '../../src/engine/types.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
@@ -142,7 +142,7 @@ function minRefsForEvents(fencerCounts: Record<string, number>): { fe: number; s
 
 function tournamentConfig(
   days: number, strips: number, videoStrips: number,
-  feRefs: number, saberRefs: number, tournamentType: string,
+  feRefs: number, saberRefs: number, tournamentType: TournamentType,
 ) {
   return makeConfig({
     days_available: days,
