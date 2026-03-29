@@ -443,13 +443,13 @@ function estimateStartOnDay(
     availableRefs,
   )
 
-  const videoRequired = competition.de_video_policy === VideoPolicy.REQUIRED
-
+  // Pools never require video strips — only DE phases do.
+  // scheduleCompetition passes videoRequired=false for pool allocation.
   const result = earliestResourceWindow(
     competition.strips_allocated,
     refResolution.refs_needed,
     competition.weapon,
-    videoRequired,
+    false,
     notBefore,
     day,
     state,

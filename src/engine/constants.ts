@@ -226,6 +226,10 @@ export const GROUP_1_MANDATORY: [Category, Category][] = [
   [Category.Y10, Category.Y12],
   [Category.Y12, Category.Y14],
   [Category.Y14, Category.CADET],
+  // Summer Nationals runs Div1 + Div1A + Div2 + Div3 — must never share a day.
+  [Category.DIV1, Category.DIV1A],
+  [Category.DIV1, Category.DIV2],
+  [Category.DIV1, Category.DIV3],
 ]
 
 // ──────────────────────────────────────────────

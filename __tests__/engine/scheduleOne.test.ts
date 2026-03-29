@@ -407,12 +407,12 @@ describe('scheduleCompetition — deadline breach', () => {
   })
 
   it('successfully reschedules to an earlier slot and emits DEADLINE_BREACH warning', () => {
-    // Day is 240 min. With earliest_start=180, pool phase starts at 180 and
-    // overruns dayEnd (180 + ~90 = 270 > 240). findEarlierSlotSameDay finds
-    // time 0 (strips free), retry from 0 succeeds (~90 + 15 + 60 = 165 < 240).
+    // Day is 255 min. With earliest_start=180, pool phase starts at 180 and
+    // overruns dayEnd (180 + ~90 = 270 > 255). findEarlierSlotSameDay finds
+    // time 0 (strips free), retry from 0 succeeds (~90 + 30 + 60 = 180 < 255).
     const config = makeConfig({
-      DAY_LENGTH_MINS: 240,
-      LATEST_START_OFFSET: 240,
+      DAY_LENGTH_MINS: 255,
+      LATEST_START_OFFSET: 255,
       days_available: 1,
       MAX_RESCHEDULE_ATTEMPTS: 3,
       referee_availability: [
@@ -423,7 +423,7 @@ describe('scheduleCompetition — deadline breach', () => {
       id: 'MF-RESCHEDULE',
       fencer_count: 24,
       earliest_start: 180, // forces late pool start → overruns dayEnd
-      latest_end: 240,
+      latest_end: 255,
       strips_allocated: 8,
     })
 

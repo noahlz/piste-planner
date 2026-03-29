@@ -400,23 +400,21 @@ describe('earlyStartPenalty', () => {
     // Pattern B fires when xpen >= 1.0; Pattern C fires independently.
     // The additive 2.0 from Pattern C is verified by comparing with a hypothetical
     // non-team pair: if we remove the ind+team relationship, only Pattern B (5.0) remains.
-    const div1AComp = makeCompetition({
-      id: 'div1a-m-foil',
-      category: Category.DIV1A, // DIV1↔DIV1A is soft crossover < 1.0 (0.3)
+    const y10Comp = makeCompetition({
+      id: 'y10-m-foil',
+      category: Category.Y10, // DIV1↔Y10 has zero crossover (no graph path)
       gender: Gender.MEN,
       weapon: Weapon.FOIL,
       event_type: EventType.INDIVIDUAL,
     })
-    const sr2 = makeScheduleResult('div1a-m-foil', 0)
+    const sr2 = makeScheduleResult('y10-m-foil', 0)
     sr2.pool_start = 480
-    const state2 = makeGlobalState({ 'div1a-m-foil': { ...sr2 } })
-    const allComps2 = [teamComp, div1AComp]
+    const state2 = makeGlobalState({ 'y10-m-foil': { ...sr2 } })
+    const allComps2 = [teamComp, y10Comp]
 
-    // Only Pattern C applies (ind+team same demo? No — different category now)
-    // DIV1 crossover DIV1A = 0.3 < 1.0 → Pattern B does NOT fire
-    // But Pattern C requires same category → doesn't fire either → 0.0
+    // DIV1↔Y10 crossover = 0.0 → Pattern B does NOT fire
+    // Pattern C requires same category → doesn't fire either → 0.0
     const penaltyNoPatternsB = earlyStartPenalty(teamComp, 1, 1320, state2, allComps2, configWithDayConfigs)
-    // DIV1 crossover with DIV1A = 0.3 < 1.0, so neither Pattern B nor C → 0.0
     expect(penaltyNoPatternsB).toBe(0.0)
   })
 
@@ -680,6 +678,18 @@ describe('crossWeaponSameDemographicPenalty', () => {
     const sr = makeScheduleResult('div1-m-foil-2', 0)
     const state = makeGlobalState({ 'div1-m-foil-2': { ...sr } })
     const allComps = [comp, sameWeapon]
+
+    const penalty = crossWeaponSameDemographicPenalty(comp, 0, state, allComps)
+    expect(penalty).toBe(0.0)
+  })
+
+  it('non-VETERAN category, different weapon on same day → 0.0 (penalty is VETERAN-only)', () => {
+    const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
+    const otherWeapon = makeCompetition({ id: 'div1-m-epee', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE })
+
+    const sr = makeScheduleResult('div1-m-epee', 0)
+    const state = makeGlobalState({ 'div1-m-epee': { ...sr } })
+    const allComps = [comp, otherWeapon]
 
     const penalty = crossWeaponSameDemographicPenalty(comp, 0, state, allComps)
     expect(penalty).toBe(0.0)

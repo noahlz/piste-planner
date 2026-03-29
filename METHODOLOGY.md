@@ -588,6 +588,155 @@ Violations emit a warning. Applies only when comparing events of different gende
 
 ---
 
+## Auto-Suggestion: Strips, Referees, and Fencer Counts
+
+When the user enters competition sizes, the UI should **auto-suggest** strip counts, referee counts, and (optionally) fencer counts based on historical data. The user can accept or override.
+
+### Fencer Count Defaults
+
+Sourced from real USA Fencing tournament data (2024–2026). Values are P75 empirical, rounded to nearest 10.
+
+**NAC-scale events** (per weapon × gender, individual):
+
+| Category | E-M | F-M | S-M | E-W | F-W | S-W |
+|----------|-----|-----|-----|-----|-----|-----|
+| Div1 | 310 | 260 | 220 | 210 | 170 | 200 |
+| Junior | 300 | 280 | 260 | 230 | 180 | 200 |
+| Cadet | 270 | 250 | 280 | 230 | 220 | 230 |
+| Y-14 | 200 | 180 | 180 | 150 | 150 | 160 |
+| Y-12 | 200 | 200 | 170 | 170 | 170 | 160 |
+| Y-10 | 80 | 100 | 80 | 70 | 70 | 60 |
+| Veteran | 120 | 80 | 40 | 80 | 40 | 50 |
+
+**Regional-scale events** (SYC/SJCC/ROC, individual):
+
+| Category | E-M | F-M | S-M | E-W | F-W | S-W |
+|----------|-----|-----|-----|-----|-----|-----|
+| Junior | 120 | 100 | 120 | 80 | 50 | 90 |
+| Cadet | 120 | 70 | 110 | 70 | 80 | 90 |
+| Y-14 | 70 | 100 | 70 | 70 | 70 | 50 |
+| Y-12 | 70 | 70 | 70 | 70 | 50 | 50 |
+| Y-10 | 20 | 30 | 30 | 20 | 20 | 20 |
+| Div1A | 50 | 80 | 50 | 50 | 50 | 10 |
+| Div2 | 60 | 70 | 50 | 50 | 20 | 30 |
+
+### Resource Preconditions (hard requirements)
+
+Tournaments are never run resource-constrained. Strips and referees are **preconditions** validated upfront, not variables the scheduler optimizes around. `validateConfig` must enforce:
+
+**Strip minimum**: Every event must be able to run all its pools at once (or in two flights for flighted events):
+
+```
+strips_total >= max_pools_any_event
+```
+
+Where `max_pools_any_event = max(ceil(fencer_count / 7))` across all events. For flighted events (200+ fencers in eligible categories), the requirement is halved: `ceil(pools / 2)`.
+
+**Referee minimum**: Every strip must have at least one referee. Refs are split into two pools by certification:
+
+- **3-weapon refs** (`sabre_refs` in config) — can officiate foil, epee, and saber
+- **Foil/epee-only refs** (`foil_epee_refs` in config) — can only officiate foil and epee
+
+Foil/epee events draw from both pools (`foil_epee_refs + sabre_refs`). Saber events can only use 3-weapon refs (`sabre_refs`).
+
+```
+sabre_refs                     >= max_saber_pools_any_event
+foil_epee_refs + sabre_refs    >= strips_total
+```
+
+These are **hard validation errors**, not warnings. The UI should auto-suggest values meeting these minimums when the user enters competition sizes.
+
+**Video strip minimum**: Tournaments with Cadet/Junior/Div1 events (staged DE with video REQUIRED) need sufficient video strips for concurrent DE phases. Video strips come in multiples of 4. Minimum 4; 8+ recommended when multiple video-required events share a day.
+
+---
+
+## Known Engine Limitations and Open Bugs
+
+Issues discovered during integration testing with realistic tournament data (March 2026). These should be addressed in future engine iterations.
+
+### Bug: `constraint_relaxation_level` not populated in ScheduleResult
+
+`scheduleOne.ts` initializes `constraint_relaxation_level: 0` and never updates it. The `assignDay` function knows which level it used, but doesn't return it. This makes it impossible to distinguish events that used level-3 relaxation (hard block override) from those that scheduled cleanly.
+
+**Fix**: `assignDay` should return `{ day, level }` and `scheduleCompetition` should store the level in the result.
+
+### Limitation: Day assignment is penalty-driven, not capacity-aware
+
+The `assignDay`/`totalDayPenalty` scoring considers crossover penalties, proximity, and early-start patterns but does **not** consider remaining day capacity (total strip-hours available). When many large events (200–350 fencers) have similar penalty profiles, the scheduler piles them onto the same day. DE phases then overrun the 14-hour day boundary.
+
+**Impact**: Real NAC scenarios with 18+ events and 200–350 fencers per event cannot fully schedule, even with generous resources (80+ strips, 8+ video). The engine degrades gracefully (ERROR bottlenecks) but schedules far fewer events than real tournaments achieve.
+
+**Fix needed**: Add a day-capacity heuristic to scoring. Estimate total strip-hours consumed by already-assigned events and penalize days nearing capacity.
+
+### Limitation: Staged DE serializes video strip usage
+
+Multiple events with `STAGED_DE_BLOCKS` on the same day must take turns using video strips for DE_ROUND_OF_16 and DE_FINALS phases. With 4–8 video strips and 6+ events requiring staged DE on one day, the cumulative DE duration exceeds the day boundary.
+
+**Impact**: Tournaments with many Cadet/Junior/Div1 events (which all require video) are especially affected.
+
+**Fix needed**: Include video-strip budget in day assignment scoring — penalize days that already have many staged-DE events assigned.
+
+### Not yet implemented: Resource precondition validation
+
+The resource preconditions defined above (strips >= max pools, refs >= strips) should be enforced at two points:
+
+1. **Upfront in `validateConfig`**: Check strip and referee minimums before scheduling begins. Return ERROR-severity `ValidationError` items with clear messages like "Event X requires Y strips for pools but only Z total strips configured."
+
+2. **Post-scheduling diagnostic**: When events fail to schedule (ERROR bottlenecks), check whether the configured strips and/or refs meet the minimum required counts. If not, surface actionable messages: "You need at least N strips" / "You need at least X 3-weapon referees for saber events." This gives the user a concrete fix rather than opaque "no valid day found" errors.
+
+### Limitation: INDIV_TEAM_HARD_BLOCKS not wired into engine
+
+The constant exists in `constants.ts` but is not consumed by `totalDayPenalty` or any scheduling logic. Individual and team events of the same category can currently be placed on the same day (which tournaments avoid in practice).
+
+### Limitation: SOFT_SEPARATION_PAIRS not applied
+
+`SOFT_SEPARATION_PAIRS` (Div1↔Cadet, penalty 5.0) is imported in `dayAssignment.ts` but never referenced in `totalDayPenalty`. The soft penalty has no effect.
+
+### Limitation: REGIONAL_CUT_OVERRIDES not applied
+
+The constant is defined but not consumed. Regional tournaments (ROC/SYC/RJCC/SJCC) should override default cuts for Y14/Cadet/Junior/Div1 to 100% advancement, but this isn't implemented.
+
+---
+
+## Integration Test Status (March 2026)
+
+Seven integration tests exist in `__tests__/engine/integration.test.ts`, each using real USA Fencing tournament data (fencer counts rounded to nearest 10). All tests pass, but with workarounds — the engine cannot fully schedule any of these tournaments at realistic scale.
+
+### Current test assertions
+
+Tests verify:
+- Engine doesn't crash on realistic data
+- At least some events schedule
+- `scheduled + errors = total` (nothing silently dropped)
+- Hard separations respected — **but only checked when there are zero errors** (all scenarios have errors, so this check is effectively skipped)
+
+### Results per scenario
+
+| Scenario | Source | Events | ~Scheduled | ~Errors | Hard sep checked? |
+|----------|--------|--------|------------|---------|-------------------|
+| B1: Feb 2026 NAC (Div1/Jr/Vet) | Real data | 24 | ~8 | ~16 | No (errors exist) |
+| B2: Nov 2025 NAC (Div1/Cdt/Y14) | Real data | 24 | ~10 | ~14 | No |
+| B3: Mar 2026 NAC (Y10/Y12/Y14/D2) | Real data | 24 | ~4 | ~20 | No |
+| B4: Jan 2026 SYC (Y8-Y14/Cdt) | Real data | 30 | ~3 | ~27 | No |
+| B5: Jan 2026 SJCC (Cdt/Jr) | Real data | 12 | ~4 | ~8 | No |
+| B6: Sep 2025 ROC (9 categories) | Real data | 54 | ~5 | ~49 | No |
+| B7: Oct 2025 NAC (Div1/Jr/Cdt) | Real data | 18 | ~7 | ~11 | No |
+
+### Root causes
+
+1. **Capacity-naive day assignment** — scheduler piles events onto the same day because penalty scoring doesn't account for remaining strip-hours
+2. **Staged DE video serialization** — multiple events' DE phases compete for limited video strips, cascading into day-boundary overruns
+3. **No upfront resource validation** — insufficient strips/refs aren't caught before scheduling begins
+
+### When these tests should be tightened
+
+Once the engine implements capacity-aware day assignment and upfront resource validation, these tests should be updated to assert:
+- All events scheduled (zero errors)
+- Hard separations verified for all scheduled events
+- Specific day assignments match expected patterns (e.g., Div1 and Junior never share a day)
+
+---
+
 ## References
 
 | # | Source | URL / Location |

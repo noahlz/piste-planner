@@ -12,6 +12,7 @@ import { CROSSOVER_GRAPH } from '../../src/engine/constants.ts'
 import type { Competition, ScheduleResult } from '../../src/engine/types.ts'
 import { makeComp, makeScheduleResult } from '../helpers/factories.ts'
 
+
 // ──────────────────────────────────────────────
 // buildPenaltyMatrix
 // ──────────────────────────────────────────────
@@ -106,6 +107,49 @@ describe('crossoverPenalty', () => {
     },
   ])('$label', ({ c1, c2, expected }) => {
     expect(crossoverPenalty(c1, c2)).toBe(expected)
+  })
+
+  it('Y8↔Y10 is NOT a hard conflict — returns 0.8, not Infinity', () => {
+    // Y8/Y10 were removed from GROUP_1_MANDATORY; they can and should share a day.
+    const c1 = makeComp('a', Category.Y8, Gender.MEN, Weapon.FOIL)
+    const c2 = makeComp('b', Category.Y10, Gender.MEN, Weapon.FOIL)
+    const result = crossoverPenalty(c1 as Competition, c2 as Competition)
+    expect(result).toBe(0.8)
+    expect(result).not.toBe(Infinity)
+  })
+
+  it('Div1↔Cadet returns soft penalty (0.8), not Infinity — moved to SOFT_SEPARATION_PAIRS', () => {
+    const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
+    const c2 = makeComp('b', Category.CADET, Gender.MEN, Weapon.FOIL)
+    const result = crossoverPenalty(c1 as Competition, c2 as Competition)
+    expect(result).toBe(0.8)
+    expect(result).not.toBe(Infinity)
+  })
+
+  it('Div1↔Div1A returns Infinity (GROUP_1_MANDATORY)', () => {
+    const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
+    const c2 = makeComp('b', Category.DIV1A, Gender.MEN, Weapon.FOIL)
+    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).toBe(Infinity)
+  })
+
+  it('Div1↔Div2 returns Infinity (GROUP_1_MANDATORY)', () => {
+    const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
+    const c2 = makeComp('b', Category.DIV2, Gender.MEN, Weapon.FOIL)
+    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).toBe(Infinity)
+  })
+
+  it('Div1↔Div3 returns Infinity (GROUP_1_MANDATORY)', () => {
+    const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
+    const c2 = makeComp('b', Category.DIV3, Gender.MEN, Weapon.FOIL)
+    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).toBe(Infinity)
+  })
+
+  it('All CROSSOVER_GRAPH direct edges are ≤ 0.8', () => {
+    for (const [, neighbours] of Object.entries(CROSSOVER_GRAPH)) {
+      for (const [, weight] of Object.entries(neighbours as Record<string, number>)) {
+        expect(weight).toBeLessThanOrEqual(0.8)
+      }
+    }
   })
 })
 

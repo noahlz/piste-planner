@@ -71,7 +71,9 @@ describe('scheduleAll — template integration', () => {
     // which raises each competition's total duration and tightens daily resource budgets.
     const config = makeConfig({
       days_available: 3,
-      strips: makeStrips(64, 4),
+      // 8 video strips needed: Cadet events use STAGED_DE_BLOCKS with video REQUIRED,
+      // so multiple Cadet DE R16/finals phases compete for video strips on the same day.
+      strips: makeStrips(64, 8),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
         day: i, foil_epee_refs: 60, sabre_refs: 30, source: 'ACTUAL' as const,
       })),
