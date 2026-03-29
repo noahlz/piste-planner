@@ -18,7 +18,7 @@ describe('suggestRefs', () => {
     ).toBeNull()
   })
 
-  it('splits refs proportionally between sabre and foil/epee', () => {
+  it('splits refs proportionally between saber and foil/epee', () => {
     const competitions = {
       'CDT-M-FOIL-IND': { fencer_count: 24, use_single_pool_override: false },
       'CDT-M-SABRE-IND': { fencer_count: 24, use_single_pool_override: false },
@@ -26,7 +26,7 @@ describe('suggestRefs', () => {
     const result = suggestRefs(competitions, 3, 24)
     expect(result).not.toBeNull()
     expect(result!.foil_epee_refs).toBeGreaterThan(0)
-    expect(result!.sabre_refs).toBeGreaterThan(0)
+    expect(result!.saber_refs).toBeGreaterThan(0)
   })
 
   it('caps refs at strips_total', () => {
@@ -39,6 +39,6 @@ describe('suggestRefs', () => {
     }
     const result = suggestRefs(competitions, 1, 8)
     expect(result).not.toBeNull()
-    expect(result!.foil_epee_refs + result!.sabre_refs).toBeLessThanOrEqual(8)
+    expect(result!.foil_epee_refs + result!.saber_refs).toBeLessThanOrEqual(8)
   })
 })

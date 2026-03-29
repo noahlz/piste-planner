@@ -23,23 +23,23 @@ export function RefereeSetup() {
   const dayRefs = useStore((s) => s.dayRefs)
   const optimalRefs = useStore((s) => s.optimalRefs)
   const setDayRefs = useStore((s) => s.setDayRefs)
-  const toggleSabreFillin = useStore((s) => s.toggleSabreFillin)
+  const toggleSaberFillin = useStore((s) => s.toggleSaberFillin)
   const suggestAllRefs = useStore((s) => s.suggestAllRefs)
   const podCaptainOverride = useStore((s) => s.pod_captain_override)
   const setPodCaptainOverride = useStore((s) => s.setPodCaptainOverride)
 
-  // Pre-compute per-day deficits for both row styling and the sabre banner
+  // Pre-compute per-day deficits for both row styling and the saber banner
   const deficits = Array.from({ length: daysAvailable }, (_, i) => {
-    const ref = dayRefs[i] ?? { foil_epee_refs: 0, sabre_refs: 0, allow_sabre_ref_fillin: false }
+    const ref = dayRefs[i] ?? { foil_epee_refs: 0, saber_refs: 0, allow_saber_ref_fillin: false }
     const optimal = optimalRefs[i]
     return {
       fe: optimal != null && ref.foil_epee_refs < optimal.foil_epee_refs,
-      sabre: optimal != null && ref.sabre_refs < optimal.sabre_refs,
-      sabreFillinOff: optimal != null && ref.sabre_refs < optimal.sabre_refs && !ref.allow_sabre_ref_fillin,
+      saber: optimal != null && ref.saber_refs < optimal.saber_refs,
+      saberFillinOff: optimal != null && ref.saber_refs < optimal.saber_refs && !ref.allow_saber_ref_fillin,
     }
   })
-  const daysWithSabreDeficit = deficits
-    .map((d, i) => (d.sabreFillinOff ? i : -1))
+  const daysWithSaberDeficit = deficits
+    .map((d, i) => (d.saberFillinOff ? i : -1))
     .filter((i) => i >= 0)
 
   if (daysAvailable === 0) {
@@ -68,7 +68,7 @@ export function RefereeSetup() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="w-64 text-xs">
-              Estimates referee counts based on selected competitions, strip count, and weapon mix. One ref per strip in use, split proportionally between sabre and foil/epee.
+              Estimates referee counts based on selected competitions, strip count, and weapon mix. One ref per strip in use, split proportionally between saber and foil/epee.
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -79,7 +79,7 @@ export function RefereeSetup() {
             <TableRow>
               <TableHead>Day</TableHead>
               <TableHead className="text-right">Foil/Epee Refs</TableHead>
-              <TableHead className="text-right">Sabre Refs</TableHead>
+              <TableHead className="text-right">Saber Refs</TableHead>
               {optimalRefs.length > 0 && (
                 <>
                   <TableHead className="text-right font-medium">Optimal F/E</TableHead>
@@ -91,12 +91,12 @@ export function RefereeSetup() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="inline-flex items-center gap-1 cursor-help">
-                        Sabre Fill-in
+                        Saber Fill-in
                         <CircleHelp className="h-3.5 w-3.5 text-muted-foreground" />
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs text-xs">
-                      When enabled, foil/epee referees may officiate sabre strips if sabre-qualified refs are unavailable.
+                      When enabled, foil/epee referees may officiate saber strips if saber-qualified refs are unavailable.
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -107,8 +107,8 @@ export function RefereeSetup() {
             {Array.from({ length: daysAvailable }, (_, i) => {
               const ref = dayRefs[i] ?? {
                 foil_epee_refs: 0,
-                sabre_refs: 0,
-                allow_sabre_ref_fillin: false,
+                saber_refs: 0,
+                allow_saber_ref_fillin: false,
               }
               const optimal = optimalRefs[i]
               const deficitWarning = 'bg-amber-100 dark:bg-amber-900/30 rounded border-l-2 border-amber-500'
@@ -123,12 +123,12 @@ export function RefereeSetup() {
                       aria-label={`Foil/Epee refs for Day ${i + 1}`}
                     />
                   </TableCell>
-                  <TableCell className={`text-right ${deficits[i].sabre ? deficitWarning : ''}`}>
+                  <TableCell className={`text-right ${deficits[i].saber ? deficitWarning : ''}`}>
                     <NumberInput
-                      value={ref.sabre_refs}
-                      onChange={(v) => setDayRefs(i, { sabre_refs: v })}
+                      value={ref.saber_refs}
+                      onChange={(v) => setDayRefs(i, { saber_refs: v })}
                       min={0}
-                      aria-label={`Sabre refs for Day ${i + 1}`}
+                      aria-label={`Saber refs for Day ${i + 1}`}
                     />
                   </TableCell>
                   {optimalRefs.length > 0 && (
@@ -137,16 +137,16 @@ export function RefereeSetup() {
                         {optimal?.foil_epee_refs ?? '—'}
                       </TableCell>
                       <TableCell className="py-1.5 text-right text-muted-foreground text-xs tabular-nums">
-                        {optimal?.sabre_refs ?? '—'}
+                        {optimal?.saber_refs ?? '—'}
                       </TableCell>
                     </>
                   )}
                   <TableCell>
                     <div className="flex justify-center">
                       <Checkbox
-                        checked={ref.allow_sabre_ref_fillin}
-                        onCheckedChange={() => toggleSabreFillin(i)}
-                        aria-label={`Sabre fill-in for Day ${i + 1}`}
+                        checked={ref.allow_saber_ref_fillin}
+                        onCheckedChange={() => toggleSaberFillin(i)}
+                        aria-label={`Saber fill-in for Day ${i + 1}`}
                       />
                     </div>
                   </TableCell>
@@ -156,10 +156,10 @@ export function RefereeSetup() {
           </TableBody>
         </Table>
 
-        {daysWithSabreDeficit.length > 0 && (
+        {daysWithSaberDeficit.length > 0 && (
           <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-            Days {daysWithSabreDeficit.map(d => d + 1).join(', ')}: sabre refs below optimal.
-            Consider enabling &quot;Sabre Fill-in&quot; to allow foil/epee refs on sabre strips.
+            Days {daysWithSaberDeficit.map(d => d + 1).join(', ')}: saber refs below optimal.
+            Consider enabling &quot;Saber Fill-in&quot; to allow foil/epee refs on saber strips.
           </p>
         )}
 

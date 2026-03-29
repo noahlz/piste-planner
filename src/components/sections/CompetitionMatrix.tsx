@@ -68,7 +68,7 @@ function lookup(
   return CATALOGUE_INDEX.get(`${gender}-${weapon}-${category}-${eventType}`)
 }
 
-// Group order: Women first, then Men; within each gender: Foil, Epee, Sabre
+// Group order: Women first, then Men; within each gender: Foil, Epee, Saber
 const GROUP_ORDER: Array<{ gender: Gender; weapon: Weapon }> = [
   { gender: Gender.WOMEN, weapon: Weapon.FOIL },
   { gender: Gender.WOMEN, weapon: Weapon.EPEE },

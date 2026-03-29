@@ -126,30 +126,30 @@ function assertIndTeamSeparation(
 }
 
 /** Compute minimum refs needed: max pool count of any single event. */
-function minRefsForEvents(fencerCounts: Record<string, number>): { fe: number; sabre: number } {
+function minRefsForEvents(fencerCounts: Record<string, number>): { fe: number; saber: number } {
   let maxFe = 0
-  let maxSabre = 0
+  let maxSaber = 0
   for (const [id, count] of Object.entries(fencerCounts)) {
     const pools = Math.ceil(count / 7)
     if (id.includes('SABRE')) {
-      maxSabre = Math.max(maxSabre, pools)
+      maxSaber = Math.max(maxSaber, pools)
     } else {
       maxFe = Math.max(maxFe, pools)
     }
   }
-  return { fe: maxFe, sabre: maxSabre }
+  return { fe: maxFe, saber: maxSaber }
 }
 
 function tournamentConfig(
   days: number, strips: number, videoStrips: number,
-  feRefs: number, sabreRefs: number, tournamentType: string,
+  feRefs: number, saberRefs: number, tournamentType: string,
 ) {
   return makeConfig({
     days_available: days,
     strips: makeStrips(strips, videoStrips),
     tournament_type: tournamentType,
     referee_availability: Array.from({ length: days }, (_, i) => ({
-      day: i, foil_epee_refs: feRefs, sabre_refs: sabreRefs, source: 'ACTUAL' as const,
+      day: i, foil_epee_refs: feRefs, saber_refs: saberRefs, source: 'ACTUAL' as const,
     })),
   })
 }
@@ -205,7 +205,7 @@ describe('Realistic tournament integration', () => {
     }
     const competitions = buildCompetitions(fencerCounts)
     const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, refs.fe, refs.sabre, 'NAC')
+    const config = tournamentConfig(4, 80, 8, refs.fe, refs.saber, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
@@ -227,7 +227,7 @@ describe('Realistic tournament integration', () => {
     }
     const competitions = buildCompetitions(fencerCounts)
     const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, refs.fe, refs.sabre, 'NAC')
+    const config = tournamentConfig(4, 80, 8, refs.fe, refs.saber, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
@@ -249,7 +249,7 @@ describe('Realistic tournament integration', () => {
     }
     const competitions = buildCompetitions(fencerCounts)
     const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, refs.fe, refs.sabre, 'NAC')
+    const config = tournamentConfig(4, 80, 8, refs.fe, refs.saber, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
@@ -272,7 +272,7 @@ describe('Realistic tournament integration', () => {
     }
     const competitions = buildCompetitions(fencerCounts)
     const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(3, 40, 4, refs.fe, refs.sabre, 'SYC')
+    const config = tournamentConfig(3, 40, 4, refs.fe, refs.saber, 'SYC')
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
@@ -289,7 +289,7 @@ describe('Realistic tournament integration', () => {
     }
     const competitions = buildCompetitions(fencerCounts)
     const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(3, 60, 8, refs.fe, refs.sabre, 'SJCC')
+    const config = tournamentConfig(3, 60, 8, refs.fe, refs.saber, 'SJCC')
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
@@ -320,7 +320,7 @@ describe('Realistic tournament integration', () => {
     }
     const competitions = buildCompetitions(fencerCounts)
     const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(3, 48, 4, refs.fe, refs.sabre, 'ROC')
+    const config = tournamentConfig(3, 48, 4, refs.fe, refs.saber, 'ROC')
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
@@ -339,7 +339,7 @@ describe('Realistic tournament integration', () => {
     }
     const competitions = buildCompetitions(fencerCounts)
     const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, refs.fe, refs.sabre, 'NAC')
+    const config = tournamentConfig(4, 80, 8, refs.fe, refs.saber, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)

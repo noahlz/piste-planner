@@ -56,7 +56,7 @@ type ConstraintLevel = (typeof CONSTRAINT_LEVELS)[number]
  * Components:
  * - crossover_count: how many other competitions conflict with this one
  * - window_tightness: 840 / (latest_end - earliest_start)
- * - sabre_scarcity: for SABRE weapon — ratio of sabre comps to min sabre refs
+ * - saber_scarcity: for SABRE weapon — ratio of saber comps to min saber refs
  * - video_scarcity: for STAGED_DE + REQUIRED video — ratio of video comps to video strips
  * - ref_weight: TWO→2.0, AUTO→1.0, ONE→0.5
  */
@@ -73,10 +73,10 @@ export function constraintScore(
   // Guard: avoid divide-by-zero for competitions with zero-width windows
   const windowTightness = windowMins > 0 ? 840 / windowMins : 840
 
-  const sabreComps = allCompetitions.filter(c => c.weapon === Weapon.SABRE).length
-  const sabreMin = Math.min(...config.referee_availability.map(r => r.sabre_refs))
-  const sabreScarcity =
-    competition.weapon === Weapon.SABRE ? sabreComps / Math.max(sabreMin, 1) : 0
+  const saberComps = allCompetitions.filter(c => c.weapon === Weapon.SABRE).length
+  const saberMin = Math.min(...config.referee_availability.map(r => r.saber_refs))
+  const saberScarcity =
+    competition.weapon === Weapon.SABRE ? saberComps / Math.max(saberMin, 1) : 0
 
   const videoCompsRequiring = allCompetitions.filter(
     c => c.de_mode === DeMode.STAGED_DE_BLOCKS && c.de_video_policy === VideoPolicy.REQUIRED,
@@ -94,7 +94,7 @@ export function constraintScore(
   }
   const refWeight = refWeightMap[competition.ref_policy] ?? 1.0
 
-  return crossoverCount + windowTightness + sabreScarcity + videoScarcity + refWeight
+  return crossoverCount + windowTightness + saberScarcity + videoScarcity + refWeight
 }
 
 // ──────────────────────────────────────────────
@@ -173,7 +173,7 @@ export function earlyStartPenalty(
 
 /**
  * Penalises unbalanced weapon distribution on a day.
- * If the proposed competition would make either ROW (foil+sabre) or epee
+ * If the proposed competition would make either ROW (foil+saber) or epee
  * have zero representation → +0.5 (minority group absent).
  */
 export function weaponBalancePenalty(

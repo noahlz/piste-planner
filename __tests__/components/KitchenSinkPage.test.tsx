@@ -179,8 +179,8 @@ describe('KitchenSinkPage user flow tests', () => {
     useStore.getState().setStrips(24)
     useStore.getState().setVideoStrips(4)
     // Set refs for both days
-    useStore.getState().setDayRefs(0, { foil_epee_refs: 10, sabre_refs: 6 })
-    useStore.getState().setDayRefs(1, { foil_epee_refs: 10, sabre_refs: 6 })
+    useStore.getState().setDayRefs(0, { foil_epee_refs: 10, saber_refs: 6 })
+    useStore.getState().setDayRefs(1, { foil_epee_refs: 10, saber_refs: 6 })
 
     render(<KitchenSinkPage />)
     fireEvent.click(screen.getByRole('button', { name: 'Generate Schedule' }))
@@ -526,7 +526,7 @@ describe('KitchenSinkPage error state tests', () => {
         pool_duration_actual: 120,
         de_duration_baseline: 140,
         de_duration_actual: 140,
-        sabre_fillin_used: false,
+        saber_fillin_used: false,
         constraint_relaxation_level: 0,
         accepted_warnings: [],
       },

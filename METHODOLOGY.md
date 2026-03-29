@@ -36,7 +36,9 @@ Piste Planner models tournament scheduling as a resource-constrained bin-packing
 11. [Constraint Relaxation](#constraint-relaxation)
 12. [Scheduling Algorithm](#scheduling-algorithm)
 13. [Tournament-Type Policies](#tournament-type-policies)
-14. [References](#references)
+14. [Known Engine Limitations and Open Bugs](#known-engine-limitations-and-open-bugs)
+15. [Integration Test Status](#integration-test-status-march-2026)
+16. [References](#references)
 
 ---
 
@@ -46,12 +48,12 @@ Piste Planner models tournament scheduling as a resource-constrained bin-packing
 
 - **Competition list**: each competition has a gender, age category, weapon, event type (individual or team), and estimated fencer count (see [`types.ts`](src/engine/types.ts) for data model)
 - **Venue resources**:
-  - **General strips**: used for pools or DEs; total count is optional — engine can suggest based on the largest single competition's pool count (see [`analysis.ts`](src/engine/analysis.ts))
+  - **General strips**: used for pools or DEs; total count is optional — see [Auto-Suggestion Logic](#auto-suggestion-logic) — engine can suggest based on the largest single competition's pool count (see [`analysis.ts`](src/engine/analysis.ts))
   - **Video strip count** (NACs only): 4, 8 (default), 12, or 16. These strips are used for the Video stage of staged DEs. Default of 8 covers a standard Round of 16. Multiple events in the video stage contend for these strips.
 - **Referees**:
-  - **Total referee count**: optional — engine can suggest based on strip count (see [`refs.ts`](src/engine/refs.ts))
-  - **3-weapon refs**: default — all refs are assumed 3-weapon (can officiate foil, epee, and sabre)
-  - **Foil/epee-only refs**: user can optionally specify how many refs cannot officiate sabre; remainder are 3-weapon
+  - **Total referee count**: optional — see [Auto-Suggestion Logic](#auto-suggestion-logic) — engine can suggest based on strip count (see [`refs.ts`](src/engine/refs.ts))
+  - **3-weapon refs**: default — all refs are assumed 3-weapon (can officiate foil, epee, and saber)
+  - **Foil/epee-only refs**: user can optionally specify how many refs cannot officiate saber; remainder are 3-weapon
   - **Refs per pool**: 1 or 2 (default: 2) — configured before auto-suggest runs
 - **Tournament duration**: 2–4 days
 - **Per-competition options**:
@@ -140,6 +142,29 @@ Overlapping age categories MUST be on **different days** (per weapon and gender)
 - If the DE phase would extend past the end of the day, the user is given a **warning** with the estimated finish time
 - This is NOT a hard failure — the schedule is allowed but flagged
 
+### Resource Preconditions (hard requirements)
+
+Tournaments are never run resource-constrained. Strips and referees are preconditions, not variables the scheduler optimizes around. `validateConfig` must enforce:
+
+**Strip minimum**: Every event must be able to run all its pools at once (or in two flights for flighted events):
+
+```
+strips_total >= max_pools_any_event
+```
+
+Where `max_pools_any_event = max(ceil(fencer_count / 7))` across all events. For flighted events (200+ fencers in eligible categories), the requirement is halved: `ceil(pools / 2)`.
+
+**Referee minimum**: Every strip must have at least one referee. Refs are split by certification (see [Referee Types](#referee-types)). Foil/epee events draw from both pools; saber events can only use 3-weapon refs.
+
+```
+saber_refs                     >= max_saber_pools_any_event
+foil_epee_refs + saber_refs    >= strips_total
+```
+
+These are **hard validation errors**, not warnings. The UI should auto-suggest values meeting these minimums when the user enters competition sizes.
+
+**Video strip minimum**: Tournaments with Cadet/Junior/Div 1 events (staged DE with video REQUIRED) need sufficient video strips for concurrent DE phases. Video strips come in multiples of 4. Minimum 4; 8+ recommended when multiple video-required events share a day.
+
 ---
 
 ## Soft Preferences
@@ -183,7 +208,7 @@ These factors influence day assignment through a weighted penalty system. The au
 
 ### Weapon Balance
 
-- Each day should have a mix of ROW weapons (foil/sabre) and epee
+- Each day should have a mix of ROW weapons (foil/saber) and epee
 - An all-ROW or all-epee day: penalty 0.5
 - Penalty should be proportional to competition size
 
@@ -229,7 +254,7 @@ All penalty weights used by the auto-suggest algorithm. These will become config
 | Early start consecutive days, high crossover | 5.0 | Two high-overlap events both at 8 AM on back-to-back days |
 | Early start same day, high crossover | 2.0 | Two high-overlap events both at 8 AM same day |
 | Early start consecutive days, ind+team | 2.0 | Ind + team (same demographic) both at 8 AM on consecutive days |
-| Rest day violation | 1.5 | Junior↔Cadet or Junior↔Div1 on consecutive days without rest |
+| Rest day violation | 1.5 | Junior↔Cadet or Junior↔Div 1 on consecutive days without rest |
 | Team before individual | 1.0 | Team event scheduled before its individual counterpart |
 | Weapon balance | 0.5 | All-ROW or all-epee day |
 | Last-day ref shortage (large event) | 0.5 | Large event on last day with below-average ref availability |
@@ -266,7 +291,7 @@ Baseline duration for a standard 6-person pool (15 round-robin bouts):
 |---|---|
 | Epee | 120 min |
 | Foil | 105 min |
-| Sabre | 75 min |
+| Saber | 75 min |
 
 - Other pool sizes scaled proportionally by bout count
   - e.g., 7-person pool = 21 bouts → ~1.4x baseline
@@ -391,8 +416,8 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 ### Referee Types
 
-- **3-Weapon Refs** (default): can officiate foil, epee, and sabre
-- **Foil/Epee-Only Refs**: cannot officiate sabre
+- **3-Weapon Refs** (default): can officiate foil, epee, and saber
+- **Foil/Epee-Only Refs**: cannot officiate saber
 - By default, all refs are assumed to be 3-weapon
 - User can optionally specify a count of foil/epee-only refs
 
@@ -422,14 +447,40 @@ The engine can auto-suggest configuration values to help organizers start with r
 ### Referee Suggestion
 
 - Heuristic: **one referee per strip in active use**
-- Split proportionally between 3-weapon and foil/epee-only based on the sabre-to-foil/epee ratio of the competition mix
+- Split proportionally between 3-weapon and foil/epee-only based on the saber-to-foil/epee ratio of the competition mix
 - Uses peak concurrent demand per weapon per day from a preliminary schedule simulation
 
 ### Flighting Suggestion
 
-- Identifies same-day competition pairs whose combined pool count exceeds strip availability
-- Only suggests flighting for Cadet, Junior, and Div 1 events with 200+ fencers
-- Larger event becomes the flighted event; smaller events get scheduling priority
+See [Flighting](#flighting) for eligibility rules and mechanics. The engine identifies same-day competition pairs whose combined pool count exceeds strip availability and suggests flighting for the larger event.
+
+### Fencer Count Defaults
+
+Sourced from real USA Fencing tournament data (2024–2026). Values are P75 empirical, rounded to nearest 10.
+
+**NAC-scale events** (per weapon × gender, individual):
+
+| Category | E-M | F-M | S-M | E-W | F-W | S-W |
+|----------|-----|-----|-----|-----|-----|-----|
+| Div1 | 310 | 260 | 220 | 210 | 170 | 200 |
+| Junior | 300 | 280 | 260 | 230 | 180 | 200 |
+| Cadet | 270 | 250 | 280 | 230 | 220 | 230 |
+| Y-14 | 200 | 180 | 180 | 150 | 150 | 160 |
+| Y-12 | 200 | 200 | 170 | 170 | 170 | 160 |
+| Y-10 | 80 | 100 | 80 | 70 | 70 | 60 |
+| Veteran | 120 | 80 | 40 | 80 | 40 | 50 |
+
+**Regional-scale events** (SYC/SJCC/ROC, individual):
+
+| Category | E-M | F-M | S-M | E-W | F-W | S-W |
+|----------|-----|-----|-----|-----|-----|-----|
+| Junior | 120 | 100 | 120 | 80 | 50 | 90 |
+| Cadet | 120 | 70 | 110 | 70 | 80 | 90 |
+| Y-14 | 70 | 100 | 70 | 70 | 70 | 50 |
+| Y-12 | 70 | 70 | 70 | 70 | 50 | 50 |
+| Y-10 | 20 | 30 | 30 | 20 | 20 | 20 |
+| Div1A | 50 | 80 | 50 | 50 | 50 | 10 |
+| Div2 | 60 | 70 | 50 | 50 | 20 | 30 |
 
 ---
 
@@ -478,7 +529,7 @@ Analysis passes run before the main scheduling loop: (see [`analysis.ts`](src/en
 3. Flighting suggestions — identifies same-day pairs that would benefit from flighting
 4. Multiple-flighting conflicts — warns if more than one flighted competition lands on the same day
 5. Video strip demand — warns if peak video-strip need exceeds video-capable strips
-6. Gender equity — checks pool count differences between men's and women's events (Athlete Handbook p.15)
+6. Gender equity (see [Gender Equity](#gender-equity)) — checks pool count differences between men's and women's events (Athlete Handbook p.15)
 7. Cut summaries — informational breakdown of advancement numbers per competition
 
 ### Phase 3: Priority Ordering
@@ -488,7 +539,7 @@ Competitions sorted by **constraint score** (highest first = scheduled first). M
 Score factors:
 - **Crossover count**: how many other competitions this one conflicts with
 - **Window tightness**: how narrow the allowed time window is
-- **Sabre scarcity**: for sabre events, ratio of sabre competitions to 3-weapon refs across days
+- **Saber scarcity**: for saber events, ratio of saber competitions to 3-weapon refs across days
 - **Video scarcity** (NACs only): ratio of staged DE events requiring video to video strips
 - **Referee intensity**: events requiring 2 refs/pool score higher (2.0) than 1 ref/pool (0.5)
 
@@ -538,7 +589,7 @@ Selecting the tournament type enables / disables events available in the tournam
 - Default cuts: Y14/Cadet/Junior/Div 1 at 80% advancement to DE
 - Staged DEs with video replay for Cadet, Junior, Div 1
 - Typically 3–4 day events with large fields (100+ fencers in major categories)
-- Predefined templates for common NAC formats (Youth, Cadet/Junior, Div1/Junior, etc.)
+- Predefined templates for common NAC formats (Youth, Cadet/Junior, Div 1/Junior, etc.)
 
 ### ROC (Regional Open Circuit)
 
@@ -588,68 +639,6 @@ Violations emit a warning. Applies only when comparing events of different gende
 
 ---
 
-## Auto-Suggestion: Strips, Referees, and Fencer Counts
-
-When the user enters competition sizes, the UI should **auto-suggest** strip counts, referee counts, and (optionally) fencer counts based on historical data. The user can accept or override.
-
-### Fencer Count Defaults
-
-Sourced from real USA Fencing tournament data (2024–2026). Values are P75 empirical, rounded to nearest 10.
-
-**NAC-scale events** (per weapon × gender, individual):
-
-| Category | E-M | F-M | S-M | E-W | F-W | S-W |
-|----------|-----|-----|-----|-----|-----|-----|
-| Div1 | 310 | 260 | 220 | 210 | 170 | 200 |
-| Junior | 300 | 280 | 260 | 230 | 180 | 200 |
-| Cadet | 270 | 250 | 280 | 230 | 220 | 230 |
-| Y-14 | 200 | 180 | 180 | 150 | 150 | 160 |
-| Y-12 | 200 | 200 | 170 | 170 | 170 | 160 |
-| Y-10 | 80 | 100 | 80 | 70 | 70 | 60 |
-| Veteran | 120 | 80 | 40 | 80 | 40 | 50 |
-
-**Regional-scale events** (SYC/SJCC/ROC, individual):
-
-| Category | E-M | F-M | S-M | E-W | F-W | S-W |
-|----------|-----|-----|-----|-----|-----|-----|
-| Junior | 120 | 100 | 120 | 80 | 50 | 90 |
-| Cadet | 120 | 70 | 110 | 70 | 80 | 90 |
-| Y-14 | 70 | 100 | 70 | 70 | 70 | 50 |
-| Y-12 | 70 | 70 | 70 | 70 | 50 | 50 |
-| Y-10 | 20 | 30 | 30 | 20 | 20 | 20 |
-| Div1A | 50 | 80 | 50 | 50 | 50 | 10 |
-| Div2 | 60 | 70 | 50 | 50 | 20 | 30 |
-
-### Resource Preconditions (hard requirements)
-
-Tournaments are never run resource-constrained. Strips and referees are **preconditions** validated upfront, not variables the scheduler optimizes around. `validateConfig` must enforce:
-
-**Strip minimum**: Every event must be able to run all its pools at once (or in two flights for flighted events):
-
-```
-strips_total >= max_pools_any_event
-```
-
-Where `max_pools_any_event = max(ceil(fencer_count / 7))` across all events. For flighted events (200+ fencers in eligible categories), the requirement is halved: `ceil(pools / 2)`.
-
-**Referee minimum**: Every strip must have at least one referee. Refs are split into two pools by certification:
-
-- **3-weapon refs** (`sabre_refs` in config) — can officiate foil, epee, and saber
-- **Foil/epee-only refs** (`foil_epee_refs` in config) — can only officiate foil and epee
-
-Foil/epee events draw from both pools (`foil_epee_refs + sabre_refs`). Saber events can only use 3-weapon refs (`sabre_refs`).
-
-```
-sabre_refs                     >= max_saber_pools_any_event
-foil_epee_refs + sabre_refs    >= strips_total
-```
-
-These are **hard validation errors**, not warnings. The UI should auto-suggest values meeting these minimums when the user enters competition sizes.
-
-**Video strip minimum**: Tournaments with Cadet/Junior/Div1 events (staged DE with video REQUIRED) need sufficient video strips for concurrent DE phases. Video strips come in multiples of 4. Minimum 4; 8+ recommended when multiple video-required events share a day.
-
----
-
 ## Known Engine Limitations and Open Bugs
 
 Issues discovered during integration testing with realistic tournament data (March 2026). These should be addressed in future engine iterations.
@@ -672,7 +661,7 @@ The `assignDay`/`totalDayPenalty` scoring considers crossover penalties, proximi
 
 Multiple events with `STAGED_DE_BLOCKS` on the same day must take turns using video strips for DE_ROUND_OF_16 and DE_FINALS phases. With 4–8 video strips and 6+ events requiring staged DE on one day, the cumulative DE duration exceeds the day boundary.
 
-**Impact**: Tournaments with many Cadet/Junior/Div1 events (which all require video) are especially affected.
+**Impact**: Tournaments with many Cadet/Junior/Div 1 events (which all require video) are especially affected.
 
 **Fix needed**: Include video-strip budget in day assignment scoring — penalize days that already have many staged-DE events assigned.
 
@@ -690,11 +679,11 @@ The constant exists in `constants.ts` but is not consumed by `totalDayPenalty` o
 
 ### Limitation: SOFT_SEPARATION_PAIRS not applied
 
-`SOFT_SEPARATION_PAIRS` (Div1↔Cadet, penalty 5.0) is imported in `dayAssignment.ts` but never referenced in `totalDayPenalty`. The soft penalty has no effect.
+`SOFT_SEPARATION_PAIRS` (Div 1↔Cadet, penalty 5.0) is imported in `dayAssignment.ts` but never referenced in `totalDayPenalty`. The soft penalty has no effect.
 
 ### Limitation: REGIONAL_CUT_OVERRIDES not applied
 
-The constant is defined but not consumed. Regional tournaments (ROC/SYC/RJCC/SJCC) should override default cuts for Y14/Cadet/Junior/Div1 to 100% advancement, but this isn't implemented.
+The constant is defined but not consumed. Regional tournaments (ROC/SYC/RJCC/SJCC) should override default cuts for Y14/Cadet/Junior/Div 1 to 100% advancement, but this isn't implemented.
 
 ---
 
@@ -714,13 +703,13 @@ Tests verify:
 
 | Scenario | Source | Events | ~Scheduled | ~Errors | Hard sep checked? |
 |----------|--------|--------|------------|---------|-------------------|
-| B1: Feb 2026 NAC (Div1/Jr/Vet) | Real data | 24 | ~8 | ~16 | No (errors exist) |
-| B2: Nov 2025 NAC (Div1/Cdt/Y14) | Real data | 24 | ~10 | ~14 | No |
+| B1: Feb 2026 NAC (Div 1/Jr/Vet) | Real data | 24 | ~8 | ~16 | No (errors exist) |
+| B2: Nov 2025 NAC (Div 1/Cdt/Y14) | Real data | 24 | ~10 | ~14 | No |
 | B3: Mar 2026 NAC (Y10/Y12/Y14/D2) | Real data | 24 | ~4 | ~20 | No |
 | B4: Jan 2026 SYC (Y8-Y14/Cdt) | Real data | 30 | ~3 | ~27 | No |
 | B5: Jan 2026 SJCC (Cdt/Jr) | Real data | 12 | ~4 | ~8 | No |
 | B6: Sep 2025 ROC (9 categories) | Real data | 54 | ~5 | ~49 | No |
-| B7: Oct 2025 NAC (Div1/Jr/Cdt) | Real data | 18 | ~7 | ~11 | No |
+| B7: Oct 2025 NAC (Div 1/Jr/Cdt) | Real data | 18 | ~7 | ~11 | No |
 
 ### Root causes
 
@@ -733,7 +722,7 @@ Tests verify:
 Once the engine implements capacity-aware day assignment and upfront resource validation, these tests should be updated to assert:
 - All events scheduled (zero errors)
 - Hard separations verified for all scheduled events
-- Specific day assignments match expected patterns (e.g., Div1 and Junior never share a day)
+- Specific day assignments match expected patterns (e.g., Div 1 and Junior never share a day)
 
 ---
 

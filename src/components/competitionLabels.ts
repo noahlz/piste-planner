@@ -30,7 +30,7 @@ export const GENDER_DISPLAY: Record<Gender, string> = {
 export const WEAPON_DISPLAY: Record<Weapon, string> = {
   [Weapon.FOIL]: 'Foil',
   [Weapon.EPEE]: 'Epee',
-  [Weapon.SABRE]: 'Sabre',
+  [Weapon.SABRE]: 'Saber',
 }
 
 const EVENT_TYPE_DISPLAY: Record<EventType, string> = {

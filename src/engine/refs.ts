@@ -40,17 +40,17 @@ export function podCaptainsNeeded(
  * Returns the total number of refs available on a given day for the specified weapon.
  *
  * PRD Section 2.3:
- * - SABRE: sabre-qualified refs only (no cross-weapon)
- * - FOIL/EPEE: foil_epee refs + sabre refs (sabre refs can officiate ROW weapons)
+ * - SABRE: saber-qualified refs only (no cross-weapon)
+ * - FOIL/EPEE: foil_epee refs + saber refs (saber refs can officiate ROW weapons)
  *
- * Note: The reverse direction (foil/epee refs filling in for sabre shortfalls
- * via `allow_sabre_ref_fillin`) is handled in the resource allocation layer (Task 3C).
+ * Note: The reverse direction (foil/epee refs filling in for saber shortfalls
+ * via `allow_saber_ref_fillin`) is handled in the resource allocation layer (Task 3C).
  */
 export function refsAvailableOnDay(day: number, weapon: Weapon, config: TournamentConfig): number {
   const avail = config.referee_availability[day]
   if (!avail) return 0
-  if (weapon === Weapon.SABRE) return avail.sabre_refs
-  return avail.foil_epee_refs + avail.sabre_refs
+  if (weapon === Weapon.SABRE) return avail.saber_refs
+  return avail.foil_epee_refs + avail.saber_refs
 }
 
 /**
@@ -184,7 +184,7 @@ export function calculateOptimalRefs(
     const dayComps = competitions.filter(c => dayAssignments.get(c.id) === d)
 
     let peakFoilEpee = 0
-    let peakSabre = 0
+    let peakSaber = 0
 
     for (const comp of dayComps) {
       // Peak ref demand for this competition is the max of its pool and DE phases
@@ -193,7 +193,7 @@ export function calculateOptimalRefs(
       const compPeak = Math.max(poolDemand, deDemand)
 
       if (comp.weapon === Weapon.SABRE) {
-        peakSabre += compPeak
+        peakSaber += compPeak
       } else {
         peakFoilEpee += compPeak
       }
@@ -202,7 +202,7 @@ export function calculateOptimalRefs(
     result.push({
       day: d,
       foil_epee_refs: peakFoilEpee,
-      sabre_refs: peakSabre,
+      saber_refs: peakSaber,
       source: 'OPTIMAL',
     })
   }

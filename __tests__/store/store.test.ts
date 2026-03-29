@@ -371,12 +371,12 @@ describe('refereeSlice', () => {
 
   describe('setDayRefs', () => {
     it('sets ref counts for a specific day', () => {
-      useStore.getState().setDayRefs(0, { foil_epee_refs: 5, sabre_refs: 3 })
+      useStore.getState().setDayRefs(0, { foil_epee_refs: 5, saber_refs: 3 })
 
       const state = useStore.getState()
       expect(state.dayRefs[0].foil_epee_refs).toBe(5)
-      expect(state.dayRefs[0].sabre_refs).toBe(3)
-      expect(state.dayRefs[0].allow_sabre_ref_fillin).toBe(false)
+      expect(state.dayRefs[0].saber_refs).toBe(3)
+      expect(state.dayRefs[0].allow_saber_ref_fillin).toBe(false)
     })
 
     it('extends array with defaults when day index exceeds current length', () => {
@@ -385,11 +385,11 @@ describe('refereeSlice', () => {
       const state = useStore.getState()
       expect(state.dayRefs).toHaveLength(3)
       // Indices 0 and 1 filled with defaults
-      expect(state.dayRefs[0]).toEqual({ foil_epee_refs: 0, sabre_refs: 0, allow_sabre_ref_fillin: false })
-      expect(state.dayRefs[1]).toEqual({ foil_epee_refs: 0, sabre_refs: 0, allow_sabre_ref_fillin: false })
+      expect(state.dayRefs[0]).toEqual({ foil_epee_refs: 0, saber_refs: 0, allow_saber_ref_fillin: false })
+      expect(state.dayRefs[1]).toEqual({ foil_epee_refs: 0, saber_refs: 0, allow_saber_ref_fillin: false })
       // Index 2 has the partial update merged with defaults
       expect(state.dayRefs[2].foil_epee_refs).toBe(10)
-      expect(state.dayRefs[2].sabre_refs).toBe(0)
+      expect(state.dayRefs[2].saber_refs).toBe(0)
     })
 
     it('marks only scheduleStale, NOT analysisStale', () => {
@@ -401,29 +401,29 @@ describe('refereeSlice', () => {
     })
   })
 
-  describe('toggleSabreFillin', () => {
-    it('toggles allow_sabre_ref_fillin for a specific day', () => {
+  describe('toggleSaberFillin', () => {
+    it('toggles allow_saber_ref_fillin for a specific day', () => {
       useStore.getState().setDayRefs(0, { foil_epee_refs: 5 })
       useStore.getState().clearStale()
 
-      useStore.getState().toggleSabreFillin(0)
-      expect(useStore.getState().dayRefs[0].allow_sabre_ref_fillin).toBe(true)
+      useStore.getState().toggleSaberFillin(0)
+      expect(useStore.getState().dayRefs[0].allow_saber_ref_fillin).toBe(true)
 
-      useStore.getState().toggleSabreFillin(0)
-      expect(useStore.getState().dayRefs[0].allow_sabre_ref_fillin).toBe(false)
+      useStore.getState().toggleSaberFillin(0)
+      expect(useStore.getState().dayRefs[0].allow_saber_ref_fillin).toBe(false)
     })
 
     it('extends array with defaults if day index exceeds length, then toggles', () => {
-      useStore.getState().toggleSabreFillin(1)
+      useStore.getState().toggleSaberFillin(1)
 
       const state = useStore.getState()
       expect(state.dayRefs).toHaveLength(2)
-      expect(state.dayRefs[0].allow_sabre_ref_fillin).toBe(false)
-      expect(state.dayRefs[1].allow_sabre_ref_fillin).toBe(true)
+      expect(state.dayRefs[0].allow_saber_ref_fillin).toBe(false)
+      expect(state.dayRefs[1].allow_saber_ref_fillin).toBe(true)
     })
 
     it('marks only scheduleStale', () => {
-      useStore.getState().toggleSabreFillin(0)
+      useStore.getState().toggleSaberFillin(0)
 
       const state = useStore.getState()
       expect(state.scheduleStale).toBe(true)
@@ -434,8 +434,8 @@ describe('refereeSlice', () => {
   describe('setOptimalRefs', () => {
     it('stores calculated optimal ref counts per day', () => {
       const optimal: DayRefConfig[] = [
-        { foil_epee_refs: 8, sabre_refs: 4, allow_sabre_ref_fillin: false },
-        { foil_epee_refs: 6, sabre_refs: 3, allow_sabre_ref_fillin: true },
+        { foil_epee_refs: 8, saber_refs: 4, allow_saber_ref_fillin: false },
+        { foil_epee_refs: 6, saber_refs: 3, allow_saber_ref_fillin: true },
       ]
       useStore.getState().setOptimalRefs(optimal)
 
@@ -622,7 +622,7 @@ describe('scheduleSlice', () => {
       pool_duration_actual: 0,
       de_duration_baseline: 0,
       de_duration_actual: 0,
-      sabre_fillin_used: false,
+      saber_fillin_used: false,
       constraint_relaxation_level: 0,
       accepted_warnings: [],
     }

@@ -3,12 +3,12 @@ import { computePoolStructure } from '../engine/pools.ts'
 
 export interface RefSuggestion {
   foil_epee_refs: number
-  sabre_refs: number
+  saber_refs: number
 }
 
 /**
  * Suggests referee counts based on selected competitions and strip count.
- * Heuristic: one ref per strip in use. Sabre competitions need sabre refs;
+ * Heuristic: one ref per strip in use. Saber competitions need saber refs;
  * foil/epee competitions need foil/epee refs. Distributes evenly across days.
  *
  * Accepts a map of competition ID -> { fencer_count, use_single_pool_override }
@@ -23,29 +23,29 @@ export function suggestRefs(
   const entries = Object.entries(competitions)
   if (entries.length === 0 || daysAvailable === 0 || stripsTotal === 0) return null
 
-  let sabrePools = 0
+  let saberPools = 0
   let foilEpeePools = 0
   for (const [id, config] of entries) {
     const entry = findCompetition(id)
     if (!entry || config.fencer_count < 2) continue
     const ps = computePoolStructure(config.fencer_count, config.use_single_pool_override)
     if (entry.weapon === 'SABRE') {
-      sabrePools += ps.n_pools
+      saberPools += ps.n_pools
     } else {
       foilEpeePools += ps.n_pools
     }
   }
 
-  const totalPools = sabrePools + foilEpeePools
+  const totalPools = saberPools + foilEpeePools
   if (totalPools === 0) return null
 
   const poolsPerDay = Math.ceil(totalPools / daysAvailable)
   const stripsInUse = Math.min(poolsPerDay, stripsTotal)
 
   // Split refs proportionally by weapon type (one ref per strip in use)
-  const sabreRatio = sabrePools / totalPools
-  const sabreRefs = Math.max(1, Math.round(stripsInUse * sabreRatio))
-  const foilEpeeRefs = Math.max(1, stripsInUse - sabreRefs)
+  const saberRatio = saberPools / totalPools
+  const saberRefs = Math.max(1, Math.round(stripsInUse * saberRatio))
+  const foilEpeeRefs = Math.max(1, stripsInUse - saberRefs)
 
-  return { foil_epee_refs: foilEpeeRefs, sabre_refs: sabreRefs }
+  return { foil_epee_refs: foilEpeeRefs, saber_refs: saberRefs }
 }

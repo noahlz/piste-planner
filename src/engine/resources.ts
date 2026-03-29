@@ -159,7 +159,7 @@ function ensureDayRefs(state: GlobalState, day: number): RefsInUseByDay {
   if (!state.refs_in_use_by_day[day]) {
     state.refs_in_use_by_day[day] = {
       foil_epee_in_use: 0,
-      sabre_in_use: 0,
+      saber_in_use: 0,
       fillin_in_use: 0,
       release_events: [],
     }
@@ -171,17 +171,17 @@ function ensureDayRefs(state: GlobalState, day: number): RefsInUseByDay {
  * Returns how many foil/epee refs are free (not currently in use) on the given day
  * at the given time, accounting for any release events that have fired by that time.
  *
- * Includes idle sabre refs in the available pool (PRD Section 2.3: sabre refs can
+ * Includes idle saber refs in the available pool (PRD Section 2.3: saber refs can
  * officiate ROW weapons). This is a read-only availability check — actual allocation
  * via allocateRefs always increments the correct pool (foil_epee_in_use). The scheduler
- * is responsible for not over-committing sabre refs across concurrent foil/epee and
- * sabre phases.
+ * is responsible for not over-committing saber refs across concurrent foil/epee and
+ * saber phases.
  */
 function feRefsFreeAt(day: number, atTime: number, state: GlobalState, config: TournamentConfig): number {
   const avail = config.referee_availability[day]
   if (!avail) return 0
   const dayRefs = state.refs_in_use_by_day[day]
-  if (!dayRefs) return avail.foil_epee_refs + avail.sabre_refs
+  if (!dayRefs) return avail.foil_epee_refs + avail.saber_refs
 
   // Count releases that happen at or before atTime
   const released = dayRefs.release_events
@@ -189,29 +189,29 @@ function feRefsFreeAt(day: number, atTime: number, state: GlobalState, config: T
     .reduce((sum, e) => sum + e.count, 0)
 
   const inUse = Math.max(0, dayRefs.foil_epee_in_use + dayRefs.fillin_in_use - released)
-  // Sabre refs can also officiate foil/epee (PRD Section 2.3)
-  const sabreReleased = dayRefs.release_events
-    .filter(e => e.time <= atTime && e.type === 'sabre')
+  // Saber refs can also officiate foil/epee (PRD Section 2.3)
+  const saberReleased = dayRefs.release_events
+    .filter(e => e.time <= atTime && e.type === 'saber')
     .reduce((sum, e) => sum + e.count, 0)
-  const sabreInUse = Math.max(0, dayRefs.sabre_in_use - sabreReleased)
-  const total = avail.foil_epee_refs + avail.sabre_refs
-  return Math.max(0, total - inUse - sabreInUse)
+  const saberInUse = Math.max(0, dayRefs.saber_in_use - saberReleased)
+  const total = avail.foil_epee_refs + avail.saber_refs
+  return Math.max(0, total - inUse - saberInUse)
 }
 
 /**
- * Returns how many sabre refs are free on the given day at atTime.
+ * Returns how many saber refs are free on the given day at atTime.
  */
-function sabreRefsFreeAt(day: number, atTime: number, state: GlobalState, config: TournamentConfig): number {
+function saberRefsFreeAt(day: number, atTime: number, state: GlobalState, config: TournamentConfig): number {
   const avail = config.referee_availability[day]
   if (!avail) return 0
   const dayRefs = state.refs_in_use_by_day[day]
-  if (!dayRefs) return avail.sabre_refs
+  if (!dayRefs) return avail.saber_refs
 
   const released = dayRefs.release_events
-    .filter(e => e.time <= atTime && e.type === 'sabre')
+    .filter(e => e.time <= atTime && e.type === 'saber')
     .reduce((sum, e) => sum + e.count, 0)
 
-  return Math.max(0, avail.sabre_refs - dayRefs.sabre_in_use + released)
+  return Math.max(0, avail.saber_refs - dayRefs.saber_in_use + released)
 }
 
 // ──────────────────────────────────────────────
@@ -222,7 +222,7 @@ function sabreRefsFreeAt(day: number, atTime: number, state: GlobalState, config
  * Records ref allocation for a phase: increments in-use counter and
  * appends a release event at endTime so free counts can be computed later.
  *
- * Weapon determines whether foil_epee_in_use or sabre_in_use is incremented.
+ * Weapon determines whether foil_epee_in_use or saber_in_use is incremented.
  */
 export function allocateRefs(
   state: GlobalState,
@@ -233,10 +233,10 @@ export function allocateRefs(
   endTime: number,
 ): void {
   const dayRefs = ensureDayRefs(state, day)
-  const type: 'foil_epee' | 'sabre' = weapon === Weapon.SABRE ? 'sabre' : 'foil_epee'
+  const type: 'foil_epee' | 'saber' = weapon === Weapon.SABRE ? 'saber' : 'foil_epee'
 
-  if (type === 'sabre') {
-    dayRefs.sabre_in_use += count
+  if (type === 'saber') {
+    dayRefs.saber_in_use += count
   } else {
     dayRefs.foil_epee_in_use += count
   }
@@ -258,28 +258,28 @@ export function releaseRefs(
 ): void {
   const dayRefs = ensureDayRefs(state, day)
   if (weapon === Weapon.SABRE) {
-    dayRefs.sabre_in_use = Math.max(0, dayRefs.sabre_in_use - count)
+    dayRefs.saber_in_use = Math.max(0, dayRefs.saber_in_use - count)
   } else {
     dayRefs.foil_epee_in_use = Math.max(0, dayRefs.foil_epee_in_use - count)
   }
 }
 
 // ──────────────────────────────────────────────
-// allocateRefsForSabre
+// allocateRefsForSaber
 // ──────────────────────────────────────────────
 
 /**
- * Allocates refs for a sabre phase, applying fill-in logic per PRD Section 8.2.
+ * Allocates refs for a saber phase, applying fill-in logic per PRD Section 8.2.
  *
- * - If enough sabre refs are free: allocate from sabre pool directly.
+ * - If enough saber refs are free: allocate from saber pool directly.
  * - If not and fill-in is enabled: supplement from foil/epee pool.
- *   Fill-in usage tracked in fillin_in_use separately from sabre_in_use.
- * - Returns INSUFFICIENT if neither sabre nor combined pool is sufficient.
+ *   Fill-in usage tracked in fillin_in_use separately from saber_in_use.
+ * - Returns INSUFFICIENT if neither saber nor combined pool is sufficient.
  *
  * Fill-in does NOT apply to bronze bouts; callers must pass config with
- * allow_sabre_ref_fillin=false for bronze bout allocation.
+ * allow_saber_ref_fillin=false for bronze bout allocation.
  */
-export function allocateRefsForSabre(
+export function allocateRefsForSaber(
   refsNeeded: number,
   start: number,
   end: number,
@@ -289,28 +289,28 @@ export function allocateRefsForSabre(
   competitionId = '',
   phase = '',
 ): AllocateRefsResult {
-  const sabreFree = sabreRefsFreeAt(day, start, state, config)
+  const saberFree = saberRefsFreeAt(day, start, state, config)
   const bottlenecks: Bottleneck[] = []
 
-  if (sabreFree >= refsNeeded) {
+  if (saberFree >= refsNeeded) {
     const dayRefs = ensureDayRefs(state, day)
-    dayRefs.sabre_in_use += refsNeeded
-    dayRefs.release_events.push({ time: end, type: 'sabre', count: refsNeeded })
+    dayRefs.saber_in_use += refsNeeded
+    dayRefs.release_events.push({ time: end, type: 'saber', count: refsNeeded })
     return { type: 'OK', bottlenecks }
   }
 
-  const sabreShortfall = refsNeeded - sabreFree
+  const saberShortfall = refsNeeded - saberFree
 
-  if (config.allow_sabre_ref_fillin) {
+  if (config.allow_saber_ref_fillin) {
     const feFree = feRefsFreeAt(day, start, state, config)
-    if (sabreFree + feFree >= refsNeeded) {
+    if (saberFree + feFree >= refsNeeded) {
       const dayRefs = ensureDayRefs(state, day)
-      if (sabreFree > 0) {
-        dayRefs.sabre_in_use += sabreFree
-        dayRefs.release_events.push({ time: end, type: 'sabre', count: sabreFree })
+      if (saberFree > 0) {
+        dayRefs.saber_in_use += saberFree
+        dayRefs.release_events.push({ time: end, type: 'saber', count: saberFree })
       }
-      dayRefs.fillin_in_use += sabreShortfall
-      dayRefs.release_events.push({ time: end, type: 'fillin', count: sabreShortfall })
+      dayRefs.fillin_in_use += saberShortfall
+      dayRefs.release_events.push({ time: end, type: 'fillin', count: saberShortfall })
 
       bottlenecks.push({
         competition_id: competitionId,
@@ -318,7 +318,7 @@ export function allocateRefsForSabre(
         cause: BottleneckCause.SABRE_REF_FILLIN,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
-        message: `${sabreShortfall} foil/epee ref(s) filling sabre strips.`,
+        message: `${saberShortfall} foil/epee ref(s) filling saber strips.`,
       })
 
       return { type: 'OK', bottlenecks }
@@ -502,7 +502,7 @@ function earliestRefsTime(
 
   // Compute current free count for weapon at atTime
   const freeNow = weapon === Weapon.SABRE
-    ? sabreRefsFreeAt(day, atTime, state, config)
+    ? saberRefsFreeAt(day, atTime, state, config)
     : feRefsFreeAt(day, atTime, state, config)
 
   if (freeNow >= refsNeeded) return atTime
@@ -516,8 +516,8 @@ function earliestRefsTime(
   let accumulatedFree = freeNow
   for (const event of futureReleases) {
     const isRelevant = weapon === Weapon.SABRE
-      ? event.type === 'sabre'
-      : event.type === 'foil_epee' || event.type === 'fillin' || event.type === 'sabre'
+      ? event.type === 'saber'
+      : event.type === 'foil_epee' || event.type === 'fillin' || event.type === 'saber'
     if (isRelevant) {
       accumulatedFree += event.count
       if (accumulatedFree >= refsNeeded) return event.time
