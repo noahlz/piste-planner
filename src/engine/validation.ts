@@ -2,6 +2,7 @@ import { BottleneckSeverity, CutMode, DeMode, EventType, VideoPolicy } from './t
 import type { Competition, TournamentConfig, ValidationError } from './types.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration } from './de.ts'
+import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
 
 function err(field: string, message: string): ValidationError {
   return { field, message, severity: BottleneckSeverity.ERROR }
@@ -224,6 +225,21 @@ export function validateConfig(
   for (const [groupId, totalStrips] of flightingGroupStrips) {
     if (totalStrips > config.strips_total) {
       errors.push(err('flighting_group', `Flighting group "${groupId}" requires ${totalStrips} strips but strips_total is ${config.strips_total}`))
+    }
+  }
+
+  // ── Regional tournament cut override warnings ──────────────────────────────
+
+  // Warn when a regional tournament has a competition with custom cuts on an override category.
+  // buildConfig applies the override automatically; this surfaces it to the user.
+  if (REGIONAL_CUT_TOURNAMENT_TYPES.has(config.tournament_type)) {
+    for (const comp of competitions) {
+      if (REGIONAL_CUT_OVERRIDES[comp.category] && comp.cut_mode !== CutMode.DISABLED) {
+        errors.push(warn(
+          'cut_mode',
+          `${comp.id}: regional tournament (${config.tournament_type}) requires all-advance for ${comp.category} — cut_mode will be overridden to DISABLED`,
+        ))
+      }
     }
   }
 

@@ -23,6 +23,8 @@ import {
   MIN_FENCERS,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
   DEFAULT_DE_DURATION_TABLE,
+  REGIONAL_CUT_OVERRIDES,
+  REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
 
@@ -138,6 +140,18 @@ function buildCompetitions(state: StoreState): Competition[] {
       is_priority: false,
       strips_allocated: 0,
     })
+  }
+
+  // For regional tournament types (ROC, SYC, RJCC, SJCC), force DISABLED cuts on categories
+  // that must advance all fencers to DEs per the USA Fencing Athlete Handbook.
+  if (REGIONAL_CUT_TOURNAMENT_TYPES.has(state.tournament_type)) {
+    for (const comp of competitions) {
+      const override = REGIONAL_CUT_OVERRIDES[comp.category]
+      if (override) {
+        comp.cut_mode = override.mode
+        comp.cut_value = override.value
+      }
+    }
   }
 
   // Apply accepted flighting suggestions, mutating the competition objects already in the array.

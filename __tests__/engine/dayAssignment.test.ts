@@ -299,6 +299,222 @@ describe('totalDayPenalty', () => {
     expect(penaltyNotFirst).toBeGreaterThan(penaltyFirst)
     expect(penaltyNotFirst - penaltyFirst).toBeCloseTo(0.3)
   })
+
+  it('DIV1↔CADET same weapon+gender on same day → adds 5.0 soft separation penalty (level 0)', () => {
+    const div1Comp = makeCompetition({
+      id: 'div1-m-foil',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+    })
+    const cadetComp = makeCompetition({
+      id: 'cadet-m-foil',
+      category: Category.CADET,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+    })
+
+    const sr = makeScheduleResult('cadet-m-foil', 0)
+    sr.pool_start = 480
+
+    const state = makeGlobalState({ 'cadet-m-foil': { ...sr } })
+    const allComps = [div1Comp, cadetComp]
+
+    const penalty = totalDayPenalty(div1Comp, 0, 600, state, 0, allComps, config)
+    expect(penalty).toBeGreaterThanOrEqual(5.0)
+  })
+
+  it('DIV1↔CADET soft separation NOT applied at level >= 2', () => {
+    const div1Comp = makeCompetition({
+      id: 'div1-m-foil',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+    })
+    const cadetComp = makeCompetition({
+      id: 'cadet-m-foil',
+      category: Category.CADET,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+    })
+
+    const sr = makeScheduleResult('cadet-m-foil', 0)
+    sr.pool_start = 480
+
+    const state = makeGlobalState({ 'cadet-m-foil': { ...sr } })
+    const allComps = [div1Comp, cadetComp]
+
+    // At level 2, soft separation and crossover penalties are waived
+    const penaltyL2 = totalDayPenalty(div1Comp, 0, 600, state, 2, allComps, config)
+    const penaltyL0 = totalDayPenalty(div1Comp, 0, 600, state, 0, allComps, config)
+
+    // Level 0 must be strictly higher (includes the 5.0 separation penalty)
+    expect(penaltyL0).toBeGreaterThan(penaltyL2)
+    // Level 2 should NOT include the 5.0 soft separation contribution
+    expect(penaltyL2).toBeLessThan(5.0)
+  })
+
+  it('DIV1↔CADET different gender → no soft separation penalty', () => {
+    const div1Comp = makeCompetition({
+      id: 'div1-m-foil',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+    })
+    // CADET WOMEN — different gender, should NOT trigger separation penalty
+    const cadetWomenComp = makeCompetition({
+      id: 'cadet-w-foil',
+      category: Category.CADET,
+      gender: Gender.WOMEN,
+      weapon: Weapon.FOIL,
+    })
+
+    const sr = makeScheduleResult('cadet-w-foil', 0)
+    sr.pool_start = 480
+
+    const state = makeGlobalState({ 'cadet-w-foil': { ...sr } })
+    const allComps = [div1Comp, cadetWomenComp]
+
+    const penalty = totalDayPenalty(div1Comp, 0, 600, state, 0, allComps, config)
+    // Different gender → no separation penalty; crossover is 0 (different gender)
+    // weaponBalance: both foil → rowCount=2 at this point, but since no epee, penalty = 0.5
+    // Just verify that the 5.0 separation did NOT fire (penalty < 5.0)
+    expect(penalty).toBeLessThan(5.0)
+  })
+
+  it('INDIV_TEAM_HARD_BLOCKS: DIV1 ind + JUNIOR team same weapon+gender on same day → Infinity (level 0)', () => {
+    // DIV1 individual and JUNIOR team share fencer pool → hard block (INDIV_TEAM_HARD_BLOCKS entry)
+    const div1IndComp = makeCompetition({
+      id: 'div1-m-foil-ind',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+    })
+    const juniorTeamComp = makeCompetition({
+      id: 'junior-m-foil-team',
+      category: Category.JUNIOR,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.TEAM,
+    })
+
+    const sr = makeScheduleResult('junior-m-foil-team', 0)
+    sr.pool_start = 480
+
+    const state = makeGlobalState({ 'junior-m-foil-team': { ...sr } })
+    const allComps = [div1IndComp, juniorTeamComp]
+
+    const penalty = totalDayPenalty(div1IndComp, 0, 600, state, 0, allComps, config)
+    expect(penalty).toBe(Infinity)
+  })
+
+  it('INDIV_TEAM_HARD_BLOCKS: reverse direction — JUNIOR ind + DIV1 team same weapon+gender → Infinity (level 0)', () => {
+    // JUNIOR individual and DIV1 team — reversed entry from INDIV_TEAM_HARD_BLOCKS
+    const juniorIndComp = makeCompetition({
+      id: 'junior-m-foil-ind',
+      category: Category.JUNIOR,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+    })
+    const div1TeamComp = makeCompetition({
+      id: 'div1-m-foil-team',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.TEAM,
+    })
+
+    const sr = makeScheduleResult('div1-m-foil-team', 0)
+    sr.pool_start = 480
+
+    const state = makeGlobalState({ 'div1-m-foil-team': { ...sr } })
+    const allComps = [juniorIndComp, div1TeamComp]
+
+    const penalty = totalDayPenalty(juniorIndComp, 0, 600, state, 0, allComps, config)
+    expect(penalty).toBe(Infinity)
+  })
+
+  it('INDIV_TEAM_HARD_BLOCKS: overridable at level 3 — DIV1 ind + JUNIOR team → NOT Infinity', () => {
+    const div1IndComp = makeCompetition({
+      id: 'div1-m-foil-ind',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+    })
+    const juniorTeamComp = makeCompetition({
+      id: 'junior-m-foil-team',
+      category: Category.JUNIOR,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.TEAM,
+    })
+
+    const sr = makeScheduleResult('junior-m-foil-team', 0)
+    sr.pool_start = 480
+
+    const state = makeGlobalState({ 'junior-m-foil-team': { ...sr } })
+    const allComps = [div1IndComp, juniorTeamComp]
+
+    const penaltyL3 = totalDayPenalty(div1IndComp, 0, 600, state, 3, allComps, config)
+    expect(penaltyL3).not.toBe(Infinity)
+  })
+
+  it('INDIV_TEAM_HARD_BLOCKS: different weapon does NOT trigger block', () => {
+    // DIV1 individual FOIL vs JUNIOR team EPEE — different weapon → no hard block
+    const div1IndFoil = makeCompetition({
+      id: 'div1-m-foil-ind',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+    })
+    const juniorTeamEpee = makeCompetition({
+      id: 'junior-m-epee-team',
+      category: Category.JUNIOR,
+      gender: Gender.MEN,
+      weapon: Weapon.EPEE,
+      event_type: EventType.TEAM,
+    })
+
+    const sr = makeScheduleResult('junior-m-epee-team', 0)
+    sr.pool_start = 480
+
+    const state = makeGlobalState({ 'junior-m-epee-team': { ...sr } })
+    const allComps = [div1IndFoil, juniorTeamEpee]
+
+    const penalty = totalDayPenalty(div1IndFoil, 0, 600, state, 0, allComps, config)
+    expect(penalty).not.toBe(Infinity)
+  })
+
+  it('INDIV_TEAM_HARD_BLOCKS: different gender does NOT trigger block', () => {
+    // DIV1 individual MEN vs JUNIOR team WOMEN — different gender → no hard block
+    const div1IndMen = makeCompetition({
+      id: 'div1-m-foil-ind',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+    })
+    const juniorTeamWomen = makeCompetition({
+      id: 'junior-w-foil-team',
+      category: Category.JUNIOR,
+      gender: Gender.WOMEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.TEAM,
+    })
+
+    const sr = makeScheduleResult('junior-w-foil-team', 0)
+    sr.pool_start = 480
+
+    const state = makeGlobalState({ 'junior-w-foil-team': { ...sr } })
+    const allComps = [div1IndMen, juniorTeamWomen]
+
+    const penalty = totalDayPenalty(div1IndMen, 0, 600, state, 0, allComps, config)
+    expect(penalty).not.toBe(Infinity)
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -542,9 +758,10 @@ describe('assignDay', () => {
     const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6), pool_round_duration: 90 })
 
     // Schedule comp1 first — should get day 0 (no conflicts)
-    const result = assignDay(comp1, poolStructure, state, config, allComps)
-    expect(result).toBeGreaterThanOrEqual(0)
-    expect(result).toBeLessThan(config.days_available)
+    const { day, level } = assignDay(comp1, poolStructure, state, config, allComps)
+    expect(day).toBeGreaterThanOrEqual(0)
+    expect(day).toBeLessThan(config.days_available)
+    expect(level).toBe(0)
 
     // No bottlenecks added for CONSTRAINT_RELAXED (optimal assignment)
     const relaxedBottlenecks = state.bottlenecks.filter(b => b.cause === BottleneckCause.CONSTRAINT_RELAXED)
@@ -589,8 +806,9 @@ describe('assignDay', () => {
 
     // Levels 0, 1, 2 will score day 0 as Infinity (same population block)
     // Level 3 ignores Infinity blocks → day 0 becomes valid
-    const result = assignDay(comp, poolStructure, state, config, allComps)
-    expect(result).toBe(0)
+    const { day, level } = assignDay(comp, poolStructure, state, config, allComps)
+    expect(day).toBe(0)
+    expect(level).toBe(3) // level 3 was used because same-population blocked levels 0-2
 
     // CONSTRAINT_RELAXED bottleneck should be recorded (level 3 was used)
     const relaxedBottlenecks = state.bottlenecks.filter(b => b.cause === BottleneckCause.CONSTRAINT_RELAXED)

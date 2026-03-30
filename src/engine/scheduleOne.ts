@@ -37,7 +37,7 @@ export function scheduleCompetition(
   allCompetitions: Competition[],
 ): ScheduleResult {
   const poolStructure = computePoolStructure(competition.fencer_count, competition.use_single_pool_override)
-  const day = assignDay(competition, poolStructure, state, config, allCompetitions)
+  const { day, level: constraintLevel } = assignDay(competition, poolStructure, state, config, allCompetitions)
   let notBefore = Math.max(competition.earliest_start, dayStart(day, config))
 
   // If team event, enforce individual-first ordering on same day (same weapon)
@@ -128,7 +128,7 @@ export function scheduleCompetition(
     de_duration_baseline: totalDeBase,
     de_duration_actual: 0,
     saber_fillin_used: false,
-    constraint_relaxation_level: 0,
+    constraint_relaxation_level: constraintLevel,
     accepted_warnings: [],
   }
 
