@@ -692,17 +692,9 @@ The resource preconditions defined above (strips >= max pools, refs >= strips) s
 2. **Post-scheduling diagnostic**: When events fail to schedule (ERROR bottlenecks), check whether the configured strips and/or refs meet the minimum required counts. If not, surface actionable messages: "You need at least N strips" / "You need at least X 3-weapon referees for saber events." This gives the user a concrete fix rather than opaque "no valid day found" errors.
 
 
-### TODO: Remove saber ref fill-in concept from engine
+### Resolved (Plan B — March 2026)
 
-The engine has an `allow_saber_ref_fillin` config flag and `allocateRefsForSaber()` function (`resources.ts`) that lets foil/epee-only refs substitute for 3-weapon refs on saber events when saber refs are insufficient. This concept should not exist — saber events must only use 3-weapon refs, period. If there aren't enough, that's a resource validation error, not something to work around.
-
-**Remove:**
-- `allow_saber_ref_fillin` from `SchedulerConfig` (`types.ts`)
-- `saber_fillin_used` from `CompetitionScheduleResult` (`types.ts`)
-- `SABER_REF_FILLIN` from `BottleneckCause` (`types.ts`)
-- `allocateRefsForSaber()` function (`resources.ts`) — inline the simple 3-weapon-only allocation
-- `toggleSaberFillin` store action and per-day UI toggle (`store.ts`, `RefereeSetup.tsx`)
-- All corresponding tests (`resources.test.ts`, `store.test.ts`, `WizardShell.test.tsx`, etc.)
+- **Saber ref fill-in concept removed**: Deleted `allow_saber_ref_fillin`, `saber_fillin_used`, `SABRE_REF_FILLIN`, `allocateRefsForSaber()`, `toggleSaberFillin`, and fill-in UI. Saber events now use `allocateRefs()` directly — insufficient saber refs surface as a scheduling failure, not a silent workaround.
 
 ### Resolved (Plan A — March 2026)
 

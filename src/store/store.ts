@@ -105,13 +105,11 @@ export interface UiSlice {
 export interface DayRefConfig {
   foil_epee_refs: number
   saber_refs: number
-  allow_saber_ref_fillin: boolean
 }
 
 const DEFAULT_DAY_REF_CONFIG: DayRefConfig = {
   foil_epee_refs: 0,
   saber_refs: 0,
-  allow_saber_ref_fillin: false,
 }
 
 export interface RefereeSlice {
@@ -120,7 +118,6 @@ export interface RefereeSlice {
   manuallyEditedDays: Set<number>
 
   setDayRefs: (dayIndex: number, refs: Partial<DayRefConfig>) => void
-  toggleSaberFillin: (dayIndex: number) => void
   setOptimalRefs: (refs: DayRefConfig[]) => void
   suggestAllRefs: () => void
 }
@@ -405,17 +402,6 @@ function createRefereeSlice(set: SetState, get: GetState): RefereeSlice {
       get().markStale({ scheduleStale: true })
     },
 
-    toggleSaberFillin: (dayIndex) => {
-      set((state) => {
-        const extended = ensureDayRefs(state.dayRefs, dayIndex + 1)
-        const updated = extended.map((dc, i) =>
-          i === dayIndex ? { ...dc, allow_saber_ref_fillin: !dc.allow_saber_ref_fillin } : dc,
-        )
-        return { dayRefs: updated }
-      })
-      get().markStale({ scheduleStale: true })
-    },
-
     setOptimalRefs: (refs) => {
       set({ optimalRefs: refs })
     },
@@ -432,7 +418,6 @@ function createRefereeSlice(set: SetState, get: GetState): RefereeSlice {
           optimalRefs: optimal.map((o) => ({
             foil_epee_refs: o.foil_epee_refs,
             saber_refs: o.saber_refs,
-            allow_saber_ref_fillin: false,
           })),
         })
       }

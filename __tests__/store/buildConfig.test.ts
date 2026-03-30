@@ -54,8 +54,8 @@ function minimalState(): Partial<StoreState> {
       THRESHOLD_MINS: 5,
     },
     dayRefs: [
-      { foil_epee_refs: 12, saber_refs: 6, allow_saber_ref_fillin: false },
-      { foil_epee_refs: 10, saber_refs: 5, allow_saber_ref_fillin: true },
+      { foil_epee_refs: 12, saber_refs: 6 },
+      { foil_epee_refs: 10, saber_refs: 5 },
     ],
     flightingSuggestionStates: [],
   }
@@ -237,27 +237,6 @@ describe('buildTournamentConfig', () => {
       const { config } = buildTournamentConfig(state)
 
       expect(config.referee_availability).toEqual([])
-    })
-  })
-
-  describe('allow_saber_ref_fillin', () => {
-    it('is true when any day has allow_saber_ref_fillin', () => {
-      const state = storeWith(minimalState())
-      const { config } = buildTournamentConfig(state)
-      // Day 1 has allow_saber_ref_fillin: true
-      expect(config.allow_saber_ref_fillin).toBe(true)
-    })
-
-    it('is false when no day has allow_saber_ref_fillin', () => {
-      const state = storeWith({
-        ...minimalState(),
-        dayRefs: [
-          { foil_epee_refs: 12, saber_refs: 6, allow_saber_ref_fillin: false },
-          { foil_epee_refs: 10, saber_refs: 5, allow_saber_ref_fillin: false },
-        ],
-      })
-      const { config } = buildTournamentConfig(state)
-      expect(config.allow_saber_ref_fillin).toBe(false)
     })
   })
 

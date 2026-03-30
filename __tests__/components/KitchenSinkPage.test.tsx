@@ -536,7 +536,6 @@ describe('KitchenSinkPage error state tests', () => {
         pool_duration_actual: 120,
         de_duration_baseline: 140,
         de_duration_actual: 140,
-        saber_fillin_used: false,
         constraint_relaxation_level: 0,
         accepted_warnings: [],
       },

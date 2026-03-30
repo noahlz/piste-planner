@@ -28,33 +28,33 @@
 
 **Approach:** This is a "delete and fix compilation" task. Remove the type definitions first, then let TypeScript errors guide the remaining cleanup.
 
-- [ ] **Step 1: Remove type definitions**
+- [x] **Step 1: Remove type definitions**
 
 Remove `allow_saber_ref_fillin` from `TournamentConfig` and `DayRefConfig` (via store types). Remove `saber_fillin_used` from `CompetitionScheduleResult`. Remove `SABER_REF_FILLIN` from `BottleneckCause`.
 
-- [ ] **Step 2: Fix engine compilation**
+- [x] **Step 2: Fix engine compilation**
 
 Work through TypeScript errors:
 - In `resources.ts`: remove `allocateRefsForSaber()`. Where saber ref allocation is needed, call `allocateRefs()` directly with the saber ref count. If saber refs are insufficient, return `INSUFFICIENT` (which the caller handles as a scheduling failure).
 - In `scheduleOne.ts`: replace `allocateRefsForSaber()` calls with direct saber ref allocation.
 - In `refs.ts`: remove any fill-in references.
 
-- [ ] **Step 3: Fix store compilation**
+- [x] **Step 3: Fix store compilation**
 
 - Remove `toggleSaberFillin` from store.
 - Remove `allow_saber_ref_fillin` from `DayRefConfig` and from `buildConfig.ts`.
 
-- [ ] **Step 4: Fix UI compilation**
+- [x] **Step 4: Fix UI compilation**
 
 - Remove fill-in checkbox from `RefereeSetup.tsx`.
 
-- [ ] **Step 5: Fix tests**
+- [x] **Step 5: Fix tests**
 
 - Remove fill-in-specific test cases.
 - Update test factories if they set `allow_saber_ref_fillin`.
 - Ensure remaining saber-related tests pass with direct allocation.
 
-- [ ] **Step 6: Run full test suite**
+- [x] **Step 6: Run full test suite**
 
 Run: `timeout 120 pnpm --silent test > ./tmp/test.log 2>&1`
 

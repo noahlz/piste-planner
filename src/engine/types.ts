@@ -114,7 +114,6 @@ export const BottleneckCause = {
   FLIGHT_B_DELAYED: 'FLIGHT_B_DELAYED',
   STRIP_DEFICIT_NO_FLIGHTING: 'STRIP_DEFICIT_NO_FLIGHTING',
   VIDEO_STRIP_CONTENTION: 'VIDEO_STRIP_CONTENTION',
-  SABRE_REF_FILLIN: 'SABRE_REF_FILLIN',
   DE_FINALS_BRONZE_NO_STRIP: 'DE_FINALS_BRONZE_NO_STRIP',
   PROXIMITY_PREFERENCE_UNMET: 'PROXIMITY_PREFERENCE_UNMET',
   CONSTRAINT_RELAXED: 'CONSTRAINT_RELAXED',
@@ -194,7 +193,6 @@ export interface TournamentConfig {
   strips_total: number
   video_strips_total: number
   referee_availability: DayRefereeAvailability[]
-  allow_saber_ref_fillin: boolean
   pod_captain_override: PodCaptainOverride
   DAY_START_MINS: number
   DAY_END_MINS: number
@@ -227,14 +225,13 @@ export interface FlightingGroup {
 
 export interface ReleaseEvent {
   time: number
-  type: 'foil_epee' | 'saber' | 'fillin'
+  type: 'foil_epee' | 'saber'
   count: number
 }
 
 export interface RefsInUseByDay {
   foil_epee_in_use: number
   saber_in_use: number
-  fillin_in_use: number
   release_events: ReleaseEvent[]
 }
 
@@ -290,7 +287,6 @@ export interface ScheduleResult {
   pool_duration_actual: number
   de_duration_baseline: number
   de_duration_actual: number
-  saber_fillin_used: boolean
   constraint_relaxation_level: number
   accepted_warnings: AcceptedWarning[]
 }

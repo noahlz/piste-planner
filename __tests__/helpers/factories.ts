@@ -48,7 +48,6 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
       saber_refs: 10,
       source: 'ACTUAL' as const,
     })),
-    allow_saber_ref_fillin: false,
     pod_captain_override: 'AUTO',
     DAY_START_MINS: DAY_START_8AM,
     DAY_END_MINS: DAY_END_10PM,
@@ -153,7 +152,6 @@ export function makeScheduleResult(competition_id: string, assigned_day: number)
     pool_duration_actual: 0,
     de_duration_baseline: 0,
     de_duration_actual: 0,
-    saber_fillin_used: false,
     constraint_relaxation_level: 0,
     accepted_warnings: [],
   }

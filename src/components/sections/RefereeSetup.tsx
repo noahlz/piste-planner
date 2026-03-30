@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { NumberInput } from '@/components/ui/number-input'
 import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -23,24 +22,19 @@ export function RefereeSetup() {
   const dayRefs = useStore((s) => s.dayRefs)
   const optimalRefs = useStore((s) => s.optimalRefs)
   const setDayRefs = useStore((s) => s.setDayRefs)
-  const toggleSaberFillin = useStore((s) => s.toggleSaberFillin)
   const suggestAllRefs = useStore((s) => s.suggestAllRefs)
   const podCaptainOverride = useStore((s) => s.pod_captain_override)
   const setPodCaptainOverride = useStore((s) => s.setPodCaptainOverride)
 
-  // Pre-compute per-day deficits for both row styling and the saber banner
+  // Pre-compute per-day deficits for row styling
   const deficits = Array.from({ length: daysAvailable }, (_, i) => {
-    const ref = dayRefs[i] ?? { foil_epee_refs: 0, saber_refs: 0, allow_saber_ref_fillin: false }
+    const ref = dayRefs[i] ?? { foil_epee_refs: 0, saber_refs: 0 }
     const optimal = optimalRefs[i]
     return {
       fe: optimal != null && ref.foil_epee_refs < optimal.foil_epee_refs,
       saber: optimal != null && ref.saber_refs < optimal.saber_refs,
-      saberFillinOff: optimal != null && ref.saber_refs < optimal.saber_refs && !ref.allow_saber_ref_fillin,
     }
   })
-  const daysWithSaberDeficit = deficits
-    .map((d, i) => (d.saberFillinOff ? i : -1))
-    .filter((i) => i >= 0)
 
   if (daysAvailable === 0) {
     return (
@@ -86,21 +80,6 @@ export function RefereeSetup() {
                   <TableHead className="text-right font-medium">Optimal S</TableHead>
                 </>
               )}
-              <TableHead className="text-center">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex items-center gap-1 cursor-help">
-                        Saber Fill-in
-                        <CircleHelp className="h-3.5 w-3.5 text-muted-foreground" />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-xs text-xs">
-                      When enabled, foil/epee referees may officiate saber strips if saber-qualified refs are unavailable.
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -108,7 +87,6 @@ export function RefereeSetup() {
               const ref = dayRefs[i] ?? {
                 foil_epee_refs: 0,
                 saber_refs: 0,
-                allow_saber_ref_fillin: false,
               }
               const optimal = optimalRefs[i]
               const deficitWarning = 'bg-amber-100 dark:bg-amber-900/30 rounded border-l-2 border-amber-500'
@@ -141,27 +119,11 @@ export function RefereeSetup() {
                       </TableCell>
                     </>
                   )}
-                  <TableCell>
-                    <div className="flex justify-center">
-                      <Checkbox
-                        checked={ref.allow_saber_ref_fillin}
-                        onCheckedChange={() => toggleSaberFillin(i)}
-                        aria-label={`Saber fill-in for Day ${i + 1}`}
-                      />
-                    </div>
-                  </TableCell>
                 </TableRow>
               )
             })}
           </TableBody>
         </Table>
-
-        {daysWithSaberDeficit.length > 0 && (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-            Days {daysWithSaberDeficit.map(d => d + 1).join(', ')}: saber refs below optimal.
-            Consider enabling &quot;Saber Fill-in&quot; to allow foil/epee refs on saber strips.
-          </p>
-        )}
 
         <div className="mt-3 max-w-xs space-y-1">
           <Label htmlFor="pod-captain" className="flex items-center gap-1 text-xs">
