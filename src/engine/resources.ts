@@ -15,10 +15,6 @@ export type FindStripsResult =
   | { type: 'FOUND'; stripIndices: number[] }
   | { type: 'WAIT_UNTIL'; waitUntil: number }
 
-export type AllocateRefsResult =
-  | { type: 'OK'; bottlenecks: Bottleneck[] }
-  | { type: 'INSUFFICIENT' }
-
 export type ResourceWindowResult =
   | { type: 'FOUND'; startTime: number; stripIndices: number[]; bottlenecks: Bottleneck[] }
   | { type: 'NO_WINDOW' }
@@ -160,7 +156,6 @@ function ensureDayRefs(state: GlobalState, day: number): RefsInUseByDay {
     state.refs_in_use_by_day[day] = {
       foil_epee_in_use: 0,
       saber_in_use: 0,
-      fillin_in_use: 0,
       release_events: [],
     }
   }
@@ -185,10 +180,10 @@ function feRefsFreeAt(day: number, atTime: number, state: GlobalState, config: T
 
   // Count releases that happen at or before atTime
   const released = dayRefs.release_events
-    .filter(e => e.time <= atTime && (e.type === 'foil_epee' || e.type === 'fillin'))
+    .filter(e => e.time <= atTime && e.type === 'foil_epee')
     .reduce((sum, e) => sum + e.count, 0)
 
-  const inUse = Math.max(0, dayRefs.foil_epee_in_use + dayRefs.fillin_in_use - released)
+  const inUse = Math.max(0, dayRefs.foil_epee_in_use - released)
   // Saber refs can also officiate foil/epee (PRD Section 2.3)
   const saberReleased = dayRefs.release_events
     .filter(e => e.time <= atTime && e.type === 'saber')
@@ -262,70 +257,6 @@ export function releaseRefs(
   } else {
     dayRefs.foil_epee_in_use = Math.max(0, dayRefs.foil_epee_in_use - count)
   }
-}
-
-// ──────────────────────────────────────────────
-// allocateRefsForSaber
-// ──────────────────────────────────────────────
-
-/**
- * Allocates refs for a saber phase, applying fill-in logic per PRD Section 8.2.
- *
- * - If enough saber refs are free: allocate from saber pool directly.
- * - If not and fill-in is enabled: supplement from foil/epee pool.
- *   Fill-in usage tracked in fillin_in_use separately from saber_in_use.
- * - Returns INSUFFICIENT if neither saber nor combined pool is sufficient.
- *
- * Fill-in does NOT apply to bronze bouts; callers must pass config with
- * allow_saber_ref_fillin=false for bronze bout allocation.
- */
-export function allocateRefsForSaber(
-  refsNeeded: number,
-  start: number,
-  end: number,
-  day: number,
-  state: GlobalState,
-  config: TournamentConfig,
-  competitionId = '',
-  phase = '',
-): AllocateRefsResult {
-  const saberFree = saberRefsFreeAt(day, start, state, config)
-  const bottlenecks: Bottleneck[] = []
-
-  if (saberFree >= refsNeeded) {
-    const dayRefs = ensureDayRefs(state, day)
-    dayRefs.saber_in_use += refsNeeded
-    dayRefs.release_events.push({ time: end, type: 'saber', count: refsNeeded })
-    return { type: 'OK', bottlenecks }
-  }
-
-  const saberShortfall = refsNeeded - saberFree
-
-  if (config.allow_saber_ref_fillin) {
-    const feFree = feRefsFreeAt(day, start, state, config)
-    if (saberFree + feFree >= refsNeeded) {
-      const dayRefs = ensureDayRefs(state, day)
-      if (saberFree > 0) {
-        dayRefs.saber_in_use += saberFree
-        dayRefs.release_events.push({ time: end, type: 'saber', count: saberFree })
-      }
-      dayRefs.fillin_in_use += saberShortfall
-      dayRefs.release_events.push({ time: end, type: 'fillin', count: saberShortfall })
-
-      bottlenecks.push({
-        competition_id: competitionId,
-        phase,
-        cause: BottleneckCause.SABRE_REF_FILLIN,
-        severity: BottleneckSeverity.WARN,
-        delay_mins: 0,
-        message: `${saberShortfall} foil/epee ref(s) filling saber strips.`,
-      })
-
-      return { type: 'OK', bottlenecks }
-    }
-  }
-
-  return { type: 'INSUFFICIENT' }
 }
 
 // ──────────────────────────────────────────────
@@ -517,7 +448,7 @@ function earliestRefsTime(
   for (const event of futureReleases) {
     const isRelevant = weapon === Weapon.SABRE
       ? event.type === 'saber'
-      : event.type === 'foil_epee' || event.type === 'fillin' || event.type === 'saber'
+      : event.type === 'foil_epee' || event.type === 'saber'
     if (isRelevant) {
       accumulatedFree += event.count
       if (accumulatedFree >= refsNeeded) return event.time

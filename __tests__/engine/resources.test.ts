@@ -6,7 +6,6 @@ import {
   findAvailableStrips,
   allocateRefs,
   releaseRefs,
-  allocateRefsForSaber,
   earliestResourceWindow,
   snapToSlot,
 } from '../../src/engine/resources.ts'
@@ -43,7 +42,6 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
       { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
       { day: 1, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
     ],
-    allow_saber_ref_fillin: false,
     pod_captain_override: 'AUTO',
     DAY_START_MINS: 480,
     DAY_END_MINS: 1320,
@@ -310,66 +308,6 @@ describe('allocateRefs / releaseRefs', () => {
     allocateRefs(state, 0, Weapon.FOIL, 2, 480, 600)
     releaseRefs(state, 0, Weapon.FOIL, 5, 600) // release more than allocated
     expect(state.refs_in_use_by_day[0].foil_epee_in_use).toBe(0)
-  })
-})
-
-// ──────────────────────────────────────────────
-// allocateRefsForSaber
-// ──────────────────────────────────────────────
-
-describe('allocateRefsForSaber', () => {
-  it('sufficient saber refs → OK, records SABRE release event', () => {
-    const config = makeConfig({ allow_saber_ref_fillin: false })
-    const state = createGlobalState(config)
-    const result = allocateRefsForSaber(4, 480, 600, 0, state, config)
-    expect(result.type).toBe('OK')
-    expect(state.refs_in_use_by_day[0].saber_in_use).toBe(4)
-  })
-
-  it('insufficient saber refs, fill-in disabled → INSUFFICIENT, state not mutated', () => {
-    // Only 2 saber refs on day 0; need 5
-    const config = makeConfig({
-      allow_saber_ref_fillin: false,
-      referee_availability: [{ day: 0, foil_epee_refs: 20, saber_refs: 2, source: 'ACTUAL' }],
-    })
-    const state = createGlobalState(config)
-    const result = allocateRefsForSaber(5, 480, 600, 0, state, config)
-    expect(result.type).toBe('INSUFFICIENT')
-    // Verify no partial allocation occurred
-    const dayRefs = state.refs_in_use_by_day[0]
-    if (dayRefs) {
-      expect(dayRefs.saber_in_use).toBe(0)
-      expect(dayRefs.foil_epee_in_use).toBe(0)
-    }
-  })
-
-  it('saber shortfall, fill-in enabled, fe refs cover → OK with SABRE_REF_FILLIN bottleneck', () => {
-    const config = makeConfig({
-      allow_saber_ref_fillin: true,
-      referee_availability: [{ day: 0, foil_epee_refs: 20, saber_refs: 2, source: 'ACTUAL' }],
-    })
-    const state = createGlobalState(config)
-    // Need 5 saber refs; only 2 available; fill-in covers the 3 shortfall
-    const result = allocateRefsForSaber(5, 480, 600, 0, state, config)
-    expect(result.type).toBe('OK')
-    if (result.type === 'OK') {
-      const fillinBottleneck = result.bottlenecks.find(b => b.cause === 'SABRE_REF_FILLIN')
-      expect(fillinBottleneck).toBeDefined()
-    }
-    // fillin tracked separately
-    expect(state.refs_in_use_by_day[0].fillin_in_use).toBe(3)
-    expect(state.refs_in_use_by_day[0].saber_in_use).toBe(2)
-  })
-
-  it('saber shortfall, fill-in enabled, but combined still insufficient → INSUFFICIENT', () => {
-    const config = makeConfig({
-      allow_saber_ref_fillin: true,
-      referee_availability: [{ day: 0, foil_epee_refs: 2, saber_refs: 1, source: 'ACTUAL' }],
-    })
-    const state = createGlobalState(config)
-    // Need 10; only 1 saber + 2 fe = 3 available
-    const result = allocateRefsForSaber(10, 480, 600, 0, state, config)
-    expect(result.type).toBe('INSUFFICIENT')
   })
 })
 

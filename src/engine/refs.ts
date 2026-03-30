@@ -43,8 +43,6 @@ export function podCaptainsNeeded(
  * - SABRE: saber-qualified refs only (no cross-weapon)
  * - FOIL/EPEE: foil_epee refs + saber refs (saber refs can officiate ROW weapons)
  *
- * Note: The reverse direction (foil/epee refs filling in for saber shortfalls
- * via `allow_saber_ref_fillin`) is handled in the resource allocation layer (Task 3C).
  */
 export function refsAvailableOnDay(day: number, weapon: Weapon, config: TournamentConfig): number {
   const avail = config.referee_availability[day]

@@ -19,7 +19,6 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
     strips_total: 12,
     video_strips_total: 2,
     referee_availability: [],
-    allow_saber_ref_fillin: false,
     pod_captain_override: PodCaptainOverride.AUTO,
     DAY_START_MINS: 480,
     DAY_END_MINS: 1320,
