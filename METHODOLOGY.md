@@ -107,13 +107,22 @@ Overlapping age categories MUST be on **different days** (per weapon and gender)
 
 ### Individual/Team Separation
 
-- **Veteran team**: NEVER on the same day as veteran individual (same weapon/gender)
-- **Junior team**: NEVER on the same day as Div 1 individual (same weapon/gender)
-- **Senior team**: NEVER on the same day as Junior individual (same weapon/gender)
-- **Div 1 individual and Senior team**: cannot be on the same day
-- **For other overlapping individual/team pairs**: 2-hour separation required, in either direction
+Hard-blocked pairs (Infinity penalty at level < 3, same weapon+gender required):
+- **Veteran ind ↔ Veteran team**: overlapping fencer pool
+- **Div 1 ind ↔ Junior team**: Junior team draws from Div 1 individual pool
+- **Junior ind ↔ Div 1 team**: Div 1 team draws from Junior individual pool
+
+(see [`constants.ts`](src/engine/constants.ts) — `INDIV_TEAM_HARD_BLOCKS`)
+
+**For other overlapping individual/team pairs**: 2-hour separation required, in either direction
   - e.g., Vet Team at 8 AM allows Div 2 Individual at 10 AM
   - Individual before team is a soft preference, not a hard rule
+
+### Soft Separation (DIV1 ↔ CADET)
+
+Div 1 and Cadet events of the same weapon+gender incur a 5.0 soft penalty when on the same day (level < 2). This reflects the Operations Manual guidance that these categories should be on different days "except in rare cases." Different weapon or different gender does not trigger the penalty — e.g., Div 1 Men's Foil and Cadet Women's Foil can share a day.
+
+(see [`constants.ts`](src/engine/constants.ts) — `SOFT_SEPARATION_PAIRS`)
 
 ### Team Events Require a Matching Individual
 
@@ -267,6 +276,8 @@ All penalty weights used by the auto-suggest algorithm. These will become config
 | Ind+team day after | -0.4 | **Bonus**: team event the day after individual |
 | Same population | ∞ | **Hard block**: identical age category + gender + weapon |
 | Group 1 mandatory separation | ∞ | **Hard block**: overlapping populations that must be on different days |
+| Ind/team hard block | ∞ | **Hard block**: specific ind/team cross-category pairs (same weapon+gender) |
+| Soft separation (DIV1↔CADET) | 5.0 | Same weapon+gender on same day; suppressed at level ≥ 2 |
 
 (see [`dayAssignment.ts`](src/engine/dayAssignment.ts), [`crossover.ts`](src/engine/crossover.ts), [`constants.ts`](src/engine/constants.ts))
 
@@ -645,12 +656,6 @@ True strip-time equity (ensuring men's and women's events get balanced simultane
 
 Issues discovered during integration testing with realistic tournament data (March 2026). These should be addressed in future engine iterations.
 
-### Bug: `constraint_relaxation_level` not populated in ScheduleResult
-
-`scheduleOne.ts` initializes `constraint_relaxation_level: 0` and never updates it. The `assignDay` function knows which level it used, but doesn't return it. This makes it impossible to distinguish events that used level-3 relaxation (hard block override) from those that scheduled cleanly.
-
-**Fix**: `assignDay` should return `{ day, level }` and `scheduleCompetition` should store the level in the result.
-
 ### Limitation: Day assignment is penalty-driven, not capacity-aware
 
 The `assignDay`/`totalDayPenalty` scoring considers crossover penalties, proximity, and early-start patterns but does **not** consider remaining day capacity (total strip-hours available). When many large events (200–350 fencers) have similar penalty profiles, the scheduler piles them onto the same day. DE phases then overrun the 14-hour day boundary.
@@ -686,17 +691,6 @@ The resource preconditions defined above (strips >= max pools, refs >= strips) s
 
 2. **Post-scheduling diagnostic**: When events fail to schedule (ERROR bottlenecks), check whether the configured strips and/or refs meet the minimum required counts. If not, surface actionable messages: "You need at least N strips" / "You need at least X 3-weapon referees for saber events." This gives the user a concrete fix rather than opaque "no valid day found" errors.
 
-### Limitation: INDIV_TEAM_HARD_BLOCKS not wired into engine
-
-The constant exists in `constants.ts` but is not consumed by `totalDayPenalty` or any scheduling logic. Individual and team events of the same category can currently be placed on the same day (which tournaments avoid in practice).
-
-### Limitation: SOFT_SEPARATION_PAIRS not applied
-
-`SOFT_SEPARATION_PAIRS` (Div 1↔Cadet, penalty 5.0) is imported in `dayAssignment.ts` but never referenced in `totalDayPenalty`. The soft penalty has no effect.
-
-### Limitation: REGIONAL_CUT_OVERRIDES not applied
-
-The constant is defined but not consumed. Regional tournaments (ROC/SYC/RJCC/SJCC) should override default cuts for Y14/Cadet/Junior/Div 1 to 100% advancement, but this isn't implemented.
 
 ### TODO: Remove saber ref fill-in concept from engine
 
@@ -710,6 +704,13 @@ The engine has an `allow_saber_ref_fillin` config flag and `allocateRefsForSaber
 - `toggleSaberFillin` store action and per-day UI toggle (`store.ts`, `RefereeSetup.tsx`)
 - All corresponding tests (`resources.test.ts`, `store.test.ts`, `WizardShell.test.tsx`, etc.)
 
+### Resolved (Plan A — March 2026)
+
+- **`constraint_relaxation_level` now populated**: `assignDay` returns `{ day, level }` and `scheduleCompetition` stores the level in the result. Integration tests use per-event level instead of global error count.
+- **`SOFT_SEPARATION_PAIRS` wired**: DIV1↔CADET same weapon+gender incurs 5.0 soft penalty at level < 2.
+- **`INDIV_TEAM_HARD_BLOCKS` wired**: Vet ind↔Vet team, Div1 ind↔Jr team, Jr ind↔Div1 team return Infinity at level < 3 (same weapon+gender).
+- **`REGIONAL_CUT_OVERRIDES` applied**: `buildConfig` overrides cuts to DISABLED/100 for Y14/Cadet/Junior/Div1 at regional tournaments (ROC/SYC/RJCC/SJCC). Validation emits WARN if user-set cuts would be overridden.
+
 ---
 
 ## Integration Test Status (March 2026)
@@ -722,7 +723,7 @@ Tests verify:
 - Engine doesn't crash on realistic data
 - At least some events schedule
 - `scheduled + errors = total` (nothing silently dropped)
-- Hard separations respected — **but only checked when there are zero errors** (all scenarios have errors, so this check is effectively skipped)
+- Hard separations respected per-event (skipped only for events that used level-3 constraint relaxation)
 
 ### Results per scenario
 

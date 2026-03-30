@@ -21,9 +21,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   EventType, DeMode, VideoPolicy,
-  CutMode, BottleneckSeverity,
+  CutMode, BottleneckSeverity, BottleneckCause,
 } from '../../src/engine/types.ts'
-import type { Competition, TournamentType } from '../../src/engine/types.ts'
+import type { Competition, Bottleneck, TournamentType } from '../../src/engine/types.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
@@ -69,26 +69,21 @@ function buildCompetitions(fencerCounts: Record<string, number>): Competition[] 
 
 /**
  * Asserts mandatory-separation categories are never on the same day for scheduled events.
- * Only checked when no ERROR bottlenecks exist — when errors are present, the engine
- * may have relaxed to level 3 (overriding hard blocks as last resort).
- *
- * Note: constraint_relaxation_level in ScheduleResult is not yet populated by the engine
- * (hardcoded to 0), so we can't use it for per-event filtering.
+ * Per-event: skips any pair where either event used level-3 relaxation (knowingly
+ * overrode hard blocks as a last resort).
  */
 function assertHardSeparations(
-  schedule: Record<string, { assigned_day: number }>,
+  schedule: Record<string, { assigned_day: number; constraint_relaxation_level: number }>,
   competitions: Competition[],
-  hasErrors: boolean,
 ) {
-  // When the engine has errors, it may have used level-3 relaxation (override hard blocks)
-  if (hasErrors) return
-
   const compMap = new Map(competitions.map(c => [c.id, c]))
   const entries = Object.entries(schedule)
   for (let i = 0; i < entries.length; i++) {
     for (let j = i + 1; j < entries.length; j++) {
       const [id1, sr1] = entries[i]
       const [id2, sr2] = entries[j]
+      // Skip pairs where either event knowingly overrode hard blocks
+      if (sr1.constraint_relaxation_level >= 3 || sr2.constraint_relaxation_level >= 3) continue
       const c1 = compMap.get(id1)!
       const c2 = compMap.get(id2)!
       if (c1.gender !== c2.gender || c1.weapon !== c2.weapon) continue
@@ -101,9 +96,13 @@ function assertHardSeparations(
   }
 }
 
-/** Asserts ind and team events of same category/gender/weapon not on same day. */
+/**
+ * Asserts ind and team events of same category/gender/weapon not on same day.
+ * Per-event: skips any pair where either event used level-3 relaxation (knowingly
+ * overrode hard blocks as a last resort).
+ */
 function assertIndTeamSeparation(
-  schedule: Record<string, { assigned_day: number }>,
+  schedule: Record<string, { assigned_day: number; constraint_relaxation_level: number }>,
   competitions: Competition[],
 ) {
   const compMap = new Map(competitions.map(c => [c.id, c]))
@@ -112,6 +111,8 @@ function assertIndTeamSeparation(
     for (let j = i + 1; j < entries.length; j++) {
       const [id1, sr1] = entries[i]
       const [id2, sr2] = entries[j]
+      // Skip pairs where either event knowingly overrode hard blocks
+      if (sr1.constraint_relaxation_level >= 3 || sr2.constraint_relaxation_level >= 3) continue
       const c1 = compMap.get(id1)!
       const c2 = compMap.get(id2)!
       if (c1.category !== c2.category) continue
@@ -163,8 +164,8 @@ function tournamentConfig(
  * - All assigned days within bounds
  */
 function assertScheduleIntegrity(
-  schedule: Record<string, { assigned_day: number }>,
-  bottlenecks: { severity: string }[],
+  schedule: Record<string, { assigned_day: number; constraint_relaxation_level: number }>,
+  bottlenecks: Bottleneck[],
   competitions: Competition[],
   days: number,
 ) {
@@ -183,8 +184,19 @@ function assertScheduleIntegrity(
     expect(sr.assigned_day).toBeLessThan(days)
   }
 
-  // Hard separation constraints (skipped when engine is in degraded mode)
-  assertHardSeparations(schedule, competitions, errors > 0)
+  // Relaxed events must have matching CONSTRAINT_RELAXED bottleneck (prevents silent false-pass
+  // if a bug were to set constraint_relaxation_level=3 on all events without actually relaxing)
+  for (const [id, sr] of Object.entries(schedule)) {
+    if (sr.constraint_relaxation_level > 0) {
+      const hasRelaxedBottleneck = bottlenecks.some(
+        b => b.competition_id === id && b.cause === BottleneckCause.CONSTRAINT_RELAXED,
+      )
+      expect(hasRelaxedBottleneck, `${id} has level ${sr.constraint_relaxation_level} but no CONSTRAINT_RELAXED bottleneck`).toBe(true)
+    }
+  }
+
+  // Hard separation constraints (per-event: skipped for events that used level-3 relaxation)
+  assertHardSeparations(schedule, competitions)
 }
 
 // ──────────────────────────────────────────────
@@ -235,7 +247,7 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
-      // TODO: assertIndTeamSeparation once INDIV_TEAM_HARD_BLOCKS is wired into engine
+      assertIndTeamSeparation(schedule, competitions)
     })
   })
 

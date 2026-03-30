@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
-import type { Strip, Competition, FlightingGroup } from '../../src/engine/types.ts'
+import type { Strip, Competition, FlightingGroup, TournamentType } from '../../src/engine/types.ts'
 import {
   DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
   SLOT_MINS, DAY_LENGTH_MINS, DE_REFS, DE_FINALS_MIN_MINS,
@@ -293,6 +293,61 @@ describe('buildTournamentConfig', () => {
       expect(config.MIN_FENCERS).toBe(MIN_FENCERS)
       expect(config.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
       expect(config.de_duration_table).toEqual(DEFAULT_DE_DURATION_TABLE)
+    })
+  })
+
+  describe('regional cut overrides', () => {
+    function regionalCutState(
+      tournamentType: TournamentType,
+      compId: string,
+      cutMode: string,
+      cutValue: number,
+    ): Partial<StoreState> {
+      return {
+        ...minimalState(),
+        tournament_type: tournamentType,
+        selectedCompetitions: {
+          [compId]: {
+            fencer_count: 40,
+            ref_policy: 'AUTO',
+            cut_mode: cutMode as CutMode,
+            cut_value: cutValue,
+            de_mode: 'SINGLE_BLOCK',
+            de_video_policy: 'BEST_EFFORT',
+            use_single_pool_override: false,
+          },
+        },
+      }
+    }
+
+    it('overrides cut to DISABLED/100 for JUNIOR at ROC tournament', () => {
+      const state = storeWith(regionalCutState('ROC', 'JR-M-FOIL-IND', 'PERCENTAGE', 20))
+      const { competitions } = buildTournamentConfig(state)
+      const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
+
+      expect(comp).toBeDefined()
+      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
+      expect(comp!.cut_value).toBe(100)
+    })
+
+    it('does NOT override cut for JUNIOR at NAC tournament', () => {
+      const state = storeWith(regionalCutState('NAC', 'JR-M-FOIL-IND', 'PERCENTAGE', 20))
+      const { competitions } = buildTournamentConfig(state)
+      const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
+
+      expect(comp).toBeDefined()
+      expect(comp!.cut_mode).toBe(CutMode.PERCENTAGE)
+      expect(comp!.cut_value).toBe(20)
+    })
+
+    it('does NOT override cut for VETERAN at ROC tournament (category not in REGIONAL_CUT_OVERRIDES)', () => {
+      const state = storeWith(regionalCutState('ROC', 'VET-M-FOIL-IND-V40', 'PERCENTAGE', 20))
+      const { competitions } = buildTournamentConfig(state)
+      const comp = competitions.find((c: Competition) => c.id === 'VET-M-FOIL-IND-V40')
+
+      expect(comp).toBeDefined()
+      expect(comp!.cut_mode).toBe(CutMode.PERCENTAGE)
+      expect(comp!.cut_value).toBe(20)
     })
   })
 

@@ -16,7 +16,7 @@ import {
   dayStart,
 } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState, PoolStructure } from './types.ts'
-import { HIGH_CROSSOVER_THRESHOLD, REST_DAY_PAIRS } from './constants.ts'
+import { HIGH_CROSSOVER_THRESHOLD, INDIV_TEAM_HARD_BLOCKS, REST_DAY_PAIRS, SOFT_SEPARATION_PAIRS } from './constants.ts'
 import {
   crossoverPenalty,
   proximityPenalty,
@@ -350,6 +350,24 @@ export function totalDayPenalty(
     // Hard block: same population or Group 1 mandatory pair
     if (level < 3 && xpen === Infinity) return Infinity
 
+    // Hard block: INDIV_TEAM_HARD_BLOCKS — specific ind/team cross-category pairs that must
+    // not share a day because they draw from overlapping fencer pools (same weapon+gender required).
+    // Checked separately so future entries in INDIV_TEAM_HARD_BLOCKS automatically apply.
+    if (level < 3 && competition.weapon === c2.weapon && competition.gender === c2.gender) {
+      for (const block of INDIV_TEAM_HARD_BLOCKS) {
+        const isIndTeamMatch =
+          (competition.event_type === EventType.INDIVIDUAL &&
+            competition.category === block.indivCategory &&
+            c2.event_type === EventType.TEAM &&
+            c2.category === block.teamCategory) ||
+          (competition.event_type === EventType.TEAM &&
+            competition.category === block.teamCategory &&
+            c2.event_type === EventType.INDIVIDUAL &&
+            c2.category === block.indivCategory)
+        if (isIndTeamMatch) return Infinity
+      }
+    }
+
     // Soft crossover penalty (ignored at level ≥ 2)
     if (level < 2) {
       total += xpen
@@ -381,6 +399,20 @@ export function totalDayPenalty(
           total += 8.0
         } else if (gap < config.INDIV_TEAM_MIN_GAP_MINS) {
           total += 3.0
+        }
+      }
+    }
+
+    // Soft separation: e.g. DIV1↔CADET same weapon+gender should be on different days
+    // (Operations Manual: only split in rare cases). Ignored at level ≥ 2, same as soft crossover.
+    if (level < 2) {
+      for (const entry of SOFT_SEPARATION_PAIRS) {
+        const [a, b] = entry.pair
+        const isPair =
+          (competition.category === a && c2.category === b) ||
+          (competition.category === b && c2.category === a)
+        if (isPair && competition.gender === c2.gender && competition.weapon === c2.weapon) {
+          total += entry.penalty
         }
       }
     }
@@ -634,7 +666,7 @@ export function assignDay(
   state: GlobalState,
   config: TournamentConfig,
   allCompetitions: Competition[],
-): number {
+): { day: number; level: number } {
   for (const level of CONSTRAINT_LEVELS) {
     const scores = scoreAllDays(competition, poolStructure, state, config, allCompetitions, level)
 
@@ -662,7 +694,7 @@ export function assignDay(
       recordDiagnosticBottlenecks(competition, best.day, best.estimatedStart, state, level, allCompetitions, config)
     }
 
-    return best.day
+    return { day: best.day, level }
   }
 
   throw new SchedulingError(

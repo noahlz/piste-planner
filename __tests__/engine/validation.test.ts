@@ -5,6 +5,7 @@ import {
   Category, CutMode, DeMode, EventType, VideoPolicy,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
+import { BottleneckSeverity } from '../../src/engine/types.ts'
 
 
 // ──────────────────────────────────────────────
@@ -392,5 +393,63 @@ describe('validateConfig — individual+team same-day duration', () => {
     })
     const errors = validateConfig(config, [individual, team])
     expect(errors.filter((e: ValidationError) => e.field === 'indiv_team_same_day')).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// validateConfig — regional cut override warnings
+// ──────────────────────────────────────────────
+
+describe('validateConfig — regional cut override warnings', () => {
+  it('emits a WARN when a regional tournament has a JUNIOR competition with non-DISABLED cut', () => {
+    const config = makeConfig({ tournament_type: 'ROC' })
+    const comp = makeCompetition({
+      id: 'JR-M-FOIL-IND',
+      category: Category.JUNIOR,
+      cut_mode: CutMode.PERCENTAGE,
+      cut_value: 20,
+    })
+    const errors = validateConfig(config, [comp])
+    const warning = errors.find(e => e.field === 'cut_mode' && e.severity === BottleneckSeverity.WARN && e.message.includes('JR-M-FOIL-IND'))
+    expect(warning).toBeDefined()
+  })
+
+  it('does not warn when regional tournament JUNIOR competition has DISABLED cut', () => {
+    const config = makeConfig({ tournament_type: 'ROC' })
+    const comp = makeCompetition({
+      id: 'JR-M-FOIL-IND',
+      category: Category.JUNIOR,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+    })
+    const errors = validateConfig(config, [comp])
+    const warnings = errors.filter(e => e.field === 'cut_mode' && e.severity === BottleneckSeverity.WARN && e.message.includes('override'))
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('does not warn for NAC tournament with non-DISABLED cut on JUNIOR', () => {
+    const config = makeConfig({ tournament_type: 'NAC' })
+    const comp = makeCompetition({
+      id: 'JR-M-FOIL-IND',
+      category: Category.JUNIOR,
+      cut_mode: CutMode.PERCENTAGE,
+      cut_value: 20,
+    })
+    const errors = validateConfig(config, [comp])
+    const warnings = errors.filter(e => e.field === 'cut_mode' && e.severity === BottleneckSeverity.WARN && e.message.includes('override'))
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('does not warn for regional tournament with non-override category (VETERAN)', () => {
+    const config = makeConfig({ tournament_type: 'SYC' })
+    const comp = makeCompetition({
+      id: 'VET-M-FOIL-IND',
+      category: Category.VETERAN,
+      cut_mode: CutMode.PERCENTAGE,
+      cut_value: 20,
+    })
+    const errors = validateConfig(config, [comp])
+    const warnings = errors.filter(e => e.field === 'cut_mode' && e.severity === BottleneckSeverity.WARN && e.message.includes('override'))
+    expect(warnings).toHaveLength(0)
   })
 })
