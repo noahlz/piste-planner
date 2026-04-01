@@ -1,8 +1,8 @@
-# Engine Fixes D: Bin-Pack Capacity-Aware Day Assignment
+# Engine Fixes D: Capacity-Aware Day Assignment
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the capacity-naive day assignment scoring with a weighted bin-packing model that tracks strip-hour capacity per day, weights competitions by age category, and penalizes overfull days.
+**Goal:** Replace the capacity-naive day assignment scoring with capacity-aware scoring that tracks strip-hour capacity per day, weights competitions by age category, and penalizes overfull days.
 
 **Architecture:** Three tightly coupled tasks: (1) build the capacity estimation functions, (2) define age-category weights, (3) integrate both into `totalDayPenalty`. Each task is independently testable but they build on each other sequentially.
 
@@ -14,7 +14,7 @@
 
 ### Task 1: Day capacity estimation function
 
-**What & Why:** The current scheduler assigns events to days based purely on crossover penalties and separation constraints — it has no concept of whether a day is "full." A 4-day NAC with 80 strips has roughly 1,120 strip-hours per day (80 strips × 14 hours). A single 310-fencer Div 1 event might consume 200+ strip-hours between pools and DEs. The scheduler doesn't track this, so when 6 large events all have similar penalty profiles, it piles them onto the same day. The result: DE phases overrun the 14-hour day boundary, and the engine has to fail those events with ERROR bottlenecks. Real tournament directors intuitively balance day loads — they know you can't put all the 300-fencer events on Saturday. This task builds the measurement tool: functions that compute how many strip-hours (general and video) a competition will consume and how much capacity a day has remaining. This is the foundation for the bin-packing model in Tasks 2–3.
+**What & Why:** The current scheduler assigns events to days based purely on crossover penalties and separation constraints — it has no concept of whether a day is "full." A 4-day NAC with 80 strips has roughly 1,120 strip-hours per day (80 strips × 14 hours). A single 310-fencer Div 1 event might consume 200+ strip-hours between pools and DEs. The scheduler doesn't track this, so when 6 large events all have similar penalty profiles, it piles them onto the same day. The result: DE phases overrun the 14-hour day boundary, and the engine has to fail those events with ERROR bottlenecks. Real tournament directors intuitively balance day loads — they know you can't put all the 300-fencer events on Saturday. This task builds the measurement tool: functions that compute how many strip-hours (general and video) a competition will consume and how much capacity a day has remaining. This is the foundation for the capacity-aware model in Tasks 2–3.
 
 **Files:**
 - Create: `src/engine/capacity.ts` — pure capacity estimation functions
@@ -61,7 +61,7 @@ Two functions:
 
 ### Task 2: Age-category start-time weights
 
-**What & Why:** Not all events consume a day equally. A 310-fencer Div 1 Men's Epee event with staged video DEs is a monster that anchors an entire day — it must start at 8 AM and will run all the way to evening. A 40-fencer Vet 60 event is comparatively lightweight and flexible. Beyond raw size, age category determines when events can realistically start. Y10 (10-and-under) events start first thing in the morning because young fencers tire quickly and parents need to leave at reasonable hours. Div 1 events also start early because they're the longest. Veteran 40 and 50 can start in early slots, but Veteran Combined (which includes 60/70 athletes), 60, 70, and 80 events should start later — some veteran fencers take medication in the morning and need time for the effects to wear off before competing. Div 1A, Div 2, and Div 3 events can also start early despite being lighter-weight events. The current scheduler has only a small Y10-first-slot heuristic. This task defines a proper weight system: each category gets a scheduling weight (how "heavy" it is in the bin-packing sense) and an earliest-start-offset (how much later than day-start it should begin). These weights let the capacity model treat a Div 1 event as 1.5× its raw strip-hours and a Vet Combined event as 0.6× — reflecting the real operational impact on a tournament day.
+**What & Why:** Not all events consume a day equally. A 310-fencer Div 1 Men's Epee event with staged video DEs is a monster that anchors an entire day — it must start at 8 AM and will run all the way to evening. A 40-fencer Vet 60 event is comparatively lightweight and flexible. Beyond raw size, age category determines when events can realistically start. Y10 (10-and-under) events start first thing in the morning because young fencers tire quickly and parents need to leave at reasonable hours. Div 1 events also start early because they're the longest. Veteran 40 and 50 can start in early slots, but Veteran Combined (which includes 60/70 athletes), 60, 70, and 80 events should start later — some veteran fencers take medication in the morning and need time for the effects to wear off before competing. Div 1A, Div 2, and Div 3 events can also start early despite being lighter-weight events. The current scheduler has only a small Y10-first-slot heuristic. This task defines a proper weight system: each category gets a scheduling weight (how "heavy" it is in the capacity-scoring sense) and an earliest-start-offset (how much later than day-start it should begin). These weights let the capacity model treat a Div 1 event as 1.5× its raw strip-hours and a Vet Combined event as 0.6× — reflecting the real operational impact on a tournament day.
 
 **Files:**
 - Modify: `src/engine/constants.ts` — add `CATEGORY_START_PREFERENCE` and `CATEGORY_WEIGHT_MODIFIER`
@@ -84,8 +84,8 @@ Add to `constants.ts`:
 
 Write tests:
 1. `weightedStripHours(competition, config)` returns `estimateCompetitionStripHours * weight` for the category.
-2. Y10 event with 80 fencers (12 pools) has weight 1.2 → 20% heavier in bin-packing.
-3. VET Combined event with 40 fencers (6 pools) has weight 0.6 → 40% lighter in bin-packing.
+2. Y10 event with 80 fencers (12 pools) has weight 1.2 → 20% heavier in capacity-aware scoring.
+3. VET Combined event with 40 fencers (6 pools) has weight 0.6 → 40% lighter in capacity-aware scoring.
 4. VET 40 event with 40 fencers has weight 0.8 → no start offset, lighter weight.
 5. DIV1 event with 310 fencers has weight 1.5 → 50% heavier (large field + video serialization).
 6. DIV2 event with 100 fencers has weight 0.7, offset 0 → can start early, lighter weight.
@@ -169,7 +169,7 @@ Run: `timeout 120 pnpm --silent test > ./tmp/test.log 2>&1`
 
 ## Post-Plan D
 
-Update METHODOLOGY.md with the new bin-pack capacity model:
+Update METHODOLOGY.md with the capacity-aware day assignment model:
 - Add a new section describing the capacity-aware day assignment model:
   - Days are bins with finite strip-hour capacity (strips × day length)
   - Video-strip hours are tracked as a separate budget

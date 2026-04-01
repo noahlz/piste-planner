@@ -10,7 +10,7 @@ For the underlying code, see [`src/engine/`](src/engine/). For USA Fencing sourc
 
 ## Operations Research Framing
 
-Piste Planner models tournament scheduling as a resource-constrained bin-packing problem:
+Piste Planner models tournament scheduling as a resource-constrained scheduling problem:
 
 - **Strips** are queues (general-purpose — used for pools or DEs)
   - During pools: each pool is a unit of work assigned to a strip queue
@@ -515,9 +515,9 @@ When the auto-suggest algorithm cannot find a valid day at the strictest level, 
 
 The auto-suggest engine uses a **priority-ordered, constraint-relaxing** approach to generate an initial schedule. The result is a **suggestion** — users can drag-and-drop competitions on the day/strip grid to refine it. The engine re-validates after each manual adjustment, showing warnings and errors for constraint violations. (see [`scheduler.ts`](src/engine/scheduler.ts), [`dayAssignment.ts`](src/engine/dayAssignment.ts), [`scheduleOne.ts`](src/engine/scheduleOne.ts))
 
-### Target Architecture: Bin Packing
+### Target Architecture: Capacity-Aware Day Assignment
 
-The scheduling algorithm is moving toward a **bin-packing approach**:
+The scheduling algorithm is moving toward **capacity-aware day assignment**:
 
 - **Bin width** = number of available strips
 - **Bin height** = day length (14 hours in 30-minute slots)
