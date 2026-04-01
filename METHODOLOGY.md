@@ -490,7 +490,7 @@ Sourced from real USA Fencing tournament data (2024–2026). Values are P75 empi
 | Y-14 | 70 | 100 | 70 | 70 | 70 | 50 |
 | Y-12 | 70 | 70 | 70 | 70 | 50 | 50 |
 | Y-10 | 20 | 30 | 30 | 20 | 20 | 20 |
-| Div1A | 50 | 80 | 50 | 50 | 50 | 10 |
+| Div1A | 80 | 50 | 50 | 50 | 50 | 10 |
 | Div2 | 60 | 70 | 50 | 50 | 20 | 30 |
 
 ---
@@ -619,7 +619,7 @@ Selecting the tournament type enables / disables events available in the tournam
 
 ### SYC (Super Youth Circuit)
 
-- Youth (Y10, Y12, Y14), Cadet and Junior categories
+- Youth categories (Y10, Y12, Y14)
 - 100% advancement to DE
 - Regional-scale fencer defaults
 
@@ -635,21 +635,6 @@ Selecting the tournament type enables / disables events available in the tournam
 - 100% advancement to DE
 - Can be combined with ROC and RYC
 
-### Gender Equity (Informational Warning Only)
-
-The USA Fencing Athlete Handbook (p.15, "Regional Tournament Capping Structure"; beginning 2025–26, mandatory for regional tournaments) caps the pool count difference between men's and women's events in the same age category and weapon:
-
-| Pools in larger event | Maximum pool count difference |
-|---|---|
-| 3 or fewer | 0 (must be equal) |
-| 4–7 | 1 |
-| 8–11 | 2 |
-| 12+ | 3 |
-
-This is a **registration/capping guideline**, not a scheduling rule. It tells organizers when entry caps are too far apart — it does not affect how events are placed on strips or time slots. The engine surfaces violations as an informational warning during pre-scheduling analysis. It has no effect on day assignment, strip allocation, or penalty scoring.
-
-True strip-time equity (ensuring men's and women's events get balanced simultaneous strip usage) is a separate concern not addressed by this rule or the engine.
-
 ---
 
 ## Known Engine Limitations and Open Bugs
@@ -664,43 +649,9 @@ The `assignDay`/`totalDayPenalty` scoring considers crossover penalties, proximi
 
 **Fix needed**: Add a day-capacity heuristic to scoring. Estimate total strip-hours consumed by already-assigned events and penalize days nearing capacity.
 
-### Correct behavior: Video strip sharing with cascading release
-
-Video strips are allocated as a block per DE phase, not dynamically shared bout-by-bout. However, multiple events **can** overlap on video strips when there are enough strips to accommodate both events' concurrent demand.
-
-Staged DE phases naturally release strips as rounds progress:
-
-| Phase | Bouts | Strips needed |
-|-------|-------|---------------|
-| Round of 16 | 8 simultaneous | 8 |
-| Round of 8 | 4 simultaneous | 4 |
-| Quarterfinals | 2 simultaneous | 2 |
-| Finals | 1 | 1 |
-
-When an event advances from R16 (8 strips) to R8 (4 strips), the freed 4 strips become available to other events. For example, with 8 video strips: Div 1 Women's Foil finishes R16 and moves to R8 (needs 4), freeing 4 strips. Vet 40 Men's Epee can then use 2 of those freed strips for its required top-4 video bouts.
-
-The engine models this correctly via per-strip `strip_free_at` tracking — each strip is individually tracked, so cascading release happens naturally as phases complete and strips are returned to the pool.
-
-The constraint is **peak concurrent demand**: if the total video strips needed by all overlapping DE phases at any point in time exceeds `video_strips_total`, events must wait (serialize). When many video-dependent events land on the same day, this serialization can push DE phases past the day boundary. The fix belongs in day assignment (item 2 above): penalize days where peak video strip demand approaches capacity, spreading video load across days.
-
 ### Not yet implemented: Post-scheduling resource diagnostic
 
 When events fail to schedule (ERROR bottlenecks), check whether the configured strips and/or refs meet the minimum required counts. If not, surface actionable messages: "You need at least N strips" / "You need at least X 3-weapon referees for saber events." This gives the user a concrete fix rather than opaque "no valid day found" errors.
-
-### Resolved (Plan C — March 2026)
-
-- **Upfront resource precondition validation**: `validateConfig` now checks strip and referee minimums before scheduling begins. For each competition, computes `n_pools` via `computePoolStructure` and verifies `n_pools <= strips_total`. For referee availability, checks that at least one day has sufficient refs of the correct type (saber refs for SABRE events, foil/epee refs for FOIL/EPEE). Returns ERROR-severity `ValidationError` with field `resource_precondition` and actionable messages like "Event X requires Y strips for pools but only Z total strips configured."
-
-### Resolved (Plan B — March 2026)
-
-- **Saber ref fill-in concept removed**: Deleted `allow_saber_ref_fillin`, `saber_fillin_used`, `SABRE_REF_FILLIN`, `allocateRefsForSaber()`, `toggleSaberFillin`, and fill-in UI. Saber events now use `allocateRefs()` directly — insufficient saber refs surface as a scheduling failure, not a silent workaround.
-
-### Resolved (Plan A — March 2026)
-
-- **`constraint_relaxation_level` now populated**: `assignDay` returns `{ day, level }` and `scheduleCompetition` stores the level in the result. Integration tests use per-event level instead of global error count.
-- **`SOFT_SEPARATION_PAIRS` wired**: DIV1↔CADET same weapon+gender incurs 5.0 soft penalty at level < 2.
-- **`INDIV_TEAM_HARD_BLOCKS` wired**: Vet ind↔Vet team, Div1 ind↔Jr team, Jr ind↔Div1 team return Infinity at level < 3 (same weapon+gender).
-- **`REGIONAL_CUT_OVERRIDES` applied**: `buildConfig` overrides cuts to DISABLED/100 for Y14/Cadet/Junior/Div1 at regional tournaments (ROC/SYC/RJCC/SJCC). Validation emits WARN if user-set cuts would be overridden.
 
 ---
 
