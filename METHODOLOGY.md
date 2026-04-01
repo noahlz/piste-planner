@@ -683,14 +683,13 @@ The engine models this correctly via per-strip `strip_free_at` tracking — each
 
 The constraint is **peak concurrent demand**: if the total video strips needed by all overlapping DE phases at any point in time exceeds `video_strips_total`, events must wait (serialize). When many video-dependent events land on the same day, this serialization can push DE phases past the day boundary. The fix belongs in day assignment (item 2 above): penalize days where peak video strip demand approaches capacity, spreading video load across days.
 
-### Not yet implemented: Resource precondition validation
+### Not yet implemented: Post-scheduling resource diagnostic
 
-The resource preconditions defined above (strips >= max pools, refs >= strips) should be enforced at two points:
+When events fail to schedule (ERROR bottlenecks), check whether the configured strips and/or refs meet the minimum required counts. If not, surface actionable messages: "You need at least N strips" / "You need at least X 3-weapon referees for saber events." This gives the user a concrete fix rather than opaque "no valid day found" errors.
 
-1. **Upfront in `validateConfig`**: Check strip and referee minimums before scheduling begins. Return ERROR-severity `ValidationError` items with clear messages like "Event X requires Y strips for pools but only Z total strips configured."
+### Resolved (Plan C — March 2026)
 
-2. **Post-scheduling diagnostic**: When events fail to schedule (ERROR bottlenecks), check whether the configured strips and/or refs meet the minimum required counts. If not, surface actionable messages: "You need at least N strips" / "You need at least X 3-weapon referees for saber events." This gives the user a concrete fix rather than opaque "no valid day found" errors.
-
+- **Upfront resource precondition validation**: `validateConfig` now checks strip and referee minimums before scheduling begins. For each competition, computes `n_pools` via `computePoolStructure` and verifies `n_pools <= strips_total`. For referee availability, checks that at least one day has sufficient refs of the correct type (saber refs for SABRE events, foil/epee refs for FOIL/EPEE). Returns ERROR-severity `ValidationError` with field `resource_precondition` and actionable messages like "Event X requires Y strips for pools but only Z total strips configured."
 
 ### Resolved (Plan B — March 2026)
 
@@ -733,11 +732,11 @@ Tests verify:
 
 1. **Capacity-naive day assignment** — scheduler piles events onto the same day because penalty scoring doesn't account for remaining strip-hours
 2. **Staged DE video serialization** — multiple events' DE phases compete for limited video strips, cascading into day-boundary overruns
-3. **No upfront resource validation** — insufficient strips/refs aren't caught before scheduling begins
+3. **~~No upfront resource validation~~ (resolved Plan C)** — `validateConfig` now catches insufficient strips/refs before scheduling begins
 
 ### When these tests should be tightened
 
-Once the engine implements capacity-aware day assignment and upfront resource validation, these tests should be updated to assert:
+Once the engine implements capacity-aware day assignment, these tests should be updated to assert:
 - All events scheduled (zero errors)
 - Hard separations verified for all scheduled events
 - Specific day assignments match expected patterns (e.g., Div 1 and Junior never share a day)

@@ -397,6 +397,101 @@ describe('validateConfig — individual+team same-day duration', () => {
 })
 
 // ──────────────────────────────────────────────
+// validateConfig — resource precondition checks
+// ──────────────────────────────────────────────
+
+describe('validateConfig — resource precondition: strips', () => {
+  it('returns error when competition needs more strips than configured (70 fencers → 10 pools, only 8 strips)', () => {
+    // ceil(70/7) = 10 pools, but strips_total = 8
+    const strips = makeStrips(8, 1)
+    const config = makeConfig({ strips })
+    const comp = makeCompetition({ id: 'MEN-JR-EPEE-IND', fencer_count: 70, weapon: 'EPEE' })
+    const errors = validateConfig(config, [comp])
+    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === 'ERROR')
+    expect(error).toBeDefined()
+    expect(error?.message).toContain('MEN-JR-EPEE-IND')
+    expect(error?.message).toMatch(/requires 10 strips/)
+    expect(error?.message).toMatch(/only 8 total strips/)
+  })
+
+  it('does not error when competition pool count fits within strips_total', () => {
+    // ceil(70/7) = 10 pools, strips_total = 24 → ok
+    const config = makeConfig()
+    const comp = makeCompetition({ fencer_count: 70, weapon: 'EPEE' })
+    const errors = validateConfig(config, [comp])
+    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
+  })
+
+  it('does not error for competitions below MIN_FENCERS', () => {
+    // fencer_count=1 is below MIN_FENCERS=2, already invalid — skip resource check
+    const strips = makeStrips(1, 0)
+    const config = makeConfig({ strips })
+    const comp = makeCompetition({ fencer_count: 1 })
+    const errors = validateConfig(config, [comp])
+    // Should get fencer_count error, but NOT resource_precondition error
+    expect(errors.filter(e => e.field === 'resource_precondition')).toHaveLength(0)
+  })
+})
+
+describe('validateConfig — resource precondition: referee availability', () => {
+  it('returns error when saber event needs more saber refs than available on any day', () => {
+    // ceil(105/7) = 15 pools, but max saber_refs across days = 10
+    const config = makeConfig()  // default: saber_refs=10 per day
+    const comp = makeCompetition({ id: 'MEN-JR-SABRE-IND', fencer_count: 105, weapon: 'SABRE' })
+    const errors = validateConfig(config, [comp])
+    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === 'ERROR')
+    expect(error).toBeDefined()
+    expect(error?.message).toContain('MEN-JR-SABRE-IND')
+    expect(error?.message).toContain('saber')
+    expect(error?.message).toContain('15')  // required refs
+    expect(error?.message).toContain('10')  // max available
+  })
+
+  it('returns error when foil event needs more foil/epee refs than available on any day', () => {
+    // ceil(168/7) = 24 pools, but max foil_epee_refs = 20
+    const config = makeConfig()  // default: foil_epee_refs=20 per day
+    const comp = makeCompetition({ id: 'MEN-DIV1-FOIL-IND', fencer_count: 168, weapon: 'FOIL' })
+    const errors = validateConfig(config, [comp])
+    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === 'ERROR')
+    expect(error).toBeDefined()
+    expect(error?.message).toContain('MEN-DIV1-FOIL-IND')
+    expect(error?.message).toContain('foil/epee')
+    expect(error?.message).toContain('24')  // required refs
+    expect(error?.message).toContain('20')  // max available
+  })
+
+  it('does not error when saber refs are sufficient on at least one day', () => {
+    // ceil(70/7) = 10 pools, at least one day has saber_refs=10 → ok
+    const config = makeConfig()  // default: saber_refs=10
+    const comp = makeCompetition({ fencer_count: 70, weapon: 'SABRE' })
+    const errors = validateConfig(config, [comp])
+    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
+  })
+
+  it('does not error when foil/epee refs are sufficient on at least one day', () => {
+    // ceil(70/7) = 10 pools, at least one day has foil_epee_refs=20 → ok
+    const config = makeConfig()
+    const comp = makeCompetition({ fencer_count: 70, weapon: 'FOIL' })
+    const errors = validateConfig(config, [comp])
+    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
+  })
+
+  it('passes when one day has sufficient saber refs even if others do not', () => {
+    // Two days: day 0 has saber_refs=5, day 1 has saber_refs=15 → ok for 15 pools
+    const config = makeConfig({
+      days_available: 2,
+      referee_availability: [
+        { day: 0, foil_epee_refs: 20, saber_refs: 5, source: 'ACTUAL' as const },
+        { day: 1, foil_epee_refs: 20, saber_refs: 15, source: 'ACTUAL' as const },
+      ],
+    })
+    const comp = makeCompetition({ fencer_count: 105, weapon: 'SABRE' })
+    const errors = validateConfig(config, [comp])
+    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
 // validateConfig — regional cut override warnings
 // ──────────────────────────────────────────────
 

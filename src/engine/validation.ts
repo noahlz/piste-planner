@@ -1,4 +1,4 @@
-import { BottleneckSeverity, CutMode, DeMode, EventType, VideoPolicy } from './types.ts'
+import { BottleneckSeverity, CutMode, DeMode, EventType, VideoPolicy, Weapon } from './types.ts'
 import type { Competition, TournamentConfig, ValidationError } from './types.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration } from './de.ts'
@@ -140,6 +140,29 @@ export function validateConfig(
       config.video_strips_total < comp.de_round_of_16_strips
     ) {
       errors.push(err('de_video_policy', `${comp.id}: REQUIRED video policy needs ${comp.de_round_of_16_strips} video strips for R16 but only ${config.video_strips_total} available`))
+    }
+
+    // Resource precondition checks — skip competitions with invalid fencer counts
+    if (comp.fencer_count >= config.MIN_FENCERS) {
+      const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
+
+      // Strip capacity: n_pools strips needed (one per pool running in parallel).
+      // strips_total is a global scalar — no per-day strip availability model yet.
+      if (n_pools > config.strips_total) {
+        errors.push(err('resource_precondition', `${comp.id}: requires ${n_pools} strips for pools but only ${config.strips_total} total strips configured`))
+      }
+
+      // Referee capacity: check that at least one day has enough refs of the right type
+      const isSabre = comp.weapon === Weapon.SABRE
+      const refField = isSabre ? 'saber_refs' : 'foil_epee_refs'
+      const refLabel = isSabre ? 'saber' : 'foil/epee'
+      const maxRefsOnAnyDay = config.referee_availability.reduce(
+        (max, day) => Math.max(max, day[refField]),
+        0,
+      )
+      if (maxRefsOnAnyDay < n_pools) {
+        errors.push(err('resource_precondition', `${comp.id}: requires ${n_pools} ${refLabel} refs for pools but only ${maxRefsOnAnyDay} configured`))
+      }
     }
   }
 
