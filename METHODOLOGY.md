@@ -25,20 +25,23 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 
 1. [Inputs and Outputs](#inputs-and-outputs)
 2. [Hard Constraints](#hard-constraints)
-3. [Soft Preferences](#soft-preferences)
-4. [Penalty Defaults Table](#penalty-defaults-table)
-5. [Pool Composition](#pool-composition)
-6. [Flighting](#flighting)
-7. [Direct Elimination (DE)](#direct-elimination-de)
-8. [Strip Assignment](#strip-assignment)
-9. [Referee Allocation](#referee-allocation)
-10. [Auto-Suggestion Logic](#auto-suggestion-logic)
-11. [Constraint Relaxation](#constraint-relaxation)
-12. [Scheduling Algorithm](#scheduling-algorithm)
-13. [Tournament-Type Policies](#tournament-type-policies)
-14. [Known Engine Limitations and Open Bugs](#known-engine-limitations-and-open-bugs)
-15. [Integration Test Status](#integration-test-status-march-2026)
-16. [References](#references)
+3. [Relaxable Constraints](#relaxable-constraints)
+4. [Soft Preferences](#soft-preferences)
+5. [Constraint Relaxation](#constraint-relaxation)
+6. [Competition Math](#competition-math)
+   - [Pool Composition](#pool-composition)
+   - [Flighting](#flighting)
+   - [Direct Elimination (DE)](#direct-elimination-de)
+7. [Resources](#resources)
+   - [Strip Assignment](#strip-assignment)
+   - [Referee Allocation](#referee-allocation)
+8. [Capacity Model [PLANNED]](#capacity-model-planned)
+9. [Scheduling Algorithm](#scheduling-algorithm)
+10. [Tournament-Type Policies](#tournament-type-policies)
+11. [Auto-Suggestion Logic](#auto-suggestion-logic)
+12. [References](#references)
+
+[Appendix A: Penalty & Constant Defaults](#appendix-a-penalty--constant-defaults)
 
 ---
 
@@ -77,14 +80,14 @@ All times are minutes from midnight (e.g., 480 = 8:00 AM). The scheduling day ru
 
 ## Hard Constraints
 
-These rules cause scheduling to fail or produce errors. They are not relaxed unless all softer options are exhausted (see [Constraint Relaxation](#constraint-relaxation)). (see [`crossover.ts`](src/engine/crossover.ts), [`dayAssignment.ts`](src/engine/dayAssignment.ts))
+These rules cause scheduling to fail or produce errors. They are never relaxed. (see [`crossover.ts`](src/engine/crossover.ts), [`dayAssignment.ts`](src/engine/dayAssignment.ts))
 
 ### Same-Population Conflicts
 
 - Two competitions with **identical age category, gender, and weapon** cannot be on the same day
 - This is the strongest constraint — returns infinite penalty
 
-### Overlapping-Population Separation
+### Overlapping-Population Separation (Group 1)
 
 Overlapping age categories MUST be on **different days** (per weapon and gender). This prevents fencers who compete in multiple age categories from having schedule conflicts. (Ops Manual Ch.4, pp.26–27 — Group 1: Mandatory Criteria)
 
@@ -105,41 +108,6 @@ Overlapping age categories MUST be on **different days** (per weapon and gender)
 
 (see [`constants.ts`](src/engine/constants.ts) — `GROUP_1_MANDATORY_PAIRS`, `CROSSOVER_GRAPH`)
 
-### Individual/Team Separation
-
-Hard-blocked pairs (Infinity penalty at level < 3, same weapon+gender required):
-- **Veteran ind ↔ Veteran team**: overlapping fencer pool
-- **Div 1 ind ↔ Junior team**: Junior team draws from Div 1 individual pool
-- **Junior ind ↔ Div 1 team**: Div 1 team draws from Junior individual pool
-
-(see [`constants.ts`](src/engine/constants.ts) — `INDIV_TEAM_HARD_BLOCKS`)
-
-**For other overlapping individual/team pairs**: 2-hour separation required, in either direction
-  - e.g., Vet Team at 8 AM allows Div 2 Individual at 10 AM
-  - Individual before team is a soft preference, not a hard rule
-
-### Soft Separation (DIV1 ↔ CADET)
-
-Div 1 and Cadet events of the same weapon+gender incur a 5.0 soft penalty when on the same day (level < 2). This reflects the Operations Manual guidance that these categories should be on different days "except in rare cases." Different weapon or different gender does not trigger the penalty — e.g., Div 1 Men's Foil and Cadet Women's Foil can share a day.
-
-(see [`constants.ts`](src/engine/constants.ts) — `SOFT_SEPARATION_PAIRS`)
-
-### Team Events Require a Matching Individual
-
-- Every team competition must have a corresponding individual competition in the same age category, gender, and weapon
-- If user selects Team, the corresponding Individual event is automatically enabled and cannot be disabled unless team is first disabled.
-- Validated before scheduling begins (see [`analysis.ts`](src/engine/analysis.ts))
-
-### Team Events Cannot Use Cuts
-
-- Team competitions always advance all entered teams to the DE phase
-- Cut-to-DE settings are rejected in validation AND not allowed in the UI
-
-### Fencer Count Bounds
-
-- Each competition must have between 2 and 500 fencers
-- Events outside this range are rejected in validation
-
 ### Single-Day Fit
 
 - A competition's worst-case duration (pool round + 30-minute admin gap + full DE) must fit within the 14-hour day
@@ -151,7 +119,7 @@ Div 1 and Cadet events of the same weapon+gender incur a 5.0 soft penalty when o
 - If the DE phase would extend past the end of the day, the user is given a **warning** with the estimated finish time
 - This is NOT a hard failure — the schedule is allowed but flagged
 
-### Resource Preconditions (hard requirements)
+### Resource Preconditions
 
 Tournaments are never run resource-constrained. Strips and referees are preconditions, not variables the scheduler optimizes around. `validateConfig` must enforce:
 
@@ -174,11 +142,48 @@ These are **hard validation errors**, not warnings. The UI should auto-suggest v
 
 **Video strip minimum**: Tournaments with Cadet/Junior/Div 1 events (staged DE with video REQUIRED) need sufficient video strips for concurrent DE phases. Video strips come in multiples of 4. Minimum 4; 8+ recommended when multiple video-required events share a day.
 
+### Team Events Require a Matching Individual
+
+- Every team competition must have a corresponding individual competition in the same age category, gender, and weapon
+- If user selects Team, the corresponding Individual event is automatically enabled and cannot be disabled unless team is first disabled.
+- Validated before scheduling begins (see [`analysis.ts`](src/engine/analysis.ts))
+
+### Team Events Cannot Use Cuts
+
+- Team competitions always advance all entered teams to the DE phase
+- Cut-to-DE settings are rejected in validation AND not allowed in the UI
+
+### Fencer Count Bounds
+
+- Each competition must have between 2 and 500 fencers
+- Events outside this range are rejected in validation
+
+---
+
+## Relaxable Constraints
+
+These constraints apply as infinite penalties at constraint relaxation levels 0–2, behaving like hard blocks. At level 3 (last resort), they are relaxed. See [Constraint Relaxation](#constraint-relaxation).
+
+### Individual/Team Separation
+
+Hard-blocked pairs (Infinity penalty at level < 3, same weapon+gender required):
+- **Veteran ind ↔ Veteran team**: overlapping fencer pool
+- **Div 1 ind ↔ Junior team**: Junior team draws from Div 1 individual pool
+- **Junior ind ↔ Div 1 team**: Div 1 team draws from Junior individual pool
+
+(see [`constants.ts`](src/engine/constants.ts) — `INDIV_TEAM_HARD_BLOCKS`)
+
+**For other overlapping individual/team pairs**: 2-hour separation required, in either direction
+  - e.g., Vet Team at 8 AM allows Div 2 Individual at 10 AM
+  - Individual before team is a soft preference, not a hard rule
+
 ---
 
 ## Soft Preferences
 
 These factors influence day assignment through a weighted penalty system. The auto-suggest algorithm assigns each competition to the day with the lowest total penalty. Penalties are listed in approximate order of strength. All weights will become configurable in a future release. (see [`dayAssignment.ts`](src/engine/dayAssignment.ts))
+
+See Appendix A for exact values.
 
 ### Demographic Crossover
 
@@ -190,111 +195,107 @@ These factors influence day assignment through a weighted penalty system. The au
   - Junior → Div 1A: 0.8 (almost always)
   - Veteran → Div 1: 0.8 (high overlap at NACs)
 - Two-hop indirect relationships computed automatically, capped at 0.3
-- When two high-crossover competitions are on the same day within 30 minutes: **strong penalty** (10.0)
-- Lower crossover within 30 minutes: **moderate penalty** (4.0)
+- When two high-crossover competitions are on the same day within 30 minutes: **strong penalty**
+- Lower crossover within 30 minutes: **moderate penalty**
+
+### Soft Separation (DIV1 ↔ CADET)
+
+Div 1 and Cadet events of the same weapon+gender incur a soft penalty when on the same day (level < 2). This reflects the Operations Manual guidance that these categories should be on different days "except in rare cases." Different weapon or different gender does not trigger the penalty — e.g., Div 1 Men's Foil and Cadet Women's Foil can share a day.
+
+(see [`constants.ts`](src/engine/constants.ts) — `SOFT_SEPARATION_PAIRS`)
 
 ### Early-Start Conflicts
 
-- Two high-crossover competitions both starting at 8:00 AM on the **same day**: penalty 2.0
-- Two high-crossover competitions both starting at 8:00 AM on **consecutive days**: penalty 5.0 (forces families to arrive early two days in a row)
-- Individual + team (same demographic) both starting early on consecutive days: penalty 2.0
+- Two high-crossover competitions both starting at 8:00 AM on the **same day**: penalty
+- Two high-crossover competitions both starting at 8:00 AM on **consecutive days**: penalty (forces families to arrive early two days in a row)
+- Individual + team (same demographic) both starting early on consecutive days: penalty
 
 ### Rest Day Preference
 
-- Junior and Cadet (same weapon): consecutive days without rest → penalty 1.5
-- Junior and Div 1 (same weapon): consecutive days without rest → penalty 1.5
+- Junior and Cadet (same weapon): consecutive days without rest → penalty
+- Junior and Div 1 (same weapon): consecutive days without rest → penalty
 - Source: Ops Manual Ch.4, p.26 — Group 2: Highly Desirable (not mandatory)
 
 ### Proximity Preference
 
 - Related categories should be on **adjacent days** (e.g., Friday/Saturday), not far apart
   - BAD: Junior Men's Epee on Friday, Div 1 Men's Epee on Monday
-- 1 day apart: bonus -0.4 (preferred)
+- 1 day apart: bonus (preferred)
 - 2 days apart: neutral (0.0)
-- 3+ days apart: penalty 0.5
+  - 2 days apart is neutral — no penalty, no bonus.
+- 3+ days apart: penalty
 
 (see [`constants.ts`](src/engine/constants.ts) — `PROXIMITY_GRAPH`, `PROXIMITY_PENALTY_WEIGHTS`)
 
 ### Weapon Balance
 
 - Each day should have a mix of ROW weapons (foil/saber) and epee
-- An all-ROW or all-epee day: penalty 0.5
+- An all-ROW or all-epee day: penalty
 - Penalty should be proportional to competition size
 
 ### Cross-Weapon Same Demographic
 
-- Penalty when same gender + age category but different weapon on same day: 0.2 per pair
+- Penalty when same gender + age category but different weapon on same day
 - **Applies ONLY to Veteran events** — no other age categories have meaningful cross-weapon overlap
 
 ### Y10 Early Scheduling
 
 - Y10 events preferred in the first time slot of their day
-- If Y10 doesn't start at 8:00 AM: penalty 0.3
+- If Y10 doesn't start at 8:00 AM: penalty
 - Reason: avoid young fencers being at competitions late into the evening
 
 ### Last-Day Referee Shortage
 
 - Large events on the last day when ref availability is below the daily average:
   - "Large" is relative to event type:
-    - NAC: 300+ fencers is large → penalty 0.5
-    - ROC: 100+ fencers is large → smaller penalty
-  - Medium events (50–100 fencers): penalty 0.2
+    - NAC: 300+ fencers is large → penalty (see Appendix A)
+    - ROC: 100+ fencers is large → moderate penalty (see Appendix A)
+  - Medium events (50–100 fencers): penalty (see Appendix A)
 
 ### Individual-Team Proximity
 
 - Applies to **Senior, Junior, and Cadet** only
-- Team event preferred the day after individual: bonus -0.4
-- Team before individual: penalty 1.0 (soft preference, not hard)
-- 2+ days apart: penalty 0.3
+- Team event preferred the day after individual: bonus
+- Team before individual: penalty (soft preference, not hard)
+- 2+ days apart: penalty
 - **Veteran team**: must be adjacent to ANY veteran individual of the same weapon/gender (Vet Combined or Vet Age 40–80)
 
----
-
-## Penalty Defaults Table
-
-All penalty weights used by the auto-suggest algorithm. These will become configurable via a settings panel in a future release.
-
-| Factor | Default | Description |
-|---|---|---|
-| Same-time high crossover (≥0.8) | 10.0 | Two high-overlap competitions within 30-min window on same day |
-| Same-time low crossover | 4.0 | Two low-overlap competitions within 30-min window on same day |
-| Ind+team same-time or wrong order | 8.0 | Individual and team event (same demographic) overlapping or team scheduled first |
-| Ind+team gap < 120 min | 3.0 | Individual and team event too close together |
-| Early start consecutive days, high crossover | 5.0 | Two high-overlap events both at 8 AM on back-to-back days |
-| Early start same day, high crossover | 2.0 | Two high-overlap events both at 8 AM same day |
-| Early start consecutive days, ind+team | 2.0 | Ind + team (same demographic) both at 8 AM on consecutive days |
-| Rest day violation | 1.5 | Junior↔Cadet or Junior↔Div 1 on consecutive days without rest |
-| Team before individual | 1.0 | Team event scheduled before its individual counterpart |
-| Weapon balance | 0.5 | All-ROW or all-epee day |
-| Last-day ref shortage (large event) | 0.5 | Large event on last day with below-average ref availability |
-| Proximity 3+ days apart | 0.5 | Related categories far apart in the schedule |
-| Y10 non-first-slot | 0.3 | Y10 event not starting at 8 AM |
-| Ind+team 2+ days apart | 0.3 | Individual and team event far apart |
-| Cross-weapon same demographic (Vet only) | 0.2 | Same gender+age, different weapon on same day (Veterans only) |
-| Last-day ref shortage (medium event) | 0.2 | Medium event on last day with below-average ref availability |
-| Proximity 1 day apart | -0.4 | **Bonus**: related categories on adjacent days |
-| Ind+team day after | -0.4 | **Bonus**: team event the day after individual |
-| Same population | ∞ | **Hard block**: identical age category + gender + weapon |
-| Group 1 mandatory separation | ∞ | **Hard block**: overlapping populations that must be on different days |
-| Ind/team hard block | ∞ | **Hard block**: specific ind/team cross-category pairs (same weapon+gender) |
-| Soft separation (DIV1↔CADET) | 5.0 | Same weapon+gender on same day; suppressed at level ≥ 2 |
-
-(see [`dayAssignment.ts`](src/engine/dayAssignment.ts), [`crossover.ts`](src/engine/crossover.ts), [`constants.ts`](src/engine/constants.ts))
+(see Appendix A for exact values)
 
 ---
 
-## Pool Composition
+## Constraint Relaxation
+
+The scheduling system uses three tiers of constraints: **Hard** (never relaxed), **Relaxable** (infinite penalty at levels 0–2, relaxed at level 3), and **Soft** (finite penalties, active at level 0). Progressive relaxation proceeds through these tiers when no valid assignment exists.
+
+(see [`dayAssignment.ts`](src/engine/dayAssignment.ts))
+
+| Level | What's Relaxed |
+|---|---|
+| 0 (full constraints) | All rules active: hard blocks, relaxable ind/team pairs, soft preferences, proximity |
+| 1 | Drops proximity preferences (Proximity Preference, Individual-Team Proximity distance penalty) |
+| 2 | Drops soft crossover penalties and Soft Separation (DIV1↔CADET); overlapping populations may share a day, but same-population hard blocks remain |
+| 3 | Drops relaxable constraints (Individual/Team hard blocks); same population still produces a warning but is allowed as last resort |
+
+- Each relaxation emits a warning
+- If no valid day exists even at Level 3, scheduling fails with an unresolvable error
+
+---
+
+## Competition Math
+
+### Pool Composition
 
 Pool structure follows USA Fencing rules (Athlete Handbook Table 2.16.1, pages 90–91). (see [`pools.ts`](src/engine/pools.ts))
 
-### Pool Sizing
+#### Pool Sizing
 
 - 9 or fewer fencers: single pool of all fencers
 - 10 fencers with single-pool override: one pool of 10 (double-stripped)
 - 10+ fencers: pools targeting 6–7 fencers each → `ceil(fencerCount / 7)` pools
 - Remainder fencers distributed so some pools get one extra fencer
 
-### Pool Duration Estimation
+#### Pool Duration Estimation
 
 Baseline duration for a standard 6-person pool (15 round-robin bouts):
 
@@ -308,41 +309,37 @@ Baseline duration for a standard 6-person pool (15 round-robin bouts):
   - e.g., 7-person pool = 21 bouts → ~1.4x baseline
 - Pools with 8+ fencers are **double-stripped** (two bouts simultaneously), halving effective duration
 
-### Pool Parallelism
+#### Pool Parallelism
 
 - Concurrent pools = min(available strips, total pools, available refs ÷ refs-per-pool)
 - Total pool round duration: `weighted_avg_pool_duration × ceil(total_pools / effective_parallelism)`
 
----
-
-## Flighting
+### Flighting
 
 Flighting splits a large competition's pool round into two flights, using **half the strips for double the time**. The schedule marks the competition as "flighted" but does not track Flight A/B start/end times separately — only total pool round duration matters. (see [`flighting.ts`](src/engine/flighting.ts))
 
-### Eligibility
+#### Eligibility
 
 - **Only** Cadet, Junior, and Div 1 events with **200+ fencers**
 - Events below 200 fencers are never flighted
 - Y10, Y12, Veteran, Div 2, Div 3, etc. are never flighted regardless of size
 
-### How Flighting Works
+#### How Flighting Works
 
 - The **larger event** becomes flighted (uses half the strips, double the time)
 - Smaller events get priority to start and run in parallel with the first flight
 - Flighted events have a strong affinity for the 8:00 AM time slot
 
-### Flighting Rules
+#### Flighting Rules
 
 - A flighted competition MUST be the largest event on its day — not allowed otherwise
 - Flighting is suggested when two same-day competitions' combined pool count exceeds available strips, but each fits individually
 
----
-
-## Direct Elimination (DE)
+### Direct Elimination (DE)
 
 (see [`de.ts`](src/engine/de.ts), [`scheduleOne.ts`](src/engine/scheduleOne.ts))
 
-### Bracket Sizing
+#### Bracket Sizing
 
 - DE bracket = next power of 2 at or above fencers advancing from pools
 - Advancement depends on cut-to-DE setting:
@@ -351,7 +348,7 @@ Flighting splits a large competition's pool round into two flights, using **half
   - **Disabled**: all fencers advance
 - Minimum 2 fencers always advance
 
-### Default Cuts by Age Category
+#### Default Cuts by Age Category
 
 | Age Category | Default Cut | Notes |
 |---|---|---|
@@ -361,7 +358,7 @@ Flighting splits a large competition's pool round into two flights, using **half
 | Div 2, Div 3 | Disabled (100% advance) | |
 | Veteran | Disabled (100% advance) | |
 
-### DE Modes
+#### DE Modes
 
 Determined by event type. NACs always use Staged DEs, with the stage round starting per the Video Policy (NACs always have video). All other event types use Single Stage.
 
@@ -373,13 +370,13 @@ Determined by event type. NACs always use Staged DEs, with the stage round start
   - Structure: Prelim DEs → Video stage (on video strips)
   - Multiple events in the Video stage contend for the available video strips
 
-### DE Phase Breakdown (for Staged DEs)
+#### DE Phase Breakdown (for Staged DEs)
 
 - Bracket above the video round: Prelim phase on general strips, then Video phase on video strips
 - Bracket at or below the video round: Video phase only
 - Duration split proportionally by bout count
 
-### Video Replay Policy
+#### Video Replay Policy
 
 At national tournaments, video replay is guaranteed from a specific DE round per age category. At local/regional tournaments, video replay is optional. (Ops Manual Ch.4, p.25)
 
@@ -399,46 +396,46 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 ---
 
-## Strip Assignment
+## Resources
+
+### Strip Assignment
 
 (see [`resources.ts`](src/engine/resources.ts))
 
-### Video Strip Preservation
+#### Video Strip Preservation
 
 - When assigning strips for competitions that do NOT require video, non-video strips are selected first
 - This preserves video-capable strips for NAC staged DEs (Cadet, Junior, Div 1)
 
-### Resource Windows
+#### Resource Windows
 
 - For each phase (pool round, DE prelim, DE video stage), the engine finds the earliest time slot where both strips AND refs are simultaneously available
 - If resources aren't available at the ideal time, the engine scans forward in 30-minute slots
 - If delay exceeds a threshold, a bottleneck diagnostic is emitted (strip contention, ref contention, or both)
 
-### Slot Granularity
+#### Slot Granularity
 
 - All phase start times snap to 30-minute boundaries (8:00, 8:30, 9:00, etc.)
 - End times are not snapped — they reflect actual estimated duration
 
----
-
-## Referee Allocation
+### Referee Allocation
 
 (see [`refs.ts`](src/engine/refs.ts))
 
-### Referee Types
+#### Referee Types
 
 - **3-Weapon Refs** (default): can officiate foil, epee, and saber
 - **Foil/Epee-Only Refs**: cannot officiate saber
 - By default, all refs are assumed to be 3-weapon
 - User can optionally specify a count of foil/epee-only refs
 
-### Refs Per Pool
+#### Refs Per Pool
 
 - **One ref per pool**: minimum
 - **Two refs per pool** (default): preferred for higher-level events; falls back to one with a warning if insufficient refs
 - **Auto**: uses two-per-pool when supply allows; drops to one otherwise
 
-### Pod Captains
+#### Pod Captains
 
 - Toggle: "Use Pod Captains to manage DEs"
 - When enabled: 1 pod captain per 8 strips, drawn from the referee pool
@@ -446,68 +443,53 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 ---
 
-## Auto-Suggestion Logic
+## Capacity Model [PLANNED]
 
-The engine can auto-suggest configuration values to help organizers start with reasonable defaults. (see [`analysis.ts`](src/engine/analysis.ts), [`refs.ts`](src/engine/refs.ts))
+This section describes the planned capacity-aware day assignment model. Implementation is tracked in Plan D (`2026-03-29-engine-fixes-D-binpack-capacity.md`). The engine does not yet implement this model.
 
-### Strip Count Suggestion
+### Strip-Hours as the Unit of Day Capacity
 
-- Finds the competition with the most pools (peak strip demand)
-- Suggests that number of strips as the baseline
+A day's total capacity is measured in **strip-hours**: the product of available strips and scheduled hours. A day with 80 strips running 14 hours has 1,120 strip-hours of general capacity. Video strips maintain a separate budget.
 
-### Referee Suggestion
+Each competition consumes strip-hours from the day it is assigned:
+- **Pool phase**: `n_pools × pool_duration_hours`
+- **DE phase**: `strips_allocated × de_duration_hours`
+- For staged DEs (NACs), also compute video-strip-hours for the R16 and finals phases.
 
-- Heuristic: **one referee per strip in active use**
-- Split proportionally between 3-weapon and foil/epee-only based on the saber-to-foil/epee ratio of the competition mix
-- Uses peak concurrent demand per weapon per day from a preliminary schedule simulation
+### Pool Duration by Weapon
 
-### Flighting Suggestion
+Pool durations differ by weapon due to bout time rules — epee bouts tend longer (non-combativity rules), sabre bouts are fastest. The engine's `weightedPoolDuration` function computes a weighted average across pool sizes in a competition. See Appendix A for base durations by weapon.
 
-See [Flighting](#flighting) for eligibility rules and mechanics. The engine identifies same-day competition pairs whose combined pool count exceeds strip availability and suggests flighting for the larger event.
+### DE Duration by Mode
 
-### Fencer Count Defaults
+- **Single Stage DE**: all DE rounds run on general strips as fast as possible
+- **Staged DE** (NACs): early rounds on general strips (Prelim phase), then R16 and beyond on video strips (Video phase). Serialized within the video strip budget — multiple events sharing video strips are scheduled sequentially.
 
-Sourced from real USA Fencing tournament data (2024–2026). Values are P75 empirical, rounded to nearest 10.
+### Age-Category Weights
 
-**NAC-scale events** (per weapon × gender, individual):
+Not all events consume a day equally. A 310-fencer Div 1 event with staged video DEs anchors an entire day; a small Veteran Combined event is comparatively lightweight. The capacity model applies a weight multiplier per age category to reflect operational impact:
 
-| Category | E-M | F-M | S-M | E-W | F-W | S-W |
-|----------|-----|-----|-----|-----|-----|-----|
-| Div1 | 310 | 260 | 220 | 210 | 170 | 200 |
-| Junior | 300 | 280 | 260 | 230 | 180 | 200 |
-| Cadet | 270 | 250 | 280 | 230 | 220 | 230 |
-| Y-14 | 200 | 180 | 180 | 150 | 150 | 160 |
-| Y-12 | 200 | 200 | 170 | 170 | 170 | 160 |
-| Y-10 | 80 | 100 | 80 | 70 | 70 | 60 |
-| Veteran | 120 | 80 | 40 | 80 | 40 | 50 |
+- **DIV1**: heaviest (large fields, video DE serialization)
+- **Junior, Cadet**: heavy (video DE, large fields)
+- **Y10, Y12, Y14**: normal weight
+- **Div1A, Div2, Div3**: lighter weight
+- **Veteran 40/50**: lighter weight, no start offset
+- **Veteran Combined, 60/70/80**: lightest weight; 2-hour start offset from day start (these fencers may need medication timing in the morning)
 
-**Regional-scale events** (SYC/SJCC/ROC, individual):
+Exact weight values are in Appendix A.
 
-| Category | E-M | F-M | S-M | E-W | F-W | S-W |
-|----------|-----|-----|-----|-----|-----|-----|
-| Junior | 120 | 100 | 120 | 80 | 50 | 90 |
-| Cadet | 120 | 70 | 110 | 70 | 80 | 90 |
-| Y-14 | 70 | 100 | 70 | 70 | 70 | 50 |
-| Y-12 | 70 | 70 | 70 | 70 | 50 | 50 |
-| Y-10 | 20 | 30 | 30 | 20 | 20 | 20 |
-| Div1A | 80 | 50 | 50 | 50 | 50 | 10 |
-| Div2 | 60 | 70 | 50 | 50 | 20 | 30 |
+### Day Capacity Scoring
 
----
+The scheduler penalizes days nearing capacity. The penalty curve is:
+- **Gentle** at moderate fill ratios (room still available)
+- **Steep** near full capacity (strong discouragement from adding more)
+- **Severe** when nearly overloaded
 
-## Constraint Relaxation
+Exact thresholds are in Appendix A.
 
-When the auto-suggest algorithm cannot find a valid day at the strictest level, it progressively relaxes rules. (see [`dayAssignment.ts`](src/engine/dayAssignment.ts))
+### Video-Strip Budget
 
-| Level | What's Relaxed |
-|---|---|
-| 0 (full constraints) | All crossover, proximity, and hard-block rules active |
-| 1 | Drops proximity preferences (related categories no longer penalized for being far apart) |
-| 2 | Drops soft crossover penalties (overlapping populations on same day allowed, but same-population hard blocks remain) |
-| 3 | Drops hard blocks (same population allowed on same day — last resort) |
-
-- Each relaxation emits a warning
-- If no valid day exists even at Level 3, scheduling fails with an unresolvable error
+Video strip capacity is tracked separately from general strip capacity. Peak concurrent demand is modeled: as staged DE rounds progress (R64 → R32 → R16 → Finals), earlier rounds release their video strips. Multiple events can share the video strip pool if their peak demand fits within the budget.
 
 ---
 
@@ -515,7 +497,7 @@ When the auto-suggest algorithm cannot find a valid day at the strictest level, 
 
 The auto-suggest engine uses a **priority-ordered, constraint-relaxing** approach to generate an initial schedule. The result is a **suggestion** — users can drag-and-drop competitions on the day/strip grid to refine it. The engine re-validates after each manual adjustment, showing warnings and errors for constraint violations. (see [`scheduler.ts`](src/engine/scheduler.ts), [`dayAssignment.ts`](src/engine/dayAssignment.ts), [`scheduleOne.ts`](src/engine/scheduleOne.ts))
 
-### Target Architecture: Capacity-Aware Day Assignment
+### Target Architecture: Capacity-Aware Day Assignment [PLANNED]
 
 The scheduling algorithm is moving toward **capacity-aware day assignment**:
 
@@ -524,6 +506,8 @@ The scheduling algorithm is moving toward **capacity-aware day assignment**:
 - Large events are placed first and prefer early time slots
 - Smaller events are packed around and on top of larger events
 - This replaces the current greedy forward-scanning approach
+
+This architecture is tracked in Plan D (`2026-03-29-engine-fixes-D-binpack-capacity.md`).
 
 ### Phase 1: Validation
 
@@ -540,8 +524,7 @@ Analysis passes run before the main scheduling loop: (see [`analysis.ts`](src/en
 3. Flighting suggestions — identifies same-day pairs that would benefit from flighting
 4. Multiple-flighting conflicts — warns if more than one flighted competition lands on the same day
 5. Video strip demand — warns if peak video-strip need exceeds video-capable strips
-6. Gender equity (see [Gender Equity](#gender-equity)) — informational warning when pool count differences between men's and women's events exceed Athlete Handbook caps (p.15)
-7. Cut summaries — informational breakdown of advancement numbers per competition
+6. Cut summaries — informational breakdown of advancement numbers per competition
 
 ### Phase 3: Priority Ordering
 
@@ -628,69 +611,65 @@ Selecting the tournament type enables / disables events available in the tournam
 - Cadet and Junior individual events
 - Default 100% advancement to DE
 - Can be combined with ROC and RYC
+- Functionally identical rules; SJCC is the national-level variant.
 
 ### SJCC (Super Junior-Cadet Circuit)
 
 - Cadet and Junior individual events (identical to RJCC)
 - 100% advancement to DE
 - Can be combined with ROC and RYC
+- Functionally identical to RJCC; this is the national-level variant.
 
 ---
 
-## Known Engine Limitations and Open Bugs
+## Auto-Suggestion Logic
 
-Issues discovered during integration testing with realistic tournament data (March 2026). These should be addressed in future engine iterations.
+The engine can auto-suggest configuration values to help organizers start with reasonable defaults. (see [`analysis.ts`](src/engine/analysis.ts), [`refs.ts`](src/engine/refs.ts))
 
-### Limitation: Day assignment is penalty-driven, not capacity-aware
+### Strip Count Suggestion
 
-The `assignDay`/`totalDayPenalty` scoring considers crossover penalties, proximity, and early-start patterns but does **not** consider remaining day capacity (total strip-hours available). When many large events (200–350 fencers) have similar penalty profiles, the scheduler piles them onto the same day. DE phases then overrun the 14-hour day boundary.
+- Finds the competition with the most pools (peak strip demand)
+- Suggests that number of strips as the baseline
 
-**Impact**: Real NAC scenarios with 18+ events and 200–350 fencers per event cannot fully schedule, even with generous resources (80+ strips, 8+ video). The engine degrades gracefully (ERROR bottlenecks) but schedules far fewer events than real tournaments achieve.
+### Referee Suggestion
 
-**Fix needed**: Add a day-capacity heuristic to scoring. Estimate total strip-hours consumed by already-assigned events and penalize days nearing capacity.
+- Heuristic: **one referee per strip in active use**
+- Split proportionally between 3-weapon and foil/epee-only based on the saber-to-foil/epee ratio of the competition mix
+- Uses peak concurrent demand per weapon per day from a preliminary schedule simulation
 
-### Not yet implemented: Post-scheduling resource diagnostic
+### Flighting Suggestion
 
-When events fail to schedule (ERROR bottlenecks), check whether the configured strips and/or refs meet the minimum required counts. If not, surface actionable messages: "You need at least N strips" / "You need at least X 3-weapon referees for saber events." This gives the user a concrete fix rather than opaque "no valid day found" errors.
+See [Flighting](#flighting) for eligibility rules and mechanics. The engine identifies same-day competition pairs whose combined pool count exceeds strip availability and suggests flighting for the larger event.
 
----
+### Fencer Count Defaults
 
-## Integration Test Status (March 2026)
+Sourced from integration test scenarios B1–B7 using real USA Fencing tournament data (2024–2026). Values are averaged across scenarios per category/weapon/gender, rounded to nearest 10.
 
-Seven integration tests exist in `__tests__/engine/integration.test.ts`, each using real USA Fencing tournament data (fencer counts rounded to nearest 10). All tests pass, but with workarounds — the engine cannot fully schedule any of these tournaments at realistic scale.
+**NAC-scale events** (per weapon × gender, individual):
 
-### Current test assertions
+| Category | E-M | F-M | S-M | E-W | F-W | S-W |
+|----------|-----|-----|-----|-----|-----|-----|
+| Div1 | 310 | 270 | 210 | 210 | 160 | 210 |
+| Junior | 260 | 260 | 260 | 210 | 180 | 200 |
+| Cadet | 250 | 220 | 270 | 210 | 200 | 210 |
+| Y-14 | 230 | 210 | 230 | 180 | 200 | 200 |
+| Y-12 | 210 | 230 | 180 | 170 | 200 | 170 |
+| Y-10 | 80 | 110 | 80 | 60 | 70 | 70 |
+| Div2 | 180 | 170 | 160 | 110 | 120 | 130 |
+| Veteran | 120 | 80 | 40 | 80 | 40 | 50 |
 
-Tests verify:
-- Engine doesn't crash on realistic data
-- At least some events schedule
-- `scheduled + errors = total` (nothing silently dropped)
-- Hard separations respected per-event (skipped only for events that used level-3 constraint relaxation)
+**Regional-scale events** (SYC/SJCC/ROC, individual):
 
-### Results per scenario
-
-| Scenario | Source | Events | ~Scheduled | ~Errors | Hard sep checked? |
-|----------|--------|--------|------------|---------|-------------------|
-| B1: Feb 2026 NAC (Div 1/Jr/Vet) | Real data | 24 | ~8 | ~16 | No (errors exist) |
-| B2: Nov 2025 NAC (Div 1/Cdt/Y14) | Real data | 24 | ~10 | ~14 | No |
-| B3: Mar 2026 NAC (Y10/Y12/Y14/D2) | Real data | 24 | ~4 | ~20 | No |
-| B4: Jan 2026 SYC (Y8-Y14/Cdt) | Real data | 30 | ~3 | ~27 | No |
-| B5: Jan 2026 SJCC (Cdt/Jr) | Real data | 12 | ~4 | ~8 | No |
-| B6: Sep 2025 ROC (9 categories) | Real data | 54 | ~5 | ~49 | No |
-| B7: Oct 2025 NAC (Div 1/Jr/Cdt) | Real data | 18 | ~7 | ~11 | No |
-
-### Root causes
-
-1. **Capacity-naive day assignment** — scheduler piles events onto the same day because penalty scoring doesn't account for remaining strip-hours
-2. **Staged DE video serialization** — multiple events' DE phases compete for limited video strips, cascading into day-boundary overruns
-3. **~~No upfront resource validation~~ (resolved Plan C)** — `validateConfig` now catches insufficient strips/refs before scheduling begins
-
-### When these tests should be tightened
-
-Once the engine implements capacity-aware day assignment, these tests should be updated to assert:
-- All events scheduled (zero errors)
-- Hard separations verified for all scheduled events
-- Specific day assignments match expected patterns (e.g., Div 1 and Junior never share a day)
+| Category | E-M | F-M | S-M | E-W | F-W | S-W |
+|----------|-----|-----|-----|-----|-----|-----|
+| Junior | 120 | 110 | 120 | 80 | 50 | 100 |
+| Cadet | 130 | 70 | 110 | 70 | 80 | 100 |
+| Y-14 | 120 | 140 | 130 | 110 | 110 | 100 |
+| Y-12 | 110 | 110 | 110 | 100 | 80 | 90 |
+| Y-10 | 50 | 50 | 60 | 50 | 40 | 40 |
+| Div1A | 50 | 100 | 50 | 50 | 60 | 10 |
+| Div2 | 60 | 70 | 50 | 60 | 20 | 30 |
+| Veteran | 40 | 20 | 20 | 20 | 10 | 10 |
 
 ---
 
@@ -708,3 +687,86 @@ Once the engine implements capacity-aware day assignment, these tests should be 
 | S8 | USA Fencing Athlete Handbook 2024-25 | [PDF](https://static1.squarespace.com/static/63d04398a7662e295f7c993a/t/6706d6a4b3f88e7f6a2a2467/1728501417355/USA_Fencing_Athlete_Handbook_2024-25.pdf) — Pool sizes, competition formats, gender equity |
 | S9 | Academy of Fencing Masters: "How to Make USA Fencing National Events Work for Everyone" | [Link](https://academyoffencingmasters.com/blog/how-to-make-usa-fencing-national-events-work-for-everyone/) |
 | S10 | Fencing Time tournament software documentation | [Link](https://www.fencingtime.com/Home/VerHistory) |
+
+---
+
+## Appendix A: Penalty & Constant Defaults
+
+All numeric penalty values and scheduling constants used by the engine. Prose sections use qualitative descriptions only and reference this appendix for exact values.
+
+(see [`dayAssignment.ts`](src/engine/dayAssignment.ts), [`crossover.ts`](src/engine/crossover.ts), [`constants.ts`](src/engine/constants.ts))
+
+### Penalty Weights
+
+| Factor | Value | Description |
+|---|---|---|
+| Same-time high crossover (≥0.8) | 10.0 | Two high-overlap competitions within 30-min window on same day |
+| Same-time low crossover | 4.0 | Two low-overlap competitions within 30-min window on same day |
+| Ind+team same-time or wrong order | 8.0 | Individual and team event (same demographic) overlapping or team scheduled first |
+| Ind+team gap < 120 min | 3.0 | Individual and team event too close together |
+| Early start consecutive days, high crossover | 5.0 | Two high-overlap events both at 8 AM on back-to-back days |
+| Early start same day, high crossover | 2.0 | Two high-overlap events both at 8 AM same day |
+| Early start consecutive days, ind+team | 2.0 | Ind + team (same demographic) both at 8 AM on consecutive days |
+| Soft separation (DIV1↔CADET) | 5.0 | Same weapon+gender on same day; suppressed at level ≥ 2 |
+| Rest day violation | 1.5 | Junior↔Cadet or Junior↔Div 1 on consecutive days without rest |
+| Team before individual | 1.0 | Team event scheduled before its individual counterpart |
+| Weapon balance | 0.5 | All-ROW or all-epee day |
+| Last-day ref shortage (large NAC event, 300+) | 0.5 | Large NAC event on last day with below-average ref availability |
+| Proximity 3+ days apart | 0.5 | Related categories far apart in the schedule |
+| Y10 non-first-slot | 0.3 | Y10 event not starting at 8 AM |
+| Last-day ref shortage (large ROC event, 100+) | 0.3 | Large regional event on last day with below-average ref availability |
+| Ind+team 2+ days apart | 0.3 | Individual and team event far apart |
+| Cross-weapon same demographic (Vet only) | 0.2 | Same gender+age, different weapon on same day (Veterans only) |
+| Last-day ref shortage (medium event, 50–100) | 0.2 | Medium event on last day with below-average ref availability |
+| Proximity 1 day apart | -0.4 | **Bonus**: related categories on adjacent days |
+| Ind+team day after | -0.4 | **Bonus**: team event the day after individual |
+| Same population | ∞ | **Hard block**: identical age category + gender + weapon |
+| Group 1 mandatory separation | ∞ | **Hard block**: overlapping populations that must be on different days |
+| Ind/team relaxable block | ∞ at level < 3 | **Relaxable**: specific ind/team cross-category pairs; relaxed at level 3 |
+
+### Timing Constants
+
+| Constant | Value | Description |
+|---|---|---|
+| Day start | 8:00 AM (480 min) | Earliest pool round start |
+| Day end | 10:00 PM (1320 min) | Latest end time (soft boundary) |
+| Day length | 14 hours | Total scheduling window |
+| Pool-round cutoff | 4:00 PM (960 min) | Pool rounds cannot start after this time |
+| Admin gap | 30 min | Mandatory gap between pool end and DE start |
+| Slot granularity | 30 min | All phase start times snap to 30-minute boundaries |
+
+### Pool Duration by Weapon (6-person baseline, 15 bouts)
+
+| Weapon | Duration |
+|---|---|
+| Epee | 120 min |
+| Foil | 105 min |
+| Saber | 75 min |
+
+### Resource Constants
+
+| Constant | Value | Description |
+|---|---|---|
+| Flighting threshold | 200+ fencers | Minimum fencer count for flighted eligibility |
+| Video strip options | 4, 8, 12, 16 | Available video strip counts (NACs only); 8 is default |
+| Pod captain ratio | 1 per 8 strips | One pod captain per 8 strips during DE phases |
+| Fencer count bounds | 2–500 | Valid range per competition |
+| DE minimum advancement | 2 fencers | Minimum fencers advancing to DE bracket |
+| Pool size targets | 6–7 | Target pool size; `ceil(fencerCount / 7)` pools |
+| Maximum crossover weight | 0.8 | Crossover graph edge cap |
+| Two-hop crossover cap | 0.3 | Indirect relationship cap |
+| Ind/team separation gap | 120 min | Minimum gap between individual and team (non-hard-blocked pairs) |
+
+### Capacity Model Constants [PLANNED]
+
+| Constant | Value | Description |
+|---|---|---|
+| DIV1 weight | 1.5 | Strip-hour multiplier (heavy: large fields + video serialization) |
+| Junior weight | 1.3 | Strip-hour multiplier |
+| Cadet weight | 1.3 | Strip-hour multiplier |
+| Y10 weight | 1.2 | Strip-hour multiplier |
+| Y12, Y14 weight | 1.0 | Baseline weight |
+| Div1A, Div2, Div3 weight | 0.7 | Lighter weight |
+| Veteran 40/50 weight | 0.8 | Lighter weight, no start offset |
+| Veteran Combined/60/70/80 weight | 0.6 | Lightest; 120-min start offset from day start |
+| Capacity penalty thresholds | [TBD] | Fill-ratio thresholds for penalty curve |
