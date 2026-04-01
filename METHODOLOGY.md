@@ -57,15 +57,16 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
   - **Total referee count**: optional — see [Auto-Suggestion Logic](#auto-suggestion-logic) — engine can suggest based on strip count (see [`refs.ts`](src/engine/refs.ts))
   - **3-weapon refs**: default — all refs are assumed 3-weapon (can officiate foil, epee, and saber)
   - **Foil/epee-only refs**: user can optionally specify how many refs cannot officiate saber; remainder are 3-weapon
+  - **Note**: the 3-weapon and foil/epee-only counts are set separately and sum to the total; only 3-weapon refs can be allocated to Saber events
   - **Refs per pool**: 1 or 2 (default: 2) — configured before auto-suggest runs
-- **Tournament duration**: 2–4 days
+- **Tournament duration**: 2–4 days (longer events, e.g. Summer Nationals, to be supported in a future version)
 - **Per-competition options**:
   - **DE mode**: determined by tournament type — NACs use "Staged DEs" (Prelim + Video stages); all other types use "Single Stage DE" (all DE rounds run as fast as possible)
   - **Video stage** (NACs only): the round at which DEs move to video strips, determined by age category per Ops Manual Ch.4, p.25 (see [Video Replay Policy](#video-replay-policy))
   - **Cut-to-DE**: % cut (e.g., cut 20% → promote 80%) or promoted count (e.g., promote top 256)
   - **Start time**: defaults to 8:00 AM; user can adjust per day
   - **Latest end time**: violation produces a warning with estimated finish time, not a scheduling failure
-  - **Flighting**: only eligible for Cadet, Junior, and Div 1 events with 200+ fencers (see [`flighting.ts`](src/engine/flighting.ts))
+  - **Flighting**: only eligible for events with 200+ fencers (see [`flighting.ts`](src/engine/flighting.ts))
 
 ### Outputs
 
@@ -173,7 +174,7 @@ Hard-blocked pairs (Infinity penalty at level < 3, same weapon+gender required):
 
 (see [`constants.ts`](src/engine/constants.ts) — `INDIV_TEAM_HARD_BLOCKS`)
 
-**For other overlapping individual/team pairs**: 2-hour separation required, in either direction
+**For other overlapping individual/team pairs**: 4-hour separation required, in either direction
   - e.g., Vet Team at 8 AM allows Div 2 Individual at 10 AM
   - Individual before team is a soft preference, not a hard rule
 
@@ -238,10 +239,10 @@ Div 1 and Cadet events of the same weapon+gender incur a soft penalty when on th
 - Penalty when same gender + age category but different weapon on same day
 - **Applies ONLY to Veteran events** — no other age categories have meaningful cross-weapon overlap
 
-### Y10 Early Scheduling
+### Y8 and Y10 Early Scheduling
 
-- Y10 events preferred in the first time slot of their day
-- If Y10 doesn't start at 8:00 AM: penalty
+- Y8/Y10 events preferred in the first time slot of their day
+- If Y8/Y10 doesn't start at 8:00 AM: penalty
 - Reason: avoid young fencers being at competitions late into the evening
 
 ### Last-Day Referee Shortage
@@ -291,7 +292,7 @@ Pool structure follows USA Fencing rules (Athlete Handbook Table 2.16.1, pages 9
 #### Pool Sizing
 
 - 9 or fewer fencers: single pool of all fencers
-- 10 fencers with single-pool override: one pool of 10 (double-stripped)
+- 10 fencers without override: 2 pools of 5
 - 10+ fencers: pools targeting 6–7 fencers each → `ceil(fencerCount / 7)` pools
 - Remainder fencers distributed so some pools get one extra fencer
 
@@ -307,7 +308,7 @@ Baseline duration for a standard 6-person pool (15 round-robin bouts):
 
 - Other pool sizes scaled proportionally by bout count
   - e.g., 7-person pool = 21 bouts → ~1.4x baseline
-- Pools with 8+ fencers are **double-stripped** (two bouts simultaneously), halving effective duration
+- Pools with 8+ fencers are **double-stripped** (two bouts simultaneously), reducing effective duration by ~40% (not exactly half due to friction between bouts and fencer rest time)
 
 #### Pool Parallelism
 
@@ -320,9 +321,8 @@ Flighting splits a large competition's pool round into two flights, using **half
 
 #### Eligibility
 
-- **Only** Cadet, Junior, and Div 1 events with **200+ fencers**
+- Events with **200+ fencers** are eligible for flighting
 - Events below 200 fencers are never flighted
-- Y10, Y12, Veteran, Div 2, Div 3, etc. are never flighted regardless of size
 
 #### How Flighting Works
 
@@ -332,7 +332,7 @@ Flighting splits a large competition's pool round into two flights, using **half
 
 #### Flighting Rules
 
-- A flighted competition MUST be the largest event on its day — not allowed otherwise
+- Multiple events can be flighted if they are within 40 entrants of each other in size and both have 200+ fencers (e.g. 250 and 280); otherwise only the largest event on a day is eligible for flighting
 - Flighting is suggested when two same-day competitions' combined pool count exceeds available strips, but each fits individually
 
 ### Direct Elimination (DE)
@@ -463,7 +463,7 @@ Pool durations differ by weapon due to bout time rules — epee bouts tend longe
 ### DE Duration by Mode
 
 - **Single Stage DE**: all DE rounds run on general strips as fast as possible
-- **Staged DE** (NACs): early rounds on general strips (Prelim phase), then R16 and beyond on video strips (Video phase). Serialized within the video strip budget — multiple events sharing video strips are scheduled sequentially.
+- **Staged DE** (NACs): early rounds on general strips (Prelim phase), then R16 and beyond on video strips (Video phase). Multiple events sharing video strips are scheduled sequentially across blocks of 4 video strips — e.g., with 8 video strips and two events both in their Round of 8, each event gets a block of 4 strips and runs its 8 bouts simultaneously.
 
 ### Age-Category Weights
 
