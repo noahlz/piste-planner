@@ -26,6 +26,10 @@ Tournament types: NAC (North American Cup), ROC (Regional Open Circuit), RYC (Re
 
 OR framing: strips are queues, referees are workers. During pools each pool is work; during DEs each bout is work. Strips are general-purpose (pools or DEs).
 
+## MCP Tools
+
+ts-morph MCP `tsconfigPath`: use `./tsconfig.app.json`, not `tsconfig.json`.
+
 ## Rules
 
 - `as const` objects, NOT TypeScript enums (`erasableSyntaxOnly`)
