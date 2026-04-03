@@ -26,6 +26,11 @@ import {
 import { refsAvailableOnDay } from './refs.ts'
 import { earliestResourceWindow, snapToSlot } from './resources.ts'
 import { resolveRefsPerPool } from './pools.ts'
+import {
+  estimateCompetitionStripHours,
+  dayConsumedCapacity,
+  categoryWeight,
+} from './capacity.ts'
 
 // ──────────────────────────────────────────────
 // SchedulingError
@@ -446,6 +451,58 @@ export function totalDayPenalty(
   total += crossWeaponSameDemographicPenalty(competition, day, state, allCompetitions)
   total += lastDayRefShortagePenalty(competition, day, state, config)
   total += restDayPenalty(competition, day, state, allCompetitions)
+
+  // ── General capacity penalty ──────────────────────────────────────────────
+  // Ramps up as the day fills (strip-hour budget), discouraging over-packing.
+  {
+    const consumed = dayConsumedCapacity(day, state, allCompetitions, config)
+    const candidateStripHours = estimateCompetitionStripHours(competition, config)
+    const candidateWeighted = candidateStripHours.total_strip_hours * categoryWeight(competition)
+    const totalCapacity = config.strips_total * (config.DAY_LENGTH_MINS / 60)
+    const fillRatio = (consumed.strip_hours_consumed + candidateWeighted) / totalCapacity
+
+    let capacityPenalty: number
+    if (fillRatio < 0.6) {
+      capacityPenalty = 0
+    } else if (fillRatio < 0.8) {
+      // Linear ramp 0 → 3.0 over the 60–80% band
+      capacityPenalty = ((fillRatio - 0.6) / 0.2) * 3.0
+    } else if (fillRatio < 0.95) {
+      // Steeper ramp 3.0 → 10.0 over the 80–95% band
+      capacityPenalty = 3.0 + ((fillRatio - 0.8) / 0.15) * 7.0
+    } else {
+      // Strongly discourage scheduling onto a near-full day
+      capacityPenalty = 20.0
+    }
+    total += capacityPenalty
+  }
+
+  // ── Video-strip capacity penalty (STAGED_DE_BLOCKS events only) ───────────
+  // Estimates peak concurrent video-strip demand for staged-DE events on the day.
+  if (competition.de_mode === DeMode.STAGED_DE_BLOCKS) {
+    let sumR16 = 0
+    let sumFinals = 0
+
+    for (const [compId, sr] of Object.entries(state.schedule)) {
+      if (sr.assigned_day !== day) continue
+      const c2 = allCompetitions.find(c => c.id === compId)
+      if (!c2 || c2.de_mode !== DeMode.STAGED_DE_BLOCKS) continue
+      sumR16 += c2.de_round_of_16_strips
+      sumFinals += c2.de_finals_strips
+    }
+
+    // Peak concurrent demand: the larger of the R16 phase or the finals phase
+    const peakDemand = Math.max(
+      sumR16 + competition.de_round_of_16_strips,
+      sumFinals + competition.de_finals_strips,
+    )
+
+    if (peakDemand > config.video_strips_total) {
+      total += 15.0
+    } else if (peakDemand > 0.7 * config.video_strips_total) {
+      total += 5.0
+    }
+  }
 
   // Proximity penalties only at level 0
   if (level < 1) {

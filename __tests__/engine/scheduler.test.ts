@@ -71,9 +71,14 @@ describe('scheduleAll — template integration', () => {
     // which raises each competition's total duration and tightens daily resource budgets.
     const config = makeConfig({
       days_available: 3,
-      // 8 video strips needed: Cadet events use STAGED_DE_BLOCKS with video REQUIRED,
-      // so multiple Cadet DE R16/finals phases compete for video strips on the same day.
-      strips: makeStrips(64, 8),
+      // 96 strips / 24 video: capacity-aware day assignment may cluster more events
+      // per day than before. With tiny fencer counts (fencer_count=10), the capacity
+      // penalty thresholds are not reached, so events don't self-balance as they would
+      // in a real tournament. Extra strips prevent resource-window exhaustion when
+      // many events concentrate on the same day. Each Cadet R16 needs 4 video strips;
+      // up to 6 concurrent R16 phases (all 6 Cadet events on one day) need 24.
+      strips: makeStrips(96, 24),
+      MAX_RESCHEDULE_ATTEMPTS: 8,
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
         day: i, foil_epee_refs: 60, three_weapon_refs: 30, source: 'ACTUAL' as const,
       })),

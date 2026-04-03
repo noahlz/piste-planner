@@ -3,10 +3,12 @@ import {
   estimateCompetitionStripHours,
   dayConsumedCapacity,
   dayRemainingCapacity,
+  categoryWeight,
+  weightedStripHours,
 } from '../../src/engine/capacity.ts'
 import type { GlobalState } from '../../src/engine/types.ts'
 import {
-  CutMode, DeMode, EventType, VideoPolicy, Weapon,
+  Category, CutMode, DeMode, EventType, VideoPolicy, VetAgeGroup, Weapon,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeScheduleResult } from '../helpers/factories.ts'
 
@@ -338,5 +340,224 @@ describe('dayRemainingCapacity', () => {
     expect(filledResult.video_strip_hours_remaining).toBeLessThan(emptyResult.video_strip_hours_remaining)
     // General strip-hours also decrease (video comp uses general strips too)
     expect(filledResult.strip_hours_remaining).toBeLessThan(emptyResult.strip_hours_remaining)
+  })
+})
+
+// ──────────────────────────────────────────────
+// categoryWeight
+// ──────────────────────────────────────────────
+
+describe('categoryWeight', () => {
+  it('Y10 competition returns weight 1.2', () => {
+    const comp = makeCompetition({ category: Category.Y10, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(1.2)
+  })
+
+  it('DIV1 competition returns weight 1.5', () => {
+    const comp = makeCompetition({ category: Category.DIV1, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(1.5)
+  })
+
+  it('JUNIOR competition returns weight 1.3', () => {
+    const comp = makeCompetition({ category: Category.JUNIOR, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(1.3)
+  })
+
+  it('CADET competition returns weight 1.3', () => {
+    const comp = makeCompetition({ category: Category.CADET, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(1.3)
+  })
+
+  it('Y12 competition returns weight 1.0', () => {
+    const comp = makeCompetition({ category: Category.Y12, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(1.0)
+  })
+
+  it('Y14 competition returns weight 1.0', () => {
+    const comp = makeCompetition({ category: Category.Y14, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(1.0)
+  })
+
+  it('Y8 competition returns weight 1.0', () => {
+    const comp = makeCompetition({ category: Category.Y8, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(1.0)
+  })
+
+  it('VETERAN VET40 competition returns weight 0.8', () => {
+    const comp = makeCompetition({ category: Category.VETERAN, vet_age_group: VetAgeGroup.VET40 })
+    expect(categoryWeight(comp)).toBe(0.8)
+  })
+
+  it('VETERAN VET50 competition returns weight 0.8', () => {
+    const comp = makeCompetition({ category: Category.VETERAN, vet_age_group: VetAgeGroup.VET50 })
+    expect(categoryWeight(comp)).toBe(0.8)
+  })
+
+  it('VETERAN VET_COMBINED competition returns weight 0.6', () => {
+    const comp = makeCompetition({ category: Category.VETERAN, vet_age_group: VetAgeGroup.VET_COMBINED })
+    expect(categoryWeight(comp)).toBe(0.6)
+  })
+
+  it('VETERAN VET60 competition returns weight 0.6', () => {
+    const comp = makeCompetition({ category: Category.VETERAN, vet_age_group: VetAgeGroup.VET60 })
+    expect(categoryWeight(comp)).toBe(0.6)
+  })
+
+  it('VETERAN VET70 competition returns weight 0.6', () => {
+    const comp = makeCompetition({ category: Category.VETERAN, vet_age_group: VetAgeGroup.VET70 })
+    expect(categoryWeight(comp)).toBe(0.6)
+  })
+
+  it('VETERAN VET80 competition returns weight 0.6', () => {
+    const comp = makeCompetition({ category: Category.VETERAN, vet_age_group: VetAgeGroup.VET80 })
+    expect(categoryWeight(comp)).toBe(0.6)
+  })
+
+  it('VETERAN with null vet_age_group defaults to weight 0.8', () => {
+    const comp = makeCompetition({ category: Category.VETERAN, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(0.8)
+  })
+
+  it('DIV1A competition returns weight 0.7', () => {
+    const comp = makeCompetition({ category: Category.DIV1A, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(0.7)
+  })
+
+  it('DIV2 competition returns weight 0.7', () => {
+    const comp = makeCompetition({ category: Category.DIV2, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(0.7)
+  })
+
+  it('DIV3 competition returns weight 0.7', () => {
+    const comp = makeCompetition({ category: Category.DIV3, vet_age_group: null })
+    expect(categoryWeight(comp)).toBe(0.7)
+  })
+})
+
+// ──────────────────────────────────────────────
+// weightedStripHours
+// ──────────────────────────────────────────────
+
+describe('weightedStripHours', () => {
+  it('Y10 event with 80 fencers has weight 1.2 → 20% heavier than raw strip-hours', () => {
+    const config = makeConfig()
+    const comp = makeCompetition({
+      category: Category.Y10,
+      vet_age_group: null,
+      fencer_count: 80,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 8,
+    })
+
+    const raw = estimateCompetitionStripHours(comp, config)
+    const weighted = weightedStripHours(comp, config)
+
+    expect(weighted).toBeCloseTo(raw.total_strip_hours * 1.2, 5)
+  })
+
+  it('VET_COMBINED event with 40 fencers has weight 0.6 → 40% lighter than raw strip-hours', () => {
+    const config = makeConfig()
+    const comp = makeCompetition({
+      category: Category.VETERAN,
+      vet_age_group: VetAgeGroup.VET_COMBINED,
+      fencer_count: 40,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 6,
+    })
+
+    const raw = estimateCompetitionStripHours(comp, config)
+    const weighted = weightedStripHours(comp, config)
+
+    expect(weighted).toBeCloseTo(raw.total_strip_hours * 0.6, 5)
+  })
+
+  it('VET40 event with 40 fencers has weight 0.8 → lighter weight, no start offset', () => {
+    const config = makeConfig()
+    const comp = makeCompetition({
+      category: Category.VETERAN,
+      vet_age_group: VetAgeGroup.VET40,
+      fencer_count: 40,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 6,
+    })
+
+    const raw = estimateCompetitionStripHours(comp, config)
+    const weighted = weightedStripHours(comp, config)
+
+    expect(weighted).toBeCloseTo(raw.total_strip_hours * 0.8, 5)
+  })
+
+  it('DIV1 event with 310 fencers has weight 1.5 → 50% heavier than raw strip-hours', () => {
+    const config = makeConfig()
+    const comp = makeCompetition({
+      category: Category.DIV1,
+      vet_age_group: null,
+      fencer_count: 310,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.PERCENTAGE,
+      cut_value: 20,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 24,
+    })
+
+    const raw = estimateCompetitionStripHours(comp, config)
+    const weighted = weightedStripHours(comp, config)
+
+    expect(weighted).toBeCloseTo(raw.total_strip_hours * 1.5, 5)
+  })
+
+  it('DIV2 event with 100 fencers has weight 0.7 → lighter than raw strip-hours', () => {
+    const config = makeConfig()
+    const comp = makeCompetition({
+      category: Category.DIV2,
+      vet_age_group: null,
+      fencer_count: 100,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 10,
+    })
+
+    const raw = estimateCompetitionStripHours(comp, config)
+    const weighted = weightedStripHours(comp, config)
+
+    expect(weighted).toBeCloseTo(raw.total_strip_hours * 0.7, 5)
+  })
+
+  it('weightedStripHours equals estimateCompetitionStripHours * categoryWeight', () => {
+    const config = makeConfig()
+    const comp = makeCompetition({
+      category: Category.JUNIOR,
+      vet_age_group: null,
+      fencer_count: 150,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.PERCENTAGE,
+      cut_value: 20,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 12,
+    })
+
+    const raw = estimateCompetitionStripHours(comp, config)
+    const weight = categoryWeight(comp)
+    const weighted = weightedStripHours(comp, config)
+
+    expect(weighted).toBeCloseTo(raw.total_strip_hours * weight, 5)
+    expect(weight).toBe(1.3)
   })
 })
