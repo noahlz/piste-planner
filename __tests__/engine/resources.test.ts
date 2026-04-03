@@ -39,8 +39,8 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
     strips_total: strips.length,
     video_strips_total: strips.filter(s => s.video_capable).length,
     referee_availability: [
-      { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
-      { day: 1, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+      { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+      { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
     ],
     pod_captain_override: 'AUTO',
     DAY_START_MINS: 480,
@@ -370,7 +370,7 @@ describe('earliestResourceWindow', () => {
     // 24 strips free, but refs all in use until t=60
     const config = makeConfig({
       strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS),
-      referee_availability: [{ day: 0, foil_epee_refs: 4, saber_refs: 0, source: 'ACTUAL' as const }],
+      referee_availability: [{ day: 0, foil_epee_refs: 4, three_weapon_refs: 0, source: 'ACTUAL' as const }],
     })
     const state = createGlobalState(config)
     // Allocate all 4 foil/epee refs until t=60

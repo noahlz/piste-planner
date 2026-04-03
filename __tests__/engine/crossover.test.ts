@@ -132,16 +132,16 @@ describe('crossoverPenalty', () => {
     expect(crossoverPenalty(c1 as Competition, c2 as Competition)).toBe(Infinity)
   })
 
-  it('Div1↔Div2 returns Infinity (GROUP_1_MANDATORY)', () => {
+  it('Div1↔Div2 returns soft penalty (not Infinity) — moved to SOFT_SEPARATION_PAIRS', () => {
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV2, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).toBe(Infinity)
+    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).not.toBe(Infinity)
   })
 
-  it('Div1↔Div3 returns Infinity (GROUP_1_MANDATORY)', () => {
+  it('Div1↔Div3 returns soft penalty (not Infinity) — moved to SOFT_SEPARATION_PAIRS', () => {
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV3, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).toBe(Infinity)
+    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).not.toBe(Infinity)
   })
 
   it('All CROSSOVER_GRAPH direct edges are ≤ 0.8', () => {

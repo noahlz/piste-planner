@@ -127,20 +127,20 @@ describe('weightedPoolDuration', () => {
     expect(result).toBe(90)
   })
 
-  it('single pool of 8 EPEE → double-stripped, halved', () => {
+  it('single pool of 8 EPEE → double-stripped, 0.6×', () => {
     const structure = computePoolStructure(8) // 1×8
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
     // poolDurationForSize(EPEE, 8) = round(120 * 28/15) = 224
-    // Single pool of 8+ → halved: round(224 / 2) = 112
-    expect(result).toBe(112)
+    // Single pool of 8+ → 0.6×: round(224 * 0.6) = 134
+    expect(result).toBe(134)
   })
 
-  it('single pool of 9 SABRE → double-stripped, halved', () => {
+  it('single pool of 9 SABRE → double-stripped, 0.6×', () => {
     const structure = computePoolStructure(9) // 1×9
     const result = weightedPoolDuration(structure, Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE)
     // poolDurationForSize(SABRE, 9) = round(75 * 36/15) = 180
-    // Single pool of 9+ → halved: round(180 / 2) = 90
-    expect(result).toBe(90)
+    // Single pool of 9+ → 0.6×: round(180 * 0.6) = 108
+    expect(result).toBe(108)
   })
 
   it('single pool of 7 is NOT double-stripped', () => {
@@ -220,11 +220,12 @@ describe('estimatePoolDuration', () => {
 
 describe('computeDeFencerCount', () => {
   it.each([
-    { fencerCount: 100, mode: CutMode.PERCENTAGE, value: 20, eventType: EventType.INDIVIDUAL, expected: 20 },
+    // cutValue is % to CUT; 20% cut of 100 → keep 80% → 80 promoted
+    { fencerCount: 100, mode: CutMode.PERCENTAGE, value: 20, eventType: EventType.INDIVIDUAL, expected: 80 },
     { fencerCount: 100, mode: CutMode.COUNT, value: 50, eventType: EventType.INDIVIDUAL, expected: 50 },
     { fencerCount: 100, mode: CutMode.DISABLED, value: 0, eventType: EventType.INDIVIDUAL, expected: 100 },
-    // minimum of 2 enforced
-    { fencerCount: 10, mode: CutMode.PERCENTAGE, value: 10, eventType: EventType.INDIVIDUAL, expected: 2 },
+    // 10% cut of 10 → keep 90% → round(9) = 9; max(9, 2) = 9
+    { fencerCount: 10, mode: CutMode.PERCENTAGE, value: 10, eventType: EventType.INDIVIDUAL, expected: 9 },
   ])('$fencerCount fencers, $mode $value → $expected', ({ fencerCount, mode, value, eventType, expected }) => {
     const result = computeDeFencerCount(fencerCount, mode, value, eventType)
     expect(result).toBe(expected)

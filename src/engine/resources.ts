@@ -176,7 +176,7 @@ function feRefsFreeAt(day: number, atTime: number, state: GlobalState, config: T
   const avail = config.referee_availability[day]
   if (!avail) return 0
   const dayRefs = state.refs_in_use_by_day[day]
-  if (!dayRefs) return avail.foil_epee_refs + avail.saber_refs
+  if (!dayRefs) return avail.foil_epee_refs + avail.three_weapon_refs
 
   // Count releases that happen at or before atTime
   const released = dayRefs.release_events
@@ -189,7 +189,7 @@ function feRefsFreeAt(day: number, atTime: number, state: GlobalState, config: T
     .filter(e => e.time <= atTime && e.type === 'saber')
     .reduce((sum, e) => sum + e.count, 0)
   const saberInUse = Math.max(0, dayRefs.saber_in_use - saberReleased)
-  const total = avail.foil_epee_refs + avail.saber_refs
+  const total = avail.foil_epee_refs + avail.three_weapon_refs
   return Math.max(0, total - inUse - saberInUse)
 }
 
@@ -200,13 +200,13 @@ function saberRefsFreeAt(day: number, atTime: number, state: GlobalState, config
   const avail = config.referee_availability[day]
   if (!avail) return 0
   const dayRefs = state.refs_in_use_by_day[day]
-  if (!dayRefs) return avail.saber_refs
+  if (!dayRefs) return avail.three_weapon_refs
 
   const released = dayRefs.release_events
     .filter(e => e.time <= atTime && e.type === 'saber')
     .reduce((sum, e) => sum + e.count, 0)
 
-  return Math.max(0, avail.saber_refs - dayRefs.saber_in_use + released)
+  return Math.max(0, avail.three_weapon_refs - dayRefs.saber_in_use + released)
 }
 
 // ──────────────────────────────────────────────

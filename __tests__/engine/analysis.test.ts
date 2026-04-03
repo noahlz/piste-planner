@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { initialAnalysis, genderEquityAllowableDiff, isRegionalQualifier } from '../../src/engine/analysis.ts'
+import { initialAnalysis, genderEquityAllowableDiff, isRegionalQualifier, suggestStripCount } from '../../src/engine/analysis.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 import {
   BottleneckCause,
@@ -147,11 +147,12 @@ describe('initialAnalysis — Pass 1: strip deficit', () => {
 // ──────────────────────────────────────────────
 
 describe('initialAnalysis — Pass 2: flighting group suggestions', () => {
-  it('two competitions: 14 + 12 pools on same day → flighting group suggestion in result', () => {
-    // ceil(98/7)=14, ceil(84/7)=12; 14+12=26 > 24 strips, each fits alone
-    const config = makeConfig({ strips_total: 24 })
-    const c1 = makeBigComp('large', 98)   // 14 pools
-    const c2 = makeBigComp('small', 84)   // 12 pools
+  it('two competitions: 30 + 29 pools on same day → flighting group suggestion in result', () => {
+    // ceil(210/7)=30, ceil(203/7)=29; 30+29=59 > 55 strips, each fits alone
+    // Both ≥ 200 fencers (eligible), within 40 of each other (|210-203|=7)
+    const config = makeConfig({ strips_total: 55 })
+    const c1 = makeBigComp('large', 210)   // 30 pools
+    const c2 = makeBigComp('small', 203)   // 29 pools
     const result = initialAnalysis(config, [c1, c2], { large: 0, small: 0 })
 
     // Suggestions from suggestFlightingGroups are added as strings
@@ -159,10 +160,11 @@ describe('initialAnalysis — Pass 2: flighting group suggestions', () => {
   })
 
   it('tied pool counts → FLIGHTING_GROUP_MANUAL_NEEDED warning in result', () => {
-    // ceil(140/7)=20 pools each; 20+20=40 > 24, each fits alone
-    const config = makeConfig({ strips_total: 24 })
-    const c1 = makeBigComp('tied-a', 140)
-    const c2 = makeBigComp('tied-b', 140)
+    // ceil(210/7)=30 pools each; 30+30=60 > 55, each fits alone
+    // Both ≥ 200 fencers (eligible), within 40 of each other (|210-210|=0)
+    const config = makeConfig({ strips_total: 55 })
+    const c1 = makeBigComp('tied-a', 210)
+    const c2 = makeBigComp('tied-b', 210)
     const result = initialAnalysis(config, [c1, c2], { 'tied-a': 0, 'tied-b': 0 })
 
     const manualNeeded = result.warnings.find(
@@ -271,12 +273,13 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
   it('both competitions in suggested flighting group require video → VIDEO_STRIP_CONTENTION warning', () => {
     // Two competitions whose combined pools exceed strips, triggering a flighting suggestion.
     // Both have REQUIRED video, which should produce a flighting-video conflict warning.
-    const config = makeConfig({ strips_total: 20 })
-    const comp1 = makeBigComp('fg-vid-1', 98, {
+    // ceil(210/7)=30, ceil(203/7)=29; 30+29=59 > 55 strips, each fits, within 40 (|210-203|=7)
+    const config = makeConfig({ strips_total: 55 })
+    const comp1 = makeBigComp('fg-vid-1', 210, {
       de_mode: DeMode.STAGED_DE_BLOCKS,
       de_video_policy: VideoPolicy.REQUIRED,
     })
-    const comp2 = makeBigComp('fg-vid-2', 84, {
+    const comp2 = makeBigComp('fg-vid-2', 203, {
       de_mode: DeMode.STAGED_DE_BLOCKS,
       de_video_policy: VideoPolicy.REQUIRED,
       gender: 'WOMEN',
@@ -300,7 +303,7 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
 describe('initialAnalysis — Pass 6: cut summary', () => {
   it('PERCENTAGE 20%, 100 fencers → cut summary INFO: 20 promoted, bracket 32', () => {
     const config = makeConfig()
-    // 20% of 100 = 20; nextPowerOf2(20) = 32
+    // cutValue=20 means cut 20%, keep 80%: round(100 * 0.8) = 80 promoted; nextPowerOf2(80) = 128
     const comp = makeBigComp('cuts-comp', 100, {
       cut_mode: CutMode.PERCENTAGE,
       cut_value: 20,
@@ -312,8 +315,8 @@ describe('initialAnalysis — Pass 6: cut summary', () => {
     )
     expect(cutInfo).toBeDefined()
     expect(cutInfo?.severity).toBe(BottleneckSeverity.INFO)
-    expect(cutInfo?.message).toMatch(/20/)
-    expect(cutInfo?.message).toMatch(/32/)
+    expect(cutInfo?.message).toMatch(/80/)
+    expect(cutInfo?.message).toMatch(/128/)
   })
 
   it('DISABLED cut_mode → no cut summary', () => {
@@ -329,37 +332,10 @@ describe('initialAnalysis — Pass 6: cut summary', () => {
 })
 
 // ──────────────────────────────────────────────
-// Pass 7 — gender equity cap validation
+// Pass 7 — gender equity cap validation (removed from pipeline; genderEquityAllowableDiff still exported)
 // ──────────────────────────────────────────────
 
 describe('initialAnalysis — Pass 7: gender equity', () => {
-  it("Men's Foil 128 vs Women's Foil 64 → GENDER_EQUITY_CAP_VIOLATION warning", () => {
-    const config = makeConfig({ tournament_type: TournamentType.NAC })
-    // 128 fencers → ceil(128/7)=19 pools; 64 fencers → ceil(64/7)=10 pools
-    // |19 - 10| = 9 > genderEquityAllowableDiff(19) = 3 → violation
-    const mens = makeCompetition({
-      id: 'men-foil',
-      gender: 'MEN',
-      weapon: 'FOIL',
-      category: 'DIV1',
-      fencer_count: 128,
-    })
-    const womens = makeCompetition({
-      id: 'women-foil',
-      gender: 'WOMEN',
-      weapon: 'FOIL',
-      category: 'DIV1',
-      fencer_count: 64,
-    })
-    const result = initialAnalysis(config, [mens, womens], { 'men-foil': 0, 'women-foil': 0 })
-
-    const violation = result.warnings.find(
-      (w: Bottleneck) => w.cause === BottleneckCause.GENDER_EQUITY_CAP_VIOLATION,
-    )
-    expect(violation).toBeDefined()
-    expect(violation?.severity).toBe(BottleneckSeverity.WARN)
-  })
-
   it('equal fencer counts (both 128) → no GENDER_EQUITY_CAP_VIOLATION', () => {
     const config = makeConfig({ tournament_type: TournamentType.NAC })
     const mens = makeCompetition({
@@ -419,5 +395,37 @@ describe('initialAnalysis — statelessness', () => {
     const r2 = initialAnalysis(config, comps, dayAssignments)
 
     expect(r1).toEqual(r2)
+  })
+})
+
+// ──────────────────────────────────────────────
+// suggestStripCount
+// ──────────────────────────────────────────────
+
+describe('suggestStripCount', () => {
+  it('returns max pool count across all competitions', () => {
+    // comp-a: 24 fencers → ceil(24/7)=4 pools; comp-b: 49 fencers → ceil(49/7)=7 pools
+    const compA = makeCompetition({ id: 'comp-a', fencer_count: 24 }) // 4 pools
+    const compB = makeCompetition({ id: 'comp-b', fencer_count: 49 }) // 7 pools
+
+    expect(suggestStripCount([compA, compB])).toBe(7)
+  })
+
+  it('returns the single competition pool count with one competition', () => {
+    // 70 fencers → ceil(70/7) = 10 pools
+    const comp = makeCompetition({ id: 'solo', fencer_count: 70 })
+
+    expect(suggestStripCount([comp])).toBe(10)
+  })
+
+  it('returns 0 for empty competition list', () => {
+    expect(suggestStripCount([])).toBe(0)
+  })
+
+  it('skips competitions with fencer_count <= 1 (no pools to run)', () => {
+    const invalid = makeCompetition({ id: 'invalid', fencer_count: 1 })
+    const valid = makeCompetition({ id: 'valid', fencer_count: 14 }) // ceil(14/7)=2 pools
+
+    expect(suggestStripCount([invalid, valid])).toBe(2)
   })
 })

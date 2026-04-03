@@ -2,6 +2,7 @@ import { BottleneckCause, BottleneckSeverity } from './types.ts'
 import type { Competition, FlightingGroup, Bottleneck } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { crossoverPenalty } from './crossover.ts'
+import { FLIGHTING_MIN_FENCERS, FLIGHTING_ELIGIBLE_CATEGORIES } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // suggestFlightingGroups
@@ -36,6 +37,17 @@ export function suggestFlightingGroups(
 
       // Only consider pairs on the same day
       if (dayAssignments[c1.id] !== dayAssignments[c2.id]) continue
+
+      // Both competitions must meet eligibility: 200+ fencers and eligible category
+      if (
+        c1.fencer_count < FLIGHTING_MIN_FENCERS ||
+        c2.fencer_count < FLIGHTING_MIN_FENCERS ||
+        !FLIGHTING_ELIGIBLE_CATEGORIES.has(c1.category) ||
+        !FLIGHTING_ELIGIBLE_CATEGORIES.has(c2.category)
+      ) continue
+
+      // Fencer counts must be within 40 of each other
+      if (Math.abs(c1.fencer_count - c2.fencer_count) > 40) continue
 
       const c1Pools = computePoolStructure(c1.fencer_count, c1.use_single_pool_override).n_pools
       const c2Pools = computePoolStructure(c2.fencer_count, c2.use_single_pool_override).n_pools

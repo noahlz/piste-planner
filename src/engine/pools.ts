@@ -79,9 +79,10 @@ export function weightedPoolDuration(
   )
   const avg = Math.round(totalWeighted / pool_sizes.length)
 
-  // Single pool of 8+ fencers is double-stripped, halving the effective duration
+  // Single pool of 8+ fencers is double-stripped. 0.6× (not 0.5×) accounts for
+  // fencer rest periods and bout-switching friction that prevent a clean 2× speedup.
   if (pool_sizes.length === 1 && pool_sizes[0] >= 8) {
-    return Math.round(avg / 2)
+    return Math.round(avg * 0.6)
   }
 
   return avg
@@ -157,7 +158,8 @@ export function computeDeFencerCount(
   if (cutMode === CutMode.DISABLED) {
     promoted = fencerCount
   } else if (cutMode === CutMode.PERCENTAGE) {
-    promoted = Math.round((fencerCount * cutValue) / 100)
+    // cutValue is the % to CUT (e.g. 20 = cut 20%, keep 80%), so promoted = fencerCount × (1 - cutValue/100)
+    promoted = Math.round(fencerCount * (1 - cutValue / 100))
   } else {
     promoted = Math.min(cutValue, fencerCount)
   }

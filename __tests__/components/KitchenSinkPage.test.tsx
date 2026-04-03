@@ -181,8 +181,8 @@ describe('KitchenSinkPage user flow tests', () => {
     useStore.getState().setStrips(24)
     useStore.getState().setVideoStrips(4)
     // Set refs for both days
-    useStore.getState().setDayRefs(0, { foil_epee_refs: 10, saber_refs: 6 })
-    useStore.getState().setDayRefs(1, { foil_epee_refs: 10, saber_refs: 6 })
+    useStore.getState().setDayRefs(0, { foil_epee_refs: 10, three_weapon_refs: 6 })
+    useStore.getState().setDayRefs(1, { foil_epee_refs: 10, three_weapon_refs: 6 })
 
     render(<KitchenSinkPage />)
     fireEvent.click(screen.getByRole('button', { name: 'Generate Schedule' }))
@@ -513,7 +513,7 @@ describe('KitchenSinkPage error state tests', () => {
         bracket_size: 32,
         cut_mode: 'DISABLED' as const,
         cut_value: 0,
-        de_mode: 'SINGLE_BLOCK' as const,
+        de_mode: 'SINGLE_STAGE' as const,
         de_video_policy: 'BEST_EFFORT' as const,
         de_start: 610,
         de_end: null,

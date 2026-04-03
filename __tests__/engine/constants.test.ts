@@ -97,12 +97,31 @@ describe('FLIGHTING_MIN_FENCERS', () => {
 })
 
 describe('SOFT_SEPARATION_PAIRS', () => {
-  it('has exactly 1 entry', () => {
-    expect(SOFT_SEPARATION_PAIRS).toHaveLength(1)
+  it('has exactly 3 entries', () => {
+    expect(SOFT_SEPARATION_PAIRS).toHaveLength(3)
   })
 
   it('contains [DIV1, CADET] with penalty 5.0', () => {
-    expect(SOFT_SEPARATION_PAIRS[0].pair).toEqual([Category.DIV1, Category.CADET])
-    expect(SOFT_SEPARATION_PAIRS[0].penalty).toBe(5.0)
+    const entry = SOFT_SEPARATION_PAIRS.find(
+      (e) => e.pair[0] === Category.DIV1 && e.pair[1] === Category.CADET,
+    )
+    expect(entry).toBeDefined()
+    expect(entry?.penalty).toBe(5.0)
+  })
+
+  it('contains [DIV1, DIV2] with penalty 3.0', () => {
+    const entry = SOFT_SEPARATION_PAIRS.find(
+      (e) => e.pair[0] === Category.DIV1 && e.pair[1] === Category.DIV2,
+    )
+    expect(entry).toBeDefined()
+    expect(entry?.penalty).toBe(3.0)
+  })
+
+  it('contains [DIV1, DIV3] with penalty 3.0', () => {
+    const entry = SOFT_SEPARATION_PAIRS.find(
+      (e) => e.pair[0] === Category.DIV1 && e.pair[1] === Category.DIV3,
+    )
+    expect(entry).toBeDefined()
+    expect(entry?.penalty).toBe(3.0)
   })
 })

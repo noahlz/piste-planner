@@ -44,8 +44,8 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
   }
 }
 
-function makeAvailability(day: number, foil_epee_refs: number, saber_refs: number): DayRefereeAvailability {
-  return { day, foil_epee_refs, saber_refs, source: 'ACTUAL' }
+function makeAvailability(day: number, foil_epee_refs: number, three_weapon_refs: number): DayRefereeAvailability {
+  return { day, foil_epee_refs, three_weapon_refs, source: 'ACTUAL' }
 }
 
 // Minimal Competition factory — only fields refs.ts needs
@@ -65,7 +65,7 @@ function makeCompetition(overrides: Partial<Competition> = {}): Competition {
     use_single_pool_override: false,
     cut_mode: 'DISABLED',
     cut_value: 100,
-    de_mode: DeMode.SINGLE_BLOCK,
+    de_mode: DeMode.SINGLE_STAGE,
     de_video_policy: 'BEST_EFFORT',
     de_finals_strip_id: null,
     de_finals_strip_requirement: 'IF_AVAILABLE',
@@ -87,19 +87,19 @@ function makeCompetition(overrides: Partial<Competition> = {}): Competition {
 
 describe('podCaptainsNeeded', () => {
   it('DISABLED override → 0 regardless of strips', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.DISABLED, DeMode.SINGLE_BLOCK, 32, 'DE_FINALS', 12)).toBe(0)
+    expect(podCaptainsNeeded(PodCaptainOverride.DISABLED, DeMode.SINGLE_STAGE, 32, 'DE_FINALS', 12)).toBe(0)
   })
 
   it('FORCE_4 override with 12 strips → ceil(12/4) = 3', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_BLOCK, 32, 'DE_FINALS', 12)).toBe(3)
+    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 32, 'DE_FINALS', 12)).toBe(3)
   })
 
-  it('AUTO, SINGLE_BLOCK, bracket ≤32, 8 strips → ceil(8/4) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_BLOCK, 32, 'DE_FINALS', 8)).toBe(2)
+  it('AUTO, SINGLE_STAGE, bracket ≤32, 8 strips → ceil(8/4) = 2', () => {
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 32, 'DE_FINALS', 8)).toBe(2)
   })
 
-  it('AUTO, SINGLE_BLOCK, bracket 64, 16 strips → ceil(16/8) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_BLOCK, 64, 'DE_FINALS', 16)).toBe(2)
+  it('AUTO, SINGLE_STAGE, bracket 64, 16 strips → ceil(16/8) = 2', () => {
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 64, 'DE_FINALS', 16)).toBe(2)
   })
 
   it('AUTO, STAGED, DE_ROUND_OF_16 phase, 4 strips → ceil(4/4) = 1', () => {
@@ -110,12 +110,12 @@ describe('podCaptainsNeeded', () => {
     expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED_DE_BLOCKS, 64, 'DE_FINALS', 8)).toBe(1)
   })
 
-  it('AUTO, SINGLE_BLOCK, bracket ≤32, 9 strips → ceil(9/4) = 3', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_BLOCK, 16, 'DE_FINALS', 9)).toBe(3)
+  it('AUTO, SINGLE_STAGE, bracket ≤32, 9 strips → ceil(9/4) = 3', () => {
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 16, 'DE_FINALS', 9)).toBe(3)
   })
 
   it('FORCE_4 with 7 strips → ceil(7/4) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_BLOCK, 64, 'DE_FINALS', 7)).toBe(2)
+    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 64, 'DE_FINALS', 7)).toBe(2)
   })
 })
 
@@ -132,15 +132,15 @@ describe('refsAvailableOnDay', () => {
     ],
   })
 
-  it('SABRE weapon → saber_refs only', () => {
+  it('SABRE weapon → three_weapon_refs only', () => {
     expect(refsAvailableOnDay(0, Weapon.SABRE, config)).toBe(5)
   })
 
-  it('FOIL weapon → foil_epee_refs + saber_refs (saber refs cross over)', () => {
+  it('FOIL weapon → foil_epee_refs + three_weapon_refs (saber refs cross over)', () => {
     expect(refsAvailableOnDay(0, Weapon.FOIL, config)).toBe(15)
   })
 
-  it('EPEE weapon → foil_epee_refs + saber_refs (saber refs cross over)', () => {
+  it('EPEE weapon → foil_epee_refs + three_weapon_refs (saber refs cross over)', () => {
     expect(refsAvailableOnDay(0, Weapon.EPEE, config)).toBe(15)
   })
 
@@ -236,30 +236,32 @@ describe('calculateOptimalRefs', () => {
     expect(result.every(r => r.source === 'OPTIMAL')).toBe(true)
   })
 
-  it('foil competition assigned to day 0 → foil_epee demand = 5 on day 0', () => {
+  it('foil competition assigned to day 0 → foil_epee demand = 6 on day 0', () => {
     const config = makeConfig({ days_available: 1 })
-    // 20-fencer foil comp: 3 pools of ~7 (pool demand=3), DE bracket=32 w/ 4 R16 strips + 1 pod captain = 5
+    // 20-fencer foil comp (AUTO policy): 3 pools × 2 refs = 6 pool demand.
+    // DE: bracket=32, 4 R16 strips + 1 pod captain = 5. Peak = max(6, 5) = 6.
     const comp = makeCompetition({ id: 'foil-1', weapon: Weapon.FOIL, fencer_count: 20, earliest_start: 0, latest_end: 840 })
     const result = calculateOptimalRefs([comp], config)
-    expect(result[0].foil_epee_refs).toBe(5)
-    expect(result[0].saber_refs).toBe(0)
+    expect(result[0].foil_epee_refs).toBe(6)
+    expect(result[0].three_weapon_refs).toBe(0)
   })
 
-  it('saber competition → saber demand = 5, foil_epee demand = 0', () => {
+  it('saber competition → saber demand = 6, foil_epee demand = 0', () => {
     const config = makeConfig({ days_available: 1 })
-    // 20-fencer saber comp: same structure as foil, peak from DE phase = 5
+    // 20-fencer saber comp (AUTO policy): 3 pools × 2 refs = 6 pool demand.
+    // DE: bracket=32, 4 R16 strips + 1 pod captain = 5. Peak = max(6, 5) = 6.
     const comp = makeCompetition({ id: 'saber-1', weapon: Weapon.SABRE, fencer_count: 20, earliest_start: 0, latest_end: 840 })
     const result = calculateOptimalRefs([comp], config)
-    expect(result[0].saber_refs).toBe(5)
+    expect(result[0].three_weapon_refs).toBe(6)
     expect(result[0].foil_epee_refs).toBe(0)
   })
 
-  it('3 foil + 3 epee competitions on day 0 → summed foil_epee demand = 30', () => {
+  it('3 foil + 3 epee competitions on day 0 → summed foil_epee demand = 36', () => {
     // Single-day config so all comps land on day 0
     const config = makeConfig({ days_available: 1 })
-    // Each 18-fencer comp: 3 pools (pool demand=3), DE bracket=32 w/ 4 R16 strips + 1 captain = 5
-    // Peak per comp = max(3, 5) = 5. Sum across 6 foil/epee comps = 30.
-    // (Conservative: assumes all peaks concurrent — the TODO for time-slot simulation will refine this)
+    // Each 18-fencer comp (AUTO policy): 3 pools × 2 refs = 6 pool demand.
+    // DE: bracket=32, 4 R16 strips + 1 captain = 5. Peak per comp = max(6, 5) = 6.
+    // Sum across 6 foil/epee comps = 36.
     const comps = [
       makeCompetition({ id: 'foil-1', weapon: Weapon.FOIL, fencer_count: 18 }),
       makeCompetition({ id: 'foil-2', weapon: Weapon.FOIL, fencer_count: 18 }),
@@ -269,19 +271,20 @@ describe('calculateOptimalRefs', () => {
       makeCompetition({ id: 'epee-3', weapon: Weapon.EPEE, fencer_count: 18 }),
     ]
     const result = calculateOptimalRefs(comps, config)
-    expect(result[0].foil_epee_refs).toBe(30)
-    expect(result[0].saber_refs).toBe(0)
+    expect(result[0].foil_epee_refs).toBe(36)
+    expect(result[0].three_weapon_refs).toBe(0)
   })
 
-  it('2 saber competitions on day 0 → summed saber demand = 10', () => {
+  it('2 saber competitions on day 0 → summed saber demand = 12', () => {
     const config = makeConfig({ days_available: 1 })
-    // Each 18-fencer saber comp: peak = max(3 pools, 5 DE refs) = 5. Sum = 10.
+    // Each 18-fencer saber comp (AUTO policy): 3 pools × 2 refs = 6 pool demand.
+    // DE: bracket=32, 4 R16 strips + 1 captain = 5. Peak = max(6, 5) = 6. Sum = 12.
     const comps = [
       makeCompetition({ id: 'saber-1', weapon: Weapon.SABRE, fencer_count: 18 }),
       makeCompetition({ id: 'saber-2', weapon: Weapon.SABRE, fencer_count: 18 }),
     ]
     const result = calculateOptimalRefs(comps, config)
-    expect(result[0].saber_refs).toBe(10)
+    expect(result[0].three_weapon_refs).toBe(12)
     expect(result[0].foil_epee_refs).toBe(0)
   })
 
@@ -289,26 +292,52 @@ describe('calculateOptimalRefs', () => {
     const config = makeConfig({ days_available: 2 })
     const result = calculateOptimalRefs([], config)
     expect(result[0].foil_epee_refs).toBe(0)
-    expect(result[0].saber_refs).toBe(0)
+    expect(result[0].three_weapon_refs).toBe(0)
     expect(result[1].foil_epee_refs).toBe(0)
-    expect(result[1].saber_refs).toBe(0)
+    expect(result[1].three_weapon_refs).toBe(0)
   })
 
-  it('known small config: 1 foil comp, 3 pools → pool demand is 3, DE demand may exceed', () => {
+  it('known small config: 1 foil comp, 3 pools → pool demand drives foil_epee_refs with AUTO policy', () => {
     const config = makeConfig({ days_available: 1 })
-    // 18 fencers → 3 pools of 6 (pool demand = 3)
+    // 18 fencers (AUTO policy) → 3 pools × 2 refs = 6 pool demand
     // DE: bracket=32, de_round_of_16_strips=4, AUTO pod captains → ceil(4/4)=1 captain + 4 strip refs = 5
-    // Peak = max(3, 5) = 5
+    // Peak = max(6, 5) = 6
     const comp = makeCompetition({ id: 'foil-1', weapon: Weapon.FOIL, fencer_count: 18, strips_allocated: 3 })
     const result = calculateOptimalRefs([comp], config)
-    // DE phase is the bottleneck (4 strips + 1 pod captain = 5 refs)
-    expect(result[0].foil_epee_refs).toBe(5)
+    // Pool phase is now the bottleneck with AUTO policy (6 > 5)
+    expect(result[0].foil_epee_refs).toBe(6)
+  })
+
+  it('TWO policy yields higher ref count than ONE policy for same competition', () => {
+    // With ONE policy: n_pools × 1 refs. With TWO policy: n_pools × 2 refs.
+    // 18 fencers → 3 pools. ONE = 3, TWO = 6. Peak = max(pool, DE).
+    const config = makeConfig({ days_available: 1 })
+    const compONE = makeCompetition({ id: 'foil-one', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: 'ONE' })
+    const compTWO = makeCompetition({ id: 'foil-two', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: 'TWO' })
+
+    const resultONE = calculateOptimalRefs([compONE], config)
+    const resultTWO = calculateOptimalRefs([compTWO], config)
+
+    expect(resultTWO[0].foil_epee_refs).toBeGreaterThan(resultONE[0].foil_epee_refs)
+  })
+
+  it('AUTO policy yields same ref count as TWO policy for small pool count', () => {
+    // AUTO tries 2 refs per pool first, identical to TWO for the peak estimate
+    const config = makeConfig({ days_available: 1 })
+    const compAUTO = makeCompetition({ id: 'foil-auto', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: 'AUTO' })
+    const compTWO = makeCompetition({ id: 'foil-two', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: 'TWO' })
+
+    const resultAUTO = calculateOptimalRefs([compAUTO], config)
+    const resultTWO = calculateOptimalRefs([compTWO], config)
+
+    expect(resultAUTO[0].foil_epee_refs).toBe(resultTWO[0].foil_epee_refs)
   })
 
   it('known small config: 1 foil comp with no DE strips → pool demand drives foil_epee_refs', () => {
     const config = makeConfig({ days_available: 1 })
-    // 18 fencers → 3 pools of 6 (pool demand = 3)
-    // DE: de_round_of_16_strips=0, de_finals_strips=0 → only finals phase → 0 strips = 0 DE demand
+    // 18 fencers (AUTO policy) → 3 pools × 2 refs = 6 pool demand
+    // DE: de_round_of_16_strips=0, de_finals_strips=0 → 0 DE demand
+    // Peak = max(6, 0) = 6
     const comp = makeCompetition({
       id: 'foil-1',
       weapon: Weapon.FOIL,
@@ -318,7 +347,7 @@ describe('calculateOptimalRefs', () => {
       de_finals_strips: 0,
     })
     const result = calculateOptimalRefs([comp], config)
-    // Pool phase is the bottleneck: 3 pools → 3 refs
-    expect(result[0].foil_epee_refs).toBe(3)
+    // Pool phase is the bottleneck with AUTO policy: 3 pools × 2 = 6 refs
+    expect(result[0].foil_epee_refs).toBe(6)
   })
 })

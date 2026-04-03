@@ -129,9 +129,9 @@ export function validateConfig(
     }
 
     // Video policy checks
-    if (comp.de_video_policy === VideoPolicy.REQUIRED && comp.de_mode === DeMode.SINGLE_BLOCK) {
-      // REQUIRED + SINGLE_BLOCK is dead config: SINGLE_BLOCK doesn't use staged video strips
-      errors.push(warn('de_video_policy', `${comp.id}: REQUIRED video policy has no effect with SINGLE_BLOCK de_mode`))
+    if (comp.de_video_policy === VideoPolicy.REQUIRED && comp.de_mode === DeMode.SINGLE_STAGE) {
+      // REQUIRED + SINGLE_STAGE is dead config: SINGLE_STAGE doesn't use staged video strips
+      errors.push(warn('de_video_policy', `${comp.id}: REQUIRED video policy has no effect with SINGLE_STAGE de_mode`))
     }
 
     if (
@@ -154,7 +154,7 @@ export function validateConfig(
 
       // Referee capacity: check that at least one day has enough refs of the right type
       const isSabre = comp.weapon === Weapon.SABRE
-      const refField = isSabre ? 'saber_refs' : 'foil_epee_refs'
+      const refField = isSabre ? 'three_weapon_refs' : 'foil_epee_refs'
       const refLabel = isSabre ? 'saber' : 'foil/epee'
       const maxRefsOnAnyDay = config.referee_availability.reduce(
         (max, day) => Math.max(max, day[refField]),
@@ -248,6 +248,18 @@ export function validateConfig(
   for (const [groupId, totalStrips] of flightingGroupStrips) {
     if (totalStrips > config.strips_total) {
       errors.push(err('flighting_group', `Flighting group "${groupId}" requires ${totalStrips} strips but strips_total is ${config.strips_total}`))
+    }
+  }
+
+  // ── Global referee headcount check ────────────────────────────────────────
+
+  // Warn when total refs on a day is less than strips_total. Refs < strips means
+  // some strips will sit idle during pools, but the engine can still schedule —
+  // hence a warning rather than an error.
+  for (const day of config.referee_availability) {
+    const total = day.foil_epee_refs + day.three_weapon_refs
+    if (total < config.strips_total) {
+      errors.push(warn('referee_availability', `Day ${day.day}: total refs (${total}) less than strips_total (${config.strips_total})`))
     }
   }
 

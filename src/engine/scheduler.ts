@@ -257,7 +257,7 @@ export function postScheduleWarnings(
   const firstDayDur = dayDurations[0] ?? 0
   const lastDayDur = dayDurations[config.days_available - 1] ?? 0
 
-  if (firstDayDur > avgMiddle) {
+  if (firstDayDur > avgMiddle * 1.1) {
     warnings.push({
       competition_id: '',
       phase: 'POST_SCHEDULE',
@@ -268,7 +268,7 @@ export function postScheduleWarnings(
     })
   }
 
-  if (lastDayDur > avgMiddle) {
+  if (lastDayDur > avgMiddle * 1.1) {
     warnings.push({
       competition_id: '',
       phase: 'POST_SCHEDULE',

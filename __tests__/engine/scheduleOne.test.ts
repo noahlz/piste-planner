@@ -329,7 +329,7 @@ describe('scheduleCompetition — team bronze bout', () => {
       id: 'MF-TEAM',
       fencer_count: 16,
       event_type: EventType.TEAM,
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       strips_allocated: 8,
     })
 
@@ -357,7 +357,7 @@ describe('scheduleCompetition — team bronze bout', () => {
       id: 'MF-TEAM-NOSTRIP',
       fencer_count: 8,
       event_type: EventType.TEAM,
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       strips_allocated: 1,
     })
 
@@ -383,7 +383,7 @@ describe('scheduleCompetition — deadline breach', () => {
       days_available: 1,
       LATEST_START_OFFSET: 840,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
       ],
     })
     const comp = makeCompetition({
@@ -416,7 +416,7 @@ describe('scheduleCompetition — deadline breach', () => {
       days_available: 1,
       MAX_RESCHEDULE_ATTEMPTS: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
       ],
     })
     const comp = makeCompetition({
@@ -457,7 +457,7 @@ describe('scheduleCompetition — deadline breach', () => {
       dayConfigs: [{ day_start_time: 0, day_end_time: 30 }],
       days_available: 1,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
       ],
     })
     const comp = makeCompetition({
@@ -494,8 +494,8 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
       days_available: 2,
       MAX_RESCHEDULE_ATTEMPTS: 0, // no retries — forces immediate SAME_DAY_VIOLATION
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
       ],
     })
     const comp = makeCompetition({
@@ -525,7 +525,7 @@ describe('scheduleCompetition — individual+team sequencing', () => {
     const config = makeConfig({
       days_available: 1,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
       ],
     })
 

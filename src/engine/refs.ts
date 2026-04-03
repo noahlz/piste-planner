@@ -1,4 +1,4 @@
-import { PodCaptainOverride, DeMode, Weapon } from './types.ts'
+import { PodCaptainOverride, DeMode, Weapon, RefPolicy } from './types.ts'
 import type { TournamentConfig, DayRefereeAvailability, Competition } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { computeBracketSize } from './de.ts'
@@ -11,7 +11,7 @@ import { crossoverPenalty } from './crossover.ts'
  * PRD Section 8.1 pod captain rules:
  * - DISABLED → 0 (no pod captains during DEs)
  * - FORCE_4  → always ceil(deStrips / 4)
- * - AUTO + SINGLE_BLOCK: bracket ≤32 → 4-strip pods; bracket >32 → 8-strip pods
+ * - AUTO + SINGLE_STAGE: bracket ≤32 → 4-strip pods; bracket >32 → 8-strip pods
  * - AUTO + STAGED_DE_BLOCKS: DE_ROUND_OF_16 → 4-strip pods; all other phases → 8-strip pods
  */
 export function podCaptainsNeeded(
@@ -26,7 +26,7 @@ export function podCaptainsNeeded(
 
   // AUTO mode — pod size depends on de_mode and phase
   let podSize: number
-  if (deMode === DeMode.SINGLE_BLOCK) {
+  if (deMode === DeMode.SINGLE_STAGE) {
     podSize = bracketSize <= 32 ? 4 : 8
   } else {
     // STAGED_DE_BLOCKS: round-of-16 uses 4-strip pods; finals and prelims use 8-strip pods
@@ -47,19 +47,22 @@ export function podCaptainsNeeded(
 export function refsAvailableOnDay(day: number, weapon: Weapon, config: TournamentConfig): number {
   const avail = config.referee_availability[day]
   if (!avail) return 0
-  if (weapon === Weapon.SABRE) return avail.saber_refs
-  return avail.foil_epee_refs + avail.saber_refs
+  if (weapon === Weapon.SABRE) return avail.three_weapon_refs
+  return avail.foil_epee_refs + avail.three_weapon_refs
 }
 
 /**
  * Estimates peak concurrent pool-round referee demand for a single competition.
  *
  * With infinite refs (as required by Phase 1.5a simulation), all pools run
- * concurrently — demand equals the number of pools.
+ * concurrently. Demand is scaled by the ref_policy:
+ * - ONE: 1 ref per pool
+ * - TWO: 2 refs per pool
+ * - AUTO: 2 refs per pool (peak estimate — AUTO tries 2 first, so we size for that)
  */
-function peakPoolRefDemand(comp: Competition): number {
+function peakPoolRefDemand(comp: Competition, ref_policy: RefPolicy): number {
   const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
-  return n_pools
+  return ref_policy === RefPolicy.ONE ? n_pools : n_pools * 2
 }
 
 /**
@@ -186,7 +189,7 @@ export function calculateOptimalRefs(
 
     for (const comp of dayComps) {
       // Peak ref demand for this competition is the max of its pool and DE phases
-      const poolDemand = comp.fencer_count > 1 ? peakPoolRefDemand(comp) : 0
+      const poolDemand = comp.fencer_count > 1 ? peakPoolRefDemand(comp, comp.ref_policy) : 0
       const deDemand = comp.fencer_count > 1 ? peakDeRefDemand(comp, config) : 0
       const compPeak = Math.max(poolDemand, deDemand)
 
@@ -200,7 +203,7 @@ export function calculateOptimalRefs(
     result.push({
       day: d,
       foil_epee_refs: peakFoilEpee,
-      saber_refs: peakSaber,
+      three_weapon_refs: peakSaber,
       source: 'OPTIMAL',
     })
   }

@@ -252,7 +252,7 @@ export function scheduleCompetition(
     const deNotBefore = snapToSlot(poolEnd + config.ADMIN_GAP_MINS)
 
     // ── DE PHASE ──
-    if (competition.de_mode === DeMode.SINGLE_BLOCK) {
+    if (competition.de_mode === DeMode.SINGLE_STAGE) {
       executeSingleBlockDe(competition, bracketSize, totalDeBase, deNotBefore, day, state, config, result)
     } else {
       executeThreeBlockDe(competition, bracketSize, totalDeBase, deNotBefore, day, state, config, result)
@@ -452,7 +452,7 @@ function allocateFlightedPools(
 }
 
 // ──────────────────────────────────────────────
-// SINGLE_BLOCK DE execution — PRD Section 10.4
+// SINGLE_STAGE DE execution — PRD Section 10.4
 // ──────────────────────────────────────────────
 
 function executeSingleBlockDe(
@@ -473,7 +473,7 @@ function executeSingleBlockDe(
     Math.min(deOptimal, config.strips_total),
     deRefsNeeded,
     competition.weapon,
-    false, // SINGLE_BLOCK never uses video
+    false, // SINGLE_STAGE never uses video
     deNotBefore,
     day,
     state,
@@ -659,7 +659,7 @@ function executeThreeBlockDe(
 }
 
 // ──────────────────────────────────────────────
-// Bronze bout allocation (shared by SINGLE_BLOCK and STAGED)
+// Bronze bout allocation (shared by SINGLE_STAGE and STAGED)
 // ──────────────────────────────────────────────
 
 function allocateBronzeBout(

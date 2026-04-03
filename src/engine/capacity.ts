@@ -36,7 +36,7 @@ export interface DayRemainingCapacity {
  *   the parallel strip demand for the pool phase.
  *
  * DE strip-hours: strips_allocated × deDuration / 60
- *   For SINGLE_BLOCK: all DE strips run for the full DE duration.
+ *   For SINGLE_STAGE: all DE strips run for the full DE duration.
  *   For STAGED_DE_BLOCKS: prelims use strips_allocated; R16 uses de_round_of_16_strips;
  *   finals uses de_finals_strips. The R16 and finals phases also count as video strip-hours.
  */
@@ -80,7 +80,7 @@ export function estimateCompetitionStripHours(
     de_strip_hours = prelims_strip_hours + r16_strip_hours + finals_strip_hours
     video_strip_hours = r16_strip_hours + finals_strip_hours
   } else {
-    // SINGLE_BLOCK: all strips used for the full DE duration; no video strip budget tracked
+    // SINGLE_STAGE: all strips used for the full DE duration; no video strip budget tracked
     de_strip_hours = competition.strips_allocated * (totalDeDuration / 60)
     video_strip_hours = 0
   }

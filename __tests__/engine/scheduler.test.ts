@@ -55,7 +55,7 @@ function competitionsFromTemplate(templateName: string, fencerCount = 24): Compe
       de_video_policy: videoPolicy,
       de_mode: videoPolicy === VideoPolicy.REQUIRED
         ? DeMode.STAGED_DE_BLOCKS
-        : DeMode.SINGLE_BLOCK,
+        : DeMode.SINGLE_STAGE,
       strips_allocated: Math.max(2, Math.ceil(fencerCount / 7)),
     })
   })
@@ -75,7 +75,7 @@ describe('scheduleAll — template integration', () => {
       // so multiple Cadet DE R16/finals phases compete for video strips on the same day.
       strips: makeStrips(64, 8),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 60, saber_refs: 30, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 60, three_weapon_refs: 30, source: 'ACTUAL' as const,
       })),
     })
     // fencer_count=10: minimum that produces ≥2 promoted fencers with 20% PERCENTAGE cut
@@ -104,7 +104,7 @@ describe('scheduleAll — template integration', () => {
       days_available: 2,
       strips: makeStrips(96, 4),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 80, saber_refs: 40, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 80, three_weapon_refs: 40, source: 'ACTUAL' as const,
       })),
     })
     const comps = competitionsFromTemplate('ROC Div1A/Vet', 8)
@@ -127,7 +127,7 @@ describe('scheduleAll — template integration', () => {
       days_available: 2,
       strips: makeStrips(56, 2),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 36, saber_refs: 18, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 36, three_weapon_refs: 18, source: 'ACTUAL' as const,
       })),
     })
     const comps = competitionsFromTemplate('RYC Weekend', 8)
@@ -156,7 +156,7 @@ describe('scheduleAll — constraint scenarios', () => {
       days_available: 3,
       strips: makeStrips(16, 2),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const,
       })),
     })
     // 6 small events across different demographics on constrained strips
@@ -183,7 +183,7 @@ describe('scheduleAll — constraint scenarios', () => {
       days_available: 2,
       strips: makeStrips(48, 0), // no video strips
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' as const,
       })),
     })
     // Small non-conflicting events with BEST_EFFORT video on zero video strips
@@ -209,7 +209,7 @@ describe('scheduleAll — constraint scenarios', () => {
       days_available: 2,
       strips: makeStrips(32, 4),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const,
       })),
     })
     // 6 small events across different weapons/genders to minimize crossover
@@ -357,6 +357,90 @@ describe('postScheduleWarnings', () => {
     expect(lastDayWarning).toBeUndefined()
   })
 
+  it('4-day tournament, first day only 5% over avg middle → no warning (below 10% threshold)', () => {
+    // dayStart(d) = d * DAY_LENGTH_MINS (840) when dayConfigs is empty.
+    // Target avg middle = 600 min. Middle events end at dayStart + 600.
+    // First day: 630 min (5% over 600). Threshold 10%: 630 <= 600*1.1=660 → no warn.
+    const config = makeConfig({ days_available: 4 })
+    const schedule: Record<string, ScheduleResult> = {}
+
+    // Day 0: dayStart=0; ends at 0+630=630 → duration 630
+    schedule['day0-event'] = {
+      ...makeScheduleResult('day0-event', 0),
+      pool_start: 0,
+      pool_end: 300,
+      de_total_end: 630,
+    }
+    // Day 1 (middle): dayStart=840; ends at 840+600=1440 → duration 600
+    schedule['day1-event'] = {
+      ...makeScheduleResult('day1-event', 1),
+      pool_start: 840,
+      pool_end: 1100,
+      de_total_end: 1440,
+    }
+    // Day 2 (middle): dayStart=1680; ends at 1680+600=2280 → duration 600
+    schedule['day2-event'] = {
+      ...makeScheduleResult('day2-event', 2),
+      pool_start: 1680,
+      pool_end: 1940,
+      de_total_end: 2280,
+    }
+    // Day 3 (last): dayStart=2520; ends at 2520+500=3020 → duration 500 (no last-day warning)
+    schedule['day3-event'] = {
+      ...makeScheduleResult('day3-event', 3),
+      pool_start: 2520,
+      pool_end: 2720,
+      de_total_end: 3020,
+    }
+
+    const warnings = postScheduleWarnings(schedule, config)
+
+    // First day: 630, avg middle: 600. 630 <= 660 → no warning.
+    const firstDayWarning = warnings.find((w: { message: string }) => w.message.includes('First day'))
+    expect(firstDayWarning).toBeUndefined()
+  })
+
+  it('4-day tournament, first day 15% over avg middle → warning fires', () => {
+    // Middle avg = 600 min. First day = 690 (15% over). 690 > 600*1.1=660 → fires.
+    const config = makeConfig({ days_available: 4 })
+    const schedule: Record<string, ScheduleResult> = {}
+
+    // Day 0: dayStart=0; ends at 690 → duration 690
+    schedule['day0-event'] = {
+      ...makeScheduleResult('day0-event', 0),
+      pool_start: 0,
+      pool_end: 350,
+      de_total_end: 690,
+    }
+    // Day 1 (middle): dayStart=840; ends at 840+600=1440 → duration 600
+    schedule['day1-event'] = {
+      ...makeScheduleResult('day1-event', 1),
+      pool_start: 840,
+      pool_end: 1100,
+      de_total_end: 1440,
+    }
+    // Day 2 (middle): dayStart=1680; ends at 1680+600=2280 → duration 600
+    schedule['day2-event'] = {
+      ...makeScheduleResult('day2-event', 2),
+      pool_start: 1680,
+      pool_end: 1940,
+      de_total_end: 2280,
+    }
+    // Day 3 (last): dayStart=2520; ends at 2520+500=3020 → duration 500 (no last-day warning)
+    schedule['day3-event'] = {
+      ...makeScheduleResult('day3-event', 3),
+      pool_start: 2520,
+      pool_end: 2720,
+      de_total_end: 3020,
+    }
+
+    const warnings = postScheduleWarnings(schedule, config)
+
+    // First day: 690, avg middle: 600. 690 > 660 → fires.
+    const firstDayWarning = warnings.find((w: { message: string }) => w.message.includes('First day'))
+    expect(firstDayWarning).toBeDefined()
+  })
+
   it('3-day tournament: no first/last day warning (only applies to 4+)', () => {
     const config = makeConfig({ days_available: 3 })
 
@@ -402,21 +486,21 @@ describe('scheduleAll — validation integration', () => {
     expect(errors[0].message).toContain('strips_total')
   })
 
-  it('carries WARN bottleneck forward and still schedules when REQUIRED video + SINGLE_BLOCK', () => {
-    // REQUIRED video policy with SINGLE_BLOCK de_mode is a WARN, not an ERROR,
+  it('carries WARN bottleneck forward and still schedules when REQUIRED video + SINGLE_STAGE', () => {
+    // REQUIRED video policy with SINGLE_STAGE de_mode is a WARN, not an ERROR,
     // so scheduling should proceed and the warning should appear in bottlenecks
     const config = makeConfig({
       days_available: 2,
       strips: makeStrips(24, 4),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const,
       })),
     })
     const comps = [
       makeCompetition({
         id: 'warn-comp',
         de_video_policy: VideoPolicy.REQUIRED,
-        de_mode: DeMode.SINGLE_BLOCK,
+        de_mode: DeMode.SINGLE_STAGE,
         fencer_count: 8,
         strips_allocated: 4,
       }),
@@ -448,7 +532,7 @@ describe('scheduleAll — graceful degradation on resource exhaustion', () => {
       days_available: 2,
       strips: makeStrips(4, 0),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 10, saber_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 10, three_weapon_refs: 10, source: 'ACTUAL' as const,
       })),
     })
 
@@ -512,7 +596,7 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
       days_available: 4,
       strips: makeStrips(64, 4),
       referee_availability: Array.from({ length: 4 }, (_, i) => ({
-        day: i, foil_epee_refs: 40, saber_refs: 20, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' as const,
       })),
     })
 
@@ -554,7 +638,7 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
       days_available: 3,
       strips: makeStrips(32, 4),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const,
       })),
     })
     const comps = [

@@ -1,6 +1,6 @@
 import type { CatalogueEntry, VetAgeGroup } from './types.ts'
 import { Category, EventType, Gender, Weapon, VetAgeGroup as VetAgeGroupEnum } from './types.ts'
-import { NAC_FENCER_DEFAULTS, REGIONAL_FENCER_DEFAULTS } from './constants.ts'
+import { NAC_FENCER_DEFAULTS, REGIONAL_FENCER_DEFAULTS, type FencerDefaultKey } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // ID generation helpers
@@ -263,7 +263,7 @@ export const TEMPLATES: Record<string, string[]> = {
 // NAC/JO templates use NAC-scale counts; regional templates use smaller counts.
 // ──────────────────────────────────────────────
 
-type FencerDefaultTable = Partial<Record<`${Category}:${EventType}`, number>>
+type FencerDefaultTable = Partial<Record<FencerDefaultKey, number>>
 
 export const TEMPLATE_FENCER_DEFAULTS: Record<string, FencerDefaultTable> = {
   'NAC Youth': NAC_FENCER_DEFAULTS,

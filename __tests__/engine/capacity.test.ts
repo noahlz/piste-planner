@@ -45,7 +45,7 @@ describe('estimateCompetitionStripHours', () => {
       event_type: EventType.INDIVIDUAL,
       cut_mode: CutMode.DISABLED,
       cut_value: 100,
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       strips_allocated: 16,
     })
 
@@ -55,7 +55,7 @@ describe('estimateCompetitionStripHours', () => {
     const expectedDeStripHours = 16 * 240 / 60     // 64
     const expectedTotal = expectedPoolStripHours + expectedDeStripHours
     expect(result.total_strip_hours).toBeCloseTo(expectedTotal, 1)
-    expect(result.video_strip_hours).toBe(0) // SINGLE_BLOCK, no video strip hours
+    expect(result.video_strip_hours).toBe(0) // SINGLE_STAGE, no video strip hours
   })
 
   it('team event with 30 fencers → much smaller strip-hour footprint than large individual', () => {
@@ -67,7 +67,7 @@ describe('estimateCompetitionStripHours', () => {
       event_type: EventType.TEAM,
       cut_mode: CutMode.DISABLED,
       cut_value: 100,
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       strips_allocated: 4,
     })
     const largeComp = makeCompetition({
@@ -77,7 +77,7 @@ describe('estimateCompetitionStripHours', () => {
       event_type: EventType.INDIVIDUAL,
       cut_mode: CutMode.DISABLED,
       cut_value: 100,
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       strips_allocated: 16,
     })
 
@@ -126,7 +126,7 @@ describe('estimateCompetitionStripHours', () => {
     expect(result.total_strip_hours).toBeCloseTo(expectedTotal, 1)
   })
 
-  it('SINGLE_BLOCK competition → zero video_strip_hours regardless of video policy', () => {
+  it('SINGLE_STAGE competition → zero video_strip_hours regardless of video policy', () => {
     const config = makeConfig()
     const comp = makeCompetition({
       id: 'single-block',
@@ -135,7 +135,7 @@ describe('estimateCompetitionStripHours', () => {
       event_type: EventType.INDIVIDUAL,
       cut_mode: CutMode.DISABLED,
       cut_value: 100,
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       de_video_policy: VideoPolicy.REQUIRED,
       strips_allocated: 8,
     })
@@ -177,7 +177,7 @@ describe('dayConsumedCapacity', () => {
       event_type: EventType.INDIVIDUAL,
       cut_mode: CutMode.DISABLED,
       cut_value: 100,
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       strips_allocated: 40,
     })
     const scheduleEntry = makeScheduleResult('large-comp', 0)
@@ -196,7 +196,7 @@ describe('dayConsumedCapacity', () => {
     const expectedDeStripHours = 40 * 240 / 60
     const expectedTotal = expectedPoolStripHours + expectedDeStripHours
     expect(result.strip_hours_consumed).toBeCloseTo(expectedTotal, 1)
-    expect(result.video_strip_hours_consumed).toBe(0) // SINGLE_BLOCK
+    expect(result.video_strip_hours_consumed).toBe(0) // SINGLE_STAGE
   })
 
   it('sums strip-hours for multiple competitions assigned to the same day', () => {
