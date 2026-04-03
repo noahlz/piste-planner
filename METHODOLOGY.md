@@ -82,6 +82,7 @@ These rules cause scheduling to fail or produce errors. They are never relaxed. 
 Overlapping age categories MUST be on **different days** (per weapon and gender). This prevents fencers who compete in multiple age categories from having schedule conflicts. (Ops Manual Ch.4, pp.26–27 — Group 1: Mandatory Criteria)
 
 - **Always different days at NACs** (same weapon and gender):
+  - DIV1 and DIV1A — never same day (near-total fencer overlap)
   - DIV1 and JUNIOR — never same day
   - JUNIOR and CADET — never same day
   - CADET and DIV1 — allowed in rare cases only
@@ -96,7 +97,7 @@ Overlapping age categories MUST be on **different days** (per weapon and gender)
 - **Affinity for unrelated events** on the same day preferred
   - e.g., Y10 and Div 3 have no fencer overlap — good same-day pairing
 
-(see [`constants.ts`](src/engine/constants.ts) — `GROUP_1_MANDATORY_PAIRS`, `CROSSOVER_GRAPH`)
+(see [`constants.ts`](src/engine/constants.ts) — `GROUP_1_MANDATORY`, `CROSSOVER_GRAPH`)
 
 ### Single-Day Fit
 
@@ -118,8 +119,8 @@ Where `max_pools_any_event = max(ceil(fencer_count / 7))` across all events. For
 **Referee minimum**: The hard floor is one referee per strip. Refs are split by certification (see [Referee Types](#referee-types)). Foil/epee events draw from both pools; saber events can only use 3-weapon refs. Two refs per pool is preferred but degrades gracefully to one ref per pool with a warning — it is not a hard failure.
 
 ```
-saber_refs                     >= max_saber_pools_any_event
-foil_epee_refs + saber_refs    >= strips_total
+three_weapon_refs                     >= max_saber_pools_any_event
+foil_epee_refs + three_weapon_refs    >= strips_total
 ```
 
 These are **hard validation errors**, not warnings. The UI should auto-suggest values meeting these minimums when the user enters competition sizes.
@@ -130,7 +131,7 @@ These are **hard validation errors**, not warnings. The UI should auto-suggest v
 
 - Every team competition must have a corresponding individual competition in the same age category, gender, and weapon
 - If user selects Team, the corresponding Individual event is automatically enabled and cannot be disabled unless team is first disabled.
-- Validated before scheduling begins (see [`analysis.ts`](src/engine/analysis.ts))
+- Validated before scheduling begins (see [`validation.ts`](src/engine/validation.ts))
 
 ### Team Events Cannot Use Cuts
 
@@ -197,7 +198,7 @@ See Appendix A for exact values.
 
 - Two high-crossover competitions both starting at 8:00 AM on the **same day**: penalty
 - Two high-crossover competitions both starting at 8:00 AM on **consecutive days**: penalty (forces families to arrive early two days in a row)
-- Individual + team (same demographic) both starting early on consecutive days: penalty
+- Individual + team (same weapon, gender, and category) both starting early on consecutive days: penalty
 
 ### Rest Day Preference
 
@@ -226,6 +227,8 @@ See Appendix A for exact values.
 | Preference | Penalty | Condition |
 |---|---|---|
 | Soft Separation (DIV1↔CADET) | 5.0 | Same weapon+gender on same day; suppressed at level >= 2. Different weapon or gender does not trigger. (see `SOFT_SEPARATION_PAIRS`) |
+| Soft Separation (DIV1↔DIV2) | 3.0 | Same weapon+gender on same day; suppressed at level >= 2. (see `SOFT_SEPARATION_PAIRS`) |
+| Soft Separation (DIV1↔DIV3) | 3.0 | Same weapon+gender on same day; suppressed at level >= 2. (see `SOFT_SEPARATION_PAIRS`) |
 | Cross-Weapon Same Demographic | 0.2 | Same gender+age, different weapon, same day (Veterans only) |
 | Y8/Y10 Early Scheduling | 0.3 | Y8/Y10 not starting at 8:00 AM |
 
@@ -413,10 +416,15 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 - **Two refs per pool** (default): preferred for higher-level events; falls back to one with a warning if insufficient refs
 - **Auto**: uses two-per-pool when supply allows; drops to one otherwise
 
+(Logic implemented in `pools.ts:resolveRefsPerPool`. Double-duty referee logic also lives in `pools.ts`: when `refsPerPool=1` and excess refs are available, one ref can cover two strips.)
+
 #### Pod Captains
 
 - Toggle: "Use Pod Captains to manage DEs"
-- When enabled: 1 pod captain per 8 strips, drawn from the referee pool
+- When enabled, drawn from the referee pool:
+  - **1 per 4 strips** for brackets ≤32 and R16 phases
+  - **1 per 8 strips** for larger brackets and other phases
+- A `FORCE_4` override option sets the ratio to 1 per 4 strips unconditionally
 - Pod captains supervise groups of strips during DE phases (NACs)
 
 ---
@@ -433,14 +441,15 @@ The auto-suggest engine uses a **priority-ordered, constraint-relaxing** approac
 
 ### Phase 2: Pre-Scheduling Analysis
 
-Analysis passes run before the main scheduling loop: (see [`analysis.ts`](src/engine/analysis.ts))
+Analysis passes run before the main scheduling loop. `initialAnalysis()` is a pre-scheduling check called from the UI layer, not from `scheduleAll()` directly. (see [`analysis.ts`](src/engine/analysis.ts))
 
 1. Total pool demand vs. strips — warns if any day's total pools exceed strip count
 2. Per-competition strip deficit — warns if a single competition's pools exceed strips and flighting is not enabled
 3. Flighting suggestions — identifies same-day pairs that would benefit from flighting
 4. Multiple-flighting conflicts — warns if more than one flighted competition lands on the same day
 5. Video strip demand — warns if peak video-strip need exceeds video-capable strips
-6. Cut summaries — informational breakdown of advancement numbers per competition
+6. Flighting-group video conflicts — warns if flighted competitions in the same group have conflicting video strip requirements
+7. Cut summaries — informational breakdown of advancement numbers per competition
 
 ### Phase 3: Priority Ordering
 
@@ -613,6 +622,8 @@ Video strip capacity is tracked separately from general strip capacity. Peak con
 
 ---
 
+> **Note:** Gender equity pool-count validation (proportional strip allocation by gender during pool rounds) is to be added in a future version.
+
 ## References
 
 | # | Source | URL / Location |
@@ -646,7 +657,7 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Ind+team gap < 120 min | 3.0 | Individual and team event too close together |
 | Early start consecutive days, high crossover | 5.0 | Two high-overlap events both at 8 AM on back-to-back days |
 | Early start same day, high crossover | 2.0 | Two high-overlap events both at 8 AM same day |
-| Early start consecutive days, ind+team | 2.0 | Ind + team (same demographic) both at 8 AM on consecutive days |
+| Early start consecutive days, ind+team | 2.0 | Ind + team (same weapon+gender+category) both at 8 AM on consecutive days |
 | Soft separation (DIV1↔CADET) | 5.0 | Same weapon+gender on same day; suppressed at level ≥ 2 |
 | Rest day violation | 1.5 | Junior↔Cadet or Junior↔Div 1 on consecutive days without rest |
 | Team before individual | 1.0 | Team event scheduled before its individual counterpart |
@@ -674,6 +685,9 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Pool-round cutoff | 4:00 PM (960 min) | Pool rounds cannot start after this time |
 | Admin gap | 30 min | Mandatory gap between pool end and DE start |
 | Slot granularity | 30 min | All phase start times snap to 30-minute boundaries |
+| FLIGHT_BUFFER_MINS | 15 min | Buffer between flighted flights |
+| THRESHOLD_MINS / EARLY_START_THRESHOLD | 10 min | Bottleneck detection threshold / early start window |
+| SAME_TIME_WINDOW_MINS | 30 min | Window for same-time crossover penalty |
 
 ### Pool Duration by Weapon (6-person baseline, 15 bouts)
 
@@ -719,13 +733,16 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 |---|---|---|
 | Flighting threshold | 200+ fencers | Minimum fencer count for flighted eligibility |
 | Video strip options | 4, 8, 12, 16 | Available video strip counts (NACs only); 8 is default |
-| Pod captain ratio | 1 per 8 strips | One pod captain per 8 strips during DE phases |
+| Pod captain ratio | 1 per 4 or 8 strips | Varies by bracket size/phase (see [Pod Captains](#pod-captains)) |
 | Fencer count bounds | 2–500 | Valid range per competition |
 | DE minimum advancement | 2 fencers | Minimum fencers advancing to DE bracket |
 | Pool size targets | 6–7 | Target pool size; `ceil(fencerCount / 7)` pools |
 | Maximum crossover weight | 0.8 | Crossover graph edge cap |
 | Two-hop crossover cap | 0.3 | Indirect relationship cap |
 | Ind/team separation gap | 120 min | Minimum gap between individual and team (non-hard-blocked pairs) |
+| DE_REFS | 1 | One referee per DE bout |
+| RefPolicy.AUTO | 1.0 | Middle constraint score (between TWO=2.0 and ONE=0.5) |
+| DEFAULT_DE_DURATION_TABLE | (see `constants.ts`) | DE durations by bracket size and weapon |
 
 ### Capacity Model Constants [PLANNED]
 

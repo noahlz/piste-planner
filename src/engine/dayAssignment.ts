@@ -13,6 +13,7 @@ import {
   RefPolicy,
   BottleneckCause,
   BottleneckSeverity,
+  TournamentType,
   dayStart,
 } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState, PoolStructure } from './types.ts'
@@ -74,7 +75,7 @@ export function constraintScore(
   const windowTightness = windowMins > 0 ? 840 / windowMins : 840
 
   const saberComps = allCompetitions.filter(c => c.weapon === Weapon.SABRE).length
-  const saberMin = Math.min(...config.referee_availability.map(r => r.saber_refs))
+  const saberMin = Math.min(...config.referee_availability.map(r => r.three_weapon_refs))
   const saberScarcity =
     competition.weapon === Weapon.SABRE ? saberComps / Math.max(saberMin, 1) : 0
 
@@ -151,10 +152,12 @@ export function earlyStartPenalty(
         total += 5.0
       }
 
-      // Pattern C: consecutive days, ind+team same demographic (category+gender only — weapon not required)
+      // Pattern C: consecutive days, ind+team same demographic (category+gender+weapon required —
+      // cross-weapon pairs should not trigger this penalty)
       const sameDemo =
         competition.category === c2.category &&
-        competition.gender === c2.gender
+        competition.gender === c2.gender &&
+        competition.weapon === c2.weapon
       const oneIsTeam =
         (competition.event_type === EventType.TEAM && c2.event_type === EventType.INDIVIDUAL) ||
         (competition.event_type === EventType.INDIVIDUAL && c2.event_type === EventType.TEAM)
@@ -207,8 +210,8 @@ export function weaponBalancePenalty(
   const total = rowCount + epeeCount
   if (total <= 1) return 0.0
 
-  // If either group is 0, minority is absent → penalty
-  if (rowCount === 0 || epeeCount === 0) return 0.5
+  // If either group is 0, minority is absent → penalty proportional to competition size
+  if (rowCount === 0 || epeeCount === 0) return Math.min(0.5 * competition.fencer_count / 200, 1.0)
   return 0.0
 }
 
@@ -273,8 +276,17 @@ export function lastDayRefShortagePenalty(
 
   if (lastDayRefs >= avgRefs) return 0.0
 
-  if (competition.fencer_count > 100) return 0.5
-  if (competition.fencer_count > 50) return 0.2
+  // Thresholds scaled to tournament size — large NAC fields warrant a higher bar
+  // than mid-size ROC or smaller events before triggering a penalty.
+  const tournamentType = config.tournament_type
+  if (tournamentType === TournamentType.NAC) {
+    if (competition.fencer_count > 300) return 0.5
+  } else if (tournamentType === TournamentType.ROC) {
+    if (competition.fencer_count > 100) return 0.3
+  } else {
+    // Medium events (RYC, SYC, RJCC, SJCC, etc.)
+    if (competition.fencer_count > 50) return 0.2
+  }
   return 0.0
 }
 
@@ -421,9 +433,12 @@ export function totalDayPenalty(
   // Early start penalty
   total += earlyStartPenalty(competition, day, estimatedStart, state, allCompetitions, config)
 
-  // Y10 must be in the first slot of the day
+  // Y8 and Y10 must be in the first slot of the day (METHODOLOGY: Y8/Y10 Early Scheduling → 0.3)
   const thisDayStart = dayStart(day, config)
-  if (competition.category === Category.Y10 && estimatedStart > thisDayStart + config.SLOT_MINS) {
+  if (
+    (competition.category === Category.Y10 || competition.category === Category.Y8) &&
+    estimatedStart > thisDayStart + config.SLOT_MINS
+  ) {
     total += 0.3
   }
 

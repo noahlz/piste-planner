@@ -92,7 +92,7 @@ function buildRefereeAvailability(
   return dayRefs.map((ref, i) => ({
     day: i,
     foil_epee_refs: ref.foil_epee_refs,
-    saber_refs: ref.saber_refs,
+    three_weapon_refs: ref.three_weapon_refs,
     source: 'ACTUAL' as const,
   }))
 }

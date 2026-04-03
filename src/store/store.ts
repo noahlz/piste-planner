@@ -104,12 +104,12 @@ export interface UiSlice {
 
 export interface DayRefConfig {
   foil_epee_refs: number
-  saber_refs: number
+  three_weapon_refs: number
 }
 
 const DEFAULT_DAY_REF_CONFIG: DayRefConfig = {
   foil_epee_refs: 0,
-  saber_refs: 0,
+  three_weapon_refs: 0,
 }
 
 export interface RefereeSlice {
@@ -240,13 +240,17 @@ function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): Co
   const entry = findCompetition(id)
   if (!entry) return null
   const cut = DEFAULT_CUT_BY_CATEGORY[entry.category]
-  const defaultCount = fencerDefaults?.[`${entry.category}:${entry.event_type}`] ?? 0
+  const defaultKey =
+    entry.event_type === 'TEAM'
+      ? `${entry.category}:TEAM`
+      : `${entry.category}:${entry.weapon}:${entry.gender}`
+  const defaultCount = fencerDefaults?.[defaultKey] ?? 0
   return {
     fencer_count: defaultCount,
     ref_policy: 'AUTO',
     cut_mode: cut.mode,
     cut_value: cut.value,
-    de_mode: 'SINGLE_BLOCK',
+    de_mode: 'SINGLE_STAGE',
     de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
     use_single_pool_override: false,
   }
@@ -271,7 +275,7 @@ function autoSuggestRefs(get: GetState, set: SetState) {
   let changed = false
   const updated = extended.map((dc, i) => {
     if (state.manuallyEditedDays.has(i)) return dc
-    if (dc.foil_epee_refs === suggestion.foil_epee_refs && dc.saber_refs === suggestion.saber_refs) return dc
+    if (dc.foil_epee_refs === suggestion.foil_epee_refs && dc.three_weapon_refs === suggestion.three_weapon_refs) return dc
     changed = true
     return { ...dc, ...suggestion }
   })
@@ -417,7 +421,7 @@ function createRefereeSlice(set: SetState, get: GetState): RefereeSlice {
         set({
           optimalRefs: optimal.map((o) => ({
             foil_epee_refs: o.foil_epee_refs,
-            saber_refs: o.saber_refs,
+            three_weapon_refs: o.three_weapon_refs,
           })),
         })
       }

@@ -61,7 +61,7 @@ function buildCompetitions(fencerCounts: Record<string, number>): Competition[] 
       de_video_policy: videoPolicy,
       de_mode: (!isTeam && videoPolicy === VideoPolicy.REQUIRED)
         ? DeMode.STAGED_DE_BLOCKS
-        : DeMode.SINGLE_BLOCK,
+        : DeMode.SINGLE_STAGE,
       strips_allocated: Math.max(2, Math.ceil(fencerCount / 7)),
     })
   })
@@ -151,7 +151,7 @@ function tournamentConfig(
     strips: makeStrips(strips, videoStrips),
     tournament_type: tournamentType,
     referee_availability: Array.from({ length: days }, (_, i) => ({
-      day: i, foil_epee_refs: feRefs, saber_refs: saberRefs, source: 'ACTUAL' as const,
+      day: i, foil_epee_refs: feRefs, three_weapon_refs: saberRefs, source: 'ACTUAL' as const,
     })),
   })
 }

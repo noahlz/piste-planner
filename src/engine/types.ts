@@ -43,7 +43,7 @@ export const RefPolicy = {
 export type RefPolicy = (typeof RefPolicy)[keyof typeof RefPolicy]
 
 export const DeMode = {
-  SINGLE_BLOCK: 'SINGLE_BLOCK',
+  SINGLE_STAGE: 'SINGLE_STAGE',
   STAGED_DE_BLOCKS: 'STAGED_DE_BLOCKS',
 } as const
 export type DeMode = (typeof DeMode)[keyof typeof DeMode]
@@ -148,7 +148,7 @@ export interface Strip {
 export interface DayRefereeAvailability {
   day: number
   foil_epee_refs: number
-  saber_refs: number
+  three_weapon_refs: number
   source: 'OPTIMAL' | 'ACTUAL'
 }
 

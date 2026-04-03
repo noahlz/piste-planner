@@ -3,7 +3,7 @@ import { computePoolStructure } from '../engine/pools.ts'
 
 export interface RefSuggestion {
   foil_epee_refs: number
-  saber_refs: number
+  three_weapon_refs: number
 }
 
 /**
@@ -47,5 +47,5 @@ export function suggestRefs(
   const saberRefs = Math.max(1, Math.round(stripsInUse * saberRatio))
   const foilEpeeRefs = Math.max(1, stripsInUse - saberRefs)
 
-  return { foil_epee_refs: foilEpeeRefs, saber_refs: saberRefs }
+  return { foil_epee_refs: foilEpeeRefs, three_weapon_refs: saberRefs }
 }

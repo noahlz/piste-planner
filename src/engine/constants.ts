@@ -1,4 +1,4 @@
-import { Category, CutMode, EventType, TournamentType, VetAgeGroup, VideoPolicy, Weapon } from './types.ts'
+import { Category, CutMode, EventType, Gender, TournamentType, VetAgeGroup, VideoPolicy, Weapon } from './types.ts'
 
 // ──────────────────────────────────────────────
 // Scheduling time constants (all values in minutes from midnight)
@@ -132,47 +132,212 @@ export const DEFAULT_VIDEO_POLICY_BY_CATEGORY: Record<Category, VideoPolicy> = {
 }
 
 // ──────────────────────────────────────────────
-// Default fencer counts by category and event type.
+// Default fencer counts keyed by category × weapon × gender (individual events)
+// or category × TEAM (team events).
 // Derived from P75 of empirical NAC/Summer Nationals and regional data,
-// rounded to nearest 10, skewed towards larger events.
+// rounded to nearest 10, skewed towards larger events (METHODOLOGY Appendix A).
 // ──────────────────────────────────────────────
 
-type FencerDefaultKey = `${Category}:${EventType}`
+export type FencerDefaultKey =
+  | `${Category}:${Weapon}:${Gender}`
+  | `${Category}:${EventType.TEAM}`
 
 export const NAC_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>> = {
-  [`${Category.Y8}:${EventType.INDIVIDUAL}`]: 10,
-  [`${Category.Y10}:${EventType.INDIVIDUAL}`]: 80,
-  [`${Category.Y12}:${EventType.INDIVIDUAL}`]: 170,
-  [`${Category.Y14}:${EventType.INDIVIDUAL}`]: 100,
-  [`${Category.CADET}:${EventType.INDIVIDUAL}`]: 230,
-  [`${Category.CADET}:${EventType.TEAM}`]: 30,
-  [`${Category.JUNIOR}:${EventType.INDIVIDUAL}`]: 260,
-  [`${Category.JUNIOR}:${EventType.TEAM}`]: 30,
-  [`${Category.VETERAN}:${EventType.INDIVIDUAL}`]: 30,
-  [`${Category.VETERAN}:${EventType.TEAM}`]: 20,
-  [`${Category.DIV1}:${EventType.INDIVIDUAL}`]: 210,
+  // DIV1 individual (E=Epee, F=Foil, S=Sabre; M=Men, W=Women)
+  [`${Category.DIV1}:${Weapon.EPEE}:${Gender.MEN}`]: 310,
+  [`${Category.DIV1}:${Weapon.FOIL}:${Gender.MEN}`]: 270,
+  [`${Category.DIV1}:${Weapon.SABRE}:${Gender.MEN}`]: 210,
+  [`${Category.DIV1}:${Weapon.EPEE}:${Gender.WOMEN}`]: 210,
+  [`${Category.DIV1}:${Weapon.FOIL}:${Gender.WOMEN}`]: 160,
+  [`${Category.DIV1}:${Weapon.SABRE}:${Gender.WOMEN}`]: 210,
+  // DIV1 team
   [`${Category.DIV1}:${EventType.TEAM}`]: 40,
-  [`${Category.DIV1A}:${EventType.INDIVIDUAL}`]: 20,
-  [`${Category.DIV2}:${EventType.INDIVIDUAL}`]: 20,
-  [`${Category.DIV3}:${EventType.INDIVIDUAL}`]: 140,
+
+  // JUNIOR individual
+  [`${Category.JUNIOR}:${Weapon.EPEE}:${Gender.MEN}`]: 260,
+  [`${Category.JUNIOR}:${Weapon.FOIL}:${Gender.MEN}`]: 260,
+  [`${Category.JUNIOR}:${Weapon.SABRE}:${Gender.MEN}`]: 260,
+  [`${Category.JUNIOR}:${Weapon.EPEE}:${Gender.WOMEN}`]: 210,
+  [`${Category.JUNIOR}:${Weapon.FOIL}:${Gender.WOMEN}`]: 180,
+  [`${Category.JUNIOR}:${Weapon.SABRE}:${Gender.WOMEN}`]: 200,
+  // JUNIOR team
+  [`${Category.JUNIOR}:${EventType.TEAM}`]: 30,
+
+  // CADET individual
+  [`${Category.CADET}:${Weapon.EPEE}:${Gender.MEN}`]: 250,
+  [`${Category.CADET}:${Weapon.FOIL}:${Gender.MEN}`]: 220,
+  [`${Category.CADET}:${Weapon.SABRE}:${Gender.MEN}`]: 270,
+  [`${Category.CADET}:${Weapon.EPEE}:${Gender.WOMEN}`]: 210,
+  [`${Category.CADET}:${Weapon.FOIL}:${Gender.WOMEN}`]: 200,
+  [`${Category.CADET}:${Weapon.SABRE}:${Gender.WOMEN}`]: 210,
+  // CADET team
+  [`${Category.CADET}:${EventType.TEAM}`]: 30,
+
+  // Y14 individual
+  [`${Category.Y14}:${Weapon.EPEE}:${Gender.MEN}`]: 230,
+  [`${Category.Y14}:${Weapon.FOIL}:${Gender.MEN}`]: 210,
+  [`${Category.Y14}:${Weapon.SABRE}:${Gender.MEN}`]: 230,
+  [`${Category.Y14}:${Weapon.EPEE}:${Gender.WOMEN}`]: 180,
+  [`${Category.Y14}:${Weapon.FOIL}:${Gender.WOMEN}`]: 200,
+  [`${Category.Y14}:${Weapon.SABRE}:${Gender.WOMEN}`]: 200,
+
+  // Y12 individual
+  [`${Category.Y12}:${Weapon.EPEE}:${Gender.MEN}`]: 210,
+  [`${Category.Y12}:${Weapon.FOIL}:${Gender.MEN}`]: 230,
+  [`${Category.Y12}:${Weapon.SABRE}:${Gender.MEN}`]: 180,
+  [`${Category.Y12}:${Weapon.EPEE}:${Gender.WOMEN}`]: 170,
+  [`${Category.Y12}:${Weapon.FOIL}:${Gender.WOMEN}`]: 200,
+  [`${Category.Y12}:${Weapon.SABRE}:${Gender.WOMEN}`]: 170,
+
+  // Y10 individual
+  [`${Category.Y10}:${Weapon.EPEE}:${Gender.MEN}`]: 80,
+  [`${Category.Y10}:${Weapon.FOIL}:${Gender.MEN}`]: 110,
+  [`${Category.Y10}:${Weapon.SABRE}:${Gender.MEN}`]: 80,
+  [`${Category.Y10}:${Weapon.EPEE}:${Gender.WOMEN}`]: 60,
+  [`${Category.Y10}:${Weapon.FOIL}:${Gender.WOMEN}`]: 70,
+  [`${Category.Y10}:${Weapon.SABRE}:${Gender.WOMEN}`]: 70,
+
+  // Y8 individual (all weapons/genders → 10)
+  [`${Category.Y8}:${Weapon.EPEE}:${Gender.MEN}`]: 10,
+  [`${Category.Y8}:${Weapon.FOIL}:${Gender.MEN}`]: 10,
+  [`${Category.Y8}:${Weapon.SABRE}:${Gender.MEN}`]: 10,
+  [`${Category.Y8}:${Weapon.EPEE}:${Gender.WOMEN}`]: 10,
+  [`${Category.Y8}:${Weapon.FOIL}:${Gender.WOMEN}`]: 10,
+  [`${Category.Y8}:${Weapon.SABRE}:${Gender.WOMEN}`]: 10,
+
+  // DIV2 individual
+  [`${Category.DIV2}:${Weapon.EPEE}:${Gender.MEN}`]: 180,
+  [`${Category.DIV2}:${Weapon.FOIL}:${Gender.MEN}`]: 170,
+  [`${Category.DIV2}:${Weapon.SABRE}:${Gender.MEN}`]: 160,
+  [`${Category.DIV2}:${Weapon.EPEE}:${Gender.WOMEN}`]: 110,
+  [`${Category.DIV2}:${Weapon.FOIL}:${Gender.WOMEN}`]: 120,
+  [`${Category.DIV2}:${Weapon.SABRE}:${Gender.WOMEN}`]: 130,
+
+  // VETERAN individual
+  [`${Category.VETERAN}:${Weapon.EPEE}:${Gender.MEN}`]: 120,
+  [`${Category.VETERAN}:${Weapon.FOIL}:${Gender.MEN}`]: 80,
+  [`${Category.VETERAN}:${Weapon.SABRE}:${Gender.MEN}`]: 40,
+  [`${Category.VETERAN}:${Weapon.EPEE}:${Gender.WOMEN}`]: 80,
+  [`${Category.VETERAN}:${Weapon.FOIL}:${Gender.WOMEN}`]: 40,
+  [`${Category.VETERAN}:${Weapon.SABRE}:${Gender.WOMEN}`]: 50,
+  // VETERAN team
+  [`${Category.VETERAN}:${EventType.TEAM}`]: 20,
+
+  // DIV3 individual — not in METHODOLOGY table; use old flat default
+  [`${Category.DIV3}:${Weapon.EPEE}:${Gender.MEN}`]: 140,
+  [`${Category.DIV3}:${Weapon.FOIL}:${Gender.MEN}`]: 140,
+  [`${Category.DIV3}:${Weapon.SABRE}:${Gender.MEN}`]: 140,
+  [`${Category.DIV3}:${Weapon.EPEE}:${Gender.WOMEN}`]: 140,
+  [`${Category.DIV3}:${Weapon.FOIL}:${Gender.WOMEN}`]: 140,
+  [`${Category.DIV3}:${Weapon.SABRE}:${Gender.WOMEN}`]: 140,
+
+  // DIV1A individual — NAC-only, not in METHODOLOGY table; use old flat default
+  [`${Category.DIV1A}:${Weapon.EPEE}:${Gender.MEN}`]: 20,
+  [`${Category.DIV1A}:${Weapon.FOIL}:${Gender.MEN}`]: 20,
+  [`${Category.DIV1A}:${Weapon.SABRE}:${Gender.MEN}`]: 20,
+  [`${Category.DIV1A}:${Weapon.EPEE}:${Gender.WOMEN}`]: 20,
+  [`${Category.DIV1A}:${Weapon.FOIL}:${Gender.WOMEN}`]: 20,
+  [`${Category.DIV1A}:${Weapon.SABRE}:${Gender.WOMEN}`]: 20,
 }
 
 export const REGIONAL_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>> = {
-  [`${Category.Y8}:${EventType.INDIVIDUAL}`]: 10,
-  [`${Category.Y10}:${EventType.INDIVIDUAL}`]: 20,
-  [`${Category.Y12}:${EventType.INDIVIDUAL}`]: 40,
-  [`${Category.Y14}:${EventType.INDIVIDUAL}`]: 50,
-  [`${Category.CADET}:${EventType.INDIVIDUAL}`]: 40,
-  [`${Category.CADET}:${EventType.TEAM}`]: 10,
-  [`${Category.JUNIOR}:${EventType.INDIVIDUAL}`]: 40,
+  // JUNIOR individual
+  [`${Category.JUNIOR}:${Weapon.EPEE}:${Gender.MEN}`]: 120,
+  [`${Category.JUNIOR}:${Weapon.FOIL}:${Gender.MEN}`]: 110,
+  [`${Category.JUNIOR}:${Weapon.SABRE}:${Gender.MEN}`]: 120,
+  [`${Category.JUNIOR}:${Weapon.EPEE}:${Gender.WOMEN}`]: 80,
+  [`${Category.JUNIOR}:${Weapon.FOIL}:${Gender.WOMEN}`]: 50,
+  [`${Category.JUNIOR}:${Weapon.SABRE}:${Gender.WOMEN}`]: 100,
+  // JUNIOR team
   [`${Category.JUNIOR}:${EventType.TEAM}`]: 10,
-  [`${Category.VETERAN}:${EventType.INDIVIDUAL}`]: 20,
+
+  // CADET individual
+  [`${Category.CADET}:${Weapon.EPEE}:${Gender.MEN}`]: 130,
+  [`${Category.CADET}:${Weapon.FOIL}:${Gender.MEN}`]: 70,
+  [`${Category.CADET}:${Weapon.SABRE}:${Gender.MEN}`]: 110,
+  [`${Category.CADET}:${Weapon.EPEE}:${Gender.WOMEN}`]: 70,
+  [`${Category.CADET}:${Weapon.FOIL}:${Gender.WOMEN}`]: 80,
+  [`${Category.CADET}:${Weapon.SABRE}:${Gender.WOMEN}`]: 100,
+  // CADET team
+  [`${Category.CADET}:${EventType.TEAM}`]: 10,
+
+  // Y14 individual
+  [`${Category.Y14}:${Weapon.EPEE}:${Gender.MEN}`]: 120,
+  [`${Category.Y14}:${Weapon.FOIL}:${Gender.MEN}`]: 140,
+  [`${Category.Y14}:${Weapon.SABRE}:${Gender.MEN}`]: 130,
+  [`${Category.Y14}:${Weapon.EPEE}:${Gender.WOMEN}`]: 110,
+  [`${Category.Y14}:${Weapon.FOIL}:${Gender.WOMEN}`]: 110,
+  [`${Category.Y14}:${Weapon.SABRE}:${Gender.WOMEN}`]: 100,
+
+  // Y12 individual
+  [`${Category.Y12}:${Weapon.EPEE}:${Gender.MEN}`]: 110,
+  [`${Category.Y12}:${Weapon.FOIL}:${Gender.MEN}`]: 110,
+  [`${Category.Y12}:${Weapon.SABRE}:${Gender.MEN}`]: 110,
+  [`${Category.Y12}:${Weapon.EPEE}:${Gender.WOMEN}`]: 100,
+  [`${Category.Y12}:${Weapon.FOIL}:${Gender.WOMEN}`]: 80,
+  [`${Category.Y12}:${Weapon.SABRE}:${Gender.WOMEN}`]: 90,
+
+  // Y10 individual
+  [`${Category.Y10}:${Weapon.EPEE}:${Gender.MEN}`]: 50,
+  [`${Category.Y10}:${Weapon.FOIL}:${Gender.MEN}`]: 50,
+  [`${Category.Y10}:${Weapon.SABRE}:${Gender.MEN}`]: 60,
+  [`${Category.Y10}:${Weapon.EPEE}:${Gender.WOMEN}`]: 50,
+  [`${Category.Y10}:${Weapon.FOIL}:${Gender.WOMEN}`]: 40,
+  [`${Category.Y10}:${Weapon.SABRE}:${Gender.WOMEN}`]: 40,
+
+  // Y8 individual (all weapons/genders → 10)
+  [`${Category.Y8}:${Weapon.EPEE}:${Gender.MEN}`]: 10,
+  [`${Category.Y8}:${Weapon.FOIL}:${Gender.MEN}`]: 10,
+  [`${Category.Y8}:${Weapon.SABRE}:${Gender.MEN}`]: 10,
+  [`${Category.Y8}:${Weapon.EPEE}:${Gender.WOMEN}`]: 10,
+  [`${Category.Y8}:${Weapon.FOIL}:${Gender.WOMEN}`]: 10,
+  [`${Category.Y8}:${Weapon.SABRE}:${Gender.WOMEN}`]: 10,
+
+  // DIV1A individual
+  [`${Category.DIV1A}:${Weapon.EPEE}:${Gender.MEN}`]: 50,
+  [`${Category.DIV1A}:${Weapon.FOIL}:${Gender.MEN}`]: 100,
+  [`${Category.DIV1A}:${Weapon.SABRE}:${Gender.MEN}`]: 50,
+  [`${Category.DIV1A}:${Weapon.EPEE}:${Gender.WOMEN}`]: 50,
+  [`${Category.DIV1A}:${Weapon.FOIL}:${Gender.WOMEN}`]: 60,
+  [`${Category.DIV1A}:${Weapon.SABRE}:${Gender.WOMEN}`]: 10,
+  // DIV1A team
+  [`${Category.DIV1A}:${EventType.TEAM}`]: 10,
+
+  // DIV2 individual
+  [`${Category.DIV2}:${Weapon.EPEE}:${Gender.MEN}`]: 60,
+  [`${Category.DIV2}:${Weapon.FOIL}:${Gender.MEN}`]: 70,
+  [`${Category.DIV2}:${Weapon.SABRE}:${Gender.MEN}`]: 50,
+  [`${Category.DIV2}:${Weapon.EPEE}:${Gender.WOMEN}`]: 60,
+  [`${Category.DIV2}:${Weapon.FOIL}:${Gender.WOMEN}`]: 20,
+  [`${Category.DIV2}:${Weapon.SABRE}:${Gender.WOMEN}`]: 30,
+
+  // VETERAN individual
+  [`${Category.VETERAN}:${Weapon.EPEE}:${Gender.MEN}`]: 40,
+  [`${Category.VETERAN}:${Weapon.FOIL}:${Gender.MEN}`]: 20,
+  [`${Category.VETERAN}:${Weapon.SABRE}:${Gender.MEN}`]: 20,
+  [`${Category.VETERAN}:${Weapon.EPEE}:${Gender.WOMEN}`]: 20,
+  [`${Category.VETERAN}:${Weapon.FOIL}:${Gender.WOMEN}`]: 10,
+  [`${Category.VETERAN}:${Weapon.SABRE}:${Gender.WOMEN}`]: 10,
+  // VETERAN team
   [`${Category.VETERAN}:${EventType.TEAM}`]: 10,
-  [`${Category.DIV1}:${EventType.INDIVIDUAL}`]: 50,
+
+  // DIV1 individual — regional (ROC not in METHODOLOGY table; keep existing flat default)
+  [`${Category.DIV1}:${Weapon.EPEE}:${Gender.MEN}`]: 50,
+  [`${Category.DIV1}:${Weapon.FOIL}:${Gender.MEN}`]: 50,
+  [`${Category.DIV1}:${Weapon.SABRE}:${Gender.MEN}`]: 50,
+  [`${Category.DIV1}:${Weapon.EPEE}:${Gender.WOMEN}`]: 50,
+  [`${Category.DIV1}:${Weapon.FOIL}:${Gender.WOMEN}`]: 50,
+  [`${Category.DIV1}:${Weapon.SABRE}:${Gender.WOMEN}`]: 50,
+  // DIV1 team
   [`${Category.DIV1}:${EventType.TEAM}`]: 10,
-  [`${Category.DIV1A}:${EventType.INDIVIDUAL}`]: 40,
-  [`${Category.DIV2}:${EventType.INDIVIDUAL}`]: 40,
-  [`${Category.DIV3}:${EventType.INDIVIDUAL}`]: 20,
+
+  // DIV3 individual — regional
+  [`${Category.DIV3}:${Weapon.EPEE}:${Gender.MEN}`]: 20,
+  [`${Category.DIV3}:${Weapon.FOIL}:${Gender.MEN}`]: 20,
+  [`${Category.DIV3}:${Weapon.SABRE}:${Gender.MEN}`]: 20,
+  [`${Category.DIV3}:${Weapon.EPEE}:${Gender.WOMEN}`]: 20,
+  [`${Category.DIV3}:${Weapon.FOIL}:${Gender.WOMEN}`]: 20,
+  [`${Category.DIV3}:${Weapon.SABRE}:${Gender.WOMEN}`]: 20,
 }
 
 // ──────────────────────────────────────────────
@@ -226,19 +391,19 @@ export const GROUP_1_MANDATORY: [Category, Category][] = [
   [Category.Y10, Category.Y12],
   [Category.Y12, Category.Y14],
   [Category.Y14, Category.CADET],
-  // Summer Nationals runs Div1 + Div1A + Div2 + Div3 — must never share a day.
   [Category.DIV1, Category.DIV1A],
-  [Category.DIV1, Category.DIV2],
-  [Category.DIV1, Category.DIV3],
 ]
 
 // ──────────────────────────────────────────────
 // Soft separation pairs: high penalty but not hard-blocked.
 // DIV1↔CADET is "allowed in rare cases" per Ops Manual.
+// DIV1↔DIV2 and DIV1↔DIV3 are common enough to warrant soft separation only.
 // ──────────────────────────────────────────────
 
 export const SOFT_SEPARATION_PAIRS: { pair: [Category, Category]; penalty: number }[] = [
   { pair: [Category.DIV1, Category.CADET], penalty: 5.0 },
+  { pair: [Category.DIV1, Category.DIV2], penalty: 3.0 },
+  { pair: [Category.DIV1, Category.DIV3], penalty: 3.0 },
 ]
 
 // ──────────────────────────────────────────────

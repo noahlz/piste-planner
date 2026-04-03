@@ -32,8 +32,9 @@ describe('nextPowerOf2', () => {
 })
 
 describe('computeBracketSize', () => {
-  it('100 entries, 20% cut → 20 promoted → bracket 32', () => {
-    expect(computeBracketSize(100, CutMode.PERCENTAGE, 20, EventType.INDIVIDUAL)).toBe(32)
+  it('100 entries, 20% cut → 80 promoted → bracket 128', () => {
+    // cutValue=20 means cut 20%, keep 80%: round(100 * 0.8) = 80 → nextPowerOf2(80) = 128
+    expect(computeBracketSize(100, CutMode.PERCENTAGE, 20, EventType.INDIVIDUAL)).toBe(128)
   })
 
   it('64 entries, DISABLED → bracket 64', () => {

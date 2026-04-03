@@ -26,7 +26,7 @@ describe('suggestRefs', () => {
     const result = suggestRefs(competitions, 3, 24)
     expect(result).not.toBeNull()
     expect(result!.foil_epee_refs).toBeGreaterThan(0)
-    expect(result!.saber_refs).toBeGreaterThan(0)
+    expect(result!.three_weapon_refs).toBeGreaterThan(0)
   })
 
   it('caps refs at strips_total', () => {
@@ -39,6 +39,6 @@ describe('suggestRefs', () => {
     }
     const result = suggestRefs(competitions, 1, 8)
     expect(result).not.toBeNull()
-    expect(result!.foil_epee_refs + result!.saber_refs).toBeLessThanOrEqual(8)
+    expect(result!.foil_epee_refs + result!.three_weapon_refs).toBeLessThanOrEqual(8)
   })
 })

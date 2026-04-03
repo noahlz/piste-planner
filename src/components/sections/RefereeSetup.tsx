@@ -28,11 +28,11 @@ export function RefereeSetup() {
 
   // Pre-compute per-day deficits for row styling
   const deficits = Array.from({ length: daysAvailable }, (_, i) => {
-    const ref = dayRefs[i] ?? { foil_epee_refs: 0, saber_refs: 0 }
+    const ref = dayRefs[i] ?? { foil_epee_refs: 0, three_weapon_refs: 0 }
     const optimal = optimalRefs[i]
     return {
       fe: optimal != null && ref.foil_epee_refs < optimal.foil_epee_refs,
-      saber: optimal != null && ref.saber_refs < optimal.saber_refs,
+      saber: optimal != null && ref.three_weapon_refs < optimal.three_weapon_refs,
     }
   })
 
@@ -86,7 +86,7 @@ export function RefereeSetup() {
             {Array.from({ length: daysAvailable }, (_, i) => {
               const ref = dayRefs[i] ?? {
                 foil_epee_refs: 0,
-                saber_refs: 0,
+                three_weapon_refs: 0,
               }
               const optimal = optimalRefs[i]
               const deficitWarning = 'bg-amber-100 dark:bg-amber-900/30 rounded border-l-2 border-amber-500'
@@ -103,8 +103,8 @@ export function RefereeSetup() {
                   </TableCell>
                   <TableCell className={`text-right ${deficits[i].saber ? deficitWarning : ''}`}>
                     <NumberInput
-                      value={ref.saber_refs}
-                      onChange={(v) => setDayRefs(i, { saber_refs: v })}
+                      value={ref.three_weapon_refs}
+                      onChange={(v) => setDayRefs(i, { three_weapon_refs: v })}
                       min={0}
                       aria-label={`Saber refs for Day ${i + 1}`}
                     />
@@ -115,7 +115,7 @@ export function RefereeSetup() {
                         {optimal?.foil_epee_refs ?? '—'}
                       </TableCell>
                       <TableCell className="py-1.5 text-right text-muted-foreground text-xs tabular-nums">
-                        {optimal?.saber_refs ?? '—'}
+                        {optimal?.three_weapon_refs ?? '—'}
                       </TableCell>
                     </>
                   )}

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 const DE_MODE_OPTIONS: { value: DeMode; label: string }[] = [
-  { value: DeMode.SINGLE_BLOCK, label: 'Single Block' },
+  { value: DeMode.SINGLE_STAGE, label: 'Single Block' },
   { value: DeMode.STAGED_DE_BLOCKS, label: 'Staged DE Blocks' },
 ]
 
@@ -26,7 +26,7 @@ const CUT_MODE_OPTIONS: { value: CutMode; label: string }[] = [
   { value: CutMode.COUNT, label: 'Count' },
 ]
 
-const DEFAULT_DE_MODE: DeMode = DeMode.SINGLE_BLOCK
+const DEFAULT_DE_MODE: DeMode = DeMode.SINGLE_STAGE
 
 export function CompetitionOverrides() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)

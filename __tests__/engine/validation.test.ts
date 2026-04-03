@@ -209,9 +209,9 @@ describe('validateConfig — DE duration table', () => {
 })
 
 describe('validateConfig — video policy warnings and errors', () => {
-  it('returns warning when REQUIRED video policy used with SINGLE_BLOCK mode', () => {
+  it('returns warning when REQUIRED video policy used with SINGLE_STAGE mode', () => {
     const comp = makeCompetition({
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       de_video_policy: VideoPolicy.REQUIRED,
     })
     const errors = validateConfig(makeConfig(), [comp])
@@ -320,6 +320,49 @@ describe('validateConfig — valid config returns no errors', () => {
     const comp = makeCompetition()
     const errors = validateConfig(config, [comp])
     expect(errors.filter((e: ValidationError) => e.severity === 'ERROR')).toHaveLength(0)
+  })
+})
+
+describe('validateConfig — global referee headcount check', () => {
+  it('warns when foil_epee_refs + three_weapon_refs < strips_total on any day', () => {
+    // 10 total refs on day 1 < strips_total 24 → WARN
+    const config = makeConfig({
+      strips_total: 24,
+      days_available: 3,
+      referee_availability: [
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 6, three_weapon_refs: 4, source: 'ACTUAL' }, // 10 < 24
+        { day: 2, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+      ],
+    })
+    const comp = makeCompetition()
+    const errors = validateConfig(config, [comp])
+
+    const allRefWarns = errors.filter(e => e.field === 'referee_availability' && e.severity === 'WARN')
+    expect(allRefWarns).toHaveLength(1)
+
+    const refWarn = allRefWarns[0]
+    expect(refWarn).toBeDefined()
+    expect(refWarn?.message).toMatch(/Day 1/)
+  })
+
+  it('does not warn when foil_epee_refs + three_weapon_refs >= strips_total on all days', () => {
+    const config = makeConfig({
+      strips_total: 24,
+      days_available: 3,
+      referee_availability: [
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+      ],
+    })
+    const comp = makeCompetition()
+    const errors = validateConfig(config, [comp])
+
+    const refWarns = errors.filter(
+      (e: ValidationError) => e.field === 'referee_availability' && e.severity === 'WARN',
+    )
+    expect(refWarns).toHaveLength(0)
   })
 })
 
@@ -435,8 +478,8 @@ describe('validateConfig — resource precondition: strips', () => {
 
 describe('validateConfig — resource precondition: referee availability', () => {
   it('returns error when saber event needs more saber refs than available on any day', () => {
-    // ceil(105/7) = 15 pools, but max saber_refs across days = 10
-    const config = makeConfig()  // default: saber_refs=10 per day
+    // ceil(105/7) = 15 pools, but max three_weapon_refs across days = 10
+    const config = makeConfig()  // default: three_weapon_refs=10 per day
     const comp = makeCompetition({ id: 'MEN-JR-SABRE-IND', fencer_count: 105, weapon: 'SABRE' })
     const errors = validateConfig(config, [comp])
     const error = errors.find(e => e.field === 'resource_precondition' && e.severity === 'ERROR')
@@ -461,8 +504,8 @@ describe('validateConfig — resource precondition: referee availability', () =>
   })
 
   it('does not error when saber refs are sufficient on at least one day', () => {
-    // ceil(70/7) = 10 pools, at least one day has saber_refs=10 → ok
-    const config = makeConfig()  // default: saber_refs=10
+    // ceil(70/7) = 10 pools, at least one day has three_weapon_refs=10 → ok
+    const config = makeConfig()  // default: three_weapon_refs=10
     const comp = makeCompetition({ fencer_count: 70, weapon: 'SABRE' })
     const errors = validateConfig(config, [comp])
     expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
@@ -477,12 +520,12 @@ describe('validateConfig — resource precondition: referee availability', () =>
   })
 
   it('passes when one day has sufficient saber refs even if others do not', () => {
-    // Two days: day 0 has saber_refs=5, day 1 has saber_refs=15 → ok for 15 pools
+    // Two days: day 0 has three_weapon_refs=5, day 1 has three_weapon_refs=15 → ok for 15 pools
     const config = makeConfig({
       days_available: 2,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 5, source: 'ACTUAL' as const },
-        { day: 1, foil_epee_refs: 20, saber_refs: 15, source: 'ACTUAL' as const },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 5, source: 'ACTUAL' as const },
+        { day: 1, foil_epee_refs: 20, three_weapon_refs: 15, source: 'ACTUAL' as const },
       ],
     })
     const comp = makeCompetition({ fencer_count: 105, weapon: 'SABRE' })

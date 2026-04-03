@@ -231,7 +231,7 @@ describe('competitionSlice', () => {
       expect(cadetConfig.ref_policy).toBe('AUTO')
       expect(cadetConfig.cut_mode).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].mode)
       expect(cadetConfig.cut_value).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].value)
-      expect(cadetConfig.de_mode).toBe('SINGLE_BLOCK')
+      expect(cadetConfig.de_mode).toBe('SINGLE_STAGE')
       expect(cadetConfig.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[cadetEntry.category])
       expect(cadetConfig.use_single_pool_override).toBe(false)
 
@@ -371,11 +371,11 @@ describe('refereeSlice', () => {
 
   describe('setDayRefs', () => {
     it('sets ref counts for a specific day', () => {
-      useStore.getState().setDayRefs(0, { foil_epee_refs: 5, saber_refs: 3 })
+      useStore.getState().setDayRefs(0, { foil_epee_refs: 5, three_weapon_refs: 3 })
 
       const state = useStore.getState()
       expect(state.dayRefs[0].foil_epee_refs).toBe(5)
-      expect(state.dayRefs[0].saber_refs).toBe(3)
+      expect(state.dayRefs[0].three_weapon_refs).toBe(3)
     })
 
     it('extends array with defaults when day index exceeds current length', () => {
@@ -384,11 +384,11 @@ describe('refereeSlice', () => {
       const state = useStore.getState()
       expect(state.dayRefs).toHaveLength(3)
       // Indices 0 and 1 filled with defaults
-      expect(state.dayRefs[0]).toEqual({ foil_epee_refs: 0, saber_refs: 0 })
-      expect(state.dayRefs[1]).toEqual({ foil_epee_refs: 0, saber_refs: 0 })
+      expect(state.dayRefs[0]).toEqual({ foil_epee_refs: 0, three_weapon_refs: 0 })
+      expect(state.dayRefs[1]).toEqual({ foil_epee_refs: 0, three_weapon_refs: 0 })
       // Index 2 has the partial update merged with defaults
       expect(state.dayRefs[2].foil_epee_refs).toBe(10)
-      expect(state.dayRefs[2].saber_refs).toBe(0)
+      expect(state.dayRefs[2].three_weapon_refs).toBe(0)
     })
 
     it('marks only scheduleStale, NOT analysisStale', () => {
@@ -403,8 +403,8 @@ describe('refereeSlice', () => {
   describe('setOptimalRefs', () => {
     it('stores calculated optimal ref counts per day', () => {
       const optimal: DayRefConfig[] = [
-        { foil_epee_refs: 8, saber_refs: 4 },
-        { foil_epee_refs: 6, saber_refs: 3 },
+        { foil_epee_refs: 8, three_weapon_refs: 4 },
+        { foil_epee_refs: 6, three_weapon_refs: 3 },
       ]
       useStore.getState().setOptimalRefs(optimal)
 
@@ -568,7 +568,7 @@ describe('scheduleSlice', () => {
       bracket_size: 0,
       cut_mode: 'DISABLED',
       cut_value: 0,
-      de_mode: 'SINGLE_BLOCK',
+      de_mode: 'SINGLE_STAGE',
       de_video_policy: 'BEST_EFFORT',
       de_start: null,
       de_end: null,

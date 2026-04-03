@@ -117,18 +117,18 @@ describe('constraintScore', () => {
     // Low saber ref config (1 saber ref, high scarcity)
     const lowSabreConfig = makeConfig({
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 1, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, saber_refs: 1, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 20, saber_refs: 1, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 1, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, three_weapon_refs: 1, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 20, three_weapon_refs: 1, source: 'ACTUAL' },
       ],
     })
 
     // Same weapon, abundant refs
     const highSabreConfig = makeConfig({
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 20, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, saber_refs: 20, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 20, saber_refs: 20, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 20, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, three_weapon_refs: 20, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 20, three_weapon_refs: 20, source: 'ACTUAL' },
       ],
     })
 
@@ -146,7 +146,7 @@ describe('constraintScore', () => {
 
     const singleBlockComp = makeCompetition({
       id: 'single-block',
-      de_mode: DeMode.SINGLE_BLOCK,
+      de_mode: DeMode.SINGLE_STAGE,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
 
@@ -295,6 +295,31 @@ describe('totalDayPenalty', () => {
     // estimated_start = 480 + 31 (past first slot boundary at 480 + 30 = 510)
     const penaltyNotFirst = totalDayPenalty(y10Comp, 0, 511, state, 0, allComps, configWithDays)
     const penaltyFirst = totalDayPenalty(y10Comp, 0, 480, state, 0, allComps, configWithDays)
+
+    expect(penaltyNotFirst).toBeGreaterThan(penaltyFirst)
+    expect(penaltyNotFirst - penaltyFirst).toBeCloseTo(0.3)
+  })
+
+  it('Y8 not in first slot → adds 0.3', () => {
+    const y8Comp = makeCompetition({
+      id: 'y8-m-foil',
+      category: Category.Y8,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+    })
+
+    const configWithDays = makeConfig({
+      dayConfigs: [
+        { day_start_time: 480, day_end_time: 1320 },
+        { day_start_time: 1320, day_end_time: 2160 },
+      ],
+    })
+    const state = makeGlobalState()
+    const allComps = [y8Comp]
+
+    // Day 0 starts at 480. SLOT_MINS = 30. Not-first-slot is > 480+30 = 510.
+    const penaltyNotFirst = totalDayPenalty(y8Comp, 0, 511, state, 0, allComps, configWithDays)
+    const penaltyFirst = totalDayPenalty(y8Comp, 0, 480, state, 0, allComps, configWithDays)
 
     expect(penaltyNotFirst).toBeGreaterThan(penaltyFirst)
     expect(penaltyNotFirst - penaltyFirst).toBeCloseTo(0.3)
@@ -614,8 +639,8 @@ describe('earlyStartPenalty', () => {
     // that crossoverPenalty < 1.0 (no Pattern B). Since same cat/gender/weapon always gives
     // Infinity, we verify by checking the increment above a non-ind/team pair.
     // Pattern B fires when xpen >= 1.0; Pattern C fires independently.
-    // The additive 2.0 from Pattern C is verified by comparing with a hypothetical
-    // non-team pair: if we remove the ind+team relationship, only Pattern B (5.0) remains.
+    // The additive 2.0 from Pattern C is verified by comparing with a pair where
+    // DIV1↔Y10 has zero crossover, so neither Pattern B nor C fires, giving 0.0.
     const y10Comp = makeCompetition({
       id: 'y10-m-foil',
       category: Category.Y10, // DIV1↔Y10 has zero crossover (no graph path)
@@ -632,6 +657,44 @@ describe('earlyStartPenalty', () => {
     // Pattern C requires same category → doesn't fire either → 0.0
     const penaltyNoPatternsB = earlyStartPenalty(teamComp, 1, 1320, state2, allComps2, configWithDayConfigs)
     expect(penaltyNoPatternsB).toBe(0.0)
+  })
+
+  it('Pattern C: cross-weapon ind+team pair → 0.0 (different weapon must NOT trigger Pattern C)', () => {
+    // DIV1 INDIVIDUAL FOIL on day 0 at 8AM; DIV1 TEAM EPEE proposed on day 1 at 8AM.
+    // Pattern C requires same weapon — cross-weapon pair should NOT fire.
+    // Pattern B requires crossover >= HIGH_CROSSOVER_THRESHOLD; DIV1 IND FOIL vs DIV1 TEAM EPEE
+    // have different weapon → crossoverPenalty = 0.0 → Pattern B also does not fire.
+    const teamComp = makeCompetition({
+      id: 'div1-m-epee-team',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.EPEE,
+      event_type: EventType.TEAM,
+    })
+    const indComp = makeCompetition({
+      id: 'div1-m-foil-ind',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+    })
+
+    const configWithDayConfigs = makeConfig({
+      dayConfigs: [
+        { day_start_time: 480, day_end_time: 1320 },
+        { day_start_time: 1320, day_end_time: 2160 },
+        { day_start_time: 2160, day_end_time: 3000 },
+      ],
+    })
+
+    const sr = makeScheduleResult('div1-m-foil-ind', 0)
+    sr.pool_start = 480 // individual at 8AM day 0
+    const state = makeGlobalState({ 'div1-m-foil-ind': { ...sr } })
+    const allComps = [teamComp, indComp]
+
+    // Team (EPEE) proposed at 8AM day 1. Different weapon → no Pattern B, no Pattern C.
+    const penalty = earlyStartPenalty(teamComp, 1, 1320, state, allComps, configWithDayConfigs)
+    expect(penalty).toBe(0.0)
   })
 
   it('not early → 0.0', () => {
@@ -651,7 +714,8 @@ describe('earlyStartPenalty', () => {
 
 describe('weaponBalancePenalty', () => {
   it('all ROW weapons (foil+saber) on day → 0.5 penalty', () => {
-    const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
+    // fencer_count: 200 gives 0.5 * 200 / 200 = 0.5 (proportional to competition size)
+    const comp = makeCompetition({ id: 'div1-m-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, fencer_count: 200 })
 
     // Day already has foil and saber (both ROW), no epee
     const foilSr = { ...makeScheduleResult('foil-other', 0) }
@@ -842,6 +906,12 @@ describe('assignDay', () => {
     }
 
     expect(() => assignDay(comp, poolStructure, state, config, allComps)).toThrow(SchedulingError)
+
+    try {
+      assignDay(comp, poolStructure, state, config, allComps)
+    } catch (caught) {
+      expect((caught as SchedulingError).cause).toBe(BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE)
+    }
   })
 })
 
@@ -935,9 +1005,9 @@ describe('lastDayRefShortagePenalty', () => {
     const config = makeConfig({
       days_available: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 20, saber_refs: 10, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
       ],
     })
     const state = makeGlobalState()
@@ -946,15 +1016,16 @@ describe('lastDayRefShortagePenalty', () => {
     expect(penalty).toBe(0.0)
   })
 
-  it('last day, refs < avg, fencer_count > 100 → 0.5', () => {
-    const comp = makeCompetition({ id: 'div1-m-foil', fencer_count: 150, weapon: Weapon.FOIL })
+  it('last day, refs < avg, fencer_count > 300 (NAC) → 0.5', () => {
+    // NAC threshold: >300 fencers → 0.5 (makeConfig defaults to NAC)
+    const comp = makeCompetition({ id: 'div1-m-foil', fencer_count: 350, weapon: Weapon.FOIL })
     // Last day has fewer refs than days 0 and 1
     const config = makeConfig({
       days_available: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 5, saber_refs: 3, source: 'ACTUAL' }, // last day — far below average
+        { day: 0, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 5, three_weapon_refs: 3, source: 'ACTUAL' }, // last day — far below average
       ],
     })
     const state = makeGlobalState()
@@ -963,14 +1034,16 @@ describe('lastDayRefShortagePenalty', () => {
     expect(penalty).toBeCloseTo(0.5)
   })
 
-  it('last day, refs < avg, fencer_count > 50 (but ≤ 100) → 0.2', () => {
+  it('last day, refs < avg, fencer_count > 50 (medium event) → 0.2', () => {
+    // Medium-tier events (RYC, SYC, etc.): >50 fencers → 0.2
     const comp = makeCompetition({ id: 'div1-m-foil', fencer_count: 75, weapon: Weapon.FOIL })
     const config = makeConfig({
+      tournament_type: 'RYC',
       days_available: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 5, saber_refs: 3, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 5, three_weapon_refs: 3, source: 'ACTUAL' },
       ],
     })
     const state = makeGlobalState()
@@ -984,9 +1057,45 @@ describe('lastDayRefShortagePenalty', () => {
     const config = makeConfig({
       days_available: 3,
       referee_availability: [
-        { day: 0, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 30, saber_refs: 15, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 5, saber_refs: 3, source: 'ACTUAL' },
+        { day: 0, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 5, three_weapon_refs: 3, source: 'ACTUAL' },
+      ],
+    })
+    const state = makeGlobalState()
+
+    const penalty = lastDayRefShortagePenalty(comp, 2, state, config)
+    expect(penalty).toBe(0.0)
+  })
+
+  it('last day, refs < avg, ROC fencer_count > 100 → 0.3', () => {
+    // ROC threshold: >100 fencers → 0.3
+    const comp = makeCompetition({ id: 'div1-m-foil', fencer_count: 150, weapon: Weapon.FOIL })
+    const config = makeConfig({
+      tournament_type: 'ROC',
+      days_available: 3,
+      referee_availability: [
+        { day: 0, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 5, three_weapon_refs: 3, source: 'ACTUAL' },
+      ],
+    })
+    const state = makeGlobalState()
+
+    const penalty = lastDayRefShortagePenalty(comp, 2, state, config)
+    expect(penalty).toBeCloseTo(0.3)
+  })
+
+  it('last day, refs < avg, ROC fencer_count <= 100 → 0.0', () => {
+    // ROC threshold: exactly 100 does NOT exceed 100, so no penalty
+    const comp = makeCompetition({ id: 'div1-m-foil', fencer_count: 100, weapon: Weapon.FOIL })
+    const config = makeConfig({
+      tournament_type: 'ROC',
+      days_available: 3,
+      referee_availability: [
+        { day: 0, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' },
+        { day: 2, foil_epee_refs: 5, three_weapon_refs: 3, source: 'ACTUAL' },
       ],
     })
     const state = makeGlobalState()

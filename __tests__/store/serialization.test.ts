@@ -26,8 +26,8 @@ function populatedState(): StoreState {
   store.getState().selectCompetitions(['CDT-M-FOIL-IND'])
   store.getState().updateCompetition('CDT-M-FOIL-IND', { fencer_count: 64 })
   store.getState().setGlobalOverrides({ ADMIN_GAP_MINS: 20 })
-  store.getState().setDayRefs(0, { foil_epee_refs: 6, saber_refs: 3 })
-  store.getState().setDayRefs(1, { foil_epee_refs: 5, saber_refs: 2 })
+  store.getState().setDayRefs(0, { foil_epee_refs: 6, three_weapon_refs: 3 })
+  store.getState().setDayRefs(1, { foil_epee_refs: 5, three_weapon_refs: 2 })
   return store.getState()
 }
 
@@ -53,7 +53,7 @@ function validSerializedData(): SerializedState {
           ref_policy: 'AUTO',
           cut_mode: 'PERCENTAGE',
           cut_value: 80,
-          de_mode: 'SINGLE_BLOCK',
+          de_mode: 'SINGLE_STAGE',
           de_video_policy: 'BEST_EFFORT',
           use_single_pool_override: false,
         },
@@ -66,9 +66,9 @@ function validSerializedData(): SerializedState {
     },
     referees: {
       dayRefs: [
-        { foil_epee_refs: 4, saber_refs: 2 },
-        { foil_epee_refs: 3, saber_refs: 1 },
-        { foil_epee_refs: 5, saber_refs: 3 },
+        { foil_epee_refs: 4, three_weapon_refs: 2 },
+        { foil_epee_refs: 3, three_weapon_refs: 1 },
+        { foil_epee_refs: 5, three_weapon_refs: 3 },
       ],
     },
   }
@@ -101,7 +101,7 @@ describe('serializeState', () => {
 
     expect(parsed.referees.dayRefs).toHaveLength(2)
     expect(parsed.referees.dayRefs[0].foil_epee_refs).toBe(6)
-    expect(parsed.referees.dayRefs[1].saber_refs).toBe(2)
+    expect(parsed.referees.dayRefs[1].three_weapon_refs).toBe(2)
   })
 
   it('excludes transient state (UI, analysis, schedule)', () => {
@@ -350,7 +350,7 @@ describe('URL size warning', () => {
         ref_policy: 'AUTO',
         cut_mode: 'PERCENTAGE',
         cut_value: 80,
-        de_mode: 'SINGLE_BLOCK',
+        de_mode: 'SINGLE_STAGE',
         de_video_policy: 'BEST_EFFORT',
         use_single_pool_override: false,
       }

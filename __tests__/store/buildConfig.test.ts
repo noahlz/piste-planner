@@ -43,7 +43,7 @@ function minimalState(): Partial<StoreState> {
         ref_policy: 'AUTO',
         cut_mode: 'PERCENTAGE',
         cut_value: 20,
-        de_mode: 'SINGLE_BLOCK',
+        de_mode: 'SINGLE_STAGE',
         de_video_policy: 'REQUIRED',
         use_single_pool_override: false,
       },
@@ -54,8 +54,8 @@ function minimalState(): Partial<StoreState> {
       THRESHOLD_MINS: 5,
     },
     dayRefs: [
-      { foil_epee_refs: 12, saber_refs: 6 },
-      { foil_epee_refs: 10, saber_refs: 5 },
+      { foil_epee_refs: 12, three_weapon_refs: 6 },
+      { foil_epee_refs: 10, three_weapon_refs: 5 },
     ],
     flightingSuggestionStates: [],
   }
@@ -136,7 +136,7 @@ describe('buildTournamentConfig', () => {
       expect(comp.ref_policy).toBe(RefPolicy.AUTO)
       expect(comp.cut_mode).toBe(CutMode.PERCENTAGE)
       expect(comp.cut_value).toBe(20)
-      expect(comp.de_mode).toBe(DeMode.SINGLE_BLOCK)
+      expect(comp.de_mode).toBe(DeMode.SINGLE_STAGE)
       expect(comp.de_video_policy).toBe(VideoPolicy.REQUIRED)
       expect(comp.use_single_pool_override).toBe(false)
     })
@@ -170,7 +170,7 @@ describe('buildTournamentConfig', () => {
             ref_policy: 'AUTO',
             cut_mode: 'DISABLED',
             cut_value: 100,
-            de_mode: 'SINGLE_BLOCK',
+            de_mode: 'SINGLE_STAGE',
             de_video_policy: 'BEST_EFFORT',
             use_single_pool_override: false,
           },
@@ -189,7 +189,7 @@ describe('buildTournamentConfig', () => {
             ref_policy: 'AUTO',
             cut_mode: 'PERCENTAGE',
             cut_value: 20,
-            de_mode: 'SINGLE_BLOCK',
+            de_mode: 'SINGLE_STAGE',
             de_video_policy: 'REQUIRED',
             use_single_pool_override: false,
           },
@@ -198,7 +198,7 @@ describe('buildTournamentConfig', () => {
             ref_policy: 'ONE',
             cut_mode: 'DISABLED',
             cut_value: 100,
-            de_mode: 'SINGLE_BLOCK',
+            de_mode: 'SINGLE_STAGE',
             de_video_policy: 'BEST_EFFORT',
             use_single_pool_override: false,
           },
@@ -221,13 +221,13 @@ describe('buildTournamentConfig', () => {
       expect(config.referee_availability[0]).toEqual({
         day: 0,
         foil_epee_refs: 12,
-        saber_refs: 6,
+        three_weapon_refs: 6,
         source: 'ACTUAL',
       })
       expect(config.referee_availability[1]).toEqual({
         day: 1,
         foil_epee_refs: 10,
-        saber_refs: 5,
+        three_weapon_refs: 5,
         source: 'ACTUAL',
       })
     })
@@ -291,7 +291,7 @@ describe('buildTournamentConfig', () => {
             ref_policy: 'AUTO',
             cut_mode: cutMode as CutMode,
             cut_value: cutValue,
-            de_mode: 'SINGLE_BLOCK',
+            de_mode: 'SINGLE_STAGE',
             de_video_policy: 'BEST_EFFORT',
             use_single_pool_override: false,
           },
@@ -340,7 +340,7 @@ describe('buildTournamentConfig', () => {
             ref_policy: 'AUTO',
             cut_mode: 'PERCENTAGE',
             cut_value: 20,
-            de_mode: 'SINGLE_BLOCK',
+            de_mode: 'SINGLE_STAGE',
             de_video_policy: 'REQUIRED',
             use_single_pool_override: false,
           },
@@ -349,7 +349,7 @@ describe('buildTournamentConfig', () => {
             ref_policy: 'ONE',
             cut_mode: 'DISABLED',
             cut_value: 100,
-            de_mode: 'SINGLE_BLOCK',
+            de_mode: 'SINGLE_STAGE',
             de_video_policy: 'BEST_EFFORT',
             use_single_pool_override: false,
           },

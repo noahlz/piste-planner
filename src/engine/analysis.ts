@@ -1,4 +1,4 @@
-import { BottleneckCause, BottleneckSeverity, CutMode, VideoPolicy, DeMode } from './types.ts'
+import { BottleneckSeverity, CutMode, VideoPolicy, DeMode, BottleneckCause } from './types.ts'
 import type { AnalysisResult, Bottleneck, Competition, TournamentConfig } from './types.ts'
 import { computePoolStructure, computeDeFencerCount } from './pools.ts'
 import { computeBracketSize } from './de.ts'
@@ -11,6 +11,21 @@ import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
  */
 export function isRegionalQualifier(config: TournamentConfig): boolean {
   return REGIONAL_QUALIFIER_TYPES.has(config.tournament_type)
+}
+
+/**
+ * Returns the suggested strip count baseline — the maximum number of pools
+ * across all competitions (peak strip demand during the pool round phase).
+ * Competitions with ≤1 fencer are skipped (no pools to run).
+ */
+export function suggestStripCount(competitions: Competition[]): number {
+  let maxPools = 0
+  for (const comp of competitions) {
+    if (comp.fencer_count <= 1) continue
+    const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
+    maxPools = Math.max(maxPools, n_pools)
+  }
+  return maxPools
 }
 
 /**
@@ -187,41 +202,6 @@ export function initialAnalysis(
       delay_mins: 0,
       message: `${comp.id}: cut summary — ${comp.fencer_count} entered, ${promoted} promoted, bracket of ${bracket}`,
     })
-  }
-
-  // ── Pass 7: gender equity validation ────────────────────────────────────
-  // Compare men's vs women's events in the same (category, weapon) group
-  // Build lookup: key = `${category}:${weapon}` → { men?, women? }
-  type GenderPair = { men?: Competition; women?: Competition }
-  const byGroup = new Map<string, GenderPair>()
-  for (const comp of competitions) {
-    const key = `${comp.category}:${comp.weapon}`
-    const pair = byGroup.get(key) ?? {}
-    if (comp.gender === 'MEN') pair.men = comp
-    else if (comp.gender === 'WOMEN') pair.women = comp
-    byGroup.set(key, pair)
-  }
-
-  for (const [, pair] of byGroup) {
-    const { men, women } = pair
-    if (!men || !women) continue
-
-    const mPools = computePoolStructure(men.fencer_count, men.use_single_pool_override).n_pools
-    const wPools = computePoolStructure(women.fencer_count, women.use_single_pool_override).n_pools
-    const largerPools = Math.max(mPools, wPools)
-    const poolDiff = Math.abs(mPools - wPools)
-    const allowed = genderEquityAllowableDiff(largerPools)
-
-    if (poolDiff > allowed) {
-      warnings.push({
-        competition_id: men.id,
-        phase: 'ENTRY',
-        cause: BottleneckCause.GENDER_EQUITY_CAP_VIOLATION,
-        severity: BottleneckSeverity.WARN,
-        delay_mins: 0,
-        message: `${men.id} vs ${women.id}: pool count difference is ${poolDiff}, max allowed is ${allowed} for ${largerPools}-pool larger event`,
-      })
-    }
   }
 
   return { warnings, suggestions, flightingSuggestions: flightingSuggestions.suggestions }
