@@ -1167,3 +1167,190 @@ describe('findEarlierSlotSameDay', () => {
     expect(result).toBeNull()
   })
 })
+
+// ──────────────────────────────────────────────
+// capacity penalty in totalDayPenalty
+// ──────────────────────────────────────────────
+
+describe('capacity penalty in totalDayPenalty', () => {
+  // Config with 24 strips × 14-hour day = 336 strip-hours total capacity
+  const config = makeConfig({
+    strips: makeStrips(24, 6),
+    days_available: 3,
+  })
+
+  // A small isolated competition (VET, low crossover risk) used as a probe
+  // to measure the capacity penalty contribution in isolation.
+  const candidateVet = makeCompetition({
+    id: 'vet-m-foil',
+    category: Category.VETERAN,
+    gender: Gender.MEN,
+    weapon: Weapon.FOIL,
+    fencer_count: 40,
+    strips_allocated: 4,
+    de_mode: DeMode.SINGLE_STAGE,
+  })
+
+  it('day at 80% fill gets higher penalty than day at 20% fill', () => {
+    // Fill day 0 with several large competitions (roughly 80% consumed)
+    // Each makeCompetition defaults: fencer_count 24, strips_allocated 8, SINGLE_STAGE
+    // 8 strips × ~3h DE ≈ 24 strip-hours each; 10 such comps ≈ 240/336 ≈ 71%
+    // Use 12 to push closer to 80%.
+    const heavySchedule: Record<string, ReturnType<typeof makeScheduleResult>> = {}
+    const heavyComps: Competition[] = [candidateVet]
+
+    for (let i = 0; i < 12; i++) {
+      const id = `heavy-${i}`
+      heavySchedule[id] = makeScheduleResult(id, 0)
+      heavyComps.push(makeCompetition({ id, fencer_count: 30, strips_allocated: 8 }))
+    }
+
+    // Light day 1 — only 2 competitions scheduled
+    const lightSchedule: Record<string, ReturnType<typeof makeScheduleResult>> = {}
+    const lightComps: Competition[] = [candidateVet]
+
+    for (let i = 0; i < 2; i++) {
+      const id = `light-${i}`
+      lightSchedule[id] = makeScheduleResult(id, 1)
+      lightComps.push(makeCompetition({ id, fencer_count: 30, strips_allocated: 8 }))
+    }
+
+    const heavyState = makeGlobalState(heavySchedule)
+    const lightState = makeGlobalState(lightSchedule)
+
+    const estimatedStart = config.DAY_START_MINS
+
+    const penaltyHeavy = totalDayPenalty(candidateVet, 0, estimatedStart, heavyState, 0, heavyComps, config)
+    const penaltyLight = totalDayPenalty(candidateVet, 1, estimatedStart, lightState, 0, lightComps, config)
+
+    expect(penaltyHeavy).toBeGreaterThan(penaltyLight)
+  })
+
+  it('day with 3 STAGED_DE_BLOCKS events already assigned → video-strip penalty applied', () => {
+    // 6 video strips in config; each STAGED event needs de_round_of_16_strips + de_finals_strips
+    // Default: de_round_of_16_strips=4, de_finals_strips=2 → 6 each
+    // 3 events already on day: peak R16 demand = 3×4 = 12 > 6 → video penalty
+    const existingIds = ['staged-1', 'staged-2', 'staged-3']
+    const scheduleEntries: Record<string, ReturnType<typeof makeScheduleResult>> = {}
+    const allComps: Competition[] = []
+
+    for (const id of existingIds) {
+      scheduleEntries[id] = makeScheduleResult(id, 0)
+      allComps.push(makeCompetition({
+        id,
+        de_mode: DeMode.STAGED_DE_BLOCKS,
+        de_round_of_16_strips: 4,
+        de_finals_strips: 2,
+        fencer_count: 64,
+        strips_allocated: 16,
+      }))
+    }
+
+    const candidateStaged = makeCompetition({
+      id: 'staged-candidate',
+      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_round_of_16_strips: 4,
+      de_finals_strips: 2,
+      fencer_count: 64,
+      strips_allocated: 16,
+    })
+    allComps.push(candidateStaged)
+
+    const state = makeGlobalState(scheduleEntries)
+    const estimatedStart = config.DAY_START_MINS
+
+    // Baseline: same candidate on an empty day (no video penalty)
+    const penaltyEmptyDay = totalDayPenalty(candidateStaged, 1, estimatedStart, makeGlobalState({}), 0, allComps, config)
+
+    // Day 0 already has 3 staged events — video-strip peak demand exceeds capacity
+    const penaltyCrowded = totalDayPenalty(candidateStaged, 0, estimatedStart, state, 0, allComps, config)
+
+    expect(penaltyCrowded).toBeGreaterThan(penaltyEmptyDay)
+  })
+
+  it('large DIV1 event produces bigger capacity footprint than small VET event', () => {
+    // Two empty days, two candidate events of different sizes.
+    // The DIV1 event (weight 1.5, 310 fencers) should incur higher penalty on the same day
+    // than the VET event (weight 0.6, 40 fencers) after both days are pre-loaded identically.
+    const preloadedSchedule: Record<string, ReturnType<typeof makeScheduleResult>> = {}
+    const baseComps: Competition[] = []
+
+    // Pre-fill day 0 and day 1 identically at ~50% capacity so the candidate's
+    // own footprint is what tips the penalty curve.
+    for (let i = 0; i < 6; i++) {
+      const id = `base-${i}`
+      const day = i < 3 ? 0 : 1
+      preloadedSchedule[id] = makeScheduleResult(id, day)
+      baseComps.push(makeCompetition({ id, fencer_count: 30, strips_allocated: 8 }))
+    }
+
+    const div1Candidate = makeCompetition({
+      id: 'div1-candidate',
+      category: Category.DIV1,
+      gender: Gender.WOMEN,
+      weapon: Weapon.EPEE,
+      fencer_count: 310,
+      strips_allocated: 20,
+      de_mode: DeMode.SINGLE_STAGE,
+    })
+
+    const vetCandidate = makeCompetition({
+      id: 'vet-candidate',
+      category: Category.VETERAN,
+      gender: Gender.WOMEN,
+      weapon: Weapon.EPEE,
+      fencer_count: 40,
+      strips_allocated: 4,
+      de_mode: DeMode.SINGLE_STAGE,
+    })
+
+    const div1Comps = [...baseComps, div1Candidate]
+    const vetComps = [...baseComps, vetCandidate]
+    const state = makeGlobalState(preloadedSchedule)
+    const estimatedStart = config.DAY_START_MINS
+
+    const penaltyDiv1 = totalDayPenalty(div1Candidate, 0, estimatedStart, state, 0, div1Comps, config)
+    const penaltyVet = totalDayPenalty(vetCandidate, 0, estimatedStart, state, 0, vetComps, config)
+
+    expect(penaltyDiv1).toBeGreaterThan(penaltyVet)
+  })
+
+  it('day near full: adding large event pushes capacity past steep threshold → high penalty', () => {
+    // Fill day 0 to ~90% with existing competitions, then add a large candidate.
+    // 336 total strip-hours; 90% = ~302 strip-hours
+    // makeCompetition defaults: 24 fencers, 8 strips_allocated, SINGLE_STAGE
+    // Estimated DE hours per comp: 8 strips × ~3h = 24 strip-hours
+    // Pool strip-hours: n_pools × poolDuration/60 ≈ 4 × 1.5 = 6 strip-hours
+    // Total ≈ 30 strip-hours per comp; 10 comps ≈ 300 strip-hours ≈ 89%
+
+    const nearFullSchedule: Record<string, ReturnType<typeof makeScheduleResult>> = {}
+    const nearFullComps: Competition[] = []
+
+    for (let i = 0; i < 10; i++) {
+      const id = `filler-${i}`
+      nearFullSchedule[id] = makeScheduleResult(id, 0)
+      nearFullComps.push(makeCompetition({ id, fencer_count: 24, strips_allocated: 8 }))
+    }
+
+    const bigCandidate = makeCompetition({
+      id: 'big-candidate',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      fencer_count: 150,
+      strips_allocated: 16,
+      de_mode: DeMode.SINGLE_STAGE,
+    })
+    nearFullComps.push(bigCandidate)
+
+    const state = makeGlobalState(nearFullSchedule)
+    const estimatedStart = config.DAY_START_MINS
+
+    // Compare to an empty day
+    const penaltyEmpty = totalDayPenalty(bigCandidate, 1, estimatedStart, makeGlobalState({}), 0, nearFullComps, config)
+    const penaltyNearFull = totalDayPenalty(bigCandidate, 0, estimatedStart, state, 0, nearFullComps, config)
+
+    // Near-full day should incur substantially more penalty (steep ramp at >80%)
+    expect(penaltyNearFull).toBeGreaterThan(penaltyEmpty + 3.0)
+  })
+})

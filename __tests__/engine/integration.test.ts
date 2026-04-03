@@ -7,15 +7,11 @@
  * 2. Respects hard separation constraints for all scheduled events
  * 3. Gracefully degrades when day capacity is exceeded (ERROR bottlenecks)
  *
- * ENGINE LIMITATIONS FOUND:
- * - estimateStartOnDay passed videoRequired=true for POOLS phase (fixed in this PR)
- * - Day assignment is penalty-driven, not capacity-aware — the scheduler doesn't
- *   consider total strip-hours remaining on a day, so it overloads days when
- *   many large events have similar penalty profiles. This causes DE phases to
- *   overrun day boundaries even with generous resources.
- * - Staged DE (STAGED_DE_BLOCKS) correctly serializes video-strip usage across
- *   events (block allocation, not dynamic sharing). When too many staged-DE
- *   events land on the same day, this compounds the day-overload problem.
+ * ENGINE LIMITATIONS FOUND (historical):
+ * - estimateStartOnDay passed videoRequired=true for POOLS phase (fixed)
+ * - Day assignment was penalty-driven only, not capacity-aware (fixed — day
+ *   assignment now uses a strip-hour bin-packing model with category weights
+ *   and a capacity penalty curve)
  * - Refs must be >= max pool count of any single event (engine doesn't wave pools).
  */
 import { describe, it, expect } from 'vitest'
@@ -171,6 +167,8 @@ function assertScheduleIntegrity(
 ) {
   const scheduled = Object.keys(schedule).length
   const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR).length
+
+  console.log(`  → ${competitions.length} events | ${scheduled} scheduled | ${errors} errors`)
 
   // At least some events scheduled (engine shouldn't totally fail)
   expect(scheduled).toBeGreaterThan(0)

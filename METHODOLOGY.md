@@ -28,7 +28,7 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 9. [Scheduling Algorithm](#scheduling-algorithm)
 10. [Tournament-Type Policies](#tournament-type-policies)
 11. [Auto-Suggestion Logic](#auto-suggestion-logic)
-12. [Planned Features](#planned-features)
+12. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
 13. [References](#references)
 
 [Appendix A: Penalty & Constant Defaults](#appendix-a-penalty--constant-defaults)
@@ -385,8 +385,9 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 #### Video Strip Preservation
 
-- When assigning strips for competitions that do NOT require video, non-video strips are selected first
-- This preserves video-capable strips for NAC staged DEs (Cadet, Junior, Div 1)
+- When `videoRequired=false` (pools, prelim DEs, single-stage DEs): non-video strips are selected first; video strips are used only as overflow when general strips are exhausted
+- When `videoRequired=true` (R16, finals on video strips): only video-capable strips are considered
+- This soft-reservation preserves video strips for staged DEs while allowing them to absorb pool overflow on strip-constrained days
 
 #### Resource Windows
 
@@ -560,65 +561,58 @@ See [Appendix A: Fencer Count Defaults](#fencer-count-defaults) for per-category
 
 ---
 
-## Planned Features
+## Capacity-Aware Day Assignment
 
-The following sections describe planned features not yet implemented. Implementation is tracked in Plan D (`2026-03-29-engine-fixes-D-binpack-capacity.md`).
+Day assignment uses a **capacity-aware bin-packing** model. Each tournament day is a bin with a finite strip-hour budget; competitions are weighted items packed into those bins.
 
-### Capacity Model [PLANNED]
+(see [`dayAssignment.ts`](src/engine/dayAssignment.ts))
 
-#### Target Architecture: Capacity-Aware Day Assignment
+### Strip-Hour Capacity
 
-The scheduling algorithm is moving toward **capacity-aware day assignment**:
+A day's capacity is measured in **strip-hours**: available strips × day length (14 hours). A day with 80 strips has 1,120 strip-hours of general capacity. For capacity scoring, video strips are tracked as a separate budget (see [Video-Strip Budget](#video-strip-budget)); however, at runtime the strip allocator can spill pool work onto idle video strips when general strips are exhausted (see [Video Strip Preservation](#video-strip-preservation)).
 
-- **Bin width** = number of available strips
-- **Bin height** = day length (14 hours in 30-minute slots)
-- Large events are placed first and prefer early time slots
-- Smaller events are packed around and on top of larger events
-- This replaces the current greedy forward-scanning approach
-
-#### Strip-Hours as the Unit of Day Capacity
-
-A day's total capacity is measured in **strip-hours**: the product of available strips and scheduled hours. A day with 80 strips running 14 hours has 1,120 strip-hours of general capacity. Video strips maintain a separate budget.
-
-Each competition consumes strip-hours from the day it is assigned:
+Each competition's strip-hour draw is computed from its pool and DE phases:
 - **Pool phase**: `n_pools × pool_duration_hours`
 - **DE phase**: `strips_allocated × de_duration_hours`
-- For staged DEs (NACs), also compute video-strip-hours for the R16 and finals phases.
 
-#### Pool Duration by Weapon
+For staged DEs (NACs), the video-strip draw is tracked separately.
 
-Pool durations differ by weapon due to bout time rules — epee bouts tend longer (non-combativity rules), sabre bouts are fastest. The engine's `weightedPoolDuration` function computes a weighted average across pool sizes in a competition. See Appendix A for base durations by weapon.
+### Age-Category Weights
 
-#### DE Duration by Mode
+Not all events consume a day equally. A 310-fencer Div 1 with staged video DEs anchors an entire day; a small Veteran Combined is comparatively lightweight. Each competition's strip-hour draw is multiplied by a category weight that reflects operational impact:
 
-- **Single Stage DE**: all DE rounds run on general strips as fast as possible
-- **Staged DE** (NACs): early rounds on general strips (Prelim phase), then R16 and beyond on video strips (Video phase). Multiple events sharing video strips are scheduled sequentially across blocks of 4 video strips — e.g., with 8 video strips and two events both in their Round of 8, each event gets a block of 4 strips and runs its 8 bouts simultaneously.
+| Category | Weight | Notes |
+|---|---|---|
+| DIV1 | 1.5 | Heaviest — large fields, video DE serialization |
+| JUNIOR, CADET | 1.3 | Heavy — video DE, large fields, early start |
+| Y10 | 1.2 | Early start required |
+| Y12, Y14 | 1.0 | Baseline |
+| VET 40, VET 50 | 0.8 | Lighter; no start offset |
+| DIV1A, DIV2, DIV3 | 0.7 | Lighter; can start early |
+| VET Combined, VET 60, VET 70, VET 80 | 0.6 | Lightest; 2-hour start offset (medication timing for older athletes) |
 
-#### Age-Category Weights
+### Capacity Penalty Curve
 
-Not all events consume a day equally. A 310-fencer Div 1 event with staged video DEs anchors an entire day; a small Veteran Combined event is comparatively lightweight. The capacity model applies a weight multiplier per age category to reflect operational impact:
+The day-assignment penalty for capacity fill ratio:
 
-- **DIV1**: heaviest (large fields, video DE serialization)
-- **Junior, Cadet**: heavy (video DE, large fields)
-- **Y10, Y12, Y14**: normal weight
-- **Div1A, Div2, Div3**: lighter weight
-- **Veteran 40/50**: lighter weight, no start offset
-- **Veteran Combined, 60/70/80**: lightest weight; 2-hour start offset from day start (these fencers may need medication timing in the morning)
+| Fill ratio | Penalty |
+|---|---|
+| < 0.60 | 0 — no penalty |
+| 0.60–0.80 | Gentle ramp from 0 to 3.0 |
+| 0.80–0.95 | Steep ramp from 3.0 to 10.0 |
+| > 0.95 | 20.0 — strongly discouraged |
 
-Exact weight values are in Appendix A.
+This is added to the existing soft-preference penalty total, so a nearly-full day is penalized heavily even when it has no crossover or separation issues.
 
-#### Day Capacity Scoring
+### Video-Strip Budget
 
-The scheduler penalizes days nearing capacity. The penalty curve is:
-- **Gentle** at moderate fill ratios (room still available)
-- **Steep** near full capacity (strong discouragement from adding more)
-- **Severe** when nearly overloaded
+For day-assignment scoring, video strip capacity is tracked separately from general strip-hours. This budget governs how many staged-DE events a day can support; it does not prevent the runtime allocator from spilling non-video work onto idle video strips (see [Video Strip Preservation](#video-strip-preservation)).
 
-Exact thresholds are in Appendix A.
+Peak concurrent demand is modeled: as staged DE rounds progress (R16 → R8 → QF → Finals), earlier rounds release their video strips and those strips become available to other events. If peak demand exceeds 70% of the video strip total, a moderate penalty (5.0) is applied; at 100% of capacity the penalty rises to 15.0.
 
-#### Video-Strip Budget
+### Staged DE Strip Release
 
-Video strip capacity is tracked separately from general strip capacity. Peak concurrent demand is modeled: as staged DE rounds progress (R64 → R32 → R16 → Finals), earlier rounds release their video strips. Multiple events can share the video strip pool if their peak demand fits within the budget.
+For NAC staged DEs, each round (R16, R8, QF, Finals) runs in sequence on video strips and then releases them. Freed strips become available to other events on the same day, so multiple events can share a video strip pool without serializing their entire DE phase.
 
 ---
 

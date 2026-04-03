@@ -23,18 +23,18 @@ When events fail to schedule (ERROR bottlenecks), no actionable message surfaces
 
 ---
 
-## Integration Test Baseline (March 2026)
+## Integration Test Baseline
 
 Seven integration tests in `__tests__/engine/integration.test.ts` use real USA Fencing tournament data (fencer counts rounded to nearest 10). All pass with current assertions, but the engine cannot fully schedule any at realistic scale.
 
-| Scenario | Source | Events | ~Scheduled | ~Errors |
-|----------|--------|--------|------------|---------|
-| B1: Feb 2026 NAC (Div 1/Jr/Vet) | Real data | 24 | ~8 | ~16 |
-| B2: Nov 2025 NAC (Div 1/Cdt/Y14) | Real data | 24 | ~10 | ~14 |
-| B3: Mar 2026 NAC (Y10/Y12/Y14/D2) | Real data | 24 | ~4 | ~20 |
-| B4: Jan 2026 SYC (Y8-Y14/Cdt) | Real data | 30 | ~3 | ~27 |
-| B5: Jan 2026 SJCC (Cdt/Jr) | Real data | 12 | ~4 | ~8 |
-| B6: Sep 2025 ROC (9 categories) | Real data | 54 | ~5 | ~49 |
-| B7: Oct 2025 NAC (Div 1/Jr/Cdt) | Real data | 18 | ~7 | ~11 |
+| Scenario | Events | Scheduled | Errors |
+|----------|--------|-----------|--------|
+| B1: Feb 2026 NAC (Div 1/Jr/Vet) | 24 | 2 | 22 |
+| B2: Nov 2025 NAC (Div 1/Cdt/Y14) | 24 | 4 | 20 |
+| B3: Mar 2026 NAC (Y10/Y12/Y14/D2) | 24 | 4 | 20 |
+| B4: Jan 2026 SYC (Y8-Y14/Cdt) | 30 | 3 | 27 |
+| B5: Jan 2026 SJCC (Cdt/Jr) | 12 | 4 | 8 |
+| B6: Sep 2025 ROC (9 categories) | 54 | 3 | 51 |
+| B7: Oct 2025 NAC (Div 1/Jr/Cdt) | 18 | 4 | 14 |
 
-**Update after Plan D:** Re-run integration suite and update this table. Expect fewer errors due to capacity-aware day assignment. If errors drop to zero, tighten assertions (hard separations for all events, specific day assignment patterns).
+*Updated 2026-04-03 after Plan D (capacity-aware day assignment).* Error counts did not improve — the capacity penalty spreads events more evenly across days, but the fundamental bottleneck is strip/ref resource exhaustion within a day. Single large events monopolize all strips, leaving no resource windows for subsequent events. Plan E (per-event strip limits + auto-flighting) targets this directly.

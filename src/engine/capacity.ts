@@ -6,8 +6,9 @@
  * capacity a competition consumes. Used as input to capacity-aware day assignment.
  */
 
-import { DeMode } from './types.ts'
+import { Category, DeMode } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState } from './types.ts'
+import { CATEGORY_START_PREFERENCE } from './constants.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
 
@@ -139,4 +140,29 @@ export function dayRemainingCapacity(
     strip_hours_remaining: total_capacity - consumed.strip_hours_consumed,
     video_strip_hours_remaining: video_capacity - consumed.video_strip_hours_consumed,
   }
+}
+
+/**
+ * Returns the capacity weight for a competition's age category.
+ *
+ * For VETERAN competitions, a compound key (`VETERAN:${vet_age_group}`) is used when
+ * vet_age_group is set, so VET60/70/80/COMBINED (weight 0.6) are distinguished from
+ * VET40/50 (weight 0.8). When vet_age_group is null, falls back to the plain VETERAN
+ * entry (weight 0.8 — same as the lighter vet groups).
+ */
+export function categoryWeight(competition: Competition): number {
+  if (competition.category === Category.VETERAN && competition.vet_age_group !== null) {
+    const key = `${Category.VETERAN}:${competition.vet_age_group}` as const
+    return CATEGORY_START_PREFERENCE[key].weight
+  }
+  return CATEGORY_START_PREFERENCE[competition.category].weight
+}
+
+/**
+ * Returns the estimated strip-hours for a competition scaled by its category weight.
+ * Used in capacity-aware day assignment to treat heavyweight events (DIV1, JUNIOR)
+ * as occupying more effective scheduling capacity than their raw strip-hours suggest.
+ */
+export function weightedStripHours(competition: Competition, config: TournamentConfig): number {
+  return estimateCompetitionStripHours(competition, config).total_strip_hours * categoryWeight(competition)
 }
