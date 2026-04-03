@@ -140,7 +140,7 @@ export const DEFAULT_VIDEO_POLICY_BY_CATEGORY: Record<Category, VideoPolicy> = {
 
 export type FencerDefaultKey =
   | `${Category}:${Weapon}:${Gender}`
-  | `${Category}:${EventType.TEAM}`
+  | `${Category}:${'TEAM'}`
 
 export const NAC_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>> = {
   // DIV1 individual (E=Epee, F=Foil, S=Sabre; M=Men, W=Women)
