@@ -30,7 +30,7 @@ Per-event overrides: each `Competition` gets nullable `max_pool_strip_pct_overri
 
 Presented to the user as: "You need at least 68 strips so your largest event (JME, 54 pools) uses at most 80% of available strips."
 
-User adjusts downward to reflect real constraints. Engine re-computes caps and flags flighting candidates.
+User adjusts strip count. Engine re-computes caps and flags or unflags flighting candidates.
 
 ### Referee Recommendation
 

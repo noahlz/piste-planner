@@ -385,8 +385,9 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 #### Video Strip Preservation
 
-- When assigning strips for competitions that do NOT require video, non-video strips are selected first
-- This preserves video-capable strips for NAC staged DEs (Cadet, Junior, Div 1)
+- When `videoRequired=false` (pools, prelim DEs, single-stage DEs): non-video strips are selected first; video strips are used only as overflow when general strips are exhausted
+- When `videoRequired=true` (R16, finals on video strips): only video-capable strips are considered
+- This soft-reservation preserves video strips for staged DEs while allowing them to absorb pool overflow on strip-constrained days
 
 #### Resource Windows
 
@@ -568,7 +569,7 @@ Day assignment uses a **capacity-aware bin-packing** model. Each tournament day 
 
 ### Strip-Hour Capacity
 
-A day's capacity is measured in **strip-hours**: available strips × day length (14 hours). A day with 80 strips has 1,120 strip-hours of general capacity. Video strips maintain a separate budget.
+A day's capacity is measured in **strip-hours**: available strips × day length (14 hours). A day with 80 strips has 1,120 strip-hours of general capacity. For capacity scoring, video strips are tracked as a separate budget (see [Video-Strip Budget](#video-strip-budget)); however, at runtime the strip allocator can spill pool work onto idle video strips when general strips are exhausted (see [Video Strip Preservation](#video-strip-preservation)).
 
 Each competition's strip-hour draw is computed from its pool and DE phases:
 - **Pool phase**: `n_pools × pool_duration_hours`
@@ -605,7 +606,9 @@ This is added to the existing soft-preference penalty total, so a nearly-full da
 
 ### Video-Strip Budget
 
-Video strip capacity is tracked separately. Peak concurrent demand is modeled: as staged DE rounds progress (R16 → R8 → QF → Finals), earlier rounds release their video strips and those strips become available to other events. If peak demand exceeds 70% of the video strip total, a moderate penalty (5.0) is applied; at 100% of capacity the penalty rises to 15.0.
+For day-assignment scoring, video strip capacity is tracked separately from general strip-hours. This budget governs how many staged-DE events a day can support; it does not prevent the runtime allocator from spilling non-video work onto idle video strips (see [Video Strip Preservation](#video-strip-preservation)).
+
+Peak concurrent demand is modeled: as staged DE rounds progress (R16 → R8 → QF → Finals), earlier rounds release their video strips and those strips become available to other events. If peak demand exceeds 70% of the video strip total, a moderate penalty (5.0) is applied; at 100% of capacity the penalty rises to 15.0.
 
 ### Staged DE Strip Release
 
