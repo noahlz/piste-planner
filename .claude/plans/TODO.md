@@ -15,14 +15,6 @@
 
 ## Engine Limitations
 
-Issues discovered during integration testing (March 2026). Tracked in Plan D (`2026-03-29-engine-fixes-D-binpack-capacity.md`).
-
-### Day assignment is capacity-naive
-
-`assignDay`/`totalDayPenalty` scores crossover penalties and proximity but does not track remaining strip-hours per day. When many large events (200–350 fencers) have similar penalty profiles, the scheduler piles them onto the same day. DE phases then overrun the 14-hour boundary, causing ERROR bottlenecks.
-
-**Fix in Plan D:** Add capacity-aware scoring using strip-hours and age-category weights.
-
 ### Post-scheduling resource diagnostic missing
 
 When events fail to schedule (ERROR bottlenecks), no actionable message surfaces explaining how many strips or refs were needed. User sees opaque "no valid day found" errors.
@@ -35,15 +27,6 @@ When events fail to schedule (ERROR bottlenecks), no actionable message surfaces
 
 Seven integration tests in `__tests__/engine/integration.test.ts` use real USA Fencing tournament data (fencer counts rounded to nearest 10). All pass with current assertions, but the engine cannot fully schedule any at realistic scale.
 
-### Current test assertions
-
-- Engine doesn't crash on realistic data
-- At least some events schedule
-- `scheduled + errors = total` (nothing silently dropped)
-- Hard separations respected for events that didn't use level-3 constraint relaxation
-
-### Results per scenario
-
 | Scenario | Source | Events | ~Scheduled | ~Errors |
 |----------|--------|--------|------------|---------|
 | B1: Feb 2026 NAC (Div 1/Jr/Vet) | Real data | 24 | ~8 | ~16 |
@@ -54,14 +37,4 @@ Seven integration tests in `__tests__/engine/integration.test.ts` use real USA F
 | B6: Sep 2025 ROC (9 categories) | Real data | 54 | ~5 | ~49 |
 | B7: Oct 2025 NAC (Div 1/Jr/Cdt) | Real data | 18 | ~7 | ~11 |
 
-### Root causes
-
-1. **Capacity-naive day assignment** — penalty scoring ignores remaining strip-hours (tracked in Plan D)
-2. **Staged DE video serialization** — multiple events' DE phases compete for limited video strips, compounding day-boundary overruns
-
-### When to tighten
-
-Once capacity-aware day assignment is implemented (Plan D), update tests to:
-- Assert all events scheduled (zero errors)
-- Verify hard separations for all events
-- Assert specific day assignment patterns (e.g., Div 1 and Junior never share a day)
+**Update after Plan D:** Re-run integration suite and update this table. Expect fewer errors due to capacity-aware day assignment. If errors drop to zero, tighten assertions (hard separations for all events, specific day assignment patterns).
