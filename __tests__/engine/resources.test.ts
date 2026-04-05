@@ -63,6 +63,8 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
     pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
     de_duration_table: DEFAULT_DE_DURATION_TABLE,
     dayConfigs: [],
+    max_pool_strip_pct: 0.80,
+    max_de_strip_pct: 0.80,
     ...overrides,
   }
 }
