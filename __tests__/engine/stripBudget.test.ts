@@ -32,6 +32,8 @@ describe('computeStripCap', () => {
     expect(computeStripCap(85, 0.80)).toBe(68)
     // floor(10 * 0.33) = floor(3.3) = 3
     expect(computeStripCap(10, 0.33)).toBe(3)
+    // floor(7 * 0.80) = floor(5.6) = 5 (not 6)
+    expect(computeStripCap(7, 0.80)).toBe(5)
   })
 })
 
@@ -112,7 +114,8 @@ describe('recommendRefCount', () => {
       makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 70 }),  // 10 pools
       makeCompetition({ id: 'f3', weapon: Weapon.FOIL, fencer_count: 490 }), // 70 pools — 3rd!
     ]
-    // top-2 foil sorted desc: 70,20 → peak=90; three_weapon=0
+    // Pool counts sorted desc: f3=70, f1=20, f2=10. Top-2 are f3 and f1; f2 is excluded.
+    // peak foil/epee = 70 + 20 = 90; three_weapon=0
     expect(recommendRefCount(comps, 1)).toEqual({ three_weapon: 0, foil_epee: 90 })
   })
 

@@ -528,6 +528,13 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
 // ──────────────────────────────────────────────
 
 describe('scheduleCompetition — per-event strip cap', () => {
+  // Shared referee availability used across all three cap tests.
+  const capTestRefAvailability = [
+    { day: 0, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
+    { day: 1, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
+    { day: 2, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
+  ]
+
   it('pool_duration_actual is longer when max_pool_strip_pct forces batching', () => {
     // 85 fencers → ceil(85/7) = 13 pools.
     // With strips_total=24 and max_pool_strip_pct=0.50 → effectiveCap=floor(24*0.50)=12.
@@ -542,11 +549,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
       max_pool_strip_pct: 0.50,
       max_de_strip_pct: 1.0,
       days_available: 3,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-        { day: 1, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-        { day: 2, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-      ],
+      referee_availability: capTestRefAvailability,
     })
     const comp = makeCompetition({
       id: 'MF-CAP-TEST',
@@ -562,6 +565,8 @@ describe('scheduleCompetition — per-event strip cap', () => {
     // With effectiveCap=12 and 13 pools, two batches are needed.
     // pool_duration_actual should be 2x pool_duration_baseline.
     expect(result.pool_duration_actual).toBe(result.pool_duration_baseline * 2)
+    // The cap limits pool strips to 12 (fewer than the 13 pools available).
+    expect(result.pool_strips_count).toBe(12)
   })
 
   it('pool_duration_actual equals baseline when no cap constraint (high pct)', () => {
@@ -574,11 +579,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
       max_pool_strip_pct: 1.0,
       max_de_strip_pct: 1.0,
       days_available: 3,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-        { day: 1, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-        { day: 2, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-      ],
+      referee_availability: capTestRefAvailability,
     })
     const comp = makeCompetition({
       id: 'MF-NOCAP-TEST',
@@ -593,6 +594,8 @@ describe('scheduleCompetition — per-event strip cap', () => {
 
     // All 13 pools run in one batch — actual equals baseline.
     expect(result.pool_duration_actual).toBe(result.pool_duration_baseline)
+    // No cap: all 13 pools run simultaneously on 13 strips.
+    expect(result.pool_strips_count).toBe(13)
   })
 
   it('per-competition max_pool_strip_pct_override takes precedence over global pct', () => {
@@ -605,11 +608,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
       max_pool_strip_pct: 0.50,
       max_de_strip_pct: 1.0,
       days_available: 3,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-        { day: 1, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-        { day: 2, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-      ],
+      referee_availability: capTestRefAvailability,
     })
     const comp = makeCompetition({
       id: 'MF-OVERRIDE-TEST',
@@ -625,6 +624,8 @@ describe('scheduleCompetition — per-event strip cap', () => {
 
     // Override gives effectiveCap=24, so all 13 pools run in one batch.
     expect(result.pool_duration_actual).toBe(result.pool_duration_baseline)
+    // Override lifts the cap: all 13 pools run simultaneously on 13 strips.
+    expect(result.pool_strips_count).toBe(13)
   })
 })
 

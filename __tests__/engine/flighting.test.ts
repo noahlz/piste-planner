@@ -5,45 +5,7 @@ import {
   validateFlightingGroup,
 } from '../../src/engine/flighting.ts'
 import { BottleneckCause, BottleneckSeverity, Category } from '../../src/engine/types.ts'
-import type { Competition } from '../../src/engine/types.ts'
-
-// ──────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────
-
-function makeCompetition(overrides: Partial<Competition> = {}): Competition {
-  return {
-    id: 'comp-1',
-    gender: 'MEN',
-    category: 'DIV1',
-    weapon: 'FOIL',
-    event_type: 'INDIVIDUAL',
-    fencer_count: 42,
-    ref_policy: 'AUTO',
-    earliest_start: 0,
-    latest_end: 840,
-    optional: false,
-    vet_age_group: null,
-    use_single_pool_override: false,
-    cut_mode: 'DISABLED',
-    cut_value: 100,
-    de_mode: 'SINGLE_STAGE',
-    de_video_policy: 'BEST_EFFORT',
-    de_finals_strip_id: null,
-    de_finals_strip_requirement: 'IF_AVAILABLE',
-    de_round_of_16_strips: 4,
-    de_round_of_16_requirement: 'IF_AVAILABLE',
-    de_finals_strips: 4,
-    de_finals_requirement: 'IF_AVAILABLE',
-    flighted: false,
-    flighting_group_id: null,
-    is_priority: false,
-    strips_allocated: 0,
-    max_pool_strip_pct_override: null,
-    max_de_strip_pct_override: null,
-    ...overrides,
-  }
-}
+import { makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // suggestFlightingGroups
