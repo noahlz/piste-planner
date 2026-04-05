@@ -44,6 +44,14 @@ export function computePoolStructure(
 }
 
 /**
+ * Lightweight wrapper around computePoolStructure that returns only n_pools.
+ * Use this wherever pool count is needed without the full PoolStructure.
+ */
+export function poolCountFor(fencerCount: number, useSinglePoolOverride = false): number {
+  return computePoolStructure(fencerCount, useSinglePoolOverride).n_pools
+}
+
+/**
  * Returns the estimated duration (minutes) for a single pool of a given size.
  *
  * Formula (PRD Section 7.2):

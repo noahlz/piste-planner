@@ -4,8 +4,6 @@ import {
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
   VIDEO_STAGE_ROUND,
-  FLIGHTING_ELIGIBLE_CATEGORIES,
-  FLIGHTING_MIN_FENCERS,
   SOFT_SEPARATION_PAIRS,
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
@@ -76,24 +74,6 @@ describe('VIDEO_STAGE_ROUND', () => {
       expect(VIDEO_STAGE_ROUND[`${Category.VETERAN}:${ageGroup}`]).toBe(4)
     }
   )
-})
-
-describe('FLIGHTING_ELIGIBLE_CATEGORIES', () => {
-  it('has size 3', () => {
-    expect(FLIGHTING_ELIGIBLE_CATEGORIES.size).toBe(3)
-  })
-
-  it('contains exactly CADET, JUNIOR, DIV1', () => {
-    expect(FLIGHTING_ELIGIBLE_CATEGORIES.has(Category.CADET)).toBe(true)
-    expect(FLIGHTING_ELIGIBLE_CATEGORIES.has(Category.JUNIOR)).toBe(true)
-    expect(FLIGHTING_ELIGIBLE_CATEGORIES.has(Category.DIV1)).toBe(true)
-  })
-})
-
-describe('FLIGHTING_MIN_FENCERS', () => {
-  it('equals 200', () => {
-    expect(FLIGHTING_MIN_FENCERS).toBe(200)
-  })
 })
 
 describe('SOFT_SEPARATION_PAIRS', () => {

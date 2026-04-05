@@ -4,6 +4,7 @@ import { computePoolStructure, computeDeFencerCount } from './pools.ts'
 import { computeBracketSize } from './de.ts'
 import { suggestFlightingGroups } from './flighting.ts'
 import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
+import { computeStripCap } from './stripBudget.ts'
 
 /**
  * Returns true when the tournament is a regional qualifier (RYC, RJCC, ROC, SYC, SJCC).
@@ -85,8 +86,13 @@ export function initialAnalysis(
 
   // ── Pass 1: strip deficit → flighting suggestions ────────────────────────
   for (const comp of competitions) {
+    const effectiveCap = computeStripCap(
+      config.strips_total,
+      config.max_pool_strip_pct,
+      comp.max_pool_strip_pct_override,
+    )
     const ps = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
-    if (ps.n_pools > config.strips_total) {
+    if (ps.n_pools > effectiveCap) {
       if (!comp.flighted) {
         warnings.push({
           competition_id: comp.id,
@@ -94,19 +100,20 @@ export function initialAnalysis(
           cause: BottleneckCause.STRIP_DEFICIT_NO_FLIGHTING,
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
-          message: `${comp.id}: ${ps.n_pools} pools but only ${config.strips_total} strips available; flighting not enabled`,
+          message: `${comp.id}: ${ps.n_pools} pools but only ${effectiveCap} strips available; flighting not enabled`,
         })
       }
       // Suggest splitting into two flights regardless of current flighting state
       const poolsPerFlight = Math.ceil(ps.n_pools / 2)
       suggestions.push(
-        `${comp.id}: consider flighting (${poolsPerFlight} pools per flight) — ${ps.n_pools} pools exceeds ${config.strips_total} strips`,
+        `${comp.id}: consider flighting (${poolsPerFlight} pools per flight) — ${ps.n_pools} pools exceeds ${effectiveCap} strips`,
       )
     }
   }
 
   // ── Pass 2: flighting group suggestions ──────────────────────────────────
-  const flightingSuggestions = suggestFlightingGroups(competitions, config.strips_total, dayAssignments)
+  const globalPoolStripCap = computeStripCap(config.strips_total, config.max_pool_strip_pct)
+  const flightingSuggestions = suggestFlightingGroups(competitions, config.strips_total, dayAssignments, globalPoolStripCap)
   for (const b of flightingSuggestions.bottlenecks) {
     warnings.push(b)
   }

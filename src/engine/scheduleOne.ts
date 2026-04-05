@@ -28,6 +28,7 @@ import { refsAvailableOnDay } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot } from './resources.ts'
 import { assignDay, findEarlierSlotSameDay, SchedulingError } from './dayAssignment.ts'
+import { computeStripCap } from './stripBudget.ts'
 
 export function scheduleCompetition(
   competition: Competition,
@@ -151,10 +152,15 @@ export function scheduleCompetition(
       poolEnd = allocateFlightedPools(competition, poolStructure, refRes, wDuration, notBefore, day, state, config, result)
     } else {
       // ── Non-flighted (or flighting group — treated as non-flighted for pool allocation) ──
+      const effectiveCap = computeStripCap(
+        config.strips_total,
+        config.max_pool_strip_pct,
+        competition.max_pool_strip_pct_override,
+      )
       const poolDur = estimatePoolDuration(
         poolStructure.n_pools,
         wDuration,
-        config.strips_total,
+        effectiveCap,
         availRefs,
         refRes.refs_per_pool,
       )
@@ -359,14 +365,20 @@ function allocateFlightedPools(
   const flightBPools = Math.floor(poolStructure.n_pools / 2)
   const availRefs = refsAvailableOnDay(day, competition.weapon, config)
 
+  const effectiveCap = computeStripCap(
+    config.strips_total,
+    config.max_pool_strip_pct,
+    competition.max_pool_strip_pct_override,
+  )
+
   // Compute per-flight durations using half the pools
   const flightADur = estimatePoolDuration(
     flightAPools, wDuration,
-    config.strips_total, availRefs, refRes.refs_per_pool,
+    effectiveCap, availRefs, refRes.refs_per_pool,
   )
   const flightBDur = estimatePoolDuration(
     flightBPools, wDuration,
-    config.strips_total, availRefs, refRes.refs_per_pool,
+    effectiveCap, availRefs, refRes.refs_per_pool,
   )
 
   const flightARefsNeeded = Math.ceil(refRes.refs_needed / 2)
@@ -468,9 +480,15 @@ function executeSingleBlockDe(
   const deOptimal = Math.floor(bracketSize / 2)
   const deRefsNeeded = config.DE_REFS
 
+  const deEffectiveCap = computeStripCap(
+    config.strips_total,
+    config.max_de_strip_pct,
+    competition.max_de_strip_pct_override,
+  )
+
   // Find resource window for DE
   const window = earliestResourceWindow(
-    Math.min(deOptimal, config.strips_total),
+    Math.min(deOptimal, deEffectiveCap),
     deRefsNeeded,
     competition.weapon,
     false, // SINGLE_STAGE never uses video

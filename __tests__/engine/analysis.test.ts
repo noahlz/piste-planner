@@ -149,7 +149,7 @@ describe('initialAnalysis — Pass 1: strip deficit', () => {
 describe('initialAnalysis — Pass 2: flighting group suggestions', () => {
   it('two competitions: 30 + 29 pools on same day → flighting group suggestion in result', () => {
     // ceil(210/7)=30, ceil(203/7)=29; 30+29=59 > 55 strips, each fits alone
-    // Both ≥ 200 fencers (eligible), within 40 of each other (|210-203|=7)
+    // Each fits within poolStripCap (floor(55×0.80)=44), combined (59) exceeds stripsTotal (55)
     const config = makeConfig({ strips_total: 55 })
     const c1 = makeBigComp('large', 210)   // 30 pools
     const c2 = makeBigComp('small', 203)   // 29 pools
@@ -161,7 +161,7 @@ describe('initialAnalysis — Pass 2: flighting group suggestions', () => {
 
   it('tied pool counts → FLIGHTING_GROUP_MANUAL_NEEDED warning in result', () => {
     // ceil(210/7)=30 pools each; 30+30=60 > 55, each fits alone
-    // Both ≥ 200 fencers (eligible), within 40 of each other (|210-210|=0)
+    // Each fits within poolStripCap (44), combined (60) exceeds stripsTotal (55)
     const config = makeConfig({ strips_total: 55 })
     const c1 = makeBigComp('tied-a', 210)
     const c2 = makeBigComp('tied-b', 210)
@@ -273,7 +273,7 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
   it('both competitions in suggested flighting group require video → VIDEO_STRIP_CONTENTION warning', () => {
     // Two competitions whose combined pools exceed strips, triggering a flighting suggestion.
     // Both have REQUIRED video, which should produce a flighting-video conflict warning.
-    // ceil(210/7)=30, ceil(203/7)=29; 30+29=59 > 55 strips, each fits, within 40 (|210-203|=7)
+    // ceil(210/7)=30, ceil(203/7)=29; 30+29=59 > 55 strips, each fits within poolStripCap (44)
     const config = makeConfig({ strips_total: 55 })
     const comp1 = makeBigComp('fg-vid-1', 210, {
       de_mode: DeMode.STAGED_DE_BLOCKS,

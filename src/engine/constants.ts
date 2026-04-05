@@ -525,19 +525,6 @@ export const VIDEO_STAGE_ROUND: Partial<Record<VideoStageKey, number>> = {
 }
 
 // ──────────────────────────────────────────────
-// Flighting eligibility — only these categories with 200+ fencers may be flighted.
-// (METHODOLOGY.md §Flighting)
-// ──────────────────────────────────────────────
-
-export const FLIGHTING_ELIGIBLE_CATEGORIES: ReadonlySet<Category> = new Set<Category>([
-  Category.CADET,
-  Category.JUNIOR,
-  Category.DIV1,
-])
-
-export const FLIGHTING_MIN_FENCERS = 200
-
-// ──────────────────────────────────────────────
 // Individual/Team hard blocks: pairs that MUST NOT be on the same day
 // (same weapon and gender). (METHODOLOGY.md §Individual/Team Separation)
 // ──────────────────────────────────────────────

@@ -179,6 +179,8 @@ export interface Competition {
   flighting_group_id: string | null
   is_priority: boolean
   strips_allocated: number
+  max_pool_strip_pct_override: number | null
+  max_de_strip_pct_override: number | null
 }
 
 export interface DayConfig {
@@ -214,6 +216,8 @@ export interface TournamentConfig {
   pool_round_duration_table: Record<Weapon, number>
   de_duration_table: Record<Weapon, Record<number, number>>
   dayConfigs: DayConfig[]
+  max_pool_strip_pct: number
+  max_de_strip_pct: number
 }
 
 export interface FlightingGroup {

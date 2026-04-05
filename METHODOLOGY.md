@@ -20,6 +20,7 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 6. [Constraint Relaxation](#constraint-relaxation)
 7. [Competition Math](#competition-math)
    - [Pool Composition](#pool-composition)
+   - [Strip Budget](#strip-budget)
    - [Flighting](#flighting)
    - [Direct Elimination (DE)](#direct-elimination-de)
 8. [Resources](#resources)
@@ -56,7 +57,7 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
   - **Cut-to-DE**: % cut (e.g., cut 20% → promote 80%) or promoted count (e.g., promote top 256)
   - **Start time**: defaults to 8:00 AM; user can adjust per day
   - **Latest end time**: violation produces a warning with estimated finish time, not a scheduling failure
-  - **Flighting**: only eligible for events with 200+ fencers (see [`flighting.ts`](src/engine/flighting.ts))
+  - **Flighting**: triggered when a competition's pool count exceeds the per-event strip cap (see [Strip Budget](#strip-budget))
 
 ### Outputs
 
@@ -296,14 +297,38 @@ See [Appendix A](#pool-duration-by-weapon-6-person-baseline-15-bouts) for base d
 - Concurrent pools = min(available strips, total pools, available refs ÷ refs-per-pool)
 - Total pool round duration: `weighted_avg_pool_duration × ceil(total_pools / effective_parallelism)`
 
+### Strip Budget
+
+The strip budget model limits how many strips any single competition may occupy during pools or DEs, preventing one large event from monopolising the venue. (see [`stripBudget.ts`](src/engine/stripBudget.ts))
+
+#### Global Percentages
+
+- `max_pool_strip_pct` on `TournamentConfig` — fraction of total strips a competition may use for pools (default `0.80`)
+- `max_de_strip_pct` on `TournamentConfig` — fraction of total strips a competition may use for DEs (default `0.80`)
+
+#### Per-Event Overrides
+
+- `max_pool_strip_pct_override` on `Competition` — when non-null, replaces the global pool percentage for that event
+- `max_de_strip_pct_override` on `Competition` — when non-null, replaces the global DE percentage for that event
+
+#### Key Functions
+
+- `computeStripCap(strips_total, pct, override)` — returns `floor(strips_total × effectivePct)`, where `effectivePct` is the override if provided, otherwise the global percentage
+- `recommendStripCount(competitions, config)` — advisory: suggests a strip total that keeps each competition within its pool cap
+- `recommendRefCount(strips, config)` — advisory: suggests a referee total proportional to peak strip usage
+- `flagFlightingCandidates(competitions, config)` — returns competition IDs where `n_pools > pool_strip_cap`
+
 ### Flighting
 
 Flighting splits a large competition's pool round into two flights, using **half the strips for double the time**. The schedule marks the competition as "flighted" but does not track Flight A/B start/end times separately — only total pool round duration matters. (see [`flighting.ts`](src/engine/flighting.ts))
 
-#### Eligibility
+#### Trigger
 
-- Events with **200+ fencers** are eligible for flighting
-- Events below 200 fencers are never flighted
+A competition is a flighting candidate when its pool count exceeds the per-event strip cap:
+
+- `pool_strip_cap = floor(strips_total × max_pool_strip_pct)` (default 80%)
+- Per-event override: `max_pool_strip_pct_override` on a `Competition` replaces the global percentage for that event
+- `flagFlightingCandidates()` returns competition IDs where `n_pools > pool_strip_cap` (see [`stripBudget.ts`](src/engine/stripBudget.ts))
 
 #### How Flighting Works
 
@@ -311,10 +336,9 @@ Flighting splits a large competition's pool round into two flights, using **half
 - Smaller events get priority to start and run in parallel with the first flight
 - Flighted events have a strong affinity for the 8:00 AM time slot
 
-#### Flighting Rules
+#### Flighting Group Suggestion
 
-- Multiple events can be flighted if they are within 40 entrants of each other in size and both have 200+ fencers (e.g. 250 and 280); otherwise only the largest event on a day is eligible for flighting
-- Flighting is suggested when two same-day competitions' combined pool count exceeds available strips, but each fits individually
+- Flighting is suggested when two same-day competitions' combined pool count exceeds `strips_total` but each fits individually within `pool_strip_cap`
 
 ### Direct Elimination (DE)
 
@@ -445,7 +469,7 @@ The auto-suggest engine uses a **priority-ordered, constraint-relaxing** approac
 Analysis passes run before the main scheduling loop. `initialAnalysis()` is a pre-scheduling check called from the UI layer, not from `scheduleAll()` directly. (see [`analysis.ts`](src/engine/analysis.ts))
 
 1. Total pool demand vs. strips — warns if any day's total pools exceed strip count
-2. Per-competition strip deficit — warns if a single competition's pools exceed strips and flighting is not enabled
+2. Per-competition strip deficit — warns if a single competition's pools exceed the effective strip cap (`pool_strip_cap`) and flighting is not enabled
 3. Flighting suggestions — identifies same-day pairs that would benefit from flighting
 4. Multiple-flighting conflicts — warns if more than one flighted competition lands on the same day
 5. Video strip demand — warns if peak video-strip need exceeds video-capable strips
@@ -553,7 +577,7 @@ The engine can auto-suggest configuration values to help organizers start with r
 
 ### Flighting Suggestion
 
-See [Flighting](#flighting) for eligibility rules and mechanics. The engine identifies same-day competition pairs whose combined pool count exceeds strip availability and suggests flighting for the larger event.
+See [Flighting](#flighting) and [Strip Budget](#strip-budget) for trigger rules and mechanics. The engine calls `flagFlightingCandidates()` to find competitions whose pool count exceeds `pool_strip_cap`, then identifies same-day pairs whose combined pool count exceeds `strips_total` but each individually fits within `pool_strip_cap`, and suggests flighting for the larger event.
 
 ### Fencer Count Defaults
 
@@ -725,7 +749,7 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 
 | Constant | Value | Description |
 |---|---|---|
-| Flighting threshold | 200+ fencers | Minimum fencer count for flighted eligibility |
+| Flighting threshold | n_pools > pool_strip_cap (default 80% of strips) | Strip-budget trigger; replaces old 200+ fencer rule |
 | Video strip options | 4, 8, 12, 16 | Available video strip counts (NACs only); 8 is default |
 | Pod captain ratio | 1 per 4 or 8 strips | Varies by bracket size/phase (see [Pod Captains](#pod-captains)) |
 | Fencer count bounds | 2–500 | Valid range per competition |

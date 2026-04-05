@@ -2,8 +2,6 @@ import { BottleneckCause, BottleneckSeverity } from './types.ts'
 import type { Competition, FlightingGroup, Bottleneck } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { crossoverPenalty } from './crossover.ts'
-import { FLIGHTING_MIN_FENCERS, FLIGHTING_ELIGIBLE_CATEGORIES } from './constants.ts'
-
 // ──────────────────────────────────────────────
 // suggestFlightingGroups
 // ──────────────────────────────────────────────
@@ -15,7 +13,8 @@ export interface FlightingGroupSuggestions {
 
 /**
  * For each pair of competitions scheduled on the same day, suggests a flighting group
- * when their combined pool count exceeds strips_total but each fits individually.
+ * when their combined pool count exceeds strips_total but each fits individually within
+ * the per-event pool strip cap (poolStripCap).
  *
  * PRD Section 9.1, Pass 2:
  * - The competition with more pools is designated priority; the other becomes flighted.
@@ -26,6 +25,7 @@ export function suggestFlightingGroups(
   competitions: Competition[],
   stripsTotal: number,
   dayAssignments: Record<string, number>,
+  poolStripCap: number,
 ): FlightingGroupSuggestions {
   const suggestions: FlightingGroup[] = []
   const bottlenecks: Bottleneck[] = []
@@ -38,23 +38,12 @@ export function suggestFlightingGroups(
       // Only consider pairs on the same day
       if (dayAssignments[c1.id] !== dayAssignments[c2.id]) continue
 
-      // Both competitions must meet eligibility: 200+ fencers and eligible category
-      if (
-        c1.fencer_count < FLIGHTING_MIN_FENCERS ||
-        c2.fencer_count < FLIGHTING_MIN_FENCERS ||
-        !FLIGHTING_ELIGIBLE_CATEGORIES.has(c1.category) ||
-        !FLIGHTING_ELIGIBLE_CATEGORIES.has(c2.category)
-      ) continue
-
-      // Fencer counts must be within 40 of each other
-      if (Math.abs(c1.fencer_count - c2.fencer_count) > 40) continue
-
       const c1Pools = computePoolStructure(c1.fencer_count, c1.use_single_pool_override).n_pools
       const c2Pools = computePoolStructure(c2.fencer_count, c2.use_single_pool_override).n_pools
 
-      // Suggest only when combined exceeds strips but each fits individually
+      // Suggest only when combined exceeds strips but each fits within the per-event cap
       if (c1Pools + c2Pools <= stripsTotal) continue
-      if (c1Pools > stripsTotal || c2Pools > stripsTotal) continue
+      if (c1Pools > poolStripCap || c2Pools > poolStripCap) continue
 
       const tied = c1Pools === c2Pools
       // Larger pool count becomes priority; on tie, fall back to id lexicographic order for determinism

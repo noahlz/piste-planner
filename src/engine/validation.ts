@@ -3,6 +3,7 @@ import type { Competition, TournamentConfig, ValidationError } from './types.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration } from './de.ts'
 import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
+import { computeStripCap } from './stripBudget.ts'
 
 function err(field: string, message: string): ValidationError {
   return { field, message, severity: BottleneckSeverity.ERROR }
@@ -140,6 +141,20 @@ export function validateConfig(
       config.video_strips_total < comp.de_round_of_16_strips
     ) {
       errors.push(err('de_video_policy', `${comp.id}: REQUIRED video policy needs ${comp.de_round_of_16_strips} video strips for R16 but only ${config.video_strips_total} available`))
+    }
+
+    // Soft warnings: DE strip requests exceed the computed DE cap.
+    // These are warnings (not errors) because the user may have intentionally overridden.
+    const deStripCap = computeStripCap(
+      config.strips_total,
+      config.max_de_strip_pct,
+      comp.max_de_strip_pct_override,
+    )
+    if (comp.de_round_of_16_strips > deStripCap) {
+      errors.push(warn('de_round_of_16_strips', `${comp.id}: R16 requests ${comp.de_round_of_16_strips} strips but DE cap is ${deStripCap}`))
+    }
+    if (comp.de_finals_strips > deStripCap) {
+      errors.push(warn('de_finals_strips', `${comp.id}: finals requests ${comp.de_finals_strips} strips but DE cap is ${deStripCap}`))
     }
 
     // Resource precondition checks — skip competitions with invalid fencer counts
