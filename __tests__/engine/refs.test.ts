@@ -40,6 +40,8 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
     pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
     de_duration_table: DEFAULT_DE_DURATION_TABLE,
     dayConfigs: [],
+    max_pool_strip_pct: 0.80,
+    max_de_strip_pct: 0.80,
     ...overrides,
   }
 }
@@ -77,6 +79,8 @@ function makeCompetition(overrides: Partial<Competition> = {}): Competition {
     flighting_group_id: null,
     is_priority: false,
     strips_allocated: 4,
+    max_pool_strip_pct_override: null,
+    max_de_strip_pct_override: null,
     ...overrides,
   }
 }

@@ -69,6 +69,8 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
     de_duration_table: DEFAULT_DE_DURATION_TABLE,
     dayConfigs: [],
+    max_pool_strip_pct: 0.80,
+    max_de_strip_pct: 0.80,
     ...overrides,
   }
 }
@@ -101,6 +103,8 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
     flighting_group_id: null,
     is_priority: false,
     strips_allocated: 8,
+    max_pool_strip_pct_override: null,
+    max_de_strip_pct_override: null,
     ...overrides,
   }
 }

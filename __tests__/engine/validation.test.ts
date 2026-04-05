@@ -535,6 +535,74 @@ describe('validateConfig — resource precondition: referee availability', () =>
 })
 
 // ──────────────────────────────────────────────
+// validateConfig — DE strip cap warnings
+// ──────────────────────────────────────────────
+
+describe('validateConfig — DE strip cap warnings', () => {
+  it('warns when de_round_of_16_strips exceeds DE strip cap', () => {
+    // strips_total=24, max_de_strip_pct=0.33 → cap=floor(24*0.33)=7. R16 requests 10 → warn.
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.33 })
+    const comp = makeCompetition({
+      id: 'comp-r16-over',
+      de_round_of_16_strips: 10,
+    })
+    const errors = validateConfig(config, [comp])
+    const warning = errors.find(e => e.field === 'de_round_of_16_strips' && e.severity === 'WARN')
+    expect(warning).toBeDefined()
+    expect(warning?.message).toContain('comp-r16-over')
+    expect(warning?.message).toContain('R16')
+  })
+
+  it('does not warn when de_round_of_16_strips is within DE strip cap', () => {
+    // strips_total=24, max_de_strip_pct=0.80 → cap=19. R16 requests 4 → ok.
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.80 })
+    const comp = makeCompetition({
+      id: 'comp-r16-ok',
+      de_round_of_16_strips: 4,
+    })
+    const errors = validateConfig(config, [comp])
+    expect(errors.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
+  })
+
+  it('warns when de_finals_strips exceeds DE strip cap', () => {
+    // strips_total=24, max_de_strip_pct=0.33 → cap=7. Finals requests 10 → warn.
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.33 })
+    const comp = makeCompetition({
+      id: 'comp-fin-over',
+      de_finals_strips: 10,
+    })
+    const errors = validateConfig(config, [comp])
+    const warning = errors.find(e => e.field === 'de_finals_strips' && e.severity === 'WARN')
+    expect(warning).toBeDefined()
+    expect(warning?.message).toContain('comp-fin-over')
+    expect(warning?.message).toContain('finals')
+  })
+
+  it('does not warn when de_finals_strips is within DE strip cap', () => {
+    // strips_total=24, max_de_strip_pct=0.80 → cap=19. Finals requests 4 → ok.
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.80 })
+    const comp = makeCompetition({
+      id: 'comp-fin-ok',
+      de_finals_strips: 4,
+    })
+    const errors = validateConfig(config, [comp])
+    expect(errors.filter(e => e.field === 'de_finals_strips')).toHaveLength(0)
+  })
+
+  it('per-competition max_de_strip_pct_override takes precedence over global pct', () => {
+    // Global pct=0.33 (cap=7), but override=0.80 (cap=19). R16 requests 10 → fits under 19, no warn.
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.33 })
+    const comp = makeCompetition({
+      id: 'comp-de-override',
+      de_round_of_16_strips: 10,
+      max_de_strip_pct_override: 0.80,
+    })
+    const errors = validateConfig(config, [comp])
+    expect(errors.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
 // validateConfig — regional cut override warnings
 // ──────────────────────────────────────────────
 

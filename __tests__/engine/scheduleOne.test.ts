@@ -14,6 +14,7 @@ import {
 import { createGlobalState } from '../../src/engine/resources.ts'
 import { SchedulingError } from '../../src/engine/dayAssignment.ts'
 import { makeStrips, makeConfig, makeCompetition } from '../helpers/factories.ts'
+import { RefPolicy } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
 // Non-flighted scheduling
@@ -84,7 +85,8 @@ describe('scheduleCompetition — non-flighted', () => {
 
 describe('scheduleCompetition — flighted standalone', () => {
   it('schedules Flight A + buffer + Flight B + admin gap + DE', () => {
-    const config = makeConfig({ strips: makeStrips(24, 4) })
+    // max_de_strip_pct: 1.0 so DE can use all 24 strips (this test is not about strip caps)
+    const config = makeConfig({ strips: makeStrips(24, 4), max_de_strip_pct: 1.0 })
     const comp = makeCompetition({
       id: 'MF-CADET',
       fencer_count: 80,
@@ -346,12 +348,14 @@ describe('scheduleCompetition — team bronze bout', () => {
   })
 
   it('emits DE_FINALS_BRONZE_NO_STRIP when no free strip for bronze', () => {
-    // Minimal strips so all are occupied by gold
+    // Minimal strips so all are occupied by gold.
+    // max_de_strip_pct: 1.0 ensures the single strip is used for DE (floor(1*0.8)=0 would break it).
     const strips = makeStrips(1, 0)
     const config = makeConfig({
       strips,
       strips_total: 1,
       video_strips_total: 0,
+      max_de_strip_pct: 1.0,
     })
     const comp = makeCompetition({
       id: 'MF-TEAM-NOSTRIP',
@@ -518,6 +522,112 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
 // ──────────────────────────────────────────────
 // Individual + team sequencing
 // ──────────────────────────────────────────────
+
+// ──────────────────────────────────────────────
+// Per-event strip cap
+// ──────────────────────────────────────────────
+
+describe('scheduleCompetition — per-event strip cap', () => {
+  // Shared referee availability used across all three cap tests.
+  const capTestRefAvailability = [
+    { day: 0, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
+    { day: 1, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
+    { day: 2, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
+  ]
+
+  it('pool_duration_actual is longer when max_pool_strip_pct forces batching', () => {
+    // 85 fencers → ceil(85/7) = 13 pools.
+    // With strips_total=24 and max_pool_strip_pct=0.50 → effectiveCap=floor(24*0.50)=12.
+    // Using TWO ref policy (no double-duty), 50 refs: staffableStrips=min(12,13,25)=12.
+    // batches=ceil(13/12)=2 → actual = 2 * baseline.
+    // Without the cap (raw 24): staffableStrips=min(24,13,25)=13 → batches=1 → actual=baseline.
+    // max_de_strip_pct: 1.0 so DE does not also get capped (this test is about pool caps only).
+    const strips = makeStrips(24, 4)
+    const config = makeConfig({
+      strips,
+      strips_total: 24,
+      max_pool_strip_pct: 0.50,
+      max_de_strip_pct: 1.0,
+      days_available: 3,
+      referee_availability: capTestRefAvailability,
+    })
+    const comp = makeCompetition({
+      id: 'MF-CAP-TEST',
+      fencer_count: 85,
+      weapon: Weapon.FOIL,
+      ref_policy: RefPolicy.TWO,
+      strips_allocated: 12,
+    })
+
+    const state = createGlobalState(config)
+    const result = scheduleCompetition(comp, state, config, [comp])
+
+    // With effectiveCap=12 and 13 pools, two batches are needed.
+    // pool_duration_actual should be 2x pool_duration_baseline.
+    expect(result.pool_duration_actual).toBe(result.pool_duration_baseline * 2)
+    // The cap limits pool strips to 12 (fewer than the 13 pools available).
+    expect(result.pool_strips_count).toBe(12)
+  })
+
+  it('pool_duration_actual equals baseline when no cap constraint (high pct)', () => {
+    // 85 fencers → ceil(85/7) = 13 pools. max_pool_strip_pct=1.0 → effectiveCap=24.
+    // staffableStrips=min(24,13,25)=13 → batches=1 → actual=baseline.
+    const strips = makeStrips(24, 4)
+    const config = makeConfig({
+      strips,
+      strips_total: 24,
+      max_pool_strip_pct: 1.0,
+      max_de_strip_pct: 1.0,
+      days_available: 3,
+      referee_availability: capTestRefAvailability,
+    })
+    const comp = makeCompetition({
+      id: 'MF-NOCAP-TEST',
+      fencer_count: 85,
+      weapon: Weapon.FOIL,
+      ref_policy: RefPolicy.TWO,
+      strips_allocated: 13,
+    })
+
+    const state = createGlobalState(config)
+    const result = scheduleCompetition(comp, state, config, [comp])
+
+    // All 13 pools run in one batch — actual equals baseline.
+    expect(result.pool_duration_actual).toBe(result.pool_duration_baseline)
+    // No cap: all 13 pools run simultaneously on 13 strips.
+    expect(result.pool_strips_count).toBe(13)
+  })
+
+  it('per-competition max_pool_strip_pct_override takes precedence over global pct', () => {
+    // 85 fencers → 13 pools. Global pct=0.50 (cap=12) but competition override=1.0 (cap=24).
+    // With override, staffableStrips=min(24,13,25)=13 → batches=1 → actual=baseline.
+    const strips = makeStrips(24, 4)
+    const config = makeConfig({
+      strips,
+      strips_total: 24,
+      max_pool_strip_pct: 0.50,
+      max_de_strip_pct: 1.0,
+      days_available: 3,
+      referee_availability: capTestRefAvailability,
+    })
+    const comp = makeCompetition({
+      id: 'MF-OVERRIDE-TEST',
+      fencer_count: 85,
+      weapon: Weapon.FOIL,
+      ref_policy: RefPolicy.TWO,
+      strips_allocated: 13,
+      max_pool_strip_pct_override: 1.0, // override: use all strips
+    })
+
+    const state = createGlobalState(config)
+    const result = scheduleCompetition(comp, state, config, [comp])
+
+    // Override gives effectiveCap=24, so all 13 pools run in one batch.
+    expect(result.pool_duration_actual).toBe(result.pool_duration_baseline)
+    // Override lifts the cap: all 13 pools run simultaneously on 13 strips.
+    expect(result.pool_strips_count).toBe(13)
+  })
+})
 
 describe('scheduleCompetition — individual+team sequencing', () => {
   it('team event is delayed by INDIV_TEAM_MIN_GAP_MINS after individual ends', () => {

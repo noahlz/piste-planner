@@ -5,43 +5,7 @@ import {
   validateFlightingGroup,
 } from '../../src/engine/flighting.ts'
 import { BottleneckCause, BottleneckSeverity, Category } from '../../src/engine/types.ts'
-import type { Competition } from '../../src/engine/types.ts'
-
-// ──────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────
-
-function makeCompetition(overrides: Partial<Competition> = {}): Competition {
-  return {
-    id: 'comp-1',
-    gender: 'MEN',
-    category: 'DIV1',
-    weapon: 'FOIL',
-    event_type: 'INDIVIDUAL',
-    fencer_count: 42,
-    ref_policy: 'AUTO',
-    earliest_start: 0,
-    latest_end: 840,
-    optional: false,
-    vet_age_group: null,
-    use_single_pool_override: false,
-    cut_mode: 'DISABLED',
-    cut_value: 100,
-    de_mode: 'SINGLE_STAGE',
-    de_video_policy: 'BEST_EFFORT',
-    de_finals_strip_id: null,
-    de_finals_strip_requirement: 'IF_AVAILABLE',
-    de_round_of_16_strips: 4,
-    de_round_of_16_requirement: 'IF_AVAILABLE',
-    de_finals_strips: 4,
-    de_finals_requirement: 'IF_AVAILABLE',
-    flighted: false,
-    flighting_group_id: null,
-    is_priority: false,
-    strips_allocated: 0,
-    ...overrides,
-  }
-}
+import { makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // suggestFlightingGroups
@@ -50,12 +14,12 @@ function makeCompetition(overrides: Partial<Competition> = {}): Competition {
 describe('suggestFlightingGroups', () => {
   it('combined > strips, each fits alone → suggests group with larger as priority', () => {
     // ceil(210/7)=30 pools, ceil(203/7)=29 pools; 30+29=59 > 55 strips, each alone fits
-    // Both ≥ 200 fencers (eligible), within 40 of each other (|210-203|=7)
+    // Each fits within poolStripCap (55), combined (59) exceeds stripsTotal (55)
     const c1 = makeCompetition({ id: 'large', fencer_count: 210 }) // 30 pools
     const c2 = makeCompetition({ id: 'small', fencer_count: 203 }) // 29 pools
     const dayAssignments: Record<string, number> = { large: 0, small: 0 }
 
-    const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments)
+    const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 55)
 
     expect(suggestions).toHaveLength(1)
     expect(suggestions[0].priority_competition_id).toBe('large')
@@ -73,7 +37,7 @@ describe('suggestFlightingGroups', () => {
     const c2 = makeCompetition({ id: 'comp-b', fencer_count: 70 }) // 10 pools
     const dayAssignments: Record<string, number> = { 'comp-a': 0, 'comp-b': 0 }
 
-    const { suggestions } = suggestFlightingGroups([c1, c2], 24, dayAssignments)
+    const { suggestions } = suggestFlightingGroups([c1, c2], 24, dayAssignments, 24)
 
     expect(suggestions).toHaveLength(0)
   })
@@ -84,7 +48,7 @@ describe('suggestFlightingGroups', () => {
     const c2 = makeCompetition({ id: 'huge-b', fencer_count: 210 }) // 30 pools
     const dayAssignments: Record<string, number> = { 'huge-a': 0, 'huge-b': 0 }
 
-    const { suggestions } = suggestFlightingGroups([c1, c2], 24, dayAssignments)
+    const { suggestions } = suggestFlightingGroups([c1, c2], 24, dayAssignments, 24)
 
     expect(suggestions).toHaveLength(0)
   })
@@ -92,12 +56,12 @@ describe('suggestFlightingGroups', () => {
   it('tied pool counts → suggest group AND flag FLIGHTING_GROUP_MANUAL_NEEDED', () => {
     // Two competitions with identical fencer counts → identical pool counts
     // ceil(210/7)=30 pools each; 30+30=60 > 55 strips, each fits alone (30 <= 55)
-    // Both ≥ 200 fencers (eligible), within 40 of each other (|210-210|=0)
+    // Each fits within poolStripCap (55), combined (60) exceeds stripsTotal (55)
     const c1 = makeCompetition({ id: 'tied-a', fencer_count: 210 }) // 30 pools
     const c2 = makeCompetition({ id: 'tied-b', fencer_count: 210 }) // 30 pools
     const dayAssignments: Record<string, number> = { 'tied-a': 0, 'tied-b': 0 }
 
-    const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments)
+    const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 55)
 
     expect(suggestions).toHaveLength(1)
     const manualNeeded = bottlenecks.find(
@@ -107,47 +71,47 @@ describe('suggestFlightingGroups', () => {
     expect(manualNeeded?.severity).toBe(BottleneckSeverity.WARN)
   })
 
-  it('under 200 fencers → no suggestion even if pools would overflow', () => {
-    // Both competitions have < FLIGHTING_MIN_FENCERS (200) — neither is eligible
-    const c1 = makeCompetition({ id: 'small-a', fencer_count: 150 })
-    const c2 = makeCompetition({ id: 'small-b', fencer_count: 150 })
-    const dayAssignments: Record<string, number> = { 'small-a': 0, 'small-b': 0 }
+  it('each fits within poolStripCap but combined exceeds stripsTotal → suggests group', () => {
+    // 20 pools each; 20+20=40 > 35 stripsTotal, but each 20 <= 25 poolStripCap
+    const c1 = makeCompetition({ id: 'comp-a', fencer_count: 140 }) // ceil(140/7)=20 pools
+    const c2 = makeCompetition({ id: 'comp-b', fencer_count: 140 }) // 20 pools
+    const dayAssignments: Record<string, number> = { 'comp-a': 0, 'comp-b': 0 }
 
-    const { suggestions } = suggestFlightingGroups([c1, c2], 24, dayAssignments)
+    const { suggestions } = suggestFlightingGroups([c1, c2], 35, dayAssignments, 25)
 
-    expect(suggestions).toHaveLength(0)
+    expect(suggestions).toHaveLength(1)
   })
 
-  it('non-eligible category (Y14) → no suggestion', () => {
-    // Y14 is not in FLIGHTING_ELIGIBLE_CATEGORIES (only CADET, JUNIOR, DIV1)
-    const c1 = makeCompetition({ id: 'y14-comp', fencer_count: 210, category: Category.Y14 })
-    const c2 = makeCompetition({ id: 'div1-comp', fencer_count: 203 })
-    const dayAssignments: Record<string, number> = { 'y14-comp': 0, 'div1-comp': 0 }
-
-    const { suggestions } = suggestFlightingGroups([c1, c2], 55, dayAssignments)
-
-    expect(suggestions).toHaveLength(0)
-  })
-
-  it('fencer counts differ by > 40 → no suggestion', () => {
-    // |250 - 200| = 50 > 40 — too large a gap to flight together
-    // ceil(250/7)=36 pools, ceil(200/7)=29 pools; 36+29=65 > 55, each fits alone
-    const c1 = makeCompetition({ id: 'large-comp', fencer_count: 250 }) // 36 pools
-    const c2 = makeCompetition({ id: 'small-comp', fencer_count: 200 }) // 29 pools
+  it('one event exceeds poolStripCap → no suggestion (individually too big to flight)', () => {
+    // 30 pools > poolStripCap of 24; the event itself is already over cap so flighting is not the fix
+    const c1 = makeCompetition({ id: 'large-comp', fencer_count: 210 }) // 30 pools
+    const c2 = makeCompetition({ id: 'small-comp', fencer_count: 140 }) // 20 pools
     const dayAssignments: Record<string, number> = { 'large-comp': 0, 'small-comp': 0 }
 
-    const { suggestions } = suggestFlightingGroups([c1, c2], 55, dayAssignments)
+    const { suggestions } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 24)
 
     expect(suggestions).toHaveLength(0)
+  })
+
+  it('any category and fencer count → suggested when pools exceed cap (category gate removed)', () => {
+    // Y14 and small fencer count — no longer gated by category or 200-fencer minimum
+    // 20 pools each; combined 40 > 35 stripsTotal, each 20 <= 25 poolStripCap
+    const c1 = makeCompetition({ id: 'y14-comp', fencer_count: 140, category: Category.Y14 }) // 20 pools
+    const c2 = makeCompetition({ id: 'div1-comp', fencer_count: 140 }) // 20 pools
+    const dayAssignments: Record<string, number> = { 'y14-comp': 0, 'div1-comp': 0 }
+
+    const { suggestions } = suggestFlightingGroups([c1, c2], 35, dayAssignments, 25)
+
+    expect(suggestions).toHaveLength(1)
   })
 
   it('competitions on different days → no suggestion for cross-day pairs', () => {
-    // Both meet eligibility (≥ 200, DIV1), but on different days → no suggestion
+    // Same strip conditions but on different days → no suggestion
     const c1 = makeCompetition({ id: 'day0-comp', fencer_count: 210 }) // 30 pools
     const c2 = makeCompetition({ id: 'day1-comp', fencer_count: 203 }) // 29 pools
     const dayAssignments: Record<string, number> = { 'day0-comp': 0, 'day1-comp': 1 }
 
-    const { suggestions } = suggestFlightingGroups([c1, c2], 55, dayAssignments)
+    const { suggestions } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 55)
 
     expect(suggestions).toHaveLength(0)
   })

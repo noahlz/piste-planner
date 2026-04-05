@@ -72,6 +72,10 @@ export function buildTournamentConfig(state: StoreState): {
     MIN_FENCERS,
     pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
     de_duration_table: DEFAULT_DE_DURATION_TABLE,
+
+    // Strip budget defaults — per-event UI overrides to be added in a future task
+    max_pool_strip_pct: 0.80,
+    max_de_strip_pct: 0.80,
   }
 
   const competitions = buildCompetitions(state)
@@ -136,6 +140,10 @@ function buildCompetitions(state: StoreState): Competition[] {
       flighting_group_id: null,
       is_priority: false,
       strips_allocated: 0,
+
+      // Per-event strip budget overrides — always null until UI exposes them
+      max_pool_strip_pct_override: null,
+      max_de_strip_pct_override: null,
     })
   }
 
