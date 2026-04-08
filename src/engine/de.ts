@@ -1,4 +1,4 @@
-import { Weapon, CutMode, EventType } from './types.ts'
+import { Weapon, CutMode, EventType, Phase } from './types.ts'
 import type { DeBlockDurations } from './types.ts'
 import { DE_FINALS_MIN_MINS } from './constants.ts'
 import { computeDeFencerCount } from './pools.ts'
@@ -33,25 +33,25 @@ export function computeBracketSize(
 /**
  * Returns the ordered list of DE phases for a given bracket size.
  *
- * PRD Section 10.1:
+ * METHODOLOGY.md §DE Modes:
  * - bracket ≥ 64: prelims (top-half bouts before round of 16) + R16 + finals
  * - bracket ≥ 16: R16 + finals
  * - bracket < 16: finals only
  */
-export function dePhasesForBracket(bracketSize: number): string[] {
+export function dePhasesForBracket(bracketSize: number): Phase[] {
   if (bracketSize >= 64) {
-    return ['DE_PRELIMS', 'DE_ROUND_OF_16', 'DE_FINALS']
+    return [Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16, Phase.DE_FINALS]
   }
   if (bracketSize >= 16) {
-    return ['DE_ROUND_OF_16', 'DE_FINALS']
+    return [Phase.DE_ROUND_OF_16, Phase.DE_FINALS]
   }
-  return ['DE_FINALS']
+  return [Phase.DE_FINALS]
 }
 
 /**
  * Splits total DE time across phases proportionally by bout count.
  *
- * PRD Section 10.2 bout allocation:
+ * METHODOLOGY.md §DE Phase Breakdown (for Staged DEs) bout allocation:
  * - total_bouts = bracket_size / 2
  * - prelims_bouts = max(total_bouts - 30 - 1, 0)  (rounds above 32)
  * - r16_bouts = min(30, total_bouts - 1)  (rounds 16 through SF)

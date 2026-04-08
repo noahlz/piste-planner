@@ -56,7 +56,7 @@ function buildCompetitions(fencerCounts: Record<string, number>): Competition[] 
       cut_value: cut.value,
       de_video_policy: videoPolicy,
       de_mode: (!isTeam && videoPolicy === VideoPolicy.REQUIRED)
-        ? DeMode.STAGED_DE_BLOCKS
+        ? DeMode.STAGED
         : DeMode.SINGLE_STAGE,
       strips_allocated: Math.max(2, Math.ceil(fencerCount / 7)),
     })

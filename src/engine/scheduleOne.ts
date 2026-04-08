@@ -1,5 +1,5 @@
 /**
- * Schedule One Competition — PRD Section 13
+ * Schedule One Competition — METHODOLOGY.md §Scheduling Algorithm Phase 5
  *
  * Core single-competition scheduler. Given a competition, mutable global state,
  * tournament config, and the full competition list, assigns a day, allocates
@@ -10,12 +10,13 @@ import {
   EventType,
   DeMode,
   VideoPolicy,
+  Phase,
   BottleneckCause,
   BottleneckSeverity,
   dayStart,
   dayEnd,
 } from './types.ts'
-import type { Competition, TournamentConfig, GlobalState, ScheduleResult } from './types.ts'
+import type { Competition, TournamentConfig, GlobalState, ScheduleResult, PoolStructure, RefResolution } from './types.ts'
 import {
   computePoolStructure,
   resolveRefsPerPool,
@@ -26,7 +27,7 @@ import {
 import { computeBracketSize, calculateDeDuration, dePhasesForBracket, deBlockDurations } from './de.ts'
 import { refsAvailableOnDay } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
-import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot } from './resources.ts'
+import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, snapshotState, restoreState } from './resources.ts'
 import { assignDay, findEarlierSlotSameDay, SchedulingError } from './dayAssignment.ts'
 import { computeStripCap } from './stripBudget.ts'
 
@@ -50,7 +51,7 @@ export function scheduleCompetition(
       if (sequencedStart > notBefore) {
         state.bottlenecks.push({
           competition_id: competition.id,
-          phase: 'SEQUENCING',
+          phase: Phase.SEQUENCING,
           cause: BottleneckCause.SEQUENCING_CONSTRAINT,
           severity: BottleneckSeverity.INFO,
           delay_mins: sequencedStart - notBefore,
@@ -89,7 +90,7 @@ export function scheduleCompetition(
     flighting_group_id: competition.flighting_group_id,
     pool_start: null,
     pool_end: null,
-    pool_strips_count: 0,
+    pool_strip_count: 0,
     pool_refs_count: 0,
     flight_a_start: null,
     flight_a_end: null,
@@ -108,16 +109,16 @@ export function scheduleCompetition(
     de_video_policy: competition.de_video_policy,
     de_start: null,
     de_end: null,
-    de_strips_count: 0,
+    de_strip_count: 0,
     de_prelims_start: null,
     de_prelims_end: null,
-    de_prelims_strips: 0,
+    de_prelims_strip_count: 0,
     de_round_of_16_start: null,
     de_round_of_16_end: null,
-    de_round_of_16_strips: 0,
+    de_round_of_16_strip_count: 0,
     de_finals_start: null,
     de_finals_end: null,
-    de_finals_strips: 0,
+    de_finals_strip_count: 0,
     de_bronze_start: null,
     de_bronze_end: null,
     de_bronze_strip_id: null,
@@ -135,15 +136,13 @@ export function scheduleCompetition(
   let rescheduleAttempts = 0
   const MAX_ATTEMPTS = config.MAX_RESCHEDULE_ATTEMPTS
 
-  // This loop implements the GOTO retry_from_pool_allocation pattern from the PRD.
+  // This loop implements the GOTO retry_from_pool_allocation pattern from METHODOLOGY.md §Scheduling Algorithm Phase 5.
   // Each iteration re-runs pool + DE allocation with a potentially earlier notBefore.
   // On retry, we must restore resource state to avoid leaking strips/refs from the
   // failed attempt — otherwise subsequent attempts see phantom resource occupancy.
   for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
     // Snapshot mutable state so we can roll back on retry
-    const stripSnapshot = [...state.strip_free_at]
-    const refsSnapshot = JSON.parse(JSON.stringify(state.refs_in_use_by_day))
-    const bottleneckCount = state.bottlenecks.length
+    const snapshot = snapshotState(state)
 
     let poolEnd: number
 
@@ -152,106 +151,15 @@ export function scheduleCompetition(
       poolEnd = allocateFlightedPools(competition, poolStructure, refRes, wDuration, notBefore, day, state, config, result)
     } else {
       // ── Non-flighted (or flighting group — treated as non-flighted for pool allocation) ──
-      const effectiveCap = computeStripCap(
-        config.strips_total,
-        config.max_pool_strip_pct,
-        competition.max_pool_strip_pct_override,
-      )
-      const poolDur = estimatePoolDuration(
-        poolStructure.n_pools,
-        wDuration,
-        effectiveCap,
-        availRefs,
-        refRes.refs_per_pool,
-      )
-      result.pool_duration_actual = poolDur.actual_duration
-
-      const window = earliestResourceWindow(
-        poolDur.effective_parallelism,
-        refRes.refs_needed,
-        competition.weapon,
-        false,
-        notBefore,
-        day,
-        state,
-        config,
-        competition.id,
-        'POOLS',
-      )
-
-      if (window.type === 'NO_WINDOW') {
-        throw new SchedulingError(
-          BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          `No resource window found for ${competition.id} pools on day ${day}`,
-        )
-      }
-
-      const T = window.startTime
-      poolEnd = T + poolDur.actual_duration
-      allocateStrips(state, window.stripIndices, poolEnd)
-      allocateRefs(state, day, competition.weapon, refRes.refs_needed, T, poolEnd)
-      state.bottlenecks.push(...window.bottlenecks)
-
-      result.pool_start = T
-      result.pool_end = poolEnd
-      result.pool_strips_count = window.stripIndices.length
-      result.pool_refs_count = refRes.refs_needed
+      poolEnd = allocateNonFlightedPools(competition, poolStructure, refRes, wDuration, notBefore, day, state, config, result)
     }
 
     // ── DEADLINE CHECK (post-pool) ──
-    if (poolEnd > dayEnd(day, config)) {
-      rescheduleAttempts++
-      if (rescheduleAttempts > MAX_ATTEMPTS) {
-        state.strip_free_at = [...stripSnapshot]
-        state.refs_in_use_by_day = JSON.parse(JSON.stringify(refsSnapshot))
-        state.bottlenecks.length = bottleneckCount
-        state.bottlenecks.push({
-          competition_id: competition.id,
-          phase: 'DEADLINE_CHECK',
-          cause: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          severity: BottleneckSeverity.ERROR,
-          delay_mins: 0,
-          message: `Exhausted ${MAX_ATTEMPTS} reschedule attempts for ${competition.id}`,
-        })
-        throw new SchedulingError(
-          BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          `Exhausted ${MAX_ATTEMPTS} reschedule attempts for ${competition.id}`,
-        )
-      }
-      const earlierSlot = findEarlierSlotSameDay(competition, poolStructure, day, state, config)
-      if (earlierSlot !== null) {
-        // Restore resource state before retrying — prevents leaked allocations
-        state.strip_free_at = [...stripSnapshot]
-        state.refs_in_use_by_day = JSON.parse(JSON.stringify(refsSnapshot))
-        state.bottlenecks.length = bottleneckCount
-        notBefore = earlierSlot
-        state.bottlenecks.push({
-          competition_id: competition.id,
-          phase: 'DEADLINE_CHECK',
-          cause: BottleneckCause.DEADLINE_BREACH,
-          severity: BottleneckSeverity.WARN,
-          delay_mins: 0,
-          message: `Rescheduled to earlier slot (attempt ${rescheduleAttempts})`,
-        })
-        continue // retry pool + DE allocation
-      } else {
-        // Restore state before throwing so caller doesn't see phantom allocations
-        state.strip_free_at = [...stripSnapshot]
-        state.refs_in_use_by_day = JSON.parse(JSON.stringify(refsSnapshot))
-        state.bottlenecks.length = bottleneckCount
-        state.bottlenecks.push({
-          competition_id: competition.id,
-          phase: 'DEADLINE_CHECK',
-          cause: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          severity: BottleneckSeverity.ERROR,
-          delay_mins: 0,
-          message: `No earlier slot found for ${competition.id} on day ${day}`,
-        })
-        throw new SchedulingError(
-          BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          `No earlier slot found for ${competition.id} on day ${day}`,
-        )
-      }
+    {
+      const check = checkDeadline(poolEnd > dayEnd(day, config), competition, poolStructure, day, state, config, snapshot, rescheduleAttempts, MAX_ATTEMPTS, 'pools')
+      rescheduleAttempts = check.rescheduleAttempts
+      if (check.result.action === 'retry') { notBefore = check.result.notBefore; continue }
+      if (check.result.action === 'throw') throw check.result.error
     }
 
     // ── ADMIN GAP ──
@@ -272,66 +180,20 @@ export function scheduleCompetition(
     const nextDayStart = dayStart(day + 1, config)
     if (deTotalEnd >= nextDayStart) {
       // Restore state before throwing so caller doesn't see phantom allocations
-      state.strip_free_at = [...stripSnapshot]
-      state.refs_in_use_by_day = JSON.parse(JSON.stringify(refsSnapshot))
-      state.bottlenecks.length = bottleneckCount
+      restoreState(state, snapshot)
       throw new SchedulingError(
         BottleneckCause.SAME_DAY_VIOLATION,
         `${competition.id} DE ends at ${deTotalEnd} — crosses day ${day} boundary (next day starts at ${nextDayStart})`,
       )
     }
 
-    if (deTotalEnd > dayEnd(day, config) || deTotalEnd > competition.latest_end) {
-      rescheduleAttempts++
-      if (rescheduleAttempts > MAX_ATTEMPTS) {
-        state.strip_free_at = [...stripSnapshot]
-        state.refs_in_use_by_day = JSON.parse(JSON.stringify(refsSnapshot))
-        state.bottlenecks.length = bottleneckCount
-        state.bottlenecks.push({
-          competition_id: competition.id,
-          phase: 'DEADLINE_CHECK',
-          cause: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          severity: BottleneckSeverity.ERROR,
-          delay_mins: 0,
-          message: `Exhausted ${MAX_ATTEMPTS} reschedule attempts for ${competition.id} (DE overrun)`,
-        })
-        throw new SchedulingError(
-          BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          `Exhausted ${MAX_ATTEMPTS} reschedule attempts for ${competition.id} (DE overrun)`,
-        )
-      }
-      const earlierSlot = findEarlierSlotSameDay(competition, poolStructure, day, state, config)
-      if (earlierSlot !== null) {
-        state.strip_free_at = [...stripSnapshot]
-        state.refs_in_use_by_day = JSON.parse(JSON.stringify(refsSnapshot))
-        state.bottlenecks.length = bottleneckCount
-        notBefore = earlierSlot
-        state.bottlenecks.push({
-          competition_id: competition.id,
-          phase: 'DEADLINE_CHECK',
-          cause: BottleneckCause.DEADLINE_BREACH,
-          severity: BottleneckSeverity.WARN,
-          delay_mins: 0,
-          message: `Rescheduled to earlier slot (attempt ${rescheduleAttempts}, DE overrun)`,
-        })
-        continue // retry from pool allocation
-      } else {
-        state.strip_free_at = [...stripSnapshot]
-        state.refs_in_use_by_day = JSON.parse(JSON.stringify(refsSnapshot))
-        state.bottlenecks.length = bottleneckCount
-        state.bottlenecks.push({
-          competition_id: competition.id,
-          phase: 'DEADLINE_CHECK',
-          cause: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          severity: BottleneckSeverity.ERROR,
-          delay_mins: 0,
-          message: `No earlier slot found for ${competition.id} on day ${day} (DE overrun)`,
-        })
-        throw new SchedulingError(
-          BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-          `No earlier slot found for ${competition.id} on day ${day} (DE overrun)`,
-        )
-      }
+    // ── DEADLINE CHECK (post-DE) ──
+    {
+      const deOverrun = deTotalEnd > dayEnd(day, config) || deTotalEnd > competition.latest_end
+      const check = checkDeadline(deOverrun, competition, poolStructure, day, state, config, snapshot, rescheduleAttempts, MAX_ATTEMPTS, 'DE overrun')
+      rescheduleAttempts = check.rescheduleAttempts
+      if (check.result.action === 'retry') { notBefore = check.result.notBefore; continue }
+      if (check.result.action === 'throw') throw check.result.error
     }
 
     // Success — record and return
@@ -388,7 +250,7 @@ function allocateFlightedPools(
   const windowA = earliestResourceWindow(
     flightAPools, flightARefsNeeded,
     competition.weapon, false, notBefore, day,
-    state, config, competition.id, 'FLIGHT_A',
+    state, config, competition.id, Phase.FLIGHT_A,
   )
   if (windowA.type === 'NO_WINDOW') {
     throw new SchedulingError(
@@ -423,7 +285,7 @@ function allocateFlightedPools(
   const windowB = earliestResourceWindow(
     flightBPools, flightBRefsNeeded,
     competition.weapon, false, flightBIdeal, day,
-    state, config, competition.id, 'FLIGHT_B',
+    state, config, competition.id, Phase.FLIGHT_B,
   )
   if (windowB.type === 'NO_WINDOW') {
     throw new SchedulingError(
@@ -440,7 +302,7 @@ function allocateFlightedPools(
   if (Tb > flightBIdeal + config.THRESHOLD_MINS) {
     state.bottlenecks.push({
       competition_id: competition.id,
-      phase: 'FLIGHT_B',
+      phase: Phase.FLIGHT_B,
       cause: BottleneckCause.FLIGHT_B_DELAYED,
       severity: BottleneckSeverity.WARN,
       delay_mins: Tb - flightBIdeal,
@@ -456,7 +318,7 @@ function allocateFlightedPools(
   result.flight_b_strips = windowB.stripIndices.length
   result.flight_b_refs = flightBRefsNeeded
   result.pool_end = flightBEnd
-  result.pool_strips_count = windowA.stripIndices.length + windowB.stripIndices.length
+  result.pool_strip_count = windowA.stripIndices.length + windowB.stripIndices.length
   result.pool_refs_count = flightARefsNeeded + flightBRefsNeeded
   result.pool_duration_actual = flightADur.actual_duration + flightBDur.actual_duration
 
@@ -464,7 +326,155 @@ function allocateFlightedPools(
 }
 
 // ──────────────────────────────────────────────
-// SINGLE_STAGE DE execution — PRD Section 10.4
+// Deadline check helper — shared by post-pool and post-DE checks
+// ──────────────────────────────────────────────
+
+type DeadlineAction = { action: 'ok' } | { action: 'retry'; notBefore: number } | { action: 'throw'; error: SchedulingError }
+
+function checkDeadline(
+  overrun: boolean,
+  competition: Competition,
+  poolStructure: PoolStructure,
+  day: number,
+  state: GlobalState,
+  config: TournamentConfig,
+  snapshot: GlobalState,
+  rescheduleAttempts: number,
+  maxAttempts: number,
+  context: string,
+): { result: DeadlineAction; rescheduleAttempts: number } {
+  if (!overrun) {
+    return { result: { action: 'ok' }, rescheduleAttempts }
+  }
+
+  rescheduleAttempts++
+
+  if (rescheduleAttempts > maxAttempts) {
+    restoreState(state, snapshot)
+    state.bottlenecks.push({
+      competition_id: competition.id,
+      phase: Phase.DEADLINE_CHECK,
+      cause: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+      severity: BottleneckSeverity.ERROR,
+      delay_mins: 0,
+      message: `Exhausted ${maxAttempts} reschedule attempts for ${competition.id}${context === 'pools' ? '' : ` (${context})`}`,
+    })
+    return {
+      result: {
+        action: 'throw',
+        error: new SchedulingError(
+          BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+          `Exhausted ${maxAttempts} reschedule attempts for ${competition.id}${context === 'pools' ? '' : ` (${context})`}`,
+        ),
+      },
+      rescheduleAttempts,
+    }
+  }
+
+  const earlierSlot = findEarlierSlotSameDay(competition, poolStructure, day, state, config)
+
+  if (earlierSlot !== null) {
+    // Restore resource state before retrying — prevents leaked allocations
+    restoreState(state, snapshot)
+    state.bottlenecks.push({
+      competition_id: competition.id,
+      phase: Phase.DEADLINE_CHECK,
+      cause: BottleneckCause.DEADLINE_BREACH,
+      severity: BottleneckSeverity.WARN,
+      delay_mins: 0,
+      message: `Rescheduled to earlier slot (attempt ${rescheduleAttempts}${context === 'pools' ? '' : `, ${context}`})`,
+    })
+    return { result: { action: 'retry', notBefore: earlierSlot }, rescheduleAttempts }
+  }
+
+  // Restore state before throwing so caller doesn't see phantom allocations
+  restoreState(state, snapshot)
+  state.bottlenecks.push({
+    competition_id: competition.id,
+    phase: Phase.DEADLINE_CHECK,
+    cause: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+    severity: BottleneckSeverity.ERROR,
+    delay_mins: 0,
+    message: `No earlier slot found for ${competition.id} on day ${day}${context === 'pools' ? '' : ` (${context})`}`,
+  })
+  return {
+    result: {
+      action: 'throw',
+      error: new SchedulingError(
+        BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+        `No earlier slot found for ${competition.id} on day ${day}${context === 'pools' ? '' : ` (${context})`}`,
+      ),
+    },
+    rescheduleAttempts,
+  }
+}
+
+// ──────────────────────────────────────────────
+// Non-flighted pool allocation (non-flighted and flighting-group competitions)
+// ──────────────────────────────────────────────
+
+function allocateNonFlightedPools(
+  competition: Competition,
+  poolStructure: PoolStructure,
+  refRes: RefResolution,
+  wDuration: number,
+  notBefore: number,
+  day: number,
+  state: GlobalState,
+  config: TournamentConfig,
+  result: ScheduleResult,
+): number {
+  const availRefs = refsAvailableOnDay(day, competition.weapon, config)
+  const effectiveCap = computeStripCap(
+    config.strips_total,
+    config.max_pool_strip_pct,
+    competition.max_pool_strip_pct_override,
+  )
+  const poolDur = estimatePoolDuration(
+    poolStructure.n_pools,
+    wDuration,
+    effectiveCap,
+    availRefs,
+    refRes.refs_per_pool,
+  )
+  result.pool_duration_actual = poolDur.actual_duration
+
+  const window = earliestResourceWindow(
+    poolDur.effective_parallelism,
+    refRes.refs_needed,
+    competition.weapon,
+    false,
+    notBefore,
+    day,
+    state,
+    config,
+    competition.id,
+    Phase.POOLS,
+  )
+
+  if (window.type === 'NO_WINDOW') {
+    throw new SchedulingError(
+      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+      `No resource window found for ${competition.id} pools on day ${day}`,
+    )
+  }
+
+  const T = window.startTime
+  const poolEnd = T + poolDur.actual_duration
+  allocateStrips(state, window.stripIndices, poolEnd)
+  allocateRefs(state, day, competition.weapon, refRes.refs_needed, T, poolEnd)
+  state.bottlenecks.push(...window.bottlenecks)
+
+  result.pool_start = T
+  result.pool_end = poolEnd
+  result.pool_strip_count = window.stripIndices.length
+  result.pool_refs_count = refRes.refs_needed
+
+  return poolEnd
+}
+
+// ──────────────────────────────────────────────
+// SINGLE_STAGE DE execution — METHODOLOGY.md §DE Modes
 // ──────────────────────────────────────────────
 
 function executeSingleBlockDe(
@@ -519,7 +529,7 @@ function executeSingleBlockDe(
 
   result.de_start = deStart
   result.de_end = deEnd
-  result.de_strips_count = deStrips
+  result.de_strip_count = deStrips
   result.de_duration_actual = actualDur
   result.de_total_end = deEnd
 
@@ -530,7 +540,7 @@ function executeSingleBlockDe(
 }
 
 // ──────────────────────────────────────────────
-// STAGED_DE_BLOCKS execution — PRD Section 10.5
+// STAGED execution — METHODOLOGY.md §DE Phase Breakdown (for Staged DEs)
 // ──────────────────────────────────────────────
 
 function executeThreeBlockDe(
@@ -557,7 +567,7 @@ function executeThreeBlockDe(
   let totalActual = 0
 
   // ── DE_PRELIMS (bracket >= 64) ──
-  if (phases.includes('DE_PRELIMS')) {
+  if (phases.includes(Phase.DE_PRELIMS)) {
     const prelimsWindow = earliestResourceWindow(
       Math.min(deOptimal, config.strips_total),
       config.DE_REFS,
@@ -568,7 +578,7 @@ function executeThreeBlockDe(
       state,
       config,
       competition.id,
-      'DE_PRELIMS',
+      Phase.DE_PRELIMS,
     )
 
     if (prelimsWindow.type === 'NO_WINDOW') {
@@ -590,7 +600,7 @@ function executeThreeBlockDe(
 
     result.de_prelims_start = prelimsStart
     result.de_prelims_end = prelimsEnd
-    result.de_prelims_strips = prelimsStrips
+    result.de_prelims_strip_count = prelimsStrips
     totalActual += prelimsActual
     currentStart = prelimsEnd
   }
@@ -607,7 +617,7 @@ function executeThreeBlockDe(
     state,
     config,
     competition.id,
-    'DE_ROUND_OF_16',
+    Phase.DE_ROUND_OF_16,
   )
 
   if (r16Window.type === 'NO_WINDOW') {
@@ -629,7 +639,7 @@ function executeThreeBlockDe(
 
   result.de_round_of_16_start = r16Start
   result.de_round_of_16_end = r16End
-  result.de_round_of_16_strips = r16Strips
+  result.de_round_of_16_strip_count = r16Strips
   totalActual += r16Actual
 
   // ── DE_FINALS ──
@@ -644,7 +654,7 @@ function executeThreeBlockDe(
     state,
     config,
     competition.id,
-    'DE_FINALS',
+    Phase.DE_FINALS,
   )
 
   if (finWindow.type === 'NO_WINDOW') {
@@ -664,7 +674,7 @@ function executeThreeBlockDe(
 
   result.de_finals_start = finStart
   result.de_finals_end = finEnd
-  result.de_finals_strips = finWindow.stripIndices.length
+  result.de_finals_strip_count = finWindow.stripIndices.length
   totalActual += finActual
 
   result.de_duration_actual = totalActual
@@ -732,11 +742,11 @@ function allocateBronzeBout(
 
   if (bronzeIdx === null) {
     // No free strip for bronze — emit bottleneck
-    // Severity depends on video policy per PRD Section 10.6
+    // Severity depends on video policy per METHODOLOGY.md §Video Replay Policy
     const severity = videoRequired ? BottleneckSeverity.WARN : BottleneckSeverity.INFO
     state.bottlenecks.push({
       competition_id: competition.id,
-      phase: 'DE_FINALS_BRONZE',
+      phase: Phase.DE_FINALS_BRONZE,
       cause: BottleneckCause.DE_FINALS_BRONZE_NO_STRIP,
       severity,
       delay_mins: 0,

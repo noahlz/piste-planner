@@ -15,7 +15,7 @@ import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.
 export interface CompetitionStripHours {
   /** Total estimated strip-hours consumed by this competition (pools + DE). */
   total_strip_hours: number
-  /** Strip-hours consumed on video-capable strips (R16 + finals for STAGED_DE_BLOCKS only). */
+  /** Strip-hours consumed on video-capable strips (R16 + finals for STAGED only). */
   video_strip_hours: number
 }
 
@@ -194,7 +194,7 @@ function teamDeStripHours(
  * DE strip-hours depend on de_capacity_mode (pod or greedy) for individual events.
  * Team events always use the greedy/round-by-round model.
  *
- * For STAGED_DE_BLOCKS: prelims use the selected capacity model; R16 and finals
+ * For STAGED: prelims use the selected capacity model; R16 and finals
  * phases use their own strip counts and durations unchanged.
  */
 export function estimateCompetitionStripHours(
@@ -234,7 +234,7 @@ export function estimateCompetitionStripHours(
   // Team events always use the team round-by-round model
   if (competition.event_type === EventType.TEAM) {
     de_strip_hours = teamDeStripHours(competition.fencer_count, competition.weapon)
-  } else if (competition.de_mode === DeMode.STAGED_DE_BLOCKS) {
+  } else if (competition.de_mode === DeMode.STAGED) {
     // Split DE into prelims / R16 / finals phases and attribute strip-hours separately.
     // R16 and finals phases require video strips (per competition policy).
     const blocks = deBlockDurations(bracketSize, totalDeDuration)
@@ -284,9 +284,9 @@ export function estimateCompetitionStripHours(
 }
 
 /**
- * Prelims strip-hours for STAGED_DE_BLOCKS.
+ * Prelims strip-hours for STAGED.
  *
- * For STAGED_DE_BLOCKS, R16/finals phases already use their own strip counts
+ * For STAGED, R16/finals phases already use their own strip counts
  * and empirical durations. The prelims phase uses the flat formula
  * `stripsAllocated × prelimsDuration / 60` — the pod sub-bracket math cancels
  * out after duration scaling because prelims duration is already empirical.

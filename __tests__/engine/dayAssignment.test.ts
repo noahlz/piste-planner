@@ -50,7 +50,6 @@ function makePoolStructure(overrides: Partial<PoolStructure> = {}): PoolStructur
   return {
     n_pools: 8,
     pool_sizes: Array(8).fill(7),
-    pool_round_duration: 90,
     ...overrides,
   }
 }
@@ -140,7 +139,7 @@ describe('constraintScore', () => {
   it('STAGED_DE + REQUIRED video → higher score', () => {
     const stagedVideoComp = makeCompetition({
       id: 'staged-video',
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
     })
 
@@ -152,9 +151,9 @@ describe('constraintScore', () => {
 
     // Many competitions requiring video — scarce resource
     const manyVideoComps: Competition[] = [
-      makeCompetition({ id: 'v1', de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
-      makeCompetition({ id: 'v2', de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
-      makeCompetition({ id: 'v3', de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
+      makeCompetition({ id: 'v1', de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
+      makeCompetition({ id: 'v2', de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
+      makeCompetition({ id: 'v3', de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
       stagedVideoComp,
       singleBlockComp,
     ]
@@ -407,8 +406,8 @@ describe('totalDayPenalty', () => {
     expect(penalty).toBeLessThan(5.0)
   })
 
-  it('INDIV_TEAM_HARD_BLOCKS: DIV1 ind + JUNIOR team same weapon+gender on same day → Infinity (level 0)', () => {
-    // DIV1 individual and JUNIOR team share fencer pool → hard block (INDIV_TEAM_HARD_BLOCKS entry)
+  it('INDIV_TEAM_RELAXABLE_BLOCKS: DIV1 ind + JUNIOR team same weapon+gender on same day → Infinity (level 0)', () => {
+    // DIV1 individual and JUNIOR team share fencer pool → hard block (INDIV_TEAM_RELAXABLE_BLOCKS entry)
     const div1IndComp = makeCompetition({
       id: 'div1-m-foil-ind',
       category: Category.DIV1,
@@ -434,8 +433,8 @@ describe('totalDayPenalty', () => {
     expect(penalty).toBe(Infinity)
   })
 
-  it('INDIV_TEAM_HARD_BLOCKS: reverse direction — JUNIOR ind + DIV1 team same weapon+gender → Infinity (level 0)', () => {
-    // JUNIOR individual and DIV1 team — reversed entry from INDIV_TEAM_HARD_BLOCKS
+  it('INDIV_TEAM_RELAXABLE_BLOCKS: reverse direction — JUNIOR ind + DIV1 team same weapon+gender → Infinity (level 0)', () => {
+    // JUNIOR individual and DIV1 team — reversed entry from INDIV_TEAM_RELAXABLE_BLOCKS
     const juniorIndComp = makeCompetition({
       id: 'junior-m-foil-ind',
       category: Category.JUNIOR,
@@ -461,7 +460,7 @@ describe('totalDayPenalty', () => {
     expect(penalty).toBe(Infinity)
   })
 
-  it('INDIV_TEAM_HARD_BLOCKS: overridable at level 3 — DIV1 ind + JUNIOR team → NOT Infinity', () => {
+  it('INDIV_TEAM_RELAXABLE_BLOCKS: overridable at level 3 — DIV1 ind + JUNIOR team → NOT Infinity', () => {
     const div1IndComp = makeCompetition({
       id: 'div1-m-foil-ind',
       category: Category.DIV1,
@@ -487,7 +486,7 @@ describe('totalDayPenalty', () => {
     expect(penaltyL3).not.toBe(Infinity)
   })
 
-  it('INDIV_TEAM_HARD_BLOCKS: different weapon does NOT trigger block', () => {
+  it('INDIV_TEAM_RELAXABLE_BLOCKS: different weapon does NOT trigger block', () => {
     // DIV1 individual FOIL vs JUNIOR team EPEE — different weapon → no hard block
     const div1IndFoil = makeCompetition({
       id: 'div1-m-foil-ind',
@@ -514,7 +513,7 @@ describe('totalDayPenalty', () => {
     expect(penalty).not.toBe(Infinity)
   })
 
-  it('INDIV_TEAM_HARD_BLOCKS: different gender does NOT trigger block', () => {
+  it('INDIV_TEAM_RELAXABLE_BLOCKS: different gender does NOT trigger block', () => {
     // DIV1 individual MEN vs JUNIOR team WOMEN — different gender → no hard block
     const div1IndMen = makeCompetition({
       id: 'div1-m-foil-ind',
@@ -819,7 +818,7 @@ describe('assignDay', () => {
     const config = makeConfig({ days_available: 2 })
     const state = makeGlobalState()
     const allComps = [comp1, comp2, comp3]
-    const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6), pool_round_duration: 90 })
+    const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6) })
 
     // Schedule comp1 first — should get day 0 (no conflicts)
     const { day, level } = assignDay(comp1, poolStructure, state, config, allComps)
@@ -866,7 +865,7 @@ describe('assignDay', () => {
     }
 
     const allComps = [comp, conflictComp]
-    const poolStructure = makePoolStructure({ n_pools: 3, pool_sizes: [7, 7, 6], pool_round_duration: 90 })
+    const poolStructure = makePoolStructure({ n_pools: 3, pool_sizes: [7, 7, 6] })
 
     // Levels 0, 1, 2 will score day 0 as Infinity (same population block)
     // Level 3 ignores Infinity blocks → day 0 becomes valid
@@ -895,7 +894,7 @@ describe('assignDay', () => {
     })
 
     const allComps = [comp]
-    const poolStructure = makePoolStructure({ n_pools: 2, pool_sizes: [5, 5], pool_round_duration: 90 })
+    const poolStructure = makePoolStructure({ n_pools: 2, pool_sizes: [5, 5] })
 
     // All strips occupied forever on the only day
     const state: GlobalState = {
@@ -1119,7 +1118,7 @@ describe('findEarlierSlotSameDay', () => {
       strips_allocated: 4,
       fencer_count: 30,
     })
-    const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6), pool_round_duration: 90 })
+    const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6) })
     const config = makeConfig({
       dayConfigs: [
         { day_start_time: 480, day_end_time: 1320 },
@@ -1149,7 +1148,7 @@ describe('findEarlierSlotSameDay', () => {
       strips_allocated: 4,
       fencer_count: 30,
     })
-    const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6), pool_round_duration: 90 })
+    const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6) })
     const config = makeConfig({
       days_available: 1,
       strips: makeStrips(24, 4),
@@ -1226,7 +1225,7 @@ describe('capacity penalty in totalDayPenalty', () => {
     expect(penaltyHeavy).toBeGreaterThan(penaltyLight)
   })
 
-  it('day with 3 STAGED_DE_BLOCKS events already assigned → video-strip penalty applied', () => {
+  it('day with 3 STAGED events already assigned → video-strip penalty applied', () => {
     // 6 video strips in config; each STAGED event needs de_round_of_16_strips + de_finals_strips
     // Default: de_round_of_16_strips=4, de_finals_strips=2 → 6 each
     // 3 events already on day: peak R16 demand = 3×4 = 12 > 6 → video penalty
@@ -1238,7 +1237,7 @@ describe('capacity penalty in totalDayPenalty', () => {
       scheduleEntries[id] = makeScheduleResult(id, 0)
       allComps.push(makeCompetition({
         id,
-        de_mode: DeMode.STAGED_DE_BLOCKS,
+        de_mode: DeMode.STAGED,
         de_round_of_16_strips: 4,
         de_finals_strips: 2,
         fencer_count: 64,
@@ -1248,7 +1247,7 @@ describe('capacity penalty in totalDayPenalty', () => {
 
     const candidateStaged = makeCompetition({
       id: 'staged-candidate',
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_round_of_16_strips: 4,
       de_finals_strips: 2,
       fencer_count: 64,

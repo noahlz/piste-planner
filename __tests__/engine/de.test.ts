@@ -6,7 +6,7 @@ import {
   deBlockDurations,
   calculateDeDuration,
 } from '../../src/engine/de.ts'
-import { CutMode, EventType, Weapon } from '../../src/engine/types.ts'
+import { CutMode, EventType, Weapon, Phase } from '../../src/engine/types.ts'
 import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
 
 describe('nextPowerOf2', () => {
@@ -48,23 +48,23 @@ describe('computeBracketSize', () => {
 
 describe('dePhasesForBracket', () => {
   it('bracket 64 → [DE_PRELIMS, DE_ROUND_OF_16, DE_FINALS]', () => {
-    expect(dePhasesForBracket(64)).toEqual(['DE_PRELIMS', 'DE_ROUND_OF_16', 'DE_FINALS'])
+    expect(dePhasesForBracket(64)).toEqual([Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16, Phase.DE_FINALS])
   })
 
   it('bracket 32 → [DE_ROUND_OF_16, DE_FINALS]', () => {
-    expect(dePhasesForBracket(32)).toEqual(['DE_ROUND_OF_16', 'DE_FINALS'])
+    expect(dePhasesForBracket(32)).toEqual([Phase.DE_ROUND_OF_16, Phase.DE_FINALS])
   })
 
   it('bracket 16 → [DE_ROUND_OF_16, DE_FINALS]', () => {
-    expect(dePhasesForBracket(16)).toEqual(['DE_ROUND_OF_16', 'DE_FINALS'])
+    expect(dePhasesForBracket(16)).toEqual([Phase.DE_ROUND_OF_16, Phase.DE_FINALS])
   })
 
   it('bracket 8 → [DE_FINALS]', () => {
-    expect(dePhasesForBracket(8)).toEqual(['DE_FINALS'])
+    expect(dePhasesForBracket(8)).toEqual([Phase.DE_FINALS])
   })
 
   it('bracket 4 → [DE_FINALS]', () => {
-    expect(dePhasesForBracket(4)).toEqual(['DE_FINALS'])
+    expect(dePhasesForBracket(4)).toEqual([Phase.DE_FINALS])
   })
 })
 

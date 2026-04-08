@@ -1,4 +1,4 @@
-import { Weapon, BottleneckCause, BottleneckSeverity } from './types.ts'
+import { Weapon, BottleneckCause, BottleneckSeverity, Phase } from './types.ts'
 import type {
   GlobalState,
   TournamentConfig,
@@ -18,6 +18,51 @@ export type FindStripsResult =
 export type ResourceWindowResult =
   | { type: 'FOUND'; startTime: number; stripIndices: number[]; bottlenecks: Bottleneck[] }
   | { type: 'NO_WINDOW' }
+
+// ──────────────────────────────────────────────
+// snapshotState / restoreState
+// ──────────────────────────────────────────────
+
+/**
+ * Creates a targeted snapshot of mutable GlobalState fields for rollback during
+ * retry loops. Avoids JSON.parse/stringify overhead by cloning only what changes:
+ *
+ * - strip_free_at: shallow array copy (numbers are primitives)
+ * - refs_in_use_by_day: each day entry is copied with its release_events array cloned
+ *   (counters and the events array are mutated during scheduling)
+ * - schedule: shallow Record copy (ScheduleResult objects are write-once / immutable)
+ * - bottlenecks: shallow array copy (Bottleneck objects are write-once / immutable)
+ */
+export function snapshotState(state: GlobalState): GlobalState {
+  const refs: GlobalState['refs_in_use_by_day'] = {}
+  for (const dayKey of Object.keys(state.refs_in_use_by_day)) {
+    const day = Number(dayKey)
+    const src = state.refs_in_use_by_day[day]
+    refs[day] = {
+      foil_epee_in_use: src.foil_epee_in_use,
+      saber_in_use: src.saber_in_use,
+      release_events: [...src.release_events],
+    }
+  }
+  return {
+    strip_free_at: [...state.strip_free_at],
+    refs_in_use_by_day: refs,
+    schedule: { ...state.schedule },
+    bottlenecks: [...state.bottlenecks],
+  }
+}
+
+/**
+ * Restores a GlobalState in-place to match a snapshot produced by snapshotState.
+ * Mutates target so that callers holding a reference to the original state object
+ * see the rolled-back values (scheduleOne passes state by reference).
+ */
+export function restoreState(target: GlobalState, snapshot: GlobalState): void {
+  target.strip_free_at = snapshot.strip_free_at
+  target.refs_in_use_by_day = snapshot.refs_in_use_by_day
+  target.schedule = snapshot.schedule
+  target.bottlenecks = snapshot.bottlenecks
+}
 
 // ──────────────────────────────────────────────
 // createGlobalState
@@ -80,7 +125,7 @@ export function releaseStrips(state: GlobalState, stripIds: number[], endTime: n
 /**
  * Finds `count` available strip indices at `atTime`, applying video preference rules.
  *
- * PRD Section 10.3:
+ * METHODOLOGY.md §Video Strip Preservation:
  * - videoRequired=true: only video-capable strips; WAIT_UNTIL if not enough free
  * - videoRequired=false: prefer non-video strips first (preserves video strips for
  *   phases that need them); falls back to video strips if non-video is insufficient
@@ -166,7 +211,7 @@ function ensureDayRefs(state: GlobalState, day: number): RefsInUseByDay {
  * Returns how many foil/epee refs are free (not currently in use) on the given day
  * at the given time, accounting for any release events that have fired by that time.
  *
- * Includes idle saber refs in the available pool (PRD Section 2.3: saber refs can
+ * Includes idle saber refs in the available pool (METHODOLOGY.md §Referee Types: saber refs can
  * officiate ROW weapons). This is a read-only availability check — actual allocation
  * via allocateRefs always increments the correct pool (foil_epee_in_use). The scheduler
  * is responsible for not over-committing saber refs across concurrent foil/epee and
@@ -184,7 +229,7 @@ function feRefsFreeAt(day: number, atTime: number, state: GlobalState, config: T
     .reduce((sum, e) => sum + e.count, 0)
 
   const inUse = Math.max(0, dayRefs.foil_epee_in_use - released)
-  // Saber refs can also officiate foil/epee (PRD Section 2.3)
+  // Saber refs can also officiate foil/epee (METHODOLOGY.md §Referee Types)
   const saberReleased = dayRefs.release_events
     .filter(e => e.time <= atTime && e.type === 'saber')
     .reduce((sum, e) => sum + e.count, 0)
@@ -267,7 +312,7 @@ export function releaseRefs(
  * Rounds t up to the next 30-minute slot boundary.
  * snapToSlot(0)=0, snapToSlot(15)=30, snapToSlot(30)=30, snapToSlot(31)=60.
  *
- * PRD Section 11.2: applied to phase start times; NOT applied to phase end times.
+ * METHODOLOGY.md §Slot Granularity: applied to phase start times; NOT applied to phase end times.
  */
 export function snapToSlot(t: number): number {
   const r = t % 30
@@ -281,7 +326,7 @@ export function snapToSlot(t: number): number {
 
 /**
  * Finds the earliest start time at or after notBefore where both strip and ref
- * requirements can be met simultaneously. PRD Section 11.1.
+ * requirements can be met simultaneously. METHODOLOGY.md §Resource Windows.
  *
  * Algorithm:
  * 1. Snap notBefore to slot boundary.
@@ -304,14 +349,17 @@ export function earliestResourceWindow(
   state: GlobalState,
   config: TournamentConfig,
   competitionId: string,
-  phase: string,
+  phase: Phase,
 ): ResourceWindowResult {
   const latestStart = dayStart(day, config) + config.LATEST_START_OFFSET
   const dayEndTime = dayStart(day, config) + config.DAY_LENGTH_MINS
 
   let candidate = snapToSlot(notBefore)
 
-  // Bounded iteration — each iteration must advance candidate; guards against stalls
+  // Resource-window search uses more attempts than the outer reschedule loop (MAX_RESCHEDULE_ATTEMPTS)
+  // because each 30-min slot scan may need multiple probes to find simultaneous strip+ref availability.
+  // The multiplier and offset provide headroom for dense schedules.
+  // Each iteration must advance candidate to guard against stalls.
   const maxAttempts = config.MAX_RESCHEDULE_ATTEMPTS * 2 + 10
   let attempts = 0
 

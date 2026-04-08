@@ -1,4 +1,4 @@
-import { BottleneckCause, BottleneckSeverity } from './types.ts'
+import { BottleneckCause, BottleneckSeverity, Phase } from './types.ts'
 import type { Competition, FlightingGroup, Bottleneck } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { crossoverPenalty } from './crossover.ts'
@@ -16,7 +16,7 @@ export interface FlightingGroupSuggestions {
  * when their combined pool count exceeds strips_total but each fits individually within
  * the per-event pool strip cap (poolStripCap).
  *
- * PRD Section 9.1, Pass 2:
+ * METHODOLOGY.md §Flighting Group Suggestion:
  * - The competition with more pools is designated priority; the other becomes flighted.
  * - When pool counts are tied, a FLIGHTING_GROUP_MANUAL_NEEDED warning is emitted and
  *   the suggestion is still created (with an arbitrary ordering by id for determinism).
@@ -53,7 +53,7 @@ export function suggestFlightingGroups(
       if (tied) {
         bottlenecks.push({
           competition_id: c1.id,
-          phase: 'FLIGHTING',
+          phase: Phase.FLIGHTING,
           cause: BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED,
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
@@ -86,7 +86,7 @@ export function suggestFlightingGroups(
 /**
  * Splits strips_total between a priority and flighted competition.
  *
- * PRD Section 9:
+ * METHODOLOGY.md §Flighting:
  * - Priority receives strips equal to its pool count, capped at strips_total.
  * - Flighted receives the remainder (strips_total − priority allocation).
  */
@@ -118,7 +118,7 @@ export function calculateFlightedStrips(
 /**
  * Validates a flighting group configuration against scheduling constraints.
  *
- * Checks (PRD Section 9.1, Pass 3):
+ * Checks (METHODOLOGY.md §Flighting):
  * 1. Warn if more than one competition on the same day is marked flighted.
  * 2. Warn (FLIGHTING_GROUP_NOT_LARGEST) if the flighted competition is not the
  *    largest by pool count among all competitions on that day.
@@ -147,7 +147,7 @@ export function validateFlightingGroup(
     for (const comp of flightedOnDay) {
       bottlenecks.push({
         competition_id: comp.id,
-        phase: 'FLIGHTING',
+        phase: Phase.FLIGHTING,
         cause: BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
@@ -169,7 +169,7 @@ export function validateFlightingGroup(
     const largestComp = poolCounts.find(p => p.pools === maxPools)
     bottlenecks.push({
       competition_id: flightedComp.id,
-      phase: 'FLIGHTING',
+      phase: Phase.FLIGHTING,
       cause: BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST,
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
@@ -184,7 +184,7 @@ export function validateFlightingGroup(
   if (penalty > 0 && penalty !== Infinity) {
     bottlenecks.push({
       competition_id: flightedComp.id,
-      phase: 'FLIGHTING',
+      phase: Phase.FLIGHTING,
       cause: BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,

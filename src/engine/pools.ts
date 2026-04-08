@@ -8,7 +8,7 @@ const BASELINE_POOL_SIZE = 6
 /**
  * Computes the pool structure (number of pools and their sizes) for a given fencer count.
  *
- * PRD Section 7.1 rules:
+ * METHODOLOGY.md §Pool Sizing rules:
  * - n ≤ 9: single pool
  * - n = 10 with single_pool_override: single pool of 10
  * - n ≥ 10: split into pools of 5, 6, and 7 targeting pool sizes of 6-7.
@@ -26,7 +26,7 @@ export function computePoolStructure(
     throw new Error(`computePoolStructure: fencerCount must be > 1, got ${fencerCount}`)
   }
   if (fencerCount <= 9 || (fencerCount === 10 && useSinglePoolOverride)) {
-    return { n_pools: 1, pool_sizes: [fencerCount], pool_round_duration: 0 }
+    return { n_pools: 1, pool_sizes: [fencerCount] }
   }
 
   // Target pools of 6-7; use ceil(n/7) as pool count
@@ -40,7 +40,7 @@ export function computePoolStructure(
     ...Array(n_pools - remainder).fill(baseSize),
   ]
 
-  return { n_pools, pool_sizes: sizes, pool_round_duration: 0 }
+  return { n_pools, pool_sizes: sizes }
 }
 
 /**
@@ -54,7 +54,7 @@ export function poolCountFor(fencerCount: number, useSinglePoolOverride = false)
 /**
  * Returns the estimated duration (minutes) for a single pool of a given size.
  *
- * Formula (PRD Section 7.2):
+ * Formula (METHODOLOGY.md §Pool Duration Estimation):
  *   round(baseDuration * BOUT_COUNTS[poolSize] / BOUT_COUNTS[6])
  *
  * BOUT_COUNTS[6] = 15 is the canonical baseline (standard 6-person pool).
@@ -73,7 +73,7 @@ export function poolDurationForSize(
 /**
  * Computes the weighted-average pool round duration across a mixed pool structure.
  *
- * PRD Section 7.2: weighted average = sum(duration_for_size * count) / total_pools
+ * METHODOLOGY.md §Pool Duration Estimation: weighted average = sum(duration_for_size * count) / total_pools
  */
 export function weightedPoolDuration(
   poolStructure: PoolStructure,
@@ -99,7 +99,7 @@ export function weightedPoolDuration(
 /**
  * Estimates the total pool round duration given resource constraints.
  *
- * PRD Section 7.3:
+ * METHODOLOGY.md §Pool Parallelism:
  * - staffable_strips = min(availableStrips, nPools, floor(availableRefs / refsPerPool))
  * - When refsPerPool == 1, excess refs can each cover an additional strip ("double duty")
  * - effective_parallelism = staffable_strips + double_duty_pairs
@@ -145,7 +145,7 @@ export function estimatePoolDuration(
 /**
  * Computes the number of fencers advancing to DE after applying pool-round cuts.
  *
- * PRD Section 7.4:
+ * METHODOLOGY.md §Pool Composition:
  * - TEAM events always bypass cuts (return fencerCount unchanged)
  * - DISABLED: all fencers advance
  * - PERCENTAGE: floor(fencerCount * value / 100), minimum 2
@@ -178,7 +178,7 @@ export function computeDeFencerCount(
 /**
  * Resolves the number of referees assigned per pool given the ref policy.
  *
- * PRD Section 7.5:
+ * METHODOLOGY.md §Refs Per Pool:
  * - ONE: always 1 ref/pool; shortfall if availableRefs < nPools
  * - TWO: tries 2 refs/pool; falls back to 1 with shortfall if availableRefs < 2*nPools
  * - AUTO: tries 2 if availableRefs >= 2*nPools; otherwise uses 1 (no shortfall)
@@ -211,7 +211,10 @@ export function resolveRefsPerPool(
   }
 
   // RefPolicy.AUTO: use 2/pool if enough, otherwise 1/pool.
-  // No shortfall when falling back from 2 to 1, but shortfall reported if even 1/pool can't be staffed.
+  // AUTO mode silently falls back to 1 ref/pool when supply is insufficient, reporting zero shortfall.
+  // This is intentional: AUTO means "use the best available" rather than "require 2".
+  // Contrast with TWO mode, which reports the shortfall as a warning.
+  // Shortfall is still reported if even 1/pool can't be staffed.
   const refs_needed_2 = nPools * 2
   if (availableRefs >= refs_needed_2) {
     return { refs_per_pool: 2, refs_needed: refs_needed_2, shortfall: 0 }

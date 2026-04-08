@@ -1,4 +1,4 @@
-import { BottleneckSeverity, CutMode, VideoPolicy, DeMode, BottleneckCause } from './types.ts'
+import { BottleneckSeverity, CutMode, VideoPolicy, DeMode, BottleneckCause, Phase } from './types.ts'
 import type { AnalysisResult, Bottleneck, Competition, TournamentConfig } from './types.ts'
 import { computePoolStructure, computeDeFencerCount } from './pools.ts'
 import { computeBracketSize } from './de.ts'
@@ -31,7 +31,7 @@ export function suggestStripCount(competitions: Competition[]): number {
 
 /**
  * Returns the maximum allowable pool count difference between men's and women's
- * events sharing the same age/weapon group (PRD Section 9.1).
+ * events sharing the same age/weapon group (METHODOLOGY.md §Phase 2: Pre-Scheduling Analysis).
  *
  * Threshold is based on the LARGER pool count of the two events:
  *   ≤3 pools → 0  (must be equal)
@@ -47,7 +47,7 @@ export function genderEquityAllowableDiff(largerPools: number): number {
 }
 
 /**
- * Performs pre-scheduling analysis across all 7 passes defined in PRD Section 9.1.
+ * Performs pre-scheduling analysis across all 7 passes defined in METHODOLOGY.md §Phase 2: Pre-Scheduling Analysis.
  * Pure function — no global state, identical output for identical input.
  *
  * @param config         Tournament-wide configuration (strips, video count, tournament type, etc.)
@@ -75,7 +75,7 @@ export function initialAnalysis(
     if (totalPools > config.strips_total) {
       warnings.push({
         competition_id: '',
-        phase: 'CAPACITY',
+        phase: Phase.CAPACITY,
         cause: BottleneckCause.STRIP_CONTENTION,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
@@ -96,7 +96,7 @@ export function initialAnalysis(
       if (!comp.flighted) {
         warnings.push({
           competition_id: comp.id,
-          phase: 'POOLS',
+          phase: Phase.POOLS,
           cause: BottleneckCause.STRIP_DEFICIT_NO_FLIGHTING,
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
@@ -140,7 +140,7 @@ export function initialAnalysis(
       for (const comp of flighted) {
         warnings.push({
           competition_id: comp.id,
-          phase: 'FLIGHTING',
+          phase: Phase.FLIGHTING,
           cause: BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY,
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
@@ -151,11 +151,11 @@ export function initialAnalysis(
   }
 
   // ── Pass 4: video strip peak demand ──────────────────────────────────────
-  // Count STAGED_DE_BLOCKS + REQUIRED competitions per day as peak concurrent video demand.
+  // Count STAGED + REQUIRED competitions per day as peak concurrent video demand.
   // Each such competition needs video strips during its DE phase.
   const videoDemandByDay = new Map<number, number>()
   for (const comp of competitions) {
-    if (comp.de_mode === DeMode.STAGED_DE_BLOCKS && comp.de_video_policy === VideoPolicy.REQUIRED) {
+    if (comp.de_mode === DeMode.STAGED && comp.de_video_policy === VideoPolicy.REQUIRED) {
       const day = dayAssignments[comp.id]
       if (day === undefined) continue
       videoDemandByDay.set(day, (videoDemandByDay.get(day) ?? 0) + 1)
@@ -166,7 +166,7 @@ export function initialAnalysis(
       warnings.push({
         // Use empty string for competition_id — this is a venue-level warning, not per-competition
         competition_id: '',
-        phase: 'DE',
+        phase: Phase.DE,
         cause: BottleneckCause.VIDEO_STRIP_CONTENTION,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
@@ -187,7 +187,7 @@ export function initialAnalysis(
     ) {
       warnings.push({
         competition_id: group.flighted_competition_id,
-        phase: 'DE',
+        phase: Phase.DE,
         cause: BottleneckCause.VIDEO_STRIP_CONTENTION,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
@@ -203,7 +203,7 @@ export function initialAnalysis(
     const bracket = computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type)
     warnings.push({
       competition_id: comp.id,
-      phase: 'CUT',
+      phase: Phase.CUT,
       cause: BottleneckCause.CUT_SUMMARY,
       severity: BottleneckSeverity.INFO,
       delay_mins: 0,

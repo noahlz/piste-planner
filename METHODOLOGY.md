@@ -168,7 +168,7 @@ Hard-blocked pairs (Infinity penalty at level < 3, same weapon+gender required):
 - **Div 1 ind ↔ Junior team**: Junior team draws from Div 1 individual pool
 - **Junior ind ↔ Div 1 team**: Div 1 team draws from Junior individual pool
 
-(see [`constants.ts`](src/engine/constants.ts) — `INDIV_TEAM_HARD_BLOCKS`)
+(see [`constants.ts`](src/engine/constants.ts) — `INDIV_TEAM_RELAXABLE_BLOCKS`)
 
 **For other overlapping individual/team pairs**: 4-hour separation required, in either direction
   - e.g., Vet Team at 8 AM allows Div 2 Individual at 10 AM
@@ -820,7 +820,7 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 | RefPolicy.AUTO | 1.0 | Middle constraint score (between TWO=2.0 and ONE=0.5) |
 | DEFAULT_DE_DURATION_TABLE | (see `constants.ts`) | DE durations by bracket size and weapon |
 
-### Capacity Model Constants [PLANNED]
+### Capacity Model Constants
 
 | Constant | Value | Description |
 |---|---|---|

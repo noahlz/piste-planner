@@ -4,7 +4,7 @@ import { KitchenSinkPage } from '../../src/components/KitchenSinkPage.tsx'
 import { useStore } from '../../src/store/store.ts'
 import { serializeState } from '../../src/store/serialization.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { BottleneckSeverity, BottleneckCause } from '../../src/engine/types.ts'
+import { BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
 // Setup
@@ -472,7 +472,7 @@ describe('KitchenSinkPage error state tests', () => {
       {
         warnings: [{
           competition_id: 'CDT-M-FOIL-IND',
-          phase: 'pool',
+          phase: Phase.POOLS,
           cause: BottleneckCause.STRIP_CONTENTION,
           severity: BottleneckSeverity.WARN,
           delay_mins: 10,
@@ -498,7 +498,7 @@ describe('KitchenSinkPage error state tests', () => {
         flighting_group_id: null,
         pool_start: 480,
         pool_end: 600,
-        pool_strips_count: 4,
+        pool_strip_count: 4,
         pool_refs_count: 4,
         flight_a_start: null,
         flight_a_end: null,
@@ -517,16 +517,16 @@ describe('KitchenSinkPage error state tests', () => {
         de_video_policy: 'BEST_EFFORT' as const,
         de_start: 610,
         de_end: null,
-        de_strips_count: 4,
+        de_strip_count: 4,
         de_prelims_start: null,
         de_prelims_end: null,
-        de_prelims_strips: 0,
+        de_prelims_strip_count: 0,
         de_round_of_16_start: null,
         de_round_of_16_end: null,
-        de_round_of_16_strips: 0,
+        de_round_of_16_strip_count: 0,
         de_finals_start: null,
         de_finals_end: null,
-        de_finals_strips: 0,
+        de_finals_strip_count: 0,
         de_bronze_start: null,
         de_bronze_end: null,
         de_bronze_strip_id: null,
@@ -582,7 +582,7 @@ describe('AnalysisOutput section', () => {
     useStore.getState().setAnalysisResults([], {
       warnings: [{
         competition_id: 'CDT-M-FOIL-IND',
-        phase: 'pool',
+        phase: Phase.POOLS,
         cause: BottleneckCause.STRIP_CONTENTION,
         severity: BottleneckSeverity.WARN,
         delay_mins: 10,

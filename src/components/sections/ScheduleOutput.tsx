@@ -120,7 +120,7 @@ export function ScheduleOutput() {
                     <TableCell className="text-right text-foreground">{formatMinutes(r.pool_end)}</TableCell>
                     <TableCell className="text-right text-foreground">{formatMinutes(r.de_start)}</TableCell>
                     <TableCell className="text-right text-foreground">{formatMinutes(r.de_total_end)}</TableCell>
-                    <TableCell className="text-right text-foreground">{r.pool_strips_count}</TableCell>
+                    <TableCell className="text-right text-foreground">{r.pool_strip_count}</TableCell>
                     <TableCell className="text-right text-foreground">
                       {bottleneckCounts[r.competition_id] ?? 0}
                     </TableCell>

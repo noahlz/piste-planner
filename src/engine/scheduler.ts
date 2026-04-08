@@ -1,5 +1,5 @@
 /**
- * Master Scheduler — PRD Section 14
+ * Master Scheduler — METHODOLOGY.md §Scheduling Algorithm
  *
  * Top-level orchestrator: sorts competitions by constraint priority,
  * schedules each via scheduleCompetition, and collects results + bottlenecks.
@@ -12,6 +12,7 @@ import type {
   Bottleneck,
 } from './types.ts'
 import {
+  Phase,
   BottleneckCause,
   BottleneckSeverity,
   dayStart,
@@ -25,7 +26,7 @@ import { recommendStripCount, recommendRefCount } from './stripBudget.ts'
 const VALID_BOTTLENECK_CAUSES = new Set(Object.values(BottleneckCause))
 
 // ──────────────────────────────────────────────
-// scheduleAll — PRD Section 14
+// scheduleAll — METHODOLOGY.md §Scheduling Algorithm
 // ──────────────────────────────────────────────
 
 export interface ScheduleAllResult {
@@ -55,7 +56,7 @@ export function scheduleAll(
   for (const ve of validationErrors) {
     state.bottlenecks.push({
       competition_id: '',
-      phase: 'VALIDATION',
+      phase: Phase.VALIDATION,
       cause: BottleneckCause.RESOURCE_EXHAUSTION,
       severity: ve.severity,
       delay_mins: 0,
@@ -89,7 +90,7 @@ export function scheduleAll(
               : BottleneckCause.RESOURCE_EXHAUSTION
           state.bottlenecks.push({
             competition_id: comp.id,
-            phase: 'SCHEDULING',
+            phase: Phase.SCHEDULING,
             cause,
             severity: BottleneckSeverity.ERROR,
             delay_mins: 0,
@@ -115,7 +116,7 @@ export function scheduleAll(
 }
 
 // ──────────────────────────────────────────────
-// sortWithPairs — PRD Section 14
+// sortWithPairs — METHODOLOGY.md §Scheduling Algorithm Phase 3
 // ──────────────────────────────────────────────
 
 /**
@@ -216,11 +217,11 @@ function sortByConstraint(
 }
 
 // ──────────────────────────────────────────────
-// postScheduleWarnings — PRD Section 14
+// postScheduleWarnings — METHODOLOGY.md §Phase 7: Post-Schedule Warnings
 // ──────────────────────────────────────────────
 
 /**
- * Generates post-schedule warnings per PRD Section 14 (Ops Manual Group 2).
+ * Generates post-schedule warnings per METHODOLOGY.md §Phase 7: Post-Schedule Warnings (Ops Manual Group 2).
  * For 4+ day events: warns if first or last day is longer than the average
  * middle day duration.
  */
@@ -264,7 +265,7 @@ export function postScheduleWarnings(
   if (firstDayDur > avgMiddle * 1.1) {
     warnings.push({
       competition_id: '',
-      phase: 'POST_SCHEDULE',
+      phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
@@ -275,7 +276,7 @@ export function postScheduleWarnings(
   if (lastDayDur > avgMiddle * 1.1) {
     warnings.push({
       competition_id: '',
-      phase: 'POST_SCHEDULE',
+      phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
@@ -312,7 +313,7 @@ export function postScheduleDiagnostics(
   if (recommended > config.strips_total) {
     results.push({
       competition_id: '',
-      phase: 'POST_SCHEDULE',
+      phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.RESOURCE_RECOMMENDATION,
       severity: BottleneckSeverity.INFO,
       delay_mins: 0,
@@ -329,7 +330,7 @@ export function postScheduleDiagnostics(
   if (totalRecommended > maxConfiguredRefs) {
     results.push({
       competition_id: '',
-      phase: 'POST_SCHEDULE',
+      phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.RESOURCE_RECOMMENDATION,
       severity: BottleneckSeverity.INFO,
       delay_mins: 0,

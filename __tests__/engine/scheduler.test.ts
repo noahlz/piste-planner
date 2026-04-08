@@ -8,6 +8,7 @@ import {
   RefPolicy,
   BottleneckCause,
   BottleneckSeverity,
+  Phase,
 } from '../../src/engine/types.ts'
 import type {
   Competition,
@@ -54,7 +55,7 @@ function competitionsFromTemplate(templateName: string, fencerCount = 24): Compe
       cut_value: cut.value,
       de_video_policy: videoPolicy,
       de_mode: videoPolicy === VideoPolicy.REQUIRED
-        ? DeMode.STAGED_DE_BLOCKS
+        ? DeMode.STAGED
         : DeMode.SINGLE_STAGE,
       strips_allocated: Math.max(2, Math.ceil(fencerCount / 7)),
     })
@@ -666,7 +667,7 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
 describe('postScheduleDiagnostics', () => {
   const resourceExhaustionError = {
     competition_id: 'failing-comp',
-    phase: 'SCHEDULING',
+    phase: Phase.SCHEDULING,
     cause: BottleneckCause.RESOURCE_EXHAUSTION,
     severity: BottleneckSeverity.ERROR,
     delay_mins: 0,
