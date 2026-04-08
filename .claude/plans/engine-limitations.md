@@ -17,7 +17,7 @@ Seven integration tests in `__tests__/engine/integration.test.ts` use real USA F
 | B1: Feb 2026 NAC (Div 1/Jr/Vet) | 24 | 2 | 22 |
 | B2: Nov 2025 NAC (Div 1/Cdt/Y14) | 24 | 4 | 20 |
 | B3: Mar 2026 NAC (Y10/Y12/Y14/D2) | 24 | 4 | 20 |
-| B4: Jan 2026 SYC (Y8-Y14/Cdt) | 30 | 3 | 27 |
+| B4: Jan 2026 SYC (Y8-Y14/Cdt) | 30 | 4 | 26 |
 | B5: Jan 2026 SJCC (Cdt/Jr) | 12 | 4 | 8 |
 | B6: Sep 2025 ROC (9 categories) | 54 | 3 | 51 |
 | B7: Oct 2025 NAC (Div 1/Jr/Cdt) | 18 | 4 | 14 |
