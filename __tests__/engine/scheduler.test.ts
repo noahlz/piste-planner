@@ -18,7 +18,7 @@ import {
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
 } from '../../src/engine/constants.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
-import { scheduleAll, sortWithPairs, postScheduleWarnings } from '../../src/engine/scheduler.ts'
+import { scheduleAll, sortWithPairs, postScheduleWarnings, postScheduleDiagnostics } from '../../src/engine/scheduler.ts'
 import {
   makeStrips,
   makeConfig,
@@ -656,5 +656,123 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
 
     const postBottlenecks = bottlenecks.filter(b => b.phase === 'POST_SCHEDULE')
     expect(postBottlenecks).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// postScheduleDiagnostics
+// ──────────────────────────────────────────────
+
+describe('postScheduleDiagnostics', () => {
+  const resourceExhaustionError = {
+    competition_id: 'failing-comp',
+    phase: 'SCHEDULING',
+    cause: BottleneckCause.RESOURCE_EXHAUSTION,
+    severity: BottleneckSeverity.ERROR,
+    delay_mins: 0,
+    message: 'No feasible day found',
+  }
+
+  it('emits strip recommendation when strips_total < recommended', () => {
+    // 64 fencers → ceil(64/7)=10 pools → recommendStripCount = ceil(10/0.80)=13
+    const comps = [
+      makeCompetition({ id: 'big-event', fencer_count: 64, weapon: Weapon.FOIL }),
+    ]
+    const config = makeConfig({ strips: makeStrips(4, 0) })
+
+    const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
+
+    const stripRec = result.filter(b => b.message.includes('Minimum recommended strips'))
+    expect(stripRec).toHaveLength(1)
+    expect(stripRec[0].cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
+    expect(stripRec[0].severity).toBe(BottleneckSeverity.INFO)
+    expect(stripRec[0].phase).toBe('POST_SCHEDULE')
+    expect(stripRec[0].message).toContain('13')
+    expect(stripRec[0].message).toContain('configured: 4')
+  })
+
+  it('emits ref recommendation when configured refs < recommended', () => {
+    // Two sabre events with 24 fencers each → ceil(24/7)=4 pools each
+    // peakSabrePools = 4+4=8, three_weapon refs needed = 8
+    // Config: 2 refs per day (foil_epee:1 + three_weapon:1 = 2 total)
+    const comps = [
+      makeCompetition({ id: 'sabre-1', fencer_count: 24, weapon: Weapon.SABRE }),
+      makeCompetition({ id: 'sabre-2', fencer_count: 24, weapon: Weapon.SABRE, gender: Gender.WOMEN }),
+    ]
+    const config = makeConfig({
+      strips: makeStrips(48, 0),
+      referee_availability: Array.from({ length: 3 }, (_, i) => ({
+        day: i, foil_epee_refs: 1, three_weapon_refs: 1, source: 'ACTUAL' as const,
+      })),
+    })
+
+    const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
+
+    const refRec = result.filter(b => b.message.includes('Minimum recommended refs'))
+    expect(refRec).toHaveLength(1)
+    expect(refRec[0].cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
+    expect(refRec[0].severity).toBe(BottleneckSeverity.INFO)
+    expect(refRec[0].phase).toBe('POST_SCHEDULE')
+    expect(refRec[0].message).toContain('8 three-weapon')
+    expect(refRec[0].message).toContain('configured: 2')
+  })
+
+  it('emits nothing when no RESOURCE_EXHAUSTION errors exist', () => {
+    const comps = [
+      makeCompetition({ id: 'event-1', fencer_count: 64, weapon: Weapon.FOIL }),
+    ]
+    const config = makeConfig({ strips: makeStrips(4, 0) })
+
+    // No bottlenecks at all
+    expect(postScheduleDiagnostics(comps, config, [])).toHaveLength(0)
+
+    // Only WARN-severity items (not ERROR)
+    const warnOnly = [{
+      ...resourceExhaustionError,
+      severity: BottleneckSeverity.WARN,
+    }]
+    expect(postScheduleDiagnostics(comps, config, warnOnly)).toHaveLength(0)
+  })
+
+  it('emits nothing when configured resources meet recommendations', () => {
+    // 6 fencers → 1 pool → recommendStripCount = ceil(1/0.80) = 2
+    // Config has 48 strips → 2 < 48, no strip recommendation
+    // 1 foil pool → foil_epee refs = 1, three_weapon = 0 → total 1 < 30, no ref rec
+    const comps = [
+      makeCompetition({ id: 'tiny-event', fencer_count: 6, weapon: Weapon.FOIL }),
+    ]
+    const config = makeConfig({
+      strips: makeStrips(2, 0),
+      referee_availability: Array.from({ length: 3 }, (_, i) => ({
+        day: i, foil_epee_refs: 1, three_weapon_refs: 0, source: 'ACTUAL' as const,
+      })),
+    })
+
+    const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
+
+    const recommendations = result.filter(b => b.cause === BottleneckCause.RESOURCE_RECOMMENDATION)
+    expect(recommendations).toHaveLength(0)
+  })
+
+  it('emits both strip and ref recommendations when both are insufficient', () => {
+    // 64 fencers → 10 pools → recommendStripCount = ceil(10/0.80) = 13
+    // Two sabre events with 24 fencers → peakSabrePools = 4+4 = 8, three_weapon = 8
+    const comps = [
+      makeCompetition({ id: 'big-foil', fencer_count: 64, weapon: Weapon.FOIL }),
+      makeCompetition({ id: 'sabre-1', fencer_count: 24, weapon: Weapon.SABRE }),
+      makeCompetition({ id: 'sabre-2', fencer_count: 24, weapon: Weapon.SABRE, gender: Gender.WOMEN }),
+    ]
+    const config = makeConfig({
+      strips: makeStrips(4, 0),
+      referee_availability: Array.from({ length: 3 }, (_, i) => ({
+        day: i, foil_epee_refs: 1, three_weapon_refs: 1, source: 'ACTUAL' as const,
+      })),
+    })
+
+    const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
+
+    expect(result).toHaveLength(2)
+    expect(result.some(b => b.message.includes('Minimum recommended strips'))).toBe(true)
+    expect(result.some(b => b.message.includes('Minimum recommended refs'))).toBe(true)
   })
 })
