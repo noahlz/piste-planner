@@ -401,6 +401,64 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 ---
 
+## DE Strip Allocation Models
+
+(see [`capacity.ts`](src/engine/capacity.ts), controlled by `de_capacity_mode` on `TournamentConfig`)
+
+Two models compute how many strip-hours an individual DE event consumes. Team events always use greedy regardless of mode.
+
+### Configuration
+
+- `de_capacity_mode: 'pod' | 'greedy'` on `TournamentConfig` – default `'pod'`
+
+### Constants
+
+- `DE_POD_SIZE = 4` strips per pod
+- `DE_BOUT_DURATION`: `{ EPEE: 20, FOIL: 20, SABRE: 10 }` minutes per bout
+
+### Pod Model (`de_capacity_mode: 'pod'`)
+
+Strips are organized into independent pods of 4 running sub-brackets in parallel.
+
+**Pod structure:**
+
+- `n_pods = ceil(strips / DE_POD_SIZE)`; remainder strips distributed so larger pods get one extra strip when not evenly divisible
+- All pods fence simultaneously – no serial pod sequencing
+
+**R16 consolidation:**
+
+- When 16 fencers remain across all pods, all pods merge to a single pod of 4 strips
+- Strips freed at consolidation become available for other events
+- QF runs on 4 strips; SF runs on 2 strips (the other 2 freed for cross-event use)
+
+**Finals exclusion:**
+
+- Gold medal bout runs on a dedicated finals strip, excluded from capacity planning
+
+**Duration scaling:**
+
+- Elapsed time computed from bout counts per round (theoretical)
+- Strip-hours scaled by `table_duration / bout_based_duration` to stay calibrated to empirical table data
+
+### Greedy Model (`de_capacity_mode: 'greedy'`)
+
+No pods – all strips treated as a single undifferentiated pool.
+
+- `strip_hours = total_bouts × bout_duration / 60`
+- Strip-count-independent: the same total strip-hours regardless of how many strips are allocated
+- No duration scaling applied
+
+### Team Events
+
+Team DEs always use the greedy/round-by-round model regardless of `de_capacity_mode`.
+
+- All bouts in a round run simultaneously – one strip per bout
+- Rounds are strictly sequential
+- Non-power-of-2 entry counts produce play-in bouts in the opening round
+- Finals excluded from capacity planning (same as individual)
+
+---
+
 ## Resources
 
 ### Strip Assignment

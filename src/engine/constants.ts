@@ -58,6 +58,12 @@ export const THRESHOLD_MINS = 10
 
 export const DE_REFS = 1
 export const DE_FINALS_MIN_MINS = 30
+export const DE_POD_SIZE = 4
+export const DE_BOUT_DURATION: Record<Weapon, number> = {
+  [Weapon.EPEE]: 20,
+  [Weapon.FOIL]: 20,
+  [Weapon.SABRE]: 10,
+}
 export const SAME_TIME_WINDOW_MINS = 30
 export const INDIV_TEAM_MIN_GAP_MINS = 120
 

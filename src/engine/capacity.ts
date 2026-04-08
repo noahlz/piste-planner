@@ -6,10 +6,10 @@
  * capacity a competition consumes. Used as input to capacity-aware day assignment.
  */
 
-import { Category, DeMode } from './types.ts'
+import { Category, DeCapacityMode, DeMode, EventType } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState } from './types.ts'
-import { CATEGORY_START_PREFERENCE } from './constants.ts'
-import { computePoolStructure, weightedPoolDuration } from './pools.ts'
+import { CATEGORY_START_PREFERENCE, DE_POD_SIZE, DE_BOUT_DURATION } from './constants.ts'
+import { computePoolStructure, weightedPoolDuration, computeDeFencerCount } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
 
 export interface CompetitionStripHours {
@@ -30,16 +30,172 @@ export interface DayRemainingCapacity {
 }
 
 /**
+ * Distributes `total` items across `n` groups as evenly as possible.
+ * Larger groups get one extra when total is not evenly divisible.
+ * Returns an array of group sizes sorted largest-first.
+ */
+export function distributeEvenly(total: number, n: number): number[] {
+  const base = Math.floor(total / n)
+  const remainder = total % n
+  const sizes: number[] = []
+  for (let i = 0; i < n; i++) {
+    sizes.push(base + (i < remainder ? 1 : 0))
+  }
+  return sizes
+}
+
+/**
+ * Returns the largest power of 2 that is ≤ n.
+ */
+function prevPowerOf2(n: number): number {
+  if (n <= 1) return 1
+  return 1 << Math.floor(Math.log2(n))
+}
+
+/**
+ * Pod model: DE strips organized into pods of DE_POD_SIZE. Each pod runs an
+ * independent sub-bracket. At R16 (16 fencers remaining overall), pods
+ * consolidate to a single pod. Strip-hours are scaled by the ratio of
+ * table duration to bout-based duration.
+ */
+function podDeStripHours(
+  promotedFencers: number,
+  stripsAllocated: number,
+  weapon: Competition['weapon'],
+  tableDuration: number,
+): number {
+  if (promotedFencers <= 1) return 0
+
+  const boutDuration = DE_BOUT_DURATION[weapon]
+  const nPods = Math.ceil(stripsAllocated / DE_POD_SIZE)
+  const podSizes = distributeEvenly(stripsAllocated, nPods)
+
+  // For brackets ≤ 16, everything runs on a single pod from the start
+  if (promotedFencers <= 16) {
+    return podR16StripHours(promotedFencers, boutDuration, tableDuration)
+  }
+
+  const subBracketFencers = Math.floor(promotedFencers / nPods)
+  // R16 cutoff per pod: 16 fencers remaining overall = 16/nPods per pod
+  const subR16Cutoff = Math.floor(16 / nPods)
+
+  // Pre-R16: each pod walks its sub-bracket down to the cutoff
+  let maxPodBatches = 0
+  for (const podStripCount of podSizes) {
+    let podBatches = 0
+    let fencers = subBracketFencers
+    while (fencers > subR16Cutoff && fencers >= 2) {
+      const bouts = Math.floor(fencers / 2)
+      podBatches += Math.ceil(bouts / podStripCount)
+      fencers = Math.floor(fencers / 2)
+    }
+    maxPodBatches = Math.max(maxPodBatches, podBatches)
+  }
+
+  const preR16Duration = maxPodBatches * boutDuration
+  const preR16StripHours = stripsAllocated * preR16Duration / 60
+
+  // R16 phase onward (single pod of DE_POD_SIZE strips, finals excluded)
+  const r16StripHours = podR16StripHours(16, boutDuration, 0) // raw, no scaling on this piece
+
+  // Bout-based total elapsed time for scaling
+  const r16Batches = Math.ceil(8 / DE_POD_SIZE) + Math.ceil(4 / DE_POD_SIZE) + 1 // R16 + QF + SF
+  const r16Duration = r16Batches * boutDuration
+  const boutBasedTotal = preR16Duration + r16Duration
+
+  // Scale to match empirical duration table
+  const scaleFactor = boutBasedTotal > 0 ? tableDuration / boutBasedTotal : 1
+  return (preR16StripHours + r16StripHours) * scaleFactor
+}
+
+/**
+ * Computes strip-hours for R16 onward on a single pod (4 strips).
+ * Finals bout excluded (dedicated strip). SF frees 2 strips.
+ */
+function podR16StripHours(
+  fencers: number,
+  boutDuration: number,
+  tableDuration: number,
+): number {
+  // Walk from current fencer count down to 2 (SF), excluding finals
+  let totalStripHours = 0
+  let totalBoutDuration = 0
+  let current = fencers
+  while (current > 2) {
+    const bouts = Math.floor(current / 2)
+    const stripsUsed = Math.min(bouts, DE_POD_SIZE)
+    const batches = Math.ceil(bouts / DE_POD_SIZE)
+    const roundDuration = batches * boutDuration
+    totalStripHours += stripsUsed * roundDuration / 60
+    totalBoutDuration += roundDuration
+    current = Math.floor(current / 2)
+  }
+
+  // Scale to table duration if provided (for standalone small brackets)
+  if (tableDuration > 0 && totalBoutDuration > 0) {
+    totalStripHours *= tableDuration / totalBoutDuration
+  }
+
+  return totalStripHours
+}
+
+/**
+ * Greedy model: all strips as a single pool. Strip-hours = total_bouts × bout_duration / 60.
+ * Strip-count-independent. No duration scaling.
+ */
+function greedyDeStripHours(
+  promotedFencers: number,
+  weapon: Competition['weapon'],
+): number {
+  if (promotedFencers <= 1) return 0
+  const totalBouts = promotedFencers - 2 // exclude finals bout
+  return totalBouts * DE_BOUT_DURATION[weapon] / 60
+}
+
+/**
+ * Team DE strip-hours: round-by-round, all bouts in a round run simultaneously.
+ * No pods. Non-power-of-2 entries cause play-in bouts. Finals excluded.
+ */
+function teamDeStripHours(
+  teamCount: number,
+  weapon: Competition['weapon'],
+): number {
+  if (teamCount <= 1) return 0
+  const boutDuration = DE_BOUT_DURATION[weapon]
+
+  const playInBouts = teamCount - prevPowerOf2(teamCount)
+  let totalStripHours = 0
+
+  // Play-in round (if any)
+  if (playInBouts > 0) {
+    totalStripHours += playInBouts * boutDuration / 60
+  }
+
+  // Clean bracket rounds: after play-ins, the bracket is a clean power of 2.
+  // Walk from full field down to SF (2 bouts), excluding finals (1 bout).
+  let remaining = prevPowerOf2(teamCount)
+  while (remaining >= 2) {
+    const bouts = Math.floor(remaining / 2)
+    if (bouts === 1) break // finals — excluded
+    totalStripHours += bouts * boutDuration / 60
+    remaining = Math.floor(remaining / 2)
+  }
+
+  return totalStripHours
+}
+
+/**
  * Estimates strip-hours consumed by a single competition.
  *
  * Pool strip-hours: n_pools × weightedPoolDuration / 60
  *   Each pool runs on its own strip simultaneously; the number of pools is
  *   the parallel strip demand for the pool phase.
  *
- * DE strip-hours: strips_allocated × deDuration / 60
- *   For SINGLE_STAGE: all DE strips run for the full DE duration.
- *   For STAGED_DE_BLOCKS: prelims use strips_allocated; R16 uses de_round_of_16_strips;
- *   finals uses de_finals_strips. The R16 and finals phases also count as video strip-hours.
+ * DE strip-hours depend on de_capacity_mode (pod or greedy) for individual events.
+ * Team events always use the greedy/round-by-round model.
+ *
+ * For STAGED_DE_BLOCKS: prelims use the selected capacity model; R16 and finals
+ * phases use their own strip counts and durations unchanged.
  */
 export function estimateCompetitionStripHours(
   competition: Competition,
@@ -64,25 +220,60 @@ export function estimateCompetitionStripHours(
     competition.cut_value,
     competition.event_type,
   )
+  const promotedFencers = computeDeFencerCount(
+    competition.fencer_count,
+    competition.cut_mode,
+    competition.cut_value,
+    competition.event_type,
+  )
   const totalDeDuration = calculateDeDuration(competition.weapon, bracketSize, config.de_duration_table)
 
   let de_strip_hours = 0
   let video_strip_hours = 0
 
-  if (competition.de_mode === DeMode.STAGED_DE_BLOCKS) {
+  // Team events always use the team round-by-round model
+  if (competition.event_type === EventType.TEAM) {
+    de_strip_hours = teamDeStripHours(competition.fencer_count, competition.weapon)
+  } else if (competition.de_mode === DeMode.STAGED_DE_BLOCKS) {
     // Split DE into prelims / R16 / finals phases and attribute strip-hours separately.
     // R16 and finals phases require video strips (per competition policy).
     const blocks = deBlockDurations(bracketSize, totalDeDuration)
 
-    const prelims_strip_hours = competition.strips_allocated * (blocks.prelims_dur / 60)
+    // Prelims use the selected capacity model
+    const prelimsPromoted = promotedFencers
+    let prelims_strip_hours: number
+    if (config.de_capacity_mode === DeCapacityMode.GREEDY) {
+      // Greedy for prelims: bouts before R16. For a bracket of N,
+      // prelims bouts = promoted - 16 (everything before R16 consolidation)
+      const prelimsBouts = Math.max(prelimsPromoted - 16, 0)
+      prelims_strip_hours = prelimsBouts * DE_BOUT_DURATION[competition.weapon] / 60
+    } else {
+      // Pod model for prelims only — compute pre-R16 strip-hours
+      prelims_strip_hours = podPrelimsStripHours(
+        prelimsPromoted,
+        competition.strips_allocated,
+        competition.weapon,
+        blocks.prelims_dur,
+      )
+    }
+
     const r16_strip_hours = competition.de_round_of_16_strips * (blocks.r16_dur / 60)
     const finals_strip_hours = competition.de_finals_strips * (blocks.finals_dur / 60)
 
     de_strip_hours = prelims_strip_hours + r16_strip_hours + finals_strip_hours
     video_strip_hours = r16_strip_hours + finals_strip_hours
   } else {
-    // SINGLE_STAGE: all strips used for the full DE duration; no video strip budget tracked
-    de_strip_hours = competition.strips_allocated * (totalDeDuration / 60)
+    // SINGLE_STAGE: use selected capacity model
+    if (config.de_capacity_mode === DeCapacityMode.GREEDY) {
+      de_strip_hours = greedyDeStripHours(promotedFencers, competition.weapon)
+    } else {
+      de_strip_hours = podDeStripHours(
+        promotedFencers,
+        competition.strips_allocated,
+        competition.weapon,
+        totalDeDuration,
+      )
+    }
     video_strip_hours = 0
   }
 
@@ -90,6 +281,24 @@ export function estimateCompetitionStripHours(
     total_strip_hours: pool_strip_hours + de_strip_hours,
     video_strip_hours,
   }
+}
+
+/**
+ * Prelims strip-hours for STAGED_DE_BLOCKS.
+ *
+ * For STAGED_DE_BLOCKS, R16/finals phases already use their own strip counts
+ * and empirical durations. The prelims phase uses the flat formula
+ * `stripsAllocated × prelimsDuration / 60` — the pod sub-bracket math cancels
+ * out after duration scaling because prelims duration is already empirical.
+ */
+function podPrelimsStripHours(
+  promotedFencers: number,
+  stripsAllocated: number,
+  _weapon: Competition['weapon'],
+  prelimsDuration: number,
+): number {
+  if (promotedFencers <= 16) return 0
+  return stripsAllocated * prelimsDuration / 60
 }
 
 /**

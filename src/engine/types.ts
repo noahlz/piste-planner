@@ -88,6 +88,12 @@ export const PodCaptainOverride = {
 } as const
 export type PodCaptainOverride = (typeof PodCaptainOverride)[keyof typeof PodCaptainOverride]
 
+export const DeCapacityMode = {
+  POD: 'pod',
+  GREEDY: 'greedy',
+} as const
+export type DeCapacityMode = (typeof DeCapacityMode)[keyof typeof DeCapacityMode]
+
 export const CutMode = {
   DISABLED: 'DISABLED',
   PERCENTAGE: 'PERCENTAGE',
@@ -218,6 +224,7 @@ export interface TournamentConfig {
   dayConfigs: DayConfig[]
   max_pool_strip_pct: number
   max_de_strip_pct: number
+  de_capacity_mode: DeCapacityMode
 }
 
 export interface FlightingGroup {

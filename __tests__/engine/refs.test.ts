@@ -42,6 +42,7 @@ function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig
     dayConfigs: [],
     max_pool_strip_pct: 0.80,
     max_de_strip_pct: 0.80,
+    de_capacity_mode: 'pod',
     ...overrides,
   }
 }
