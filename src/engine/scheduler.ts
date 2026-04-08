@@ -20,6 +20,7 @@ import { createGlobalState } from './resources.ts'
 import { scheduleCompetition } from './scheduleOne.ts'
 import { constraintScore, SchedulingError } from './dayAssignment.ts'
 import { validateConfig } from './validation.ts'
+import { recommendStripCount, recommendRefCount } from './stripBudget.ts'
 
 const VALID_BOTTLENECK_CAUSES = new Set(Object.values(BottleneckCause))
 
@@ -100,6 +101,9 @@ export function scheduleAll(
       }
     }
   }
+
+  const diagnostics = postScheduleDiagnostics(competitions, config, state.bottlenecks)
+  state.bottlenecks.push(...diagnostics)
 
   const postWarnings = postScheduleWarnings(state.schedule, config)
   state.bottlenecks.push(...postWarnings)
@@ -280,4 +284,58 @@ export function postScheduleWarnings(
   }
 
   return warnings
+}
+
+// ──────────────────────────────────────────────
+// postScheduleDiagnostics — resource recommendations
+// ──────────────────────────────────────────────
+
+/**
+ * When scheduling fails due to resource exhaustion, emits INFO-severity
+ * recommendations telling users how many strips and refs they actually need.
+ * Returns empty array if no RESOURCE_EXHAUSTION errors exist.
+ */
+export function postScheduleDiagnostics(
+  competitions: Competition[],
+  config: TournamentConfig,
+  bottlenecks: Bottleneck[],
+): Bottleneck[] {
+  const results: Bottleneck[] = []
+
+  const hasResourceExhaustion = bottlenecks.some(
+    b => b.severity === BottleneckSeverity.ERROR && b.cause === BottleneckCause.RESOURCE_EXHAUSTION,
+  )
+  if (!hasResourceExhaustion) return results
+
+  // Strip recommendation
+  const recommended = recommendStripCount(competitions, config.max_pool_strip_pct)
+  if (recommended > config.strips_total) {
+    results.push({
+      competition_id: '',
+      phase: 'POST_SCHEDULE',
+      cause: BottleneckCause.RESOURCE_RECOMMENDATION,
+      severity: BottleneckSeverity.INFO,
+      delay_mins: 0,
+      message: `Minimum recommended strips: ${recommended} (configured: ${config.strips_total}). Consider adding strips or enabling flighting for large events.`,
+    })
+  }
+
+  // Ref recommendation
+  const rec = recommendRefCount(competitions, 1)
+  const totalRecommended = rec.three_weapon + rec.foil_epee
+  const maxConfiguredRefs = Math.max(
+    ...config.referee_availability.map(d => d.foil_epee_refs + d.three_weapon_refs),
+  )
+  if (totalRecommended > maxConfiguredRefs) {
+    results.push({
+      competition_id: '',
+      phase: 'POST_SCHEDULE',
+      cause: BottleneckCause.RESOURCE_RECOMMENDATION,
+      severity: BottleneckSeverity.INFO,
+      delay_mins: 0,
+      message: `Minimum recommended refs: ${rec.three_weapon} three-weapon + ${rec.foil_epee} foil/epee (configured: ${maxConfiguredRefs}). Add referees to reduce scheduling failures.`,
+    })
+  }
+
+  return results
 }
