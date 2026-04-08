@@ -5,6 +5,7 @@ import {
   dayRemainingCapacity,
   categoryWeight,
   weightedStripHours,
+  distributeEvenly,
 } from '../../src/engine/capacity.ts'
 import type { GlobalState } from '../../src/engine/types.ts'
 import {
@@ -29,17 +30,11 @@ function makeGlobalState(
 // ──────────────────────────────────────────────
 
 describe('estimateCompetitionStripHours', () => {
-  it('200-fencer EPEE INDIVIDUAL event → exact pool and DE strip-hours', () => {
+  it('200-fencer EPEE INDIVIDUAL event → pod model reduces DE strip-hours vs flat formula', () => {
     const config = makeConfig()
     // 200 fencers → n_pools = ceil(200/7) = 29
-    // base_size = floor(200/29) = 6, remainder = 200 % 29 = 26
-    // 26 pools of 7, 3 pools of 6
-    // poolDurationForSize(EPEE, 7) = round(120 * 21/15) = 168
-    // poolDurationForSize(EPEE, 6) = round(120 * 15/15) = 120
-    // weightedPoolDuration = round((26*168 + 3*120) / 29) = round(163.03) = 163
     // pool_strip_hours = 29 * 163 / 60 = 78.8167
-    // DE: no cut → bracket = 256; EPEE 256 = 240 mins; de_strip_hours = 16 * 240 / 60 = 64
-    // total = 78.8167 + 64 = 142.8167
+    // Pod model DE on 16 strips: produces ~52.2 strip-hours (vs flat 64)
     const comp = makeCompetition({
       id: 'epee-200',
       fencer_count: 200,
@@ -54,9 +49,10 @@ describe('estimateCompetitionStripHours', () => {
     const result = estimateCompetitionStripHours(comp, config)
 
     const expectedPoolStripHours = 29 * 163 / 60   // 78.8167
-    const expectedDeStripHours = 16 * 240 / 60     // 64
-    const expectedTotal = expectedPoolStripHours + expectedDeStripHours
-    expect(result.total_strip_hours).toBeCloseTo(expectedTotal, 1)
+    // Pod model produces less than the old flat formula (16 * 240 / 60 = 64)
+    const flatDeStripHours = 16 * 240 / 60
+    expect(result.total_strip_hours).toBeGreaterThan(expectedPoolStripHours)
+    expect(result.total_strip_hours).toBeLessThan(expectedPoolStripHours + flatDeStripHours)
     expect(result.video_strip_hours).toBe(0) // SINGLE_STAGE, no video strip hours
   })
 
@@ -147,6 +143,201 @@ describe('estimateCompetitionStripHours', () => {
     expect(result.video_strip_hours).toBe(0)
   })
 
+  it('pod model — 256-fencer EPEE on 16 strips → DE strip-hours ≈ 53.47', () => {
+    // 4 pods of 4 strips; sub-bracket = 64 per pod; pre-R16 = 15 batches × 20 min = 300 min
+    // preR16StripHours = 16 × 300/60 = 80.0; r16StripHours = 4.667
+    // scaleFactor = 240/380; total DE sh = 84.667 × 0.63158 ≈ 53.47
+    const podConfig = makeConfig({ de_capacity_mode: 'pod' })
+    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const comp = makeCompetition({
+      id: 'pod-256',
+      fencer_count: 256,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 16,
+    })
+
+    const podResult = estimateCompetitionStripHours(comp, podConfig)
+    const greedyResult = estimateCompetitionStripHours(comp, greedyConfig)
+
+    // Pool strip-hours are the same regardless of de_capacity_mode.
+    // Greedy DE for 256 fencers: (256-2) * 20/60 = 84.667. Isolate pool_sh then check pod DE.
+    const greedyDeStripHours = (256 - 2) * 20 / 60
+    const poolStripHours = greedyResult.total_strip_hours - greedyDeStripHours
+    const podDeStripHours = podResult.total_strip_hours - poolStripHours
+    expect(podDeStripHours).toBeCloseTo(53.47, 0)
+  })
+
+  it('greedy model — 256 fencers, 20% cut → DE strip-hours ≈ 67.67', () => {
+    // promoted = round(256 × 0.80) = 205; totalBouts = 203; 203 × 20/60 = 67.67
+    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const cutComp = makeCompetition({
+      id: 'greedy-256-cut',
+      fencer_count: 256,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.PERCENTAGE,
+      cut_value: 20,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 16,
+    })
+    const noCutComp = makeCompetition({
+      id: 'greedy-256-nocut',
+      fencer_count: 256,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 16,
+    })
+
+    const cutResult = estimateCompetitionStripHours(cutComp, greedyConfig)
+    const noCutResult = estimateCompetitionStripHours(noCutComp, greedyConfig)
+
+    // Pool strip-hours are the same (same fencer_count). Isolate via greedy no-cut baseline.
+    const poolStripHours = noCutResult.total_strip_hours - (256 - 2) * 20 / 60
+    const deStripHours = cutResult.total_strip_hours - poolStripHours
+    expect(deStripHours).toBeCloseTo(67.67, 1)
+  })
+
+  it('pod model — bracket ≤ 16 (12 fencers, 8 strips) → DE strip-hours ≈ 3.0', () => {
+    // podR16StripHours(12, 20, 60): walk 12→6→3→1; totalBoutDur=80; scaleFactor=60/80=0.75
+    // totalStripHours = (2.667 + 1.0 + 0.333) × 0.75 = 4.0 × 0.75 = 3.0
+    const podConfig = makeConfig({ de_capacity_mode: 'pod' })
+    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const comp = makeCompetition({
+      id: 'pod-small',
+      fencer_count: 12,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 8,
+    })
+
+    const podResult = estimateCompetitionStripHours(comp, podConfig)
+    const greedyResult = estimateCompetitionStripHours(comp, greedyConfig)
+
+    // Pool strip-hours same regardless of mode. Greedy DE for 12 fencers: (12-2)*20/60 = 3.333
+    const poolStripHours = greedyResult.total_strip_hours - (12 - 2) * 20 / 60
+    const podDeStripHours = podResult.total_strip_hours - poolStripHours
+    // Flat formula: 8 × 60/60 = 8.0; pod model is much less
+    expect(podDeStripHours).toBeCloseTo(3.0, 1)
+    expect(podDeStripHours).toBeLessThan(8 * 60 / 60)
+  })
+
+  it('team event — 33 teams, EPEE → uses team model regardless of de_capacity_mode', () => {
+    // playInBouts=1 (33-32); rounds 32→16→8→4→2 (finals excluded)
+    // teamDeStripHours = (1+16+8+4+2) × 20/60 = 31 × 20/60 ≈ 10.333
+    const podConfig = makeConfig({ de_capacity_mode: 'pod' })
+    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const comp = makeCompetition({
+      id: 'team-33',
+      fencer_count: 33,
+      weapon: Weapon.EPEE,
+      event_type: EventType.TEAM,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 16,
+    })
+
+    const podResult = estimateCompetitionStripHours(comp, podConfig)
+    const greedyResult = estimateCompetitionStripHours(comp, greedyConfig)
+
+    // Team events use the team model regardless of de_capacity_mode — results must be equal
+    expect(podResult.total_strip_hours).toBe(greedyResult.total_strip_hours)
+    // Total = pool_strip_hours + 10.333; verify DE portion ≈ 10.333
+    // Pool for 33 EPEE: n_pools=5, 3 pools of 7 (168 min each), 2 pools of 6 (120 min each)
+    // weightedPoolDur = round((3×168 + 2×120)/5) = round(148.8) = 149; pool_sh = 5×149/60 ≈ 12.417
+    const expectedPoolStripHours = 5 * 149 / 60
+    const deStripHours = podResult.total_strip_hours - expectedPoolStripHours
+    expect(deStripHours).toBeCloseTo(10.333, 1)
+  })
+
+  it('team event — 32 teams, EPEE → DE strip-hours = 10.0 (no play-ins)', () => {
+    // 32 teams, no play-ins. R32:16 + R16:8 + QF:4 + SF:2 = 30 bouts (finals excluded)
+    // teamDeStripHours = 30 × 20/60 = 10.0
+    const config = makeConfig({ de_capacity_mode: 'pod' })
+    const comp = makeCompetition({
+      id: 'team-32',
+      fencer_count: 32,
+      weapon: Weapon.EPEE,
+      event_type: EventType.TEAM,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 16,
+    })
+
+    const result = estimateCompetitionStripHours(comp, config)
+
+    // Pool for 32 EPEE: n_pools=5, 2 pools of 7 (168 min), 3 pools of 6 (120 min)
+    // weightedPoolDur = round((2×168 + 3×120)/5) = round(139.2) = 139; pool_sh = 5×139/60
+    const expectedPoolStripHours = 5 * 139 / 60
+    const deStripHours = result.total_strip_hours - expectedPoolStripHours
+    expect(deStripHours).toBeCloseTo(10.0, 1)
+  })
+
+  it('greedy model — strip count does not affect total strip-hours', () => {
+    const config = makeConfig({ de_capacity_mode: 'greedy' })
+    const comp4 = makeCompetition({
+      id: 'greedy-strips-4',
+      fencer_count: 100,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 4,
+    })
+    const comp16 = makeCompetition({
+      id: 'greedy-strips-16',
+      fencer_count: 100,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 16,
+    })
+
+    const result4 = estimateCompetitionStripHours(comp4, config)
+    const result16 = estimateCompetitionStripHours(comp16, config)
+
+    expect(result4.total_strip_hours).toBe(result16.total_strip_hours)
+  })
+
+  it('pod model — 200-fencer EPEE on 16 strips produces fewer DE strip-hours than flat formula', () => {
+    const podConfig = makeConfig({ de_capacity_mode: 'pod' })
+    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const comp = makeCompetition({
+      id: 'pod-200-vs-flat',
+      fencer_count: 200,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 16,
+    })
+
+    const podResult = estimateCompetitionStripHours(comp, podConfig)
+    const greedyResult = estimateCompetitionStripHours(comp, greedyConfig)
+
+    // Flat formula: 16 strips × 240 min / 60 = 64 strip-hours
+    const flatDeStripHours = 16 * 240 / 60
+    const poolStripHours = greedyResult.total_strip_hours - (200 - 2) * 20 / 60
+    const podDeStripHours = podResult.total_strip_hours - poolStripHours
+    expect(podDeStripHours).toBeLessThan(flatDeStripHours)
+    expect(podDeStripHours).toBeGreaterThan(0)
+  })
+
 })
 
 // ──────────────────────────────────────────────
@@ -165,13 +356,8 @@ describe('dayConsumedCapacity', () => {
     expect(result.video_strip_hours_consumed).toBe(0)
   })
 
-  it('one large competition consuming 40 strips for 4h → ~160 strip-hours consumed', () => {
+  it('one large competition on a day → consumed capacity matches estimateCompetitionStripHours', () => {
     const config = makeConfig({ strips: Array.from({ length: 80 }, (_, i) => ({ id: `strip-${i+1}`, video_capable: i < 4 })) })
-    // Use a competition where we can predict strip-hours consumed
-    // With strips_allocated=40 and total DE duration = 4h = 240 mins:
-    // DE strip-hours = 40 * 240 / 60 = 160 strip-hours
-    // We need fencer count such that DE bracket duration ≈ 240 mins
-    // FOIL, bracket 256 = 240 mins, fencer_count=200 no cut → bracket=256
     const comp = makeCompetition({
       id: 'large-comp',
       fencer_count: 200,
@@ -186,18 +372,9 @@ describe('dayConsumedCapacity', () => {
     const state = makeGlobalState({ 'large-comp': scheduleEntry })
 
     const result = dayConsumedCapacity(0, state, [comp], config)
+    const estimate = estimateCompetitionStripHours(comp, config)
 
-    // 200 FOIL fencers: n_pools=29, 26 pools of 7, 3 pools of 6
-    // poolDurationForSize(FOIL,7) = round(105*21/15) = 147
-    // poolDurationForSize(FOIL,6) = round(105*15/15) = 105
-    // weightedPoolDuration = round((26*147 + 3*105)/29) = round(4137/29) = round(142.65) = 143
-    // pool_strip_hours = 29 * 143 / 60 = 69.1167
-    // bracket=256; deDuration(FOIL,256)=240; de_strip_hours = 40 * 240 / 60 = 160
-    // total = 69.1167 + 160 = 229.1167
-    const expectedPoolStripHours = 29 * 143 / 60
-    const expectedDeStripHours = 40 * 240 / 60
-    const expectedTotal = expectedPoolStripHours + expectedDeStripHours
-    expect(result.strip_hours_consumed).toBeCloseTo(expectedTotal, 1)
+    expect(result.strip_hours_consumed).toBeCloseTo(estimate.total_strip_hours, 5)
     expect(result.video_strip_hours_consumed).toBe(0) // SINGLE_STAGE
   })
 
@@ -214,12 +391,12 @@ describe('dayConsumedCapacity', () => {
     const result = dayConsumedCapacity(0, state, [comp1, comp2], config)
 
     // comp1: 30 FOIL → 5 pools of 6; poolDur(FOIL,6)=105; pool_sh=5*105/60=8.75
-    //   bracket=32; FOIL[32]=90; de_sh=4*90/60=6.0 → comp1_total=14.75
+    //   DE uses pod model — strip-hours computed via estimateCompetitionStripHours
     // comp2: 30 EPEE → 5 pools of 6; poolDur(EPEE,6)=120; pool_sh=5*120/60=10.0
-    //   bracket=32; EPEE[32]=90; de_sh=4*90/60=6.0 → comp2_total=16.0
-    const comp1StripHours = 5 * 105 / 60 + 4 * 90 / 60   // 8.75 + 6.0 = 14.75
-    const comp2StripHours = 5 * 120 / 60 + 4 * 90 / 60   // 10.0 + 6.0 = 16.0
-    expect(result.strip_hours_consumed).toBeCloseTo(comp1StripHours + comp2StripHours, 1)
+    //   DE uses pod model — strip-hours computed via estimateCompetitionStripHours
+    const comp1StripHours = estimateCompetitionStripHours(comp1, config).total_strip_hours
+    const comp2StripHours = estimateCompetitionStripHours(comp2, config).total_strip_hours
+    expect(result.strip_hours_consumed).toBeCloseTo(comp1StripHours + comp2StripHours, 5)
   })
 
   it('only counts competitions assigned to the queried day, not other days', () => {
@@ -236,9 +413,9 @@ describe('dayConsumedCapacity', () => {
     const emptyDayResult = dayConsumedCapacity(2, state, [comp1, comp2], config)
 
     // 30 FOIL (default weapon) → 5 pools of 6; poolDur(FOIL,6)=105; pool_sh=5*105/60=8.75
-    // bracket=32; FOIL[32]=90; de_sh=4*90/60=6.0 → total=14.75
-    const expectedSingleCompStripHours = 5 * 105 / 60 + 4 * 90 / 60   // 8.75 + 6.0 = 14.75
-    expect(day0Result.strip_hours_consumed).toBeCloseTo(expectedSingleCompStripHours, 1)
+    // DE uses pod model — strip-hours computed via estimateCompetitionStripHours
+    const expectedSingleCompStripHours = estimateCompetitionStripHours(comp1, config).total_strip_hours
+    expect(day0Result.strip_hours_consumed).toBeCloseTo(expectedSingleCompStripHours, 5)
     expect(emptyDayResult.strip_hours_consumed).toBe(0)
   })
 
@@ -312,10 +489,9 @@ describe('dayRemainingCapacity', () => {
     // poolDur(FOIL,7)=round(105*21/15)=147; poolDur(FOIL,6)=105
     // weightedPoolDur = round((2*147+6*105)/8) = round(924/8) = round(115.5) = 116
     // pool_sh = 8 * 116 / 60 = 15.4667
-    // bracket=64; FOIL[64]=120; de_sh = 8 * 120 / 60 = 16.0
-    // comp_total = 15.4667 + 16.0 = 31.4667
-    const expectedCompStripHours = 8 * 116 / 60 + 8 * 120 / 60
-    expect(emptyResult.strip_hours_remaining - filledResult.strip_hours_remaining).toBeCloseTo(expectedCompStripHours, 1)
+    // DE uses pod model — strip-hours computed via estimateCompetitionStripHours
+    const expectedCompStripHours = estimateCompetitionStripHours(comp, config).total_strip_hours
+    expect(emptyResult.strip_hours_remaining - filledResult.strip_hours_remaining).toBeCloseTo(expectedCompStripHours, 5)
   })
 
   it('video remaining capacity tracks separately from general capacity', () => {
@@ -559,5 +735,23 @@ describe('weightedStripHours', () => {
 
     expect(weighted).toBeCloseTo(raw.total_strip_hours * weight, 5)
     expect(weight).toBe(1.3)
+  })
+})
+
+// ──────────────────────────────────────────────
+// distributeEvenly
+// ──────────────────────────────────────────────
+
+describe('distributeEvenly', () => {
+  it('divides evenly when divisible', () => {
+    expect(distributeEvenly(12, 3)).toEqual([4, 4, 4])
+  })
+
+  it('larger groups get one extra when not divisible', () => {
+    expect(distributeEvenly(10, 3)).toEqual([4, 3, 3])
+  })
+
+  it('6 strips across 2 pods → [3, 3]', () => {
+    expect(distributeEvenly(6, 2)).toEqual([3, 3])
   })
 })
