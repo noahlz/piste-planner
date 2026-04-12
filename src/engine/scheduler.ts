@@ -10,6 +10,7 @@ import type {
   TournamentConfig,
   ScheduleResult,
   Bottleneck,
+  GlobalState,
 } from './types.ts'
 import {
   Phase,
@@ -22,6 +23,8 @@ import { scheduleCompetition } from './scheduleOne.ts'
 import { constraintScore, SchedulingError } from './dayAssignment.ts'
 import { validateConfig } from './validation.ts'
 import { recommendStripCount, recommendRefCount } from './stripBudget.ts'
+import { dayConsumedCapacity } from './capacity.ts'
+import { peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 
 const VALID_BOTTLENECK_CAUSES = new Set(Object.values(BottleneckCause))
 
@@ -105,6 +108,9 @@ export function scheduleAll(
 
   const diagnostics = postScheduleDiagnostics(competitions, config, state.bottlenecks)
   state.bottlenecks.push(...diagnostics)
+
+  const dayBreakdown = postScheduleDayBreakdown(competitions, config, state)
+  state.bottlenecks.push(...dayBreakdown)
 
   const postWarnings = postScheduleWarnings(state.schedule, config)
   state.bottlenecks.push(...postWarnings)
@@ -317,7 +323,7 @@ export function postScheduleDiagnostics(
       cause: BottleneckCause.RESOURCE_RECOMMENDATION,
       severity: BottleneckSeverity.INFO,
       delay_mins: 0,
-      message: `Minimum recommended strips: ${recommended} (configured: ${config.strips_total}). Consider adding strips or enabling flighting for large events.`,
+      message: `Strips: need ${recommended}, have ${config.strips_total} — add ${recommended - config.strips_total} more (or enable flighting for large events).`,
     })
   }
 
@@ -334,8 +340,92 @@ export function postScheduleDiagnostics(
       cause: BottleneckCause.RESOURCE_RECOMMENDATION,
       severity: BottleneckSeverity.INFO,
       delay_mins: 0,
-      message: `Minimum recommended refs: ${rec.three_weapon} three-weapon + ${rec.foil_epee} foil/epee (configured: ${maxConfiguredRefs}). Add referees to reduce scheduling failures.`,
+      message: `Refs: need ${rec.three_weapon} three-weapon + ${rec.foil_epee} foil/epee (${totalRecommended} total), have ${maxConfiguredRefs} — add ${totalRecommended - maxConfiguredRefs} more.`,
     })
+  }
+
+  return results
+}
+
+// ──────────────────────────────────────────────
+// postScheduleDayBreakdown — per-day resource summaries
+// ──────────────────────────────────────────────
+
+/**
+ * After scheduling, emits per-day resource summaries for days that have
+ * at least one failed competition. Shows strip-hour and ref usage vs capacity.
+ */
+export function postScheduleDayBreakdown(
+  competitions: Competition[],
+  config: TournamentConfig,
+  state: GlobalState,
+): Bottleneck[] {
+  const results: Bottleneck[] = []
+
+  // Identify days that have at least one failed event
+  const failedCompIds = new Set(
+    state.bottlenecks
+      .filter(b => b.severity === BottleneckSeverity.ERROR)
+      .map(b => b.competition_id)
+      .filter(id => id !== ''),
+  )
+  if (failedCompIds.size === 0) return results
+
+  // Determine which days had failures (assigned_day from schedule, or all days for unscheduled comps)
+  const daysWithFailures = new Set<number>()
+  for (const compId of failedCompIds) {
+    const sr = state.schedule[compId]
+    if (sr) {
+      daysWithFailures.add(sr.assigned_day)
+    } else {
+      // Competition never got a day assignment — all days are relevant
+      for (let d = 0; d < config.days_available; d++) daysWithFailures.add(d)
+    }
+  }
+
+  for (const day of [...daysWithFailures].sort((a, b) => a - b)) {
+    // Strip-hours summary
+    const consumed = dayConsumedCapacity(day, state, competitions, config)
+    const totalCapacity = config.strips_total * (config.DAY_LENGTH_MINS / 60)
+    const stripDeficit = Math.max(0, consumed.strip_hours_consumed - totalCapacity)
+
+    results.push({
+      competition_id: '',
+      phase: Phase.POST_SCHEDULE,
+      cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+      severity: stripDeficit > 0 ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
+      delay_mins: 0,
+      message: `Day ${day + 1} strips: ${consumed.strip_hours_consumed.toFixed(1)} strip-hours consumed of ${totalCapacity.toFixed(1)} available${stripDeficit > 0 ? ` (${stripDeficit.toFixed(1)} over capacity)` : ''}.`,
+    })
+
+    // Ref summary for this day
+    const dayRefConfig = config.referee_availability.find(r => r.day === day)
+    const configuredRefs = dayRefConfig
+      ? dayRefConfig.foil_epee_refs + dayRefConfig.three_weapon_refs
+      : 0
+
+    // Sum peak ref demand across scheduled competitions on this day.
+    // Each competition's peak is the larger of its pool and DE demand.
+    const compsOnDay = competitions.filter(c => state.schedule[c.id]?.assigned_day === day)
+    let peakRefDemand = 0
+    for (const comp of compsOnDay) {
+      if (comp.fencer_count <= 1) continue
+      const poolDemand = peakPoolRefDemand(comp, comp.ref_policy)
+      const deDemand = peakDeRefDemand(comp, config)
+      peakRefDemand += Math.max(poolDemand, deDemand)
+    }
+
+    if (peakRefDemand > 0 || configuredRefs > 0) {
+      const refDeficit = Math.max(0, peakRefDemand - configuredRefs)
+      results.push({
+        competition_id: '',
+        phase: Phase.POST_SCHEDULE,
+        cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+        severity: refDeficit > 0 ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
+        delay_mins: 0,
+        message: `Day ${day + 1} refs: peak demand ${peakRefDemand}, configured ${configuredRefs}${refDeficit > 0 ? ` — add ${refDeficit} more` : ''}.`,
+      })
+    }
   }
 
   return results

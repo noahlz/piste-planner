@@ -19,7 +19,8 @@ import {
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
 } from '../../src/engine/constants.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
-import { scheduleAll, sortWithPairs, postScheduleWarnings, postScheduleDiagnostics } from '../../src/engine/scheduler.ts'
+import { scheduleAll, sortWithPairs, postScheduleWarnings, postScheduleDiagnostics, postScheduleDayBreakdown } from '../../src/engine/scheduler.ts'
+import { createGlobalState } from '../../src/engine/resources.ts'
 import {
   makeStrips,
   makeConfig,
@@ -631,11 +632,14 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
     // The test is only meaningful if the schedule actually produces an imbalance
     expect(expectedWarnings.length).toBeGreaterThan(0)
 
-    // All POST_SCHEDULE warnings must appear in the scheduleAll bottleneck list
-    const postBottlenecks = bottlenecks.filter(b => b.phase === 'POST_SCHEDULE')
-    expect(postBottlenecks).toHaveLength(expectedWarnings.length)
+    // All postScheduleWarnings must appear in the scheduleAll bottleneck list
+    // Filter by cause to exclude DAY_RESOURCE_SUMMARY entries added by postScheduleDayBreakdown
+    const warningBottlenecks = bottlenecks.filter(
+      b => b.phase === 'POST_SCHEDULE' && b.cause === BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
+    )
+    expect(warningBottlenecks).toHaveLength(expectedWarnings.length)
     for (const w of expectedWarnings) {
-      expect(postBottlenecks.some(b => b.message === w.message)).toBe(true)
+      expect(warningBottlenecks.some(b => b.message === w.message)).toBe(true)
     }
   })
 
@@ -683,13 +687,14 @@ describe('postScheduleDiagnostics', () => {
 
     const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
 
-    const stripRec = result.filter(b => b.message.includes('Minimum recommended strips'))
+    const stripRec = result.filter(b => b.message.includes('Strips: need'))
     expect(stripRec).toHaveLength(1)
     expect(stripRec[0].cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
     expect(stripRec[0].severity).toBe(BottleneckSeverity.INFO)
     expect(stripRec[0].phase).toBe('POST_SCHEDULE')
     expect(stripRec[0].message).toContain('13')
-    expect(stripRec[0].message).toContain('configured: 4')
+    expect(stripRec[0].message).toContain('have 4')
+    expect(stripRec[0].message).toContain('add 9 more')
   })
 
   it('emits ref recommendation when configured refs < recommended', () => {
@@ -709,13 +714,14 @@ describe('postScheduleDiagnostics', () => {
 
     const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
 
-    const refRec = result.filter(b => b.message.includes('Minimum recommended refs'))
+    const refRec = result.filter(b => b.message.includes('Refs: need'))
     expect(refRec).toHaveLength(1)
     expect(refRec[0].cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
     expect(refRec[0].severity).toBe(BottleneckSeverity.INFO)
     expect(refRec[0].phase).toBe('POST_SCHEDULE')
     expect(refRec[0].message).toContain('8 three-weapon')
-    expect(refRec[0].message).toContain('configured: 2')
+    expect(refRec[0].message).toContain('have 2')
+    expect(refRec[0].message).toContain('add 6 more')
   })
 
   it('emits nothing when no RESOURCE_EXHAUSTION errors exist', () => {
@@ -773,7 +779,72 @@ describe('postScheduleDiagnostics', () => {
     const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
 
     expect(result).toHaveLength(2)
-    expect(result.some(b => b.message.includes('Minimum recommended strips'))).toBe(true)
-    expect(result.some(b => b.message.includes('Minimum recommended refs'))).toBe(true)
+    expect(result.some(b => b.message.includes('Strips: need'))).toBe(true)
+    expect(result.some(b => b.message.includes('Refs: need'))).toBe(true)
+  })
+})
+
+describe('postScheduleDayBreakdown', () => {
+  it('returns empty when no ERROR bottlenecks exist', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    const comps = [makeCompetition({ id: 'event-1', fencer_count: 20 })]
+
+    const result = postScheduleDayBreakdown(comps, config, state)
+    expect(result).toHaveLength(0)
+  })
+
+  it('emits per-day strip summary for days with failed events', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    // Schedule one competition on day 0
+    state.schedule['event-1'] = makeScheduleResult('event-1', 0)
+    // Add an ERROR bottleneck for a different competition (unscheduled)
+    state.bottlenecks.push({
+      competition_id: 'event-2',
+      phase: Phase.SCHEDULING,
+      cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      severity: BottleneckSeverity.ERROR,
+      delay_mins: 0,
+      message: 'Failed',
+    })
+
+    const comps = [
+      makeCompetition({ id: 'event-1', fencer_count: 20 }),
+      makeCompetition({ id: 'event-2', fencer_count: 20 }),
+    ]
+
+    const result = postScheduleDayBreakdown(comps, config, state)
+
+    // Should have summaries for all days (event-2 was unscheduled → all days relevant)
+    const daySummaries = result.filter(b => b.cause === BottleneckCause.DAY_RESOURCE_SUMMARY)
+    expect(daySummaries.length).toBeGreaterThan(0)
+    expect(daySummaries.every(b => b.phase === Phase.POST_SCHEDULE)).toBe(true)
+    expect(daySummaries.every(b => b.competition_id === '')).toBe(true)
+    // Verify message content includes strip-hours data
+    const stripSummaries = daySummaries.filter(b => b.message.includes('strip-hours'))
+    expect(stripSummaries.length).toBeGreaterThan(0)
+  })
+
+  it('severity is INFO for normal load (strip-hours within capacity)', () => {
+    // With 24 strips × 14 hours = 336 strip-hours, a 20-fencer event won't exceed capacity
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    state.schedule['event-1'] = makeScheduleResult('event-1', 0)
+    state.bottlenecks.push({
+      competition_id: 'event-1',
+      phase: Phase.SCHEDULING,
+      cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      severity: BottleneckSeverity.ERROR,
+      delay_mins: 0,
+      message: 'Failed',
+    })
+
+    const comps = [makeCompetition({ id: 'event-1', fencer_count: 20 })]
+    const result = postScheduleDayBreakdown(comps, config, state)
+
+    const stripSummaries = result.filter(b => b.message.includes('strip-hours'))
+    expect(stripSummaries.length).toBeGreaterThan(0)
+    expect(stripSummaries[0].severity).toBe(BottleneckSeverity.INFO)
   })
 })

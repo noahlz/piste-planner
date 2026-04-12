@@ -27,9 +27,52 @@ import {
 import { computeBracketSize, calculateDeDuration, dePhasesForBracket, deBlockDurations } from './de.ts'
 import { refsAvailableOnDay } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
-import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, snapshotState, restoreState } from './resources.ts'
+import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, snapshotState, restoreState, type NoWindowReason } from './resources.ts'
 import { assignDay, findEarlierSlotSameDay, SchedulingError } from './dayAssignment.ts'
 import { computeStripCap } from './stripBudget.ts'
+
+function formatTime(mins: number): string {
+  if (!isFinite(mins)) return 'never'
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return `${h}:${String(m).padStart(2, '0')}`
+}
+
+/**
+ * Translates a NO_WINDOW reason into an INFO-severity diagnostic bottleneck
+ * so users see why a specific resource window search failed.
+ */
+function emitNoWindowDiagnostic(
+  reason: NoWindowReason | undefined,
+  competitionId: string,
+  phase: Phase,
+  day: number,
+  state: GlobalState,
+): void {
+  if (!reason) return
+
+  let message: string
+  switch (reason.kind) {
+    case 'STRIPS':
+      message = `${competitionId} ${phase} on day ${day + 1}: need ${reason.needed} strips, ${reason.available} free, earliest free at ${formatTime(reason.earliest_free)}`
+      break
+    case 'REFS':
+      message = `${competitionId} ${phase} on day ${day + 1}: need ${reason.needed} refs, ${reason.available} available, next release at ${formatTime(reason.earliest_free)}`
+      break
+    case 'TIME':
+      message = `${competitionId} ${phase} on day ${day + 1}: candidate ${formatTime(reason.candidate)} exceeds latest start ${formatTime(reason.latest_start)}`
+      break
+  }
+
+  state.bottlenecks.push({
+    competition_id: competitionId,
+    phase,
+    cause: BottleneckCause.NO_WINDOW_DIAGNOSTIC,
+    severity: BottleneckSeverity.INFO,
+    delay_mins: 0,
+    message,
+  })
+}
 
 export function scheduleCompetition(
   competition: Competition,
@@ -253,6 +296,7 @@ function allocateFlightedPools(
     state, config, competition.id, Phase.FLIGHT_A,
   )
   if (windowA.type === 'NO_WINDOW') {
+    emitNoWindowDiagnostic(windowA.reason, competition.id, Phase.FLIGHT_A, day, state)
     throw new SchedulingError(
       BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
       `No resource window for ${competition.id} Flight A on day ${day}`,
@@ -288,6 +332,7 @@ function allocateFlightedPools(
     state, config, competition.id, Phase.FLIGHT_B,
   )
   if (windowB.type === 'NO_WINDOW') {
+    emitNoWindowDiagnostic(windowB.reason, competition.id, Phase.FLIGHT_B, day, state)
     throw new SchedulingError(
       BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
       `No resource window for ${competition.id} Flight B on day ${day}`,
@@ -453,6 +498,7 @@ function allocateNonFlightedPools(
   )
 
   if (window.type === 'NO_WINDOW') {
+    emitNoWindowDiagnostic(window.reason, competition.id, Phase.POOLS, day, state)
     throw new SchedulingError(
       BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
       `No resource window found for ${competition.id} pools on day ${day}`,
@@ -511,6 +557,7 @@ function executeSingleBlockDe(
   )
 
   if (window.type === 'NO_WINDOW') {
+    emitNoWindowDiagnostic(window.reason, competition.id, Phase.DE, day, state)
     throw new SchedulingError(
       BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
       `No resource window for ${competition.id} DE on day ${day}`,
@@ -582,6 +629,7 @@ function executeThreeBlockDe(
     )
 
     if (prelimsWindow.type === 'NO_WINDOW') {
+      emitNoWindowDiagnostic(prelimsWindow.reason, competition.id, Phase.DE_PRELIMS, day, state)
       throw new SchedulingError(
         BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
         `No resource window for ${competition.id} DE_PRELIMS on day ${day}`,
@@ -621,6 +669,7 @@ function executeThreeBlockDe(
   )
 
   if (r16Window.type === 'NO_WINDOW') {
+    emitNoWindowDiagnostic(r16Window.reason, competition.id, Phase.DE_ROUND_OF_16, day, state)
     throw new SchedulingError(
       BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
       `No resource window for ${competition.id} DE_ROUND_OF_16 on day ${day}`,
@@ -658,6 +707,7 @@ function executeThreeBlockDe(
   )
 
   if (finWindow.type === 'NO_WINDOW') {
+    emitNoWindowDiagnostic(finWindow.reason, competition.id, Phase.DE_FINALS, day, state)
     throw new SchedulingError(
       BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
       `No resource window for ${competition.id} DE_FINALS on day ${day}`,

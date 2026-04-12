@@ -60,7 +60,7 @@ export function refsAvailableOnDay(day: number, weapon: Weapon, config: Tourname
  * - TWO: 2 refs per pool
  * - AUTO: 2 refs per pool (peak estimate — AUTO tries 2 first, so we size for that)
  */
-function peakPoolRefDemand(comp: Competition, ref_policy: RefPolicy): number {
+export function peakPoolRefDemand(comp: Competition, ref_policy: RefPolicy): number {
   const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
   return ref_policy === RefPolicy.ONE ? n_pools : n_pools * 2
 }
@@ -72,7 +72,7 @@ function peakPoolRefDemand(comp: Competition, ref_policy: RefPolicy): number {
  * With infinite refs, the DE phase uses all allocated strips concurrently.
  * DE always requires 1 ref per strip (DE_REFS = 1).
  */
-function peakDeRefDemand(comp: Competition, config: TournamentConfig): number {
+export function peakDeRefDemand(comp: Competition, config: TournamentConfig): number {
   const bracketSize = computeBracketSize(
     comp.fencer_count,
     comp.cut_mode,

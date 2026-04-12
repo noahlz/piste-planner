@@ -155,6 +155,8 @@ export const BottleneckCause = {
   CUT_SUMMARY: 'CUT_SUMMARY',
   RESOURCE_EXHAUSTION: 'RESOURCE_EXHAUSTION',
   RESOURCE_RECOMMENDATION: 'RESOURCE_RECOMMENDATION',
+  DAY_RESOURCE_SUMMARY: 'DAY_RESOURCE_SUMMARY',
+  NO_WINDOW_DIAGNOSTIC: 'NO_WINDOW_DIAGNOSTIC',
 } as const
 export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCause]
 
