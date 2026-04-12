@@ -14,6 +14,7 @@ import type {
 } from './types.ts'
 import {
   Phase,
+  DeMode,
   BottleneckCause,
   BottleneckSeverity,
   dayStart,
@@ -328,7 +329,7 @@ export function postScheduleDiagnostics(
   }
 
   // Ref recommendation
-  const rec = recommendRefCount(competitions, 1)
+  const rec = recommendRefCount(competitions, 1, config)
   const totalRecommended = rec.three_weapon + rec.foil_epee
   const maxConfiguredRefs = Math.max(
     ...config.referee_availability.map(d => d.foil_epee_refs + d.three_weapon_refs),
@@ -424,6 +425,24 @@ export function postScheduleDayBreakdown(
         severity: refDeficit > 0 ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
         delay_mins: 0,
         message: `Day ${day + 1} refs: peak demand ${peakRefDemand}, configured ${configuredRefs}${refDeficit > 0 ? ` — add ${refDeficit} more` : ''}.`,
+      })
+    }
+
+    // Video-stage DE ref contention
+    const stagedComps = compsOnDay.filter(c => c.de_mode === DeMode.STAGED)
+    const stagedCount = stagedComps.length
+    const videoStageSum = stagedComps.reduce(
+      (sum, c) => sum + Math.max(c.de_round_of_16_strips, c.de_finals_strips),
+      0,
+    )
+    if (videoStageSum > 0) {
+      results.push({
+        competition_id: '',
+        phase: Phase.POST_SCHEDULE,
+        cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+        severity: videoStageSum > configuredRefs ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
+        delay_mins: 0,
+        message: `Day ${day + 1} video-stage DE ref demand: ${videoStageSum} refs across ${stagedCount} staged events`,
       })
     }
   }

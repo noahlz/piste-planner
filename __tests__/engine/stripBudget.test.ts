@@ -5,8 +5,8 @@ import {
   recommendRefCount,
   flagFlightingCandidates,
 } from '../../src/engine/stripBudget.ts'
-import { makeCompetition } from '../helpers/factories.ts'
-import { Weapon } from '../../src/engine/types.ts'
+import { makeCompetition, makeConfig } from '../helpers/factories.ts'
+import { Weapon, DeMode } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
 // computeStripCap
@@ -74,7 +74,7 @@ describe('recommendStripCount', () => {
 
 describe('recommendRefCount', () => {
   it('returns zeros for an empty competition list', () => {
-    expect(recommendRefCount([], 1)).toEqual({ three_weapon: 0, foil_epee: 0 })
+    expect(recommendRefCount([], 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 0 })
   })
 
   it('sabre-heavy: all refs are three-weapon, foil/epee surplus is zero', () => {
@@ -82,8 +82,8 @@ describe('recommendRefCount', () => {
       makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 70 }), // 10 pools
       makeCompetition({ id: 's2', weapon: Weapon.SABRE, fencer_count: 35 }), // 5 pools
     ]
-    // peakSabre=15, peakFoilEpee=0 → three_weapon=15, foil_epee=0
-    expect(recommendRefCount(comps, 1)).toEqual({ three_weapon: 15, foil_epee: 0 })
+    // peakSabrePools=15, peakSabreDe=10, max=15; peakFoilEpee=0 → three_weapon=15, foil_epee=0
+    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 15, foil_epee: 0 })
   })
 
   it('foil/epee only: three_weapon=0, all go to foil_epee', () => {
@@ -91,8 +91,8 @@ describe('recommendRefCount', () => {
       makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 70 }), // 10 pools
       makeCompetition({ id: 'e1', weapon: Weapon.EPEE, fencer_count: 35 }), // 5 pools
     ]
-    // peakFoilEpee=15, peakSabre=0 → three_weapon=0, foil_epee=15
-    expect(recommendRefCount(comps, 1)).toEqual({ three_weapon: 0, foil_epee: 15 })
+    // peakFoilEpeePools=15, peakFoilEpeeDe=10, max=15; peakSabre=0 → three_weapon=0, foil_epee=15
+    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 15 })
   })
 
   it('mixed weapons: foil/epee refs are the surplus beyond the sabre crew', () => {
@@ -102,9 +102,9 @@ describe('recommendRefCount', () => {
       makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 140 }), // 20 pools
       makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 70 }),  // 10 pools
     ]
-    // peakSabre=15, three_weapon=15
-    // peakFoilEpee=30, ceil(30*1)=30 − 15 = 15 foil_epee
-    expect(recommendRefCount(comps, 1)).toEqual({ three_weapon: 15, foil_epee: 15 })
+    // peakSabre: max(15 pools, 10 DE) = 15. peakFoilEpee: max(30 pools, 10 DE) = 30.
+    // three_weapon=15, foil_epee = 30 − 15 = 15
+    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 15, foil_epee: 15 })
   })
 
   it('uses only the top-2 events per weapon class', () => {
@@ -116,15 +116,59 @@ describe('recommendRefCount', () => {
     ]
     // Pool counts sorted desc: f3=70, f1=20, f2=10. Top-2 are f3 and f1; f2 is excluded.
     // peak foil/epee = 70 + 20 = 90; three_weapon=0
-    expect(recommendRefCount(comps, 1)).toEqual({ three_weapon: 0, foil_epee: 90 })
+    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 90 })
   })
 
   it('scales with refsPerPool', () => {
     const comps = [
       makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 35 }), // 5 pools
     ]
-    // peakSabre=5, refsPerPool=2 → three_weapon=10
-    expect(recommendRefCount(comps, 2)).toEqual({ three_weapon: 10, foil_epee: 0 })
+    // peakSabre: max(5*2=10 pools, 5 DE) = 10 → three_weapon=10
+    expect(recommendRefCount(comps, 2, makeConfig())).toEqual({ three_weapon: 10, foil_epee: 0 })
+  })
+
+  it('DE demand exceeds pool demand when DE strips are high and fencer count is low', () => {
+    // 14 fencers = 2 pools → pool demand = 2
+    // DE: bracketSize=16, R16 strips=8, SINGLE_STAGE, bracketSize<=32 → podSize=4
+    // captains = ceil(8/4) = 2. activeStrips = min(8, max(8,2,8)) = 8. DE demand = 8+2 = 10
+    const comps = [
+      makeCompetition({
+        id: 'de-heavy',
+        weapon: Weapon.FOIL,
+        fencer_count: 14,
+        de_round_of_16_strips: 8,
+      }),
+    ]
+    // max(2 pools, 10 DE) = 10 → foil_epee=10
+    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 10 })
+  })
+
+  it('staged DE video-stage contention drives demand above per-class peaks', () => {
+    // 3 foil competitions with STAGED DEs, each with R16 strips=4
+    // Pool demand: 14 fencers = 2 pools each. Top-2 = 4.
+    // DE demand per comp: bracketSize=16, dePhasePeakStrips=4, STAGED + DE_R16 → podSize=4
+    //   captains=ceil(4/4)=1, activeStrips=min(4, max(4,2,8))=4, demand=4+1=5. Top-2=10.
+    // Per-class peak = max(4 pools, 10 DE) = 10
+    // Video-stage sum: 3 * max(4,2) = 12 > 10 → bumps foil_epee to 12
+    const comps = [
+      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED, de_round_of_16_strips: 4 }),
+      makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED, de_round_of_16_strips: 4 }),
+      makeCompetition({ id: 'f3', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED, de_round_of_16_strips: 4 }),
+    ]
+    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 12 })
+  })
+
+  it('mixed: one weapon class pool-dominant, another DE-dominant', () => {
+    const comps = [
+      // Sabre: 70 fencers = 10 pools (pool-dominant). DE demand = 5.
+      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 70 }),
+      // Foil: 14 fencers = 2 pools but R16 strips=8 → DE demand=10 (DE-dominant)
+      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 14, de_round_of_16_strips: 8 }),
+    ]
+    // peakSabre = max(10 pools, 5 DE) = 10
+    // peakFoilEpee = max(2 pools, 10 DE) = 10
+    // three_weapon=10, foil_epee = max(0, 10 - 10) = 0
+    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 10, foil_epee: 0 })
   })
 })
 
