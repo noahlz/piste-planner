@@ -1,16 +1,11 @@
 ## Engine Limitations
 
-### Post-scheduling resource diagnostics are shallow
+### Post-scheduling resource diagnostics — remaining gaps
 
-`postScheduleDiagnostics` in `scheduler.ts` emits INFO-level messages using `recommendStripCount()` and `recommendRefCount()` after RESOURCE_EXHAUSTION errors. However the messages are global and surface-level:
+Per-phase, per-day, and delta messaging were added in 2026-04-12 (commit 02169034). Two gaps remain:
 
-- No per-phase breakdown (pools vs DEs vs video stage)
-- No per-day analysis – doesn't identify which days are bottlenecked
-- No delta messaging ("need 8 strips, have 6, add 2 more")
-- Ref estimation skips video-stage DE demand
-- No reporting of which constraint relaxations were attempted before failure
-
-**Fix needed:** Enrich diagnostics with per-day, per-phase, delta-based messaging so users can act on specific shortages.
+- **Ref estimation skips video-stage DE demand** — `recommendRefCount()` and `postScheduleDayBreakdown` do not account for staged DE video phases; ref demand for NAC events is understated
+- **No constraint-relaxation trail** — when a competition fails after exhausting all relaxation levels, the bottleneck list does not report which levels were attempted
 
 ---
 
