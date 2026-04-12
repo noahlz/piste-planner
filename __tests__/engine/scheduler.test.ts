@@ -699,7 +699,8 @@ describe('postScheduleDiagnostics', () => {
 
   it('emits ref recommendation when configured refs < recommended', () => {
     // Two sabre events with 24 fencers each → ceil(24/7)=4 pools each
-    // peakSabrePools = 4+4=8, three_weapon refs needed = 8
+    // peakSabrePools = 4+4=8, peakSabreDe = 5+5=10 (DE demand per comp: 4 strips + 1 captain)
+    // max(8, 10) = 10 → three_weapon refs needed = 10
     // Config: 2 refs per day (foil_epee:1 + three_weapon:1 = 2 total)
     const comps = [
       makeCompetition({ id: 'sabre-1', fencer_count: 24, weapon: Weapon.SABRE }),
@@ -719,9 +720,9 @@ describe('postScheduleDiagnostics', () => {
     expect(refRec[0].cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
     expect(refRec[0].severity).toBe(BottleneckSeverity.INFO)
     expect(refRec[0].phase).toBe('POST_SCHEDULE')
-    expect(refRec[0].message).toContain('8 three-weapon')
+    expect(refRec[0].message).toContain('10 three-weapon')
     expect(refRec[0].message).toContain('have 2')
-    expect(refRec[0].message).toContain('add 6 more')
+    expect(refRec[0].message).toContain('add 8 more')
   })
 
   it('emits nothing when no RESOURCE_EXHAUSTION errors exist', () => {
@@ -742,16 +743,17 @@ describe('postScheduleDiagnostics', () => {
   })
 
   it('emits nothing when configured resources meet recommendations', () => {
-    // 6 fencers → 1 pool → recommendStripCount = ceil(1/0.80) = 2
-    // Config has 48 strips → 2 < 48, no strip recommendation
-    // 1 foil pool → foil_epee refs = 1, three_weapon = 0 → total 1 < 30, no ref rec
+    // 70 fencers → 10 pools → recommendStripCount = ceil(10/0.80) = 13
+    // Config has 48 strips → 13 < 48, no strip recommendation
+    // Pool demand = 10, DE demand = 5 → max = 10 foil_epee refs needed
+    // Config has 10 foil_epee refs per day → 10 ≥ 10, no ref rec
     const comps = [
-      makeCompetition({ id: 'tiny-event', fencer_count: 6, weapon: Weapon.FOIL }),
+      makeCompetition({ id: 'foil-event', fencer_count: 70, weapon: Weapon.FOIL }),
     ]
     const config = makeConfig({
-      strips: makeStrips(2, 0),
+      strips: makeStrips(48, 0),
       referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 1, three_weapon_refs: 0, source: 'ACTUAL' as const,
+        day: i, foil_epee_refs: 10, three_weapon_refs: 0, source: 'ACTUAL' as const,
       })),
     })
 
@@ -763,7 +765,8 @@ describe('postScheduleDiagnostics', () => {
 
   it('emits both strip and ref recommendations when both are insufficient', () => {
     // 64 fencers → 10 pools → recommendStripCount = ceil(10/0.80) = 13
-    // Two sabre events with 24 fencers → peakSabrePools = 4+4 = 8, three_weapon = 8
+    // Two sabre events with 24 fencers → peakSabrePools = 4+4 = 8, peakSabreDe = 5+5 = 10
+    // max(8, 10) = 10 → three_weapon = 10
     const comps = [
       makeCompetition({ id: 'big-foil', fencer_count: 64, weapon: Weapon.FOIL }),
       makeCompetition({ id: 'sabre-1', fencer_count: 24, weapon: Weapon.SABRE }),
@@ -780,7 +783,9 @@ describe('postScheduleDiagnostics', () => {
 
     expect(result).toHaveLength(2)
     expect(result.some(b => b.message.includes('Strips: need'))).toBe(true)
-    expect(result.some(b => b.message.includes('Refs: need'))).toBe(true)
+    const refRec = result.find(b => b.message.includes('Refs: need'))
+    expect(refRec).toBeDefined()
+    expect(refRec!.message).toContain('10 three-weapon')
   })
 })
 
@@ -824,6 +829,74 @@ describe('postScheduleDayBreakdown', () => {
     // Verify message content includes strip-hours data
     const stripSummaries = daySummaries.filter(b => b.message.includes('strip-hours'))
     expect(stripSummaries.length).toBeGreaterThan(0)
+  })
+
+  it('emits video-stage contention diagnostic for staged DEs', () => {
+    const config = makeConfig({
+      referee_availability: [
+        { day: 0, foil_epee_refs: 3, three_weapon_refs: 2, source: 'ACTUAL' as const },
+        { day: 1, foil_epee_refs: 3, three_weapon_refs: 2, source: 'ACTUAL' as const },
+        { day: 2, foil_epee_refs: 3, three_weapon_refs: 2, source: 'ACTUAL' as const },
+      ],
+    })
+    const state = createGlobalState(config)
+
+    const comps = [
+      makeCompetition({ id: 'staged-1', fencer_count: 20, de_mode: DeMode.STAGED, de_round_of_16_strips: 4 }),
+      makeCompetition({ id: 'staged-2', fencer_count: 20, de_mode: DeMode.STAGED, de_round_of_16_strips: 4 }),
+      makeCompetition({ id: 'staged-3', fencer_count: 20, de_mode: DeMode.STAGED, de_round_of_16_strips: 4 }),
+    ]
+
+    // Schedule all on day 0
+    for (const c of comps) {
+      state.schedule[c.id] = makeScheduleResult(c.id, 0)
+    }
+
+    // Need an ERROR bottleneck to trigger postScheduleDayBreakdown
+    state.bottlenecks.push({
+      competition_id: 'staged-1',
+      phase: Phase.SCHEDULING,
+      cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      severity: BottleneckSeverity.ERROR,
+      delay_mins: 0,
+      message: 'Failed',
+    })
+
+    const result = postScheduleDayBreakdown(comps, config, state)
+    const videoStage = result.filter(b => b.message.includes('video-stage'))
+
+    expect(videoStage).toHaveLength(1)
+    // 3 comps × max(4, 2) = 12, configured refs = 5, so WARN
+    expect(videoStage[0].severity).toBe(BottleneckSeverity.WARN)
+    expect(videoStage[0].message).toContain('12 refs')
+    expect(videoStage[0].message).toContain('3 staged events')
+  })
+
+  it('does not emit video-stage diagnostic for single-stage DEs', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+
+    const comps = [
+      makeCompetition({ id: 'single-1', fencer_count: 20, de_mode: DeMode.SINGLE_STAGE }),
+      makeCompetition({ id: 'single-2', fencer_count: 20, de_mode: DeMode.SINGLE_STAGE }),
+    ]
+
+    for (const c of comps) {
+      state.schedule[c.id] = makeScheduleResult(c.id, 0)
+    }
+
+    state.bottlenecks.push({
+      competition_id: 'single-1',
+      phase: Phase.SCHEDULING,
+      cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      severity: BottleneckSeverity.ERROR,
+      delay_mins: 0,
+      message: 'Failed',
+    })
+
+    const result = postScheduleDayBreakdown(comps, config, state)
+    const videoStage = result.filter(b => b.message.includes('video-stage'))
+    expect(videoStage).toHaveLength(0)
   })
 
   it('severity is INFO for normal load (strip-hours within capacity)', () => {
