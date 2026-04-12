@@ -756,25 +756,41 @@ export function assignDay(
   config: TournamentConfig,
   allCompetitions: Competition[],
 ): { day: number; level: number } {
+  // Track each relaxation attempt for diagnostics
+  const trail: Array<{ level: number; validCount: number; totalCount: number }> = []
+
   for (const level of Object.values(ConstraintLevel)) {
     const scores = scoreAllDays(competition, poolStructure, state, config, allCompetitions, level)
 
     // Filter out Infinity-scored days (hard blocks at lower levels)
     const valid = scores.filter(s => s.score !== Infinity)
 
-    if (valid.length === 0) continue
+    if (valid.length === 0) {
+      trail.push({ level, validCount: 0, totalCount: scores.length })
+      // Record INFO bottleneck for the failed level
+      state.bottlenecks.push({
+        competition_id: competition.id,
+        phase: Phase.DAY_ASSIGNMENT,
+        cause: BottleneckCause.CONSTRAINT_RELAXED,
+        severity: BottleneckSeverity.INFO,
+        delay_mins: 0,
+        message: `${competition.id}: Level ${level}: 0 valid days of ${scores.length}`,
+      })
+      continue
+    }
 
     const best = valid.reduce((min, s) => (s.score < min.score ? s : min), valid[0])
 
     // Record relaxation bottleneck if we had to relax constraints
     if (level > ConstraintLevel.FULL) {
+      const trailSummary = trail.map(t => `Level ${t.level}: ${t.validCount} valid days of ${t.totalCount}`).join(', ')
       state.bottlenecks.push({
         competition_id: competition.id,
         phase: Phase.DAY_ASSIGNMENT,
         cause: BottleneckCause.CONSTRAINT_RELAXED,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
-        message: `${competition.id}: day assignment required constraint relaxation to level ${level}`,
+        message: `${competition.id}: day assignment required constraint relaxation to level ${level} (${trailSummary})`,
       })
     }
 
@@ -786,9 +802,10 @@ export function assignDay(
     return { day: best.day, level }
   }
 
+  const trailSummary = trail.map(t => `Level ${t.level}: ${t.validCount} valid days of ${t.totalCount}`).join(', ')
   throw new SchedulingError(
     BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-    `No valid day found for competition ${competition.id} — all days exhausted at all constraint levels`,
+    `No valid day found for competition ${competition.id} — all days exhausted at all constraint levels. Trail: ${trailSummary}`,
   )
 }
 

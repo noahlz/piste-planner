@@ -19,6 +19,7 @@ import {
   DeMode,
   VideoPolicy,
   BottleneckCause,
+  BottleneckSeverity,
 } from '../../src/engine/types.ts'
 import type {
   Competition,
@@ -873,9 +874,11 @@ describe('assignDay', () => {
     expect(day).toBe(0)
     expect(level).toBe(3) // level 3 was used because same-population blocked levels 0-2
 
-    // CONSTRAINT_RELAXED bottleneck should be recorded (level 3 was used)
+    // CONSTRAINT_RELAXED bottlenecks: 3 INFO (failed levels 0-2) + 1 WARN (successful level 3)
     const relaxedBottlenecks = state.bottlenecks.filter(b => b.cause === BottleneckCause.CONSTRAINT_RELAXED)
-    expect(relaxedBottlenecks).toHaveLength(1)
+    expect(relaxedBottlenecks).toHaveLength(4)
+    expect(relaxedBottlenecks.filter(b => b.severity === BottleneckSeverity.INFO)).toHaveLength(3)
+    expect(relaxedBottlenecks.filter(b => b.severity === BottleneckSeverity.WARN)).toHaveLength(1)
   })
 
   it('all days impossible → throws SchedulingError', () => {
@@ -911,6 +914,102 @@ describe('assignDay', () => {
     } catch (caught) {
       expect((caught as SchedulingError).cause).toBe(BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE)
     }
+  })
+
+  it('all levels fail → error message includes relaxation trail with each level', () => {
+    const config = makeConfig({
+      days_available: 1,
+      strips: makeStrips(1, 0),
+    })
+
+    const comp = makeCompetition({
+      id: 'trail-comp',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      fencer_count: 10,
+      strips_allocated: 4,
+    })
+
+    const state: GlobalState = {
+      strip_free_at: [Infinity],
+      refs_in_use_by_day: {},
+      schedule: {},
+      bottlenecks: [],
+    }
+
+    const allComps = [comp]
+    const poolStructure = makePoolStructure({ n_pools: 2, pool_sizes: [5, 5] })
+
+    try {
+      assignDay(comp, poolStructure, state, config, allComps)
+      expect.unreachable('should have thrown')
+    } catch (caught) {
+      expect(caught).toBeInstanceOf(SchedulingError)
+      const msg = (caught as SchedulingError).message
+      expect(msg).toContain('trail-comp')
+      // Trail should mention each level and its valid-day count
+      expect(msg).toContain('Level 0')
+      expect(msg).toContain('Level 1')
+      expect(msg).toContain('Level 2')
+      expect(msg).toContain('Level 3')
+      expect(msg).toContain('0 valid')
+    }
+  })
+
+  it('partial relaxation → INFO bottlenecks for failed levels, WARN for successful level', () => {
+    const config = makeConfig({ days_available: 1 })
+
+    const comp = makeCompetition({
+      id: 'partial-relax',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      fencer_count: 20,
+      strips_allocated: 2,
+    })
+
+    // Same population on day 0 → Infinity crossover at levels 0-1
+    // Level 2 drops soft crossover but keeps Infinity blocks → still blocked
+    // Level 3 drops Infinity blocks → succeeds
+    const conflictComp = makeCompetition({
+      id: 'partial-relax-conflict',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      fencer_count: 20,
+    })
+
+    const conflictSr = makeScheduleResult('partial-relax-conflict', 0)
+    conflictSr.pool_start = 0
+
+    const state: GlobalState = {
+      strip_free_at: Array(24).fill(0),
+      refs_in_use_by_day: {},
+      schedule: { 'partial-relax-conflict': { ...conflictSr } },
+      bottlenecks: [],
+    }
+
+    const allComps = [comp, conflictComp]
+    const poolStructure = makePoolStructure({ n_pools: 3, pool_sizes: [7, 7, 6] })
+
+    const { day, level } = assignDay(comp, poolStructure, state, config, allComps)
+    expect(day).toBe(0)
+    expect(level).toBe(3)
+
+    // INFO bottlenecks for each failed intermediate level
+    const infoBottlenecks = state.bottlenecks.filter(
+      b => b.cause === BottleneckCause.CONSTRAINT_RELAXED && b.severity === BottleneckSeverity.INFO,
+    )
+    expect(infoBottlenecks).toHaveLength(3)
+
+    // WARN bottleneck for the successful relaxed level
+    const warnBottlenecks = state.bottlenecks.filter(
+      b => b.cause === BottleneckCause.CONSTRAINT_RELAXED && b.severity === BottleneckSeverity.WARN,
+    )
+    expect(warnBottlenecks).toHaveLength(1)
+    expect(warnBottlenecks[0].message).toContain('relaxation to level 3')
+    expect(warnBottlenecks[0].message).toContain('Level 0')
   })
 })
 
