@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
 import type { DayRefConfig } from '../../src/store/store.ts'
-import { TournamentType, PodCaptainOverride, BottleneckSeverity, BottleneckCause } from '../../src/engine/types.ts'
+import { TournamentType, PodCaptainOverride, BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
 import type { ValidationError, Bottleneck, AnalysisResult, ScheduleResult } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import { DEFAULT_CUT_BY_CATEGORY, DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../src/engine/constants.ts'
@@ -437,7 +437,7 @@ describe('analysisSlice', () => {
         warnings: [
           {
             competition_id: 'CDT-M-FOIL-IND',
-            phase: 'pool',
+            phase: Phase.POOLS,
             cause: BottleneckCause.STRIP_CONTENTION,
             severity: BottleneckSeverity.WARN,
             delay_mins: 10,
@@ -509,7 +509,7 @@ describe('analysisSlice', () => {
         warnings: [
           {
             competition_id: 'X',
-            phase: 'pool',
+            phase: Phase.POOLS,
             cause: BottleneckCause.STRIP_CONTENTION,
             severity: BottleneckSeverity.WARN,
             delay_mins: 5,
@@ -553,7 +553,7 @@ describe('scheduleSlice', () => {
       flighting_group_id: null,
       pool_start: null,
       pool_end: null,
-      pool_strips_count: 0,
+      pool_strip_count: 0,
       pool_refs_count: 0,
       flight_a_start: null,
       flight_a_end: null,
@@ -572,16 +572,16 @@ describe('scheduleSlice', () => {
       de_video_policy: 'BEST_EFFORT',
       de_start: null,
       de_end: null,
-      de_strips_count: 0,
+      de_strip_count: 0,
       de_prelims_start: null,
       de_prelims_end: null,
-      de_prelims_strips: 0,
+      de_prelims_strip_count: 0,
       de_round_of_16_start: null,
       de_round_of_16_end: null,
-      de_round_of_16_strips: 0,
+      de_round_of_16_strip_count: 0,
       de_finals_start: null,
       de_finals_end: null,
-      de_finals_strips: 0,
+      de_finals_strip_count: 0,
       de_bronze_start: null,
       de_bronze_end: null,
       de_bronze_strip_id: null,
@@ -613,7 +613,7 @@ describe('scheduleSlice', () => {
       const bottlenecks: Bottleneck[] = [
         {
           competition_id: 'CDT-M-FOIL-IND',
-          phase: 'pool',
+          phase: Phase.POOLS,
           cause: BottleneckCause.STRIP_CONTENTION,
           severity: BottleneckSeverity.WARN,
           delay_mins: 5,
@@ -633,7 +633,7 @@ describe('scheduleSlice', () => {
     it('resets schedule state', () => {
       useStore.getState().setScheduleResults(
         { 'X': makeScheduleResult('X') },
-        [{ competition_id: 'X', phase: 'de', cause: BottleneckCause.DEADLINE_BREACH, severity: BottleneckSeverity.ERROR, delay_mins: 30, message: 'late' }],
+        [{ competition_id: 'X', phase: Phase.DE, cause: BottleneckCause.DEADLINE_BREACH, severity: BottleneckSeverity.ERROR, delay_mins: 30, message: 'late' }],
       )
 
       useStore.getState().clearSchedule()

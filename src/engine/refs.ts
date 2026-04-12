@@ -1,4 +1,4 @@
-import { PodCaptainOverride, DeMode, Weapon, RefPolicy } from './types.ts'
+import { PodCaptainOverride, DeMode, Weapon, RefPolicy, Phase } from './types.ts'
 import type { TournamentConfig, DayRefereeAvailability, Competition } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { computeBracketSize } from './de.ts'
@@ -8,17 +8,17 @@ import { crossoverPenalty } from './crossover.ts'
 /**
  * Returns the number of pod captains needed for a DE phase.
  *
- * PRD Section 8.1 pod captain rules:
+ * METHODOLOGY.md §Pod Captains pod captain rules:
  * - DISABLED → 0 (no pod captains during DEs)
  * - FORCE_4  → always ceil(deStrips / 4)
  * - AUTO + SINGLE_STAGE: bracket ≤32 → 4-strip pods; bracket >32 → 8-strip pods
- * - AUTO + STAGED_DE_BLOCKS: DE_ROUND_OF_16 → 4-strip pods; all other phases → 8-strip pods
+ * - AUTO + STAGED: DE_ROUND_OF_16 → 4-strip pods; all other phases → 8-strip pods
  */
 export function podCaptainsNeeded(
   override: PodCaptainOverride,
   deMode: DeMode,
   bracketSize: number,
-  dePhase: string,
+  dePhase: Phase,
   deStrips: number,
 ): number {
   if (override === PodCaptainOverride.DISABLED) return 0
@@ -29,8 +29,8 @@ export function podCaptainsNeeded(
   if (deMode === DeMode.SINGLE_STAGE) {
     podSize = bracketSize <= 32 ? 4 : 8
   } else {
-    // STAGED_DE_BLOCKS: round-of-16 uses 4-strip pods; finals and prelims use 8-strip pods
-    podSize = dePhase === 'DE_ROUND_OF_16' ? 4 : 8
+    // STAGED: round-of-16 uses 4-strip pods; finals and prelims use 8-strip pods
+    podSize = dePhase === Phase.DE_ROUND_OF_16 ? 4 : 8
   }
 
   return Math.ceil(deStrips / podSize)
@@ -39,7 +39,7 @@ export function podCaptainsNeeded(
 /**
  * Returns the total number of refs available on a given day for the specified weapon.
  *
- * PRD Section 2.3:
+ * METHODOLOGY.md §Referee Types:
  * - SABRE: saber-qualified refs only (no cross-weapon)
  * - FOIL/EPEE: foil_epee refs + saber refs (saber refs can officiate ROW weapons)
  *
@@ -86,7 +86,7 @@ function peakDeRefDemand(comp: Competition, config: TournamentConfig): number {
   // DE refs: 1 per strip + pod captains for the phase with most strips
   // Use DE_ROUND_OF_16 as the representative phase (typically more strips than finals)
   const dePhasePeakStrips = comp.de_round_of_16_strips > 0 ? comp.de_round_of_16_strips : comp.de_finals_strips
-  const phase = comp.de_round_of_16_strips > 0 ? 'DE_ROUND_OF_16' : 'DE_FINALS'
+  const phase = comp.de_round_of_16_strips > 0 ? Phase.DE_ROUND_OF_16 : Phase.DE_FINALS
 
   const refsPerStrip = config.DE_REFS
   const captains = podCaptainsNeeded(
@@ -103,14 +103,19 @@ function peakDeRefDemand(comp: Competition, config: TournamentConfig): number {
 }
 
 /**
- * Assigns competitions to days using a greedy constraint-scored algorithm (PRD Section 12).
+ * Lightweight greedy day assignment for referee demand estimation.
  *
+ * Uses constraint scores to distribute competitions across days but skips the full
+ * penalty-scoring and constraint-relaxation logic of dayAssignment.ts:assignDay().
+ * Results are approximate — used only to estimate peak concurrent ref demand before
+ * the real scheduler runs.
+ *
+ * Algorithm (METHODOLOGY.md §Scheduling Algorithm / §Capacity-Aware Day Assignment):
  * Sort order: most-constrained competitions first (highest constraintScore).
  * Per competition: assign to the day with the lowest total crossoverPenalty against
  * competitions already assigned to that day. Ties broken by lowest day index.
  *
- * This is a lightweight preliminary assignment — no GlobalState, no time-slot
- * simulation — sufficient for ref-estimation purposes.
+ * No GlobalState, no time-slot simulation — sufficient for ref-estimation purposes only.
  */
 export function preliminaryDayAssign(
   competitions: Competition[],
@@ -157,7 +162,7 @@ export function preliminaryDayAssign(
 /**
  * Calculates optimal referee counts per day (Phase 1.5a).
  *
- * PRD Section 8.1: simulates the day schedule with infinite refs and finds
+ * METHODOLOGY.md §Pod Captains: simulates the day schedule with infinite refs and finds
  * peak concurrent demand per weapon type per day.
  *
  * Implementation approach:

@@ -6,7 +6,7 @@ import { buildTournamentConfig } from '../../store/buildConfig.ts'
 import { validateConfig } from '../../engine/validation.ts'
 import { initialAnalysis } from '../../engine/analysis.ts'
 import { scheduleAll } from '../../engine/scheduler.ts'
-import { BottleneckCause, BottleneckSeverity } from '../../engine/types.ts'
+import { BottleneckCause, BottleneckSeverity, Phase } from '../../engine/types.ts'
 
 export function ActionButtons() {
   const validationErrors = useStore((s) => s.validationErrors)
@@ -42,7 +42,7 @@ export function ActionButtons() {
       state.setScheduleResults({}, [
         {
           competition_id: '',
-          phase: 'SCHEDULE',
+          phase: Phase.SCHEDULING,
           cause: BottleneckCause.STRIP_CONTENTION,
           severity: BottleneckSeverity.ERROR,
           delay_mins: 0,

@@ -44,7 +44,7 @@ export type RefPolicy = (typeof RefPolicy)[keyof typeof RefPolicy]
 
 export const DeMode = {
   SINGLE_STAGE: 'SINGLE_STAGE',
-  STAGED_DE_BLOCKS: 'STAGED_DE_BLOCKS',
+  STAGED: 'STAGED',
 } as const
 export type DeMode = (typeof DeMode)[keyof typeof DeMode]
 
@@ -100,6 +100,28 @@ export const CutMode = {
   COUNT: 'COUNT',
 } as const
 export type CutMode = (typeof CutMode)[keyof typeof CutMode]
+
+export const Phase = {
+  POOLS: 'POOLS',
+  FLIGHT_A: 'FLIGHT_A',
+  FLIGHT_B: 'FLIGHT_B',
+  DE_PRELIMS: 'DE_PRELIMS',
+  DE_ROUND_OF_16: 'DE_ROUND_OF_16',
+  DE_FINALS: 'DE_FINALS',
+  DE_FINALS_BRONZE: 'DE_FINALS_BRONZE',
+  DE: 'DE',
+  SEQUENCING: 'SEQUENCING',
+  BRONZE: 'BRONZE',
+  DAY_ASSIGNMENT: 'DAY_ASSIGNMENT',
+  CAPACITY: 'CAPACITY',
+  FLIGHTING: 'FLIGHTING',
+  CUT: 'CUT',
+  VALIDATION: 'VALIDATION',
+  SCHEDULING: 'SCHEDULING',
+  POST_SCHEDULE: 'POST_SCHEDULE',
+  DEADLINE_CHECK: 'DEADLINE_CHECK',
+} as const
+export type Phase = (typeof Phase)[keyof typeof Phase]
 
 export const BottleneckCause = {
   STRIP_CONTENTION: 'STRIP_CONTENTION',
@@ -261,7 +283,7 @@ export interface ScheduleResult {
   flighting_group_id: string | null
   pool_start: number | null
   pool_end: number | null
-  pool_strips_count: number
+  pool_strip_count: number
   pool_refs_count: number
   flight_a_start: number | null
   flight_a_end: number | null
@@ -280,16 +302,16 @@ export interface ScheduleResult {
   de_video_policy: VideoPolicy
   de_start: number | null
   de_end: number | null
-  de_strips_count: number
+  de_strip_count: number
   de_prelims_start: number | null
   de_prelims_end: number | null
-  de_prelims_strips: number
+  de_prelims_strip_count: number
   de_round_of_16_start: number | null
   de_round_of_16_end: number | null
-  de_round_of_16_strips: number
+  de_round_of_16_strip_count: number
   de_finals_start: number | null
   de_finals_end: number | null
-  de_finals_strips: number
+  de_finals_strip_count: number
   de_bronze_start: number | null
   de_bronze_end: number | null
   de_bronze_strip_id: string | null
@@ -312,7 +334,7 @@ export interface GlobalState {
 
 export interface Bottleneck {
   competition_id: string
-  phase: string
+  phase: Phase
   cause: BottleneckCause
   severity: BottleneckSeverity
   delay_mins: number
@@ -322,7 +344,6 @@ export interface Bottleneck {
 export interface PoolStructure {
   n_pools: number
   pool_sizes: number[]
-  pool_round_duration: number
 }
 
 export interface PoolDurationResult {

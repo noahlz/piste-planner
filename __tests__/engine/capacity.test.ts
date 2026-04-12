@@ -85,7 +85,7 @@ describe('estimateCompetitionStripHours', () => {
     expect(teamResult.total_strip_hours).toBeLessThan(largeResult.total_strip_hours)
   })
 
-  it('STAGED_DE_BLOCKS with REQUIRED video policy → non-zero video_strip_hours', () => {
+  it('STAGED with REQUIRED video policy → non-zero video_strip_hours', () => {
     const config = makeConfig()
     const comp = makeCompetition({
       id: 'staged-video',
@@ -94,7 +94,7 @@ describe('estimateCompetitionStripHours', () => {
       event_type: EventType.INDIVIDUAL,
       cut_mode: CutMode.DISABLED,
       cut_value: 100,
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       de_round_of_16_strips: 4,
       de_finals_strips: 2,
@@ -419,13 +419,13 @@ describe('dayConsumedCapacity', () => {
     expect(emptyDayResult.strip_hours_consumed).toBe(0)
   })
 
-  it('video strip-hours consumed is non-zero for STAGED_DE_BLOCKS + REQUIRED competitions', () => {
+  it('video strip-hours consumed is non-zero for STAGED + REQUIRED competitions', () => {
     const config = makeConfig()
     const comp = makeCompetition({
       id: 'video-comp',
       fencer_count: 100,
       weapon: Weapon.FOIL,
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       de_round_of_16_strips: 4,
       de_finals_strips: 2,
@@ -436,7 +436,7 @@ describe('dayConsumedCapacity', () => {
 
     const result = dayConsumedCapacity(0, state, [comp], config)
 
-    // Same competition as in the estimateCompetitionStripHours STAGED_DE_BLOCKS test:
+    // Same competition as in the estimateCompetitionStripHours STAGED test:
     // r16_strip_hours = 4 * 71 / 60 = 4.7333; finals_strip_hours = 2 * 30 / 60 = 1.0
     // video_strip_hours = 4.7333 + 1.0 = 5.7333
     const expectedVideoStripHours = 4 * 71 / 60 + 2 * 30 / 60
@@ -500,7 +500,7 @@ describe('dayRemainingCapacity', () => {
       id: 'video-comp',
       fencer_count: 100,
       weapon: Weapon.FOIL,
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       de_round_of_16_strips: 4,
       de_finals_strips: 2,

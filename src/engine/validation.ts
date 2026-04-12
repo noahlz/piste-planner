@@ -39,28 +39,51 @@ export function validateSameDayCompletion(
   return null
 }
 
-/**
- * Validates tournament configuration and competition list before scheduling.
- * Returns an array of ValidationErrors; empty array means valid.
- * Checks all conditions per PRD Section 15.
- */
-export function validateConfig(
-  config: TournamentConfig,
-  competitions: Competition[],
-): ValidationError[] {
-  const errors: ValidationError[] = []
+// ── Sub-validators ─────────────────────────────────────────────────────────────
 
-  // ── Global config checks ───────────────────────────────────────────────────
+function validateStripConfig(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
+  const errors: ValidationError[] = []
 
   if (config.strips_total === 0) {
     errors.push(err('strips_total', 'strips_total must be > 0'))
   }
 
-  if (config.days_available < 2 || config.days_available > 4) {
-    errors.push(err('days_available', `days_available must be 2–4, got ${config.days_available}`))
+  // Flighting group strips exceed strips_total
+  // Group competitions by their flighting_group_id, sum strips_allocated, check against total
+  const flightingGroupStrips = new Map<string, number>()
+  for (const comp of competitions) {
+    if (comp.flighted && comp.flighting_group_id) {
+      const current = flightingGroupStrips.get(comp.flighting_group_id) ?? 0
+      flightingGroupStrips.set(comp.flighting_group_id, current + comp.strips_allocated)
+    }
+  }
+  for (const [groupId, totalStrips] of flightingGroupStrips) {
+    if (totalStrips > config.strips_total) {
+      errors.push(err('flighting_group', `Flighting group "${groupId}" requires ${totalStrips} strips but strips_total is ${config.strips_total}`))
+    }
   }
 
-  // ── Competition-level checks ───────────────────────────────────────────────
+  return errors
+}
+
+function validateRefConfig(config: TournamentConfig, _competitions: Competition[]): ValidationError[] {
+  const errors: ValidationError[] = []
+
+  // Warn when total refs on a day is less than strips_total. Refs < strips means
+  // some strips will sit idle during pools, but the engine can still schedule —
+  // hence a warning rather than an error.
+  for (const day of config.referee_availability) {
+    const total = day.foil_epee_refs + day.three_weapon_refs
+    if (total < config.strips_total) {
+      errors.push(warn('referee_availability', `Day ${day.day}: total refs (${total}) less than strips_total (${config.strips_total})`))
+    }
+  }
+
+  return errors
+}
+
+function validateCompetitionFields(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
+  const errors: ValidationError[] = []
 
   const seenIds = new Set<string>()
   for (const comp of competitions) {
@@ -136,7 +159,7 @@ export function validateConfig(
     }
 
     if (
-      comp.de_mode === DeMode.STAGED_DE_BLOCKS &&
+      comp.de_mode === DeMode.STAGED &&
       comp.de_video_policy === VideoPolicy.REQUIRED &&
       config.video_strips_total < comp.de_round_of_16_strips
     ) {
@@ -181,42 +204,27 @@ export function validateConfig(
     }
   }
 
-  // ── Team events require a matching individual ──────────────────────────────
-
-  const individualKeys = new Set(
-    competitions
-      .filter(c => c.event_type === EventType.INDIVIDUAL)
-      .map(c => `${c.category}|${c.gender}|${c.weapon}`),
-  )
-  for (const comp of competitions) {
-    if (comp.event_type === EventType.TEAM) {
-      const key = `${comp.category}|${comp.gender}|${comp.weapon}`
-      if (!individualKeys.has(key)) {
-        errors.push(err('event_type', `${comp.id}: team event has no matching individual for ${comp.category} ${comp.gender} ${comp.weapon}`))
+  // Regional tournament cut override warnings
+  // Warn when a regional tournament has a competition with custom cuts on an override category.
+  // buildConfig applies the override automatically; this surfaces it to the user.
+  if (REGIONAL_CUT_TOURNAMENT_TYPES.has(config.tournament_type)) {
+    for (const comp of competitions) {
+      if (REGIONAL_CUT_OVERRIDES[comp.category] && comp.cut_mode !== CutMode.DISABLED) {
+        errors.push(warn(
+          'cut_mode',
+          `${comp.id}: regional tournament (${config.tournament_type}) requires all-advance for ${comp.category} — cut_mode will be overridden to DISABLED`,
+        ))
       }
     }
   }
 
-  // ── Same population: N individual events for same category+gender+weapon ──
-  // Veteran events include vet_age_group in the key because each age group is a distinct population.
+  return errors
+}
 
-  const populationCounts = new Map<string, number>()
-  for (const comp of competitions) {
-    if (comp.event_type === EventType.INDIVIDUAL) {
-      const key = comp.vet_age_group !== null
-        ? `${comp.category}|${comp.gender}|${comp.weapon}|${comp.vet_age_group}`
-        : `${comp.category}|${comp.gender}|${comp.weapon}`
-      populationCounts.set(key, (populationCounts.get(key) ?? 0) + 1)
-    }
-  }
-  for (const [key, count] of populationCounts) {
-    if (count > config.days_available) {
-      errors.push(err('same_population', `Same-population group [${key}] has ${count} individual events but only ${config.days_available} days available`))
-    }
-  }
+function validateTimingConstraints(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
+  const errors: ValidationError[] = []
 
-  // ── Individual + team same-day worst-case duration ─────────────────────────
-
+  // Individual + team same-day worst-case duration
   for (const team of competitions) {
     if (team.event_type !== EventType.TEAM) continue
     if (team.fencer_count < config.MIN_FENCERS) continue
@@ -250,48 +258,68 @@ export function validateConfig(
     }
   }
 
-  // ── Flighting group strips exceed strips_total ─────────────────────────────
+  return errors
+}
 
-  // Group competitions by their flighting_group_id, sum strips_allocated, check against total
-  const flightingGroupStrips = new Map<string, number>()
+function validateDependencies(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
+  const errors: ValidationError[] = []
+
+  // Team events require a matching individual
+  const individualKeys = new Set(
+    competitions
+      .filter(c => c.event_type === EventType.INDIVIDUAL)
+      .map(c => `${c.category}|${c.gender}|${c.weapon}`),
+  )
   for (const comp of competitions) {
-    if (comp.flighted && comp.flighting_group_id) {
-      const current = flightingGroupStrips.get(comp.flighting_group_id) ?? 0
-      flightingGroupStrips.set(comp.flighting_group_id, current + comp.strips_allocated)
-    }
-  }
-  for (const [groupId, totalStrips] of flightingGroupStrips) {
-    if (totalStrips > config.strips_total) {
-      errors.push(err('flighting_group', `Flighting group "${groupId}" requires ${totalStrips} strips but strips_total is ${config.strips_total}`))
-    }
-  }
-
-  // ── Global referee headcount check ────────────────────────────────────────
-
-  // Warn when total refs on a day is less than strips_total. Refs < strips means
-  // some strips will sit idle during pools, but the engine can still schedule —
-  // hence a warning rather than an error.
-  for (const day of config.referee_availability) {
-    const total = day.foil_epee_refs + day.three_weapon_refs
-    if (total < config.strips_total) {
-      errors.push(warn('referee_availability', `Day ${day.day}: total refs (${total}) less than strips_total (${config.strips_total})`))
-    }
-  }
-
-  // ── Regional tournament cut override warnings ──────────────────────────────
-
-  // Warn when a regional tournament has a competition with custom cuts on an override category.
-  // buildConfig applies the override automatically; this surfaces it to the user.
-  if (REGIONAL_CUT_TOURNAMENT_TYPES.has(config.tournament_type)) {
-    for (const comp of competitions) {
-      if (REGIONAL_CUT_OVERRIDES[comp.category] && comp.cut_mode !== CutMode.DISABLED) {
-        errors.push(warn(
-          'cut_mode',
-          `${comp.id}: regional tournament (${config.tournament_type}) requires all-advance for ${comp.category} — cut_mode will be overridden to DISABLED`,
-        ))
+    if (comp.event_type === EventType.TEAM) {
+      const key = `${comp.category}|${comp.gender}|${comp.weapon}`
+      if (!individualKeys.has(key)) {
+        errors.push(err('event_type', `${comp.id}: team event has no matching individual for ${comp.category} ${comp.gender} ${comp.weapon}`))
       }
     }
   }
 
+  // Same population: N individual events for same category+gender+weapon
+  // Veteran events include vet_age_group in the key because each age group is a distinct population.
+  const populationCounts = new Map<string, number>()
+  for (const comp of competitions) {
+    if (comp.event_type === EventType.INDIVIDUAL) {
+      const key = comp.vet_age_group !== null
+        ? `${comp.category}|${comp.gender}|${comp.weapon}|${comp.vet_age_group}`
+        : `${comp.category}|${comp.gender}|${comp.weapon}`
+      populationCounts.set(key, (populationCounts.get(key) ?? 0) + 1)
+    }
+  }
+  for (const [key, count] of populationCounts) {
+    if (count > config.days_available) {
+      errors.push(err('same_population', `Same-population group [${key}] has ${count} individual events but only ${config.days_available} days available`))
+    }
+  }
+
   return errors
+}
+
+/**
+ * Validates tournament configuration and competition list before scheduling.
+ * Returns an array of ValidationErrors; empty array means valid.
+ * Checks all conditions per METHODOLOGY.md §Phase 1: Validation.
+ */
+export function validateConfig(
+  config: TournamentConfig,
+  competitions: Competition[],
+): ValidationError[] {
+  const globalErrors: ValidationError[] = []
+
+  if (config.days_available < 2 || config.days_available > 4) {
+    globalErrors.push(err('days_available', `days_available must be 2–4, got ${config.days_available}`))
+  }
+
+  return [
+    ...globalErrors,
+    ...validateStripConfig(config, competitions),
+    ...validateRefConfig(config, competitions),
+    ...validateCompetitionFields(config, competitions),
+    ...validateTimingConstraints(config, competitions),
+    ...validateDependencies(config, competitions),
+  ]
 }

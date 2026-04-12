@@ -531,11 +531,12 @@ export const VIDEO_STAGE_ROUND: Partial<Record<VideoStageKey, number>> = {
 }
 
 // ──────────────────────────────────────────────
-// Individual/Team hard blocks: pairs that MUST NOT be on the same day
-// (same weapon and gender). (METHODOLOGY.md §Individual/Team Separation)
+// Individual/Team relaxable blocks: pairs that MUST NOT be on the same day
+// (same weapon and gender) unless constraints are relaxed to level 3.
+// (METHODOLOGY.md §Individual/Team Separation)
 // ──────────────────────────────────────────────
 
-export const INDIV_TEAM_HARD_BLOCKS: { indivCategory: Category; teamCategory: Category }[] = [
+export const INDIV_TEAM_RELAXABLE_BLOCKS: { indivCategory: Category; teamCategory: Category }[] = [
   { indivCategory: Category.VETERAN, teamCategory: Category.VETERAN },
   { indivCategory: Category.DIV1, teamCategory: Category.JUNIOR },
   { indivCategory: Category.JUNIOR, teamCategory: Category.DIV1 },
@@ -559,3 +560,67 @@ export const REGIONAL_CUT_TOURNAMENT_TYPES: ReadonlySet<string> = new Set<string
   TournamentType.RJCC,
   TournamentType.SJCC,
 ])
+
+// ──────────────────────────────────────────────
+// Penalty weights — named constants from METHODOLOGY.md Appendix A
+// ──────────────────────────────────────────────
+
+export const PENALTY_WEIGHTS = {
+  /** Same-time high crossover (edge >= 0.8) */
+  SAME_TIME_HIGH_CROSSOVER: 10.0,
+  /** Same-time low crossover (edge < 0.8) */
+  SAME_TIME_LOW_CROSSOVER: 4.0,
+  /** Ind+team same-time or wrong order on same day */
+  INDIV_TEAM_SAME_TIME_OR_WRONG_ORDER: 8.0,
+  /** Ind+team gap < 120 min on same day */
+  INDIV_TEAM_GAP_UNDER_MIN: 3.0,
+  /** Early start consecutive days, high crossover */
+  EARLY_START_CONSECUTIVE_HIGH_CROSSOVER: 5.0,
+  /** Early start same day, high crossover */
+  EARLY_START_SAME_DAY_HIGH_CROSSOVER: 2.0,
+  /** Early start consecutive days, ind+team same demographic */
+  EARLY_START_CONSECUTIVE_INDIV_TEAM: 2.0,
+  /** Rest day violation (consecutive-day penalty for JUNIOR/CADET/DIV1) */
+  REST_DAY_VIOLATION: 1.5,
+  /** Team scheduled before individual (wrong order, proximity) */
+  TEAM_BEFORE_INDIVIDUAL: 1.0,
+  /** Weapon balance — minority group absent on a day */
+  WEAPON_BALANCE: 0.5,
+  /** Last-day ref shortage: large NAC (300+ fencers) */
+  LAST_DAY_REF_SHORTAGE_LARGE_NAC: 0.5,
+  /** Proximity 3+ days apart */
+  PROXIMITY_3_PLUS_DAYS: 0.5,
+  /** Y10 non-first-slot penalty */
+  Y10_NON_FIRST_SLOT: 0.3,
+  /** Last-day ref shortage: large ROC (100+ fencers) */
+  LAST_DAY_REF_SHORTAGE_LARGE_ROC: 0.3,
+  /** Ind+team 2+ days apart (proximity) */
+  INDIV_TEAM_2_PLUS_DAYS: 0.3,
+  /** Cross-weapon same demographic (Veteran only) */
+  CROSS_WEAPON_SAME_DEMOGRAPHIC_VET: 0.2,
+  /** Last-day ref shortage: medium tournament (50-100 fencers) */
+  LAST_DAY_REF_SHORTAGE_MEDIUM: 0.2,
+  /** Proximity 1 day apart (bonus — negative) */
+  PROXIMITY_1_DAY: -0.4,
+  /** Ind+team day after individual (bonus — negative) */
+  INDIV_TEAM_DAY_AFTER: -0.4,
+} as const
+
+// ──────────────────────────────────────────────
+// Capacity penalty curve — fill-ratio thresholds and ramps
+// ──────────────────────────────────────────────
+
+export const CAPACITY_PENALTY_CURVE = {
+  /** Fill ratio below which no capacity penalty applies */
+  LOW_THRESHOLD: 0.6,
+  /** Fill ratio at which the moderate ramp begins */
+  MID_THRESHOLD: 0.8,
+  /** Fill ratio at which the steep ramp ends and max penalty applies */
+  HIGH_THRESHOLD: 0.95,
+  /** Maximum penalty for the low-to-mid band */
+  LOW_BAND_MAX: 3.0,
+  /** Additional penalty added across the mid-to-high band */
+  MID_BAND_DELTA: 7.0,
+  /** Flat penalty when fill ratio exceeds the high threshold */
+  OVERFLOW_PENALTY: 20.0,
+} as const

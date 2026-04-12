@@ -3,6 +3,7 @@ import { EventType } from './types.ts'
 import {
   CROSSOVER_GRAPH,
   GROUP_1_MANDATORY,
+  PENALTY_WEIGHTS,
   PROXIMITY_GRAPH,
   PROXIMITY_PENALTY_WEIGHTS,
 } from './constants.ts'
@@ -183,9 +184,9 @@ export function individualTeamProximityPenalty(
 
   const gap = proposedDay - sr.assigned_day
 
-  if (gap === 1) return -0.4
+  if (gap === 1) return PENALTY_WEIGHTS.INDIV_TEAM_DAY_AFTER
   if (gap === 0) return 0.0
-  if (gap === -1) return 1.0
+  if (gap === -1) return PENALTY_WEIGHTS.TEAM_BEFORE_INDIVIDUAL
   // |gap| >= 2: too far apart in either direction
-  return 0.3
+  return PENALTY_WEIGHTS.INDIV_TEAM_2_PLUS_DAYS
 }

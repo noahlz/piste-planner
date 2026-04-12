@@ -59,11 +59,11 @@ describe('scheduleCompetition — non-flighted', () => {
     const result = scheduleCompetition(comp, state, config, [comp])
 
     // 24 fencers → 4 pools of 6 → pool_strips = min(n_pools=4, allocated=8) = 4
-    expect(result.pool_strips_count).toBe(4)
+    expect(result.pool_strip_count).toBe(4)
     // AUTO ref policy, 20 foil_epee refs → 2 refs/pool × 4 pools = 8
     expect(result.pool_refs_count).toBe(8)
     // bracket=32, deOptimal=16 → engine allocates 16 strips from available pool
-    expect(result.de_strips_count).toBe(16)
+    expect(result.de_strip_count).toBe(16)
   })
 
   it('marks strips as occupied during the pool phase', () => {
@@ -194,19 +194,19 @@ describe('scheduleCompetition — flighting group', () => {
     const priorityResult = scheduleCompetition(priority, state, config, allComps)
 
     // Priority should have strips allocated
-    expect(priorityResult.pool_strips_count).toBeGreaterThan(0)
+    expect(priorityResult.pool_strip_count).toBeGreaterThan(0)
 
     // Now schedule the flighted comp
     const flightedResult = scheduleCompetition(flighted, state, config, allComps)
-    expect(flightedResult.pool_strips_count).toBeGreaterThan(0)
+    expect(flightedResult.pool_strip_count).toBeGreaterThan(0)
   })
 })
 
 // ──────────────────────────────────────────────
-// STAGED_DE_BLOCKS
+// STAGED
 // ──────────────────────────────────────────────
 
-describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
+describe('scheduleCompetition — STAGED', () => {
   it('bracket 64 produces DE_PRELIMS + DE_ROUND_OF_16 + DE_FINALS', () => {
     // Need enough video strips for dayAssignment (which wrongly checks video for pools)
     const config = makeConfig({ strips: makeStrips(24, 12) })
@@ -214,7 +214,7 @@ describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
     const comp = makeCompetition({
       id: 'MF-DIV1-STAGED',
       fencer_count: 64,
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       strips_allocated: 12,
     })
@@ -241,7 +241,7 @@ describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
     const comp = makeCompetition({
       id: 'MF-DIV1-STAGED16',
       fencer_count: 16,
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       strips_allocated: 8,
     })
@@ -265,7 +265,7 @@ describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
     const comp = makeCompetition({
       id: 'MF-DIV1-VIDEO',
       fencer_count: 16,
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       strips_allocated: 8,
     })
@@ -273,9 +273,9 @@ describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
     const state = createGlobalState(config)
     const result = scheduleCompetition(comp, state, config, [comp])
 
-    // 16 fencers → bracket 16 → de_round_of_16_strips = comp setting (4), de_finals_strips = comp setting (2)
-    expect(result.de_round_of_16_strips).toBe(4)
-    expect(result.de_finals_strips).toBe(2)
+    // 16 fencers → bracket 16 → de_round_of_16_strip_count = comp setting (4), de_finals_strip_count = comp setting (2)
+    expect(result.de_round_of_16_strip_count).toBe(4)
+    expect(result.de_finals_strip_count).toBe(2)
   })
 
   it('video policy FINALS_ONLY: R16 does NOT use video strips, finals DO use video strips', () => {
@@ -293,7 +293,7 @@ describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
     const comp = makeCompetition({
       id: 'MF-FINALS-ONLY',
       fencer_count: 16,
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.FINALS_ONLY,
       // Requesting 4 R16 strips — only 2 video available, so R16 must use non-video
       de_round_of_16_strips: 4,
@@ -309,14 +309,14 @@ describe('scheduleCompetition — STAGED_DE_BLOCKS', () => {
     expect(result.de_finals_start).not.toBeNull()
 
     // R16 got 4 strips (pulled from non-video pool, not limited to 2 video strips)
-    expect(result.de_round_of_16_strips).toBe(4)
+    expect(result.de_round_of_16_strip_count).toBe(4)
 
     // Finals used video strips (de_finals_strips=2, video_strips_total=2)
-    expect(result.de_finals_strips).toBe(2)
+    expect(result.de_finals_strip_count).toBe(2)
 
-    // The fact that de_round_of_16_strips=4 was satisfied with only 2 video strips available
+    // The fact that de_round_of_16_strip_count=4 was satisfied with only 2 video strips available
     // proves R16 used non-video strips — if videoRequired were true for R16, it could only
-    // get 2 strips (video_strips_total=2) and de_round_of_16_strips would be ≤2.
+    // get 2 strips (video_strips_total=2) and de_round_of_16_strip_count would be ≤2.
   })
 })
 
@@ -566,7 +566,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
     // pool_duration_actual should be 2x pool_duration_baseline.
     expect(result.pool_duration_actual).toBe(result.pool_duration_baseline * 2)
     // The cap limits pool strips to 12 (fewer than the 13 pools available).
-    expect(result.pool_strips_count).toBe(12)
+    expect(result.pool_strip_count).toBe(12)
   })
 
   it('pool_duration_actual equals baseline when no cap constraint (high pct)', () => {
@@ -595,7 +595,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
     // All 13 pools run in one batch — actual equals baseline.
     expect(result.pool_duration_actual).toBe(result.pool_duration_baseline)
     // No cap: all 13 pools run simultaneously on 13 strips.
-    expect(result.pool_strips_count).toBe(13)
+    expect(result.pool_strip_count).toBe(13)
   })
 
   it('per-competition max_pool_strip_pct_override takes precedence over global pct', () => {
@@ -625,7 +625,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
     // Override gives effectiveCap=24, so all 13 pools run in one batch.
     expect(result.pool_duration_actual).toBe(result.pool_duration_baseline)
     // Override lifts the cap: all 13 pools run simultaneously on 13 strips.
-    expect(result.pool_strips_count).toBe(13)
+    expect(result.pool_strip_count).toBe(13)
   })
 })
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { podCaptainsNeeded, refsAvailableOnDay, calculateOptimalRefs, preliminaryDayAssign } from '../../src/engine/refs.ts'
-import { PodCaptainOverride, DeMode, Weapon, Category, Gender } from '../../src/engine/types.ts'
+import { PodCaptainOverride, DeMode, Weapon, Category, Gender, Phase } from '../../src/engine/types.ts'
 import type { TournamentConfig, DayRefereeAvailability, Competition } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -92,35 +92,35 @@ function makeCompetition(overrides: Partial<Competition> = {}): Competition {
 
 describe('podCaptainsNeeded', () => {
   it('DISABLED override → 0 regardless of strips', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.DISABLED, DeMode.SINGLE_STAGE, 32, 'DE_FINALS', 12)).toBe(0)
+    expect(podCaptainsNeeded(PodCaptainOverride.DISABLED, DeMode.SINGLE_STAGE, 32, Phase.DE_FINALS, 12)).toBe(0)
   })
 
   it('FORCE_4 override with 12 strips → ceil(12/4) = 3', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 32, 'DE_FINALS', 12)).toBe(3)
+    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 32, Phase.DE_FINALS, 12)).toBe(3)
   })
 
   it('AUTO, SINGLE_STAGE, bracket ≤32, 8 strips → ceil(8/4) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 32, 'DE_FINALS', 8)).toBe(2)
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 32, Phase.DE_FINALS, 8)).toBe(2)
   })
 
   it('AUTO, SINGLE_STAGE, bracket 64, 16 strips → ceil(16/8) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 64, 'DE_FINALS', 16)).toBe(2)
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 64, Phase.DE_FINALS, 16)).toBe(2)
   })
 
   it('AUTO, STAGED, DE_ROUND_OF_16 phase, 4 strips → ceil(4/4) = 1', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED_DE_BLOCKS, 64, 'DE_ROUND_OF_16', 4)).toBe(1)
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED, 64, Phase.DE_ROUND_OF_16, 4)).toBe(1)
   })
 
   it('AUTO, STAGED, DE_FINALS phase, 8 strips → ceil(8/8) = 1', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED_DE_BLOCKS, 64, 'DE_FINALS', 8)).toBe(1)
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED, 64, Phase.DE_FINALS, 8)).toBe(1)
   })
 
   it('AUTO, SINGLE_STAGE, bracket ≤32, 9 strips → ceil(9/4) = 3', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 16, 'DE_FINALS', 9)).toBe(3)
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 16, Phase.DE_FINALS, 9)).toBe(3)
   })
 
   it('FORCE_4 with 7 strips → ceil(7/4) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 64, 'DE_FINALS', 7)).toBe(2)
+    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 64, Phase.DE_FINALS, 7)).toBe(2)
   })
 })
 

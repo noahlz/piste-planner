@@ -1,5 +1,5 @@
 /**
- * Day Assignment Engine — PRD Section 12
+ * Day Assignment Engine — METHODOLOGY.md §Scheduling Algorithm / §Capacity-Aware Day Assignment
  *
  * Answers: which day should this competition be scheduled on?
  * Uses penalty scoring with constraint relaxation to find the best valid day.
@@ -11,13 +11,21 @@ import {
   DeMode,
   VideoPolicy,
   RefPolicy,
+  Phase,
   BottleneckCause,
   BottleneckSeverity,
   TournamentType,
   dayStart,
 } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState, PoolStructure } from './types.ts'
-import { HIGH_CROSSOVER_THRESHOLD, INDIV_TEAM_HARD_BLOCKS, REST_DAY_PAIRS, SOFT_SEPARATION_PAIRS } from './constants.ts'
+import {
+  CAPACITY_PENALTY_CURVE,
+  HIGH_CROSSOVER_THRESHOLD,
+  INDIV_TEAM_RELAXABLE_BLOCKS,
+  PENALTY_WEIGHTS,
+  REST_DAY_PAIRS,
+  SOFT_SEPARATION_PAIRS,
+} from './constants.ts'
 import {
   crossoverPenalty,
   proximityPenalty,
@@ -45,14 +53,19 @@ export class SchedulingError extends Error {
 }
 
 // ──────────────────────────────────────────────
-// Constraint relaxation levels (PRD Section 12.3)
+// Constraint relaxation levels (METHODOLOGY.md §Constraint Relaxation)
 // ──────────────────────────────────────────────
 
-const CONSTRAINT_LEVELS = [0, 1, 2, 3] as const
-type ConstraintLevel = (typeof CONSTRAINT_LEVELS)[number]
+const ConstraintLevel = {
+  FULL: 0,
+  DROP_PROXIMITY: 1,
+  DROP_SOFT_CROSSOVER: 2,
+  DROP_RELAXABLE_BLOCKS: 3,
+} as const
+type ConstraintLevel = (typeof ConstraintLevel)[keyof typeof ConstraintLevel]
 
 // ──────────────────────────────────────────────
-// constraintScore — PRD Section 12.2
+// constraintScore — METHODOLOGY.md §Scheduling Algorithm Phase 3
 // ──────────────────────────────────────────────
 
 /**
@@ -85,10 +98,10 @@ export function constraintScore(
     competition.weapon === Weapon.SABRE ? saberComps / Math.max(saberMin, 1) : 0
 
   const videoCompsRequiring = allCompetitions.filter(
-    c => c.de_mode === DeMode.STAGED_DE_BLOCKS && c.de_video_policy === VideoPolicy.REQUIRED,
+    c => c.de_mode === DeMode.STAGED && c.de_video_policy === VideoPolicy.REQUIRED,
   ).length
   const videoScarcity =
-    competition.de_mode === DeMode.STAGED_DE_BLOCKS &&
+    competition.de_mode === DeMode.STAGED &&
     competition.de_video_policy === VideoPolicy.REQUIRED
       ? videoCompsRequiring / Math.max(config.video_strips_total, 1)
       : 0
@@ -104,7 +117,7 @@ export function constraintScore(
 }
 
 // ──────────────────────────────────────────────
-// earlyStartPenalty — PRD Section 12.9
+// earlyStartPenalty — METHODOLOGY.md §Early-Start Conflicts
 // ──────────────────────────────────────────────
 
 /**
@@ -148,13 +161,13 @@ export function earlyStartPenalty(
       // Pattern A: same day, both early start, high crossover
       const xpen = crossoverPenalty(competition, c2)
       if (xpen >= HIGH_CROSSOVER_THRESHOLD) {
-        total += 2.0
+        total += PENALTY_WEIGHTS.EARLY_START_SAME_DAY_HIGH_CROSSOVER
       }
     } else if (dayGap === 1) {
       // Pattern B: consecutive days, both early start, high crossover
       const xpen = crossoverPenalty(competition, c2)
       if (xpen >= HIGH_CROSSOVER_THRESHOLD) {
-        total += 5.0
+        total += PENALTY_WEIGHTS.EARLY_START_CONSECUTIVE_HIGH_CROSSOVER
       }
 
       // Pattern C: consecutive days, ind+team same demographic (category+gender+weapon required —
@@ -167,7 +180,7 @@ export function earlyStartPenalty(
         (competition.event_type === EventType.TEAM && c2.event_type === EventType.INDIVIDUAL) ||
         (competition.event_type === EventType.INDIVIDUAL && c2.event_type === EventType.TEAM)
       if (sameDemo && oneIsTeam) {
-        total += 2.0
+        total += PENALTY_WEIGHTS.EARLY_START_CONSECUTIVE_INDIV_TEAM
       }
     }
   }
@@ -176,7 +189,7 @@ export function earlyStartPenalty(
 }
 
 // ──────────────────────────────────────────────
-// weaponBalancePenalty — PRD Section 12.5
+// weaponBalancePenalty — METHODOLOGY.md §Weapon Balance
 // ──────────────────────────────────────────────
 
 /**
@@ -216,12 +229,12 @@ export function weaponBalancePenalty(
   if (total <= 1) return 0.0
 
   // If either group is 0, minority is absent → penalty proportional to competition size
-  if (rowCount === 0 || epeeCount === 0) return Math.min(0.5 * competition.fencer_count / 200, 1.0)
+  if (rowCount === 0 || epeeCount === 0) return Math.min(PENALTY_WEIGHTS.WEAPON_BALANCE * competition.fencer_count / 200, 1.0)
   return 0.0
 }
 
 // ──────────────────────────────────────────────
-// crossWeaponSameDemographicPenalty — PRD Section 12.6
+// crossWeaponSameDemographicPenalty — METHODOLOGY.md §Demographic Crossover
 // ──────────────────────────────────────────────
 
 /**
@@ -248,7 +261,7 @@ export function crossWeaponSameDemographicPenalty(
       c2.category === competition.category &&
       c2.weapon !== competition.weapon
     ) {
-      total += 0.2
+      total += PENALTY_WEIGHTS.CROSS_WEAPON_SAME_DEMOGRAPHIC_VET
     }
   }
 
@@ -256,7 +269,7 @@ export function crossWeaponSameDemographicPenalty(
 }
 
 // ──────────────────────────────────────────────
-// lastDayRefShortagePenalty — PRD Section 12.7
+// lastDayRefShortagePenalty — METHODOLOGY.md §Last-Day Referee Shortage
 // ──────────────────────────────────────────────
 
 /**
@@ -285,18 +298,18 @@ export function lastDayRefShortagePenalty(
   // than mid-size ROC or smaller events before triggering a penalty.
   const tournamentType = config.tournament_type
   if (tournamentType === TournamentType.NAC) {
-    if (competition.fencer_count > 300) return 0.5
+    if (competition.fencer_count > 300) return PENALTY_WEIGHTS.LAST_DAY_REF_SHORTAGE_LARGE_NAC
   } else if (tournamentType === TournamentType.ROC) {
-    if (competition.fencer_count > 100) return 0.3
+    if (competition.fencer_count > 100) return PENALTY_WEIGHTS.LAST_DAY_REF_SHORTAGE_LARGE_ROC
   } else {
     // Medium events (RYC, SYC, RJCC, SJCC, etc.)
-    if (competition.fencer_count > 50) return 0.2
+    if (competition.fencer_count > 50) return PENALTY_WEIGHTS.LAST_DAY_REF_SHORTAGE_MEDIUM
   }
   return 0.0
 }
 
 // ──────────────────────────────────────────────
-// restDayPenalty — PRD Section 12.8
+// restDayPenalty — METHODOLOGY.md §Rest Day Preference
 // ──────────────────────────────────────────────
 
 /**
@@ -328,7 +341,7 @@ export function restDayPenalty(
 
     const dayGap = Math.abs(day - sr.assigned_day)
     if (dayGap === 1) {
-      total += 1.5
+      total += PENALTY_WEIGHTS.REST_DAY_VIOLATION
     }
   }
 
@@ -336,7 +349,7 @@ export function restDayPenalty(
 }
 
 // ──────────────────────────────────────────────
-// totalDayPenalty — PRD Section 12.4
+// totalDayPenalty — METHODOLOGY.md §Capacity-Aware Day Assignment
 // ──────────────────────────────────────────────
 
 /**
@@ -365,13 +378,13 @@ export function totalDayPenalty(
     const xpen = crossoverPenalty(competition, c2)
 
     // Hard block: same population or Group 1 mandatory pair
-    if (level < 3 && xpen === Infinity) return Infinity
+    if (level < ConstraintLevel.DROP_RELAXABLE_BLOCKS && xpen === Infinity) return Infinity
 
-    // Hard block: INDIV_TEAM_HARD_BLOCKS — specific ind/team cross-category pairs that must
+    // Hard block: INDIV_TEAM_RELAXABLE_BLOCKS — specific ind/team cross-category pairs that must
     // not share a day because they draw from overlapping fencer pools (same weapon+gender required).
-    // Checked separately so future entries in INDIV_TEAM_HARD_BLOCKS automatically apply.
-    if (level < 3 && competition.weapon === c2.weapon && competition.gender === c2.gender) {
-      for (const block of INDIV_TEAM_HARD_BLOCKS) {
+    // Checked separately so future entries in INDIV_TEAM_RELAXABLE_BLOCKS automatically apply.
+    if (level < ConstraintLevel.DROP_RELAXABLE_BLOCKS && competition.weapon === c2.weapon && competition.gender === c2.gender) {
+      for (const block of INDIV_TEAM_RELAXABLE_BLOCKS) {
         const isIndTeamMatch =
           (competition.event_type === EventType.INDIVIDUAL &&
             competition.category === block.indivCategory &&
@@ -385,15 +398,17 @@ export function totalDayPenalty(
       }
     }
 
-    // Soft crossover penalty (ignored at level ≥ 2)
-    if (level < 2) {
+    // Soft crossover penalty (ignored at level ≥ DROP_SOFT_CROSSOVER)
+    if (level < ConstraintLevel.DROP_SOFT_CROSSOVER) {
       total += xpen
     }
 
     // Same-time penalty: always applied regardless of level
     const c2Start = sr.pool_start ?? null
     if (c2Start !== null && Math.abs(estimatedStart - c2Start) <= config.SAME_TIME_WINDOW_MINS && xpen > 0) {
-      total += xpen >= HIGH_CROSSOVER_THRESHOLD ? 10.0 : 4.0
+      total += xpen >= HIGH_CROSSOVER_THRESHOLD
+        ? PENALTY_WEIGHTS.SAME_TIME_HIGH_CROSSOVER
+        : PENALTY_WEIGHTS.SAME_TIME_LOW_CROSSOVER
     }
 
     // Individual+Team ordering penalty (same demographic)
@@ -413,16 +428,16 @@ export function totalDayPenalty(
 
         const gap = teamStart - indStart // positive = team after ind (correct)
         if (Math.abs(gap) <= config.SAME_TIME_WINDOW_MINS || gap < 0) {
-          total += 8.0
+          total += PENALTY_WEIGHTS.INDIV_TEAM_SAME_TIME_OR_WRONG_ORDER
         } else if (gap < config.INDIV_TEAM_MIN_GAP_MINS) {
-          total += 3.0
+          total += PENALTY_WEIGHTS.INDIV_TEAM_GAP_UNDER_MIN
         }
       }
     }
 
     // Soft separation: e.g. DIV1↔CADET same weapon+gender should be on different days
-    // (Operations Manual: only split in rare cases). Ignored at level ≥ 2, same as soft crossover.
-    if (level < 2) {
+    // (Operations Manual: only split in rare cases). Ignored at level ≥ DROP_SOFT_CROSSOVER, same as soft crossover.
+    if (level < ConstraintLevel.DROP_SOFT_CROSSOVER) {
       for (const entry of SOFT_SEPARATION_PAIRS) {
         const [a, b] = entry.pair
         const isPair =
@@ -444,7 +459,7 @@ export function totalDayPenalty(
     (competition.category === Category.Y10 || competition.category === Category.Y8) &&
     estimatedStart > thisDayStart + config.SLOT_MINS
   ) {
-    total += 0.3
+    total += PENALTY_WEIGHTS.Y10_NON_FIRST_SLOT
   }
 
   total += weaponBalancePenalty(competition, day, state, allCompetitions)
@@ -462,31 +477,33 @@ export function totalDayPenalty(
     const fillRatio = (consumed.strip_hours_consumed + candidateWeighted) / totalCapacity
 
     let capacityPenalty: number
-    if (fillRatio < 0.6) {
+    if (fillRatio < CAPACITY_PENALTY_CURVE.LOW_THRESHOLD) {
       capacityPenalty = 0
-    } else if (fillRatio < 0.8) {
-      // Linear ramp 0 → 3.0 over the 60–80% band
-      capacityPenalty = ((fillRatio - 0.6) / 0.2) * 3.0
-    } else if (fillRatio < 0.95) {
-      // Steeper ramp 3.0 → 10.0 over the 80–95% band
-      capacityPenalty = 3.0 + ((fillRatio - 0.8) / 0.15) * 7.0
+    } else if (fillRatio < CAPACITY_PENALTY_CURVE.MID_THRESHOLD) {
+      // Linear ramp 0 → LOW_BAND_MAX over the low–mid band
+      const bandWidth = CAPACITY_PENALTY_CURVE.MID_THRESHOLD - CAPACITY_PENALTY_CURVE.LOW_THRESHOLD
+      capacityPenalty = ((fillRatio - CAPACITY_PENALTY_CURVE.LOW_THRESHOLD) / bandWidth) * CAPACITY_PENALTY_CURVE.LOW_BAND_MAX
+    } else if (fillRatio < CAPACITY_PENALTY_CURVE.HIGH_THRESHOLD) {
+      // Steeper ramp LOW_BAND_MAX → LOW_BAND_MAX + MID_BAND_DELTA over the mid–high band
+      const bandWidth = CAPACITY_PENALTY_CURVE.HIGH_THRESHOLD - CAPACITY_PENALTY_CURVE.MID_THRESHOLD
+      capacityPenalty = CAPACITY_PENALTY_CURVE.LOW_BAND_MAX + ((fillRatio - CAPACITY_PENALTY_CURVE.MID_THRESHOLD) / bandWidth) * CAPACITY_PENALTY_CURVE.MID_BAND_DELTA
     } else {
       // Strongly discourage scheduling onto a near-full day
-      capacityPenalty = 20.0
+      capacityPenalty = CAPACITY_PENALTY_CURVE.OVERFLOW_PENALTY
     }
     total += capacityPenalty
   }
 
-  // ── Video-strip capacity penalty (STAGED_DE_BLOCKS events only) ───────────
+  // ── Video-strip capacity penalty (STAGED events only) ───────────
   // Estimates peak concurrent video-strip demand for staged-DE events on the day.
-  if (competition.de_mode === DeMode.STAGED_DE_BLOCKS) {
+  if (competition.de_mode === DeMode.STAGED) {
     let sumR16 = 0
     let sumFinals = 0
 
     for (const [compId, sr] of Object.entries(state.schedule)) {
       if (sr.assigned_day !== day) continue
       const c2 = allCompetitions.find(c => c.id === compId)
-      if (!c2 || c2.de_mode !== DeMode.STAGED_DE_BLOCKS) continue
+      if (!c2 || c2.de_mode !== DeMode.STAGED) continue
       sumR16 += c2.de_round_of_16_strips
       sumFinals += c2.de_finals_strips
     }
@@ -504,8 +521,8 @@ export function totalDayPenalty(
     }
   }
 
-  // Proximity penalties only at level 0
-  if (level < 1) {
+  // Proximity penalties only at FULL constraint level
+  if (level < ConstraintLevel.DROP_PROXIMITY) {
     total += proximityPenalty(competition, day, state.schedule, allCompetitions)
     total += individualTeamProximityPenalty(competition, day, state.schedule, allCompetitions)
   }
@@ -559,7 +576,7 @@ function estimateStartOnDay(
     state,
     config,
     competition.id,
-    'POOLS',
+    Phase.POOLS,
   )
 
   if (result.type === 'NO_WINDOW') return null
@@ -592,7 +609,7 @@ function scoreAllDays(
 }
 
 // ──────────────────────────────────────────────
-// recordDiagnosticBottlenecks — PRD Section 12.4
+// recordDiagnosticBottlenecks — METHODOLOGY.md §Capacity-Aware Day Assignment
 // ──────────────────────────────────────────────
 
 /**
@@ -625,11 +642,11 @@ function recordDiagnosticBottlenecks(
 
     const xpen = crossoverPenalty(competition, c2)
 
-    if (xpen > 0 && level < 2) {
+    if (xpen > 0 && level < ConstraintLevel.DROP_SOFT_CROSSOVER) {
       hasCrossover = true
       state.bottlenecks.push({
         competition_id: competition.id,
-        phase: 'DAY_ASSIGNMENT',
+        phase: Phase.DAY_ASSIGNMENT,
         cause: BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
@@ -667,7 +684,7 @@ function recordDiagnosticBottlenecks(
   if (hasSameTimeCrossover) {
     state.bottlenecks.push({
       competition_id: competition.id,
-      phase: 'DAY_ASSIGNMENT',
+      phase: Phase.DAY_ASSIGNMENT,
       cause: BottleneckCause.SAME_TIME_CROSSOVER,
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
@@ -678,7 +695,7 @@ function recordDiagnosticBottlenecks(
   if (hasIndTeamOrdering) {
     state.bottlenecks.push({
       competition_id: competition.id,
-      phase: 'DAY_ASSIGNMENT',
+      phase: Phase.DAY_ASSIGNMENT,
       cause: BottleneckCause.INDIV_TEAM_ORDERING,
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
@@ -690,13 +707,13 @@ function recordDiagnosticBottlenecks(
   if (hasCrossover) {
     state.bottlenecks.push({
       competition_id: competition.id,
-      phase: 'DAY_ASSIGNMENT',
+      phase: Phase.DAY_ASSIGNMENT,
       cause: BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
       message: `${competition.id}: unavoidable crossover conflict on day ${day}`,
     })
-  } else if (level < 1) {
+  } else if (level < ConstraintLevel.DROP_PROXIMITY) {
     // No crossover — check if proximity penalties are the source
     const proxPenalty =
       proximityPenalty(competition, day, state.schedule, allCompetitions) +
@@ -704,7 +721,7 @@ function recordDiagnosticBottlenecks(
     if (proxPenalty > 0) {
       state.bottlenecks.push({
         competition_id: competition.id,
-        phase: 'DAY_ASSIGNMENT',
+        phase: Phase.DAY_ASSIGNMENT,
         cause: BottleneckCause.PROXIMITY_PREFERENCE_UNMET,
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
@@ -715,7 +732,7 @@ function recordDiagnosticBottlenecks(
 }
 
 // ──────────────────────────────────────────────
-// assignDay — PRD Section 12.3
+// assignDay — METHODOLOGY.md §Constraint Relaxation
 // ──────────────────────────────────────────────
 
 /**
@@ -739,7 +756,7 @@ export function assignDay(
   config: TournamentConfig,
   allCompetitions: Competition[],
 ): { day: number; level: number } {
-  for (const level of CONSTRAINT_LEVELS) {
+  for (const level of Object.values(ConstraintLevel)) {
     const scores = scoreAllDays(competition, poolStructure, state, config, allCompetitions, level)
 
     // Filter out Infinity-scored days (hard blocks at lower levels)
@@ -750,10 +767,10 @@ export function assignDay(
     const best = valid.reduce((min, s) => (s.score < min.score ? s : min), valid[0])
 
     // Record relaxation bottleneck if we had to relax constraints
-    if (level > 0) {
+    if (level > ConstraintLevel.FULL) {
       state.bottlenecks.push({
         competition_id: competition.id,
-        phase: 'DAY_ASSIGNMENT',
+        phase: Phase.DAY_ASSIGNMENT,
         cause: BottleneckCause.CONSTRAINT_RELAXED,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
@@ -776,7 +793,7 @@ export function assignDay(
 }
 
 // ──────────────────────────────────────────────
-// findEarlierSlotSameDay — PRD Section 12.10
+// findEarlierSlotSameDay — METHODOLOGY.md §Capacity-Aware Day Assignment
 // ──────────────────────────────────────────────
 
 /**
@@ -824,7 +841,7 @@ export function findEarlierSlotSameDay(
       state,
       config,
       competition.id,
-      'POOLS',
+      Phase.POOLS,
     )
 
     if (result.type === 'FOUND') {

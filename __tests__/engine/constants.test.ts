@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  INDIV_TEAM_HARD_BLOCKS,
+  INDIV_TEAM_RELAXABLE_BLOCKS,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
   VIDEO_STAGE_ROUND,
@@ -8,21 +8,21 @@ import {
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
 
-describe('INDIV_TEAM_HARD_BLOCKS', () => {
+describe('INDIV_TEAM_RELAXABLE_BLOCKS', () => {
   it('has exactly 3 entries', () => {
-    expect(INDIV_TEAM_HARD_BLOCKS).toHaveLength(3)
+    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toHaveLength(3)
   })
 
   it('contains VETERAN/VETERAN, DIV1/JUNIOR, JUNIOR/DIV1', () => {
-    expect(INDIV_TEAM_HARD_BLOCKS).toContainEqual({
+    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toContainEqual({
       indivCategory: Category.VETERAN,
       teamCategory: Category.VETERAN,
     })
-    expect(INDIV_TEAM_HARD_BLOCKS).toContainEqual({
+    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toContainEqual({
       indivCategory: Category.DIV1,
       teamCategory: Category.JUNIOR,
     })
-    expect(INDIV_TEAM_HARD_BLOCKS).toContainEqual({
+    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toContainEqual({
       indivCategory: Category.JUNIOR,
       teamCategory: Category.DIV1,
     })

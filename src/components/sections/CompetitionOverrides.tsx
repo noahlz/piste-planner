@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 const DE_MODE_OPTIONS: { value: DeMode; label: string }[] = [
   { value: DeMode.SINGLE_STAGE, label: 'Single Block' },
-  { value: DeMode.STAGED_DE_BLOCKS, label: 'Staged DE Blocks' },
+  { value: DeMode.STAGED, label: 'Staged DE Blocks' },
 ]
 
 const VIDEO_POLICY_OPTIONS: { value: VideoPolicy; label: string }[] = [

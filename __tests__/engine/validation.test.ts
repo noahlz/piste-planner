@@ -218,11 +218,11 @@ describe('validateConfig — video policy warnings and errors', () => {
     expect(errors.some((e: ValidationError) => e.field === 'de_video_policy' && e.severity === 'WARN')).toBe(true)
   })
 
-  it('returns error for STAGED_DE_BLOCKS + REQUIRED + video_strips < de_round_of_16_strips', () => {
+  it('returns error for STAGED + REQUIRED + video_strips < de_round_of_16_strips', () => {
     // 2 video strips but de_round_of_16_strips = 4 → not enough video strips for R16
     const config = makeConfig({ video_strips_total: 2 })
     const comp = makeCompetition({
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       de_round_of_16_strips: 4,
     })
@@ -230,10 +230,10 @@ describe('validateConfig — video policy warnings and errors', () => {
     expect(errors.some((e: ValidationError) => e.field === 'de_video_policy' && e.severity === 'ERROR')).toBe(true)
   })
 
-  it('does not error when STAGED_DE_BLOCKS + REQUIRED + enough video strips', () => {
+  it('does not error when STAGED + REQUIRED + enough video strips', () => {
     const config = makeConfig({ video_strips_total: 4 })
     const comp = makeCompetition({
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       de_round_of_16_strips: 4,
     })

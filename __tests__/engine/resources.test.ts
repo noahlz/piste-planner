@@ -9,7 +9,7 @@ import {
   earliestResourceWindow,
   snapToSlot,
 } from '../../src/engine/resources.ts'
-import { Weapon } from '../../src/engine/types.ts'
+import { Weapon, Phase } from '../../src/engine/types.ts'
 import type { TournamentConfig, Strip } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -327,7 +327,7 @@ describe('earliestResourceWindow', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
     // notBefore=60 (1hr into day 0), already on slot boundary
-    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 60, 0, state, config, 'comp-1', 'POOL')
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 60, 0, state, config, 'comp-1', Phase.POOLS)
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
       expect(result.startTime).toBe(60)
@@ -339,7 +339,7 @@ describe('earliestResourceWindow', () => {
     const state = createGlobalState(config)
     // notBefore=0; all strips busy until t=120
     allocateStrips(state, Array.from({ length: STANDARD_STRIPS_TOTAL }, (_, i) => i), 120)
-    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', Phase.POOLS)
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
       expect(result.startTime).toBe(120)
@@ -351,7 +351,7 @@ describe('earliestResourceWindow', () => {
     const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS), THRESHOLD_MINS: 10 })
     const state = createGlobalState(config)
     allocateStrips(state, Array.from({ length: STANDARD_STRIPS_TOTAL }, (_, i) => i), 60)
-    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', Phase.POOLS)
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
       const stripContention = result.bottlenecks.find(b => b.cause === 'STRIP_CONTENTION')
@@ -365,7 +365,7 @@ describe('earliestResourceWindow', () => {
     const config = makeConfig({ strips: makeStrips(STANDARD_STRIPS_TOTAL, STANDARD_VIDEO_STRIPS) })
     const state = createGlobalState(config)
     allocateStrips(state, Array.from({ length: STANDARD_STRIPS_TOTAL }, (_, i) => i), 500)
-    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', Phase.POOLS)
     expect(result.type).toBe('NO_WINDOW')
   })
 
@@ -379,7 +379,7 @@ describe('earliestResourceWindow', () => {
     // Allocate all 4 foil/epee refs until t=60
     allocateRefs(state, 0, Weapon.FOIL, 4, 0, 60)
     // Request 4 strips + 4 refs at t=0 — strips free but refs busy until t=60
-    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', Phase.POOLS)
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
       expect(result.startTime).toBe(60) // snapped from 60 → 60 (already on boundary)
@@ -395,7 +395,7 @@ describe('earliestResourceWindow', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
     // notBefore=15 (not on 30-min boundary) → snaps to 30
-    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 15, 0, state, config, 'comp-1', 'POOL')
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 15, 0, state, config, 'comp-1', Phase.POOLS)
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
       // 15 snaps to 30
@@ -415,7 +415,7 @@ describe('earliestResourceWindow', () => {
     const state = createGlobalState(config)
     // Both strips busy until well past day end
     allocateStrips(state, [0, 1], 9999)
-    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', 'POOL')
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', Phase.POOLS)
     expect(result.type).toBe('NO_WINDOW')
   })
 })

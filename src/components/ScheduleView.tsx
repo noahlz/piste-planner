@@ -1,7 +1,7 @@
 import { useStore } from '../store/store.ts'
 import { buildTournamentConfig } from '../store/buildConfig.ts'
 import { scheduleAll } from '../engine/scheduler.ts'
-import { BottleneckCause, BottleneckSeverity } from '../engine/types.ts'
+import { BottleneckCause, BottleneckSeverity, Phase } from '../engine/types.ts'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
@@ -24,7 +24,7 @@ export function ScheduleView() {
       state.setScheduleResults({}, [
         {
           competition_id: '',
-          phase: 'SCHEDULE',
+          phase: Phase.SCHEDULING,
           cause: BottleneckCause.STRIP_CONTENTION,
           severity: BottleneckSeverity.ERROR,
           delay_mins: 0,

@@ -213,16 +213,16 @@ describe('initialAnalysis — Pass 3: one flighted per day', () => {
 
 describe('initialAnalysis — Pass 4: video strip demand', () => {
   it('peak concurrent video-required DEs (3) exceeds video_strips_total (2) → VIDEO_STRIP_CONTENTION warning', () => {
-    // Three STAGED_DE_BLOCKS + REQUIRED competitions all on same day
+    // Three STAGED + REQUIRED competitions all on same day
     // Override to 2 video strips to trigger the warning
     const configWith2Video = makeConfig({
       strips_total: 24,
       video_strips_total: 2,
     })
     const comps = [
-      makeBigComp('vid-1', 42, { de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
-      makeBigComp('vid-2', 42, { de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
-      makeBigComp('vid-3', 42, { de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
+      makeBigComp('vid-1', 42, { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
+      makeBigComp('vid-2', 42, { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
+      makeBigComp('vid-3', 42, { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
     ]
     const dayAssignments = { 'vid-1': 0, 'vid-2': 0, 'vid-3': 0 }
 
@@ -254,8 +254,8 @@ describe('initialAnalysis — Pass 4: video strip demand', () => {
     // 2 REQUIRED on same day, 4 video strips available → no contention
     const config = makeConfig() // 4 video strips
     const comps = [
-      makeBigComp('vid-1', 42, { de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
-      makeBigComp('vid-2', 42, { de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
+      makeBigComp('vid-1', 42, { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
+      makeBigComp('vid-2', 42, { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
     ]
     const result = initialAnalysis(config, comps, { 'vid-1': 0, 'vid-2': 0 })
 
@@ -277,11 +277,11 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
     // ceil(210/7)=30, ceil(203/7)=29; 30+29=59 > 55 strips, each fits within poolStripCap (44)
     const config = makeConfig({ strips_total: 55 })
     const comp1 = makeBigComp('fg-vid-1', 210, {
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
     })
     const comp2 = makeBigComp('fg-vid-2', 203, {
-      de_mode: DeMode.STAGED_DE_BLOCKS,
+      de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       gender: 'WOMEN',
     })
@@ -387,7 +387,7 @@ describe('initialAnalysis — statelessness', () => {
   it('calling twice with same input produces identical output', () => {
     const config = makeConfig({ tournament_type: TournamentType.NAC })
     const comps = [
-      makeBigComp('comp-a', 140, { de_mode: DeMode.STAGED_DE_BLOCKS, de_video_policy: VideoPolicy.REQUIRED }),
+      makeBigComp('comp-a', 140, { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }),
       makeBigComp('comp-b', 84, { cut_mode: CutMode.PERCENTAGE, cut_value: 25 }),
     ]
     const dayAssignments = { 'comp-a': 0, 'comp-b': 0 }
