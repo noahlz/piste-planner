@@ -320,7 +320,7 @@ The strip budget model limits how many strips any single competition may occupy 
 
 ### Flighting
 
-Flighting splits a large competition's pool round into two flights, using **half the strips for double the time**. The schedule marks the competition as "flighted" but does not track Flight A/B start/end times separately — only total pool round duration matters. (see [`flighting.ts`](src/engine/flighting.ts))
+Flighting splits a large competition's pool round into exactly two flights (Flight A and Flight B), using **half the strips for double the time**. Two flights is the maximum — three or more flights are not used in USA Fencing operations. The schedule marks the competition as "flighted" but does not track Flight A/B start/end times separately — only total pool round duration matters. (see [`flighting.ts`](src/engine/flighting.ts))
 
 #### Trigger
 

@@ -1,10 +1,24 @@
 ## Engine Limitations
 
-### Post-scheduling resource diagnostic missing
+### Post-scheduling resource diagnostics are shallow
 
-When events fail to schedule (ERROR bottlenecks), no actionable message surfaces explaining how many strips or refs were needed. User sees opaque "no valid day found" errors.
+`postScheduleDiagnostics` in `scheduler.ts` emits INFO-level messages using `recommendStripCount()` and `recommendRefCount()` after RESOURCE_EXHAUSTION errors. However the messages are global and surface-level:
 
-**Fix needed:** After scheduling, if errors exist, check whether configured strips/refs meet the minimum required counts and emit targeted messages: "You need at least N strips" / "You need at least X 3-weapon referees."
+- No per-phase breakdown (pools vs DEs vs video stage)
+- No per-day analysis – doesn't identify which days are bottlenecked
+- No delta messaging ("need 8 strips, have 6, add 2 more")
+- Ref estimation skips video-stage DE demand
+- No reporting of which constraint relaxations were attempted before failure
+
+**Fix needed:** Enrich diagnostics with per-day, per-phase, delta-based messaging so users can act on specific shortages.
+
+---
+
+### Strip/ref resource exhaustion at realistic scale
+
+Strip budget (`stripBudget.ts`), auto-flighting (`flighting.ts`), and capacity-aware day assignment (`dayAssignment.ts`) are all implemented. Despite this, the B1–B7 integration test baselines show the engine cannot fully schedule any realistic tournament. The fundamental bottleneck: a single large event (e.g. 310-fencer Div 1 needing ~45 pools) monopolizes all strips even at the 80% strip cap, leaving no resource windows for other events on the same day.
+
+Flighting halves pool strip demand but 2 flights is the maximum – 3+ flights are not realistic for USA Fencing operations. The likely path forward is ensuring venues configure enough strips for their largest events, and improving the engine's ability to stagger events across time windows within a day.
 
 ---
 
@@ -22,4 +36,4 @@ Seven integration tests in `__tests__/engine/integration.test.ts` use real USA F
 | B6: Sep 2025 ROC (9 categories) | 54 | 3 | 51 |
 | B7: Oct 2025 NAC (Div 1/Jr/Cdt) | 18 | 4 | 14 |
 
-*Updated 2026-04-03 after Plan D (capacity-aware day assignment).* Error counts did not improve — the capacity penalty spreads events more evenly across days, but the fundamental bottleneck is strip/ref resource exhaustion within a day. Single large events monopolize all strips, leaving no resource windows for subsequent events. Plan E (per-event strip limits + auto-flighting) targets this directly.
+*Updated 2026-04-12.* Strip budget, auto-flighting, and capacity-aware day assignment are implemented but did not improve error counts. The bottleneck is single-day strip exhaustion by large events, not day-assignment quality.
