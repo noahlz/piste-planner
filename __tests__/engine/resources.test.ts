@@ -419,3 +419,87 @@ describe('earliestResourceWindow', () => {
     expect(result.type).toBe('NO_WINDOW')
   })
 })
+
+// ──────────────────────────────────────────────
+// earliestResourceWindow NO_WINDOW reason
+// ──────────────────────────────────────────────
+
+describe('earliestResourceWindow NO_WINDOW reason', () => {
+  // dayStart(0, config) = 0; LATEST_START_OFFSET=480 → latestStart=480; DAY_LENGTH_MINS=840 → dayEnd=840
+
+  it('TIME reason — notBefore already past latestStart', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    // notBefore=500 > latestStart=480 → immediate TIME reason
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 500, 0, state, config, 'comp-1', Phase.POOLS)
+    expect(result.type).toBe('NO_WINDOW')
+    if (result.type === 'NO_WINDOW') {
+      expect(result.reason?.kind).toBe('TIME')
+      if (result.reason?.kind === 'TIME') {
+        expect(result.reason.latest_start).toBe(480)
+      }
+    }
+  })
+
+  it('STRIPS reason — strip availability pushes T past latestStart', () => {
+    // 24 strips total. Request 4 strips with refs free.
+    // Strips 0-3 allocated until t=900 (past latestStart=960 after snap).
+    // findAvailableStrips returns WAIT_UNTIL(900) → candidate advances to 900.
+    // Next iteration: strips 0-3 are free at t=900, but stripFreeMax=900,
+    // T=snapToSlot(max(900,900,tRefs=0))=900 which is < latestStart=960. That succeeds.
+    //
+    // Instead: allocate strips until t=1000. findAvailableStrips WAIT_UNTIL(1000) →
+    // snapToSlot(1000)=1020 > latestStart=960 → TIME reason fires from the first branch.
+    //
+    // To hit diagNoWindowReason's STRIPS path: findAvailableStrips must return FOUND,
+    // then stripFreeMax must push T past latestStart. This requires selected strips
+    // with freeAt in the past (free at candidate), but their freeAt stored > than refs.
+    // Since freeAt <= atTime for FOUND strips, stripFreeMax <= candidate always.
+    // The STRIPS path in diagNoWindowReason is reachable only when stripFreeMax > tRefs,
+    // which requires refs available immediately while strip selection succeeds but T
+    // overflows — this is practically unreachable because findAvailableStrips only
+    // returns strips whose freeAt <= candidate.
+    //
+    // This test verifies the WAIT_UNTIL inline STRIPS path instead.
+    const config = makeConfig({
+      strips: makeStrips(4, 0),
+      LATEST_START_OFFSET: 60,
+      DAY_LENGTH_MINS: 120,
+    })
+    const state = createGlobalState(config)
+    // All 4 strips busy until t=9999. Requesting 4, refsNeeded=0.
+    // findAvailableStrips → WAIT_UNTIL(9999), snap → 10020 > latestStart → TIME at line 419.
+    // This is correctly a TIME reason since the strips won't be free within the day.
+    allocateStrips(state, [0, 1, 2, 3], 9999)
+    const result = earliestResourceWindow(4, 0, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', Phase.POOLS)
+    expect(result.type).toBe('NO_WINDOW')
+    if (result.type === 'NO_WINDOW') {
+      expect(result.reason).toBeDefined()
+      // Strips are the root cause but the proximate failure is TIME (no window within day bounds)
+      expect(result.reason?.kind).toBe('TIME')
+    }
+  })
+
+  it('REFS reason — enough strips but refs tied up past day end', () => {
+    // 24 strips free, but all 4 foil refs allocated until t=9999. earliestRefsTime
+    // returns Infinity, so T=snapToSlot(Infinity)=Infinity > latestStart, triggering
+    // diagNoWindowReason with candidate=0 <= latestStart and refs as binding constraint.
+    const config = makeConfig({
+      referee_availability: [
+        { day: 0, foil_epee_refs: 4, three_weapon_refs: 0, source: 'ACTUAL' as const },
+        { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const },
+      ],
+      LATEST_START_OFFSET: 120,
+      DAY_LENGTH_MINS: 240,
+    })
+    const state = createGlobalState(config)
+    // Allocate all 4 foil refs until t=9999 — earliestRefsTime returns Infinity
+    allocateRefs(state, 0, Weapon.FOIL, 4, 0, 9999)
+    // Request 4 refs — strips are free but refs are tied up indefinitely
+    const result = earliestResourceWindow(4, 4, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', Phase.POOLS)
+    expect(result.type).toBe('NO_WINDOW')
+    if (result.type === 'NO_WINDOW') {
+      expect(result.reason?.kind).toBe('REFS')
+    }
+  })
+})

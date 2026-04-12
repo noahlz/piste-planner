@@ -15,9 +15,14 @@ export type FindStripsResult =
   | { type: 'FOUND'; stripIndices: number[] }
   | { type: 'WAIT_UNTIL'; waitUntil: number }
 
+export type NoWindowReason =
+  | { kind: 'STRIPS'; needed: number; available: number; earliest_free: number }
+  | { kind: 'REFS'; needed: number; available: number; earliest_free: number }
+  | { kind: 'TIME'; candidate: number; latest_start: number }
+
 export type ResourceWindowResult =
   | { type: 'FOUND'; startTime: number; stripIndices: number[]; bottlenecks: Bottleneck[] }
-  | { type: 'NO_WINDOW' }
+  | { type: 'NO_WINDOW'; reason?: NoWindowReason }
 
 // ──────────────────────────────────────────────
 // snapshotState / restoreState
@@ -321,6 +326,49 @@ export function snapToSlot(t: number): number {
 }
 
 // ──────────────────────────────────────────────
+// NO_WINDOW diagnostic helpers
+// ──────────────────────────────────────────────
+
+/**
+ * Counts how many strips are free at `atTime`, optionally filtering to video-capable strips only.
+ */
+function countFreeStrips(
+  state: GlobalState,
+  config: TournamentConfig,
+  atTime: number,
+  videoRequired: boolean,
+): number {
+  return config.strips.filter(
+    (s, i) => (!videoRequired || s.video_capable) && state.strip_free_at[i] <= atTime,
+  ).length
+}
+
+/**
+ * Determines the limiting NoWindowReason when no window could be found.
+ * Prefers TIME if the candidate itself is already past the deadline, then
+ * STRIPS if strip availability was the binding constraint, otherwise REFS.
+ */
+function diagNoWindowReason(
+  candidate: number,
+  latestStart: number,
+  _dayEndTime: number,
+  stripsNeeded: number,
+  stripsAvailable: number,
+  lastStripFreeMax: number,
+  refsNeeded: number,
+  refsAvailable: number,
+  lastTRefs: number,
+): NoWindowReason {
+  if (candidate > latestStart) {
+    return { kind: 'TIME', candidate, latest_start: latestStart }
+  }
+  if (lastStripFreeMax > lastTRefs) {
+    return { kind: 'STRIPS', needed: stripsNeeded, available: stripsAvailable, earliest_free: lastStripFreeMax }
+  }
+  return { kind: 'REFS', needed: refsNeeded, available: refsAvailable, earliest_free: lastTRefs }
+}
+
+// ──────────────────────────────────────────────
 // earliestResourceWindow
 // ──────────────────────────────────────────────
 
@@ -363,11 +411,18 @@ export function earliestResourceWindow(
   const maxAttempts = config.MAX_RESCHEDULE_ATTEMPTS * 2 + 10
   let attempts = 0
 
+  // Hoisted to capture the last known strip and ref free times for diagnotics on loop exhaustion.
+  let lastStripFreeMax = 0
+  let lastTRefs = Infinity
+
   while (attempts < maxAttempts) {
     attempts++
 
     if (candidate > latestStart || candidate > dayEndTime) {
-      return { type: 'NO_WINDOW' }
+      return {
+        type: 'NO_WINDOW',
+        reason: { kind: 'TIME', candidate, latest_start: latestStart },
+      }
     }
 
     const stripResult = findAvailableStrips(state, config, stripsNeeded, candidate, videoRequired)
@@ -376,7 +431,15 @@ export function earliestResourceWindow(
       const next = snapToSlot(stripResult.waitUntil)
       if (next <= candidate) {
         // Shouldn't happen, but guard against infinite loop
-        return { type: 'NO_WINDOW' }
+        return {
+          type: 'NO_WINDOW',
+          reason: {
+            kind: 'STRIPS',
+            needed: stripsNeeded,
+            available: countFreeStrips(state, config, candidate, videoRequired),
+            earliest_free: stripResult.waitUntil,
+          },
+        }
       }
       candidate = next
       continue
@@ -394,17 +457,47 @@ export function earliestResourceWindow(
       (max, i) => Math.max(max, state.strip_free_at[i]),
       0,
     )
+    // Update hoisted trackers for loop-exhaustion diagnostics
+    lastStripFreeMax = stripFreeMax
+    lastTRefs = tRefs
+
     const T = snapToSlot(Math.max(candidate, stripFreeMax, tRefs))
 
     if (T > latestStart || T > dayEndTime) {
-      return { type: 'NO_WINDOW' }
+      const freeRefs = weapon === Weapon.SABRE
+        ? saberRefsFreeAt(day, candidate, state, config)
+        : feRefsFreeAt(day, candidate, state, config)
+      return {
+        type: 'NO_WINDOW',
+        reason: diagNoWindowReason(
+          candidate,
+          latestStart,
+          dayEndTime,
+          stripsNeeded,
+          countFreeStrips(state, config, candidate, videoRequired),
+          stripFreeMax,
+          refsNeeded,
+          freeRefs,
+          tRefs,
+        ),
+      }
     }
 
     // Verify strips are still available at T (they may have been claimed by a concurrent phase)
     const verifyResult = findAvailableStrips(state, config, stripsNeeded, T, videoRequired)
     if (verifyResult.type === 'WAIT_UNTIL') {
       const next = snapToSlot(verifyResult.waitUntil)
-      if (next <= candidate) return { type: 'NO_WINDOW' }
+      if (next <= candidate) {
+        return {
+          type: 'NO_WINDOW',
+          reason: {
+            kind: 'STRIPS',
+            needed: stripsNeeded,
+            available: countFreeStrips(state, config, T, videoRequired),
+            earliest_free: verifyResult.waitUntil,
+          },
+        }
+      }
       candidate = next
       continue
     }
@@ -455,7 +548,23 @@ export function earliestResourceWindow(
     }
   }
 
-  return { type: 'NO_WINDOW' }
+  const freeRefsAtEnd = weapon === Weapon.SABRE
+    ? saberRefsFreeAt(day, candidate, state, config)
+    : feRefsFreeAt(day, candidate, state, config)
+  return {
+    type: 'NO_WINDOW',
+    reason: diagNoWindowReason(
+      candidate,
+      latestStart,
+      dayEndTime,
+      stripsNeeded,
+      countFreeStrips(state, config, candidate, videoRequired),
+      lastStripFreeMax,
+      refsNeeded,
+      freeRefsAtEnd,
+      lastTRefs,
+    ),
+  }
 }
 
 /**
