@@ -590,6 +590,105 @@ describe('scheduleAll — graceful degradation on resource exhaustion', () => {
 })
 
 // ──────────────────────────────────────────────
+// scheduleAll — repair loop
+// ──────────────────────────────────────────────
+
+describe('scheduleAll — repair loop', () => {
+  it('moves events to a viable day when their coloring-assigned day is too short', () => {
+    // Day 0: 60 min — too short for pools + DE with 16 fencers (~90+ min needed).
+    // Day 1: normal 840 min — events can schedule here.
+    // DSatur coloring is capacity-unaware, so it may assign events to day 0.
+    // The repair loop detects the failure and moves them to day 1.
+    const config = makeConfig({
+      days_available: 2,
+      dayConfigs: [
+        { day_start_time: 0, day_end_time: 60 },
+        { day_start_time: 840, day_end_time: 1680 },
+      ],
+      strips: makeStrips(24, 4),
+      referee_availability: [
+        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const },
+        { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const },
+      ],
+    })
+
+    // Two non-conflicting events (different demographics = no hard constraints)
+    const comps = [
+      makeCompetition({
+        id: 'repair-1',
+        fencer_count: 16,
+        strips_allocated: 4,
+        gender: Gender.MEN,
+        weapon: Weapon.FOIL,
+        category: Category.DIV1A,
+      }),
+      makeCompetition({
+        id: 'repair-2',
+        fencer_count: 16,
+        strips_allocated: 4,
+        gender: Gender.WOMEN,
+        weapon: Weapon.EPEE,
+        category: Category.DIV1A,
+      }),
+    ]
+
+    const { schedule, bottlenecks } = scheduleAll(comps, config)
+
+    // Both should be scheduled with no errors
+    expect(Object.keys(schedule)).toHaveLength(2)
+    const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
+    expect(errors).toHaveLength(0)
+
+    // Both events must end up on day 1 (day 0 is too short for any event)
+    expect(schedule['repair-1'].assigned_day).toBe(1)
+    expect(schedule['repair-2'].assigned_day).toBe(1)
+
+    // If the repair loop ran, it leaves a DEADLINE_BREACH WARN bottleneck with "repaired".
+    // If coloring assigned directly to day 1, no repair bottleneck exists — both are valid.
+    // The key assertion is that both events end up on day 1 regardless of path.
+  })
+
+  it('produces ERROR bottleneck when no day can fit the event', () => {
+    // Both days are 30 min with 1 strip — 100 fencers need far more time and strips.
+    // Neither the coloring-assigned day nor any repair alternative can fit.
+    const config = makeConfig({
+      tournament_type: 'RJCC',
+      days_available: 2,
+      dayConfigs: [
+        { day_start_time: 0, day_end_time: 30 },
+        { day_start_time: 840, day_end_time: 870 },
+      ],
+      strips: makeStrips(1, 0),
+      referee_availability: [
+        { day: 0, foil_epee_refs: 10, three_weapon_refs: 5, source: 'ACTUAL' as const },
+        { day: 1, foil_epee_refs: 10, three_weapon_refs: 5, source: 'ACTUAL' as const },
+      ],
+    })
+
+    const comps = [
+      makeCompetition({
+        id: 'impossible-1',
+        fencer_count: 100,
+        strips_allocated: 1,
+        gender: Gender.MEN,
+        weapon: Weapon.FOIL,
+        category: Category.DIV1,
+        earliest_start: 0,
+        latest_end: 9999,
+      }),
+    ]
+
+    const { schedule, bottlenecks } = scheduleAll(comps, config)
+
+    // Event should not be scheduled
+    expect(Object.keys(schedule)).toHaveLength(0)
+    // At least one ERROR bottleneck produced
+    const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
+    expect(errors.length).toBeGreaterThan(0)
+  })
+})
+
+// ──────────────────────────────────────────────
 // scheduleAll — postScheduleWarnings integration
 // ──────────────────────────────────────────────
 

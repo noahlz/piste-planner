@@ -28,7 +28,7 @@ import { computeBracketSize, calculateDeDuration, dePhasesForBracket, deBlockDur
 import { refsAvailableOnDay } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, snapshotState, restoreState, type NoWindowReason } from './resources.ts'
-import { assignDay, findEarlierSlotSameDay, SchedulingError } from './dayAssignment.ts'
+import { findEarlierSlotSameDay, SchedulingError } from './dayAssignment.ts'
 import { computeStripCap } from './stripBudget.ts'
 
 function formatTime(mins: number): string {
@@ -76,12 +76,12 @@ function emitNoWindowDiagnostic(
 
 export function scheduleCompetition(
   competition: Competition,
+  day: number,
   state: GlobalState,
   config: TournamentConfig,
   allCompetitions: Competition[],
 ): ScheduleResult {
   const poolStructure = computePoolStructure(competition.fencer_count, competition.use_single_pool_override)
-  const { day, level: constraintLevel } = assignDay(competition, poolStructure, state, config, allCompetitions)
   let notBefore = Math.max(competition.earliest_start, dayStart(day, config))
 
   // If team event, enforce individual-first ordering on same day (same weapon)
@@ -171,7 +171,7 @@ export function scheduleCompetition(
     pool_duration_actual: 0,
     de_duration_baseline: totalDeBase,
     de_duration_actual: 0,
-    constraint_relaxation_level: constraintLevel,
+    constraint_relaxation_level: 0,
     accepted_warnings: [],
   }
 

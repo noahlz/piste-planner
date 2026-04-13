@@ -30,7 +30,7 @@ describe('scheduleCompetition — non-flighted', () => {
       strips_allocated: 8,
     })
 
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // Pool phase populated
     expect(result.pool_start).not.toBeNull()
@@ -56,7 +56,7 @@ describe('scheduleCompetition — non-flighted', () => {
     const state = createGlobalState(config)
     const comp = makeCompetition({ id: 'MF-DIV1', fencer_count: 24 })
 
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // 24 fencers → 4 pools of 6 → pool_strips = min(n_pools=4, allocated=8) = 4
     expect(result.pool_strip_count).toBe(4)
@@ -71,7 +71,7 @@ describe('scheduleCompetition — non-flighted', () => {
     const state = createGlobalState(config)
     const comp = makeCompetition({ id: 'MF-DIV1', fencer_count: 24 })
 
-    scheduleCompetition(comp, state, config, [comp])
+    scheduleCompetition(comp, 0, state, config, [comp])
 
     // Some strips should be occupied past day start
     const occupiedStrips = state.strip_free_at.filter(t => t > dayStart(0, config))
@@ -97,7 +97,7 @@ describe('scheduleCompetition — flighted standalone', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     expect(result.use_flighting).toBe(true)
 
@@ -138,7 +138,7 @@ describe('scheduleCompetition — flighted standalone', () => {
     })
 
     const state = createGlobalState(config)
-    scheduleCompetition(comp, state, config, [comp])
+    scheduleCompetition(comp, 0, state, config, [comp])
 
     const result = state.schedule['MS-CADET']
     expect(result.flight_a_start).not.toBeNull()
@@ -191,13 +191,13 @@ describe('scheduleCompetition — flighting group', () => {
     // Schedule priority first
     const state = createGlobalState(config)
     const allComps = [priority, flighted]
-    const priorityResult = scheduleCompetition(priority, state, config, allComps)
+    const priorityResult = scheduleCompetition(priority, 0, state, config, allComps)
 
     // Priority should have strips allocated
     expect(priorityResult.pool_strip_count).toBeGreaterThan(0)
 
     // Now schedule the flighted comp
-    const flightedResult = scheduleCompetition(flighted, state, config, allComps)
+    const flightedResult = scheduleCompetition(flighted, 0, state, config, allComps)
     expect(flightedResult.pool_strip_count).toBeGreaterThan(0)
   })
 })
@@ -220,7 +220,7 @@ describe('scheduleCompetition — STAGED', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // All three blocks populated
     expect(result.de_prelims_start).not.toBeNull()
@@ -247,7 +247,7 @@ describe('scheduleCompetition — STAGED', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // No prelims
     expect(result.de_prelims_start).toBeNull()
@@ -271,7 +271,7 @@ describe('scheduleCompetition — STAGED', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // 16 fencers → bracket 16 → de_round_of_16_strip_count = comp setting (4), de_finals_strip_count = comp setting (2)
     expect(result.de_round_of_16_strip_count).toBe(4)
@@ -302,7 +302,7 @@ describe('scheduleCompetition — STAGED', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // Both phases scheduled successfully
     expect(result.de_round_of_16_start).not.toBeNull()
@@ -336,7 +336,7 @@ describe('scheduleCompetition — team bronze bout', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // Bronze bout should be populated for TEAM event
     expect(result.de_bronze_start).not.toBeNull()
@@ -366,7 +366,7 @@ describe('scheduleCompetition — team bronze bout', () => {
     })
 
     const state = createGlobalState(config)
-    scheduleCompetition(comp, state, config, [comp])
+    scheduleCompetition(comp, 0, state, config, [comp])
 
     const bronzeBottleneck = state.bottlenecks.find(
       b => b.cause === BottleneckCause.DE_FINALS_BRONZE_NO_STRIP,
@@ -400,7 +400,7 @@ describe('scheduleCompetition — deadline breach', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // Must finish by day end and no DEADLINE_BREACH bottleneck
     expect(result.de_total_end ?? result.de_end).toBeLessThanOrEqual(dayEnd(result.assigned_day, config))
@@ -432,7 +432,7 @@ describe('scheduleCompetition — deadline breach', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // Must have succeeded and fit within the day
     expect(result.de_total_end ?? result.de_end).toBeLessThanOrEqual(dayEnd(result.assigned_day, config))
@@ -475,7 +475,7 @@ describe('scheduleCompetition — deadline breach', () => {
     const state = createGlobalState(config)
 
     // Must throw a SchedulingError — not just any error
-    expect(() => scheduleCompetition(comp, state, config, [comp])).toThrow(SchedulingError)
+    expect(() => scheduleCompetition(comp, 0, state, config, [comp])).toThrow(SchedulingError)
     const breachBottleneck = state.bottlenecks.find(
       b => b.cause === BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
     )
@@ -515,7 +515,7 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
     // With MAX_RESCHEDULE_ATTEMPTS=0, the first overrun throws immediately.
     // Assert it throws a SchedulingError (either SAME_DAY_VIOLATION or
     // DEADLINE_BREACH_UNRESOLVABLE depending on exact timing).
-    expect(() => scheduleCompetition(comp, state, config, [comp])).toThrow(SchedulingError)
+    expect(() => scheduleCompetition(comp, 0, state, config, [comp])).toThrow(SchedulingError)
   })
 })
 
@@ -560,7 +560,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // With effectiveCap=12 and 13 pools, two batches are needed.
     // pool_duration_actual should be 2x pool_duration_baseline.
@@ -590,7 +590,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // All 13 pools run in one batch — actual equals baseline.
     expect(result.pool_duration_actual).toBe(result.pool_duration_baseline)
@@ -620,7 +620,7 @@ describe('scheduleCompetition — per-event strip cap', () => {
     })
 
     const state = createGlobalState(config)
-    const result = scheduleCompetition(comp, state, config, [comp])
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
 
     // Override gives effectiveCap=24, so all 13 pools run in one batch.
     expect(result.pool_duration_actual).toBe(result.pool_duration_baseline)
@@ -663,10 +663,10 @@ describe('scheduleCompetition — individual+team sequencing', () => {
     const state = createGlobalState(config)
     const allComps = [individual, team]
 
-    const indResult = scheduleCompetition(individual, state, config, allComps)
+    const indResult = scheduleCompetition(individual, 0, state, config, allComps)
 
     // Team event — same weapon/category/gender — must be sequenced after individual
-    const teamResult = scheduleCompetition(team, state, config, allComps)
+    const teamResult = scheduleCompetition(team, 0, state, config, allComps)
 
     // Both on day 0 (only day available)
     expect(indResult.assigned_day).toBe(0)
