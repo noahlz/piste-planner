@@ -41,23 +41,24 @@ Write a test file that imports the real B1-B7 tournament configurations from `in
 
 ## Results (fill in after running)
 
-| Scenario | Days | Events/Day | Hard Violations | Relaxations | Soft Penalty |
-|----------|------|------------|-----------------|-------------|--------------|
-| B1 | | | | | |
-| B2 | | | | | |
-| B3 | | | | | |
-| B4 | | | | | |
-| B5 | | | | | |
-| B6 | | | | | |
-| B7 | | | | | |
+| Scenario | Days | Events/Day | Hard Violations | Relaxations | Soft Penalty | Rest Violations |
+|----------|------|------------|-----------------|-------------|--------------|-----------------|
+| B1 | 4 | 6/6/12/0 | 0 | 0 | 0.00 | 0 |
+| B2 | 4 | 6/6/6/6 | 0 | 0 | 0.00 | 0 |
+| B3 | 4 | 6/12/6/0 | 0 | 0 | 1.80 | 0 |
+| B4 | 3 | 12/12/6 | 0 | 0 | 1.80 | 0 |
+| B5 | 3 | 6/0/6 | 0 | 0 | 0.00 | 0 |
+| B6 | 3 | 18/18/18 | 0 | 0 | 6.60 | 2 |
+| B7 | 4 | 6/0/6/6 | 0 | 0 | 0.00 | 0 |
 
 ### Assessment
 
-_To be filled in after running. Key questions:_
-- Are day assignments balanced across available days?
-- Are hard constraints respected (or only relaxed where expected)?
-- Does the within-day sequence put high-demand events first?
-- Compared to the old penalty-based assignments, does this look better, worse, or equivalent?
+- **Hard constraints:** Fully satisfied across all 7 scenarios. Zero violations, zero relaxations needed.
+- **Day balance is the main problem.** B1, B3, B5, and B7 leave one or more days completely empty while overloading others. DSatur optimizes for constraint satisfaction, not load balancing. B1 puts 12 events on Day 2 and 0 on Day 3. B5 leaves Day 1 entirely unused.
+- **B2 and B6 achieve perfect balance** – coincidentally, not by algorithmic design.
+- **Within-day sequencing works correctly.** Y8/Y10 events placed first, mandatory before optional, individual before team, larger demand before smaller.
+- **Soft penalties are low.** Max 6.60 for the dense B6 scenario (54 events, 3 days). B6 has 2 rest-day violations (JR/CDT foil and epee on adjacent days), which is expected given the constraint density.
+- **vs. old penalty-based approach:** Hard constraint satisfaction is strictly better (the old approach needed relaxation in some scenarios). Day balance is worse – the old capacity-aware bin-packing model distributed load more evenly. Stage 3 integration should combine DSatur's constraint satisfaction with capacity-aware rebalancing.
 
 ---
 
