@@ -19,9 +19,13 @@ import {
   BottleneckSeverity,
   dayStart,
 } from './types.ts'
-import { createGlobalState } from './resources.ts'
+import { createGlobalState, snapshotState, restoreState } from './resources.ts'
 import { scheduleCompetition } from './scheduleOne.ts'
 import { constraintScore, SchedulingError } from './dayAssignment.ts'
+import { buildConstraintGraph } from './constraintGraph.ts'
+import type { ConstraintGraph } from './constraintGraph.ts'
+import { assignDaysByColoring } from './dayColoring.ts'
+import { sequenceEventsForDay } from './daySequencing.ts'
 import { validateConfig } from './validation.ts'
 import { recommendStripCount, recommendRefCount } from './stripBudget.ts'
 import { dayConsumedCapacity } from './capacity.ts'
@@ -73,36 +77,140 @@ export function scheduleAll(
     return { schedule: state.schedule, bottlenecks: state.bottlenecks }
   }
 
-  const allSorted = sortWithPairs(competitions, config)
+  // ── Phase 1: Build constraint graph ──
+  const graph = buildConstraintGraph(competitions)
 
-  for (const comp of allSorted) {
-    try {
-      // Pass original `competitions` (not sorted) for crossover/proximity context
-      scheduleCompetition(comp, state, config, competitions)
-    } catch (err) {
-      if (err instanceof SchedulingError) {
-        // Only add an ERROR bottleneck if scheduleCompetition didn't already record one
-        // (some throw sites in scheduleOne.ts push a bottleneck before throwing)
-        const alreadyRecorded = state.bottlenecks.some(
-          (b) => b.competition_id === comp.id && b.severity === BottleneckSeverity.ERROR,
-        )
-        if (!alreadyRecorded) {
-          const rawCause = typeof err.cause === 'string' ? err.cause : null
-          const cause =
-            rawCause && VALID_BOTTLENECK_CAUSES.has(rawCause as BottleneckCause)
-              ? (rawCause as BottleneckCause)
-              : BottleneckCause.RESOURCE_EXHAUSTION
+  // ── Phase 2: Assign days by graph coloring ──
+  const { dayMap, relaxations, effectiveDays } = assignDaysByColoring(graph, competitions, config)
+
+  // ── Phase 3: Per-day scheduling loop ──
+  const failedEvents: { comp: Competition; error: SchedulingError }[] = []
+
+  for (let day = 0; day < effectiveDays; day++) {
+    const dayEvents = competitions.filter(c => dayMap.get(c.id) === day)
+    if (dayEvents.length === 0) continue
+
+    const ordered = sequenceEventsForDay(dayEvents, config)
+
+    for (const comp of ordered) {
+      const snapshot = snapshotState(state)
+      try {
+        const result = scheduleCompetition(comp, day, state, config, competitions)
+
+        // Flow constraint_relaxation_level from coloring
+        const relaxLevel = relaxations.get(comp.id)
+        if (relaxLevel !== undefined) {
+          result.constraint_relaxation_level = relaxLevel
           state.bottlenecks.push({
             competition_id: comp.id,
-            phase: Phase.SCHEDULING,
-            cause,
-            severity: BottleneckSeverity.ERROR,
+            phase: Phase.DAY_ASSIGNMENT,
+            cause: BottleneckCause.CONSTRAINT_RELAXED,
+            severity: BottleneckSeverity.INFO,
             delay_mins: 0,
-            message: err.message,
+            message: `${comp.id}: constraint relaxed to level ${relaxLevel} during day assignment`,
           })
         }
-      } else {
-        throw err
+      } catch (err) {
+        if (err instanceof SchedulingError) {
+          // Restore state to prevent phantom resource allocations from partial
+          // scheduling (scheduleOne may allocate strips/refs before a later phase
+          // fails and throws without restoring).
+          restoreState(state, snapshot)
+          failedEvents.push({ comp, error: err })
+        } else {
+          throw err
+        }
+      }
+    }
+  }
+
+  // ── Phase 4: Repair loop for failed events ──
+  const MAX_REPAIR_ATTEMPTS = config.days_available
+
+  for (const { comp, error: _originalError } of failedEvents) {
+    const edges = graph.get(comp.id) ?? []
+    const hardNeighborIds = edges
+      .filter(e => e.weight === Infinity)
+      .map(e => e.targetId)
+
+    const blockedDays = new Set<number>()
+    for (const neighborId of hardNeighborIds) {
+      const neighborResult = state.schedule[neighborId]
+      if (neighborResult) {
+        blockedDays.add(neighborResult.assigned_day)
+      }
+    }
+
+    const altDays = Array.from({ length: config.days_available }, (_, i) => i)
+      .filter(d => !blockedDays.has(d))
+      .sort((a, b) =>
+        softPenaltyEstimate(comp.id, a, graph, state) -
+        softPenaltyEstimate(comp.id, b, graph, state),
+      )
+
+    let repaired = false
+    let attempts = 0
+
+    for (const altDay of altDays) {
+      if (attempts >= MAX_REPAIR_ATTEMPTS) break
+      attempts++
+
+      const snapshot = snapshotState(state)
+      try {
+        const result = scheduleCompetition(comp, altDay, state, config, competitions)
+
+        // Apply relaxation level if present
+        const relaxLevel = relaxations.get(comp.id)
+        if (relaxLevel !== undefined) {
+          result.constraint_relaxation_level = relaxLevel
+          state.bottlenecks.push({
+            competition_id: comp.id,
+            phase: Phase.DAY_ASSIGNMENT,
+            cause: BottleneckCause.CONSTRAINT_RELAXED,
+            severity: BottleneckSeverity.WARN,
+            delay_mins: 0,
+            message: `${comp.id}: repaired to day ${altDay}, constraint relaxed to level ${relaxLevel}`,
+          })
+        } else {
+          state.bottlenecks.push({
+            competition_id: comp.id,
+            phase: Phase.DAY_ASSIGNMENT,
+            cause: BottleneckCause.DEADLINE_BREACH,
+            severity: BottleneckSeverity.WARN,
+            delay_mins: 0,
+            message: `${comp.id}: repaired by moving to day ${altDay} (original day lacked resources)`,
+          })
+        }
+        repaired = true
+        break
+      } catch (retryErr) {
+        if (retryErr instanceof SchedulingError) {
+          restoreState(state, snapshot)
+        } else {
+          throw retryErr
+        }
+      }
+    }
+
+    if (!repaired) {
+      // Record ERROR bottleneck (same pattern as original error handling)
+      const alreadyRecorded = state.bottlenecks.some(
+        (b) => b.competition_id === comp.id && b.severity === BottleneckSeverity.ERROR,
+      )
+      if (!alreadyRecorded) {
+        const rawCause = typeof _originalError.cause === 'string' ? _originalError.cause : null
+        const cause =
+          rawCause && VALID_BOTTLENECK_CAUSES.has(rawCause as BottleneckCause)
+            ? (rawCause as BottleneckCause)
+            : BottleneckCause.RESOURCE_EXHAUSTION
+        state.bottlenecks.push({
+          competition_id: comp.id,
+          phase: Phase.SCHEDULING,
+          cause,
+          severity: BottleneckSeverity.ERROR,
+          delay_mins: 0,
+          message: _originalError.message,
+        })
       }
     }
   }
@@ -120,6 +228,40 @@ export function scheduleAll(
     schedule: state.schedule,
     bottlenecks: state.bottlenecks,
   }
+}
+
+// ──────────────────────────────────────────────
+// softPenaltyEstimate — repair loop day ranking
+// ──────────────────────────────────────────────
+
+/**
+ * Estimates the soft penalty for placing a competition on a given day,
+ * used to rank alternative days in the repair loop. Sums soft-edge weights
+ * for neighbors already scheduled on the same day, plus a load-balance
+ * tiebreaker proportional to the number of events already on that day.
+ */
+function softPenaltyEstimate(
+  compId: string,
+  day: number,
+  graph: ConstraintGraph,
+  state: GlobalState,
+): number {
+  const edges = graph.get(compId) ?? []
+  let penalty = 0
+  for (const edge of edges) {
+    if (edge.weight === Infinity) continue
+    const neighborResult = state.schedule[edge.targetId]
+    if (neighborResult && neighborResult.assigned_day === day) {
+      penalty += edge.weight
+    }
+  }
+  // Load-balance tiebreaker
+  let eventsOnDay = 0
+  for (const sr of Object.values(state.schedule)) {
+    if (sr.assigned_day === day) eventsOnDay++
+  }
+  penalty += eventsOnDay * 0.1
+  return penalty
 }
 
 // ──────────────────────────────────────────────
