@@ -103,30 +103,44 @@ describe('assignDaysByColoring', () => {
   })
 
   it('soft conflicts prefer different days when enough colors available', () => {
-    // c1 and c2 have a soft conflict — they should go on different days when
-    // 2 days are available (no hard constraint prevents it)
+    // With load balancing, the new-day penalty outweighs soft conflicts for
+    // just 2 events. Use a hard edge to force day 0 open, then verify the
+    // soft conflict steers c3 away from c2's day.
     const c1 = makeCompetition({ id: 'c1' })
     const c2 = makeCompetition({ id: 'c2' })
-    const graph = buildGraph([['c1', 'c2', 5.0]])
-    const config = makeConfig({ days_available: 2 })
+    const c3 = makeCompetition({ id: 'c3' })
+    const graph = buildGraph([
+      ['c1', 'c2', Infinity], // hard: c1 and c2 on different days
+      ['c2', 'c3', 5.0],     // soft: c3 prefers not to share c2's day
+    ])
+    const config = makeConfig({ days_available: 3 })
 
-    const { dayMap, relaxations } = assignDaysByColoring(graph, [c1, c2], config)
+    const { dayMap, relaxations, effectiveDays } = assignDaysByColoring(graph, [c1, c2, c3], config)
 
-    // With a positive soft penalty, the second event should prefer the other day
-    expect(dayMap.get('c1')).not.toBe(dayMap.get('c2'))
+    expect(effectiveDays).toBe(2)
+    // c3 should avoid c2's day due to soft penalty (both days already open)
+    expect(dayMap.get('c2')).not.toBe(dayMap.get('c3'))
     expect(relaxations.size).toBe(0)
   })
 
-  it('assigns different days for two events even with only a soft conflict and 3 days', () => {
-    const c1 = makeCompetition({ id: 'c1' })
-    const c2 = makeCompetition({ id: 'c2' })
-    const graph = buildGraph([['c1', 'c2', 2.0]])
-    const config = makeConfig({ days_available: 3 })
+  it('load balancing spreads events across used days evenly', () => {
+    // c1 and c2 have a hard edge forcing 2 days. The remaining 4 events
+    // have no constraints. Phase 1 → effectiveDays=2, Phase 2 → ~3 per day.
+    const comps = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'].map(id => makeCompetition({ id }))
+    const graph = buildGraph([['c1', 'c2', Infinity]])
+    // Add empty adjacency entries for c3-c6
+    for (const id of ['c3', 'c4', 'c5', 'c6']) {
+      if (!graph.has(id)) graph.set(id, [])
+    }
+    const config = makeConfig({ days_available: 4 })
 
-    const { dayMap } = assignDaysByColoring(graph, [c1, c2], config)
+    const { dayMap, effectiveDays } = assignDaysByColoring(graph, comps, config)
 
-    // Soft conflict: the second colored event prefers a different day
-    expect(dayMap.get('c1')).not.toBe(dayMap.get('c2'))
+    expect(effectiveDays).toBe(2)
+    const day0Count = [...dayMap.values()].filter(d => d === 0).length
+    const day1Count = [...dayMap.values()].filter(d => d === 1).length
+    expect(day0Count).toBe(3)
+    expect(day1Count).toBe(3)
   })
 
   it('tie-breaking: larger strips_allocated × categoryWeight event gets colored first (higher saturation priority is irrelevant at tie — packing footprint wins)', () => {
@@ -225,18 +239,43 @@ describe('assignDaysByColoring', () => {
     expect(relaxations.size).toBe(0)
   })
 
-  it('assigns all days within [0, days_available)', () => {
+  it('effectiveDays reports minimum days needed', () => {
+    // 3 mutually hard-conflicting events, 5 days available.
+    // Chromatic number = 3, so effectiveDays = 3.
+    const c1 = makeCompetition({ id: 'c1' })
+    const c2 = makeCompetition({ id: 'c2' })
+    const c3 = makeCompetition({ id: 'c3' })
+    const graph = buildGraph([
+      ['c1', 'c2', Infinity],
+      ['c2', 'c3', Infinity],
+      ['c1', 'c3', Infinity],
+    ])
+    const config = makeConfig({ days_available: 5 })
+
+    const { dayMap, effectiveDays } = assignDaysByColoring(graph, [c1, c2, c3], config)
+
+    expect(effectiveDays).toBe(3)
+    // All assignments compacted to [0, 3)
+    for (const day of dayMap.values()) {
+      expect(day).toBeGreaterThanOrEqual(0)
+      expect(day).toBeLessThan(3)
+    }
+  })
+
+  it('assigns all days within [0, effectiveDays)', () => {
     const comps = Array.from({ length: 5 }, (_, i) =>
       makeCompetition({ id: `c${i}` }),
     )
     const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
     const config = makeConfig({ days_available: 3 })
 
-    const { dayMap } = assignDaysByColoring(graph, comps, config)
+    const { dayMap, effectiveDays } = assignDaysByColoring(graph, comps, config)
 
+    // No constraints → all on 1 day
+    expect(effectiveDays).toBe(1)
     for (const [, day] of dayMap) {
       expect(day).toBeGreaterThanOrEqual(0)
-      expect(day).toBeLessThan(3)
+      expect(day).toBeLessThan(effectiveDays)
     }
   })
 })

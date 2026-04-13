@@ -1,12 +1,31 @@
 /**
- * DSatur graph-coloring based day assignment for competitions.
+ * Two-phase DSatur graph coloring for tournament day assignment.
  *
- * DSatur: picks the uncolored vertex with highest saturation degree (number of
- * distinct colors among already-colored hard-edge neighbors). Ties broken by
- * hard-edge degree then by strips_allocated × categoryWeight descending.
+ * DSatur is a greedy graph-coloring heuristic that always colors the vertex
+ * with the highest "saturation degree" next – that is, the uncolored vertex
+ * whose already-colored neighbors use the most distinct colors. This
+ * prioritizes the most constrained events first, and ties are broken by
+ * hard-edge degree then by packing footprint (strips × category weight).
  *
- * Colors represent tournament days (0-indexed). Soft edges add penalties but
- * do not block a color. Hard edges (weight === Infinity) block a color.
+ * Tournament day assignment maps directly to graph coloring: events are
+ * vertices, scheduling conflicts are edges, and days are colors. Hard edges
+ * (weight === Infinity) block a color outright, so hard constraints are
+ * guaranteed by construction rather than relying on penalty dominance. Soft
+ * edges contribute penalties that steer the heuristic toward better schedules
+ * without forbidding any assignment. For realistic tournament sizes (n <= 54
+ * events), the O(n³) runtime is negligible.
+ *
+ * Standard DSatur minimizes chromatic number (fewest days) but does not
+ * balance load across those days. This module uses two phases:
+ *   Phase 1 – run DSatur without load-balancing penalties to discover the
+ *             minimum number of days (the effective chromatic number).
+ *   Phase 2 – rerun DSatur with load-balancing penalties active, capped to
+ *             the effective day count from Phase 1, so events spread evenly
+ *             across the minimum set of days.
+ *
+ * References:
+ *   - DSatur algorithm: https://en.wikipedia.org/wiki/DSatur
+ *   - Graph coloring concepts: https://www.youtube.com/watch?v=h9wxtqoa1jY
  */
 
 import type { Competition, TournamentConfig } from './types.ts'
@@ -19,6 +38,13 @@ import {
   INDIV_TEAM_RELAXABLE_BLOCKS,
   PENALTY_WEIGHTS,
 } from './constants.ts'
+
+// ──────────────────────────────────────────────
+// Load-balancing constants
+// ──────────────────────────────────────────────
+
+/** Per-event cost for adding to an already-used day. Nudges toward even distribution. */
+const LOAD_BALANCE_FULLNESS = 0.5
 
 // ──────────────────────────────────────────────
 // Internal helpers
@@ -120,6 +146,7 @@ function colorPenalty(
   compMap: Map<string, Competition>,
   competitions: Competition[],
   relaxedEdges: Set<string>, // edges temporarily relaxed to soft for this vertex
+  loadBalance: boolean,
 ): number {
   const edges = graph.get(id) ?? []
   const self = compMap.get(id)!
@@ -159,6 +186,16 @@ function colorPenalty(
 
   // Individual/team ordering
   total += individualTeamOrderingPenalty(self, c, competitions, coloring)
+
+  // Load balancing: penalize days proportionally to how many events are
+  // already assigned there. Only active in Phase 2 (loadBalance = true).
+  if (loadBalance) {
+    let eventsOnDay = 0
+    for (const day of coloring.values()) {
+      if (day === c) eventsOnDay++
+    }
+    total += eventsOnDay * LOAD_BALANCE_FULLNESS
+  }
 
   return total
 }
@@ -204,36 +241,26 @@ function findRelaxableEdges(
 }
 
 // ──────────────────────────────────────────────
-// Main export
+// Core DSatur loop
 // ──────────────────────────────────────────────
 
 /**
- * Assigns each competition to a tournament day (0-indexed) using DSatur graph
- * coloring on the constraint graph.
+ * Runs one pass of DSatur graph coloring over all competitions.
  *
- * Hard edges (weight === Infinity) block a color. Soft edges contribute penalty
- * only. When no valid color is available, INDIV_TEAM_RELAXABLE_BLOCKS edges are
- * relaxed to soft (weight 5.0) and the coloring is retried. If still impossible,
- * the least-bad color is chosen and a relaxation (value = 3) is recorded.
+ * When `loadBalance` is true, `colorPenalty` adds per-event fullness costs so
+ * events spread evenly across used days. When false, the algorithm minimizes
+ * chromatic number without caring about balance.
  */
-export function assignDaysByColoring(
+function dsaturLoop(
   graph: ConstraintGraph,
   competitions: Competition[],
-  config: TournamentConfig,
-): { dayMap: Map<string, number>; relaxations: Map<string, number> } {
-  const nDays = config.days_available
+  nDays: number,
+  compMap: Map<string, Competition>,
+  packingFootprint: Map<string, number>,
+  loadBalance: boolean,
+): { coloring: Map<string, number>; relaxations: Map<string, number> } {
   const coloring = new Map<string, number>()
   const relaxations = new Map<string, number>()
-
-  // Build lookup maps
-  const compMap = new Map<string, Competition>()
-  for (const c of competitions) compMap.set(c.id, c)
-
-  // Precompute packing footprint: strips_allocated × categoryWeight
-  const packingFootprint = new Map<string, number>()
-  for (const c of competitions) {
-    packingFootprint.set(c.id, c.strips_allocated * categoryWeight(c))
-  }
 
   // All competition IDs that need coloring
   const uncolored = new Set<string>(competitions.map(c => c.id))
@@ -288,9 +315,9 @@ export function assignDaysByColoring(
     let chosenColor: number
     if (validColors.length > 0) {
       let bestColor = validColors[0]
-      let bestPenalty = colorPenalty(id, validColors[0], graph, coloring, compMap, competitions, new Set())
+      let bestPenalty = colorPenalty(id, validColors[0], graph, coloring, compMap, competitions, new Set(), loadBalance)
       for (let ci = 1; ci < validColors.length; ci++) {
-        const p = colorPenalty(id, validColors[ci], graph, coloring, compMap, competitions, new Set())
+        const p = colorPenalty(id, validColors[ci], graph, coloring, compMap, competitions, new Set(), loadBalance)
         if (p < bestPenalty) {
           bestPenalty = p
           bestColor = validColors[ci]
@@ -316,9 +343,9 @@ export function assignDaysByColoring(
 
         if (relaxedValidColors.length > 0) {
           let bestColor = relaxedValidColors[0]
-          let bestPenalty = colorPenalty(id, relaxedValidColors[0], graph, coloring, compMap, competitions, relaxable)
+          let bestPenalty = colorPenalty(id, relaxedValidColors[0], graph, coloring, compMap, competitions, relaxable, loadBalance)
           for (let ci = 1; ci < relaxedValidColors.length; ci++) {
-            const p = colorPenalty(id, relaxedValidColors[ci], graph, coloring, compMap, competitions, relaxable)
+            const p = colorPenalty(id, relaxedValidColors[ci], graph, coloring, compMap, competitions, relaxable, loadBalance)
             if (p < bestPenalty) {
               bestPenalty = p
               bestColor = relaxedValidColors[ci]
@@ -328,9 +355,9 @@ export function assignDaysByColoring(
         } else {
           // Still no valid color — pick least-bad color
           chosenColor = 0
-          let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, relaxable)
+          let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, relaxable, loadBalance)
           for (let c = 1; c < nDays; c++) {
-            const p = colorPenalty(id, c, graph, coloring, compMap, competitions, relaxable)
+            const p = colorPenalty(id, c, graph, coloring, compMap, competitions, relaxable, loadBalance)
             if (p < bestPenalty) {
               bestPenalty = p
               chosenColor = c
@@ -340,9 +367,9 @@ export function assignDaysByColoring(
       } else {
         // No relaxable edges — pick least-bad color
         chosenColor = 0
-        let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, new Set())
+        let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, new Set(), loadBalance)
         for (let c = 1; c < nDays; c++) {
-          const p = colorPenalty(id, c, graph, coloring, compMap, competitions, new Set())
+          const p = colorPenalty(id, c, graph, coloring, compMap, competitions, new Set(), loadBalance)
           if (p < bestPenalty) {
             bestPenalty = p
             chosenColor = c
@@ -360,5 +387,50 @@ export function assignDaysByColoring(
     uncolored.delete(id)
   }
 
-  return { dayMap: coloring, relaxations }
+  return { coloring, relaxations }
+}
+
+// ──────────────────────────────────────────────
+// Main export
+// ──────────────────────────────────────────────
+
+/**
+ * Assigns each competition to a tournament day (0-indexed) using two-phase
+ * DSatur graph coloring on the constraint graph.
+ *
+ * Phase 1 discovers the minimum number of days (no load balancing).
+ * Phase 2 rebalances events within that minimum day count.
+ *
+ * Returns `effectiveDays` – the actual number of distinct days used.
+ */
+export function assignDaysByColoring(
+  graph: ConstraintGraph,
+  competitions: Competition[],
+  config: TournamentConfig,
+): { dayMap: Map<string, number>; relaxations: Map<string, number>; effectiveDays: number } {
+  // Build lookup maps
+  const compMap = new Map<string, Competition>()
+  for (const c of competitions) compMap.set(c.id, c)
+
+  // Precompute packing footprint: strips_allocated × categoryWeight
+  const packingFootprint = new Map<string, number>()
+  for (const c of competitions) {
+    packingFootprint.set(c.id, c.strips_allocated * categoryWeight(c))
+  }
+
+  // Phase 1: find minimum days (no load balancing)
+  const phase1 = dsaturLoop(graph, competitions, config.days_available, compMap, packingFootprint, false)
+  const effectiveDays = new Set(phase1.coloring.values()).size
+
+  // Phase 2: rebalance within minimum day count
+  const phase2 = dsaturLoop(graph, competitions, effectiveDays, compMap, packingFootprint, true)
+
+  // Compact day assignments to contiguous 0..k-1
+  const dayRemap = new Map<number, number>()
+  const sortedUsed = [...new Set(phase2.coloring.values())].sort((a, b) => a - b)
+  for (let i = 0; i < sortedUsed.length; i++) dayRemap.set(sortedUsed[i], i)
+  const dayMap = new Map<string, number>()
+  for (const [id, day] of phase2.coloring) dayMap.set(id, dayRemap.get(day)!)
+
+  return { dayMap, relaxations: phase2.relaxations, effectiveDays }
 }

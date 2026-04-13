@@ -183,6 +183,7 @@ function logMetrics(
   relaxations: Map<string, number>,
   competitions: Competition[],
   config: TournamentConfig,
+  effectiveDays: number,
 ): void {
   const dist = dayDistribution(dayMap, config.days_available)
   const hardViolations = hardConstraintViolations(dayMap, competitions, relaxations)
@@ -191,7 +192,12 @@ function logMetrics(
 
   console.log(`\n=== ${label} ===`)
   console.log(`Events: ${competitions.length} | Days: ${config.days_available}`)
+  console.log(`Effective days: ${effectiveDays} / ${config.days_available}`)
   console.log(`Day distribution: ${dist.map((c, d) => `Day ${d}: ${c}`).join(', ')}`)
+  const nonEmptyDays = dist.filter(c => c > 0)
+  const maxLoad = Math.max(...nonEmptyDays)
+  const minLoad = Math.min(...nonEmptyDays)
+  console.log(`Balance: ${minLoad}-${maxLoad} events/day (${nonEmptyDays.length} days used)`)
   console.log(`Hard constraint violations: ${hardViolations.length}`)
   if (hardViolations.length > 0) {
     for (const v of hardViolations) {
@@ -345,17 +351,17 @@ describe('Coloring validation (DSatur day assignment)', () => {
         refs.fe, refs.saber, scenario.tournamentType,
       )
       const graph = buildConstraintGraph(competitions)
-      const { dayMap, relaxations } = assignDaysByColoring(graph, competitions, config)
+      const { dayMap, relaxations, effectiveDays } = assignDaysByColoring(graph, competitions, config)
 
       it('assigns every competition a day within bounds', () => {
-        logMetrics(label, dayMap, relaxations, competitions, config)
+        logMetrics(label, dayMap, relaxations, competitions, config, effectiveDays)
 
         const assignedIds = new Set(dayMap.keys())
         const expectedIds = new Set(competitions.map(c => c.id))
         expect(assignedIds).toEqual(expectedIds)
         for (const [id, day] of dayMap) {
           expect(day, `${id} day out of bounds`).toBeGreaterThanOrEqual(0)
-          expect(day, `${id} day out of bounds`).toBeLessThan(scenario.days)
+          expect(day, `${id} day out of bounds`).toBeLessThan(effectiveDays)
         }
       })
 
@@ -365,6 +371,14 @@ describe('Coloring validation (DSatur day assignment)', () => {
           console.log(`  HARD VIOLATION: ${v.id1} vs ${v.id2} both on day ${v.day}`)
         }
         expect(violations).toHaveLength(0)
+      })
+
+      it('uses minimum days and assignments are compacted', () => {
+        expect(effectiveDays).toBeLessThanOrEqual(scenario.days)
+        expect(effectiveDays).toBeGreaterThan(0)
+        for (const day of dayMap.values()) {
+          expect(day).toBeLessThan(effectiveDays)
+        }
       })
 
     })
