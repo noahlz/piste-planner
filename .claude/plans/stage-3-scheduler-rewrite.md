@@ -39,9 +39,9 @@ Replace single-pass loop (lines 76-108) with 5-phase pipeline:
 
 **Phase 1:** `const graph = buildConstraintGraph(competitions)`
 
-**Phase 2:** `const { dayMap, relaxations } = assignDaysByColoring(graph, competitions, config)`
+**Phase 2:** `const { dayMap, relaxations, effectiveDays } = assignDaysByColoring(graph, competitions, config)`
 
-**Phase 3:** For each day 0..days_available-1:
+**Phase 3:** For each day 0..effectiveDays-1 (the coloring may use fewer days than `config.days_available`):
 - Collect events for this day from dayMap
 - `sequenceEventsForDay(dayEvents, config)`
 - For each: `scheduleCompetition(event, day, state, config, competitions)`. Catch `SchedulingError` -> add to failedEvents.
