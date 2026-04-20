@@ -105,8 +105,8 @@ export function peakDeRefDemand(comp: Competition, config: TournamentConfig): nu
 /**
  * Lightweight greedy day assignment for referee demand estimation.
  *
- * Uses constraint scores to distribute competitions across days but skips the full
- * penalty-scoring and constraint-relaxation logic of dayAssignment.ts:assignDay().
+ * Uses constraint scores to distribute competitions across days but skips full
+ * penalty scoring and resource-window simulation.
  * Results are approximate — used only to estimate peak concurrent ref demand before
  * the real scheduler runs.
  *
