@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
-import type { Strip, Competition, FlightingGroup, TournamentType } from '../../src/engine/types.ts'
+import type { Strip, Competition, FlightingGroup } from '../../src/engine/types.ts'
 import {
   DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
   SLOT_MINS, DAY_LENGTH_MINS, DE_REFS, DE_FINALS_MIN_MINS,
