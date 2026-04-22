@@ -467,9 +467,16 @@ Team DEs always use the greedy/round-by-round model regardless of `de_capacity_m
 
 #### Video Strip Preservation
 
-- When `videoRequired=false` (pools, prelim DEs, single-stage DEs): non-video strips are selected first; video strips are used only as overflow when general strips are exhausted
-- When `videoRequired=true` (R16, finals on video strips): only video-capable strips are considered
-- This soft-reservation preserves video strips for staged DEs while allowing them to absorb pool overflow on strip-constrained days
+Video strips are primarily reserved for staged DE phases (R16, QF, SF, Finals). Pool rounds may use video strips only under these conditions:
+
+- **Start-of-day pool wave**: video strips MAY be used by pool rounds running at day start (the first pool wave, when many events open concurrently). Once this wave ends, video strips become reserved for DEs — a later event starting its pools mid-day must run on general strips only.
+- **Single-event day**: when only one competition is scheduled for the entire day, video strips remain available for that event's pools at any time (morning or end-of-day). A single event cannot conflict with its own DEs (its DE phases run strictly after its pools), so reserving video strips adds no value.
+- **Multi-event mid-day pools**: not allowed. Once the morning pool wave completes on a multi-event day, video strips are locked to DE-only usage.
+
+Phase-level rules:
+- **`videoRequired=true`** (staged DE R16, QF, SF, Finals): only video-capable strips are considered.
+- **`videoRequired=false` for DE prelims / single-stage DEs**: non-video strips selected first; video strips used as overflow when general strips are exhausted.
+- **`videoRequired=false` for pools**: subject to the pool-specific rules above (start-of-day wave, or single-event day).
 
 #### Resource Windows
 
@@ -651,7 +658,7 @@ Day assignment uses a **capacity-aware bin-packing** model. Each tournament day 
 
 ### Strip-Hour Capacity
 
-A day's capacity is measured in **strip-hours**: available strips × day length (14 hours). A day with 80 strips has 1,120 strip-hours of general capacity. For capacity scoring, video strips are tracked as a separate budget (see [Video-Strip Budget](#video-strip-budget)); however, at runtime the strip allocator can spill pool work onto idle video strips when general strips are exhausted (see [Video Strip Preservation](#video-strip-preservation)).
+A day's capacity is measured in **strip-hours**: available strips × day length (14 hours). A day with 80 strips has 1,120 strip-hours of general capacity. For capacity scoring, video strips are tracked as a separate budget (see [Video-Strip Budget](#video-strip-budget)); however, at runtime the strip allocator can spill the start-of-day pool wave onto idle video strips, and on single-event days video strips remain available for pools throughout (see [Video Strip Preservation](#video-strip-preservation)).
 
 Each competition's strip-hour draw is computed from its pool and DE phases:
 - **Pool phase**: `n_pools × pool_duration_hours`
