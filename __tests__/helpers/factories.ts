@@ -10,11 +10,11 @@ import {
 } from '../../src/engine/constants.ts'
 
 // Minutes-from-midnight constants used across test factories
-export const DAY_START_8AM = 480
-export const DAY_END_10PM = 1320
-export const LATEST_START_4PM = 960
+const DAY_START_8AM = 480
+const DAY_END_10PM = 1320
+const LATEST_START_4PM = 960
 
-export type CompetitionKey = Pick<Competition, 'category' | 'gender' | 'weapon' | 'event_type' | 'id'>
+type CompetitionKey = Pick<Competition, 'category' | 'gender' | 'weapon' | 'event_type' | 'id'>
 
 export function makeComp(
   id: string,

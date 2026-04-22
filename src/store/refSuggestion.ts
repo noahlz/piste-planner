@@ -1,7 +1,7 @@
 import { findCompetition } from '../engine/catalogue.ts'
 import { computePoolStructure } from '../engine/pools.ts'
 
-export interface RefSuggestion {
+interface RefSuggestion {
   foil_epee_refs: number
   three_weapon_refs: number
 }

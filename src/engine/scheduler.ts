@@ -60,7 +60,7 @@ function recordRelaxation(
 // scheduleAll — METHODOLOGY.md §Scheduling Algorithm
 // ──────────────────────────────────────────────
 
-export interface ScheduleAllResult {
+interface ScheduleAllResult {
   schedule: Record<string, ScheduleResult>
   bottlenecks: Bottleneck[]
 }

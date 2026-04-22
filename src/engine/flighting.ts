@@ -7,7 +7,7 @@ import { forEachCompetitionPair } from './pairs.ts'
 // suggestFlightingGroups
 // ──────────────────────────────────────────────
 
-export interface FlightingGroupSuggestions {
+interface FlightingGroupSuggestions {
   suggestions: FlightingGroup[]
   bottlenecks: Bottleneck[]
 }

@@ -12,19 +12,19 @@ import { CATEGORY_START_PREFERENCE, DE_POD_SIZE, DE_BOUT_DURATION } from './cons
 import { computePoolStructure, weightedPoolDuration, computeDeFencerCount } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
 
-export interface CompetitionStripHours {
+interface CompetitionStripHours {
   /** Total estimated strip-hours consumed by this competition (pools + DE). */
   total_strip_hours: number
   /** Strip-hours consumed on video-capable strips (R16 + finals for STAGED only). */
   video_strip_hours: number
 }
 
-export interface DayConsumedCapacity {
+interface DayConsumedCapacity {
   strip_hours_consumed: number
   video_strip_hours_consumed: number
 }
 
-export interface DayRemainingCapacity {
+interface DayRemainingCapacity {
   strip_hours_remaining: number
   video_strip_hours_remaining: number
 }

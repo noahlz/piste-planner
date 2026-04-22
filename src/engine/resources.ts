@@ -35,7 +35,7 @@ export type PoolContext = {
 // Return types for strip selection and resource windows
 // ──────────────────────────────────────────────
 
-export type FindStripsResult =
+type FindStripsResult =
   | { type: 'FOUND'; stripIndices: number[] }
   | { type: 'WAIT_UNTIL'; waitUntil: number }
 
