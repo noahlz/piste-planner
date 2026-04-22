@@ -1,7 +1,7 @@
 import type { CatalogueEntry, VetAgeGroup } from '../engine/types.ts'
 import { Category, EventType, Gender, Weapon, VetAgeGroup as VetAgeGroupEnum } from '../engine/types.ts'
 
-export const CATEGORY_DISPLAY: Record<Category, string> = {
+const CATEGORY_DISPLAY: Record<Category, string> = {
   [Category.Y8]: 'Y8',
   [Category.Y10]: 'Y10',
   [Category.Y12]: 'Y12',
@@ -38,7 +38,7 @@ const EVENT_TYPE_DISPLAY: Record<EventType, string> = {
   [EventType.TEAM]: 'Team',
 }
 
-export const VET_AGE_GROUP_DISPLAY: Record<VetAgeGroup, string> = {
+const VET_AGE_GROUP_DISPLAY: Record<VetAgeGroup, string> = {
   [VetAgeGroupEnum.VET40]: 'V40',
   [VetAgeGroupEnum.VET50]: 'V50',
   [VetAgeGroupEnum.VET60]: 'V60',

@@ -27,17 +27,40 @@ import type { ConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { sequenceEventsForDay } from './daySequencing.ts'
 import { validateConfig } from './validation.ts'
-import { recommendStripCount, recommendRefCount } from './stripBudget.ts'
+import { recommendStripCount, recommendRefCount, peakDeStripDemand } from './stripBudget.ts'
 import { dayConsumedCapacity } from './capacity.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 
 const VALID_BOTTLENECK_CAUSES = new Set(Object.values(BottleneckCause))
 
+/**
+ * Records a constraint-relaxation bottleneck on the result and pushes it onto
+ * state.bottlenecks. Used by both initial-pass and repair-loop scheduling.
+ */
+function recordRelaxation(
+  result: { constraint_relaxation_level?: number },
+  state: { bottlenecks: Bottleneck[] },
+  compId: string,
+  relaxLevel: number,
+  severity: BottleneckSeverity,
+  message: string,
+): void {
+  result.constraint_relaxation_level = relaxLevel
+  state.bottlenecks.push({
+    competition_id: compId,
+    phase: Phase.DAY_ASSIGNMENT,
+    cause: BottleneckCause.CONSTRAINT_RELAXED,
+    severity,
+    delay_mins: 0,
+    message,
+  })
+}
+
 // ──────────────────────────────────────────────
 // scheduleAll — METHODOLOGY.md §Scheduling Algorithm
 // ──────────────────────────────────────────────
 
-export interface ScheduleAllResult {
+interface ScheduleAllResult {
   schedule: Record<string, ScheduleResult>
   bottlenecks: Bottleneck[]
 }
@@ -130,15 +153,10 @@ export function scheduleAll(
         // Flow constraint_relaxation_level from coloring
         const relaxLevel = relaxations.get(comp.id)
         if (relaxLevel !== undefined) {
-          result.constraint_relaxation_level = relaxLevel
-          state.bottlenecks.push({
-            competition_id: comp.id,
-            phase: Phase.DAY_ASSIGNMENT,
-            cause: BottleneckCause.CONSTRAINT_RELAXED,
-            severity: BottleneckSeverity.INFO,
-            delay_mins: 0,
-            message: `${comp.id}: constraint relaxed to level ${relaxLevel} during day assignment`,
-          })
+          recordRelaxation(
+            result, state, comp.id, relaxLevel, BottleneckSeverity.INFO,
+            `${comp.id}: constraint relaxed to level ${relaxLevel} during day assignment`,
+          )
         }
       } catch (err) {
         if (err instanceof SchedulingError) {
@@ -192,15 +210,10 @@ export function scheduleAll(
         // Apply relaxation level if present
         const relaxLevel = relaxations.get(comp.id)
         if (relaxLevel !== undefined) {
-          result.constraint_relaxation_level = relaxLevel
-          state.bottlenecks.push({
-            competition_id: comp.id,
-            phase: Phase.DAY_ASSIGNMENT,
-            cause: BottleneckCause.CONSTRAINT_RELAXED,
-            severity: BottleneckSeverity.WARN,
-            delay_mins: 0,
-            message: `${comp.id}: repaired to day ${altDay}, constraint relaxed to level ${relaxLevel}`,
-          })
+          recordRelaxation(
+            result, state, comp.id, relaxLevel, BottleneckSeverity.WARN,
+            `${comp.id}: repaired to day ${altDay}, constraint relaxed to level ${relaxLevel}`,
+          )
         } else {
           state.bottlenecks.push({
             competition_id: comp.id,
@@ -556,6 +569,8 @@ export function postScheduleDayBreakdown(
     }
   }
 
+  const refAvailByDay = new Map(config.referee_availability.map(r => [r.day, r]))
+
   for (const day of [...daysWithFailures].sort((a, b) => a - b)) {
     // Strip-hours summary
     const consumed = dayConsumedCapacity(day, state, competitions, config)
@@ -572,7 +587,7 @@ export function postScheduleDayBreakdown(
     })
 
     // Ref summary for this day
-    const dayRefConfig = config.referee_availability.find(r => r.day === day)
+    const dayRefConfig = refAvailByDay.get(day)
     const configuredRefs = dayRefConfig
       ? dayRefConfig.foil_epee_refs + dayRefConfig.three_weapon_refs
       : 0
@@ -604,7 +619,7 @@ export function postScheduleDayBreakdown(
     const stagedComps = compsOnDay.filter(c => c.de_mode === DeMode.STAGED)
     const stagedCount = stagedComps.length
     const videoStageSum = stagedComps.reduce(
-      (sum, c) => sum + Math.max(c.de_round_of_16_strips, c.de_finals_strips),
+      (sum, c) => sum + peakDeStripDemand(c),
       0,
     )
     if (videoStageSum > 0) {

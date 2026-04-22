@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { WizardShell } from '../../src/components/wizard/WizardShell.tsx'
 import { ScheduleView } from '../../src/components/ScheduleView.tsx'
 import { useStore } from '../../src/store/store.ts'
+import { BottleneckSeverity } from '../../src/engine/types.ts'
 import App from '../../src/App.tsx'
 
 // Reset store before each test
@@ -101,7 +102,7 @@ describe('WizardShell navigation', () => {
 
     await waitFor(() => {
       const state = useStore.getState()
-      const hasHardErrors = state.validationErrors.some((e) => e.severity === 'ERROR')
+      const hasHardErrors = state.validationErrors.some((e) => e.severity === BottleneckSeverity.ERROR)
       expect(hasHardErrors).toBe(true)
     })
 
@@ -114,8 +115,10 @@ describe('WizardShell navigation', () => {
     render(<WizardShell />)
 
     await waitFor(() => {
-      const hasHardErrors = useStore.getState().validationErrors.some((e) => e.severity === 'ERROR')
-      expect(hasHardErrors).toBe(true)
+      const errors = useStore.getState().validationErrors.filter((e) => e.severity === BottleneckSeverity.ERROR)
+      expect(errors.length).toBeGreaterThan(0)
+      // Validation of an empty store should produce a strips_total or days_available error
+      expect(errors.some((e) => e.field === 'strips_total' || e.field === 'days_available')).toBe(true)
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'View Schedule' }))
@@ -166,13 +169,13 @@ describe('Layout toggle', () => {
     expect(useStore.getState().layoutMode).toBe('wizard')
   })
 
-  it('switching to wizard layout renders wizard content', async () => {
+  it('switching to wizard layout renders wizard content', () => {
     useStore.getState().setLayoutMode('kitchen-sink')
     render(<App />)
 
     // Radix Tabs doesn't reliably fire onValueChange with fireEvent in jsdom;
     // call the store action directly and let React process the re-render inside act().
-    await act(() => {
+    act(() => {
       useStore.getState().setLayoutMode('wizard')
     })
 
@@ -181,13 +184,13 @@ describe('Layout toggle', () => {
     expect(screen.getByText('Tournament')).toBeInTheDocument()
   })
 
-  it('switching to kitchen-sink layout hides wizard content', async () => {
+  it('switching to kitchen-sink layout hides wizard content', () => {
     useStore.getState().setLayoutMode('wizard')
     render(<App />)
 
     // Radix Tabs doesn't reliably fire onValueChange with fireEvent in jsdom;
     // call the store action directly and let React process the re-render inside act().
-    await act(() => {
+    act(() => {
       useStore.getState().setLayoutMode('kitchen-sink')
     })
 
@@ -283,11 +286,13 @@ describe('Stale banner', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
 
-    // Engine should have re-run — schedule results or bottleneck messages populated
+    // Engine should have re-run — schedule results or bottleneck messages populated,
+    // and the stale flag should be cleared (engine completed a run regardless of outcome)
     await waitFor(() => {
       const state = useStore.getState()
       const hasOutput = Object.keys(state.scheduleResults).length > 0 || state.bottlenecks.length > 0
       expect(hasOutput).toBe(true)
+      expect(state.scheduleStale).toBe(false)
     })
   })
 

@@ -39,7 +39,7 @@ import type { Competition, TournamentConfig } from './types.ts'
 import { EventType } from './types.ts'
 import type { ConstraintGraph } from './constraintGraph.ts'
 import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
-import { getProximityWeight } from './crossover.ts'
+import { getProximityWeight, findIndividualCounterpart } from './crossover.ts'
 import {
   REST_DAY_PAIRS,
   INDIV_TEAM_RELAXABLE_BLOCKS,
@@ -158,14 +158,7 @@ function individualTeamOrderingPenalty(
 ): number {
   if (competition.event_type !== EventType.TEAM) return 0.0
 
-  const ind = competitions.find(
-    c =>
-      c.id !== competition.id &&
-      c.category === competition.category &&
-      c.gender === competition.gender &&
-      c.weapon === competition.weapon &&
-      c.event_type === EventType.INDIVIDUAL,
-  )
+  const ind = findIndividualCounterpart(competition, competitions)
   if (!ind) return 0.0
 
   const indDay = coloring.get(ind.id)

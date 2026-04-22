@@ -499,13 +499,6 @@ export const REGIONAL_QUALIFIER_TYPES: ReadonlySet<string> = new Set<string>([
 ])
 
 // ──────────────────────────────────────────────
-// High crossover threshold — edges at or above this trigger stronger penalties
-// in dayAssignment.ts (same-time 10.0, early-start 5.0/2.0).
-// ──────────────────────────────────────────────
-
-export const HIGH_CROSSOVER_THRESHOLD = 0.8
-
-// ──────────────────────────────────────────────
 // Video stage round: the DE round at which video replay begins per category.
 // At NACs these are guaranteed; at other tournaments they're best-effort.
 // (Ops Manual Ch.4, p.25)

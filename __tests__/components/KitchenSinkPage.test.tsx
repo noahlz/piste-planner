@@ -4,7 +4,7 @@ import { KitchenSinkPage } from '../../src/components/KitchenSinkPage.tsx'
 import { useStore } from '../../src/store/store.ts'
 import { serializeState } from '../../src/store/serialization.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
+import { BottleneckSeverity, BottleneckCause, CutMode, DeMode, Phase, VideoPolicy } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
 // Setup
@@ -449,7 +449,7 @@ describe('KitchenSinkPage error state tests', () => {
     await waitFor(() => {
       const alert = screen.getByRole('alert')
       expect(alert).toBeInTheDocument()
-      expect(alert.textContent).toBeTruthy()
+      expect(alert.textContent).toMatch(/invalid|malformed|error|parse|json/i)
     })
   })
 
@@ -511,10 +511,10 @@ describe('KitchenSinkPage error state tests', () => {
         entry_fencer_count: 30,
         promoted_fencer_count: 30,
         bracket_size: 32,
-        cut_mode: 'DISABLED' as const,
+        cut_mode: CutMode.DISABLED,
         cut_value: 0,
-        de_mode: 'SINGLE_STAGE' as const,
-        de_video_policy: 'BEST_EFFORT' as const,
+        de_mode: DeMode.SINGLE_STAGE,
+        de_video_policy: VideoPolicy.BEST_EFFORT,
         de_start: 610,
         de_end: null,
         de_strip_count: 4,

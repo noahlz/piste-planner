@@ -379,7 +379,7 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
 }
 
 /** Ensures dayRefs array is at least `length` elements, filling gaps with defaults. */
-export function ensureDayRefs(existing: DayRefConfig[], length: number): DayRefConfig[] {
+function ensureDayRefs(existing: DayRefConfig[], length: number): DayRefConfig[] {
   if (existing.length >= length) return existing
   return [
     ...existing,

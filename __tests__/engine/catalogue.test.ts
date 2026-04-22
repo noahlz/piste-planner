@@ -64,9 +64,9 @@ describe('CATALOGUE', () => {
   it('every entry has all required fields populated', () => {
     for (const e of CATALOGUE) {
       expect(e.id).toBeTruthy()
-      expect(e.gender).toBeTruthy()
-      expect(e.category).toBeTruthy()
-      expect(e.weapon).toBeTruthy()
+      expect(Object.values(Gender)).toContain(e.gender)
+      expect(Object.values(Category)).toContain(e.category)
+      expect(Object.values(Weapon)).toContain(e.weapon)
       expect(e.event_type).toBeTruthy()
     }
   })

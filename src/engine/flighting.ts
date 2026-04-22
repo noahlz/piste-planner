@@ -2,11 +2,12 @@ import { BottleneckCause, BottleneckSeverity, Phase } from './types.ts'
 import type { Competition, FlightingGroup, Bottleneck } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { crossoverPenalty } from './crossover.ts'
+import { forEachCompetitionPair } from './pairs.ts'
 // ──────────────────────────────────────────────
 // suggestFlightingGroups
 // ──────────────────────────────────────────────
 
-export interface FlightingGroupSuggestions {
+interface FlightingGroupSuggestions {
   suggestions: FlightingGroup[]
   bottlenecks: Bottleneck[]
 }
@@ -30,51 +31,46 @@ export function suggestFlightingGroups(
   const suggestions: FlightingGroup[] = []
   const bottlenecks: Bottleneck[] = []
 
-  for (let i = 0; i < competitions.length; i++) {
-    for (let j = i + 1; j < competitions.length; j++) {
-      const c1 = competitions[i]
-      const c2 = competitions[j]
+  forEachCompetitionPair(competitions, (c1, c2) => {
+    // Only consider pairs on the same day
+    if (dayAssignments[c1.id] !== dayAssignments[c2.id]) return
 
-      // Only consider pairs on the same day
-      if (dayAssignments[c1.id] !== dayAssignments[c2.id]) continue
+    const c1Pools = computePoolStructure(c1.fencer_count, c1.use_single_pool_override).n_pools
+    const c2Pools = computePoolStructure(c2.fencer_count, c2.use_single_pool_override).n_pools
 
-      const c1Pools = computePoolStructure(c1.fencer_count, c1.use_single_pool_override).n_pools
-      const c2Pools = computePoolStructure(c2.fencer_count, c2.use_single_pool_override).n_pools
+    // Suggest only when combined exceeds strips but each fits within the per-event cap
+    if (c1Pools + c2Pools <= stripsTotal) return
+    if (c1Pools > poolStripCap || c2Pools > poolStripCap) return
 
-      // Suggest only when combined exceeds strips but each fits within the per-event cap
-      if (c1Pools + c2Pools <= stripsTotal) continue
-      if (c1Pools > poolStripCap || c2Pools > poolStripCap) continue
+    const tied = c1Pools === c2Pools
+    // Larger pool count becomes priority; on tie, fall back to id lexicographic order for determinism
+    const [priority, flighted] =
+      c1Pools > c2Pools || (tied && c1.id <= c2.id) ? [c1, c2] : [c2, c1]
 
-      const tied = c1Pools === c2Pools
-      // Larger pool count becomes priority; on tie, fall back to id lexicographic order for determinism
-      const [priority, flighted] =
-        c1Pools > c2Pools || (tied && c1.id <= c2.id) ? [c1, c2] : [c2, c1]
-
-      if (tied) {
-        bottlenecks.push({
-          competition_id: c1.id,
-          phase: Phase.FLIGHTING,
-          cause: BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED,
-          severity: BottleneckSeverity.WARN,
-          delay_mins: 0,
-          message: `${c1.id} and ${c2.id} have equal pool counts (${c1Pools}); organiser must designate priority manually`,
-        })
-      }
-
-      const { strips_for_priority, strips_for_flighted } = calculateFlightedStrips(
-        priority,
-        flighted,
-        stripsTotal,
-      )
-
-      suggestions.push({
-        priority_competition_id: priority.id,
-        flighted_competition_id: flighted.id,
-        strips_for_priority,
-        strips_for_flighted,
+    if (tied) {
+      bottlenecks.push({
+        competition_id: c1.id,
+        phase: Phase.FLIGHTING,
+        cause: BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED,
+        severity: BottleneckSeverity.WARN,
+        delay_mins: 0,
+        message: `${c1.id} and ${c2.id} have equal pool counts (${c1Pools}); organiser must designate priority manually`,
       })
     }
-  }
+
+    const { strips_for_priority, strips_for_flighted } = calculateFlightedStrips(
+      priority,
+      flighted,
+      stripsTotal,
+    )
+
+    suggestions.push({
+      priority_competition_id: priority.id,
+      flighted_competition_id: flighted.id,
+      strips_for_priority,
+      strips_for_flighted,
+    })
+  })
 
   return { suggestions, bottlenecks }
 }

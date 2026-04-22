@@ -146,14 +146,15 @@ describe('scheduleCompetition — flighted standalone', () => {
     expect(result.flight_a_start!).toBeLessThan(result.flight_b_start!)
     expect(result.use_flighting).toBe(true)
 
-    // With abundant strips no FLIGHT_B_DELAYED bottleneck should be emitted.
-    // NOTE: Forcing a FLIGHT_B_DELAYED scenario requires a concurrent external competition
-    // holding ALL strip-pool strips occupied past flightBIdeal. Since the strip used by
-    // Flight A is always released before flightBIdeal, single-competition unit tests cannot
-    // trigger this path. This scenario is covered by master scheduler integration tests.
     const delayed = state.bottlenecks.find(b => b.cause === BottleneckCause.FLIGHT_B_DELAYED)
     expect(delayed).toBeUndefined()
   })
+
+  // Triggering FLIGHT_B_DELAYED requires a concurrent external competition holding all
+  // strip-pool strips occupied past flightBIdeal. Flight A always releases its strips
+  // before flightBIdeal in a single-competition scenario, so this path can only be
+  // exercised through multi-competition integration tests (see integration.test.ts).
+  it.todo('emits FLIGHT_B_DELAYED when a concurrent competition holds all strips past flightBIdeal')
 })
 
 // ──────────────────────────────────────────────
@@ -474,8 +475,15 @@ describe('scheduleCompetition — deadline breach', () => {
 
     const state = createGlobalState(config)
 
-    // Must throw a SchedulingError — not just any error
-    expect(() => scheduleCompetition(comp, 0, state, config, [comp])).toThrow(SchedulingError)
+    let thrown: SchedulingError | undefined
+    try {
+      scheduleCompetition(comp, 0, state, config, [comp])
+    } catch (e) {
+      thrown = e as SchedulingError
+    }
+    expect(thrown).toBeInstanceOf(SchedulingError)
+    expect(thrown?.cause).toBe(BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE)
+
     const breachBottleneck = state.bottlenecks.find(
       b => b.cause === BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
     )
@@ -513,9 +521,18 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
     const state = createGlobalState(config)
 
     // With MAX_RESCHEDULE_ATTEMPTS=0, the first overrun throws immediately.
-    // Assert it throws a SchedulingError (either SAME_DAY_VIOLATION or
-    // DEADLINE_BREACH_UNRESOLVABLE depending on exact timing).
-    expect(() => scheduleCompetition(comp, 0, state, config, [comp])).toThrow(SchedulingError)
+    // Either SAME_DAY_VIOLATION or DEADLINE_BREACH_UNRESOLVABLE depending on exact timing.
+    let thrown: SchedulingError | undefined
+    try {
+      scheduleCompetition(comp, 0, state, config, [comp])
+    } catch (e) {
+      thrown = e as SchedulingError
+    }
+    expect(thrown).toBeInstanceOf(SchedulingError)
+    expect([
+      BottleneckCause.SAME_DAY_VIOLATION,
+      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+    ]).toContain(thrown?.cause)
   })
 })
 

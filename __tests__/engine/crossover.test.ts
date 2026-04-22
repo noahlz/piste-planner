@@ -9,8 +9,8 @@ import {
 } from '../../src/engine/crossover.ts'
 import { Category, Gender, Weapon, EventType } from '../../src/engine/types.ts'
 import { CROSSOVER_GRAPH } from '../../src/engine/constants.ts'
-import type { Competition, ScheduleResult } from '../../src/engine/types.ts'
-import { makeComp, makeScheduleResult } from '../helpers/factories.ts'
+import type { ScheduleResult } from '../../src/engine/types.ts'
+import { makeComp, makeCompetition, makeScheduleResult } from '../helpers/factories.ts'
 
 
 // ──────────────────────────────────────────────
@@ -113,7 +113,7 @@ describe('crossoverPenalty', () => {
     // Y8/Y10 were removed from GROUP_1_MANDATORY; they can and should share a day.
     const c1 = makeComp('a', Category.Y8, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.Y10, Gender.MEN, Weapon.FOIL)
-    const result = crossoverPenalty(c1 as Competition, c2 as Competition)
+    const result = crossoverPenalty(c1, c2)
     expect(result).toBe(0.8)
     expect(result).not.toBe(Infinity)
   })
@@ -121,7 +121,7 @@ describe('crossoverPenalty', () => {
   it('Div1↔Cadet returns soft penalty (0.8), not Infinity — moved to SOFT_SEPARATION_PAIRS', () => {
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.CADET, Gender.MEN, Weapon.FOIL)
-    const result = crossoverPenalty(c1 as Competition, c2 as Competition)
+    const result = crossoverPenalty(c1, c2)
     expect(result).toBe(0.8)
     expect(result).not.toBe(Infinity)
   })
@@ -129,19 +129,19 @@ describe('crossoverPenalty', () => {
   it('Div1↔Div1A returns Infinity (GROUP_1_MANDATORY)', () => {
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV1A, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).toBe(Infinity)
   })
 
   it('Div1↔Div2 returns soft penalty (not Infinity) — moved to SOFT_SEPARATION_PAIRS', () => {
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV2, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).not.toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).not.toBe(Infinity)
   })
 
   it('Div1↔Div3 returns soft penalty (not Infinity) — moved to SOFT_SEPARATION_PAIRS', () => {
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV3, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1 as Competition, c2 as Competition)).not.toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).not.toBe(Infinity)
   })
 
   it('All CROSSOVER_GRAPH direct edges are ≤ 0.8', () => {
@@ -173,18 +173,18 @@ describe('getProximityWeight', () => {
 // ──────────────────────────────────────────────
 
 describe('proximityPenalty', () => {
-  const div1 = makeComp('div1', Category.DIV1, Gender.MEN, Weapon.FOIL)
-  const junior = makeComp('junior', Category.JUNIOR, Gender.MEN, Weapon.FOIL)
-  const juniorWomen = makeComp('junior-w', Category.JUNIOR, Gender.WOMEN, Weapon.FOIL)
-  const juniorEpee = makeComp('junior-e', Category.JUNIOR, Gender.MEN, Weapon.EPEE)
-  const y10 = makeComp('y10', Category.Y10, Gender.MEN, Weapon.FOIL)
+  const div1 = makeCompetition({ id: 'div1', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
+  const junior = makeCompetition({ id: 'junior', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.FOIL })
+  const juniorWomen = makeCompetition({ id: 'junior-w', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.FOIL })
+  const juniorEpee = makeCompetition({ id: 'junior-e', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.EPEE })
+  const y10 = makeCompetition({ id: 'y10', category: Category.Y10, gender: Gender.MEN, weapon: Weapon.FOIL })
 
   it('Same gender+weapon, DIV1↔JUNIOR, day_gap=1 → negative bonus (-0.4 × 1.0)', () => {
     const schedule: Record<string, ScheduleResult> = {
       junior: makeScheduleResult('junior', 1),
     }
     // div1 proposed day=2, junior on day=1 → gap=1 → -0.4 * 1.0 = -0.4
-    const result = proximityPenalty(div1, 2, schedule, [junior as Competition])
+    const result = proximityPenalty(div1, 2, schedule, [junior])
     expect(result).toBeCloseTo(-0.4)
   })
 
@@ -192,7 +192,7 @@ describe('proximityPenalty', () => {
     const schedule: Record<string, ScheduleResult> = {
       junior: makeScheduleResult('junior', 2),
     }
-    const result = proximityPenalty(div1, 2, schedule, [junior as Competition])
+    const result = proximityPenalty(div1, 2, schedule, [junior])
     expect(result).toBe(0.0)
   })
 
@@ -201,7 +201,7 @@ describe('proximityPenalty', () => {
       junior: makeScheduleResult('junior', 0),
     }
     // div1 proposed day=3, junior on day=0 → gap=3 → 0.5 * 1.0 = 0.5
-    const result = proximityPenalty(div1, 3, schedule, [junior as Competition])
+    const result = proximityPenalty(div1, 3, schedule, [junior])
     expect(result).toBeCloseTo(0.5)
   })
 
@@ -209,7 +209,7 @@ describe('proximityPenalty', () => {
     const schedule: Record<string, ScheduleResult> = {
       'junior-w': makeScheduleResult('junior-w', 0),
     }
-    const result = proximityPenalty(div1, 3, schedule, [juniorWomen as Competition])
+    const result = proximityPenalty(div1, 3, schedule, [juniorWomen])
     expect(result).toBe(0.0)
   })
 
@@ -217,7 +217,7 @@ describe('proximityPenalty', () => {
     const schedule: Record<string, ScheduleResult> = {
       'junior-e': makeScheduleResult('junior-e', 0),
     }
-    const result = proximityPenalty(div1, 3, schedule, [juniorEpee as Competition])
+    const result = proximityPenalty(div1, 3, schedule, [juniorEpee])
     expect(result).toBe(0.0)
   })
 
@@ -225,7 +225,7 @@ describe('proximityPenalty', () => {
     const schedule: Record<string, ScheduleResult> = {
       y10: makeScheduleResult('y10', 0),
     }
-    const result = proximityPenalty(div1, 3, schedule, [y10 as Competition])
+    const result = proximityPenalty(div1, 3, schedule, [y10])
     expect(result).toBe(0.0)
   })
 
@@ -234,7 +234,7 @@ describe('proximityPenalty', () => {
       junior: makeScheduleResult('junior', 0),
     }
     // div1 proposed day=4, junior on day=0 → gap=4, clamped to 3 → 0.5 * 1.0
-    const result = proximityPenalty(div1, 4, schedule, [junior as Competition])
+    const result = proximityPenalty(div1, 4, schedule, [junior])
     expect(result).toBeCloseTo(0.5)
   })
 })
@@ -244,8 +244,8 @@ describe('proximityPenalty', () => {
 // ──────────────────────────────────────────────
 
 describe('individualTeamProximityPenalty', () => {
-  const teamComp = makeComp('div1-team', Category.DIV1, Gender.MEN, Weapon.FOIL, EventType.TEAM)
-  const indComp = makeComp('div1-ind', Category.DIV1, Gender.MEN, Weapon.FOIL, EventType.INDIVIDUAL)
+  const teamComp = makeCompetition({ id: 'div1-team', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
+  const indComp = makeCompetition({ id: 'div1-ind', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
 
   it('TEAM event, individual scheduled day before → -0.4 bonus', () => {
     // team on proposed day=2, individual on day=1 → gap = 2-1 = 1 → -0.4
@@ -253,10 +253,10 @@ describe('individualTeamProximityPenalty', () => {
       'div1-ind': makeScheduleResult('div1-ind', 1),
     }
     const result = individualTeamProximityPenalty(
-      teamComp as Competition,
+      teamComp,
       2,
       schedule,
-      [indComp as Competition],
+      [indComp],
     )
     expect(result).toBe(-0.4)
   })
@@ -266,10 +266,10 @@ describe('individualTeamProximityPenalty', () => {
       'div1-ind': makeScheduleResult('div1-ind', 2),
     }
     const result = individualTeamProximityPenalty(
-      teamComp as Competition,
+      teamComp,
       2,
       schedule,
-      [indComp as Competition],
+      [indComp],
     )
     expect(result).toBe(0.0)
   })
@@ -280,10 +280,10 @@ describe('individualTeamProximityPenalty', () => {
       'div1-ind': makeScheduleResult('div1-ind', 2),
     }
     const result = individualTeamProximityPenalty(
-      teamComp as Competition,
+      teamComp,
       1,
       schedule,
-      [indComp as Competition],
+      [indComp],
     )
     expect(result).toBe(1.0)
   })
@@ -294,10 +294,10 @@ describe('individualTeamProximityPenalty', () => {
       'div1-ind': makeScheduleResult('div1-ind', 3),
     }
     const result = individualTeamProximityPenalty(
-      teamComp as Competition,
+      teamComp,
       0,
       schedule,
-      [indComp as Competition],
+      [indComp],
     )
     expect(result).toBe(0.3)
   })
@@ -307,10 +307,10 @@ describe('individualTeamProximityPenalty', () => {
       'div1-ind': makeScheduleResult('div1-ind', 1),
     }
     const result = individualTeamProximityPenalty(
-      indComp as Competition,
+      indComp,
       2,
       schedule,
-      [indComp as Competition],
+      [indComp],
     )
     expect(result).toBe(0.0)
   })
@@ -322,21 +322,17 @@ describe('individualTeamProximityPenalty', () => {
 
 describe('findIndividualCounterpart', () => {
   it('finds matching individual for a team event', () => {
-    const team = makeComp('d1-team', Category.DIV1, Gender.MEN, Weapon.FOIL, EventType.TEAM)
-    const ind = makeComp('d1-ind', Category.DIV1, Gender.MEN, Weapon.FOIL, EventType.INDIVIDUAL)
-    const other = makeComp('d1w-ind', Category.DIV1, Gender.WOMEN, Weapon.FOIL, EventType.INDIVIDUAL)
-    const result = findIndividualCounterpart(team as Competition, [
-      ind as Competition,
-      other as Competition,
-      team as Competition,
-    ])
+    const team = makeCompetition({ id: 'd1-team', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
+    const ind = makeCompetition({ id: 'd1-ind', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
+    const other = makeCompetition({ id: 'd1w-ind', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
+    const result = findIndividualCounterpart(team, [ind, other, team])
     expect(result?.id).toBe('d1-ind')
   })
 
   it('returns undefined when no match exists', () => {
-    const team = makeComp('d1-team', Category.DIV1, Gender.MEN, Weapon.FOIL, EventType.TEAM)
-    const other = makeComp('jr-ind', Category.JUNIOR, Gender.MEN, Weapon.FOIL, EventType.INDIVIDUAL)
-    const result = findIndividualCounterpart(team as Competition, [other as Competition])
+    const team = makeCompetition({ id: 'd1-team', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
+    const other = makeCompetition({ id: 'jr-ind', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
+    const result = findIndividualCounterpart(team, [other])
     expect(result).toBeUndefined()
   })
 })

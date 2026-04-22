@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { validateConfig, validateSameDayCompletion } from '../../src/engine/validation.ts'
 import type { TournamentConfig, ValidationError } from '../../src/engine/types.ts'
 import {
-  Category, CutMode, DeMode, EventType, VideoPolicy,
+  Category, CutMode, DeMode, EventType, Gender, TournamentType, VideoPolicy, Weapon,
+  BottleneckSeverity,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
-import { BottleneckSeverity } from '../../src/engine/types.ts'
 
 
 // ──────────────────────────────────────────────
@@ -16,26 +16,26 @@ describe('validateConfig — fencer count', () => {
   it('returns error when fencer_count is 0', () => {
     const comp = makeCompetition({ fencer_count: 0 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'fencer_count' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'fencer_count' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('returns error when fencer_count is 1 (< MIN_FENCERS)', () => {
     const comp = makeCompetition({ fencer_count: 1 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'fencer_count' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'fencer_count' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('returns error when fencer_count exceeds MAX_FENCERS (500)', () => {
     const comp = makeCompetition({ fencer_count: 501 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'fencer_count' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'fencer_count' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error for fencer_count at boundary values (2 and 500)', () => {
     const low = makeCompetition({ id: 'low', fencer_count: 2 })
     const high = makeCompetition({ id: 'high', fencer_count: 500 })
     const errors = validateConfig(makeConfig(), [low, high])
-    expect(errors.filter((e: ValidationError) => e.field === 'fencer_count' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter((e: ValidationError) => e.field === 'fencer_count' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
@@ -43,7 +43,7 @@ describe('validateConfig — strip count', () => {
   it('returns error when strips_total is 0', () => {
     const config = makeConfig({ strips: [], strips_total: 0, video_strips_total: 0 })
     const errors = validateConfig(config, [makeCompetition()])
-    expect(errors.some((e: ValidationError) => e.field === 'strips_total' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'strips_total' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not require strips_total to be divisible by 4', () => {
@@ -51,7 +51,7 @@ describe('validateConfig — strip count', () => {
     const strips = makeStrips(5, 1)
     const config = makeConfig({ strips, strips_total: 5, video_strips_total: 1 })
     const errors = validateConfig(config, [makeCompetition()])
-    expect(errors.filter((e: ValidationError) => e.field === 'strips_total' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter((e: ValidationError) => e.field === 'strips_total' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
@@ -62,27 +62,27 @@ describe('validateConfig — days_available', () => {
   ])('returns error for $label', ({ days }) => {
     const config = makeConfig({ days_available: days })
     const errors = validateConfig(config, [makeCompetition()])
-    expect(errors.some((e: ValidationError) => e.field === 'days_available' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'days_available' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it.each([2, 3, 4])('does not error for valid days_available=%i', (days) => {
     const config = makeConfig({ days_available: days })
     const errors = validateConfig(config, [makeCompetition()])
-    expect(errors.filter((e: ValidationError) => e.field === 'days_available' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter((e: ValidationError) => e.field === 'days_available' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
 describe('validateConfig — duplicate competition IDs', () => {
   it('returns error for duplicate IDs', () => {
     const c1 = makeCompetition({ id: 'dup' })
-    const c2 = makeCompetition({ id: 'dup', gender: 'WOMEN' })
+    const c2 = makeCompetition({ id: 'dup', gender: Gender.WOMEN })
     const errors = validateConfig(makeConfig(), [c1, c2])
-    expect(errors.some((e: ValidationError) => e.field === 'competition.id' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'competition.id' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error for unique IDs', () => {
     const c1 = makeCompetition({ id: 'comp-1' })
-    const c2 = makeCompetition({ id: 'comp-2', gender: 'WOMEN' })
+    const c2 = makeCompetition({ id: 'comp-2', gender: Gender.WOMEN })
     const errors = validateConfig(makeConfig(), [c1, c2])
     expect(errors.filter((e: ValidationError) => e.field === 'competition.id')).toHaveLength(0)
   })
@@ -93,31 +93,31 @@ describe('validateConfig — team event without matching individual', () => {
     const team = makeCompetition({
       id: 'team-foil-men',
       event_type: EventType.TEAM,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
     })
     const errors = validateConfig(makeConfig(), [team])
-    expect(errors.some((e: ValidationError) => e.field === 'event_type' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'event_type' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error when matching individual exists', () => {
     const individual = makeCompetition({
       id: 'indiv-foil-men',
       event_type: EventType.INDIVIDUAL,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
     })
     const team = makeCompetition({
       id: 'team-foil-men',
       event_type: EventType.TEAM,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
     })
     const errors = validateConfig(makeConfig(), [individual, team])
-    expect(errors.filter((e: ValidationError) => e.field === 'event_type' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter((e: ValidationError) => e.field === 'event_type' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
@@ -126,21 +126,21 @@ describe('validateConfig — team event cut_mode', () => {
     const individual = makeCompetition({
       id: 'indiv',
       event_type: EventType.INDIVIDUAL,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
     })
     const team = makeCompetition({
       id: 'team',
       event_type: EventType.TEAM,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
       cut_mode: CutMode.PERCENTAGE,
       cut_value: 50,
     })
     const errors = validateConfig(makeConfig(), [individual, team])
-    expect(errors.some((e: ValidationError) => e.field === 'cut_mode' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'cut_mode' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 })
 
@@ -148,25 +148,25 @@ describe('validateConfig — cut_mode parameter validation', () => {
   it('returns error for PERCENTAGE cut_mode with value <= 0', () => {
     const comp = makeCompetition({ cut_mode: CutMode.PERCENTAGE, cut_value: 0 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('returns error for PERCENTAGE cut_mode with value > 100', () => {
     const comp = makeCompetition({ cut_mode: CutMode.PERCENTAGE, cut_value: 101 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('returns error for COUNT cut_mode with value > fencer_count', () => {
     const comp = makeCompetition({ cut_mode: CutMode.COUNT, cut_value: 25, fencer_count: 24 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error for COUNT cut_mode with value == fencer_count', () => {
     const comp = makeCompetition({ cut_mode: CutMode.COUNT, cut_value: 24, fencer_count: 24 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.filter((e: ValidationError) => e.field === 'cut_value' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter((e: ValidationError) => e.field === 'cut_value' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
@@ -175,14 +175,14 @@ describe('validateConfig — cut produces < 2 promoted', () => {
     // 3 fencers * 10% = 0 promoted → error
     const comp = makeCompetition({ fencer_count: 3, cut_mode: CutMode.PERCENTAGE, cut_value: 10 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('returns error when COUNT cut produces < 2 promoted', () => {
     // count=1 promotes only 1 fencer → error
     const comp = makeCompetition({ fencer_count: 10, cut_mode: CutMode.COUNT, cut_value: 1 })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'cut_value' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 })
 
@@ -196,13 +196,13 @@ describe('validateConfig — DE duration table', () => {
     } as unknown as TournamentConfig['de_duration_table']
     const config = makeConfig({ de_duration_table: tableWithMissing })
     // fencer_count=2, cut=DISABLED → bracket size = nextPowerOf2(2) = 2; missing from FOIL table
-    const comp = makeCompetition({ fencer_count: 2, weapon: 'FOIL', cut_mode: CutMode.DISABLED })
+    const comp = makeCompetition({ fencer_count: 2, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED })
     const errors = validateConfig(config, [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'de_duration_table' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'de_duration_table' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error when all bracket sizes are in table', () => {
-    const comp = makeCompetition({ fencer_count: 24, weapon: 'FOIL', cut_mode: CutMode.DISABLED })
+    const comp = makeCompetition({ fencer_count: 24, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED })
     const errors = validateConfig(makeConfig(), [comp])
     expect(errors.filter((e: ValidationError) => e.field === 'de_duration_table')).toHaveLength(0)
   })
@@ -215,7 +215,7 @@ describe('validateConfig — video policy warnings and errors', () => {
       de_video_policy: VideoPolicy.REQUIRED,
     })
     const errors = validateConfig(makeConfig(), [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'de_video_policy' && e.severity === 'WARN')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'de_video_policy' && e.severity === BottleneckSeverity.WARN)).toBe(true)
   })
 
   it('returns error for STAGED + REQUIRED + video_strips < de_round_of_16_strips', () => {
@@ -227,7 +227,7 @@ describe('validateConfig — video policy warnings and errors', () => {
       de_round_of_16_strips: 4,
     })
     const errors = validateConfig(config, [comp])
-    expect(errors.some((e: ValidationError) => e.field === 'de_video_policy' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'de_video_policy' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error when STAGED + REQUIRED + enough video strips', () => {
@@ -238,7 +238,7 @@ describe('validateConfig — video policy warnings and errors', () => {
       de_round_of_16_strips: 4,
     })
     const errors = validateConfig(config, [comp])
-    expect(errors.filter((e: ValidationError) => e.field === 'de_video_policy' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter((e: ValidationError) => e.field === 'de_video_policy' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
@@ -249,14 +249,14 @@ describe('validateConfig — same population individuals exceed days_available',
     const comps = [1, 2, 3, 4].map(i =>
       makeCompetition({
         id: `indiv-${i}`,
-        gender: 'MEN',
+        gender: Gender.MEN,
         category: Category.DIV1,
-        weapon: 'FOIL',
+        weapon: Weapon.FOIL,
         event_type: EventType.INDIVIDUAL,
       }),
     )
     const errors = validateConfig(config, comps)
-    expect(errors.some((e: ValidationError) => e.field === 'same_population' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'same_population' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error when same-population count <= days_available', () => {
@@ -264,9 +264,9 @@ describe('validateConfig — same population individuals exceed days_available',
     const comps = [1, 2, 3].map(i =>
       makeCompetition({
         id: `indiv-${i}`,
-        gender: 'MEN',
+        gender: Gender.MEN,
         category: Category.DIV1,
-        weapon: 'FOIL',
+        weapon: Weapon.FOIL,
         event_type: EventType.INDIVIDUAL,
       }),
     )
@@ -292,7 +292,7 @@ describe('validateConfig — flighting group strips exceed strips_total', () => 
       strips_allocated: 6,
     })
     const errors = validateConfig(config, [c1, c2])
-    expect(errors.some((e: ValidationError) => e.field === 'flighting_group' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'flighting_group' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error when flighting group strips fit within strips_total', () => {
@@ -310,7 +310,7 @@ describe('validateConfig — flighting group strips exceed strips_total', () => 
       strips_allocated: 8,
     })
     const errors = validateConfig(config, [c1, c2])
-    expect(errors.filter((e: ValidationError) => e.field === 'flighting_group' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter((e: ValidationError) => e.field === 'flighting_group' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
@@ -319,7 +319,7 @@ describe('validateConfig — valid config returns no errors', () => {
     const config = makeConfig()
     const comp = makeCompetition()
     const errors = validateConfig(config, [comp])
-    expect(errors.filter((e: ValidationError) => e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter((e: ValidationError) => e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
@@ -338,7 +338,7 @@ describe('validateConfig — global referee headcount check', () => {
     const comp = makeCompetition()
     const errors = validateConfig(config, [comp])
 
-    const allRefWarns = errors.filter(e => e.field === 'referee_availability' && e.severity === 'WARN')
+    const allRefWarns = errors.filter(e => e.field === 'referee_availability' && e.severity === BottleneckSeverity.WARN)
     expect(allRefWarns).toHaveLength(1)
 
     const refWarn = allRefWarns[0]
@@ -360,7 +360,7 @@ describe('validateConfig — global referee headcount check', () => {
     const errors = validateConfig(config, [comp])
 
     const refWarns = errors.filter(
-      (e: ValidationError) => e.field === 'referee_availability' && e.severity === 'WARN',
+      (e: ValidationError) => e.field === 'referee_availability' && e.severity === BottleneckSeverity.WARN,
     )
     expect(refWarns).toHaveLength(0)
   })
@@ -372,7 +372,7 @@ describe('validateConfig — global referee headcount check', () => {
 
 describe('validateSameDayCompletion', () => {
   it('returns null when competition fits comfortably within DAY_LENGTH_MINS', () => {
-    const comp = makeCompetition({ fencer_count: 24, weapon: 'FOIL', cut_mode: CutMode.DISABLED })
+    const comp = makeCompetition({ fencer_count: 24, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED })
     const result = validateSameDayCompletion(comp, makeConfig())
     expect(result).toBeNull()
   })
@@ -380,10 +380,10 @@ describe('validateSameDayCompletion', () => {
   it('returns error when pool + admin + DE exceeds DAY_LENGTH_MINS', () => {
     // Craft a config with a very short day but normal competition size
     const config = makeConfig({ DAY_LENGTH_MINS: 10 })
-    const comp = makeCompetition({ fencer_count: 64, weapon: 'EPEE', cut_mode: CutMode.DISABLED })
+    const comp = makeCompetition({ fencer_count: 64, weapon: Weapon.EPEE, cut_mode: CutMode.DISABLED })
     const result = validateSameDayCompletion(comp, config)
     expect(result).not.toBeNull()
-    expect(result?.severity).toBe('ERROR')
+    expect(result?.severity).toBe(BottleneckSeverity.ERROR)
     expect(result?.field).toBe('same_day_completion')
   })
 })
@@ -399,21 +399,21 @@ describe('validateConfig — individual+team same-day duration', () => {
     const individual = makeCompetition({
       id: 'indiv',
       event_type: EventType.INDIVIDUAL,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
       fencer_count: 24,
     })
     const team = makeCompetition({
       id: 'team',
       event_type: EventType.TEAM,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
       fencer_count: 8,
     })
     const errors = validateConfig(config, [individual, team])
-    expect(errors.some((e: ValidationError) => e.field === 'indiv_team_same_day' && e.severity === 'ERROR')).toBe(true)
+    expect(errors.some((e: ValidationError) => e.field === 'indiv_team_same_day' && e.severity === BottleneckSeverity.ERROR)).toBe(true)
   })
 
   it('does not error when individual + gap + team fits within DAY_LENGTH_MINS', () => {
@@ -421,17 +421,17 @@ describe('validateConfig — individual+team same-day duration', () => {
     const individual = makeCompetition({
       id: 'indiv',
       event_type: EventType.INDIVIDUAL,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
       fencer_count: 24,
     })
     const team = makeCompetition({
       id: 'team',
       event_type: EventType.TEAM,
-      gender: 'MEN',
+      gender: Gender.MEN,
       category: Category.DIV1,
-      weapon: 'FOIL',
+      weapon: Weapon.FOIL,
       fencer_count: 8,
     })
     const errors = validateConfig(config, [individual, team])
@@ -448,9 +448,9 @@ describe('validateConfig — resource precondition: strips', () => {
     // ceil(70/7) = 10 pools, but strips_total = 8
     const strips = makeStrips(8, 1)
     const config = makeConfig({ strips })
-    const comp = makeCompetition({ id: 'MEN-JR-EPEE-IND', fencer_count: 70, weapon: 'EPEE' })
+    const comp = makeCompetition({ id: 'MEN-JR-EPEE-IND', fencer_count: 70, weapon: Weapon.EPEE })
     const errors = validateConfig(config, [comp])
-    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === 'ERROR')
+    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === BottleneckSeverity.ERROR)
     expect(error).toBeDefined()
     expect(error?.message).toContain('MEN-JR-EPEE-IND')
     expect(error?.message).toMatch(/requires 10 strips/)
@@ -460,9 +460,9 @@ describe('validateConfig — resource precondition: strips', () => {
   it('does not error when competition pool count fits within strips_total', () => {
     // ceil(70/7) = 10 pools, strips_total = 24 → ok
     const config = makeConfig()
-    const comp = makeCompetition({ fencer_count: 70, weapon: 'EPEE' })
+    const comp = makeCompetition({ fencer_count: 70, weapon: Weapon.EPEE })
     const errors = validateConfig(config, [comp])
-    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 
   it('does not error for competitions below MIN_FENCERS', () => {
@@ -480,9 +480,9 @@ describe('validateConfig — resource precondition: referee availability', () =>
   it('returns error when saber event needs more saber refs than available on any day', () => {
     // ceil(105/7) = 15 pools, but max three_weapon_refs across days = 10
     const config = makeConfig()  // default: three_weapon_refs=10 per day
-    const comp = makeCompetition({ id: 'MEN-JR-SABRE-IND', fencer_count: 105, weapon: 'SABRE' })
+    const comp = makeCompetition({ id: 'MEN-JR-SABRE-IND', fencer_count: 105, weapon: Weapon.SABRE })
     const errors = validateConfig(config, [comp])
-    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === 'ERROR')
+    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === BottleneckSeverity.ERROR)
     expect(error).toBeDefined()
     expect(error?.message).toContain('MEN-JR-SABRE-IND')
     expect(error?.message).toContain('saber')
@@ -493,9 +493,9 @@ describe('validateConfig — resource precondition: referee availability', () =>
   it('returns error when foil event needs more foil/epee refs than available on any day', () => {
     // ceil(168/7) = 24 pools, but max foil_epee_refs = 20
     const config = makeConfig()  // default: foil_epee_refs=20 per day
-    const comp = makeCompetition({ id: 'MEN-DIV1-FOIL-IND', fencer_count: 168, weapon: 'FOIL' })
+    const comp = makeCompetition({ id: 'MEN-DIV1-FOIL-IND', fencer_count: 168, weapon: Weapon.FOIL })
     const errors = validateConfig(config, [comp])
-    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === 'ERROR')
+    const error = errors.find(e => e.field === 'resource_precondition' && e.severity === BottleneckSeverity.ERROR)
     expect(error).toBeDefined()
     expect(error?.message).toContain('MEN-DIV1-FOIL-IND')
     expect(error?.message).toContain('foil/epee')
@@ -506,17 +506,17 @@ describe('validateConfig — resource precondition: referee availability', () =>
   it('does not error when saber refs are sufficient on at least one day', () => {
     // ceil(70/7) = 10 pools, at least one day has three_weapon_refs=10 → ok
     const config = makeConfig()  // default: three_weapon_refs=10
-    const comp = makeCompetition({ fencer_count: 70, weapon: 'SABRE' })
+    const comp = makeCompetition({ fencer_count: 70, weapon: Weapon.SABRE })
     const errors = validateConfig(config, [comp])
-    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 
   it('does not error when foil/epee refs are sufficient on at least one day', () => {
     // ceil(70/7) = 10 pools, at least one day has foil_epee_refs=20 → ok
     const config = makeConfig()
-    const comp = makeCompetition({ fencer_count: 70, weapon: 'FOIL' })
+    const comp = makeCompetition({ fencer_count: 70, weapon: Weapon.FOIL })
     const errors = validateConfig(config, [comp])
-    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 
   it('passes when one day has sufficient saber refs even if others do not', () => {
@@ -528,9 +528,9 @@ describe('validateConfig — resource precondition: referee availability', () =>
         { day: 1, foil_epee_refs: 20, three_weapon_refs: 15, source: 'ACTUAL' as const },
       ],
     })
-    const comp = makeCompetition({ fencer_count: 105, weapon: 'SABRE' })
+    const comp = makeCompetition({ fencer_count: 105, weapon: Weapon.SABRE })
     const errors = validateConfig(config, [comp])
-    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === 'ERROR')).toHaveLength(0)
+    expect(errors.filter(e => e.field === 'resource_precondition' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
 })
 
@@ -547,7 +547,7 @@ describe('validateConfig — DE strip cap warnings', () => {
       de_round_of_16_strips: 10,
     })
     const errors = validateConfig(config, [comp])
-    const warning = errors.find(e => e.field === 'de_round_of_16_strips' && e.severity === 'WARN')
+    const warning = errors.find(e => e.field === 'de_round_of_16_strips' && e.severity === BottleneckSeverity.WARN)
     expect(warning).toBeDefined()
     expect(warning?.message).toContain('comp-r16-over')
     expect(warning?.message).toContain('R16')
@@ -572,7 +572,7 @@ describe('validateConfig — DE strip cap warnings', () => {
       de_finals_strips: 10,
     })
     const errors = validateConfig(config, [comp])
-    const warning = errors.find(e => e.field === 'de_finals_strips' && e.severity === 'WARN')
+    const warning = errors.find(e => e.field === 'de_finals_strips' && e.severity === BottleneckSeverity.WARN)
     expect(warning).toBeDefined()
     expect(warning?.message).toContain('comp-fin-over')
     expect(warning?.message).toContain('finals')
@@ -608,7 +608,7 @@ describe('validateConfig — DE strip cap warnings', () => {
 
 describe('validateConfig — regional cut override warnings', () => {
   it('emits a WARN when a regional tournament has a JUNIOR competition with non-DISABLED cut', () => {
-    const config = makeConfig({ tournament_type: 'ROC' })
+    const config = makeConfig({ tournament_type: TournamentType.ROC })
     const comp = makeCompetition({
       id: 'JR-M-FOIL-IND',
       category: Category.JUNIOR,
@@ -621,7 +621,7 @@ describe('validateConfig — regional cut override warnings', () => {
   })
 
   it('does not warn when regional tournament JUNIOR competition has DISABLED cut', () => {
-    const config = makeConfig({ tournament_type: 'ROC' })
+    const config = makeConfig({ tournament_type: TournamentType.ROC })
     const comp = makeCompetition({
       id: 'JR-M-FOIL-IND',
       category: Category.JUNIOR,
@@ -634,7 +634,7 @@ describe('validateConfig — regional cut override warnings', () => {
   })
 
   it('does not warn for NAC tournament with non-DISABLED cut on JUNIOR', () => {
-    const config = makeConfig({ tournament_type: 'NAC' })
+    const config = makeConfig({ tournament_type: TournamentType.NAC })
     const comp = makeCompetition({
       id: 'JR-M-FOIL-IND',
       category: Category.JUNIOR,
@@ -647,7 +647,7 @@ describe('validateConfig — regional cut override warnings', () => {
   })
 
   it('does not warn for regional tournament with non-override category (VETERAN)', () => {
-    const config = makeConfig({ tournament_type: 'SYC' })
+    const config = makeConfig({ tournament_type: TournamentType.SYC })
     const comp = makeCompetition({
       id: 'VET-M-FOIL-IND',
       category: Category.VETERAN,

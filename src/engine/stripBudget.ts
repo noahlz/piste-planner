@@ -7,6 +7,14 @@ import { poolCountFor } from './pools.ts'
 import { peakDeRefDemand } from './refs.ts'
 
 /**
+ * Peak strip count a staged DE will hold concurrently — the larger of
+ * round-of-16 and finals allocations.
+ */
+export function peakDeStripDemand(comp: Competition): number {
+  return Math.max(comp.de_round_of_16_strips, comp.de_finals_strips)
+}
+
+/**
  * Returns the max number of strips a phase (pool or DE) may use across the
  * whole tournament.  Per-competition override takes precedence over the global
  * percentage when provided.
@@ -89,7 +97,7 @@ export function recommendRefCount(
   // cross-weapon sum of video-stage strips may exceed per-class peaks.
   const videoStageSum = competitions
     .filter(c => c.de_mode === DeMode.STAGED)
-    .reduce((sum, c) => sum + Math.max(c.de_round_of_16_strips, c.de_finals_strips), 0)
+    .reduce((sum, c) => sum + peakDeStripDemand(c), 0)
 
   // Per weapon class: max(pool demand, DE demand)
   let peakSabre = Math.max(peakSabrePools * refsPerPool, peakSabreDe)
@@ -100,7 +108,7 @@ export function recommendRefCount(
   if (videoStageSum > peakSabre + peakFoilEpee) {
     const stagedSabreStrips = competitions
       .filter(c => c.de_mode === DeMode.STAGED && c.weapon === Weapon.SABRE)
-      .reduce((sum, c) => sum + Math.max(c.de_round_of_16_strips, c.de_finals_strips), 0)
+      .reduce((sum, c) => sum + peakDeStripDemand(c), 0)
     const stagedFoilEpeeStrips = videoStageSum - stagedSabreStrips
 
     peakSabre = Math.max(peakSabre, stagedSabreStrips)

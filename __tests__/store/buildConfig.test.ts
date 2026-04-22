@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
-import type { Strip, Competition, FlightingGroup, TournamentType } from '../../src/engine/types.ts'
+import type { Strip, Competition, FlightingGroup } from '../../src/engine/types.ts'
 import {
   DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
   SLOT_MINS, DAY_LENGTH_MINS, DE_REFS, DE_FINALS_MIN_MINS,
@@ -13,6 +13,7 @@ import {
 import {
   Category, Gender, Weapon, EventType,
   CutMode, DeMode, VideoPolicy, RefPolicy, DeStripRequirement,
+  PodCaptainOverride, TournamentType,
 } from '../../src/engine/types.ts'
 
 /** Helper: reset store and apply partial state, returning the full state snapshot. */
@@ -28,7 +29,7 @@ function storeWith(partial: Partial<StoreState>): StoreState {
 /** Minimal store state that produces a valid config. */
 function minimalState(): Partial<StoreState> {
   return {
-    tournament_type: 'NAC',
+    tournament_type: TournamentType.NAC,
     days_available: 2,
     dayConfigs: [
       { day_start_time: 480, day_end_time: 1320 },
@@ -36,15 +37,15 @@ function minimalState(): Partial<StoreState> {
     ],
     strips_total: 10,
     video_strips_total: 2,
-    pod_captain_override: 'AUTO',
+    pod_captain_override: PodCaptainOverride.AUTO,
     selectedCompetitions: {
       'D1-M-FOIL-IND': {
         fencer_count: 64,
-        ref_policy: 'AUTO',
-        cut_mode: 'PERCENTAGE',
+        ref_policy: RefPolicy.AUTO,
+        cut_mode: CutMode.PERCENTAGE,
         cut_value: 20,
-        de_mode: 'SINGLE_STAGE',
-        de_video_policy: 'REQUIRED',
+        de_mode: DeMode.SINGLE_STAGE,
+        de_video_policy: VideoPolicy.REQUIRED,
         use_single_pool_override: false,
       },
     },
@@ -66,11 +67,11 @@ describe('buildTournamentConfig', () => {
     const state = storeWith(minimalState())
     const { config, competitions } = buildTournamentConfig(state)
 
-    expect(config.tournament_type).toBe('NAC')
+    expect(config.tournament_type).toBe(TournamentType.NAC)
     expect(config.days_available).toBe(2)
     expect(config.strips_total).toBe(10)
     expect(config.video_strips_total).toBe(2)
-    expect(config.pod_captain_override).toBe('AUTO')
+    expect(config.pod_captain_override).toBe(PodCaptainOverride.AUTO)
     expect(competitions).toHaveLength(1)
   })
 
@@ -167,11 +168,11 @@ describe('buildTournamentConfig', () => {
         selectedCompetitions: {
           'BOGUS-ID': {
             fencer_count: 10,
-            ref_policy: 'AUTO',
-            cut_mode: 'DISABLED',
+            ref_policy: RefPolicy.AUTO,
+            cut_mode: CutMode.DISABLED,
             cut_value: 100,
-            de_mode: 'SINGLE_STAGE',
-            de_video_policy: 'BEST_EFFORT',
+            de_mode: DeMode.SINGLE_STAGE,
+            de_video_policy: VideoPolicy.BEST_EFFORT,
             use_single_pool_override: false,
           },
         },
@@ -186,20 +187,20 @@ describe('buildTournamentConfig', () => {
         selectedCompetitions: {
           'D1-M-FOIL-IND': {
             fencer_count: 64,
-            ref_policy: 'AUTO',
-            cut_mode: 'PERCENTAGE',
+            ref_policy: RefPolicy.AUTO,
+            cut_mode: CutMode.PERCENTAGE,
             cut_value: 20,
-            de_mode: 'SINGLE_STAGE',
-            de_video_policy: 'REQUIRED',
+            de_mode: DeMode.SINGLE_STAGE,
+            de_video_policy: VideoPolicy.REQUIRED,
             use_single_pool_override: false,
           },
           'CDT-W-EPEE-IND': {
             fencer_count: 32,
-            ref_policy: 'ONE',
-            cut_mode: 'DISABLED',
+            ref_policy: RefPolicy.ONE,
+            cut_mode: CutMode.DISABLED,
             cut_value: 100,
-            de_mode: 'SINGLE_STAGE',
-            de_video_policy: 'BEST_EFFORT',
+            de_mode: DeMode.SINGLE_STAGE,
+            de_video_policy: VideoPolicy.BEST_EFFORT,
             use_single_pool_override: false,
           },
         } as const,
@@ -288,11 +289,11 @@ describe('buildTournamentConfig', () => {
         selectedCompetitions: {
           [compId]: {
             fencer_count: 40,
-            ref_policy: 'AUTO',
+            ref_policy: RefPolicy.AUTO,
             cut_mode: cutMode as CutMode,
             cut_value: cutValue,
-            de_mode: 'SINGLE_STAGE',
-            de_video_policy: 'BEST_EFFORT',
+            de_mode: DeMode.SINGLE_STAGE,
+            de_video_policy: VideoPolicy.BEST_EFFORT,
             use_single_pool_override: false,
           },
         },
@@ -300,7 +301,7 @@ describe('buildTournamentConfig', () => {
     }
 
     it('overrides cut to DISABLED/100 for JUNIOR at ROC tournament', () => {
-      const state = storeWith(regionalCutState('ROC', 'JR-M-FOIL-IND', 'PERCENTAGE', 20))
+      const state = storeWith(regionalCutState(TournamentType.ROC, 'JR-M-FOIL-IND', 'PERCENTAGE', 20))
       const { competitions } = buildTournamentConfig(state)
       const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
 
@@ -310,7 +311,7 @@ describe('buildTournamentConfig', () => {
     })
 
     it('does NOT override cut for JUNIOR at NAC tournament', () => {
-      const state = storeWith(regionalCutState('NAC', 'JR-M-FOIL-IND', 'PERCENTAGE', 20))
+      const state = storeWith(regionalCutState(TournamentType.NAC, 'JR-M-FOIL-IND', 'PERCENTAGE', 20))
       const { competitions } = buildTournamentConfig(state)
       const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
 
@@ -320,7 +321,7 @@ describe('buildTournamentConfig', () => {
     })
 
     it('does NOT override cut for VETERAN at ROC tournament (category not in REGIONAL_CUT_OVERRIDES)', () => {
-      const state = storeWith(regionalCutState('ROC', 'VET-M-FOIL-IND-V40', 'PERCENTAGE', 20))
+      const state = storeWith(regionalCutState(TournamentType.ROC, 'VET-M-FOIL-IND-V40', 'PERCENTAGE', 20))
       const { competitions } = buildTournamentConfig(state)
       const comp = competitions.find((c: Competition) => c.id === 'VET-M-FOIL-IND-V40')
 
@@ -337,20 +338,20 @@ describe('buildTournamentConfig', () => {
         selectedCompetitions: {
           'D1-M-FOIL-IND': {
             fencer_count: 64,
-            ref_policy: 'AUTO',
-            cut_mode: 'PERCENTAGE',
+            ref_policy: RefPolicy.AUTO,
+            cut_mode: CutMode.PERCENTAGE,
             cut_value: 20,
-            de_mode: 'SINGLE_STAGE',
-            de_video_policy: 'REQUIRED',
+            de_mode: DeMode.SINGLE_STAGE,
+            de_video_policy: VideoPolicy.REQUIRED,
             use_single_pool_override: false,
           },
           'CDT-W-EPEE-IND': {
             fencer_count: 32,
-            ref_policy: 'ONE',
-            cut_mode: 'DISABLED',
+            ref_policy: RefPolicy.ONE,
+            cut_mode: CutMode.DISABLED,
             cut_value: 100,
-            de_mode: 'SINGLE_STAGE',
-            de_video_policy: 'BEST_EFFORT',
+            de_mode: DeMode.SINGLE_STAGE,
+            de_video_policy: VideoPolicy.BEST_EFFORT,
             use_single_pool_override: false,
           },
         } as const,

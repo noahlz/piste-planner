@@ -4,7 +4,10 @@ import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts
 import {
   BottleneckCause,
   BottleneckSeverity,
+  Category,
+  Gender,
   TournamentType,
+  Weapon,
   CutMode,
   DeMode,
   VideoPolicy,
@@ -73,7 +76,9 @@ describe('initialAnalysis — Pass 0: capacity warning', () => {
     )
     expect(capacityWarnings.length).toBe(1)
     expect(capacityWarnings[0].severity).toBe(BottleneckSeverity.WARN)
-    expect(capacityWarnings[0].message).toContain('strips')
+    // 4 comps × ceil(24/7)=4 pools each = 16 total pools; 8 strips available on day 1
+    expect(capacityWarnings[0].message).toContain('~16 pools')
+    expect(capacityWarnings[0].message).toContain('8 strips')
   })
 
   it('does not warn when pools/day fits within strip count', () => {
@@ -283,7 +288,7 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
     const comp2 = makeBigComp('fg-vid-2', 203, {
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      gender: 'WOMEN',
+      gender: Gender.WOMEN,
     })
     const result = initialAnalysis(config, [comp1, comp2], { 'fg-vid-1': 0, 'fg-vid-2': 0 })
 
@@ -341,16 +346,16 @@ describe('initialAnalysis — Pass 7: gender equity', () => {
     const config = makeConfig({ tournament_type: TournamentType.NAC })
     const mens = makeCompetition({
       id: 'men-foil',
-      gender: 'MEN',
-      weapon: 'FOIL',
-      category: 'DIV1',
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      category: Category.DIV1,
       fencer_count: 128,
     })
     const womens = makeCompetition({
       id: 'women-foil',
-      gender: 'WOMEN',
-      weapon: 'FOIL',
-      category: 'DIV1',
+      gender: Gender.WOMEN,
+      weapon: Weapon.FOIL,
+      category: Category.DIV1,
       fencer_count: 128,
     })
     const result = initialAnalysis(config, [mens, womens], { 'men-foil': 0, 'women-foil': 0 })

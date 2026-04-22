@@ -72,6 +72,9 @@ describe('constraintScore', () => {
     const looseScore = constraintScore(looseComp, allComps, config)
 
     expect(score).toBeGreaterThan(looseScore)
+    // Absolute lower bound: crossoverCount(4) + windowTightness(840/360≈2.33) + refWeight(1) ≈ 7.33
+    // A refactor that scales scores to near-zero would fail this check.
+    expect(score).toBeGreaterThan(5)
   })
 
   it('saber competition with low saber ref availability → higher score', () => {
@@ -112,6 +115,9 @@ describe('constraintScore', () => {
     const lowScore = constraintScore(saberComp, manySabreComps, lowSabreConfig)
     const highScore = constraintScore(saberComp, manySabreComps, highSabreConfig)
     expect(lowScore).toBeGreaterThan(highScore)
+    // Absolute lower bound: saberScarcity (5/1=5) + crossoverCount(4) + refWeight(1) + window ≈ 10
+    // A refactor that scales scores to near-zero would fail this check.
+    expect(lowScore).toBeGreaterThan(5)
   })
 
   it('STAGED_DE + REQUIRED video → higher score', () => {
