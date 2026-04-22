@@ -3,6 +3,8 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans`. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **Plan style note:** per user preference, steps describe *what* the code must do (behavior + test assertions) rather than pre-writing implementation. Executing agent writes code during execution.
+>
+> **Execution order:** execute this plan AFTER `stage-6-phase-scheduling.md`. The phase-scheduling refactor is the higher-priority density fix and should land first. This plan cleans up ref-gating complexity and inverts the referee model; it is independent of but easier to execute on a post-phase-refactor codebase.
 
 ## Goal
 

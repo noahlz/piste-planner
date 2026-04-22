@@ -4,7 +4,7 @@
 >
 > **Plan style:** per user preference, steps describe *what* the code must do (behavior + test assertions) rather than pre-writing implementation.
 >
-> **Dependency:** this plan assumes `refs-as-output.md` has landed first. Some of the ref-gating complexity is removed by that plan, simplifying `findAvailableStrips` and `earliestResourceWindow` touch points. If refs-as-output is NOT landed, the file references below still apply but the engineer will encounter additional ref-related surface area during each task.
+> **Execution order:** execute this plan FIRST, before `refs-as-output.md`. The density fix (B5/B7) is the higher-priority goal. Ref-gating code in `findAvailableStrips` and `earliestResourceWindow` will still be present during execution of this plan — work around it, do not remove it. `refs-as-output.md` cleans it up afterward.
 
 ## Goal
 
