@@ -21,7 +21,7 @@ import {
   computeDeFencerCount,
 } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, dePhasesForBracket } from './de.ts'
-import { snapToSlot, snapshotState, restoreState } from './resources.ts'
+import { snapToSlot, snapshotState, restoreState, type PoolContext } from './resources.ts'
 import { findEarlierSlotSameDay, SchedulingError } from './dayAssignment.ts'
 import {
   schedulePoolPhase,
@@ -39,6 +39,7 @@ export function scheduleCompetition(
   state: GlobalState,
   config: TournamentConfig,
   allCompetitions: Competition[],
+  isSingleEventDay: boolean = false,
 ): ScheduleResult {
   const notBeforeBase = Math.max(competition.earliest_start, dayStart(day, config))
 
@@ -111,6 +112,13 @@ export function scheduleCompetition(
     accepted_warnings: [],
   }
 
+  // Build poolContext for video-strip preservation rule (METHODOLOGY.md §Video Strip Preservation)
+  const poolContext: PoolContext = {
+    isPoolPhase: true,
+    isSingleEventDay,
+    day,
+  }
+
   // Deadline check + pool allocation retry loop
   let rescheduleAttempts = 0
   const MAX_ATTEMPTS = config.MAX_RESCHEDULE_ATTEMPTS
@@ -123,12 +131,12 @@ export function scheduleCompetition(
   for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
     // Snapshot mutable state so we can roll back on retry
     const snapshot = snapshotState(state)
-    let txLog: EventTxLog = { stripChanges: [], refIntervalIdxs: [] }
+    let txLog: EventTxLog = { stripChanges: [], refEvents: [] }
 
     // ── POOL PHASE ──
     // schedulePoolPhase handles team/individual sequencing internally
     const { poolEnd } = schedulePoolPhase(
-      competition, day, notBefore, state, config, allCompetitions, result, txLog,
+      competition, day, notBefore, state, config, allCompetitions, result, txLog, poolContext,
     )
 
     // ── DEADLINE CHECK (post-pool) ──
@@ -143,7 +151,7 @@ export function scheduleCompetition(
     const deNotBefore = snapToSlot(poolEnd + config.ADMIN_GAP_MINS)
 
     // Reset txLog for DE phase (pool txLog is not needed separately — rollback uses snapshotState)
-    txLog = { stripChanges: [], refIntervalIdxs: [] }
+    txLog = { stripChanges: [], refEvents: [] }
 
     // ── DE PHASE ──
     if (competition.de_mode === DeMode.SINGLE_STAGE) {

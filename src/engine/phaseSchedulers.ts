@@ -7,6 +7,14 @@
  * scheduleCompetition can be rewritten as a thin orchestrator.
  *
  * Non-functional refactor — behavior is bit-identical to the original scheduleOne.ts.
+ *
+ * NOTE: these functions were designed to support a phase-major scheduling loop
+ * (all events' pools, then all events' prelims, ...) but Stage 6 Task 3 attempted
+ * that flip and reverted it. The functions are still called sequentially from
+ * `scheduleCompetition` for one event at a time. See `scheduler.ts` Phase 3
+ * comment block and `__tests__/engine/scheduler.test.ts` footer for the
+ * postmortem on why phase-major was reverted (strip-rollback order-dependence
+ * + density regressions under video-strip contention).
  */
 import {
   EventType,
@@ -26,7 +34,7 @@ import {
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
 import { refsAvailableOnDay } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
-import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, type NoWindowReason } from './resources.ts'
+import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, type NoWindowReason, type PoolContext } from './resources.ts'
 import { SchedulingError } from './dayAssignment.ts'
 import { computeStripCap } from './stripBudget.ts'
 import { dayStart } from './types.ts'
@@ -106,6 +114,7 @@ export function schedulePoolPhase(
   allCompetitions: Competition[],
   partialResult: PartialScheduleResult,
   txLog: EventTxLog,
+  poolContext?: PoolContext,
 ): { poolEnd: number } {
   // If team event, enforce individual-first ordering on same day (same weapon)
   let effectiveNotBefore = notBefore
@@ -140,10 +149,10 @@ export function schedulePoolPhase(
   let poolEnd: number
   if (competition.flighted && competition.flighting_group_id === null) {
     // Standalone flighted
-    poolEnd = allocateFlightedPools(competition, poolStructure, refRes, wDuration, effectiveNotBefore, day, state, config, partialResult, txLog)
+    poolEnd = allocateFlightedPools(competition, poolStructure, refRes, wDuration, effectiveNotBefore, day, state, config, partialResult, txLog, poolContext)
   } else {
     // Non-flighted (or flighting group — treated as non-flighted for pool allocation)
-    poolEnd = allocateNonFlightedPools(competition, poolStructure, refRes, wDuration, effectiveNotBefore, day, state, config, partialResult, txLog)
+    poolEnd = allocateNonFlightedPools(competition, poolStructure, refRes, wDuration, effectiveNotBefore, day, state, config, partialResult, txLog, poolContext)
   }
 
   return { poolEnd }
@@ -500,6 +509,7 @@ function allocateFlightedPools(
   config: TournamentConfig,
   partialResult: PartialScheduleResult,
   txLog: EventTxLog,
+  poolContext?: PoolContext,
 ): number {
   const flightAPools = Math.ceil(poolStructure.n_pools / 2)
   const flightBPools = Math.floor(poolStructure.n_pools / 2)
@@ -529,6 +539,7 @@ function allocateFlightedPools(
     flightAPools, flightARefsNeeded,
     competition.weapon, false, notBefore, day,
     state, config, competition.id, Phase.FLIGHT_A,
+    poolContext,
   )
   if (windowA.type === 'NO_WINDOW') {
     emitNoWindowDiagnostic(windowA.reason, competition.id, Phase.FLIGHT_A, day, state)
@@ -565,6 +576,7 @@ function allocateFlightedPools(
     flightBPools, flightBRefsNeeded,
     competition.weapon, false, flightBIdeal, day,
     state, config, competition.id, Phase.FLIGHT_B,
+    poolContext,
   )
   if (windowB.type === 'NO_WINDOW') {
     emitNoWindowDiagnostic(windowB.reason, competition.id, Phase.FLIGHT_B, day, state)
@@ -616,6 +628,7 @@ function allocateNonFlightedPools(
   config: TournamentConfig,
   partialResult: PartialScheduleResult,
   txLog: EventTxLog,
+  poolContext?: PoolContext,
 ): number {
   const availRefs = refsAvailableOnDay(day, competition.weapon, config)
   const effectiveCap = computeStripCap(
@@ -643,6 +656,7 @@ function allocateNonFlightedPools(
     config,
     competition.id,
     Phase.POOLS,
+    poolContext,
   )
 
   if (window.type === 'NO_WINDOW') {

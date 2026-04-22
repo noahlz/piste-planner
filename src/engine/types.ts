@@ -399,12 +399,14 @@ export interface CatalogueEntry {
  * they can be rolled back if the event cannot be fully scheduled.
  *
  * - stripChanges: prior strip_free_at values, indexed by strip index
- * - refIntervalIdxs: positions in refs_in_use_by_day[day].release_events pushed
- *   during this event, for rollback
+ * - refEvents: direct object references to pushed ReleaseEvent entries so rollback
+ *   can find-and-remove by identity. Using object references instead of array indices
+ *   is required for phase-major scheduling, where multiple events' txLogs interleave
+ *   and rolling back one event's entries would shift another's recorded indices.
  */
 export interface EventTxLog {
   stripChanges: Array<{ stripIdx: number; oldFreeAt: number }>
-  refIntervalIdxs: Array<{ day: number; intervalIdx: number }>
+  refEvents: Array<{ day: number; event: ReleaseEvent }>
 }
 
 // ──────────────────────────────────────────────

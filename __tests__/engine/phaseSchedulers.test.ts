@@ -24,7 +24,7 @@ import { makeCompetition, makeConfig } from '../helpers/factories.ts'
 // ──────────────────────────────────────────────
 
 function freshTxLog(): EventTxLog {
-  return { stripChanges: [], refIntervalIdxs: [] }
+  return { stripChanges: [], refEvents: [] }
 }
 
 // Day 0, 8 AM in minutes-from-midnight
