@@ -9,15 +9,15 @@ Stage 6 shipped structural refactors (phase-scheduler extraction, `EventTxLog` r
 
 ## Current B-scenario state
 
-| Scenario | Pre-Stage-5 | Pre-Stage-6 | Post-Stage-6 (current) | Stage-6 target | Met? |
-|---|---|---|---|---|---|
-| B1 (Feb 2026 NAC, 4d / 24 events)    | 15 | 14 | 13 | ≥15 | ✗ |
-| B2 (Nov 2025 NAC, 4d / 24 events)    | 10 | 11 | 9  | ≥10 | ✗ |
-| B3 (Mar 2026 NAC Youth, 4d / 24)     | 5  | 7  | 5  | ≥7  | ✗ |
-| B4 (Jan 2026 SYC, 3d / 30)           | 9  | 9  | 8  | ≥9  | ✗ |
-| B5 (Jan 2026 SJCC, 3d / 12)          | 3  | 3  | 3  | ≥8  | ✗ (primary) |
-| B6 (Sep 2025 ROC, 3d / 54)           | 17 | 17 | 17 | ≥17 | ✓ |
-| B7 (Oct 2025 NAC, 4d / 18)           | 4  | 4  | 4  | ≥10 | ✗ (primary) |
+| Scenario | Pre-Stage-5 | Pre-Stage-6 | Post-Stage-6 | Post-wave-bump (current) | Stage-6 target | Met? |
+|---|---|---|---|---|---|---|
+| B1 (Feb 2026 NAC, 4d / 24 events)    | 15 | 14 | 13 | 13 | ≥15 | ✗ |
+| B2 (Nov 2025 NAC, 4d / 24 events)    | 10 | 11 | 9  | 9  | ≥10 | ✗ |
+| B3 (Mar 2026 NAC Youth, 4d / 24)     | 5  | 7  | 5  | 5  | ≥7  | ✗ |
+| B4 (Jan 2026 SYC, 3d / 30)           | 9  | 9  | 8  | 9  | ≥9  | ✓ |
+| B5 (Jan 2026 SJCC, 3d / 12)          | 3  | 3  | 3  | 3  | ≥8  | ✗ (primary) |
+| B6 (Sep 2025 ROC, 3d / 54)           | 17 | 17 | 17 | 17 | ≥17 | ✓ |
+| B7 (Oct 2025 NAC, 4d / 18)           | 4  | 4  | 4  | 4  | ≥10 | ✗ (primary) |
 
 ## What was attempted in Stage 6
 
@@ -64,7 +64,7 @@ This turns B5/B7 from "scheduler failures we can't explain" into "capacity sizin
 ## Next-session investigation list (ordered by cost/value)
 
 ### Cheap / low-risk
-1. **`MORNING_WAVE_WINDOW_MINS` 60 → 120.** One constant in `src/engine/constants.ts`. Update the 5 `findAvailableStrips — poolContext video rule` tests (morning-wave boundary). Re-run integration suite; expect B1–B4 to recover toward baseline.
+1. **DONE** — `MORNING_WAVE_WINDOW_MINS` 60 → 120. B4 +1 (8→9); B1/B2/B3/B5/B6/B7 unchanged. Hypothesis (recover B1–B4 to baseline) did not hold; kept anyway because 120 better matches `DEFAULT_POOL_ROUND_DURATION_TABLE`.
 
 2. **Loosen B5/B7 integration test configs.** In `__tests__/engine/integration.test.ts`, increase `strips`, `videoStrips`, and/or `days_available` for the B5 and B7 describes until all events schedule. Record the minimum config needed.
 
