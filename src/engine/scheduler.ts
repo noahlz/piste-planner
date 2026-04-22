@@ -129,7 +129,7 @@ export function scheduleAll(
   //
   // Stage 6 Task 5 (2026-04-22) implemented the video-strips-for-pools rule
   // (METHODOLOGY.md §Video Strip Preservation). Pool phases may consume video
-  // strips only during the morning wave (first 60 min) OR on single-event days.
+  // strips only during the morning wave (first 120 min) OR on single-event days.
   // This was expected to improve strip-constrained scenarios (B5) but produced
   // small regressions on most B-scenarios (B1: 14→13, B2: 11→9, B3: 7→5,
   // B4: 9→8; B5/B6/B7 unchanged). Late-starting pools that previously overflowed

@@ -51,7 +51,8 @@ export const DAY_LENGTH_MINS = 840 // DAY_END_MINS - DAY_START_MINS
 export const ADMIN_GAP_MINS = 30
 export const FLIGHT_BUFFER_MINS = 15
 export const THRESHOLD_MINS = 10
-export const MORNING_WAVE_WINDOW_MINS = 60
+// Pool rounds run 75-120 min (see DEFAULT_POOL_ROUND_DURATION_TABLE), so a 60-min wave can't accommodate the second event starting inside the wave.
+export const MORNING_WAVE_WINDOW_MINS = 120
 
 // ──────────────────────────────────────────────
 // DE / referee constants

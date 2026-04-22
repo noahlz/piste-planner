@@ -587,16 +587,16 @@ describe('findAvailableStrips — poolContext video rule', () => {
   // 18 non-video free + 4 video free = 22 free; requesting 20 needs video overflow
 
   // dayStart(0, config) = 0 * 840 = 0
-  // morning wave: atTime <= 0 + 60 = 60
-  // atTime=30 is within morning wave; atTime=90 is outside
+  // morning wave: atTime <= 0 + 120 = 120
+  // atTime=30 is within morning wave; atTime=180 is outside
 
-  it('1. morning wave pool: video overflow allowed (atTime <= dayStart+60)', () => {
+  it('1. morning wave pool: video overflow allowed (atTime <= dayStart+120)', () => {
     const config = makePoolContextConfig()
     const state = createGlobalState(config)
     // Busy 2 non-video strips so only 16 non-video are free; 4 video free → 20 total
     allocateStrips(state, [4, 5], 9999)
     const poolContext: PoolContext = { isPoolPhase: true, isSingleEventDay: false, day: 0 }
-    // atTime=30 is within morning wave (dayStart(0)=0 + 60 = 60, 30 <= 60)
+    // atTime=30 is within morning wave (dayStart(0)=0 + 120 = 120, 30 <= 120)
     const result = findAvailableStrips(state, config, 20, 30, false, poolContext)
     // 16 non-video free + 4 video free = 20 total — should succeed including video
     expect(result.type).toBe('FOUND')
@@ -613,8 +613,8 @@ describe('findAvailableStrips — poolContext video rule', () => {
     // Busy 2 non-video strips → only 16 non-video free; 4 video free but excluded
     allocateStrips(state, [4, 5], 9999)
     const poolContext: PoolContext = { isPoolPhase: true, isSingleEventDay: false, day: 0 }
-    // atTime=90 is after morning wave (dayStart(0)+60=60, 90 > 60)
-    const result = findAvailableStrips(state, config, 20, 90, false, poolContext)
+    // atTime=180 is after morning wave (dayStart(0)+120=120, 180 > 120)
+    const result = findAvailableStrips(state, config, 20, 180, false, poolContext)
     // Only 16 non-video free, need 20, video excluded → WAIT_UNTIL
     expect(result.type).toBe('WAIT_UNTIL')
   })
@@ -625,8 +625,8 @@ describe('findAvailableStrips — poolContext video rule', () => {
     // Busy 2 non-video strips → only 16 non-video free; 4 video free
     allocateStrips(state, [4, 5], 9999)
     const poolContext: PoolContext = { isPoolPhase: true, isSingleEventDay: true, day: 0 }
-    // atTime=90 is after morning wave, but isSingleEventDay=true allows video overflow
-    const result = findAvailableStrips(state, config, 20, 90, false, poolContext)
+    // atTime=180 is after morning wave, but isSingleEventDay=true allows video overflow
+    const result = findAvailableStrips(state, config, 20, 180, false, poolContext)
     expect(result.type).toBe('FOUND')
     if (result.type === 'FOUND') {
       expect(result.stripIndices).toHaveLength(20)
