@@ -4,6 +4,7 @@ import type {
   TournamentConfig,
   Bottleneck,
   RefsInUseByDay,
+  EventTxLog,
 } from './types.ts'
 import { dayStart } from './types.ts'
 
@@ -96,9 +97,15 @@ export function createGlobalState(config: TournamentConfig): GlobalState {
  * Marks the given strip indices as occupied until endTime.
  * Later allocations always win — endTime is set directly (no max-guard needed
  * since the scheduler never allocates a strip that is still busy).
+ *
+ * If txLog is provided, the prior free_at value for each strip is recorded
+ * before mutation so the allocation can be rolled back.
  */
-export function allocateStrips(state: GlobalState, stripIds: number[], endTime: number): void {
+export function allocateStrips(state: GlobalState, stripIds: number[], endTime: number, txLog?: EventTxLog): void {
   for (const idx of stripIds) {
+    if (txLog) {
+      txLog.stripChanges.push({ stripIdx: idx, oldFreeAt: state.strip_free_at[idx] })
+    }
     state.strip_free_at[idx] = endTime
   }
 }
@@ -268,6 +275,9 @@ function saberRefsFreeAt(day: number, atTime: number, state: GlobalState, config
  * appends a release event at endTime so free counts can be computed later.
  *
  * Weapon determines whether foil_epee_in_use or saber_in_use is incremented.
+ *
+ * If txLog is provided, the index of the pushed release_event is recorded
+ * so the allocation can be rolled back.
  */
 export function allocateRefs(
   state: GlobalState,
@@ -276,6 +286,7 @@ export function allocateRefs(
   count: number,
   _startTime: number,
   endTime: number,
+  txLog?: EventTxLog,
 ): void {
   const dayRefs = ensureDayRefs(state, day)
   const type: 'foil_epee' | 'saber' = weapon === Weapon.SABRE ? 'saber' : 'foil_epee'
@@ -287,6 +298,10 @@ export function allocateRefs(
   }
 
   dayRefs.release_events.push({ time: endTime, type, count })
+
+  if (txLog) {
+    txLog.refIntervalIdxs.push({ day, intervalIdx: dayRefs.release_events.length - 1 })
+  }
 }
 
 /**

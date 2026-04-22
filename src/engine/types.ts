@@ -391,6 +391,23 @@ export interface CatalogueEntry {
 }
 
 // ──────────────────────────────────────────────
+// Phase-scheduler transaction log
+// ──────────────────────────────────────────────
+
+/**
+ * Records mutations made during a single competition's phase scheduling so that
+ * they can be rolled back if the event cannot be fully scheduled.
+ *
+ * - stripChanges: prior strip_free_at values, indexed by strip index
+ * - refIntervalIdxs: positions in refs_in_use_by_day[day].release_events pushed
+ *   during this event, for rollback
+ */
+export interface EventTxLog {
+  stripChanges: Array<{ stripIdx: number; oldFreeAt: number }>
+  refIntervalIdxs: Array<{ day: number; intervalIdx: number }>
+}
+
+// ──────────────────────────────────────────────
 // Helper functions
 // ──────────────────────────────────────────────
 

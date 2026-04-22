@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/noahlz/.claude/references/**)",
+      "Read(//Users/noahlz/.claude/rules/**)",
+      "Read(//Users/noahlz/.claude/plugins/cache/**/dev-workflow/**)",
+      "Read(//Users/noahlz/projects/claude-plugins/plugins/dev-workflow/**)"
+    ]
+  }
+}
