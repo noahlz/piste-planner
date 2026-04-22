@@ -397,7 +397,7 @@ export function scheduleSingleStageDePhase(
       state,
       config,
       competition.id,
-      'DE',
+      Phase.DE,
     ),
     competition, Phase.DE, 'DE', day, state,
   )

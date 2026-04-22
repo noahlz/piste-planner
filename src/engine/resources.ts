@@ -8,7 +8,7 @@ import type {
   Strip,
 } from './types.ts'
 import { dayStart } from './types.ts'
-import { MORNING_WAVE_WINDOW_MINS } from './constants.ts'
+import { MORNING_WAVE_WINDOW_MINS, SLOT_MINS } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // PoolContext — video-strip preservation for pool phases
@@ -277,23 +277,30 @@ function ensureDayRefs(state: GlobalState, day: number): RefsInUseByDay {
  * is responsible for not over-committing saber refs across concurrent foil/epee and
  * saber phases.
  */
+function sumReleasedByType(
+  events: RefsInUseByDay['release_events'],
+  atTime: number,
+): { foil_epee: number; saber: number } {
+  let foil_epee = 0
+  let saber = 0
+  for (const e of events) {
+    if (e.time > atTime) continue
+    if (e.type === 'saber') saber += e.count
+    else foil_epee += e.count
+  }
+  return { foil_epee, saber }
+}
+
 function feRefsFreeAt(day: number, atTime: number, state: GlobalState, config: TournamentConfig): number {
   const avail = config.referee_availability[day]
   if (!avail) return 0
   const dayRefs = state.refs_in_use_by_day[day]
   if (!dayRefs) return avail.foil_epee_refs + avail.three_weapon_refs
 
-  // Count releases that happen at or before atTime
-  const released = dayRefs.release_events
-    .filter(e => e.time <= atTime && e.type === 'foil_epee')
-    .reduce((sum, e) => sum + e.count, 0)
-
-  const inUse = Math.max(0, dayRefs.foil_epee_in_use - released)
+  const released = sumReleasedByType(dayRefs.release_events, atTime)
+  const inUse = Math.max(0, dayRefs.foil_epee_in_use - released.foil_epee)
   // Saber refs can also officiate foil/epee (METHODOLOGY.md §Referee Types)
-  const saberReleased = dayRefs.release_events
-    .filter(e => e.time <= atTime && e.type === 'saber')
-    .reduce((sum, e) => sum + e.count, 0)
-  const saberInUse = Math.max(0, dayRefs.saber_in_use - saberReleased)
+  const saberInUse = Math.max(0, dayRefs.saber_in_use - released.saber)
   const total = avail.foil_epee_refs + avail.three_weapon_refs
   return Math.max(0, total - inUse - saberInUse)
 }
@@ -307,11 +314,8 @@ function saberRefsFreeAt(day: number, atTime: number, state: GlobalState, config
   const dayRefs = state.refs_in_use_by_day[day]
   if (!dayRefs) return avail.three_weapon_refs
 
-  const released = dayRefs.release_events
-    .filter(e => e.time <= atTime && e.type === 'saber')
-    .reduce((sum, e) => sum + e.count, 0)
-
-  return Math.max(0, avail.three_weapon_refs - dayRefs.saber_in_use + released)
+  const released = sumReleasedByType(dayRefs.release_events, atTime)
+  return Math.max(0, avail.three_weapon_refs - dayRefs.saber_in_use + released.saber)
 }
 
 // ──────────────────────────────────────────────
@@ -418,15 +422,15 @@ export function releaseRefs(
 // ──────────────────────────────────────────────
 
 /**
- * Rounds t up to the next 30-minute slot boundary.
+ * Rounds t up to the next SLOT_MINS boundary.
  * snapToSlot(0)=0, snapToSlot(15)=30, snapToSlot(30)=30, snapToSlot(31)=60.
  *
  * METHODOLOGY.md §Slot Granularity: applied to phase start times; NOT applied to phase end times.
  */
 export function snapToSlot(t: number): number {
-  const r = t % 30
+  const r = t % SLOT_MINS
   if (r === 0) return t
-  return t + (30 - r)
+  return t + (SLOT_MINS - r)
 }
 
 // ──────────────────────────────────────────────

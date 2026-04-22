@@ -4,6 +4,7 @@ import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration } from './de.ts'
 import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
+import { findIndividualCounterpart } from './crossover.ts'
 
 function err(field: string, message: string): ValidationError {
   return { field, message, severity: BottleneckSeverity.ERROR }
@@ -253,13 +254,7 @@ function validateTimingConstraints(config: TournamentConfig, competitions: Compe
     if (team.event_type !== EventType.TEAM) continue
     if (team.fencer_count < config.MIN_FENCERS) continue
 
-    const matchingIndividual = competitions.find(
-      c =>
-        c.event_type === EventType.INDIVIDUAL &&
-        c.category === team.category &&
-        c.gender === team.gender &&
-        c.weapon === team.weapon,
-    )
+    const matchingIndividual = findIndividualCounterpart(team, competitions)
     if (!matchingIndividual) continue
     if (matchingIndividual.fencer_count < config.MIN_FENCERS) continue
 

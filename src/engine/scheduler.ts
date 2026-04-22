@@ -27,7 +27,7 @@ import type { ConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { sequenceEventsForDay } from './daySequencing.ts'
 import { validateConfig } from './validation.ts'
-import { recommendStripCount, recommendRefCount } from './stripBudget.ts'
+import { recommendStripCount, recommendRefCount, peakDeStripDemand } from './stripBudget.ts'
 import { dayConsumedCapacity } from './capacity.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 
@@ -569,6 +569,8 @@ export function postScheduleDayBreakdown(
     }
   }
 
+  const refAvailByDay = new Map(config.referee_availability.map(r => [r.day, r]))
+
   for (const day of [...daysWithFailures].sort((a, b) => a - b)) {
     // Strip-hours summary
     const consumed = dayConsumedCapacity(day, state, competitions, config)
@@ -585,7 +587,7 @@ export function postScheduleDayBreakdown(
     })
 
     // Ref summary for this day
-    const dayRefConfig = config.referee_availability.find(r => r.day === day)
+    const dayRefConfig = refAvailByDay.get(day)
     const configuredRefs = dayRefConfig
       ? dayRefConfig.foil_epee_refs + dayRefConfig.three_weapon_refs
       : 0
@@ -617,7 +619,7 @@ export function postScheduleDayBreakdown(
     const stagedComps = compsOnDay.filter(c => c.de_mode === DeMode.STAGED)
     const stagedCount = stagedComps.length
     const videoStageSum = stagedComps.reduce(
-      (sum, c) => sum + Math.max(c.de_round_of_16_strips, c.de_finals_strips),
+      (sum, c) => sum + peakDeStripDemand(c),
       0,
     )
     if (videoStageSum > 0) {
