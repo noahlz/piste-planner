@@ -33,6 +33,29 @@ import { peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 
 const VALID_BOTTLENECK_CAUSES = new Set(Object.values(BottleneckCause))
 
+/**
+ * Records a constraint-relaxation bottleneck on the result and pushes it onto
+ * state.bottlenecks. Used by both initial-pass and repair-loop scheduling.
+ */
+function recordRelaxation(
+  result: { constraint_relaxation_level?: number },
+  state: { bottlenecks: Bottleneck[] },
+  compId: string,
+  relaxLevel: number,
+  severity: BottleneckSeverity,
+  message: string,
+): void {
+  result.constraint_relaxation_level = relaxLevel
+  state.bottlenecks.push({
+    competition_id: compId,
+    phase: Phase.DAY_ASSIGNMENT,
+    cause: BottleneckCause.CONSTRAINT_RELAXED,
+    severity,
+    delay_mins: 0,
+    message,
+  })
+}
+
 // ──────────────────────────────────────────────
 // scheduleAll — METHODOLOGY.md §Scheduling Algorithm
 // ──────────────────────────────────────────────
@@ -130,15 +153,10 @@ export function scheduleAll(
         // Flow constraint_relaxation_level from coloring
         const relaxLevel = relaxations.get(comp.id)
         if (relaxLevel !== undefined) {
-          result.constraint_relaxation_level = relaxLevel
-          state.bottlenecks.push({
-            competition_id: comp.id,
-            phase: Phase.DAY_ASSIGNMENT,
-            cause: BottleneckCause.CONSTRAINT_RELAXED,
-            severity: BottleneckSeverity.INFO,
-            delay_mins: 0,
-            message: `${comp.id}: constraint relaxed to level ${relaxLevel} during day assignment`,
-          })
+          recordRelaxation(
+            result, state, comp.id, relaxLevel, BottleneckSeverity.INFO,
+            `${comp.id}: constraint relaxed to level ${relaxLevel} during day assignment`,
+          )
         }
       } catch (err) {
         if (err instanceof SchedulingError) {
@@ -192,15 +210,10 @@ export function scheduleAll(
         // Apply relaxation level if present
         const relaxLevel = relaxations.get(comp.id)
         if (relaxLevel !== undefined) {
-          result.constraint_relaxation_level = relaxLevel
-          state.bottlenecks.push({
-            competition_id: comp.id,
-            phase: Phase.DAY_ASSIGNMENT,
-            cause: BottleneckCause.CONSTRAINT_RELAXED,
-            severity: BottleneckSeverity.WARN,
-            delay_mins: 0,
-            message: `${comp.id}: repaired to day ${altDay}, constraint relaxed to level ${relaxLevel}`,
-          })
+          recordRelaxation(
+            result, state, comp.id, relaxLevel, BottleneckSeverity.WARN,
+            `${comp.id}: repaired to day ${altDay}, constraint relaxed to level ${relaxLevel}`,
+          )
         } else {
           state.bottlenecks.push({
             competition_id: comp.id,

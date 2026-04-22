@@ -5,6 +5,7 @@ import type {
   Bottleneck,
   RefsInUseByDay,
   EventTxLog,
+  Strip,
 } from './types.ts'
 import { dayStart } from './types.ts'
 import { MORNING_WAVE_WINDOW_MINS } from './constants.ts'
@@ -172,6 +173,35 @@ export function releaseStrips(state: GlobalState, stripIds: number[], endTime: n
  *
  * Returns WAIT_UNTIL with the earliest time when enough suitable strips become free.
  */
+type IndexedStrip = { i: number; s: Strip; freeAt: number }
+
+/**
+ * Annotate each strip with its index and current free_at time. Sorts by freeAt
+ * when sort=true so callers can pick the earliest-free strips.
+ */
+function indexStrips(
+  strips: readonly Strip[],
+  freeAt: readonly number[],
+  predicate: (s: Strip, freeAt: number) => boolean,
+  sort = false,
+): IndexedStrip[] {
+  const result = strips
+    .map((s, i): IndexedStrip => ({ i, s, freeAt: freeAt[i] }))
+    .filter(x => predicate(x.s, x.freeAt))
+  return sort ? result.sort((a, b) => a.freeAt - b.freeAt) : result
+}
+
+/** Earliest time `count` strips matching the predicate become free, or Infinity. */
+function waitUntilForCount(
+  strips: readonly Strip[],
+  freeAt: readonly number[],
+  count: number,
+  predicate: (s: Strip) => boolean,
+): number {
+  const sorted = indexStrips(strips, freeAt, (s) => predicate(s), true)
+  return sorted.length >= count ? sorted[count - 1].freeAt : Infinity
+}
+
 export function findAvailableStrips(
   state: GlobalState,
   config: TournamentConfig,
@@ -184,24 +214,11 @@ export function findAvailableStrips(
   const freeAt = state.strip_free_at
 
   if (videoRequired) {
-    const candidates = strips
-      .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
-      .filter(x => x.s.video_capable && x.freeAt <= atTime)
-
+    const candidates = indexStrips(strips, freeAt, (s, t) => s.video_capable && t <= atTime)
     if (candidates.length >= count) {
       return { type: 'FOUND', stripIndices: candidates.slice(0, count).map(x => x.i) }
     }
-
-    // Not enough video strips free — return earliest time when count video strips will be free
-    const videoStrips = strips
-      .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
-      .filter(x => x.s.video_capable)
-      .sort((a, b) => a.freeAt - b.freeAt)
-
-    const waitUntil = videoStrips.length >= count
-      ? videoStrips[count - 1].freeAt
-      : Infinity
-    return { type: 'WAIT_UNTIL', waitUntil }
+    return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(strips, freeAt, count, (s) => s.video_capable) }
   }
 
   // Pool video-strip preservation rule:
@@ -213,49 +230,23 @@ export function findAvailableStrips(
 
   if (applyPoolVideoExclusion) {
     // Non-video strips only — exclude video entirely
-    const freeNonVideo = strips
-      .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
-      .filter(x => !x.s.video_capable && x.freeAt <= atTime)
-      .sort((a, b) => a.freeAt - b.freeAt)
-
+    const freeNonVideo = indexStrips(strips, freeAt, (s, t) => !s.video_capable && t <= atTime, true)
     if (freeNonVideo.length >= count) {
       return { type: 'FOUND', stripIndices: freeNonVideo.slice(0, count).map(x => x.i) }
     }
-
-    // Not enough non-video strips free — wait for non-video strips only
-    const allNonVideo = strips
-      .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
-      .filter(x => !x.s.video_capable)
-      .sort((a, b) => a.freeAt - b.freeAt)
-
-    const waitUntil = allNonVideo.length >= count ? allNonVideo[count - 1].freeAt : Infinity
-    return { type: 'WAIT_UNTIL', waitUntil }
+    return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(strips, freeAt, count, (s) => !s.video_capable) }
   }
 
   // Non-video preferred: collect free non-video strips first, then free video strips
-  const freeNonVideo = strips
-    .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
-    .filter(x => !x.s.video_capable && x.freeAt <= atTime)
-    .sort((a, b) => a.freeAt - b.freeAt)
-
-  const freeVideo = strips
-    .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
-    .filter(x => x.s.video_capable && x.freeAt <= atTime)
-    .sort((a, b) => a.freeAt - b.freeAt)
-
+  const freeNonVideo = indexStrips(strips, freeAt, (s, t) => !s.video_capable && t <= atTime, true)
+  const freeVideo = indexStrips(strips, freeAt, (s, t) => s.video_capable && t <= atTime, true)
   const candidates = [...freeNonVideo, ...freeVideo]
 
   if (candidates.length >= count) {
     return { type: 'FOUND', stripIndices: candidates.slice(0, count).map(x => x.i) }
   }
 
-  // Not enough free — find earliest time when `count` strips become free
-  const allSorted = strips
-    .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
-    .sort((a, b) => a.freeAt - b.freeAt)
-
-  const waitUntil = allSorted.length >= count ? allSorted[count - 1].freeAt : Infinity
-  return { type: 'WAIT_UNTIL', waitUntil }
+  return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(strips, freeAt, count, () => true) }
 }
 
 // ──────────────────────────────────────────────
@@ -516,6 +507,31 @@ export function earliestResourceWindow(
   const latestStart = dayStart(day, config) + config.LATEST_START_OFFSET
   const dayEndTime = dayStart(day, config) + config.DAY_LENGTH_MINS
 
+  // Build a NO_WINDOW result from the diagnostic free-ref count + diagNoWindowReason.
+  const buildNoWindow = (
+    cand: number,
+    stripFreeMax: number,
+    refTime: number,
+  ): ResourceWindowResult => {
+    const freeRefs = weapon === Weapon.SABRE
+      ? saberRefsFreeAt(day, cand, state, config)
+      : feRefsFreeAt(day, cand, state, config)
+    return {
+      type: 'NO_WINDOW',
+      reason: diagNoWindowReason(
+        cand,
+        latestStart,
+        dayEndTime,
+        stripsNeeded,
+        countFreeStrips(state, config, cand, videoRequired),
+        stripFreeMax,
+        refsNeeded,
+        freeRefs,
+        refTime,
+      ),
+    }
+  }
+
   let candidate = snapToSlot(notBefore)
 
   // Resource-window search uses more attempts than the outer reschedule loop (MAX_RESCHEDULE_ATTEMPTS)
@@ -578,23 +594,7 @@ export function earliestResourceWindow(
     const T = snapToSlot(Math.max(candidate, stripFreeMax, tRefs))
 
     if (T > latestStart || T > dayEndTime) {
-      const freeRefs = weapon === Weapon.SABRE
-        ? saberRefsFreeAt(day, candidate, state, config)
-        : feRefsFreeAt(day, candidate, state, config)
-      return {
-        type: 'NO_WINDOW',
-        reason: diagNoWindowReason(
-          candidate,
-          latestStart,
-          dayEndTime,
-          stripsNeeded,
-          countFreeStrips(state, config, candidate, videoRequired),
-          stripFreeMax,
-          refsNeeded,
-          freeRefs,
-          tRefs,
-        ),
-      }
+      return buildNoWindow(candidate, stripFreeMax, tRefs)
     }
 
     // Verify strips are still available at T (they may have been claimed by a concurrent phase)
@@ -662,23 +662,7 @@ export function earliestResourceWindow(
     }
   }
 
-  const freeRefsAtEnd = weapon === Weapon.SABRE
-    ? saberRefsFreeAt(day, candidate, state, config)
-    : feRefsFreeAt(day, candidate, state, config)
-  return {
-    type: 'NO_WINDOW',
-    reason: diagNoWindowReason(
-      candidate,
-      latestStart,
-      dayEndTime,
-      stripsNeeded,
-      countFreeStrips(state, config, candidate, videoRequired),
-      lastStripFreeMax,
-      refsNeeded,
-      freeRefsAtEnd,
-      lastTRefs,
-    ),
-  }
+  return buildNoWindow(candidate, lastStripFreeMax, lastTRefs)
 }
 
 /**

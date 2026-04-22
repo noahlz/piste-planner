@@ -14,6 +14,24 @@ function warn(field: string, message: string): ValidationError {
 }
 
 /**
+ * Pushes an error if the DE duration table has no entry for the given weapon/bracket.
+ * Shared by individual and team DE-entry validation.
+ */
+function checkDeDurationEntry(
+  compId: string,
+  weapon: Weapon,
+  bracketSize: number,
+  table: TournamentConfig['de_duration_table'],
+  errors: ValidationError[],
+  errFn: typeof err,
+): void {
+  const deDuration = table[weapon]?.[bracketSize]
+  if (deDuration === undefined) {
+    errors.push(errFn('de_duration_table', `${compId}: no DE duration entry for weapon=${weapon} bracket=${bracketSize}`))
+  }
+}
+
+/**
  * Computes the worst-case single-day duration for a competition:
  * pool round + admin gap + full DE.
  * Returns a ValidationError if it exceeds DAY_LENGTH_MINS, null otherwise.
@@ -135,21 +153,27 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
 
       // DE duration table must contain an entry for the computed bracket size
       if (comp.fencer_count >= config.MIN_FENCERS) {
-        const bracketSize = computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type)
-        const deDuration = config.de_duration_table[comp.weapon]?.[bracketSize]
-        if (deDuration === undefined) {
-          errors.push(err('de_duration_table', `${comp.id}: no DE duration entry for weapon=${comp.weapon} bracket=${bracketSize}`))
-        }
+        checkDeDurationEntry(
+          comp.id,
+          comp.weapon,
+          computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type),
+          config.de_duration_table,
+          errors,
+          err,
+        )
       }
     }
 
     // Team events also need a DE duration table entry (teams bypass cuts, bracket = nextPowerOf2(fencer_count))
     if (comp.event_type === EventType.TEAM && comp.fencer_count >= config.MIN_FENCERS) {
-      const bracketSize = computeBracketSize(comp.fencer_count, CutMode.DISABLED, 100, comp.event_type)
-      const deDuration = config.de_duration_table[comp.weapon]?.[bracketSize]
-      if (deDuration === undefined) {
-        errors.push(err('de_duration_table', `${comp.id}: no DE duration entry for weapon=${comp.weapon} bracket=${bracketSize}`))
-      }
+      checkDeDurationEntry(
+        comp.id,
+        comp.weapon,
+        computeBracketSize(comp.fencer_count, CutMode.DISABLED, 100, comp.event_type),
+        config.de_duration_table,
+        errors,
+        err,
+      )
     }
 
     // Video policy checks

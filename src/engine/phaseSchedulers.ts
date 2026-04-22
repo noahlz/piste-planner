@@ -34,7 +34,7 @@ import {
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
 import { refsAvailableOnDay } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
-import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, type NoWindowReason, type PoolContext } from './resources.ts'
+import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, type NoWindowReason, type PoolContext, type ResourceWindowResult } from './resources.ts'
 import { SchedulingError } from './dayAssignment.ts'
 import { computeStripCap } from './stripBudget.ts'
 import { dayStart } from './types.ts'
@@ -94,6 +94,48 @@ function emitNoWindowDiagnostic(
     delay_mins: 0,
     message,
   })
+}
+
+type FoundWindow = Extract<ResourceWindowResult, { type: 'FOUND' }>
+
+/**
+ * Asserts a resource window search succeeded. On NO_WINDOW, emits a diagnostic
+ * bottleneck and throws SchedulingError. On FOUND, accumulates contention
+ * bottlenecks and returns the FOUND case (typed) for direct use.
+ */
+function assertWindowFound(
+  window: ResourceWindowResult,
+  competition: Competition,
+  phase: Phase,
+  phaseLabel: string,
+  day: number,
+  state: GlobalState,
+): FoundWindow {
+  if (window.type === 'NO_WINDOW') {
+    emitNoWindowDiagnostic(window.reason, competition.id, phase, day, state)
+    throw new SchedulingError(
+      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+      `No resource window for ${competition.id} ${phaseLabel} on day ${day}`,
+    )
+  }
+  state.bottlenecks.push(...window.bottlenecks)
+  return window
+}
+
+/**
+ * Computes DE bracket size and per-block durations for a competition. Returns
+ * the bracket size and the deBlockDurations result.
+ */
+function computeDeBlocks(competition: Competition, config: TournamentConfig) {
+  const bracketSize = computeBracketSize(
+    competition.fencer_count,
+    competition.cut_mode,
+    competition.cut_value,
+    competition.event_type,
+  )
+  const totalDeBase = calculateDeDuration(competition.weapon, bracketSize, config.de_duration_table)
+  const blocks = deBlockDurations(bracketSize, totalDeBase)
+  return { bracketSize, blocks }
 }
 
 // ──────────────────────────────────────────────
@@ -171,37 +213,24 @@ export function scheduleDePrelimsPhase(
   partialResult: PartialScheduleResult,
   txLog: EventTxLog,
 ): { prelimsEnd: number } {
-  const bracketSize = computeBracketSize(
-    competition.fencer_count,
-    competition.cut_mode,
-    competition.cut_value,
-    competition.event_type,
-  )
-  const totalDeBase = calculateDeDuration(competition.weapon, bracketSize, config.de_duration_table)
-  const blocks = deBlockDurations(bracketSize, totalDeBase)
+  const { bracketSize, blocks } = computeDeBlocks(competition, config)
   const deOptimal = Math.floor(bracketSize / 2)
 
-  const prelimsWindow = earliestResourceWindow(
-    Math.min(deOptimal, config.strips_total),
-    config.DE_REFS,
-    competition.weapon,
-    false, // prelims never use video regardless of policy
-    notBefore,
-    day,
-    state,
-    config,
-    competition.id,
-    Phase.DE_PRELIMS,
+  const prelimsWindow = assertWindowFound(
+    earliestResourceWindow(
+      Math.min(deOptimal, config.strips_total),
+      config.DE_REFS,
+      competition.weapon,
+      false, // prelims never use video regardless of policy
+      notBefore,
+      day,
+      state,
+      config,
+      competition.id,
+      Phase.DE_PRELIMS,
+    ),
+    competition, Phase.DE_PRELIMS, 'DE_PRELIMS', day, state,
   )
-
-  if (prelimsWindow.type === 'NO_WINDOW') {
-    emitNoWindowDiagnostic(prelimsWindow.reason, competition.id, Phase.DE_PRELIMS, day, state)
-    throw new SchedulingError(
-      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-      `No resource window for ${competition.id} DE_PRELIMS on day ${day}`,
-    )
-  }
-  state.bottlenecks.push(...prelimsWindow.bottlenecks)
 
   const prelimsStart = prelimsWindow.startTime
   const prelimsStrips = prelimsWindow.stripIndices.length
@@ -235,36 +264,23 @@ export function scheduleR16Phase(
   const r16VideoRequired = policy === VideoPolicy.REQUIRED
 
   const r16Target = competition.de_round_of_16_strips
-  const r16Window = earliestResourceWindow(
-    r16Target,
-    config.DE_REFS * r16Target,
-    competition.weapon,
-    r16VideoRequired,
-    notBefore,
-    day,
-    state,
-    config,
-    competition.id,
-    Phase.DE_ROUND_OF_16,
+  const r16Window = assertWindowFound(
+    earliestResourceWindow(
+      r16Target,
+      config.DE_REFS * r16Target,
+      competition.weapon,
+      r16VideoRequired,
+      notBefore,
+      day,
+      state,
+      config,
+      competition.id,
+      Phase.DE_ROUND_OF_16,
+    ),
+    competition, Phase.DE_ROUND_OF_16, 'DE_ROUND_OF_16', day, state,
   )
 
-  if (r16Window.type === 'NO_WINDOW') {
-    emitNoWindowDiagnostic(r16Window.reason, competition.id, Phase.DE_ROUND_OF_16, day, state)
-    throw new SchedulingError(
-      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-      `No resource window for ${competition.id} DE_ROUND_OF_16 on day ${day}`,
-    )
-  }
-  state.bottlenecks.push(...r16Window.bottlenecks)
-
-  const bracketSize = computeBracketSize(
-    competition.fencer_count,
-    competition.cut_mode,
-    competition.cut_value,
-    competition.event_type,
-  )
-  const totalDeBase = calculateDeDuration(competition.weapon, bracketSize, config.de_duration_table)
-  const blocks = deBlockDurations(bracketSize, totalDeBase)
+  const { blocks } = computeDeBlocks(competition, config)
 
   const r16Start = r16Window.startTime
   const r16Strips = r16Window.stripIndices.length
@@ -299,36 +315,23 @@ export function scheduleDeFinalsPhase(
   const finalsVideoRequired = policy === VideoPolicy.REQUIRED || policy === VideoPolicy.FINALS_ONLY
 
   const finTarget = competition.de_finals_strips
-  const finWindow = earliestResourceWindow(
-    finTarget,
-    config.DE_REFS,
-    competition.weapon,
-    finalsVideoRequired,
-    notBefore, // continuous from R16 end — no gap
-    day,
-    state,
-    config,
-    competition.id,
-    Phase.DE_FINALS,
+  const finWindow = assertWindowFound(
+    earliestResourceWindow(
+      finTarget,
+      config.DE_REFS,
+      competition.weapon,
+      finalsVideoRequired,
+      notBefore, // continuous from R16 end — no gap
+      day,
+      state,
+      config,
+      competition.id,
+      Phase.DE_FINALS,
+    ),
+    competition, Phase.DE_FINALS, 'DE_FINALS', day, state,
   )
 
-  if (finWindow.type === 'NO_WINDOW') {
-    emitNoWindowDiagnostic(finWindow.reason, competition.id, Phase.DE_FINALS, day, state)
-    throw new SchedulingError(
-      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-      `No resource window for ${competition.id} DE_FINALS on day ${day}`,
-    )
-  }
-  state.bottlenecks.push(...finWindow.bottlenecks)
-
-  const bracketSize = computeBracketSize(
-    competition.fencer_count,
-    competition.cut_mode,
-    competition.cut_value,
-    competition.event_type,
-  )
-  const totalDeBase = calculateDeDuration(competition.weapon, bracketSize, config.de_duration_table)
-  const blocks = deBlockDurations(bracketSize, totalDeBase)
+  const { blocks } = computeDeBlocks(competition, config)
 
   const finStart = finWindow.startTime
   const finActual = Math.max(blocks.finals_dur, config.DE_FINALS_MIN_MINS)
@@ -358,12 +361,7 @@ export function scheduleSingleStageDePhase(
   partialResult: PartialScheduleResult,
   txLog: EventTxLog,
 ): { deEnd: number; deStripIndices: number[] } {
-  const bracketSize = computeBracketSize(
-    competition.fencer_count,
-    competition.cut_mode,
-    competition.cut_value,
-    competition.event_type,
-  )
+  const { bracketSize } = computeDeBlocks(competition, config)
   const totalDeBase = calculateDeDuration(competition.weapon, bracketSize, config.de_duration_table)
   const deOptimal = Math.floor(bracketSize / 2)
   const deRefsNeeded = config.DE_REFS
@@ -374,27 +372,21 @@ export function scheduleSingleStageDePhase(
     competition.max_de_strip_pct_override,
   )
 
-  const window = earliestResourceWindow(
-    Math.min(deOptimal, deEffectiveCap),
-    deRefsNeeded,
-    competition.weapon,
-    false, // SINGLE_STAGE never uses video
-    notBefore,
-    day,
-    state,
-    config,
-    competition.id,
-    'DE',
+  const window = assertWindowFound(
+    earliestResourceWindow(
+      Math.min(deOptimal, deEffectiveCap),
+      deRefsNeeded,
+      competition.weapon,
+      false, // SINGLE_STAGE never uses video
+      notBefore,
+      day,
+      state,
+      config,
+      competition.id,
+      'DE',
+    ),
+    competition, Phase.DE, 'DE', day, state,
   )
-
-  if (window.type === 'NO_WINDOW') {
-    emitNoWindowDiagnostic(window.reason, competition.id, Phase.DE, day, state)
-    throw new SchedulingError(
-      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-      `No resource window for ${competition.id} DE on day ${day}`,
-    )
-  }
-  state.bottlenecks.push(...window.bottlenecks)
 
   const deStart = window.startTime
   const deStrips = window.stripIndices.length
@@ -434,37 +426,22 @@ export function scheduleBronzePhase(
   const strips = config.strips
   const freeAt = state.strip_free_at
 
-  let bronzeIdx: number | null = null
+  // Find first strip not in goldSet that is free at finalsStart and matches the predicate.
+  const findFreeBronzeStrip = (predicate: (videoCapable: boolean) => boolean): number | null => {
+    for (let i = 0; i < strips.length; i++) {
+      if (goldSet.has(i)) continue
+      if (predicate(strips[i].video_capable) && freeAt[i] <= finalsStart) return i
+    }
+    return null
+  }
 
+  let bronzeIdx: number | null
   if (videoRequired) {
-    // Try video strips first (excluding gold)
-    for (let i = 0; i < strips.length; i++) {
-      if (goldSet.has(i)) continue
-      if (strips[i].video_capable && freeAt[i] <= finalsStart) {
-        bronzeIdx = i
-        break
-      }
-    }
+    // Video strips only (excluding gold)
+    bronzeIdx = findFreeBronzeStrip((video) => video)
   } else {
-    // Non-video preferred, then any strip (excluding gold)
-    // Try non-video first
-    for (let i = 0; i < strips.length; i++) {
-      if (goldSet.has(i)) continue
-      if (!strips[i].video_capable && freeAt[i] <= finalsStart) {
-        bronzeIdx = i
-        break
-      }
-    }
-    // Fallback to video strips
-    if (bronzeIdx === null) {
-      for (let i = 0; i < strips.length; i++) {
-        if (goldSet.has(i)) continue
-        if (strips[i].video_capable && freeAt[i] <= finalsStart) {
-          bronzeIdx = i
-          break
-        }
-      }
-    }
+    // Non-video preferred, fallback to video
+    bronzeIdx = findFreeBronzeStrip((video) => !video) ?? findFreeBronzeStrip((video) => video)
   }
 
   if (bronzeIdx === null) {
@@ -535,20 +512,15 @@ function allocateFlightedPools(
   const flightBRefsNeeded = Math.floor(refRes.refs_needed / 2)
 
   // Flight A
-  const windowA = earliestResourceWindow(
-    flightAPools, flightARefsNeeded,
-    competition.weapon, false, notBefore, day,
-    state, config, competition.id, Phase.FLIGHT_A,
-    poolContext,
+  const windowA = assertWindowFound(
+    earliestResourceWindow(
+      flightAPools, flightARefsNeeded,
+      competition.weapon, false, notBefore, day,
+      state, config, competition.id, Phase.FLIGHT_A,
+      poolContext,
+    ),
+    competition, Phase.FLIGHT_A, 'Flight A', day, state,
   )
-  if (windowA.type === 'NO_WINDOW') {
-    emitNoWindowDiagnostic(windowA.reason, competition.id, Phase.FLIGHT_A, day, state)
-    throw new SchedulingError(
-      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-      `No resource window for ${competition.id} Flight A on day ${day}`,
-    )
-  }
-  state.bottlenecks.push(...windowA.bottlenecks)
 
   const Ta = windowA.startTime
   const flightAEnd = Ta + flightADur.actual_duration
@@ -572,20 +544,15 @@ function allocateFlightedPools(
     )
   }
 
-  const windowB = earliestResourceWindow(
-    flightBPools, flightBRefsNeeded,
-    competition.weapon, false, flightBIdeal, day,
-    state, config, competition.id, Phase.FLIGHT_B,
-    poolContext,
+  const windowB = assertWindowFound(
+    earliestResourceWindow(
+      flightBPools, flightBRefsNeeded,
+      competition.weapon, false, flightBIdeal, day,
+      state, config, competition.id, Phase.FLIGHT_B,
+      poolContext,
+    ),
+    competition, Phase.FLIGHT_B, 'Flight B', day, state,
   )
-  if (windowB.type === 'NO_WINDOW') {
-    emitNoWindowDiagnostic(windowB.reason, competition.id, Phase.FLIGHT_B, day, state)
-    throw new SchedulingError(
-      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-      `No resource window for ${competition.id} Flight B on day ${day}`,
-    )
-  }
-  state.bottlenecks.push(...windowB.bottlenecks)
 
   const Tb = windowB.startTime
   const flightBEnd = Tb + flightBDur.actual_duration
@@ -645,33 +612,27 @@ function allocateNonFlightedPools(
   )
   partialResult.pool_duration_actual = poolDur.actual_duration
 
-  const window = earliestResourceWindow(
-    poolDur.effective_parallelism,
-    refRes.refs_needed,
-    competition.weapon,
-    false,
-    notBefore,
-    day,
-    state,
-    config,
-    competition.id,
-    Phase.POOLS,
-    poolContext,
+  const window = assertWindowFound(
+    earliestResourceWindow(
+      poolDur.effective_parallelism,
+      refRes.refs_needed,
+      competition.weapon,
+      false,
+      notBefore,
+      day,
+      state,
+      config,
+      competition.id,
+      Phase.POOLS,
+      poolContext,
+    ),
+    competition, Phase.POOLS, 'pools', day, state,
   )
-
-  if (window.type === 'NO_WINDOW') {
-    emitNoWindowDiagnostic(window.reason, competition.id, Phase.POOLS, day, state)
-    throw new SchedulingError(
-      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-      `No resource window found for ${competition.id} pools on day ${day}`,
-    )
-  }
 
   const T = window.startTime
   const poolEnd = T + poolDur.actual_duration
   allocateStrips(state, window.stripIndices, poolEnd, txLog)
   allocateRefs(state, day, competition.weapon, refRes.refs_needed, T, poolEnd, txLog)
-  state.bottlenecks.push(...window.bottlenecks)
 
   partialResult.pool_start = T
   partialResult.pool_end = poolEnd

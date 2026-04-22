@@ -26,6 +26,34 @@ const TOURNAMENT_TYPE_LABELS: Record<TournamentType, string> = {
 
 const TOURNAMENT_TYPES = Object.values(TournamentType)
 
+interface DayTimeSelectProps {
+  label: string
+  id: string
+  value: number
+  onChange: (value: number) => void
+}
+
+function DayTimeSelect({ label, id, value, onChange }: DayTimeSelectProps) {
+  return (
+    <>
+      <Label className="text-xs text-muted-foreground" htmlFor={id}>
+        {label}
+      </Label>
+      <Select value={String(value)} onValueChange={(v: string) => onChange(Number(v))}>
+        <SelectTrigger id={id} className="w-32">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {TIME_OPTIONS.map((t) => (
+            <SelectItem key={t} value={String(t)}>
+              {formatTime(t)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </>
+  )
+}
 
 export function TournamentSetup() {
   const tournamentType = useStore((s) => s.tournament_type)
@@ -95,46 +123,18 @@ export function TournamentSetup() {
               {dayConfigs.map((dc, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <span className="w-14 text-xs font-medium text-foreground">Day {i + 1}</span>
-                  <Label className="text-xs text-muted-foreground" htmlFor={`day-${i}-start`}>
-                    Start
-                  </Label>
-                  <Select
-                    value={String(dc.day_start_time)}
-                    onValueChange={(v: string) =>
-                      updateDayConfig(i, { day_start_time: Number(v) })
-                    }
-                  >
-                    <SelectTrigger id={`day-${i}-start`} className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIME_OPTIONS.map((t) => (
-                        <SelectItem key={t} value={String(t)}>
-                          {formatTime(t)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Label className="text-xs text-muted-foreground" htmlFor={`day-${i}-end`}>
-                    End
-                  </Label>
-                  <Select
-                    value={String(dc.day_end_time)}
-                    onValueChange={(v: string) =>
-                      updateDayConfig(i, { day_end_time: Number(v) })
-                    }
-                  >
-                    <SelectTrigger id={`day-${i}-end`} className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIME_OPTIONS.map((t) => (
-                        <SelectItem key={t} value={String(t)}>
-                          {formatTime(t)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <DayTimeSelect
+                    label="Start"
+                    id={`day-${i}-start`}
+                    value={dc.day_start_time}
+                    onChange={(v) => updateDayConfig(i, { day_start_time: v })}
+                  />
+                  <DayTimeSelect
+                    label="End"
+                    id={`day-${i}-end`}
+                    value={dc.day_end_time}
+                    onChange={(v) => updateDayConfig(i, { day_end_time: v })}
+                  />
                 </div>
               ))}
             </div>
