@@ -12,11 +12,8 @@ import {
 } from '../../src/engine/resources.ts'
 import type { PoolContext } from '../../src/engine/resources.ts'
 import { Weapon, Phase } from '../../src/engine/types.ts'
-import type { TournamentConfig, Strip, EventTxLog } from '../../src/engine/types.ts'
-import {
-  DEFAULT_POOL_ROUND_DURATION_TABLE,
-  DEFAULT_DE_DURATION_TABLE,
-} from '../../src/engine/constants.ts'
+import type { EventTxLog } from '../../src/engine/types.ts'
+import { makeConfig, makeStrips, makePoolContextConfig } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // Constants & Helpers
@@ -24,53 +21,6 @@ import {
 
 const STANDARD_STRIPS_TOTAL = 24
 const STANDARD_VIDEO_STRIPS = 4
-
-function makeStrips(total: number, videoCount: number): Strip[] {
-  return Array.from({ length: total }, (_, i) => ({
-    id: `strip-${i + 1}`,
-    video_capable: i < videoCount,
-  }))
-}
-
-function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig {
-  const strips = overrides.strips ?? makeStrips(24, 4)
-  return {
-    tournament_type: 'NAC',
-    days_available: 2,
-    strips,
-    strips_total: strips.length,
-    video_strips_total: strips.filter(s => s.video_capable).length,
-    referee_availability: [
-      { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
-      { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
-    ],
-    pod_captain_override: 'AUTO',
-    DAY_START_MINS: 480,
-    DAY_END_MINS: 1320,
-    LATEST_START_MINS: 960,
-    LATEST_START_OFFSET: 480,
-    SLOT_MINS: 30,
-    DAY_LENGTH_MINS: 840,
-    ADMIN_GAP_MINS: 15,
-    FLIGHT_BUFFER_MINS: 15,
-    THRESHOLD_MINS: 10,
-    DE_REFS: 1,
-    DE_FINALS_MIN_MINS: 30,
-    SAME_TIME_WINDOW_MINS: 30,
-    INDIV_TEAM_MIN_GAP_MINS: 120,
-    EARLY_START_THRESHOLD: 10,
-    MAX_RESCHEDULE_ATTEMPTS: 3,
-    MAX_FENCERS: 500,
-    MIN_FENCERS: 2,
-    pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
-    de_duration_table: DEFAULT_DE_DURATION_TABLE,
-    dayConfigs: [],
-    max_pool_strip_pct: 0.80,
-    max_de_strip_pct: 0.80,
-    de_capacity_mode: 'pod',
-    ...overrides,
-  }
-}
 
 // ──────────────────────────────────────────────
 // snapToSlot
@@ -443,41 +393,26 @@ describe('earliestResourceWindow NO_WINDOW reason', () => {
     }
   })
 
-  it('STRIPS reason — strip availability pushes T past latestStart', () => {
-    // 24 strips total. Request 4 strips with refs free.
-    // Strips 0-3 allocated until t=900 (past latestStart=960 after snap).
-    // findAvailableStrips returns WAIT_UNTIL(900) → candidate advances to 900.
-    // Next iteration: strips 0-3 are free at t=900, but stripFreeMax=900,
-    // T=snapToSlot(max(900,900,tRefs=0))=900 which is < latestStart=960. That succeeds.
+  it('strip scarcity surfaces as TIME reason (STRIPS branch proven unreachable)', () => {
+    // The STRIPS branch in diagNoWindowReason requires findAvailableStrips to return FOUND
+    // while stripFreeMax still pushes the candidate past latestStart. That cannot happen
+    // because findAvailableStrips only returns strips whose freeAt <= candidate, so
+    // stripFreeMax <= candidate always. Strip-caused failures arrive instead as WAIT_UNTIL,
+    // which snaps past latestStart and fires the TIME branch first.
     //
-    // Instead: allocate strips until t=1000. findAvailableStrips WAIT_UNTIL(1000) →
-    // snapToSlot(1000)=1020 > latestStart=960 → TIME reason fires from the first branch.
-    //
-    // To hit diagNoWindowReason's STRIPS path: findAvailableStrips must return FOUND,
-    // then stripFreeMax must push T past latestStart. This requires selected strips
-    // with freeAt in the past (free at candidate), but their freeAt stored > than refs.
-    // Since freeAt <= atTime for FOUND strips, stripFreeMax <= candidate always.
-    // The STRIPS path in diagNoWindowReason is reachable only when stripFreeMax > tRefs,
-    // which requires refs available immediately while strip selection succeeds but T
-    // overflows — this is practically unreachable because findAvailableStrips only
-    // returns strips whose freeAt <= candidate.
-    //
-    // This test verifies the WAIT_UNTIL inline STRIPS path instead.
+    // This test confirms that outcome: all 4 strips busy until t=9999, LATEST_START_OFFSET=60
+    // means latestStart=60. WAIT_UNTIL(9999) snaps to 10020 > 60 → NO_WINDOW with TIME reason.
     const config = makeConfig({
       strips: makeStrips(4, 0),
       LATEST_START_OFFSET: 60,
       DAY_LENGTH_MINS: 120,
     })
     const state = createGlobalState(config)
-    // All 4 strips busy until t=9999. Requesting 4, refsNeeded=0.
-    // findAvailableStrips → WAIT_UNTIL(9999), snap → 10020 > latestStart → TIME at line 419.
-    // This is correctly a TIME reason since the strips won't be free within the day.
     allocateStrips(state, [0, 1, 2, 3], 9999)
     const result = earliestResourceWindow(4, 0, Weapon.FOIL, false, 0, 0, state, config, 'comp-1', Phase.POOLS)
     expect(result.type).toBe('NO_WINDOW')
     if (result.type === 'NO_WINDOW') {
       expect(result.reason).toBeDefined()
-      // Strips are the root cause but the proximate failure is TIME (no window within day bounds)
       expect(result.reason?.kind).toBe('TIME')
     }
   })
@@ -650,49 +585,6 @@ describe('rollbackEvent', () => {
 describe('findAvailableStrips — poolContext video rule', () => {
   // 22 strips: 4 video (indices 0-3) + 18 non-video (indices 4-21)
   // 18 non-video free + 4 video free = 22 free; requesting 20 needs video overflow
-  function makePoolContextConfig(): TournamentConfig {
-    const strips: Strip[] = [
-      // 4 video strips
-      ...Array.from({ length: 4 }, (_, i) => ({ id: `video-${i}`, video_capable: true })),
-      // 18 non-video strips
-      ...Array.from({ length: 18 }, (_, i) => ({ id: `nonvideo-${i}`, video_capable: false })),
-    ]
-    return {
-      tournament_type: 'NAC',
-      days_available: 2,
-      strips,
-      strips_total: strips.length,
-      video_strips_total: 4,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' },
-      ],
-      pod_captain_override: 'AUTO',
-      DAY_START_MINS: 480,
-      DAY_END_MINS: 1320,
-      LATEST_START_MINS: 960,
-      LATEST_START_OFFSET: 480,
-      SLOT_MINS: 30,
-      DAY_LENGTH_MINS: 840,
-      ADMIN_GAP_MINS: 15,
-      FLIGHT_BUFFER_MINS: 15,
-      THRESHOLD_MINS: 10,
-      DE_REFS: 1,
-      DE_FINALS_MIN_MINS: 30,
-      SAME_TIME_WINDOW_MINS: 30,
-      INDIV_TEAM_MIN_GAP_MINS: 120,
-      EARLY_START_THRESHOLD: 10,
-      MAX_RESCHEDULE_ATTEMPTS: 3,
-      MAX_FENCERS: 500,
-      MIN_FENCERS: 2,
-      pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
-      de_duration_table: DEFAULT_DE_DURATION_TABLE,
-      dayConfigs: [],
-      max_pool_strip_pct: 1.0,
-      max_de_strip_pct: 0.80,
-      de_capacity_mode: 'pod',
-    }
-  }
 
   // dayStart(0, config) = 0 * 840 = 0
   // morning wave: atTime <= 0 + 60 = 60

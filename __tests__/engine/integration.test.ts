@@ -168,8 +168,6 @@ function assertScheduleIntegrity(
   const scheduled = Object.keys(schedule).length
   const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR).length
 
-  console.log(`  → ${competitions.length} events | ${scheduled} scheduled | ${errors} errors`)
-
   // At least some events scheduled (engine shouldn't totally fail)
   expect(scheduled).toBeGreaterThan(0)
 
@@ -223,6 +221,8 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
+      // B1: 24 events; engine must schedule at least 13 (baseline from real engine output)
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(13)
     })
   })
 
@@ -246,6 +246,8 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
+      // B2: 24 events; engine must schedule at least 9 (baseline from real engine output)
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
     })
   })
 
@@ -268,6 +270,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
+      // B3: 24 events; engine must schedule at least 5 (baseline from real engine output)
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(5)
     })
   })
 
@@ -292,6 +296,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
+      // B4: 30 events; engine must schedule at least 8 (baseline from real engine output)
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(8)
     })
   })
 
@@ -310,6 +316,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
+      // B5: 12 events; engine must schedule at least 3 (baseline from real engine output)
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(3)
     })
   })
 
@@ -342,6 +350,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
+      // B6: 54 events; engine must schedule at least 17 (baseline from real engine output)
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(17)
     })
   })
 
@@ -362,6 +372,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
+      // B7: 18 events; engine must schedule at least 4 (baseline from real engine output)
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(4)
     })
   })
 })

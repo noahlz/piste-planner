@@ -4,7 +4,7 @@ import {
   calculateFlightedStrips,
   validateFlightingGroup,
 } from '../../src/engine/flighting.ts'
-import { BottleneckCause, BottleneckSeverity, Category } from '../../src/engine/types.ts'
+import { BottleneckCause, BottleneckSeverity, Category, Gender, Weapon } from '../../src/engine/types.ts'
 import { makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
@@ -222,8 +222,8 @@ describe('validateFlightingGroup', () => {
   it('demographic conflict between grouped pair → warning with crossover score', () => {
     // CADET + DIV2: direct crossover edge (1.0), same gender and weapon → penalty > 0
     // CADET→DIV2 is in CROSSOVER_GRAPH[CADET] and is not GROUP_1_MANDATORY
-    const priority = makeCompetition({ id: 'pri', gender: 'MEN', weapon: 'FOIL', category: 'CADET', fencer_count: 105 })
-    const flighted = makeCompetition({ id: 'flt', gender: 'MEN', weapon: 'FOIL', category: 'DIV2', fencer_count: 84, flighted: true })
+    const priority = makeCompetition({ id: 'pri', gender: Gender.MEN, weapon: Weapon.FOIL, category: Category.CADET, fencer_count: 105 })
+    const flighted = makeCompetition({ id: 'flt', gender: Gender.MEN, weapon: Weapon.FOIL, category: Category.DIV2, fencer_count: 84, flighted: true })
 
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
     const dayAssignments: Record<string, number> = { pri: 0, flt: 0 }
@@ -239,8 +239,8 @@ describe('validateFlightingGroup', () => {
   })
 
   it('no demographic warning for different genders', () => {
-    const priority = makeCompetition({ id: 'pri', gender: 'MEN', weapon: 'FOIL', category: 'DIV1', fencer_count: 105 })
-    const flighted = makeCompetition({ id: 'flt', gender: 'WOMEN', weapon: 'FOIL', category: 'DIV1', fencer_count: 84, flighted: true })
+    const priority = makeCompetition({ id: 'pri', gender: Gender.MEN, weapon: Weapon.FOIL, category: Category.DIV1, fencer_count: 105 })
+    const flighted = makeCompetition({ id: 'flt', gender: Gender.WOMEN, weapon: Weapon.FOIL, category: Category.DIV1, fencer_count: 84, flighted: true })
 
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
     const dayAssignments: Record<string, number> = { pri: 0, flt: 0 }

@@ -5,6 +5,7 @@ import { TournamentType, PodCaptainOverride, BottleneckSeverity, BottleneckCause
 import type { ValidationError, Bottleneck, AnalysisResult, ScheduleResult } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import { DEFAULT_CUT_BY_CATEGORY, DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../src/engine/constants.ts'
+import { makeScheduleResult } from '../helpers/factories.ts'
 
 // Reset store to initial state before each test
 beforeEach(() => {
@@ -543,59 +544,6 @@ describe('analysisSlice', () => {
 // ──────────────────────────────────────────────
 
 describe('scheduleSlice', () => {
-  // Minimal ScheduleResult factory for testing
-  function makeScheduleResult(id: string): ScheduleResult {
-    return {
-      competition_id: id,
-      assigned_day: 0,
-      use_flighting: false,
-      is_priority: false,
-      flighting_group_id: null,
-      pool_start: null,
-      pool_end: null,
-      pool_strip_count: 0,
-      pool_refs_count: 0,
-      flight_a_start: null,
-      flight_a_end: null,
-      flight_a_strips: 0,
-      flight_a_refs: 0,
-      flight_b_start: null,
-      flight_b_end: null,
-      flight_b_strips: 0,
-      flight_b_refs: 0,
-      entry_fencer_count: 0,
-      promoted_fencer_count: 0,
-      bracket_size: 0,
-      cut_mode: 'DISABLED',
-      cut_value: 0,
-      de_mode: 'SINGLE_STAGE',
-      de_video_policy: 'BEST_EFFORT',
-      de_start: null,
-      de_end: null,
-      de_strip_count: 0,
-      de_prelims_start: null,
-      de_prelims_end: null,
-      de_prelims_strip_count: 0,
-      de_round_of_16_start: null,
-      de_round_of_16_end: null,
-      de_round_of_16_strip_count: 0,
-      de_finals_start: null,
-      de_finals_end: null,
-      de_finals_strip_count: 0,
-      de_bronze_start: null,
-      de_bronze_end: null,
-      de_bronze_strip_id: null,
-      de_total_end: null,
-      conflict_score: 0,
-      pool_duration_baseline: 0,
-      pool_duration_actual: 0,
-      de_duration_baseline: 0,
-      de_duration_actual: 0,
-      constraint_relaxation_level: 0,
-      accepted_warnings: [],
-    }
-  }
-
   describe('initial state', () => {
     it('scheduleResults is empty and bottlenecks is empty', () => {
       const state = useStore.getState()
@@ -607,8 +555,8 @@ describe('scheduleSlice', () => {
   describe('setScheduleResults', () => {
     it('stores results from scheduleAll', () => {
       const results: Record<string, ScheduleResult> = {
-        'CDT-M-FOIL-IND': makeScheduleResult('CDT-M-FOIL-IND'),
-        'JR-W-EPEE-IND': makeScheduleResult('JR-W-EPEE-IND'),
+        'CDT-M-FOIL-IND': makeScheduleResult('CDT-M-FOIL-IND', 0),
+        'JR-W-EPEE-IND': makeScheduleResult('JR-W-EPEE-IND', 0),
       }
       const bottlenecks: Bottleneck[] = [
         {
@@ -632,7 +580,7 @@ describe('scheduleSlice', () => {
   describe('clearSchedule', () => {
     it('resets schedule state', () => {
       useStore.getState().setScheduleResults(
-        { 'X': makeScheduleResult('X') },
+        { 'X': makeScheduleResult('X', 0) },
         [{ competition_id: 'X', phase: Phase.DE, cause: BottleneckCause.DEADLINE_BREACH, severity: BottleneckSeverity.ERROR, delay_mins: 30, message: 'late' }],
       )
 

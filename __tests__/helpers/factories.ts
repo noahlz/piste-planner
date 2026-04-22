@@ -2,7 +2,7 @@ import type { Competition, ScheduleResult, TournamentConfig, Strip } from '../..
 import {
   Category, Gender, Weapon,
   EventType, CutMode, DeMode, VideoPolicy,
-  RefPolicy, DeStripRequirement,
+  RefPolicy, DeStripRequirement, TournamentType, PodCaptainOverride, DeCapacityMode,
 } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -14,7 +14,7 @@ const DAY_START_8AM = 480
 const DAY_END_10PM = 1320
 const LATEST_START_4PM = 960
 
-type CompetitionKey = Pick<Competition, 'category' | 'gender' | 'weapon' | 'event_type' | 'id'>
+export type CompetitionKey = Pick<Competition, 'category' | 'gender' | 'weapon' | 'event_type' | 'id'>
 
 export function makeComp(
   id: string,
@@ -37,7 +37,7 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
   const strips = overrides.strips ?? makeStrips(24, 4)
   const days = overrides.days_available ?? 3
   return {
-    tournament_type: 'NAC',
+    tournament_type: TournamentType.NAC,
     days_available: days,
     strips,
     strips_total: strips.length,
@@ -48,7 +48,7 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
       three_weapon_refs: 10,
       source: 'ACTUAL' as const,
     })),
-    pod_captain_override: 'AUTO',
+    pod_captain_override: PodCaptainOverride.AUTO,
     DAY_START_MINS: DAY_START_8AM,
     DAY_END_MINS: DAY_END_10PM,
     LATEST_START_MINS: LATEST_START_4PM,
@@ -71,7 +71,7 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     dayConfigs: [],
     max_pool_strip_pct: 0.80,
     max_de_strip_pct: 0.80,
-    de_capacity_mode: 'pod',
+    de_capacity_mode: DeCapacityMode.POD,
     ...overrides,
   }
 }
@@ -107,6 +107,32 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
     max_pool_strip_pct_override: null,
     max_de_strip_pct_override: null,
     ...overrides,
+  }
+}
+
+/**
+ * Config with 4 video + 18 non-video strips (22 total) used by pool-context
+ * video-overflow tests. max_pool_strip_pct=1.0 so all strips may be used for pools.
+ */
+export function makePoolContextConfig(): TournamentConfig {
+  const strips: Strip[] = [
+    ...Array.from({ length: 4 }, (_, i) => ({ id: `video-${i}`, video_capable: true })),
+    ...Array.from({ length: 18 }, (_, i) => ({ id: `nonvideo-${i}`, video_capable: false })),
+  ]
+  return {
+    ...makeConfig({
+      strips,
+      strips_total: strips.length,
+      video_strips_total: 4,
+      days_available: 2,
+      max_pool_strip_pct: 1.0,
+      max_de_strip_pct: 0.80,
+    }),
+    referee_availability: [
+      { day: 0, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' as const },
+      { day: 1, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' as const },
+    ],
+    ADMIN_GAP_MINS: 15,
   }
 }
 

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   Category,
+  EventType,
   Gender,
+  TournamentType,
   Weapon,
   DeMode,
   VideoPolicy,
@@ -181,8 +183,14 @@ describe('scheduleAll — constraint scenarios', () => {
     // All events should still be scheduled (may have delays)
     expect(Object.keys(schedule)).toHaveLength(comps.length)
 
-    // Expect at least some bottlenecks from resource contention or scheduling pressure
-    expect(bottlenecks.length).toBeGreaterThan(0)
+    // Expect at least one resource-contention bottleneck from strip/ref pressure
+    const contentionCauses = new Set([
+      BottleneckCause.STRIP_CONTENTION,
+      BottleneckCause.REFEREE_CONTENTION,
+      BottleneckCause.STRIP_AND_REFEREE_CONTENTION,
+    ])
+    const contentionBottlenecks = bottlenecks.filter(b => contentionCauses.has(b.cause as typeof BottleneckCause.STRIP_CONTENTION))
+    expect(contentionBottlenecks.length).toBeGreaterThan(0)
   })
 
   it('zero video strips produces no VIDEO_STRIP_CONTENTION bottlenecks', () => {
@@ -535,7 +543,7 @@ describe('scheduleAll — graceful degradation on resource exhaustion', () => {
     // Using diverse demographics (different category/gender/weapon per pair) avoids
     // triggering same-population validation errors.
     const config = makeConfig({
-      tournament_type: 'RJCC',
+      tournament_type: TournamentType.RJCC,
       days_available: 2,
       strips: makeStrips(4, 0),
       referee_availability: Array.from({ length: 2 }, (_, i) => ({
@@ -545,16 +553,16 @@ describe('scheduleAll — graceful degradation on resource exhaustion', () => {
 
     // 10 competitions each wanting all 4 strips, across enough demographic variation
     // to avoid same-population errors (max 2 per population for 2 days)
-    const weapons = ['FOIL', 'EPEE', 'SABRE'] as const
-    const genders = ['MEN', 'WOMEN'] as const
-    const categories = ['DIV1', 'DIV1A', 'DIV2', 'DIV3', 'JUNIOR', 'CADET'] as const
+    const weapons = [Weapon.FOIL, Weapon.EPEE, Weapon.SABRE] as const
+    const genders = [Gender.MEN, Gender.WOMEN] as const
+    const categories = [Category.DIV1, Category.DIV1A, Category.DIV2, Category.DIV3, Category.JUNIOR, Category.CADET] as const
     const competitions: Competition[] = Array.from({ length: 10 }, (_, i) =>
       makeCompetition({
         id: `COMP-${i}`,
         gender: genders[i % 2],
         category: categories[i % categories.length],
         weapon: weapons[i % 3],
-        event_type: 'INDIVIDUAL',
+        event_type: EventType.INDIVIDUAL,
         fencer_count: 16,
         strips_allocated: 4,
         // Wide-open time window so validation doesn't reject on earliest/latest
@@ -566,10 +574,10 @@ describe('scheduleAll — graceful degradation on resource exhaustion', () => {
     // Should NOT throw — should return partial results
     const result = scheduleAll(competitions, config)
 
-    // At least some competitions should have been scheduled
-    expect(Object.keys(result.schedule).length).toBeGreaterThan(0)
-    // But not all — some should have failed
-    expect(Object.keys(result.schedule).length).toBeLessThan(competitions.length)
+    // At least 2 competitions should have been scheduled (4 strips supports ≥ 2 events)
+    expect(Object.keys(result.schedule).length).toBeGreaterThanOrEqual(2)
+    // But not all — at least 2 should have failed given strip exhaustion across 10 events
+    expect(Object.keys(result.schedule).length).toBeLessThanOrEqual(competitions.length - 2)
     // Failed competitions produce ERROR bottlenecks
     const errorBottlenecks = result.bottlenecks.filter(
       (b) => b.severity === BottleneckSeverity.ERROR,
@@ -652,7 +660,7 @@ describe('scheduleAll — repair loop', () => {
     // Both days are 30 min with 1 strip — 100 fencers need far more time and strips.
     // Neither the coloring-assigned day nor any repair alternative can fit.
     const config = makeConfig({
-      tournament_type: 'RJCC',
+      tournament_type: TournamentType.RJCC,
       days_available: 2,
       dayConfigs: [
         { day_start_time: 0, day_end_time: 30 },

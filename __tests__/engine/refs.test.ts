@@ -1,89 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { podCaptainsNeeded, refsAvailableOnDay, calculateOptimalRefs, preliminaryDayAssign } from '../../src/engine/refs.ts'
-import { PodCaptainOverride, DeMode, Weapon, Category, Gender, Phase } from '../../src/engine/types.ts'
-import type { TournamentConfig, DayRefereeAvailability, Competition } from '../../src/engine/types.ts'
-import {
-  DEFAULT_POOL_ROUND_DURATION_TABLE,
-  DEFAULT_DE_DURATION_TABLE,
-} from '../../src/engine/constants.ts'
+import { PodCaptainOverride, DeMode, Weapon, Category, Gender, Phase, RefPolicy } from '../../src/engine/types.ts'
+import type { DayRefereeAvailability } from '../../src/engine/types.ts'
+import { makeConfig, makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
 
-function makeConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfig {
-  return {
-    tournament_type: 'NAC',
-    days_available: 2,
-    strips: [],
-    strips_total: 12,
-    video_strips_total: 2,
-    referee_availability: [],
-    pod_captain_override: PodCaptainOverride.AUTO,
-    DAY_START_MINS: 480,
-    DAY_END_MINS: 1320,
-    LATEST_START_MINS: 960,
-    LATEST_START_OFFSET: 480,
-    SLOT_MINS: 30,
-    DAY_LENGTH_MINS: 840,
-    ADMIN_GAP_MINS: 15,
-    FLIGHT_BUFFER_MINS: 15,
-    THRESHOLD_MINS: 10,
-    DE_REFS: 1,
-    DE_FINALS_MIN_MINS: 30,
-    SAME_TIME_WINDOW_MINS: 30,
-    INDIV_TEAM_MIN_GAP_MINS: 120,
-    EARLY_START_THRESHOLD: 10,
-    MAX_RESCHEDULE_ATTEMPTS: 3,
-    MAX_FENCERS: 500,
-    MIN_FENCERS: 2,
-    pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
-    de_duration_table: DEFAULT_DE_DURATION_TABLE,
-    dayConfigs: [],
-    max_pool_strip_pct: 0.80,
-    max_de_strip_pct: 0.80,
-    de_capacity_mode: 'pod',
-    ...overrides,
-  }
-}
-
 function makeAvailability(day: number, foil_epee_refs: number, three_weapon_refs: number): DayRefereeAvailability {
   return { day, foil_epee_refs, three_weapon_refs, source: 'ACTUAL' }
-}
-
-// Minimal Competition factory — only fields refs.ts needs
-function makeCompetition(overrides: Partial<Competition> = {}): Competition {
-  return {
-    id: 'test-comp',
-    gender: 'MEN',
-    category: 'DIV1',
-    weapon: Weapon.FOIL,
-    event_type: 'INDIVIDUAL',
-    fencer_count: 32,
-    ref_policy: 'AUTO',
-    earliest_start: 0,
-    latest_end: 840,
-    optional: false,
-    vet_age_group: null,
-    use_single_pool_override: false,
-    cut_mode: 'DISABLED',
-    cut_value: 100,
-    de_mode: DeMode.SINGLE_STAGE,
-    de_video_policy: 'BEST_EFFORT',
-    de_finals_strip_id: null,
-    de_finals_strip_requirement: 'IF_AVAILABLE',
-    de_round_of_16_strips: 4,
-    de_round_of_16_requirement: 'IF_AVAILABLE',
-    de_finals_strips: 4,
-    de_finals_requirement: 'IF_AVAILABLE',
-    flighted: false,
-    flighting_group_id: null,
-    is_priority: false,
-    strips_allocated: 4,
-    max_pool_strip_pct_override: null,
-    max_de_strip_pct_override: null,
-    ...overrides,
-  }
 }
 
 // ──────────────────────────────────────────────
@@ -317,8 +243,8 @@ describe('calculateOptimalRefs', () => {
     // With ONE policy: n_pools × 1 refs. With TWO policy: n_pools × 2 refs.
     // 18 fencers → 3 pools. ONE = 3, TWO = 6. Peak = max(pool, DE).
     const config = makeConfig({ days_available: 1 })
-    const compONE = makeCompetition({ id: 'foil-one', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: 'ONE' })
-    const compTWO = makeCompetition({ id: 'foil-two', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: 'TWO' })
+    const compONE = makeCompetition({ id: 'foil-one', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: RefPolicy.ONE })
+    const compTWO = makeCompetition({ id: 'foil-two', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: RefPolicy.TWO })
 
     const resultONE = calculateOptimalRefs([compONE], config)
     const resultTWO = calculateOptimalRefs([compTWO], config)
@@ -329,8 +255,8 @@ describe('calculateOptimalRefs', () => {
   it('AUTO policy yields same ref count as TWO policy for small pool count', () => {
     // AUTO tries 2 refs per pool first, identical to TWO for the peak estimate
     const config = makeConfig({ days_available: 1 })
-    const compAUTO = makeCompetition({ id: 'foil-auto', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: 'AUTO' })
-    const compTWO = makeCompetition({ id: 'foil-two', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: 'TWO' })
+    const compAUTO = makeCompetition({ id: 'foil-auto', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: RefPolicy.AUTO })
+    const compTWO = makeCompetition({ id: 'foil-two', weapon: Weapon.FOIL, fencer_count: 18, ref_policy: RefPolicy.TWO })
 
     const resultAUTO = calculateOptimalRefs([compAUTO], config)
     const resultTWO = calculateOptimalRefs([compTWO], config)

@@ -334,7 +334,7 @@ describe('URL round-trip: encodeToUrl → decodeFromUrl', () => {
 })
 
 describe('URL size warning', () => {
-  it('warns when encoded payload exceeds 2KB', () => {
+  it('encoded payload can exceed 2KB', () => {
     // Create a state with many competitions to inflate size
     const store = useStore
     store.setState(store.getInitialState())
