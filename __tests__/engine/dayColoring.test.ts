@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { assignDaysByColoring } from '../../src/engine/dayColoring.ts'
+import { assignDaysByColoring, capacityPenalty } from '../../src/engine/dayColoring.ts'
 import type { ConstraintGraph } from '../../src/engine/constraintGraph.ts'
-import { makeCompetition, makeConfig } from '../helpers/factories.ts'
+import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { Category, Gender, Weapon, EventType } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
@@ -263,19 +263,136 @@ describe('assignDaysByColoring', () => {
   })
 
   it('assigns all days within [0, effectiveDays)', () => {
+    // Tiny events so capacity-aware expansion never triggers. With no edges
+    // and low strip-hours the coloring collapses to a single day.
     const comps = Array.from({ length: 5 }, (_, i) =>
-      makeCompetition({ id: `c${i}` }),
+      makeCompetition({ id: `c${i}`, fencer_count: 2, strips_allocated: 2 }),
     )
     const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
     const config = makeConfig({ days_available: 3 })
 
     const { dayMap, effectiveDays } = assignDaysByColoring(graph, comps, config)
 
-    // No constraints → all on 1 day
+    // No constraints and negligible capacity demand → all on 1 day
     expect(effectiveDays).toBe(1)
     for (const [, day] of dayMap) {
       expect(day).toBeGreaterThanOrEqual(0)
       expect(day).toBeLessThan(effectiveDays)
     }
+  })
+
+  it('expands effectiveDays to the days_available cap when capacity heavily exceeds one day', () => {
+    // No edges → chromatic number = 1. Six large DIV1 events vastly exceed
+    // one day's capacity (dayCap = 24 strips × 14 h = 336 SH; each event's
+    // weighted SH is in the tens, so 6 × ~75 = ~450 SH easily saturates
+    // capacityDays beyond 4). Expansion should hit the min(days_available,
+    // MAX_EXPANDED_DAYS) = 4 cap and place every event.
+    const comps = Array.from({ length: 6 }, (_, i) =>
+      makeCompetition({
+        id: `big${i}`,
+        fencer_count: 120,
+        category: Category.DIV1,
+        strips_allocated: 20,
+      }),
+    )
+    const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
+    const config = makeConfig({ days_available: 4 })
+
+    const { effectiveDays, dayMap } = assignDaysByColoring(graph, comps, config)
+
+    expect(effectiveDays).toBe(4)
+    expect(dayMap.size).toBe(6)
+  })
+
+  it('days_available=1 suppresses expansion even when capacity demand is high', () => {
+    // Even with huge capacity pressure, expansionCap = min(1, 4) = 1 forces
+    // effectiveDays = max(chromaticN, min(capacityDays, 1)) = 1.
+    const comps = Array.from({ length: 6 }, (_, i) =>
+      makeCompetition({
+        id: `big${i}`,
+        fencer_count: 120,
+        category: Category.DIV1,
+        strips_allocated: 20,
+      }),
+    )
+    const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
+    const config = makeConfig({ days_available: 1 })
+
+    const { effectiveDays } = assignDaysByColoring(graph, comps, config)
+
+    expect(effectiveDays).toBe(1)
+  })
+
+  it('chromatic number is a hard floor that expansion cannot lower', () => {
+    // 3 mutually hard-conflicting tiny events: chromaticN = 3. Their total
+    // strip-hours is negligible, so capacityDays ≈ 1 — but effectiveDays must
+    // stay at 3 because hard constraints require 3 distinct colors.
+    const comps = [
+      makeCompetition({ id: 'c1', fencer_count: 2, strips_allocated: 2 }),
+      makeCompetition({ id: 'c2', fencer_count: 2, strips_allocated: 2 }),
+      makeCompetition({ id: 'c3', fencer_count: 2, strips_allocated: 2 }),
+    ]
+    const graph = buildGraph([
+      ['c1', 'c2', Infinity],
+      ['c2', 'c3', Infinity],
+      ['c1', 'c3', Infinity],
+    ])
+    const config = makeConfig({ days_available: 5 })
+
+    const { effectiveDays } = assignDaysByColoring(graph, comps, config)
+
+    expect(effectiveDays).toBe(3)
+  })
+
+  it('Phase 2 load-balances unconstrained events away from non-empty days', () => {
+    // Tight config: 2 strips × 14h = 28 SH/day. With a single big DIV1 event
+    // placed first, Phase 2's per-event flat LOAD_BALANCE_FULLNESS plus the
+    // capacity penalty together steer an unconstrained candidate to the other
+    // day. (This scenario alone does not isolate the capacity term — see
+    // 'capacityPenalty ramp' below for that.)
+    const big = makeCompetition({
+      id: 'big',
+      fencer_count: 120,
+      category: Category.DIV1,
+      strips_allocated: 20,
+    })
+    const candidate = makeCompetition({
+      id: 'candidate',
+      fencer_count: 8,
+      category: Category.Y8,
+      strips_allocated: 2,
+    })
+    const graph: ConstraintGraph = new Map([
+      ['big', []],
+      ['candidate', []],
+    ])
+    const config = makeConfig({
+      days_available: 2,
+      strips: makeStrips(2, 0),
+    })
+    const { dayMap } = assignDaysByColoring(graph, [big, candidate], config)
+
+    expect(dayMap.get('candidate')).not.toBe(dayMap.get('big'))
+  })
+})
+
+describe('capacityPenalty ramp', () => {
+  it('returns 0 below the 0.85 threshold', () => {
+    expect(capacityPenalty(0)).toBe(0)
+    expect(capacityPenalty(0.5)).toBe(0)
+    expect(capacityPenalty(0.85)).toBe(0)
+  })
+
+  it('ramps linearly from 0 at 0.85 to 3.0 at 1.0', () => {
+    // Mid-ramp: 0.925 → ~1.5
+    expect(capacityPenalty(0.925)).toBeCloseTo(1.5, 3)
+    expect(capacityPenalty(1.0)).toBeCloseTo(3.0, 3)
+  })
+
+  it('applies a steep overflow ramp above 1.0 and caps at OVERFLOW_PENALTY', () => {
+    // 10% overflow → 3.0 + 0.1 * 10 = 4.0
+    expect(capacityPenalty(1.1)).toBeCloseTo(4.0, 3)
+    // Far past overflow is clamped at CAPACITY_PENALTY_CURVE.OVERFLOW_PENALTY (20.0)
+    expect(capacityPenalty(10)).toBe(20.0)
   })
 })

@@ -16,12 +16,19 @@
  * events), the O(n³) runtime is negligible.
  *
  * Standard DSatur minimizes chromatic number (fewest days) but does not
- * balance load across those days. This module uses two phases:
+ * balance load across those days. This module uses two phases with a
+ * capacity-aware expansion step between them:
  *   Phase 1 – run DSatur without load-balancing penalties to discover the
  *             minimum number of days (the effective chromatic number).
- *   Phase 2 – rerun DSatur with load-balancing penalties active, capped to
- *             the effective day count from Phase 1, so events spread evenly
- *             across the minimum set of days.
+ *   Expand  – if total weighted strip-hours exceed what chromaticN days can
+ *             absorb at CAPACITY_TARGET_FILL, raise the day count up to a
+ *             cap of min(config.days_available, MAX_EXPANDED_DAYS). The
+ *             chromatic number is always a floor so hard constraints remain
+ *             satisfied.
+ *   Phase 2 – rerun DSatur with capacity-aware load-balancing penalties
+ *             active, capped to the expanded day count from the step above.
+ *             A day's penalty rises with its fill ratio (strip-hours /
+ *             day capacity), steering events toward less-loaded days.
  *
  * References:
  *   - DSatur algorithm: https://en.wikipedia.org/wiki/DSatur
@@ -31,20 +38,61 @@
 import type { Competition, TournamentConfig } from './types.ts'
 import { EventType } from './types.ts'
 import type { ConstraintGraph } from './constraintGraph.ts'
-import { categoryWeight } from './capacity.ts'
+import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
 import { getProximityWeight } from './crossover.ts'
 import {
   REST_DAY_PAIRS,
   INDIV_TEAM_RELAXABLE_BLOCKS,
   PENALTY_WEIGHTS,
+  CAPACITY_PENALTY_CURVE,
 } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // Load-balancing constants
 // ──────────────────────────────────────────────
 
-/** Per-event cost for adding to an already-used day. Nudges toward even distribution. */
+/**
+ * Per-event base cost for adding to an already-used day. Provides uniform
+ * spread pressure when capacity fill is low. Matches the pre-Stage-5 flat
+ * load balance so small tournaments that never saturate capacity behave the
+ * same as before.
+ */
 const LOAD_BALANCE_FULLNESS = 0.5
+
+/**
+ * Upper bound on how many days Phase 2 is allowed to use, independent of the
+ * user's `days_available` setting. USA Fencing tournaments beyond 4 days are
+ * uncommon; capping at 4 prevents runaway expansion.
+ */
+const MAX_EXPANDED_DAYS = 4
+
+/**
+ * "Target fill" used when estimating capacity-demanded days. estimateComp
+ * StripHours models raw parallel work and underestimates real scheduling
+ * capacity pressure (LATEST_START cutoffs, DE tails, video strip serialization),
+ * so a conservative target leaves headroom. 0.3 means we aim to keep each
+ * day's raw strip-hour fill at ~30% before expanding.
+ */
+const CAPACITY_TARGET_FILL = 0.3
+
+/**
+ * Capacity penalty for a candidate day's fill ratio. Exported for unit tests.
+ *
+ * We only penalize approaching / past 100% fill. Earlier-triggering curves
+ * (starting at 60% fill) over-steered events in mid-loaded days and caused
+ * regressions in large multi-day tournaments where several days naturally
+ * land in the 0.6-0.8 range. Keeping the ramp near 1.0 targets the actual
+ * failure mode: packing a day past its raw strip-hour capacity.
+ */
+export function capacityPenalty(fillRatio: number): number {
+  if (fillRatio <= 0.85) return 0
+  if (fillRatio <= 1.0) {
+    // Linear ramp 0.85 → 1.0 mapping to 0 → 3.0
+    return (fillRatio - 0.85) / 0.15 * 3.0
+  }
+  // Past capacity: strong push. OVERFLOW_PENALTY provides upper cap.
+  return Math.min(CAPACITY_PENALTY_CURVE.OVERFLOW_PENALTY, 3.0 + (fillRatio - 1.0) * 10.0)
+}
 
 // ──────────────────────────────────────────────
 // Internal helpers
@@ -147,6 +195,8 @@ function colorPenalty(
   competitions: Competition[],
   relaxedEdges: Set<string>, // edges temporarily relaxed to soft for this vertex
   loadBalance: boolean,
+  stripHoursMap: Map<string, number>,
+  dayCapacity: number,
 ): number {
   const edges = graph.get(id) ?? []
   const self = compMap.get(id)!
@@ -187,14 +237,21 @@ function colorPenalty(
   // Individual/team ordering
   total += individualTeamOrderingPenalty(self, c, competitions, coloring)
 
-  // Load balancing: penalize days proportionally to how many events are
-  // already assigned there. Only active in Phase 2 (loadBalance = true).
+  // Load balancing: per-event flat cost plus staged capacity-fill penalty.
+  // Only active in Phase 2.
   if (loadBalance) {
+    let sumStripHours = 0
     let eventsOnDay = 0
-    for (const day of coloring.values()) {
-      if (day === c) eventsOnDay++
+    for (const [otherId, otherDay] of coloring) {
+      if (otherDay === c) {
+        sumStripHours += stripHoursMap.get(otherId) ?? 0
+        eventsOnDay++
+      }
     }
     total += eventsOnDay * LOAD_BALANCE_FULLNESS
+    if (dayCapacity > 0) {
+      total += capacityPenalty(sumStripHours / dayCapacity)
+    }
   }
 
   return total
@@ -258,6 +315,8 @@ function dsaturLoop(
   compMap: Map<string, Competition>,
   packingFootprint: Map<string, number>,
   loadBalance: boolean,
+  stripHoursMap: Map<string, number>,
+  dayCapacity: number,
 ): { coloring: Map<string, number>; relaxations: Map<string, number> } {
   const coloring = new Map<string, number>()
   const relaxations = new Map<string, number>()
@@ -315,9 +374,9 @@ function dsaturLoop(
     let chosenColor: number
     if (validColors.length > 0) {
       let bestColor = validColors[0]
-      let bestPenalty = colorPenalty(id, validColors[0], graph, coloring, compMap, competitions, new Set(), loadBalance)
+      let bestPenalty = colorPenalty(id, validColors[0], graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
       for (let ci = 1; ci < validColors.length; ci++) {
-        const p = colorPenalty(id, validColors[ci], graph, coloring, compMap, competitions, new Set(), loadBalance)
+        const p = colorPenalty(id, validColors[ci], graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
         if (p < bestPenalty) {
           bestPenalty = p
           bestColor = validColors[ci]
@@ -343,9 +402,9 @@ function dsaturLoop(
 
         if (relaxedValidColors.length > 0) {
           let bestColor = relaxedValidColors[0]
-          let bestPenalty = colorPenalty(id, relaxedValidColors[0], graph, coloring, compMap, competitions, relaxable, loadBalance)
+          let bestPenalty = colorPenalty(id, relaxedValidColors[0], graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
           for (let ci = 1; ci < relaxedValidColors.length; ci++) {
-            const p = colorPenalty(id, relaxedValidColors[ci], graph, coloring, compMap, competitions, relaxable, loadBalance)
+            const p = colorPenalty(id, relaxedValidColors[ci], graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
             if (p < bestPenalty) {
               bestPenalty = p
               bestColor = relaxedValidColors[ci]
@@ -355,9 +414,9 @@ function dsaturLoop(
         } else {
           // Still no valid color — pick least-bad color
           chosenColor = 0
-          let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, relaxable, loadBalance)
+          let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
           for (let c = 1; c < nDays; c++) {
-            const p = colorPenalty(id, c, graph, coloring, compMap, competitions, relaxable, loadBalance)
+            const p = colorPenalty(id, c, graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
             if (p < bestPenalty) {
               bestPenalty = p
               chosenColor = c
@@ -367,9 +426,9 @@ function dsaturLoop(
       } else {
         // No relaxable edges — pick least-bad color
         chosenColor = 0
-        let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, new Set(), loadBalance)
+        let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
         for (let c = 1; c < nDays; c++) {
-          const p = colorPenalty(id, c, graph, coloring, compMap, competitions, new Set(), loadBalance)
+          const p = colorPenalty(id, c, graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
           if (p < bestPenalty) {
             bestPenalty = p
             chosenColor = c
@@ -418,12 +477,44 @@ export function assignDaysByColoring(
     packingFootprint.set(c.id, c.strips_allocated * categoryWeight(c))
   }
 
-  // Phase 1: find minimum days (no load balancing)
-  const phase1 = dsaturLoop(graph, competitions, config.days_available, compMap, packingFootprint, false)
-  const effectiveDays = new Set(phase1.coloring.values()).size
+  // Precompute strip-hours per competition (capacity-weighted for load balancing).
+  // Multiplying by categoryWeight gives heavyweight categories (DIV1, JUNIOR,
+  // CADET) more effective footprint than their raw strip-hours, so capacity
+  // scoring treats a 300-fencer DIV1 event as heavier than a 300-fencer DIV3.
+  const stripHoursMap = new Map<string, number>()
+  let totalStripHours = 0
+  for (const c of competitions) {
+    const raw = estimateCompetitionStripHours(c, config).total_strip_hours
+    const weighted = raw * categoryWeight(c)
+    stripHoursMap.set(c.id, weighted)
+    totalStripHours += weighted
+  }
 
-  // Phase 2: rebalance within minimum day count
-  const phase2 = dsaturLoop(graph, competitions, effectiveDays, compMap, packingFootprint, true)
+  const dayCapacity = config.strips_total * (config.DAY_LENGTH_MINS / 60)
+
+  // Phase 1: find minimum days (no load balancing). Passes stripHoursMap +
+  // dayCapacity for signature uniformity but they're unused when loadBalance=false.
+  const phase1 = dsaturLoop(
+    graph, competitions, config.days_available, compMap, packingFootprint,
+    false, stripHoursMap, dayCapacity,
+  )
+  const chromaticN = new Set(phase1.coloring.values()).size
+
+  // Day expansion: if raw capacity demand exceeds what chromaticN days can
+  // absorb at a reasonable fill target, expand — capped at the user's
+  // days_available and at MAX_EXPANDED_DAYS. chromaticN is always a floor
+  // (hard constraints must be respected).
+  const capacityDays = dayCapacity > 0
+    ? Math.ceil(totalStripHours / (dayCapacity * CAPACITY_TARGET_FILL))
+    : chromaticN
+  const expansionCap = Math.min(config.days_available, MAX_EXPANDED_DAYS)
+  const effectiveDays = Math.max(chromaticN, Math.min(capacityDays, expansionCap))
+
+  // Phase 2: rebalance with capacity-aware fill-ratio penalty.
+  const phase2 = dsaturLoop(
+    graph, competitions, effectiveDays, compMap, packingFootprint,
+    true, stripHoursMap, dayCapacity,
+  )
 
   // Compact day assignments to contiguous 0..k-1
   const dayRemap = new Map<number, number>()
@@ -432,5 +523,5 @@ export function assignDaysByColoring(
   const dayMap = new Map<string, number>()
   for (const [id, day] of phase2.coloring) dayMap.set(id, dayRemap.get(day)!)
 
-  return { dayMap, relaxations: phase2.relaxations, effectiveDays }
+  return { dayMap, relaxations: phase2.relaxations, effectiveDays: sortedUsed.length }
 }
