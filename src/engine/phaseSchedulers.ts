@@ -189,12 +189,26 @@ export function schedulePoolPhase(
   partialResult.pool_duration_baseline = wDuration
 
   let poolEnd: number
+  const poolAllocCtx: PoolAllocationContext = {
+    competition,
+    poolStructure,
+    refRes,
+    wDuration,
+    notBefore: effectiveNotBefore,
+    day,
+    state,
+    config,
+    partialResult,
+    txLog,
+    poolContext,
+  }
+
   if (competition.flighted && competition.flighting_group_id === null) {
     // Standalone flighted
-    poolEnd = allocateFlightedPools(competition, poolStructure, refRes, wDuration, effectiveNotBefore, day, state, config, partialResult, txLog, poolContext)
+    poolEnd = allocateFlightedPools(poolAllocCtx)
   } else {
     // Non-flighted (or flighting group — treated as non-flighted for pool allocation)
-    poolEnd = allocateNonFlightedPools(competition, poolStructure, refRes, wDuration, effectiveNotBefore, day, state, config, partialResult, txLog, poolContext)
+    poolEnd = allocateNonFlightedPools(poolAllocCtx)
   }
 
   return { poolEnd }
@@ -475,19 +489,34 @@ export function scheduleBronzePhase(
 // Internal helpers (flighted / non-flighted pool allocation)
 // ──────────────────────────────────────────────
 
-function allocateFlightedPools(
-  competition: Competition,
-  poolStructure: ReturnType<typeof computePoolStructure>,
-  refRes: ReturnType<typeof resolveRefsPerPool>,
-  wDuration: number,
-  notBefore: number,
-  day: number,
-  state: GlobalState,
-  config: TournamentConfig,
-  partialResult: PartialScheduleResult,
-  txLog: EventTxLog,
-  poolContext?: PoolContext,
-): number {
+/** Shared parameter bundle for pool-allocation helpers. */
+interface PoolAllocationContext {
+  competition: Competition
+  poolStructure: ReturnType<typeof computePoolStructure>
+  refRes: ReturnType<typeof resolveRefsPerPool>
+  wDuration: number
+  notBefore: number
+  day: number
+  state: GlobalState
+  config: TournamentConfig
+  partialResult: PartialScheduleResult
+  txLog: EventTxLog
+  poolContext?: PoolContext
+}
+
+function allocateFlightedPools({
+  competition,
+  poolStructure,
+  refRes,
+  wDuration,
+  notBefore,
+  day,
+  state,
+  config,
+  partialResult,
+  txLog,
+  poolContext,
+}: PoolAllocationContext): number {
   const flightAPools = Math.ceil(poolStructure.n_pools / 2)
   const flightBPools = Math.floor(poolStructure.n_pools / 2)
   const availRefs = refsAvailableOnDay(day, competition.weapon, config)
@@ -584,19 +613,19 @@ function allocateFlightedPools(
   return flightBEnd
 }
 
-function allocateNonFlightedPools(
-  competition: Competition,
-  poolStructure: ReturnType<typeof computePoolStructure>,
-  refRes: ReturnType<typeof resolveRefsPerPool>,
-  wDuration: number,
-  notBefore: number,
-  day: number,
-  state: GlobalState,
-  config: TournamentConfig,
-  partialResult: PartialScheduleResult,
-  txLog: EventTxLog,
-  poolContext?: PoolContext,
-): number {
+function allocateNonFlightedPools({
+  competition,
+  poolStructure,
+  refRes,
+  wDuration,
+  notBefore,
+  day,
+  state,
+  config,
+  partialResult,
+  txLog,
+  poolContext,
+}: PoolAllocationContext): number {
   const availRefs = refsAvailableOnDay(day, competition.weapon, config)
   const effectiveCap = computeStripCap(
     config.strips_total,
