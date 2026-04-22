@@ -8,9 +8,11 @@ import {
   releaseRefs,
   earliestResourceWindow,
   snapToSlot,
+  rollbackEvent,
 } from '../../src/engine/resources.ts'
+import type { PoolContext } from '../../src/engine/resources.ts'
 import { Weapon, Phase } from '../../src/engine/types.ts'
-import type { TournamentConfig, Strip } from '../../src/engine/types.ts'
+import type { TournamentConfig, Strip, EventTxLog } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
   DEFAULT_DE_DURATION_TABLE,
@@ -500,6 +502,269 @@ describe('earliestResourceWindow NO_WINDOW reason', () => {
     expect(result.type).toBe('NO_WINDOW')
     if (result.type === 'NO_WINDOW') {
       expect(result.reason?.kind).toBe('REFS')
+    }
+  })
+})
+
+// ──────────────────────────────────────────────
+// rollbackEvent
+// ──────────────────────────────────────────────
+
+describe('rollbackEvent', () => {
+  function makeTxLog(): EventTxLog {
+    return { stripChanges: [], refEvents: [] }
+  }
+
+  it('strip rollback: restores strip_free_at to pre-allocation values and clears txLog', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    // All strips start at 0 (dayStart(0) with empty dayConfigs)
+    const initialFreeAt = state.strip_free_at[0]
+    expect(initialFreeAt).toBe(0)
+
+    const txLog = makeTxLog()
+    allocateStrips(state, [0, 1, 2], 600, txLog)
+
+    // Verify allocation took effect
+    expect(state.strip_free_at[0]).toBe(600)
+    expect(state.strip_free_at[1]).toBe(600)
+    expect(state.strip_free_at[2]).toBe(600)
+    expect(txLog.stripChanges).toHaveLength(3)
+
+    rollbackEvent(state, txLog)
+
+    // All three strips restored to initial value (0)
+    expect(state.strip_free_at[0]).toBe(0)
+    expect(state.strip_free_at[1]).toBe(0)
+    expect(state.strip_free_at[2]).toBe(0)
+    // txLog is cleared
+    expect(txLog.stripChanges).toHaveLength(0)
+    expect(txLog.refEvents).toHaveLength(0)
+  })
+
+  it('ref rollback: restores foil_epee_in_use and release_events and clears txLog', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+
+    const txLog = makeTxLog()
+    allocateRefs(state, 0, Weapon.FOIL, 3, 480, 600, txLog)
+
+    const dayRefs = state.refs_in_use_by_day[0]
+    expect(dayRefs.foil_epee_in_use).toBe(3)
+    expect(dayRefs.release_events).toHaveLength(1)
+    expect(txLog.refEvents).toHaveLength(1)
+
+    rollbackEvent(state, txLog)
+
+    expect(dayRefs.foil_epee_in_use).toBe(0)
+    expect(dayRefs.release_events).toHaveLength(0)
+    expect(txLog.stripChanges).toHaveLength(0)
+    expect(txLog.refEvents).toHaveLength(0)
+  })
+
+  it('combined rollback: strips AND refs both restored', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+
+    const txLog = makeTxLog()
+    allocateStrips(state, [5, 6], 720, txLog)
+    allocateRefs(state, 0, Weapon.SABRE, 2, 480, 720, txLog)
+
+    expect(state.strip_free_at[5]).toBe(720)
+    expect(state.strip_free_at[6]).toBe(720)
+    expect(state.refs_in_use_by_day[0].saber_in_use).toBe(2)
+    expect(state.refs_in_use_by_day[0].release_events).toHaveLength(1)
+
+    rollbackEvent(state, txLog)
+
+    // Strips restored to initial value (0)
+    expect(state.strip_free_at[5]).toBe(0)
+    expect(state.strip_free_at[6]).toBe(0)
+    // Refs restored
+    expect(state.refs_in_use_by_day[0].saber_in_use).toBe(0)
+    expect(state.refs_in_use_by_day[0].release_events).toHaveLength(0)
+    // txLog cleared
+    expect(txLog.stripChanges).toHaveLength(0)
+    expect(txLog.refEvents).toHaveLength(0)
+  })
+
+  it('isolation: rolling back event E does not affect event F allocations', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+
+    // Event E: strips [0, 1], 3 foil refs
+    const txLogE = makeTxLog()
+    allocateStrips(state, [0, 1], 600, txLogE)
+    allocateRefs(state, 0, Weapon.FOIL, 3, 480, 600, txLogE)
+
+    // Event F: strips [2, 3], 2 foil refs (different strip indices and second release_event)
+    const txLogF = makeTxLog()
+    allocateStrips(state, [2, 3], 660, txLogF)
+    allocateRefs(state, 0, Weapon.FOIL, 2, 480, 660, txLogF)
+
+    // Confirm state before rollback
+    expect(state.strip_free_at[2]).toBe(660)
+    expect(state.strip_free_at[3]).toBe(660)
+    expect(state.refs_in_use_by_day[0].foil_epee_in_use).toBe(5) // 3 + 2
+    expect(state.refs_in_use_by_day[0].release_events).toHaveLength(2)
+
+    // Roll back only E
+    rollbackEvent(state, txLogE)
+
+    // E's strips restored
+    expect(state.strip_free_at[0]).toBe(0)
+    expect(state.strip_free_at[1]).toBe(0)
+
+    // F's strips untouched
+    expect(state.strip_free_at[2]).toBe(660)
+    expect(state.strip_free_at[3]).toBe(660)
+
+    // In-use counter reduced by E's 3 refs; F's 2 remain
+    expect(state.refs_in_use_by_day[0].foil_epee_in_use).toBe(2)
+
+    // F's release_event (idx 1 before rollback, now the only remaining one) is still present
+    expect(state.refs_in_use_by_day[0].release_events).toHaveLength(1)
+    expect(state.refs_in_use_by_day[0].release_events[0].count).toBe(2)
+    expect(state.refs_in_use_by_day[0].release_events[0].time).toBe(660)
+
+    // txLogE is cleared; txLogF still has its entries (not mutated by E's rollback)
+    expect(txLogE.stripChanges).toHaveLength(0)
+    expect(txLogE.refEvents).toHaveLength(0)
+    expect(txLogF.stripChanges).toHaveLength(2)
+    expect(txLogF.refEvents).toHaveLength(1)
+  })
+})
+
+// ──────────────────────────────────────────────
+// findAvailableStrips — poolContext video rule
+// ──────────────────────────────────────────────
+
+// Setup: config with dayStart(0)=0 and MORNING_WAVE_WINDOW_MINS=60, so morning wave
+// ends at 60. 18 non-video strips (indices 4–21) and 4 video strips (indices 0–3).
+// We need 20 strips total, forcing overflow into video territory.
+//
+// State: non-video strips 4–21 are free. Video strips 0–3 are free.
+// Allocate non-video strips 4–21 at count 18; need 20 total so must use 2 video.
+// Actually: make only 18 non-video free (busy 2 of them) + all 4 video free.
+
+describe('findAvailableStrips — poolContext video rule', () => {
+  // 22 strips: 4 video (indices 0-3) + 18 non-video (indices 4-21)
+  // 18 non-video free + 4 video free = 22 free; requesting 20 needs video overflow
+  function makePoolContextConfig(): TournamentConfig {
+    const strips: Strip[] = [
+      // 4 video strips
+      ...Array.from({ length: 4 }, (_, i) => ({ id: `video-${i}`, video_capable: true })),
+      // 18 non-video strips
+      ...Array.from({ length: 18 }, (_, i) => ({ id: `nonvideo-${i}`, video_capable: false })),
+    ]
+    return {
+      tournament_type: 'NAC',
+      days_available: 2,
+      strips,
+      strips_total: strips.length,
+      video_strips_total: 4,
+      referee_availability: [
+        { day: 0, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' },
+        { day: 1, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' },
+      ],
+      pod_captain_override: 'AUTO',
+      DAY_START_MINS: 480,
+      DAY_END_MINS: 1320,
+      LATEST_START_MINS: 960,
+      LATEST_START_OFFSET: 480,
+      SLOT_MINS: 30,
+      DAY_LENGTH_MINS: 840,
+      ADMIN_GAP_MINS: 15,
+      FLIGHT_BUFFER_MINS: 15,
+      THRESHOLD_MINS: 10,
+      DE_REFS: 1,
+      DE_FINALS_MIN_MINS: 30,
+      SAME_TIME_WINDOW_MINS: 30,
+      INDIV_TEAM_MIN_GAP_MINS: 120,
+      EARLY_START_THRESHOLD: 10,
+      MAX_RESCHEDULE_ATTEMPTS: 3,
+      MAX_FENCERS: 500,
+      MIN_FENCERS: 2,
+      pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
+      de_duration_table: DEFAULT_DE_DURATION_TABLE,
+      dayConfigs: [],
+      max_pool_strip_pct: 1.0,
+      max_de_strip_pct: 0.80,
+      de_capacity_mode: 'pod',
+    }
+  }
+
+  // dayStart(0, config) = 0 * 840 = 0
+  // morning wave: atTime <= 0 + 60 = 60
+  // atTime=30 is within morning wave; atTime=90 is outside
+
+  it('1. morning wave pool: video overflow allowed (atTime <= dayStart+60)', () => {
+    const config = makePoolContextConfig()
+    const state = createGlobalState(config)
+    // Busy 2 non-video strips so only 16 non-video are free; 4 video free → 20 total
+    allocateStrips(state, [4, 5], 9999)
+    const poolContext: PoolContext = { isPoolPhase: true, isSingleEventDay: false, day: 0 }
+    // atTime=30 is within morning wave (dayStart(0)=0 + 60 = 60, 30 <= 60)
+    const result = findAvailableStrips(state, config, 20, 30, false, poolContext)
+    // 16 non-video free + 4 video free = 20 total — should succeed including video
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.stripIndices).toHaveLength(20)
+      const videoUsed = result.stripIndices.filter(i => config.strips[i].video_capable)
+      expect(videoUsed.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('2. after morning wave, multi-event day: video excluded, not enough non-video → WAIT_UNTIL', () => {
+    const config = makePoolContextConfig()
+    const state = createGlobalState(config)
+    // Busy 2 non-video strips → only 16 non-video free; 4 video free but excluded
+    allocateStrips(state, [4, 5], 9999)
+    const poolContext: PoolContext = { isPoolPhase: true, isSingleEventDay: false, day: 0 }
+    // atTime=90 is after morning wave (dayStart(0)+60=60, 90 > 60)
+    const result = findAvailableStrips(state, config, 20, 90, false, poolContext)
+    // Only 16 non-video free, need 20, video excluded → WAIT_UNTIL
+    expect(result.type).toBe('WAIT_UNTIL')
+  })
+
+  it('3. after morning wave, single-event day: video overflow allowed', () => {
+    const config = makePoolContextConfig()
+    const state = createGlobalState(config)
+    // Busy 2 non-video strips → only 16 non-video free; 4 video free
+    allocateStrips(state, [4, 5], 9999)
+    const poolContext: PoolContext = { isPoolPhase: true, isSingleEventDay: true, day: 0 }
+    // atTime=90 is after morning wave, but isSingleEventDay=true allows video overflow
+    const result = findAvailableStrips(state, config, 20, 90, false, poolContext)
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.stripIndices).toHaveLength(20)
+      const videoUsed = result.stripIndices.filter(i => config.strips[i].video_capable)
+      expect(videoUsed.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('4. no poolContext (DE phase): video overflow still allowed (existing behavior)', () => {
+    const config = makePoolContextConfig()
+    const state = createGlobalState(config)
+    // Busy 2 non-video strips → only 16 non-video free; 4 video free
+    allocateStrips(state, [4, 5], 9999)
+    // No poolContext — existing overflow behavior preserved
+    const result = findAvailableStrips(state, config, 20, 90, false)
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.stripIndices).toHaveLength(20)
+    }
+  })
+
+  it('5. videoRequired=true: only video strips regardless of poolContext', () => {
+    const config = makePoolContextConfig()
+    const state = createGlobalState(config)
+    const poolContext: PoolContext = { isPoolPhase: true, isSingleEventDay: false, day: 0 }
+    // atTime=90, videoRequired=true — poolContext is irrelevant for this path
+    const result = findAvailableStrips(state, config, 2, 90, true, poolContext)
+    expect(result.type).toBe('FOUND')
+    if (result.type === 'FOUND') {
+      expect(result.stripIndices.every(i => config.strips[i].video_capable)).toBe(true)
     }
   })
 })

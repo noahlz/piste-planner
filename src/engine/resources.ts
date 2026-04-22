@@ -4,8 +4,31 @@ import type {
   TournamentConfig,
   Bottleneck,
   RefsInUseByDay,
+  EventTxLog,
 } from './types.ts'
 import { dayStart } from './types.ts'
+import { MORNING_WAVE_WINDOW_MINS } from './constants.ts'
+
+// ──────────────────────────────────────────────
+// PoolContext — video-strip preservation for pool phases
+// ──────────────────────────────────────────────
+
+/**
+ * Passed by pool-phase callers into findAvailableStrips and earliestResourceWindow
+ * to enable the video-strip-preservation rule (METHODOLOGY.md §Video Strip Preservation).
+ *
+ * When isPoolPhase=true the rule applies: video strips may only be used as overflow
+ * during the morning wave OR when the event is the only one on its day. Outside those
+ * conditions, pools are restricted to non-video strips only.
+ */
+export type PoolContext = {
+  /** Must be true to activate the video-strip restriction for pools. */
+  isPoolPhase: boolean
+  /** True when only one competition is scheduled on this day. */
+  isSingleEventDay: boolean
+  /** Day index (0-based) — used to compute the morning-wave boundary. */
+  day: number
+}
 
 // ──────────────────────────────────────────────
 // Return types for strip selection and resource windows
@@ -96,9 +119,15 @@ export function createGlobalState(config: TournamentConfig): GlobalState {
  * Marks the given strip indices as occupied until endTime.
  * Later allocations always win — endTime is set directly (no max-guard needed
  * since the scheduler never allocates a strip that is still busy).
+ *
+ * If txLog is provided, the prior free_at value for each strip is recorded
+ * before mutation so the allocation can be rolled back.
  */
-export function allocateStrips(state: GlobalState, stripIds: number[], endTime: number): void {
+export function allocateStrips(state: GlobalState, stripIds: number[], endTime: number, txLog?: EventTxLog): void {
   for (const idx of stripIds) {
+    if (txLog) {
+      txLog.stripChanges.push({ stripIdx: idx, oldFreeAt: state.strip_free_at[idx] })
+    }
     state.strip_free_at[idx] = endTime
   }
 }
@@ -135,6 +164,12 @@ export function releaseStrips(state: GlobalState, stripIds: number[], endTime: n
  * - videoRequired=false: prefer non-video strips first (preserves video strips for
  *   phases that need them); falls back to video strips if non-video is insufficient
  *
+ * When poolContext is provided with isPoolPhase=true, the pool video-strip rule applies:
+ * video strips are excluded as overflow UNLESS the candidate time is within the morning
+ * wave (atTime <= dayStart(day) + MORNING_WAVE_WINDOW_MINS) OR isSingleEventDay=true.
+ * If excluded and insufficient non-video strips are free, returns WAIT_UNTIL based on
+ * non-video release times (Infinity if there are never enough non-video strips).
+ *
  * Returns WAIT_UNTIL with the earliest time when enough suitable strips become free.
  */
 export function findAvailableStrips(
@@ -143,6 +178,7 @@ export function findAvailableStrips(
   count: number,
   atTime: number,
   videoRequired: boolean,
+  poolContext?: PoolContext,
 ): FindStripsResult {
   const strips = config.strips
   const freeAt = state.strip_free_at
@@ -165,6 +201,34 @@ export function findAvailableStrips(
     const waitUntil = videoStrips.length >= count
       ? videoStrips[count - 1].freeAt
       : Infinity
+    return { type: 'WAIT_UNTIL', waitUntil }
+  }
+
+  // Pool video-strip preservation rule:
+  // When isPoolPhase=true, video strips are excluded unless we're in the morning wave
+  // or this is the only event on the day.
+  const applyPoolVideoExclusion = poolContext?.isPoolPhase === true
+    && !poolContext.isSingleEventDay
+    && atTime > dayStart(poolContext.day, config) + MORNING_WAVE_WINDOW_MINS
+
+  if (applyPoolVideoExclusion) {
+    // Non-video strips only — exclude video entirely
+    const freeNonVideo = strips
+      .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
+      .filter(x => !x.s.video_capable && x.freeAt <= atTime)
+      .sort((a, b) => a.freeAt - b.freeAt)
+
+    if (freeNonVideo.length >= count) {
+      return { type: 'FOUND', stripIndices: freeNonVideo.slice(0, count).map(x => x.i) }
+    }
+
+    // Not enough non-video strips free — wait for non-video strips only
+    const allNonVideo = strips
+      .map((s, i) => ({ i, s, freeAt: freeAt[i] }))
+      .filter(x => !x.s.video_capable)
+      .sort((a, b) => a.freeAt - b.freeAt)
+
+    const waitUntil = allNonVideo.length >= count ? allNonVideo[count - 1].freeAt : Infinity
     return { type: 'WAIT_UNTIL', waitUntil }
   }
 
@@ -268,6 +332,9 @@ function saberRefsFreeAt(day: number, atTime: number, state: GlobalState, config
  * appends a release event at endTime so free counts can be computed later.
  *
  * Weapon determines whether foil_epee_in_use or saber_in_use is incremented.
+ *
+ * If txLog is provided, the index of the pushed release_event is recorded
+ * so the allocation can be rolled back.
  */
 export function allocateRefs(
   state: GlobalState,
@@ -276,6 +343,7 @@ export function allocateRefs(
   count: number,
   _startTime: number,
   endTime: number,
+  txLog?: EventTxLog,
 ): void {
   const dayRefs = ensureDayRefs(state, day)
   const type: 'foil_epee' | 'saber' = weapon === Weapon.SABRE ? 'saber' : 'foil_epee'
@@ -286,7 +354,52 @@ export function allocateRefs(
     dayRefs.foil_epee_in_use += count
   }
 
-  dayRefs.release_events.push({ time: endTime, type, count })
+  const releaseEvent = { time: endTime, type, count }
+  dayRefs.release_events.push(releaseEvent)
+
+  if (txLog) {
+    txLog.refEvents.push({ day, event: releaseEvent })
+  }
+}
+
+/**
+ * Reverses all strip and ref allocations recorded in txLog.
+ *
+ * Strip changes: processed in reverse so that a strip allocated twice in one event
+ * restores to its earliest observed value.
+ *
+ * Ref changes: find-and-remove the recorded ReleaseEvent by object identity (indexOf).
+ * Object-reference tracking is required for phase-major: multiple events' txLogs
+ * interleave entries in the same release_events array, and rolling back one event
+ * would shift positional indices recorded by others. Identity lookup is immune to
+ * shifts caused by concurrent rollbacks.
+ */
+export function rollbackEvent(state: GlobalState, txLog: EventTxLog): void {
+  // Restore strips in reverse order
+  for (let i = txLog.stripChanges.length - 1; i >= 0; i--) {
+    const { stripIdx, oldFreeAt } = txLog.stripChanges[i]
+    state.strip_free_at[stripIdx] = oldFreeAt
+  }
+
+  // Remove ref release_events by object identity
+  for (let i = txLog.refEvents.length - 1; i >= 0; i--) {
+    const { day, event } = txLog.refEvents[i]
+    const dayRefs = state.refs_in_use_by_day[day]
+    if (!dayRefs) continue
+
+    const idx = dayRefs.release_events.indexOf(event)
+    if (idx >= 0) {
+      dayRefs.release_events.splice(idx, 1)
+      if (event.type === 'saber') {
+        dayRefs.saber_in_use = Math.max(0, dayRefs.saber_in_use - event.count)
+      } else {
+        dayRefs.foil_epee_in_use = Math.max(0, dayRefs.foil_epee_in_use - event.count)
+      }
+    }
+  }
+
+  txLog.stripChanges = []
+  txLog.refEvents = []
 }
 
 /**
@@ -398,6 +511,7 @@ export function earliestResourceWindow(
   config: TournamentConfig,
   competitionId: string,
   phase: Phase,
+  poolContext?: PoolContext,
 ): ResourceWindowResult {
   const latestStart = dayStart(day, config) + config.LATEST_START_OFFSET
   const dayEndTime = dayStart(day, config) + config.DAY_LENGTH_MINS
@@ -425,7 +539,7 @@ export function earliestResourceWindow(
       }
     }
 
-    const stripResult = findAvailableStrips(state, config, stripsNeeded, candidate, videoRequired)
+    const stripResult = findAvailableStrips(state, config, stripsNeeded, candidate, videoRequired, poolContext)
 
     if (stripResult.type === 'WAIT_UNTIL') {
       const next = snapToSlot(stripResult.waitUntil)
@@ -484,7 +598,7 @@ export function earliestResourceWindow(
     }
 
     // Verify strips are still available at T (they may have been claimed by a concurrent phase)
-    const verifyResult = findAvailableStrips(state, config, stripsNeeded, T, videoRequired)
+    const verifyResult = findAvailableStrips(state, config, stripsNeeded, T, videoRequired, poolContext)
     if (verifyResult.type === 'WAIT_UNTIL') {
       const next = snapToSlot(verifyResult.waitUntil)
       if (next <= candidate) {

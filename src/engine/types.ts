@@ -391,6 +391,25 @@ export interface CatalogueEntry {
 }
 
 // ──────────────────────────────────────────────
+// Phase-scheduler transaction log
+// ──────────────────────────────────────────────
+
+/**
+ * Records mutations made during a single competition's phase scheduling so that
+ * they can be rolled back if the event cannot be fully scheduled.
+ *
+ * - stripChanges: prior strip_free_at values, indexed by strip index
+ * - refEvents: direct object references to pushed ReleaseEvent entries so rollback
+ *   can find-and-remove by identity. Using object references instead of array indices
+ *   is required for phase-major scheduling, where multiple events' txLogs interleave
+ *   and rolling back one event's entries would shift another's recorded indices.
+ */
+export interface EventTxLog {
+  stripChanges: Array<{ stripIdx: number; oldFreeAt: number }>
+  refEvents: Array<{ day: number; event: ReleaseEvent }>
+}
+
+// ──────────────────────────────────────────────
 // Helper functions
 // ──────────────────────────────────────────────
 

@@ -83,7 +83,36 @@ export function scheduleAll(
   // ── Phase 2: Assign days by graph coloring ──
   const { dayMap, relaxations, effectiveDays } = assignDaysByColoring(graph, competitions, config)
 
-  // ── Phase 3: Per-day scheduling loop ──
+  // ── Phase 3: Per-day scheduling loop (EVENT-MAJOR) ──
+  //
+  // Each event runs fully (pool → DE_PRELIMS → R16 → FINALS → BRONZE) before the
+  // next event on the same day starts. `scheduleCompetition` is a thin orchestrator
+  // over the phase schedulers in `phaseSchedulers.ts`.
+  //
+  // ATTEMPT LOG — do not re-try without addressing these first:
+  //
+  // Stage 6 Task 3 (2026-04-22) attempted to flip this to PHASE-MAJOR (all events'
+  // pools → all events' DE_PRELIMS → ...). The attempt was reverted because:
+  //   (a) `EventTxLog`-based strip rollback is order-dependent: when multiple
+  //       events allocate the same strip across phases and any one fails,
+  //       per-event txLogs contain stale `oldFreeAt` values. Fix requires storing
+  //       strip allocations as an interval list per strip (major refactor),
+  //       not a single `strip_free_at` scalar.
+  //   (b) Density regressed in video-strip-constrained B-scenarios (B5: 3 → 0,
+  //       B7: 4 → 0) because clustering R16/Finals across events concurrently
+  //       created NO_WINDOW failures that event-major avoided via serialization.
+  //       Same-day recovery via `scheduleCompetition` could not fully compensate.
+  // See `__tests__/engine/scheduler.test.ts` footer for the full postmortem.
+  //
+  // Stage 6 Task 5 (2026-04-22) implemented the video-strips-for-pools rule
+  // (METHODOLOGY.md §Video Strip Preservation). Pool phases may consume video
+  // strips only during the morning wave (first 60 min) OR on single-event days.
+  // This was expected to improve strip-constrained scenarios (B5) but produced
+  // small regressions on most B-scenarios (B1: 14→13, B2: 11→9, B3: 7→5,
+  // B4: 9→8; B5/B6/B7 unchanged). Late-starting pools that previously overflowed
+  // to video strips now hit NO_WINDOW. Kept because the rule aligns with the
+  // spec; if density matters more than spec compliance, tune
+  // `MORNING_WAVE_WINDOW_MINS` larger or relax the multi-event exclusion.
   const failedEvents: { comp: Competition; error: SchedulingError }[] = []
 
   for (let day = 0; day < effectiveDays; day++) {
@@ -91,11 +120,12 @@ export function scheduleAll(
     if (dayEvents.length === 0) continue
 
     const ordered = sequenceEventsForDay(dayEvents, config)
+    const isSingleEventDay = dayEvents.length === 1
 
     for (const comp of ordered) {
       const snapshot = snapshotState(state)
       try {
-        const result = scheduleCompetition(comp, day, state, config, competitions)
+        const result = scheduleCompetition(comp, day, state, config, competitions, isSingleEventDay)
 
         // Flow constraint_relaxation_level from coloring
         const relaxLevel = relaxations.get(comp.id)

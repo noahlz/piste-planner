@@ -1020,3 +1020,48 @@ describe('postScheduleDayBreakdown', () => {
     expect(stripSummaries[0].severity).toBe(BottleneckSeverity.INFO)
   })
 })
+
+// ──────────────────────────────────────────────────────────────────────────────
+// HISTORICAL NOTE — phase-major scheduling attempt (Stage 6 Task 3, 2026-04-22)
+// ──────────────────────────────────────────────────────────────────────────────
+//
+// We attempted to flip the per-day inner loop in `scheduler.ts` from event-major
+// (schedule event A's full phase chain → then B's → then C's) to phase-major
+// (schedule POOLS for all events → then DE_PRELIMS for all events → ...).
+//
+// The change introduced two correctness issues and a density regression:
+//
+// 1. Cross-event strip rollback is ORDER-DEPENDENT and corrupts `strip_free_at`.
+//    In phase-major, multiple events' txLogs interleave allocations on the same
+//    strip across phases (event A pool uses strip 0 until 150; event B pool uses
+//    strip 0 from 150 to 300). On failure, rolling back event A first then B
+//    (or vice versa) cannot restore correct state because `strip_free_at` only
+//    stores the latest endTime, not a full history. The `oldFreeAt` snapshot
+//    recorded at allocation time becomes stale when a LATER event overwrites
+//    the strip. Object-identity tracking (as we did for refs) does not help
+//    here because strips have no "owner object" to find-and-remove.
+//
+//    Fix would require storing strip allocations as a list of intervals per
+//    strip and computing `free_at` as max(end across non-rolled-back entries).
+//    This is a major data-model refactor out of scope for this attempt.
+//
+// 2. Density regression — several B-scenarios lost events compared to baseline.
+//    Phase-major caused events' R16/Finals phases to cluster in time and
+//    compete for the small pool of video strips simultaneously, producing
+//    NO_WINDOW failures that event-major avoided by serializing per-event.
+//    Specifically: baseline B5 = 3 scheduled → phase-major = 0 scheduled.
+//    Baseline B7 = 4 → phase-major = 0.
+//    Same-day recovery via `scheduleCompetition` did not fully compensate
+//    because scheduleCompetition itself calls the same phase schedulers with
+//    the same resource constraints.
+//
+// Decision: revert the per-day loop to event-major. Keep the structural
+// refactor — `phaseSchedulers.ts` extraction, `EventTxLog`, `rollbackEvent` —
+// since these are independently useful (used internally by `scheduleCompetition`
+// as a thin orchestrator).
+//
+// If revisited: need a strip-allocation model that supports unordered rollback
+// (interval list per strip) AND a density-improvement mechanism that doesn't
+// create video-strip contention spikes across concurrent DE phases.
+// ──────────────────────────────────────────────────────────────────────────────
+
