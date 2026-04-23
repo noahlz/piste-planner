@@ -1,4 +1,4 @@
-import type { StoreState, CompetitionConfig, GlobalOverrides, DayRefConfig } from './store.ts'
+import type { StoreState, CompetitionConfig, GlobalOverrides } from './store.ts'
 import type { DayConfig, TournamentType, PodCaptainOverride } from '../engine/types.ts'
 import { TournamentType as TT } from '../engine/types.ts'
 
@@ -21,12 +21,9 @@ export interface SerializedState {
     selectedCompetitions: Record<string, CompetitionConfig>
     globalOverrides: GlobalOverrides
   }
-  referees: {
-    dayRefs: DayRefConfig[]
-  }
 }
 
-const VALID_TOP_LEVEL_KEYS = ['schemaVersion', 'tournament', 'competitions', 'referees'] as const
+const VALID_TOP_LEVEL_KEYS = ['schemaVersion', 'tournament', 'competitions'] as const
 const VALID_TOURNAMENT_TYPES = new Set(Object.values(TT))
 
 // ──────────────────────────────────────────────
@@ -50,9 +47,6 @@ export function serializeState(state: StoreState): string {
       selectedCompetitions: state.selectedCompetitions,
       globalOverrides: state.globalOverrides,
     },
-    referees: {
-      dayRefs: state.dayRefs,
-    },
   }
   return JSON.stringify(serialized)
 }
@@ -69,7 +63,9 @@ export function validateSchema(
     return { valid: false, error: 'Input must be a non-null object' }
   }
 
-  const obj = data as Record<string, unknown>
+  // Strip legacy 'referees' key for backward compat before validation
+  const obj = { ...(data as Record<string, unknown>) }
+  delete obj['referees']
 
   // Check for unknown top-level fields
   const allowedKeys = new Set<string>(VALID_TOP_LEVEL_KEYS)
@@ -125,12 +121,7 @@ export function validateSchema(
     }
   }
 
-  // referees
-  if (obj.referees == null || typeof obj.referees !== 'object') {
-    return { valid: false, error: 'Missing required field: referees' }
-  }
-
-  return { valid: true, data: data as SerializedState }
+  return { valid: true, data: obj as unknown as SerializedState }
 }
 
 // ──────────────────────────────────────────────
@@ -168,7 +159,6 @@ export function deserializeState(
       pod_captain_override: data.tournament.pod_captain_override,
       selectedCompetitions: data.competitions.selectedCompetitions,
       globalOverrides: data.competitions.globalOverrides,
-      dayRefs: data.referees.dayRefs,
     },
   }
 }

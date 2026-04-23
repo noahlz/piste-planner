@@ -176,13 +176,6 @@ export interface Strip {
   video_capable: boolean
 }
 
-export interface DayRefereeAvailability {
-  day: number
-  foil_epee_refs: number
-  three_weapon_refs: number
-  source: 'OPTIMAL' | 'ACTUAL'
-}
-
 export interface Competition {
   id: string
   gender: Gender
@@ -225,7 +218,6 @@ export interface TournamentConfig {
   strips: Strip[]
   strips_total: number
   video_strips_total: number
-  referee_availability: DayRefereeAvailability[]
   pod_captain_override: PodCaptainOverride
   DAY_START_MINS: number
   DAY_END_MINS: number
@@ -259,16 +251,22 @@ export interface FlightingGroup {
   strips_for_flighted: number
 }
 
-export interface ReleaseEvent {
-  time: number
-  type: 'foil_epee' | 'saber'
+export interface RefDemandInterval {
+  startTime: number
+  endTime: number
   count: number
+  weapon: Weapon
 }
 
-export interface RefsInUseByDay {
-  foil_epee_in_use: number
-  saber_in_use: number
-  release_events: ReleaseEvent[]
+export interface RefDemandByDay {
+  intervals: RefDemandInterval[]
+}
+
+export interface RefRequirementsByDay {
+  day: number
+  peak_total_refs: number
+  peak_saber_refs: number
+  peak_time: number
 }
 
 export interface AcceptedWarning {
@@ -329,7 +327,7 @@ export interface ScheduleResult {
 
 export interface GlobalState {
   strip_free_at: number[]
-  refs_in_use_by_day: Record<number, RefsInUseByDay>
+  ref_demand_by_day: Record<number, RefDemandByDay>
   schedule: Record<string, ScheduleResult>
   bottlenecks: Bottleneck[]
 }
@@ -352,7 +350,6 @@ export interface PoolDurationResult {
   actual_duration: number
   baseline: number
   effective_parallelism: number
-  double_duty_pairs: number
   uncompensated: number
   penalised: boolean
 }
@@ -360,7 +357,6 @@ export interface PoolDurationResult {
 export interface RefResolution {
   refs_per_pool: number
   refs_needed: number
-  shortfall: number
 }
 
 export interface DeBlockDurations {
@@ -399,14 +395,14 @@ export interface CatalogueEntry {
  * they can be rolled back if the event cannot be fully scheduled.
  *
  * - stripChanges: prior strip_free_at values, indexed by strip index
- * - refEvents: direct object references to pushed ReleaseEvent entries so rollback
+ * - refEvents: direct object references to pushed RefDemandInterval entries so rollback
  *   can find-and-remove by identity. Using object references instead of array indices
  *   is required for phase-major scheduling, where multiple events' txLogs interleave
  *   and rolling back one event's entries would shift another's recorded indices.
  */
 export interface EventTxLog {
   stripChanges: Array<{ stripIdx: number; oldFreeAt: number }>
-  refEvents: Array<{ day: number; event: ReleaseEvent }>
+  refEvents: Array<{ day: number; event: RefDemandInterval }>
 }
 
 // ──────────────────────────────────────────────

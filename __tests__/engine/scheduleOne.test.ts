@@ -119,7 +119,8 @@ describe('scheduleCompetition — flighted standalone', () => {
   })
 
   it('does NOT emit FLIGHT_B_DELAYED when strips are plentiful and Flight B starts on schedule', () => {
-    // 24 strips, 12 needed per flight — no contention, Flight B should start on time
+    // 24 strips, 12 needed per flight — no contention, Flight B should start on time.
+    // 80 fencers → 12 pools → AUTO policy needs 24 refs (2/pool); provide 30 sabre refs.
     const strips = makeStrips(24, 4)
     const config = makeConfig({
       strips,
@@ -387,9 +388,6 @@ describe('scheduleCompetition — deadline breach', () => {
     const config = makeConfig({
       days_available: 1,
       LATEST_START_OFFSET: 840,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
-      ],
     })
     const comp = makeCompetition({
       id: 'MF-FITS',
@@ -420,9 +418,6 @@ describe('scheduleCompetition — deadline breach', () => {
       LATEST_START_OFFSET: 255,
       days_available: 1,
       MAX_RESCHEDULE_ATTEMPTS: 3,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
-      ],
     })
     const comp = makeCompetition({
       id: 'MF-RESCHEDULE',
@@ -461,9 +456,6 @@ describe('scheduleCompetition — deadline breach', () => {
       LATEST_START_OFFSET: 0,
       dayConfigs: [{ day_start_time: 0, day_end_time: 30 }],
       days_available: 1,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
-      ],
     })
     const comp = makeCompetition({
       id: 'MF-UNRESOLVABLE',
@@ -505,10 +497,6 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
       LATEST_START_OFFSET: 120,
       days_available: 2,
       MAX_RESCHEDULE_ATTEMPTS: 0, // no retries — forces immediate SAME_DAY_VIOLATION
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
-      ],
     })
     const comp = makeCompetition({
       id: 'MF-CROSS-DAY',
@@ -545,13 +533,6 @@ describe('scheduleCompetition — SAME_DAY_VIOLATION', () => {
 // ──────────────────────────────────────────────
 
 describe('scheduleCompetition — per-event strip cap', () => {
-  // Shared referee availability used across all three cap tests.
-  const capTestRefAvailability = [
-    { day: 0, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-    { day: 1, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-    { day: 2, foil_epee_refs: 50, three_weapon_refs: 25, source: 'ACTUAL' as const },
-  ]
-
   it('pool_duration_actual is longer when max_pool_strip_pct forces batching', () => {
     // 85 fencers → ceil(85/7) = 13 pools.
     // With strips_total=24 and max_pool_strip_pct=0.50 → effectiveCap=floor(24*0.50)=12.
@@ -566,7 +547,6 @@ describe('scheduleCompetition — per-event strip cap', () => {
       max_pool_strip_pct: 0.50,
       max_de_strip_pct: 1.0,
       days_available: 3,
-      referee_availability: capTestRefAvailability,
     })
     const comp = makeCompetition({
       id: 'MF-CAP-TEST',
@@ -596,7 +576,6 @@ describe('scheduleCompetition — per-event strip cap', () => {
       max_pool_strip_pct: 1.0,
       max_de_strip_pct: 1.0,
       days_available: 3,
-      referee_availability: capTestRefAvailability,
     })
     const comp = makeCompetition({
       id: 'MF-NOCAP-TEST',
@@ -625,7 +604,6 @@ describe('scheduleCompetition — per-event strip cap', () => {
       max_pool_strip_pct: 0.50,
       max_de_strip_pct: 1.0,
       days_available: 3,
-      referee_availability: capTestRefAvailability,
     })
     const comp = makeCompetition({
       id: 'MF-OVERRIDE-TEST',
@@ -651,9 +629,6 @@ describe('scheduleCompetition — individual+team sequencing', () => {
     // Use a single day with plenty of room for both events
     const config = makeConfig({
       days_available: 1,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' },
-      ],
     })
 
     // Small fencer counts so both fit on one day with the 2-hour gap

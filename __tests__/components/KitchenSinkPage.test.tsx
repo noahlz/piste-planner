@@ -180,9 +180,6 @@ describe('KitchenSinkPage user flow tests', () => {
     useStore.getState().setDays(2)
     useStore.getState().setStrips(24)
     useStore.getState().setVideoStrips(4)
-    // Set refs for both days
-    useStore.getState().setDayRefs(0, { foil_epee_refs: 10, three_weapon_refs: 6 })
-    useStore.getState().setDayRefs(1, { foil_epee_refs: 10, three_weapon_refs: 6 })
 
     render(<KitchenSinkPage />)
     fireEvent.click(screen.getByRole('button', { name: 'Generate Schedule' }))
@@ -339,7 +336,6 @@ describe('SaveLoadShare save tests', () => {
         expect(parsed.schemaVersion).toBe(1)
         expect(parsed.tournament).toBeDefined()
         expect(parsed.competitions).toBeDefined()
-        expect(parsed.referees).toBeDefined()
         expect(parsed.tournament.strips_total).toBe(12)
         resolve()
       }

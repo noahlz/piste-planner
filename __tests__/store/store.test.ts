@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import type { DayRefConfig } from '../../src/store/store.ts'
 import { TournamentType, PodCaptainOverride, BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
 import type { ValidationError, Bottleneck, AnalysisResult, ScheduleResult } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
@@ -351,65 +350,6 @@ describe('competitionSlice', () => {
       const state = useStore.getState()
       expect(state.analysisStale).toBe(true)
       expect(state.scheduleStale).toBe(true)
-    })
-  })
-})
-
-// ──────────────────────────────────────────────
-// refereeSlice
-// ──────────────────────────────────────────────
-
-describe('refereeSlice', () => {
-  describe('initial state', () => {
-    it('dayRefs is an empty array', () => {
-      expect(useStore.getState().dayRefs).toEqual([])
-    })
-
-    it('optimalRefs is an empty array', () => {
-      expect(useStore.getState().optimalRefs).toEqual([])
-    })
-  })
-
-  describe('setDayRefs', () => {
-    it('sets ref counts for a specific day', () => {
-      useStore.getState().setDayRefs(0, { foil_epee_refs: 5, three_weapon_refs: 3 })
-
-      const state = useStore.getState()
-      expect(state.dayRefs[0].foil_epee_refs).toBe(5)
-      expect(state.dayRefs[0].three_weapon_refs).toBe(3)
-    })
-
-    it('extends array with defaults when day index exceeds current length', () => {
-      useStore.getState().setDayRefs(2, { foil_epee_refs: 10 })
-
-      const state = useStore.getState()
-      expect(state.dayRefs).toHaveLength(3)
-      // Indices 0 and 1 filled with defaults
-      expect(state.dayRefs[0]).toEqual({ foil_epee_refs: 0, three_weapon_refs: 0 })
-      expect(state.dayRefs[1]).toEqual({ foil_epee_refs: 0, three_weapon_refs: 0 })
-      // Index 2 has the partial update merged with defaults
-      expect(state.dayRefs[2].foil_epee_refs).toBe(10)
-      expect(state.dayRefs[2].three_weapon_refs).toBe(0)
-    })
-
-    it('marks only scheduleStale, NOT analysisStale', () => {
-      useStore.getState().setDayRefs(0, { foil_epee_refs: 4 })
-
-      const state = useStore.getState()
-      expect(state.scheduleStale).toBe(true)
-      expect(state.analysisStale).toBe(false)
-    })
-  })
-
-  describe('setOptimalRefs', () => {
-    it('stores calculated optimal ref counts per day', () => {
-      const optimal: DayRefConfig[] = [
-        { foil_epee_refs: 8, three_weapon_refs: 4 },
-        { foil_epee_refs: 6, three_weapon_refs: 3 },
-      ]
-      useStore.getState().setOptimalRefs(optimal)
-
-      expect(useStore.getState().optimalRefs).toEqual(optimal)
     })
   })
 })

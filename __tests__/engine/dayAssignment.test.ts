@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   constraintScore,
   findEarlierSlotSameDay,
+  saberPileupPenalty,
 } from '../../src/engine/dayAssignment.ts'
 import {
   Category,
@@ -72,52 +73,9 @@ describe('constraintScore', () => {
     const looseScore = constraintScore(looseComp, allComps, config)
 
     expect(score).toBeGreaterThan(looseScore)
-    // Absolute lower bound: crossoverCount(4) + windowTightness(840/360≈2.33) + refWeight(1) ≈ 7.33
+    // Absolute lower bound: crossoverCount(4) + windowTightness(840/360≈2.33) + videoScarcity(0) ≈ 6.33
     // A refactor that scales scores to near-zero would fail this check.
     expect(score).toBeGreaterThan(5)
-  })
-
-  it('saber competition with low saber ref availability → higher score', () => {
-    const saberComp = makeCompetition({
-      id: 'cadet-m-saber',
-      category: Category.CADET,
-      gender: Gender.MEN,
-      weapon: Weapon.SABRE,
-    })
-
-    // Many saber competitions competing for few saber refs
-    const manySabreComps = [
-      makeCompetition({ id: 's1', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.SABRE }),
-      makeCompetition({ id: 's2', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.SABRE }),
-      makeCompetition({ id: 's3', category: Category.CADET, gender: Gender.WOMEN, weapon: Weapon.SABRE }),
-      makeCompetition({ id: 's4', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.SABRE }),
-      saberComp,
-    ]
-
-    // Low saber ref config (1 saber ref, high scarcity)
-    const lowSabreConfig = makeConfig({
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, three_weapon_refs: 1, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, three_weapon_refs: 1, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 20, three_weapon_refs: 1, source: 'ACTUAL' },
-      ],
-    })
-
-    // Same weapon, abundant refs
-    const highSabreConfig = makeConfig({
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, three_weapon_refs: 20, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 20, three_weapon_refs: 20, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 20, three_weapon_refs: 20, source: 'ACTUAL' },
-      ],
-    })
-
-    const lowScore = constraintScore(saberComp, manySabreComps, lowSabreConfig)
-    const highScore = constraintScore(saberComp, manySabreComps, highSabreConfig)
-    expect(lowScore).toBeGreaterThan(highScore)
-    // Absolute lower bound: saberScarcity (5/1=5) + crossoverCount(4) + refWeight(1) + window ≈ 10
-    // A refactor that scales scores to near-zero would fail this check.
-    expect(lowScore).toBeGreaterThan(5)
   })
 
   it('STAGED_DE + REQUIRED video → higher score', () => {
@@ -159,6 +117,62 @@ describe('constraintScore', () => {
 })
 
 // ──────────────────────────────────────────────
+// saberPileupPenalty
+// ──────────────────────────────────────────────
+
+describe('saberPileupPenalty', () => {
+  const sabre = makeCompetition({ id: 's1', weapon: Weapon.SABRE })
+  const foil = makeCompetition({ id: 'f1', weapon: Weapon.FOIL })
+  const otherSabres = [
+    makeCompetition({ id: 's2', weapon: Weapon.SABRE }),
+    makeCompetition({ id: 's3', weapon: Weapon.SABRE }),
+    makeCompetition({ id: 's4', weapon: Weapon.SABRE }),
+    makeCompetition({ id: 's5', weapon: Weapon.SABRE }),
+    makeCompetition({ id: 's6', weapon: Weapon.SABRE }),
+  ]
+
+  it('non-saber event → penalty is 0 regardless of day contents', () => {
+    const assignments = new Map([['s2', 0], ['s3', 0], ['s4', 0]] as [string, number][])
+    expect(saberPileupPenalty(foil, 0, assignments, [foil, ...otherSabres])).toBe(0)
+  })
+
+  it('saber on day with 0 other saber → 0', () => {
+    expect(saberPileupPenalty(sabre, 0, new Map(), [sabre, ...otherSabres])).toBe(0)
+  })
+
+  it('saber on day with 1 other saber → 0.5', () => {
+    const assignments = new Map([['s2', 0]] as [string, number][])
+    expect(saberPileupPenalty(sabre, 0, assignments, [sabre, ...otherSabres])).toBe(0.5)
+  })
+
+  it('saber on day with 2 other saber → 2.0', () => {
+    const assignments = new Map([['s2', 0], ['s3', 0]] as [string, number][])
+    expect(saberPileupPenalty(sabre, 0, assignments, [sabre, ...otherSabres])).toBe(2.0)
+  })
+
+  it('saber on day with 3 other saber → 10.0', () => {
+    const assignments = new Map([['s2', 0], ['s3', 0], ['s4', 0]] as [string, number][])
+    expect(saberPileupPenalty(sabre, 0, assignments, [sabre, ...otherSabres])).toBe(10.0)
+  })
+
+  it('saber on day with 5 other saber → 50.0 (clamped)', () => {
+    const assignments = new Map([['s2', 0], ['s3', 0], ['s4', 0], ['s5', 0], ['s6', 0]] as [string, number][])
+    expect(saberPileupPenalty(sabre, 0, assignments, [sabre, ...otherSabres])).toBe(50.0)
+  })
+
+  it('saber on different day from other saber events → 0', () => {
+    const assignments = new Map([['s2', 1], ['s3', 1]] as [string, number][])
+    expect(saberPileupPenalty(sabre, 0, assignments, [sabre, ...otherSabres])).toBe(0)
+  })
+
+  it('excludes self from count', () => {
+    // Self is in assignments on the same day — still excluded from count
+    const assignments = new Map([['s1', 0], ['s2', 0]] as [string, number][])
+    expect(saberPileupPenalty(sabre, 0, assignments, [sabre, ...otherSabres])).toBe(0.5)
+  })
+})
+
+// ──────────────────────────────────────────────
 // findEarlierSlotSameDay
 // ──────────────────────────────────────────────
 
@@ -184,7 +198,7 @@ describe('findEarlierSlotSameDay', () => {
     // All strips free from the start of day 0
     const state: GlobalState = {
       strip_free_at: Array(24).fill(480),
-      refs_in_use_by_day: {},
+      ref_demand_by_day: {},
       schedule: {},
       bottlenecks: [],
     }
@@ -211,7 +225,7 @@ describe('findEarlierSlotSameDay', () => {
     // All strips occupied beyond the end of day → no window possible
     const state: GlobalState = {
       strip_free_at: Array(24).fill(Infinity),
-      refs_in_use_by_day: {},
+      ref_demand_by_day: {},
       schedule: {},
       bottlenecks: [],
     }

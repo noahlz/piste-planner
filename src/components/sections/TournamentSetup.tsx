@@ -1,8 +1,10 @@
 import { useStore } from '../../store/store.ts'
-import { TournamentType } from '../../engine/types.ts'
+import { TournamentType, PodCaptainOverride } from '../../engine/types.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { CircleHelp } from 'lucide-react'
 
 // 6:00 AM (360) through 11:00 PM (1380) in 30-minute increments
 const TIME_OPTIONS: number[] = Array.from({ length: 35 }, (_, i) => 360 + i * 30)
@@ -25,6 +27,14 @@ const TOURNAMENT_TYPE_LABELS: Record<TournamentType, string> = {
 }
 
 const TOURNAMENT_TYPES = Object.values(TournamentType)
+
+const POD_CAPTAIN_LABELS: Record<PodCaptainOverride, string> = {
+  [PodCaptainOverride.AUTO]: 'Auto',
+  [PodCaptainOverride.DISABLED]: 'Disabled',
+  [PodCaptainOverride.FORCE_4]: 'Force 4-person pods',
+}
+
+const POD_CAPTAIN_OPTIONS = Object.values(PodCaptainOverride)
 
 interface DayTimeSelectProps {
   label: string
@@ -62,6 +72,8 @@ export function TournamentSetup() {
   const setDays = useStore((s) => s.setDays)
   const dayConfigs = useStore((s) => s.dayConfigs)
   const updateDayConfig = useStore((s) => s.updateDayConfig)
+  const podCaptainOverride = useStore((s) => s.pod_captain_override)
+  const setPodCaptainOverride = useStore((s) => s.setPodCaptainOverride)
   return (
     <Card className="pt-0 gap-0">
       <CardHeader className="bg-foreground/10 rounded-t-xl py-2">
@@ -140,6 +152,37 @@ export function TournamentSetup() {
             </div>
           </div>
         )}
+
+        <div className="mt-3 max-w-xs space-y-1">
+          <Label htmlFor="pod-captain" className="flex items-center gap-1 text-xs">
+            Pod Captain Override
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <CircleHelp className="inline h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs">
+                  Controls whether DE phases use a dedicated pod captain to assign bouts on a group of 4 or 8 strips. Does not apply to the final rounds (round of 16 onward). Auto decides based on bracket size.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </Label>
+          <Select
+            value={podCaptainOverride}
+            onValueChange={(value: string) => setPodCaptainOverride(value as PodCaptainOverride)}
+          >
+            <SelectTrigger id="pod-captain">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {POD_CAPTAIN_OPTIONS.map((opt) => (
+                <SelectItem key={opt} value={opt}>
+                  {POD_CAPTAIN_LABELS[opt]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </CardContent>
     </Card>
   )

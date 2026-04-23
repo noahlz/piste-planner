@@ -24,20 +24,24 @@ export function runScheduleAll(state: StoreState = useStore.getState()): void {
 
   try {
     const result = scheduleAll(competitions, config)
-    state.setScheduleResults(result.schedule, result.bottlenecks)
+    state.setScheduleResults(result.schedule, result.bottlenecks, result.ref_requirements_by_day ?? [])
     state.clearStale()
   } catch (err) {
     // Surface scheduling errors as a single ERROR-level validation message
     const message = err instanceof Error ? err.message : String(err)
-    state.setScheduleResults({}, [
-      {
-        competition_id: '',
-        phase: Phase.SCHEDULING,
-        cause: BottleneckCause.STRIP_CONTENTION,
-        severity: BottleneckSeverity.ERROR,
-        delay_mins: 0,
-        message: `Scheduling failed: ${message}`,
-      },
-    ])
+    state.setScheduleResults(
+      {},
+      [
+        {
+          competition_id: '',
+          phase: Phase.SCHEDULING,
+          cause: BottleneckCause.STRIP_CONTENTION,
+          severity: BottleneckSeverity.ERROR,
+          delay_mins: 0,
+          message: `Scheduling failed: ${message}`,
+        },
+      ],
+      [],
+    )
   }
 }

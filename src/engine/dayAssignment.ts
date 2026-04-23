@@ -8,15 +8,12 @@ import {
   Weapon,
   DeMode,
   VideoPolicy,
-  RefPolicy,
   Phase,
   dayStart,
 } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState, PoolStructure } from './types.ts'
 import { crossoverPenalty } from './crossover.ts'
-import { refsAvailableOnDay } from './refs.ts'
 import { earliestResourceWindow, snapToSlot } from './resources.ts'
-import { resolveRefsPerPool } from './pools.ts'
 
 // ──────────────────────────────────────────────
 // SchedulingError
@@ -41,9 +38,7 @@ export class SchedulingError extends Error {
  * Components:
  * - crossover_count: how many other competitions conflict with this one
  * - window_tightness: 840 / (latest_end - earliest_start)
- * - saber_scarcity: for SABRE weapon — ratio of saber comps to min saber refs
  * - video_scarcity: for STAGED_DE + REQUIRED video — ratio of video comps to video strips
- * - ref_weight: TWO→2.0, AUTO→1.0, ONE→0.5
  */
 export function constraintScore(
   competition: Competition,
@@ -58,11 +53,6 @@ export function constraintScore(
   // Guard: avoid divide-by-zero for competitions with zero-width windows
   const windowTightness = windowMins > 0 ? 840 / windowMins : 840
 
-  const saberComps = allCompetitions.filter(c => c.weapon === Weapon.SABRE).length
-  const saberMin = Math.min(...config.referee_availability.map(r => r.three_weapon_refs))
-  const saberScarcity =
-    competition.weapon === Weapon.SABRE ? saberComps / Math.max(saberMin, 1) : 0
-
   const videoCompsRequiring = allCompetitions.filter(
     c => c.de_mode === DeMode.STAGED && c.de_video_policy === VideoPolicy.REQUIRED,
   ).length
@@ -72,14 +62,44 @@ export function constraintScore(
       ? videoCompsRequiring / Math.max(config.video_strips_total, 1)
       : 0
 
-  const refWeightMap: Record<string, number> = {
-    [RefPolicy.TWO]: 2.0,
-    [RefPolicy.AUTO]: 1.0,
-    [RefPolicy.ONE]: 0.5,
-  }
-  const refWeight = refWeightMap[competition.ref_policy] ?? 1.0
+  return crossoverCount + windowTightness + videoScarcity
+}
 
-  return crossoverCount + windowTightness + saberScarcity + videoScarcity + refWeight
+// ──────────────────────────────────────────────
+// saberPileupPenalty — METHODOLOGY.md §Scheduling Algorithm / §Saber Pileup
+// ──────────────────────────────────────────────
+
+/**
+ * Penalty table indexed by how many OTHER saber events are already assigned
+ * to the candidate day. Index 0 means no other saber events (no penalty).
+ * Index 4+ clamps to table[4] = 50.0.
+ */
+export const SABER_PILEUP_PENALTY_TABLE = [0, 0.5, 2.0, 10.0, 50.0] as const
+
+/**
+ * Returns a penalty for placing a SABRE competition on a day that already
+ * has many other SABRE competitions. Non-saber events always return 0.
+ *
+ * The penalty grows steeply to discourage piling saber events onto a single
+ * day, since saber refs are three-weapon specialists and are naturally scarce.
+ */
+export function saberPileupPenalty(
+  competition: Competition,
+  candidateDay: number,
+  assignments: Map<string, number>,
+  allCompetitions: Competition[],
+): number {
+  if (competition.weapon !== Weapon.SABRE) return 0
+
+  let count = 0
+  for (const c of allCompetitions) {
+    if (c.id === competition.id) continue
+    if (c.weapon !== Weapon.SABRE) continue
+    if (assignments.get(c.id) === candidateDay) count++
+  }
+
+  const idx = Math.min(count, SABER_PILEUP_PENALTY_TABLE.length - 1)
+  return SABER_PILEUP_PENALTY_TABLE[idx]
 }
 
 // ──────────────────────────────────────────────
@@ -97,7 +117,7 @@ export function constraintScore(
  */
 export function findEarlierSlotSameDay(
   competition: Competition,
-  poolStructure: PoolStructure,
+  _poolStructure: PoolStructure,
   day: number,
   state: GlobalState,
   config: TournamentConfig,
@@ -105,13 +125,6 @@ export function findEarlierSlotSameDay(
   const thisDayStart = dayStart(day, config)
   const latestStart = thisDayStart + config.LATEST_START_OFFSET
   const maxSlots = Math.ceil(config.LATEST_START_OFFSET / config.SLOT_MINS)
-
-  const availableRefs = refsAvailableOnDay(day, competition.weapon, config)
-  const refResolution = resolveRefsPerPool(
-    competition.ref_policy,
-    poolStructure.n_pools,
-    availableRefs,
-  )
 
   const videoRequired = competition.de_video_policy === VideoPolicy.REQUIRED
 
@@ -123,8 +136,6 @@ export function findEarlierSlotSameDay(
 
     const result = earliestResourceWindow(
       competition.strips_allocated,
-      refResolution.refs_needed,
-      competition.weapon,
       videoRequired,
       slot,
       day,

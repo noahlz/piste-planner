@@ -1,11 +1,13 @@
-import { Weapon, BottleneckCause, BottleneckSeverity, Phase } from './types.ts'
+import { BottleneckCause, BottleneckSeverity, Phase } from './types.ts'
 import type {
   GlobalState,
   TournamentConfig,
   Bottleneck,
-  RefsInUseByDay,
+  RefDemandByDay,
+  RefDemandInterval,
   EventTxLog,
   Strip,
+  Weapon,
 } from './types.ts'
 import { dayStart } from './types.ts'
 import { MORNING_WAVE_WINDOW_MINS, SLOT_MINS } from './constants.ts'
@@ -41,7 +43,6 @@ type FindStripsResult =
 
 export type NoWindowReason =
   | { kind: 'STRIPS'; needed: number; available: number; earliest_free: number }
-  | { kind: 'REFS'; needed: number; available: number; earliest_free: number }
   | { kind: 'TIME'; candidate: number; latest_start: number }
 
 export type ResourceWindowResult =
@@ -57,25 +58,21 @@ export type ResourceWindowResult =
  * retry loops. Avoids JSON.parse/stringify overhead by cloning only what changes:
  *
  * - strip_free_at: shallow array copy (numbers are primitives)
- * - refs_in_use_by_day: each day entry is copied with its release_events array cloned
- *   (counters and the events array are mutated during scheduling)
+ * - ref_demand_by_day: each day's intervals array is shallow-copied so rollback via
+ *   txLog (object identity splice) is unaffected — the interval objects themselves
+ *   are shared across snapshot and live state, which is intentional.
  * - schedule: shallow Record copy (ScheduleResult objects are write-once / immutable)
  * - bottlenecks: shallow array copy (Bottleneck objects are write-once / immutable)
  */
 export function snapshotState(state: GlobalState): GlobalState {
-  const refs: GlobalState['refs_in_use_by_day'] = {}
-  for (const dayKey of Object.keys(state.refs_in_use_by_day)) {
+  const refs: GlobalState['ref_demand_by_day'] = {}
+  for (const dayKey of Object.keys(state.ref_demand_by_day)) {
     const day = Number(dayKey)
-    const src = state.refs_in_use_by_day[day]
-    refs[day] = {
-      foil_epee_in_use: src.foil_epee_in_use,
-      saber_in_use: src.saber_in_use,
-      release_events: [...src.release_events],
-    }
+    refs[day] = { intervals: [...state.ref_demand_by_day[day].intervals] }
   }
   return {
     strip_free_at: [...state.strip_free_at],
-    refs_in_use_by_day: refs,
+    ref_demand_by_day: refs,
     schedule: { ...state.schedule },
     bottlenecks: [...state.bottlenecks],
   }
@@ -88,7 +85,7 @@ export function snapshotState(state: GlobalState): GlobalState {
  */
 export function restoreState(target: GlobalState, snapshot: GlobalState): void {
   target.strip_free_at = snapshot.strip_free_at
-  target.refs_in_use_by_day = snapshot.refs_in_use_by_day
+  target.ref_demand_by_day = snapshot.ref_demand_by_day
   target.schedule = snapshot.schedule
   target.bottlenecks = snapshot.bottlenecks
 }
@@ -106,7 +103,7 @@ export function createGlobalState(config: TournamentConfig): GlobalState {
   return {
     // Strips become available at the start of day 0 in the scheduling time model
     strip_free_at: config.strips.map(() => dayStart(0, config)),
-    refs_in_use_by_day: {},
+    ref_demand_by_day: {},
     schedule: {},
     bottlenecks: [],
   }
@@ -254,106 +251,42 @@ export function findAvailableStrips(
 // ──────────────────────────────────────────────
 
 /**
- * Lazily initialises the per-day ref tracking record if not yet present.
+ * Lazily initialises the per-day ref demand record if not yet present.
  */
-function ensureDayRefs(state: GlobalState, day: number): RefsInUseByDay {
-  if (!state.refs_in_use_by_day[day]) {
-    state.refs_in_use_by_day[day] = {
-      foil_epee_in_use: 0,
-      saber_in_use: 0,
-      release_events: [],
-    }
+function ensureDayRefs(state: GlobalState, day: number): RefDemandByDay {
+  if (!state.ref_demand_by_day[day]) {
+    state.ref_demand_by_day[day] = { intervals: [] }
   }
-  return state.refs_in_use_by_day[day]
-}
-
-/**
- * Returns how many foil/epee refs are free (not currently in use) on the given day
- * at the given time, accounting for any release events that have fired by that time.
- *
- * Includes idle saber refs in the available pool (METHODOLOGY.md §Referee Types: saber refs can
- * officiate ROW weapons). This is a read-only availability check — actual allocation
- * via allocateRefs always increments the correct pool (foil_epee_in_use). The scheduler
- * is responsible for not over-committing saber refs across concurrent foil/epee and
- * saber phases.
- */
-function sumReleasedByType(
-  events: RefsInUseByDay['release_events'],
-  atTime: number,
-): { foil_epee: number; saber: number } {
-  let foil_epee = 0
-  let saber = 0
-  for (const e of events) {
-    if (e.time > atTime) continue
-    if (e.type === 'saber') saber += e.count
-    else foil_epee += e.count
-  }
-  return { foil_epee, saber }
-}
-
-function feRefsFreeAt(day: number, atTime: number, state: GlobalState, config: TournamentConfig): number {
-  const avail = config.referee_availability[day]
-  if (!avail) return 0
-  const dayRefs = state.refs_in_use_by_day[day]
-  if (!dayRefs) return avail.foil_epee_refs + avail.three_weapon_refs
-
-  const released = sumReleasedByType(dayRefs.release_events, atTime)
-  const inUse = Math.max(0, dayRefs.foil_epee_in_use - released.foil_epee)
-  // Saber refs can also officiate foil/epee (METHODOLOGY.md §Referee Types)
-  const saberInUse = Math.max(0, dayRefs.saber_in_use - released.saber)
-  const total = avail.foil_epee_refs + avail.three_weapon_refs
-  return Math.max(0, total - inUse - saberInUse)
-}
-
-/**
- * Returns how many saber refs are free on the given day at atTime.
- */
-function saberRefsFreeAt(day: number, atTime: number, state: GlobalState, config: TournamentConfig): number {
-  const avail = config.referee_availability[day]
-  if (!avail) return 0
-  const dayRefs = state.refs_in_use_by_day[day]
-  if (!dayRefs) return avail.three_weapon_refs
-
-  const released = sumReleasedByType(dayRefs.release_events, atTime)
-  return Math.max(0, avail.three_weapon_refs - dayRefs.saber_in_use + released.saber)
+  return state.ref_demand_by_day[day]
 }
 
 // ──────────────────────────────────────────────
-// allocateRefs / releaseRefs
+// allocateRefs
 // ──────────────────────────────────────────────
 
 /**
- * Records ref allocation for a phase: increments in-use counter and
- * appends a release event at endTime so free counts can be computed later.
+ * Records ref allocation for a phase by pushing a RefDemandInterval into the
+ * day's intervals array. The interval records ref demand for post-schedule reporting
+ * (computeRefRequirements sweep-line analysis).
  *
- * Weapon determines whether foil_epee_in_use or saber_in_use is incremented.
- *
- * If txLog is provided, the index of the pushed release_event is recorded
- * so the allocation can be rolled back.
+ * If txLog is provided, the pushed interval object reference is recorded so
+ * rollbackEvent can splice it out by identity.
  */
 export function allocateRefs(
   state: GlobalState,
   day: number,
   weapon: Weapon,
   count: number,
-  _startTime: number,
+  startTime: number,
   endTime: number,
   txLog?: EventTxLog,
 ): void {
   const dayRefs = ensureDayRefs(state, day)
-  const type: 'foil_epee' | 'saber' = weapon === Weapon.SABRE ? 'saber' : 'foil_epee'
-
-  if (type === 'saber') {
-    dayRefs.saber_in_use += count
-  } else {
-    dayRefs.foil_epee_in_use += count
-  }
-
-  const releaseEvent = { time: endTime, type, count }
-  dayRefs.release_events.push(releaseEvent)
+  const interval: RefDemandInterval = { startTime, endTime, count, weapon }
+  dayRefs.intervals.push(interval)
 
   if (txLog) {
-    txLog.refEvents.push({ day, event: releaseEvent })
+    txLog.refEvents.push({ day, event: interval })
   }
 }
 
@@ -363,11 +296,10 @@ export function allocateRefs(
  * Strip changes: processed in reverse so that a strip allocated twice in one event
  * restores to its earliest observed value.
  *
- * Ref changes: find-and-remove the recorded ReleaseEvent by object identity (indexOf).
- * Object-reference tracking is required for phase-major: multiple events' txLogs
- * interleave entries in the same release_events array, and rolling back one event
- * would shift positional indices recorded by others. Identity lookup is immune to
- * shifts caused by concurrent rollbacks.
+ * Ref changes: find-and-remove the recorded RefDemandInterval by object identity.
+ * Object-reference tracking is required for phase-major scheduling where multiple
+ * events' txLogs interleave entries in the same intervals array — positional indices
+ * recorded by one event would be shifted by concurrent rollbacks.
  */
 export function rollbackEvent(state: GlobalState, txLog: EventTxLog): void {
   // Restore strips in reverse order
@@ -376,45 +308,20 @@ export function rollbackEvent(state: GlobalState, txLog: EventTxLog): void {
     state.strip_free_at[stripIdx] = oldFreeAt
   }
 
-  // Remove ref release_events by object identity
+  // Remove ref intervals by object identity
   for (let i = txLog.refEvents.length - 1; i >= 0; i--) {
     const { day, event } = txLog.refEvents[i]
-    const dayRefs = state.refs_in_use_by_day[day]
+    const dayRefs = state.ref_demand_by_day[day]
     if (!dayRefs) continue
 
-    const idx = dayRefs.release_events.indexOf(event)
+    const idx = dayRefs.intervals.indexOf(event)
     if (idx >= 0) {
-      dayRefs.release_events.splice(idx, 1)
-      if (event.type === 'saber') {
-        dayRefs.saber_in_use = Math.max(0, dayRefs.saber_in_use - event.count)
-      } else {
-        dayRefs.foil_epee_in_use = Math.max(0, dayRefs.foil_epee_in_use - event.count)
-      }
+      dayRefs.intervals.splice(idx, 1)
     }
   }
 
   txLog.stripChanges = []
   txLog.refEvents = []
-}
-
-/**
- * Immediately decrements the in-use counter for the given weapon.
- * Used when a phase completes early or is cancelled.
- * Does not remove the release_event record (harmless double-release is guarded by max(0,...)).
- */
-export function releaseRefs(
-  state: GlobalState,
-  day: number,
-  weapon: Weapon,
-  count: number,
-  _endTime: number,
-): void {
-  const dayRefs = ensureDayRefs(state, day)
-  if (weapon === Weapon.SABRE) {
-    dayRefs.saber_in_use = Math.max(0, dayRefs.saber_in_use - count)
-  } else {
-    dayRefs.foil_epee_in_use = Math.max(0, dayRefs.foil_epee_in_use - count)
-  }
 }
 
 // ──────────────────────────────────────────────
@@ -453,27 +360,19 @@ function countFreeStrips(
 
 /**
  * Determines the limiting NoWindowReason when no window could be found.
- * Prefers TIME if the candidate itself is already past the deadline, then
- * STRIPS if strip availability was the binding constraint, otherwise REFS.
+ * Returns TIME if the candidate is already past the deadline, otherwise STRIPS.
  */
 function diagNoWindowReason(
   candidate: number,
   latestStart: number,
-  _dayEndTime: number,
   stripsNeeded: number,
   stripsAvailable: number,
   lastStripFreeMax: number,
-  refsNeeded: number,
-  refsAvailable: number,
-  lastTRefs: number,
 ): NoWindowReason {
   if (candidate > latestStart) {
     return { kind: 'TIME', candidate, latest_start: latestStart }
   }
-  if (lastStripFreeMax > lastTRefs) {
-    return { kind: 'STRIPS', needed: stripsNeeded, available: stripsAvailable, earliest_free: lastStripFreeMax }
-  }
-  return { kind: 'REFS', needed: refsNeeded, available: refsAvailable, earliest_free: lastTRefs }
+  return { kind: 'STRIPS', needed: stripsNeeded, available: stripsAvailable, earliest_free: lastStripFreeMax }
 }
 
 // ──────────────────────────────────────────────
@@ -481,24 +380,22 @@ function diagNoWindowReason(
 // ──────────────────────────────────────────────
 
 /**
- * Finds the earliest start time at or after notBefore where both strip and ref
- * requirements can be met simultaneously. METHODOLOGY.md §Resource Windows.
+ * Finds the earliest start time at or after notBefore where strip requirements
+ * can be met. Refs are always assumed available — only strips and time gate scheduling.
+ * METHODOLOGY.md §Resource Windows.
  *
  * Algorithm:
  * 1. Snap notBefore to slot boundary.
  * 2. Try to find strips at candidate time.
  * 3. If WAIT_UNTIL, advance candidate and retry (bounded by strip count limit).
- * 4. Check ref availability; advance if refs not yet free.
- * 5. Snap resulting time to slot.
- * 6. Emit contention bottlenecks if delay exceeds THRESHOLD_MINS.
- * 7. Return NO_WINDOW if time exceeds DAY_START + LATEST_START_OFFSET or DAY_END.
+ * 4. Snap resulting time to slot.
+ * 5. Emit STRIP_CONTENTION bottleneck if delay exceeds THRESHOLD_MINS.
+ * 6. Return NO_WINDOW if time exceeds DAY_START + LATEST_START_OFFSET or DAY_END.
  *
  * The MAX_RESCHEDULE_ATTEMPTS guard prevents unbounded iteration.
  */
 export function earliestResourceWindow(
   stripsNeeded: number,
-  refsNeeded: number,
-  weapon: Weapon,
   videoRequired: boolean,
   notBefore: number,
   day: number,
@@ -511,43 +408,28 @@ export function earliestResourceWindow(
   const latestStart = dayStart(day, config) + config.LATEST_START_OFFSET
   const dayEndTime = dayStart(day, config) + config.DAY_LENGTH_MINS
 
-  // Build a NO_WINDOW result from the diagnostic free-ref count + diagNoWindowReason.
-  const buildNoWindow = (
-    cand: number,
-    stripFreeMax: number,
-    refTime: number,
-  ): ResourceWindowResult => {
-    const freeRefs = weapon === Weapon.SABRE
-      ? saberRefsFreeAt(day, cand, state, config)
-      : feRefsFreeAt(day, cand, state, config)
-    return {
-      type: 'NO_WINDOW',
-      reason: diagNoWindowReason(
-        cand,
-        latestStart,
-        dayEndTime,
-        stripsNeeded,
-        countFreeStrips(state, config, cand, videoRequired),
-        stripFreeMax,
-        refsNeeded,
-        freeRefs,
-        refTime,
-      ),
-    }
-  }
+  const buildNoWindow = (cand: number, stripFreeMax: number): ResourceWindowResult => ({
+    type: 'NO_WINDOW',
+    reason: diagNoWindowReason(
+      cand,
+      latestStart,
+      stripsNeeded,
+      countFreeStrips(state, config, cand, videoRequired),
+      stripFreeMax,
+    ),
+  })
 
   let candidate = snapToSlot(notBefore)
 
   // Resource-window search uses more attempts than the outer reschedule loop (MAX_RESCHEDULE_ATTEMPTS)
-  // because each 30-min slot scan may need multiple probes to find simultaneous strip+ref availability.
+  // because each 30-min slot scan may need multiple probes to find strip availability.
   // The multiplier and offset provide headroom for dense schedules.
   // Each iteration must advance candidate to guard against stalls.
   const maxAttempts = config.MAX_RESCHEDULE_ATTEMPTS * 2 + 10
   let attempts = 0
 
-  // Hoisted to capture the last known strip and ref free times for diagnotics on loop exhaustion.
+  // Hoisted to capture the last known strip free time for diagnostics on loop exhaustion.
   let lastStripFreeMax = 0
-  let lastTRefs = Infinity
 
   while (attempts < maxAttempts) {
     attempts++
@@ -581,24 +463,17 @@ export function earliestResourceWindow(
 
     const selectedStrips = stripResult.stripIndices
 
-    // T_refs: earliest time >= notBefore when sufficient refs are available.
-    // Computed from notBefore (not candidate) so refWait accurately reflects
-    // whether refs themselves are the source of delay vs. strips being the cause.
-    const tRefs = earliestRefsTime(day, weapon, refsNeeded, notBefore, state, config)
-
-    // T is the latest of: candidate, all selected strip free_at values, and ref availability
+    // T is the latest of: candidate and all selected strip free_at values
     const stripFreeMax = selectedStrips.reduce(
       (max, i) => Math.max(max, state.strip_free_at[i]),
       0,
     )
-    // Update hoisted trackers for loop-exhaustion diagnostics
     lastStripFreeMax = stripFreeMax
-    lastTRefs = tRefs
 
-    const T = snapToSlot(Math.max(candidate, stripFreeMax, tRefs))
+    const T = snapToSlot(Math.max(candidate, stripFreeMax))
 
     if (T > latestStart || T > dayEndTime) {
-      return buildNoWindow(candidate, stripFreeMax, tRefs)
+      return buildNoWindow(candidate, stripFreeMax)
     }
 
     // Verify strips are still available at T (they may have been claimed by a concurrent phase)
@@ -625,25 +500,13 @@ export function earliestResourceWindow(
     const bottlenecks: Bottleneck[] = []
 
     if (delay >= config.THRESHOLD_MINS) {
-      const stripWait = Math.max(0, stripFreeMax - notBefore)
-      const refWait = Math.max(0, tRefs - notBefore)
-
-      let cause: BottleneckCause
-      if (stripWait > 0 && refWait > 0) {
-        cause = BottleneckCause.STRIP_AND_REFEREE_CONTENTION
-      } else if (stripWait > 0) {
-        cause = BottleneckCause.STRIP_CONTENTION
-      } else {
-        cause = BottleneckCause.REFEREE_CONTENTION
-      }
-
       bottlenecks.push({
         competition_id: competitionId,
         phase,
-        cause,
+        cause: BottleneckCause.STRIP_CONTENTION,
         severity: BottleneckSeverity.WARN,
         delay_mins: delay,
-        message: `${competitionId} ${phase}: delayed ${delay} min due to resource contention`,
+        message: `${competitionId} ${phase}: delayed ${delay} min due to strip contention`,
       })
 
       if (videoRequired) {
@@ -666,54 +529,5 @@ export function earliestResourceWindow(
     }
   }
 
-  return buildNoWindow(candidate, lastStripFreeMax, lastTRefs)
-}
-
-/**
- * Returns the earliest time >= atTime when the required number of refs
- * are free for the given weapon on the given day.
- *
- * Scans release events in chronological order to find when enough refs
- * come free. If refs are already available at atTime, returns atTime.
- */
-function earliestRefsTime(
-  day: number,
-  weapon: Weapon,
-  refsNeeded: number,
-  atTime: number,
-  state: GlobalState,
-  config: TournamentConfig,
-): number {
-  const avail = config.referee_availability[day]
-  if (!avail) return atTime
-
-  const dayRefs = state.refs_in_use_by_day[day]
-  if (!dayRefs) return atTime // no refs allocated yet — all free
-
-  // Compute current free count for weapon at atTime
-  const freeNow = weapon === Weapon.SABRE
-    ? saberRefsFreeAt(day, atTime, state, config)
-    : feRefsFreeAt(day, atTime, state, config)
-
-  if (freeNow >= refsNeeded) return atTime
-
-  // Find future release events that increase free count enough
-  // Sort events by time and walk forward until we have enough refs
-  const futureReleases = dayRefs.release_events
-    .filter(e => e.time > atTime)
-    .sort((a, b) => a.time - b.time)
-
-  let accumulatedFree = freeNow
-  for (const event of futureReleases) {
-    const isRelevant = weapon === Weapon.SABRE
-      ? event.type === 'saber'
-      : event.type === 'foil_epee' || event.type === 'saber'
-    if (isRelevant) {
-      accumulatedFree += event.count
-      if (accumulatedFree >= refsNeeded) return event.time
-    }
-  }
-
-  // No future release makes enough refs available — return far future
-  return Infinity
+  return buildNoWindow(candidate, lastStripFreeMax)
 }

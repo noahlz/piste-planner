@@ -54,10 +54,6 @@ function minimalState(): Partial<StoreState> {
       FLIGHT_BUFFER_MINS: 10,
       THRESHOLD_MINS: 5,
     },
-    dayRefs: [
-      { foil_epee_refs: 12, three_weapon_refs: 6 },
-      { foil_epee_refs: 10, three_weapon_refs: 5 },
-    ],
     flightingSuggestionStates: [],
   }
 }
@@ -210,34 +206,6 @@ describe('buildTournamentConfig', () => {
 
       const ids = competitions.map((c: Competition) => c.id).sort()
       expect(ids).toEqual(['CDT-W-EPEE-IND', 'D1-M-FOIL-IND'])
-    })
-  })
-
-  describe('referee availability', () => {
-    it('maps dayRefs to DayRefereeAvailability with source ACTUAL', () => {
-      const state = storeWith(minimalState())
-      const { config } = buildTournamentConfig(state)
-
-      expect(config.referee_availability).toHaveLength(2)
-      expect(config.referee_availability[0]).toEqual({
-        day: 0,
-        foil_epee_refs: 12,
-        three_weapon_refs: 6,
-        source: 'ACTUAL',
-      })
-      expect(config.referee_availability[1]).toEqual({
-        day: 1,
-        foil_epee_refs: 10,
-        three_weapon_refs: 5,
-        source: 'ACTUAL',
-      })
-    })
-
-    it('produces empty referee_availability when dayRefs is empty', () => {
-      const state = storeWith({ ...minimalState(), dayRefs: [] })
-      const { config } = buildTournamentConfig(state)
-
-      expect(config.referee_availability).toEqual([])
     })
   })
 

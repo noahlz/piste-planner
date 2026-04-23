@@ -12,11 +12,9 @@ import type {
   AnalysisResult,
   FlightingGroup,
   ScheduleResult,
+  RefRequirementsByDay,
 } from '../engine/types.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
-import { suggestRefs } from './refSuggestion.ts'
-import { calculateOptimalRefs } from '../engine/refs.ts'
-import { buildTournamentConfig } from './buildConfig.ts'
 import { suggestStrips as computeStripSuggestion } from './stripSuggestion.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
@@ -102,26 +100,6 @@ export interface UiSlice {
   clearStale: () => void
 }
 
-export interface DayRefConfig {
-  foil_epee_refs: number
-  three_weapon_refs: number
-}
-
-const DEFAULT_DAY_REF_CONFIG: DayRefConfig = {
-  foil_epee_refs: 0,
-  three_weapon_refs: 0,
-}
-
-export interface RefereeSlice {
-  dayRefs: DayRefConfig[]
-  optimalRefs: DayRefConfig[]
-  manuallyEditedDays: Set<number>
-
-  setDayRefs: (dayIndex: number, refs: Partial<DayRefConfig>) => void
-  setOptimalRefs: (refs: DayRefConfig[]) => void
-  suggestAllRefs: () => void
-}
-
 const SuggestionState = {
   PENDING: 'pending',
   ACCEPTED: 'accepted',
@@ -145,12 +123,17 @@ export interface AnalysisSlice {
 export interface ScheduleSlice {
   scheduleResults: Record<string, ScheduleResult>
   bottlenecks: Bottleneck[]
+  refRequirementsByDay: RefRequirementsByDay[]
 
-  setScheduleResults: (results: Record<string, ScheduleResult>, bottlenecks: Bottleneck[]) => void
+  setScheduleResults: (
+    results: Record<string, ScheduleResult>,
+    bottlenecks: Bottleneck[],
+    refRequirementsByDay?: RefRequirementsByDay[],
+  ) => void
   clearSchedule: () => void
 }
 
-export type StoreState = TournamentSlice & UiSlice & CompetitionSlice & RefereeSlice & AnalysisSlice & ScheduleSlice
+export type StoreState = TournamentSlice & UiSlice & CompetitionSlice & AnalysisSlice & ScheduleSlice
 
 // ──────────────────────────────────────────────
 // Slice creators
@@ -198,7 +181,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
     setStrips: (total) => {
       set({ strips_total: total })
       get().markStale({ analysisStale: true, scheduleStale: true })
-      autoSuggestRefs(get as GetState, set as SetState)
     },
 
     setVideoStrips: (total) => {
@@ -220,7 +202,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
       if (suggested !== null) {
         set({ strips_total: suggested })
         get().markStale({ analysisStale: true, scheduleStale: true })
-        autoSuggestRefs(get as GetState, set as SetState)
       }
     },
 
@@ -256,32 +237,6 @@ function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): Co
   }
 }
 
-/**
- * Auto-populates referee counts for days that haven't been manually edited.
- * Called after competition selection changes.
- */
-function autoSuggestRefs(get: GetState, set: SetState) {
-  const state = get()
-  if (state.days_available === 0 || state.strips_total === 0) return
-
-  const suggestion = suggestRefs(
-    state.selectedCompetitions,
-    state.days_available,
-    state.strips_total,
-  )
-  if (!suggestion) return
-
-  const extended = ensureDayRefs(state.dayRefs, state.days_available)
-  let changed = false
-  const updated = extended.map((dc, i) => {
-    if (state.manuallyEditedDays.has(i)) return dc
-    if (dc.foil_epee_refs === suggestion.foil_epee_refs && dc.three_weapon_refs === suggestion.three_weapon_refs) return dc
-    changed = true
-    return { ...dc, ...suggestion }
-  })
-  if (changed) set({ dayRefs: updated })
-}
-
 function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice {
   return {
     selectedCompetitions: {},
@@ -299,7 +254,6 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
       }
       set({ selectedCompetitions: map })
       get().markStale({ analysisStale: true, scheduleStale: true })
-      autoSuggestRefs(get as GetState, set as SetState)
     },
 
     addCompetition: (id) => {
@@ -309,7 +263,6 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
         selectedCompetitions: { ...state.selectedCompetitions, [id]: config },
       }))
       get().markStale({ analysisStale: true, scheduleStale: true })
-      autoSuggestRefs(get as GetState, set as SetState)
     },
 
     updateCompetition: (id, partial) => {
@@ -332,7 +285,6 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
         return { selectedCompetitions: rest }
       })
       get().markStale({ analysisStale: true, scheduleStale: true })
-      autoSuggestRefs(get as GetState, set as SetState)
     },
 
     applyTemplate: (templateName) => {
@@ -345,7 +297,6 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
       }
       set({ selectedCompetitions: map })
       get().markStale({ analysisStale: true, scheduleStale: true })
-      autoSuggestRefs(get as GetState, set as SetState)
     },
 
     setGlobalOverrides: (partial) => {
@@ -375,70 +326,6 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
     },
 
     clearStale: () => set({ analysisStale: false, scheduleStale: false }),
-  }
-}
-
-/** Ensures dayRefs array is at least `length` elements, filling gaps with defaults. */
-function ensureDayRefs(existing: DayRefConfig[], length: number): DayRefConfig[] {
-  if (existing.length >= length) return existing
-  return [
-    ...existing,
-    ...Array.from({ length: length - existing.length }, () => ({ ...DEFAULT_DAY_REF_CONFIG })),
-  ]
-}
-
-function createRefereeSlice(set: SetState, get: GetState): RefereeSlice {
-  return {
-    dayRefs: [],
-    optimalRefs: [],
-    manuallyEditedDays: new Set<number>(),
-
-    setDayRefs: (dayIndex, refs) => {
-      set((state) => {
-        const extended = ensureDayRefs(state.dayRefs, dayIndex + 1)
-        const updated = extended.map((dc, i) =>
-          i === dayIndex ? { ...dc, ...refs } : dc,
-        )
-        const newManual = new Set(state.manuallyEditedDays)
-        newManual.add(dayIndex)
-        return { dayRefs: updated, manuallyEditedDays: newManual }
-      })
-      get().markStale({ scheduleStale: true })
-    },
-
-    setOptimalRefs: (refs) => {
-      set({ optimalRefs: refs })
-    },
-
-    suggestAllRefs: () => {
-      const state = get()
-      if (state.days_available === 0 || state.strips_total === 0) return
-
-      // Calculate and store optimal refs from the engine
-      const { config, competitions } = buildTournamentConfig(state as StoreState)
-      if (competitions.length > 0) {
-        const optimal = calculateOptimalRefs(competitions, config)
-        set({
-          optimalRefs: optimal.map((o) => ({
-            foil_epee_refs: o.foil_epee_refs,
-            three_weapon_refs: o.three_weapon_refs,
-          })),
-        })
-      }
-
-      const suggestion = suggestRefs(
-        state.selectedCompetitions,
-        state.days_available,
-        state.strips_total,
-      )
-      if (!suggestion) return
-      const extended = ensureDayRefs(state.dayRefs, state.days_available)
-      const dayRefs = extended.slice(0, state.days_available).map((dc) => ({
-        ...dc,
-        ...suggestion,
-      }))
-      set({ dayRefs, manuallyEditedDays: new Set<number>() })
-    },
   }
 }
 
@@ -492,13 +379,14 @@ function createScheduleSlice(set: SetState, _get: GetState): ScheduleSlice {
   return {
     scheduleResults: {},
     bottlenecks: [],
+    refRequirementsByDay: [],
 
-    setScheduleResults: (results, bottlenecks) => {
-      set({ scheduleResults: results, bottlenecks })
+    setScheduleResults: (results, bottlenecks, refRequirementsByDay = []) => {
+      set({ scheduleResults: results, bottlenecks, refRequirementsByDay })
     },
 
     clearSchedule: () => {
-      set({ scheduleResults: {}, bottlenecks: [] })
+      set({ scheduleResults: {}, bottlenecks: [], refRequirementsByDay: [] })
     },
   }
 }
@@ -511,7 +399,6 @@ export const useStore = create<StoreState>()((set, get) => ({
   ...createTournamentSlice(set as SetState, get as GetState),
   ...createCompetitionSlice(set as SetState, get as GetState),
   ...createUiSlice(set as SetState, get as GetState),
-  ...createRefereeSlice(set as SetState, get as GetState),
   ...createAnalysisSlice(set as SetState, get as GetState),
   ...createScheduleSlice(set as SetState, get as GetState),
 }))

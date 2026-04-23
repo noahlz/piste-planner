@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { ScheduleOutput } from './sections/ScheduleOutput.tsx'
 import { SaveLoadShare } from './sections/SaveLoadShare.tsx'
+import { RefRequirementsReport } from './sections/RefRequirementsReport.tsx'
 
 export function ScheduleView() {
   const scheduleStale = useStore((s) => s.scheduleStale)
+  const refRequirementsByDay = useStore((s) => s.refRequirementsByDay)
 
   return (
     <div className="space-y-4">
@@ -21,6 +23,7 @@ export function ScheduleView() {
       )}
 
       <ScheduleOutput />
+      <RefRequirementsReport requirements={refRequirementsByDay} />
       <SaveLoadShare />
 
       <div className="flex justify-center">

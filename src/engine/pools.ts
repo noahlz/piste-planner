@@ -99,10 +99,11 @@ export function weightedPoolDuration(
 /**
  * Estimates the total pool round duration given resource constraints.
  *
+ * Refs are assumed always available (Task 5A: ref-availability gating removed).
+ *
  * METHODOLOGY.md §Pool Parallelism:
- * - staffable_strips = min(availableStrips, nPools, floor(availableRefs / refsPerPool))
- * - When refsPerPool == 1, excess refs can each cover an additional strip ("double duty")
- * - effective_parallelism = staffable_strips + double_duty_pairs
+ * - staffable_strips = min(availableStrips, nPools)
+ * - effective_parallelism = staffable_strips
  * - actual_batches = ceil(nPools / effective_parallelism)
  * - actual_duration = ceil(baseline * actual_batches)
  */
@@ -110,33 +111,18 @@ export function estimatePoolDuration(
   nPools: number,
   weightedDuration: number,
   availableStrips: number,
-  availableRefs: number,
-  refsPerPool: number,
+  _refsPerPool: number,
 ): PoolDurationResult {
-  const staffableStrips = Math.min(
-    availableStrips,
-    nPools,
-    Math.floor(availableRefs / refsPerPool),
-  )
-
-  // Referee double-duty: when refs_per_pool == 1, one excess ref can cover two strips.
-  // Distinct from "double stripping" in the Ops Manual.
-  let double_duty_pairs = 0
-  if (refsPerPool === 1) {
-    const excessRefs = Math.max(availableRefs - staffableStrips, 0)
-    double_duty_pairs = Math.min(excessRefs, nPools - staffableStrips)
-  }
-
-  const effective_parallelism = staffableStrips + double_duty_pairs
+  const staffableStrips = Math.min(availableStrips, nPools)
+  const effective_parallelism = staffableStrips
   const actual_batches = Math.ceil(nPools / Math.max(effective_parallelism, 1))
   const actual_duration = Math.ceil(weightedDuration * actual_batches)
-  const uncompensated = Math.max(nPools - effective_parallelism, 0)
+  const uncompensated = Math.max(nPools - staffableStrips, 0)
 
   return {
     actual_duration,
     baseline: weightedDuration,
     effective_parallelism,
-    double_duty_pairs,
     uncompensated,
     penalised: uncompensated > 0,
   }
@@ -178,52 +164,21 @@ export function computeDeFencerCount(
 /**
  * Resolves the number of referees assigned per pool given the ref policy.
  *
+ * Refs are assumed always available (Task 5A: ref-availability gating removed).
+ *
  * METHODOLOGY.md §Refs Per Pool:
- * - ONE: always 1 ref/pool; shortfall if availableRefs < nPools
- * - TWO: tries 2 refs/pool; falls back to 1 with shortfall if availableRefs < 2*nPools
- * - AUTO: tries 2 if availableRefs >= 2*nPools; otherwise uses 1 (no shortfall)
+ * - ONE: 1 ref/pool, refs_needed = nPools
+ * - TWO: 2 refs/pool, refs_needed = 2 * nPools (no fallback — refs always sufficient)
+ * - AUTO: 2 refs/pool, refs_needed = 2 * nPools (no fallback — refs always sufficient)
  */
 export function resolveRefsPerPool(
   refPolicy: RefPolicy,
   nPools: number,
-  availableRefs: number,
 ): RefResolution {
   if (refPolicy === RefPolicy.ONE) {
-    const refs_needed = nPools
-    return {
-      refs_per_pool: 1,
-      refs_needed,
-      shortfall: Math.max(0, refs_needed - availableRefs),
-    }
+    return { refs_per_pool: 1, refs_needed: nPools }
   }
 
-  if (refPolicy === RefPolicy.TWO) {
-    const refs_needed_2 = nPools * 2
-    if (availableRefs >= refs_needed_2) {
-      return { refs_per_pool: 2, refs_needed: refs_needed_2, shortfall: 0 }
-    }
-    const refs_needed_1 = nPools
-    return {
-      refs_per_pool: 1,
-      refs_needed: refs_needed_1,
-      shortfall: refs_needed_2 - availableRefs,
-    }
-  }
-
-  // RefPolicy.AUTO: use 2/pool if enough, otherwise 1/pool.
-  // AUTO mode silently falls back to 1 ref/pool when supply is insufficient, reporting zero shortfall.
-  // This is intentional: AUTO means "use the best available" rather than "require 2".
-  // Contrast with TWO mode, which reports the shortfall as a warning.
-  // Shortfall is still reported if even 1/pool can't be staffed.
-  const refs_needed_2 = nPools * 2
-  if (availableRefs >= refs_needed_2) {
-    return { refs_per_pool: 2, refs_needed: refs_needed_2, shortfall: 0 }
-  }
-
-  const refs_needed_1 = nPools
-  return {
-    refs_per_pool: 1,
-    refs_needed: refs_needed_1,
-    shortfall: Math.max(0, refs_needed_1 - availableRefs),
-  }
+  // TWO and AUTO both use 2 refs/pool; no fallback to 1 since refs are always assumed available
+  return { refs_per_pool: 2, refs_needed: nPools * 2 }
 }

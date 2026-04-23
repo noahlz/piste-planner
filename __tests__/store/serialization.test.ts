@@ -26,8 +26,6 @@ function populatedState(): StoreState {
   store.getState().selectCompetitions(['CDT-M-FOIL-IND'])
   store.getState().updateCompetition('CDT-M-FOIL-IND', { fencer_count: 64 })
   store.getState().setGlobalOverrides({ ADMIN_GAP_MINS: 20 })
-  store.getState().setDayRefs(0, { foil_epee_refs: 6, three_weapon_refs: 3 })
-  store.getState().setDayRefs(1, { foil_epee_refs: 5, three_weapon_refs: 2 })
   return store.getState()
 }
 
@@ -64,13 +62,6 @@ function validSerializedData(): SerializedState {
         THRESHOLD_MINS: 10,
       },
     },
-    referees: {
-      dayRefs: [
-        { foil_epee_refs: 4, three_weapon_refs: 2 },
-        { foil_epee_refs: 3, three_weapon_refs: 1 },
-        { foil_epee_refs: 5, three_weapon_refs: 3 },
-      ],
-    },
   }
 }
 
@@ -87,7 +78,6 @@ describe('serializeState', () => {
     expect(parsed.schemaVersion).toBe(1)
     expect(parsed.tournament).toBeDefined()
     expect(parsed.competitions).toBeDefined()
-    expect(parsed.referees).toBeDefined()
 
     expect(parsed.tournament.tournament_type).toBe('RYC')
     expect(parsed.tournament.days_available).toBe(2)
@@ -98,20 +88,16 @@ describe('serializeState', () => {
 
     expect(parsed.competitions.selectedCompetitions['CDT-M-FOIL-IND'].fencer_count).toBe(64)
     expect(parsed.competitions.globalOverrides.ADMIN_GAP_MINS).toBe(20)
-
-    expect(parsed.referees.dayRefs).toHaveLength(2)
-    expect(parsed.referees.dayRefs[0].foil_epee_refs).toBe(6)
-    expect(parsed.referees.dayRefs[1].three_weapon_refs).toBe(2)
   })
 
-  it('excludes transient state (UI, analysis, schedule)', () => {
+  it('excludes transient state (UI, analysis, schedule) and referees', () => {
     const state = populatedState()
     const json = serializeState(state)
     const parsed = JSON.parse(json)
 
-    // Only three top-level data keys + schemaVersion
+    // Only two top-level data keys + schemaVersion
     expect(Object.keys(parsed).sort()).toEqual(
-      ['competitions', 'referees', 'schemaVersion', 'tournament'].sort(),
+      ['competitions', 'schemaVersion', 'tournament'].sort(),
     )
   })
 })
@@ -224,7 +210,6 @@ describe('deserializeState', () => {
       expect(result.state.tournament_type).toBe('NAC')
       expect(result.state.strips_total).toBe(10)
       expect(result.state.selectedCompetitions?.['CDT-M-FOIL-IND']?.fencer_count).toBe(32)
-      expect(result.state.dayRefs).toHaveLength(3)
     }
   })
 
@@ -247,6 +232,30 @@ describe('deserializeState', () => {
     const result = deserializeState(JSON.stringify(data))
     expect('error' in result).toBe(true)
     if ('error' in result) expect(result.error).toMatch(/days_available/i)
+  })
+
+  it('load: legacy referees key is silently ignored (backward compat)', () => {
+    const legacy = JSON.stringify({
+      schemaVersion: 1,
+      tournament: {
+        tournament_type: 'NAC',
+        days_available: 2,
+        dayConfigs: [],
+        strips_total: 20,
+        video_strips_total: 4,
+        pod_captain_override: 'AUTO',
+      },
+      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      referees: { dayRefs: [{ foil_epee_refs: 5, three_weapon_refs: 3 }] },
+    })
+    const result = deserializeState(legacy)
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      expect(result.state.tournament_type).toBe('NAC')
+      expect(result.state.strips_total).toBe(20)
+      // No ref fields in the returned state
+      expect((result.state as Record<string, unknown>)['dayRefs']).toBeUndefined()
+    }
   })
 })
 
@@ -271,7 +280,6 @@ describe('round-trip: serializeState → deserializeState', () => {
     expect(loaded.pod_captain_override).toBe(original.pod_captain_override)
     expect(loaded.selectedCompetitions).toEqual(original.selectedCompetitions)
     expect(loaded.globalOverrides).toEqual(original.globalOverrides)
-    expect(loaded.dayRefs).toEqual(original.dayRefs)
   })
 })
 
@@ -329,7 +337,6 @@ describe('URL round-trip: encodeToUrl → decodeFromUrl', () => {
     expect(loaded.days_available).toBe(original.days_available)
     expect(loaded.strips_total).toBe(original.strips_total)
     expect(loaded.selectedCompetitions).toEqual(original.selectedCompetitions)
-    expect(loaded.dayRefs).toEqual(original.dayRefs)
   })
 })
 

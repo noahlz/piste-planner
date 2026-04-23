@@ -89,9 +89,9 @@ describe('schedulePoolPhase', () => {
     expect(partialResult.pool_strip_count).toBe(10)
   })
 
-  it('emits ref release_events with the correct count after pool allocation', () => {
-    // AUTO policy, 20 foil_epee_refs, 10 pools → refs_per_pool=2 → refs_needed=20.
-    // allocateRefs pushes one release_event for foil_epee with count=20.
+  it('records a ref demand interval with the correct count after pool allocation', () => {
+    // AUTO policy, 10 pools → refs_per_pool=2 → refs_needed=20.
+    // allocateRefs pushes one interval for FOIL with count=20.
     const config = makeConfig()
     const state = createGlobalState(config)
     const competition = makeCompetition({ id: 'pool-refs', fencer_count: 64 })
@@ -123,11 +123,6 @@ describe('schedulePoolPhase', () => {
     const config = makeConfig({
       max_pool_strip_pct: 0.50,
       max_de_strip_pct: 1.0,
-      referee_availability: [
-        { day: 0, foil_epee_refs: 100, three_weapon_refs: 50, source: 'ACTUAL' },
-        { day: 1, foil_epee_refs: 100, three_weapon_refs: 50, source: 'ACTUAL' },
-        { day: 2, foil_epee_refs: 100, three_weapon_refs: 50, source: 'ACTUAL' },
-      ],
     })
     const state = createGlobalState(config)
     const competition = makeCompetition({

@@ -37,6 +37,7 @@
 
 import type { Competition, TournamentConfig } from './types.ts'
 import { EventType } from './types.ts'
+import { saberPileupPenalty } from './dayAssignment.ts'
 import type { ConstraintGraph } from './constraintGraph.ts'
 import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
 import { getProximityWeight, findIndividualCounterpart } from './crossover.ts'
@@ -229,6 +230,10 @@ function colorPenalty(
 
   // Individual/team ordering
   total += individualTeamOrderingPenalty(self, c, competitions, coloring)
+
+  // Saber pileup: discourage concentrating saber events on a single day.
+  // Always active (not gated by loadBalance) — structural concern.
+  total += saberPileupPenalty(self, c, coloring, competitions)
 
   // Load balancing: per-event flat cost plus staged capacity-fill penalty.
   // Only active in Phase 2.

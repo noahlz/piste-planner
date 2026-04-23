@@ -159,58 +159,38 @@ describe('weightedPoolDuration', () => {
 describe('estimatePoolDuration', () => {
   const baseline = 120 // EPEE 6-person pool
 
-  it('4 pools, 4 strips, 4 refs, 1 ref/pool → baseline (no penalty)', () => {
-    const result = estimatePoolDuration(4, baseline, 4, 4, 1)
+  it('4 pools, 4 strips → baseline (no penalty)', () => {
+    // staffable = min(4, 4) = 4, effective_parallelism = 4, batches = 1
+    const result = estimatePoolDuration(4, baseline, 4, 1)
     expect(result.actual_duration).toBe(baseline)
     expect(result.baseline).toBe(baseline)
     expect(result.effective_parallelism).toBe(4)
-    expect(result.double_duty_pairs).toBe(0)
     expect(result.uncompensated).toBe(0)
     expect(result.penalised).toBe(false)
   })
 
-  it('4 pools, 2 strips → double-duty compensates with excess refs', () => {
-    // 4 refs, 2 strips, refsPerPool=1: staffable=min(2,4,4)=2, excess=4-2=2, dd=min(2,2)=2
-    // effective=2+2=4, batches=1
-    const result = estimatePoolDuration(4, baseline, 2, 4, 1)
-    expect(result.effective_parallelism).toBe(4)
-    expect(result.double_duty_pairs).toBe(2)
-    expect(result.actual_duration).toBe(baseline)
-    expect(result.penalised).toBe(false)
-  })
-
-  it('4 pools, 2 strips, 2 refs → strip+ref limited, no double-duty excess', () => {
-    // staffable=min(2,4,2)=2, excess=2-2=0, dd=0, effective=2, batches=2
-    const result = estimatePoolDuration(4, baseline, 2, 2, 1)
+  it('4 pools, 2 strips → strip-limited, 2 batches', () => {
+    // staffable = min(2, 4) = 2, effective_parallelism = 2, batches = 2
+    const result = estimatePoolDuration(4, baseline, 2, 1)
     expect(result.effective_parallelism).toBe(2)
-    expect(result.double_duty_pairs).toBe(0)
-    expect(result.actual_duration).toBe(baseline * 2)
-    expect(result.penalised).toBe(true)
-  })
-
-  it('4 pools, 4 strips, 2 refs, 1 ref/pool → ref-limited with no double-duty', () => {
-    // staffable=min(4,4,2)=2, excess=2-2=0, dd=0, effective=2
-    const result = estimatePoolDuration(4, baseline, 4, 2, 1)
-    expect(result.effective_parallelism).toBe(2)
-    expect(result.double_duty_pairs).toBe(0)
     expect(result.actual_duration).toBe(baseline * 2)
     expect(result.uncompensated).toBe(2)
     expect(result.penalised).toBe(true)
   })
 
   it('nPools=0 → zero duration, no penalty (degenerate but valid upstream)', () => {
-    const result = estimatePoolDuration(0, baseline, 4, 4, 1)
+    const result = estimatePoolDuration(0, baseline, 4, 1)
     expect(result.actual_duration).toBe(0)
     expect(result.effective_parallelism).toBe(0)
     expect(result.penalised).toBe(false)
   })
 
-  it('no double-duty when refsPerPool > 1', () => {
-    // 4 pools, 4 strips, 6 refs, refsPerPool=2: staffable=min(4,4,3)=3, dd=0 (rpp!=1)
-    const result = estimatePoolDuration(4, baseline, 4, 6, 2)
-    expect(result.double_duty_pairs).toBe(0)
-    expect(result.effective_parallelism).toBe(3)
-    expect(result.penalised).toBe(true)
+  it('refsPerPool param is accepted but does not affect strip-based parallelism', () => {
+    // 4 pools, 4 strips, refsPerPool=2 → same result as refsPerPool=1
+    const result = estimatePoolDuration(4, baseline, 4, 2)
+    expect(result.effective_parallelism).toBe(4)
+    expect(result.actual_duration).toBe(baseline)
+    expect(result.penalised).toBe(false)
   })
 })
 
@@ -253,45 +233,33 @@ describe('computeDeFencerCount', () => {
 // ──────────────────────────────────────────────
 
 describe('resolveRefsPerPool', () => {
-  it('Policy ONE, 4 pools, 4 refs → refs_per_pool=1, no shortfall', () => {
-    const result = resolveRefsPerPool(RefPolicy.ONE, 4, 4)
+  it('Policy ONE, 4 pools → refs_per_pool=1, refs_needed=4', () => {
+    const result = resolveRefsPerPool(RefPolicy.ONE, 4)
     expect(result.refs_per_pool).toBe(1)
     expect(result.refs_needed).toBe(4)
-    expect(result.shortfall).toBe(0)
   })
 
-  it('Policy TWO, 4 pools, 8 refs → refs_per_pool=2, no shortfall', () => {
-    const result = resolveRefsPerPool(RefPolicy.TWO, 4, 8)
+  it('Policy TWO, 4 pools → refs_per_pool=2, refs_needed=8', () => {
+    const result = resolveRefsPerPool(RefPolicy.TWO, 4)
     expect(result.refs_per_pool).toBe(2)
     expect(result.refs_needed).toBe(8)
-    expect(result.shortfall).toBe(0)
   })
 
-  it('Policy TWO, 4 pools, 6 refs → fallback to 1, shortfall>0', () => {
-    // wants 8 refs (2 per pool), only 6 available → falls back to 1 ref/pool
-    const result = resolveRefsPerPool(RefPolicy.TWO, 4, 6)
-    expect(result.refs_per_pool).toBe(1)
-    expect(result.shortfall).toBe(2)
-  })
-
-  it('Policy AUTO, 4 pools, 8 refs → refs_per_pool=2, no shortfall', () => {
-    const result = resolveRefsPerPool(RefPolicy.AUTO, 4, 8)
+  it('Policy AUTO, 4 pools → refs_per_pool=2, refs_needed=8 (no fallback)', () => {
+    const result = resolveRefsPerPool(RefPolicy.AUTO, 4)
     expect(result.refs_per_pool).toBe(2)
-    expect(result.shortfall).toBe(0)
+    expect(result.refs_needed).toBe(8)
   })
 
-  it('Policy AUTO, 4 pools, 5 refs → refs_per_pool=1, no shortfall (graceful fallback)', () => {
-    // 5 < 8 needed for 2/pool, so falls back to 1/pool; 5 >= 4 needed for 1/pool
-    const result = resolveRefsPerPool(RefPolicy.AUTO, 4, 5)
+  it('Policy ONE, 1 pool → refs_per_pool=1, refs_needed=1', () => {
+    const result = resolveRefsPerPool(RefPolicy.ONE, 1)
     expect(result.refs_per_pool).toBe(1)
-    expect(result.shortfall).toBe(0)
+    expect(result.refs_needed).toBe(1)
   })
 
-  it('Policy AUTO, 4 pools, 2 refs → refs_per_pool=1, shortfall=2', () => {
-    // 2 < 4 needed for 1/pool → shortfall
-    const result = resolveRefsPerPool(RefPolicy.AUTO, 4, 2)
-    expect(result.refs_per_pool).toBe(1)
-    expect(result.refs_needed).toBe(4)
-    expect(result.shortfall).toBe(2)
+  it('Policy TWO, 10 pools → refs_needed=20', () => {
+    const result = resolveRefsPerPool(RefPolicy.TWO, 10)
+    expect(result.refs_per_pool).toBe(2)
+    expect(result.refs_needed).toBe(20)
   })
 })

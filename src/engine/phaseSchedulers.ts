@@ -32,7 +32,6 @@ import {
   weightedPoolDuration,
 } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
-import { refsAvailableOnDay } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, type NoWindowReason, type PoolContext, type ResourceWindowResult } from './resources.ts'
 import { SchedulingError } from './dayAssignment.ts'
@@ -77,9 +76,6 @@ function emitNoWindowDiagnostic(
   switch (reason.kind) {
     case 'STRIPS':
       message = `${competitionId} ${phase} on day ${day + 1}: need ${reason.needed} strips, ${reason.available} free, earliest free at ${formatTime(reason.earliest_free)}`
-      break
-    case 'REFS':
-      message = `${competitionId} ${phase} on day ${day + 1}: need ${reason.needed} refs, ${reason.available} available, next release at ${formatTime(reason.earliest_free)}`
       break
     case 'TIME':
       message = `${competitionId} ${phase} on day ${day + 1}: candidate ${formatTime(reason.candidate)} exceeds latest start ${formatTime(reason.latest_start)}`
@@ -181,8 +177,7 @@ export function schedulePoolPhase(
   }
 
   const poolStructure = computePoolStructure(competition.fencer_count, competition.use_single_pool_override)
-  const availRefs = refsAvailableOnDay(day, competition.weapon, config)
-  const refRes = resolveRefsPerPool(competition.ref_policy, poolStructure.n_pools, availRefs)
+  const refRes = resolveRefsPerPool(competition.ref_policy, poolStructure.n_pools)
   const wDuration = weightedPoolDuration(poolStructure, competition.weapon, config.pool_round_duration_table)
 
   // Store pool_duration_baseline computed here into partialResult
@@ -233,8 +228,6 @@ export function scheduleDePrelimsPhase(
   const prelimsWindow = assertWindowFound(
     earliestResourceWindow(
       Math.min(deOptimal, config.strips_total),
-      config.DE_REFS,
-      competition.weapon,
       false, // prelims never use video regardless of policy
       notBefore,
       day,
@@ -281,8 +274,6 @@ export function scheduleR16Phase(
   const r16Window = assertWindowFound(
     earliestResourceWindow(
       r16Target,
-      config.DE_REFS * r16Target,
-      competition.weapon,
       r16VideoRequired,
       notBefore,
       day,
@@ -332,8 +323,6 @@ export function scheduleDeFinalsPhase(
   const finWindow = assertWindowFound(
     earliestResourceWindow(
       finTarget,
-      config.DE_REFS,
-      competition.weapon,
       finalsVideoRequired,
       notBefore, // continuous from R16 end — no gap
       day,
@@ -389,8 +378,6 @@ export function scheduleSingleStageDePhase(
   const window = assertWindowFound(
     earliestResourceWindow(
       Math.min(deOptimal, deEffectiveCap),
-      deRefsNeeded,
-      competition.weapon,
       false, // SINGLE_STAGE never uses video
       notBefore,
       day,
@@ -519,7 +506,6 @@ function allocateFlightedPools({
 }: PoolAllocationContext): number {
   const flightAPools = Math.ceil(poolStructure.n_pools / 2)
   const flightBPools = Math.floor(poolStructure.n_pools / 2)
-  const availRefs = refsAvailableOnDay(day, competition.weapon, config)
 
   const effectiveCap = computeStripCap(
     config.strips_total,
@@ -530,11 +516,11 @@ function allocateFlightedPools({
   // Compute per-flight durations using half the pools
   const flightADur = estimatePoolDuration(
     flightAPools, wDuration,
-    effectiveCap, availRefs, refRes.refs_per_pool,
+    effectiveCap, refRes.refs_per_pool,
   )
   const flightBDur = estimatePoolDuration(
     flightBPools, wDuration,
-    effectiveCap, availRefs, refRes.refs_per_pool,
+    effectiveCap, refRes.refs_per_pool,
   )
 
   const flightARefsNeeded = Math.ceil(refRes.refs_needed / 2)
@@ -543,8 +529,7 @@ function allocateFlightedPools({
   // Flight A
   const windowA = assertWindowFound(
     earliestResourceWindow(
-      flightAPools, flightARefsNeeded,
-      competition.weapon, false, notBefore, day,
+      flightAPools, false, notBefore, day,
       state, config, competition.id, Phase.FLIGHT_A,
       poolContext,
     ),
@@ -575,8 +560,7 @@ function allocateFlightedPools({
 
   const windowB = assertWindowFound(
     earliestResourceWindow(
-      flightBPools, flightBRefsNeeded,
-      competition.weapon, false, flightBIdeal, day,
+      flightBPools, false, flightBIdeal, day,
       state, config, competition.id, Phase.FLIGHT_B,
       poolContext,
     ),
@@ -626,7 +610,6 @@ function allocateNonFlightedPools({
   txLog,
   poolContext,
 }: PoolAllocationContext): number {
-  const availRefs = refsAvailableOnDay(day, competition.weapon, config)
   const effectiveCap = computeStripCap(
     config.strips_total,
     config.max_pool_strip_pct,
@@ -636,7 +619,6 @@ function allocateNonFlightedPools({
     poolStructure.n_pools,
     wDuration,
     effectiveCap,
-    availRefs,
     refRes.refs_per_pool,
   )
   partialResult.pool_duration_actual = poolDur.actual_duration
@@ -644,8 +626,6 @@ function allocateNonFlightedPools({
   const window = assertWindowFound(
     earliestResourceWindow(
       poolDur.effective_parallelism,
-      refRes.refs_needed,
-      competition.weapon,
       false,
       notBefore,
       day,

@@ -4,7 +4,6 @@ import { CompetitionMatrix } from './sections/CompetitionMatrix.tsx'
 import { FencerCounts } from './sections/FencerCounts.tsx'
 import { CompetitionOverrides } from './sections/CompetitionOverrides.tsx'
 import { StripSetup } from './sections/StripSetup.tsx'
-import { RefereeSetup } from './sections/RefereeSetup.tsx'
 import { ActionButtons } from './sections/ActionButtons.tsx'
 import { AnalysisOutput } from './sections/AnalysisOutput.tsx'
 import { ScheduleOutput } from './sections/ScheduleOutput.tsx'
@@ -19,7 +18,6 @@ export function KitchenSinkPage() {
       <FencerCounts />
       <CompetitionOverrides />
       <StripSetup />
-      <RefereeSetup />
       <ActionButtons />
       <AnalysisOutput />
       <ScheduleOutput />

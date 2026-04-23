@@ -19,7 +19,7 @@ function makeGlobalState(
 ): GlobalState {
   return {
     strip_free_at: Array(strips_total).fill(480),
-    refs_in_use_by_day: {},
+    ref_demand_by_day: {},
     schedule: scheduleEntries,
     bottlenecks: [],
   }

@@ -42,12 +42,6 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     strips,
     strips_total: strips.length,
     video_strips_total: strips.filter(s => s.video_capable).length,
-    referee_availability: Array.from({ length: days }, (_, i) => ({
-      day: i,
-      foil_epee_refs: 20,
-      three_weapon_refs: 10,
-      source: 'ACTUAL' as const,
-    })),
     pod_captain_override: PodCaptainOverride.AUTO,
     DAY_START_MINS: DAY_START_8AM,
     DAY_END_MINS: DAY_END_10PM,
@@ -128,10 +122,6 @@ export function makePoolContextConfig(): TournamentConfig {
       max_pool_strip_pct: 1.0,
       max_de_strip_pct: 0.80,
     }),
-    referee_availability: [
-      { day: 0, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' as const },
-      { day: 1, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' as const },
-    ],
     ADMIN_GAP_MINS: 15,
   }
 }
