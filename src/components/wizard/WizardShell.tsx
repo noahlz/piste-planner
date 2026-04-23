@@ -8,7 +8,7 @@ import { WizardStep3 } from './WizardStep3.tsx'
 import { WizardStep4 } from './WizardStep4.tsx'
 import { ScheduleView } from '../ScheduleView.tsx'
 
-const STEP_LABELS = ['Tournament', 'Fencers', 'Refs & Strips', 'Analysis', 'Schedule'] as const
+const STEP_LABELS = ['Tournament', 'Fencers', 'Strips', 'Analysis', 'Schedule'] as const
 
 function StepIndicator({ currentStep }: { currentStep: number }) {
   return (

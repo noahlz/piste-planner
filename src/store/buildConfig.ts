@@ -1,6 +1,5 @@
 import type {
   Competition,
-  DayRefereeAvailability,
   Strip,
   TournamentConfig,
 } from '../engine/types.ts'
@@ -38,15 +37,12 @@ export function buildTournamentConfig(state: StoreState): {
 } {
   const strips = buildStrips(state.strips_total, state.video_strips_total)
 
-  const referee_availability = buildRefereeAvailability(state.dayRefs)
-
   const config: TournamentConfig = {
     tournament_type: state.tournament_type,
     days_available: state.days_available,
     strips,
     strips_total: state.strips_total,
     video_strips_total: state.video_strips_total,
-    referee_availability,
     pod_captain_override: state.pod_captain_override,
     dayConfigs: state.dayConfigs,
 
@@ -90,17 +86,6 @@ function buildStrips(total: number, videoCount: number): Strip[] {
   return Array.from({ length: total }, (_, i) => ({
     id: `strip-${i + 1}`,
     video_capable: i < videoCount,
-  }))
-}
-
-function buildRefereeAvailability(
-  dayRefs: StoreState['dayRefs'],
-): DayRefereeAvailability[] {
-  return dayRefs.map((ref, i) => ({
-    day: i,
-    foil_epee_refs: ref.foil_epee_refs,
-    three_weapon_refs: ref.three_weapon_refs,
-    source: 'ACTUAL' as const,
   }))
 }
 

@@ -1,6 +1,7 @@
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useStore } from '../../store/store.ts'
 import { BottleneckSeverity } from '../../engine/types.ts'
+import { formatMinutes } from '../../lib/time.ts'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -23,13 +24,6 @@ const SEVERITY_ICON = {
   WARN: AlertTriangle,
   INFO: Info,
 } as const
-
-function formatMinutes(mins: number | null): string {
-  if (mins === null) return '\u2014'
-  const hours = Math.floor(mins / 60)
-  const minutes = mins % 60
-  return `${hours}:${minutes.toString().padStart(2, '0')}`
-}
 
 /**
  * Returns a row tint class based on the worst bottleneck severity for a competition.

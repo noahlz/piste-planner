@@ -83,9 +83,6 @@ describe('scheduleAll — template integration', () => {
       // up to 6 concurrent R16 phases (all 6 Cadet events on one day) need 24.
       strips: makeStrips(96, 24),
       MAX_RESCHEDULE_ATTEMPTS: 8,
-      referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 60, three_weapon_refs: 30, source: 'ACTUAL' as const,
-      })),
     })
     // fencer_count=10: minimum that produces ≥2 promoted fencers with 20% PERCENTAGE cut
     // (round(10 × 0.20) = 2). Using 6 would fail validation.
@@ -112,9 +109,6 @@ describe('scheduleAll — template integration', () => {
     const config = makeConfig({
       days_available: 2,
       strips: makeStrips(96, 4),
-      referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 80, three_weapon_refs: 40, source: 'ACTUAL' as const,
-      })),
     })
     const comps = competitionsFromTemplate('ROC Div1A/Vet', 8)
 
@@ -135,9 +129,6 @@ describe('scheduleAll — template integration', () => {
     const config = makeConfig({
       days_available: 2,
       strips: makeStrips(56, 2),
-      referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 36, three_weapon_refs: 18, source: 'ACTUAL' as const,
-      })),
     })
     const comps = competitionsFromTemplate('RYC Weekend', 8)
 
@@ -164,9 +155,6 @@ describe('scheduleAll — constraint scenarios', () => {
     const config = makeConfig({
       days_available: 3,
       strips: makeStrips(16, 2),
-      referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const,
-      })),
     })
     // 6 small events across different demographics on constrained strips
     const comps = [
@@ -197,9 +185,6 @@ describe('scheduleAll — constraint scenarios', () => {
     const config = makeConfig({
       days_available: 2,
       strips: makeStrips(48, 0), // no video strips
-      referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 30, three_weapon_refs: 15, source: 'ACTUAL' as const,
-      })),
     })
     // Small non-conflicting events with BEST_EFFORT video on zero video strips
     const comps = [
@@ -223,9 +208,6 @@ describe('scheduleAll — constraint scenarios', () => {
     const config = makeConfig({
       days_available: 2,
       strips: makeStrips(32, 4),
-      referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const,
-      })),
     })
     // 6 small events across different weapons/genders to minimize crossover
     const comps = [
@@ -507,9 +489,6 @@ describe('scheduleAll — validation integration', () => {
     const config = makeConfig({
       days_available: 2,
       strips: makeStrips(24, 4),
-      referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const,
-      })),
     })
     const comps = [
       makeCompetition({
@@ -546,9 +525,6 @@ describe('scheduleAll — graceful degradation on resource exhaustion', () => {
       tournament_type: TournamentType.RJCC,
       days_available: 2,
       strips: makeStrips(4, 0),
-      referee_availability: Array.from({ length: 2 }, (_, i) => ({
-        day: i, foil_epee_refs: 10, three_weapon_refs: 10, source: 'ACTUAL' as const,
-      })),
     })
 
     // 10 competitions each wanting all 4 strips, across enough demographic variation
@@ -614,10 +590,6 @@ describe('scheduleAll — repair loop', () => {
         { day_start_time: 840, day_end_time: 1680 },
       ],
       strips: makeStrips(24, 4),
-      referee_availability: [
-        { day: 0, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const },
-        { day: 1, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const },
-      ],
     })
 
     // Two non-conflicting events (different demographics = no hard constraints)
@@ -667,10 +639,6 @@ describe('scheduleAll — repair loop', () => {
         { day_start_time: 840, day_end_time: 870 },
       ],
       strips: makeStrips(1, 0),
-      referee_availability: [
-        { day: 0, foil_epee_refs: 10, three_weapon_refs: 5, source: 'ACTUAL' as const },
-        { day: 1, foil_epee_refs: 10, three_weapon_refs: 5, source: 'ACTUAL' as const },
-      ],
     })
 
     const comps = [
@@ -709,9 +677,6 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
     const config = makeConfig({
       days_available: 4,
       strips: makeStrips(64, 4),
-      referee_availability: Array.from({ length: 4 }, (_, i) => ({
-        day: i, foil_epee_refs: 40, three_weapon_refs: 20, source: 'ACTUAL' as const,
-      })),
     })
 
     // Heavy events locked to day 0 (latest_end=840 means they cannot start after 840=dayStart(1))
@@ -754,9 +719,6 @@ describe('scheduleAll — postScheduleWarnings integration', () => {
     const config = makeConfig({
       days_available: 3,
       strips: makeStrips(32, 4),
-      referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 20, three_weapon_refs: 10, source: 'ACTUAL' as const,
-      })),
     })
     const comps = [
       makeCompetition({ id: 'c1', gender: Gender.MEN,   weapon: Weapon.FOIL,  category: Category.DIV1A, fencer_count: 16, strips_allocated: 4 }),
@@ -804,34 +766,6 @@ describe('postScheduleDiagnostics', () => {
     expect(stripRec[0].message).toContain('add 9 more')
   })
 
-  it('emits ref recommendation when configured refs < recommended', () => {
-    // Two sabre events with 24 fencers each → ceil(24/7)=4 pools each
-    // peakSabrePools = 4+4=8, peakSabreDe = 5+5=10 (DE demand per comp: 4 strips + 1 captain)
-    // max(8, 10) = 10 → three_weapon refs needed = 10
-    // Config: 2 refs per day (foil_epee:1 + three_weapon:1 = 2 total)
-    const comps = [
-      makeCompetition({ id: 'sabre-1', fencer_count: 24, weapon: Weapon.SABRE }),
-      makeCompetition({ id: 'sabre-2', fencer_count: 24, weapon: Weapon.SABRE, gender: Gender.WOMEN }),
-    ]
-    const config = makeConfig({
-      strips: makeStrips(48, 0),
-      referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 1, three_weapon_refs: 1, source: 'ACTUAL' as const,
-      })),
-    })
-
-    const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
-
-    const refRec = result.filter(b => b.message.includes('Refs: need'))
-    expect(refRec).toHaveLength(1)
-    expect(refRec[0].cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
-    expect(refRec[0].severity).toBe(BottleneckSeverity.INFO)
-    expect(refRec[0].phase).toBe('POST_SCHEDULE')
-    expect(refRec[0].message).toContain('10 three-weapon')
-    expect(refRec[0].message).toContain('have 2')
-    expect(refRec[0].message).toContain('add 8 more')
-  })
-
   it('emits nothing when no RESOURCE_EXHAUSTION errors exist', () => {
     const comps = [
       makeCompetition({ id: 'event-1', fencer_count: 64, weapon: Weapon.FOIL }),
@@ -849,50 +783,20 @@ describe('postScheduleDiagnostics', () => {
     expect(postScheduleDiagnostics(comps, config, warnOnly)).toHaveLength(0)
   })
 
-  it('emits nothing when configured resources meet recommendations', () => {
+  it('emits nothing when strips meet recommendation', () => {
     // 70 fencers → 10 pools → recommendStripCount = ceil(10/0.80) = 13
     // Config has 48 strips → 13 < 48, no strip recommendation
-    // Pool demand = 10, DE demand = 5 → max = 10 foil_epee refs needed
-    // Config has 10 foil_epee refs per day → 10 ≥ 10, no ref rec
     const comps = [
       makeCompetition({ id: 'foil-event', fencer_count: 70, weapon: Weapon.FOIL }),
     ]
     const config = makeConfig({
       strips: makeStrips(48, 0),
-      referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 10, three_weapon_refs: 0, source: 'ACTUAL' as const,
-      })),
     })
 
     const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
 
     const recommendations = result.filter(b => b.cause === BottleneckCause.RESOURCE_RECOMMENDATION)
     expect(recommendations).toHaveLength(0)
-  })
-
-  it('emits both strip and ref recommendations when both are insufficient', () => {
-    // 64 fencers → 10 pools → recommendStripCount = ceil(10/0.80) = 13
-    // Two sabre events with 24 fencers → peakSabrePools = 4+4 = 8, peakSabreDe = 5+5 = 10
-    // max(8, 10) = 10 → three_weapon = 10
-    const comps = [
-      makeCompetition({ id: 'big-foil', fencer_count: 64, weapon: Weapon.FOIL }),
-      makeCompetition({ id: 'sabre-1', fencer_count: 24, weapon: Weapon.SABRE }),
-      makeCompetition({ id: 'sabre-2', fencer_count: 24, weapon: Weapon.SABRE, gender: Gender.WOMEN }),
-    ]
-    const config = makeConfig({
-      strips: makeStrips(4, 0),
-      referee_availability: Array.from({ length: 3 }, (_, i) => ({
-        day: i, foil_epee_refs: 1, three_weapon_refs: 1, source: 'ACTUAL' as const,
-      })),
-    })
-
-    const result = postScheduleDiagnostics(comps, config, [resourceExhaustionError])
-
-    expect(result).toHaveLength(2)
-    expect(result.some(b => b.message.includes('Strips: need'))).toBe(true)
-    const refRec = result.find(b => b.message.includes('Refs: need'))
-    expect(refRec).toBeDefined()
-    expect(refRec!.message).toContain('10 three-weapon')
   })
 })
 
@@ -939,13 +843,7 @@ describe('postScheduleDayBreakdown', () => {
   })
 
   it('emits video-stage contention diagnostic for staged DEs', () => {
-    const config = makeConfig({
-      referee_availability: [
-        { day: 0, foil_epee_refs: 3, three_weapon_refs: 2, source: 'ACTUAL' as const },
-        { day: 1, foil_epee_refs: 3, three_weapon_refs: 2, source: 'ACTUAL' as const },
-        { day: 2, foil_epee_refs: 3, three_weapon_refs: 2, source: 'ACTUAL' as const },
-      ],
-    })
+    const config = makeConfig({})
     const state = createGlobalState(config)
 
     const comps = [
@@ -973,8 +871,8 @@ describe('postScheduleDayBreakdown', () => {
     const videoStage = result.filter(b => b.message.includes('video-stage'))
 
     expect(videoStage).toHaveLength(1)
-    // 3 comps × max(4, 2) = 12, configured refs = 5, so WARN
-    expect(videoStage[0].severity).toBe(BottleneckSeverity.WARN)
+    // Video-stage contention emits INFO (no configured refs to compare against)
+    expect(videoStage[0].severity).toBe(BottleneckSeverity.INFO)
     expect(videoStage[0].message).toContain('12 refs')
     expect(videoStage[0].message).toContain('3 staged events')
   })

@@ -123,32 +123,14 @@ function assertIndTeamSeparation(
   }
 }
 
-/** Compute minimum refs needed: max pool count of any single event. */
-function minRefsForEvents(fencerCounts: Record<string, number>): { fe: number; saber: number } {
-  let maxFe = 0
-  let maxSaber = 0
-  for (const [id, count] of Object.entries(fencerCounts)) {
-    const pools = Math.ceil(count / 7)
-    if (id.includes('SABRE')) {
-      maxSaber = Math.max(maxSaber, pools)
-    } else {
-      maxFe = Math.max(maxFe, pools)
-    }
-  }
-  return { fe: maxFe, saber: maxSaber }
-}
-
 function tournamentConfig(
   days: number, strips: number, videoStrips: number,
-  feRefs: number, saberRefs: number, tournamentType: TournamentType,
+  tournamentType: TournamentType,
 ) {
   return makeConfig({
     days_available: days,
     strips: makeStrips(strips, videoStrips),
     tournament_type: tournamentType,
-    referee_availability: Array.from({ length: days }, (_, i) => ({
-      day: i, foil_epee_refs: feRefs, three_weapon_refs: saberRefs, source: 'ACTUAL' as const,
-    })),
   })
 }
 
@@ -214,15 +196,22 @@ describe('Realistic tournament integration', () => {
       'VET-W-EPEE-TEAM': 20, 'VET-W-FOIL-TEAM': 10, 'VET-W-SABRE-TEAM': 10,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, refs.fe, refs.saber, 'NAC')
+    const config = tournamentConfig(4, 80, 8, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
       // B1: 24 events; engine must schedule at least 13 (baseline from real engine output)
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(13)
+
+      // Smoke test for ref_requirements_by_day
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
+      for (const r of ref_requirements_by_day!) {
+        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
+        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
     })
   })
 
@@ -239,15 +228,22 @@ describe('Realistic tournament integration', () => {
       'CDT-W-EPEE-TEAM': 30, 'CDT-W-FOIL-TEAM': 10, 'CDT-W-SABRE-TEAM': 10,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, refs.fe, refs.saber, 'NAC')
+    const config = tournamentConfig(4, 80, 8, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
       // B2: 24 events; engine must schedule at least 9 (baseline from real engine output)
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
+
+      // Ref requirements output
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
+      for (const r of ref_requirements_by_day!) {
+        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
+        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
     })
   })
 
@@ -264,14 +260,21 @@ describe('Realistic tournament integration', () => {
       'D2-W-EPEE-IND': 110, 'D2-W-FOIL-IND': 120, 'D2-W-SABRE-IND': 130,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, refs.fe, refs.saber, 'NAC')
+    const config = tournamentConfig(4, 80, 8, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       // B3: 24 events; engine must schedule at least 5 (baseline from real engine output)
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(5)
+
+      // Ref requirements output
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
+      for (const r of ref_requirements_by_day!) {
+        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
+        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
     })
   })
 
@@ -290,14 +293,22 @@ describe('Realistic tournament integration', () => {
       'CDT-W-EPEE-IND': 110, 'CDT-W-FOIL-IND': 80, 'CDT-W-SABRE-IND': 120,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(3, 40, 4, refs.fe, refs.saber, 'SYC')
+    const config = tournamentConfig(3, 40, 4, 'SYC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B4: 30 events; engine must schedule at least 8 (baseline from real engine output)
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(8)
+      // B4: 30 events; engine must schedule at least 6 (baseline updated after saberPileupPenalty
+      // was added — saber events spread across days more, changing capacity allocation).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(6)
+
+      // Ref requirements output
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
+      for (const r of ref_requirements_by_day!) {
+        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
+        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
     })
   })
 
@@ -310,14 +321,21 @@ describe('Realistic tournament integration', () => {
       'CDT-W-EPEE-IND': 80, 'CDT-W-FOIL-IND': 70, 'CDT-W-SABRE-IND': 90,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(3, 60, 8, refs.fe, refs.saber, 'SJCC')
+    const config = tournamentConfig(3, 60, 8, 'SJCC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
       // B5: 12 events; engine must schedule at least 3 (baseline from real engine output)
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(3)
+
+      // Ref requirements output
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
+      for (const r of ref_requirements_by_day!) {
+        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
+        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
     })
   })
 
@@ -344,14 +362,21 @@ describe('Realistic tournament integration', () => {
       'VET-W-EPEE-IND-VCMB': 20, 'VET-W-FOIL-IND-VCMB': 10, 'VET-W-SABRE-IND-VCMB': 10,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(3, 48, 4, refs.fe, refs.saber, 'ROC')
+    const config = tournamentConfig(3, 48, 4, 'ROC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
       // B6: 54 events; engine must schedule at least 17 (baseline from real engine output)
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(17)
+
+      // Ref requirements output
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
+      for (const r of ref_requirements_by_day!) {
+        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
+        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
     })
   })
 
@@ -366,14 +391,21 @@ describe('Realistic tournament integration', () => {
       'CDT-W-EPEE-IND': 180, 'CDT-W-FOIL-IND': 170, 'CDT-W-SABRE-IND': 180,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const refs = minRefsForEvents(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, refs.fe, refs.saber, 'NAC')
+    const config = tournamentConfig(4, 80, 8, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       // B7: 18 events; engine must schedule at least 4 (baseline from real engine output)
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(4)
+
+      // Ref requirements output
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
+      for (const r of ref_requirements_by_day!) {
+        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
+        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
     })
   })
 })

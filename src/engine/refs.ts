@@ -1,9 +1,7 @@
 import { PodCaptainOverride, DeMode, Weapon, RefPolicy, Phase } from './types.ts'
-import type { TournamentConfig, DayRefereeAvailability, Competition } from './types.ts'
+import type { TournamentConfig, Competition, RefDemandInterval, RefDemandByDay, RefRequirementsByDay } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { computeBracketSize } from './de.ts'
-import { constraintScore } from './dayAssignment.ts'
-import { crossoverPenalty } from './crossover.ts'
 
 /**
  * Returns the number of pod captains needed for a DE phase.
@@ -34,21 +32,6 @@ export function podCaptainsNeeded(
   }
 
   return Math.ceil(deStrips / podSize)
-}
-
-/**
- * Returns the total number of refs available on a given day for the specified weapon.
- *
- * METHODOLOGY.md §Referee Types:
- * - SABRE: saber-qualified refs only (no cross-weapon)
- * - FOIL/EPEE: foil_epee refs + saber refs (saber refs can officiate ROW weapons)
- *
- */
-export function refsAvailableOnDay(day: number, weapon: Weapon, config: TournamentConfig): number {
-  const avail = config.referee_availability[day]
-  if (!avail) return 0
-  if (weapon === Weapon.SABRE) return avail.three_weapon_refs
-  return avail.foil_epee_refs + avail.three_weapon_refs
 }
 
 /**
@@ -103,114 +86,63 @@ export function peakDeRefDemand(comp: Competition, config: TournamentConfig): nu
 }
 
 /**
- * Lightweight greedy day assignment for referee demand estimation.
+ * Sweep-line helper: given a list of intervals, returns the peak running count
+ * and the time at which it is first reached.
  *
- * Uses constraint scores to distribute competitions across days but skips full
- * penalty scoring and resource-window simulation.
- * Results are approximate — used only to estimate peak concurrent ref demand before
- * the real scheduler runs.
- *
- * Algorithm (METHODOLOGY.md §Scheduling Algorithm / §Capacity-Aware Day Assignment):
- * Sort order: most-constrained competitions first (highest constraintScore).
- * Per competition: assign to the day with the lowest total crossoverPenalty against
- * competitions already assigned to that day. Ties broken by lowest day index.
- *
- * No GlobalState, no time-slot simulation — sufficient for ref-estimation purposes only.
+ * Tie-break rule: when a start event (delta > 0) and an end event (delta < 0)
+ * share the same time, the start event is processed first. This ensures that
+ * two back-to-back intervals that share a boundary time are counted as
+ * concurrent at that boundary (matching the OR model where handoff is instant).
  */
-export function preliminaryDayAssign(
-  competitions: Competition[],
-  config: TournamentConfig,
-): Map<string, number> {
-  const days = config.days_available
-  const assignments = new Map<string, number>()
+function sweepLine(intervals: RefDemandInterval[]): { peak: number; peakTime: number } {
+  if (intervals.length === 0) return { peak: 0, peakTime: 0 }
 
-  // Sort by constraintScore descending: most constrained goes first
-  const sorted = [...competitions].sort(
-    (a, b) => constraintScore(b, competitions, config) - constraintScore(a, competitions, config),
-  )
-
-  // dayBuckets[d] holds competitions already assigned to day d
-  const dayBuckets: Competition[][] = Array.from({ length: days }, () => [])
-
-  for (const comp of sorted) {
-    let bestDay = 0
-    let bestPenalty = Infinity
-
-    for (let d = 0; d < days; d++) {
-      // Sum crossover penalties against all competitions already on this day
-      let dayPenalty = 0
-      for (const assigned of dayBuckets[d]) {
-        dayPenalty += crossoverPenalty(comp, assigned)
-        // Short-circuit: once we exceed the current best, no point continuing
-        if (dayPenalty > bestPenalty) break
-      }
-
-      // Lower penalty wins; ties broken by lowest day index (d < bestDay is guaranteed by iteration order)
-      if (dayPenalty < bestPenalty) {
-        bestPenalty = dayPenalty
-        bestDay = d
-      }
-    }
-
-    assignments.set(comp.id, bestDay)
-    dayBuckets[bestDay].push(comp)
+  // Emit (time, delta) events — +count at start, -count at end
+  const events: Array<{ time: number; delta: number }> = []
+  for (const { startTime, endTime, count } of intervals) {
+    events.push({ time: startTime, delta: count })
+    events.push({ time: endTime, delta: -count })
   }
 
-  return assignments
+  // Sort ascending by time; within same time, positive deltas (starts) come first
+  events.sort((a, b) => a.time - b.time || b.delta - a.delta)
+
+  let running = 0
+  let peak = 0
+  let peakTime = 0
+
+  for (const { time, delta } of events) {
+    running += delta
+    if (running > peak) {
+      peak = running
+      peakTime = time
+    }
+  }
+
+  return { peak, peakTime }
 }
 
 /**
- * Calculates optimal referee counts per day (Phase 1.5a).
+ * Computes peak concurrent referee requirements per day via a sweep-line over
+ * demand intervals emitted by the scheduler.
  *
- * METHODOLOGY.md §Pod Captains: simulates the day schedule with infinite refs and finds
- * peak concurrent demand per weapon type per day.
- *
- * Implementation approach:
- * 1. Assign each competition to a day via preliminaryDayAssign — a greedy
- *    constraint-scored assignment that separates high-crossover competitions
- *    across days (sufficient for ref estimation without full scheduler)
- * 2. For each day, sum peak concurrent demand across all competitions:
- *    - Pool phase demand: n_pools refs (all pools run concurrently with infinite refs)
- *    - DE phase demand: strips * DE_REFS + pod captains
- *    The peak is the maximum of pool-phase and DE-phase demand summed across
- *    all competitions on the day. Since competitions share the day sequentially,
- *    we take each competition's own peak (pool vs DE) and sum across concurrent
- *    competitions — conservative but valid for minimum ref estimation.
+ * Returns one entry per day in [0, daysAvailable). Days with no intervals (or
+ * absent from demandByDay) yield all-zero entries with peak_time=0.
  */
-export function calculateOptimalRefs(
-  competitions: Competition[],
-  config: TournamentConfig,
-): DayRefereeAvailability[] {
-  const dayAssignments = preliminaryDayAssign(competitions, config)
-  const days = config.days_available
+export function computeRefRequirements(
+  demandByDay: Record<number, RefDemandByDay>,
+  daysAvailable: number,
+): RefRequirementsByDay[] {
+  const result: RefRequirementsByDay[] = []
 
-  const result: DayRefereeAvailability[] = []
+  for (let d = 0; d < daysAvailable; d++) {
+    const intervals: RefDemandInterval[] = demandByDay[d]?.intervals ?? []
 
-  for (let d = 0; d < days; d++) {
-    const dayComps = competitions.filter(c => dayAssignments.get(c.id) === d)
+    const { peak: peak_total_refs, peakTime: peak_time } = sweepLine(intervals)
+    const sabreOnly = intervals.filter(iv => iv.weapon === Weapon.SABRE)
+    const { peak: peak_saber_refs } = sweepLine(sabreOnly)
 
-    let peakFoilEpee = 0
-    let peakSaber = 0
-
-    for (const comp of dayComps) {
-      // Peak ref demand for this competition is the max of its pool and DE phases
-      const poolDemand = comp.fencer_count > 1 ? peakPoolRefDemand(comp, comp.ref_policy) : 0
-      const deDemand = comp.fencer_count > 1 ? peakDeRefDemand(comp, config) : 0
-      const compPeak = Math.max(poolDemand, deDemand)
-
-      if (comp.weapon === Weapon.SABRE) {
-        peakSaber += compPeak
-      } else {
-        peakFoilEpee += compPeak
-      }
-    }
-
-    result.push({
-      day: d,
-      foil_epee_refs: peakFoilEpee,
-      three_weapon_refs: peakSaber,
-      source: 'OPTIMAL',
-    })
+    result.push({ day: d, peak_total_refs, peak_saber_refs, peak_time })
   }
 
   return result

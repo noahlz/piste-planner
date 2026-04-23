@@ -85,20 +85,8 @@ function validateStripConfig(config: TournamentConfig, competitions: Competition
   return errors
 }
 
-function validateRefConfig(config: TournamentConfig, _competitions: Competition[]): ValidationError[] {
-  const errors: ValidationError[] = []
-
-  // Warn when total refs on a day is less than strips_total. Refs < strips means
-  // some strips will sit idle during pools, but the engine can still schedule —
-  // hence a warning rather than an error.
-  for (const day of config.referee_availability) {
-    const total = day.foil_epee_refs + day.three_weapon_refs
-    if (total < config.strips_total) {
-      errors.push(warn('referee_availability', `Day ${day.day}: total refs (${total}) less than strips_total (${config.strips_total})`))
-    }
-  }
-
-  return errors
+function validateRefConfig(_config: TournamentConfig, _competitions: Competition[]): ValidationError[] {
+  return []
 }
 
 function validateCompetitionFields(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
@@ -215,17 +203,6 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
         errors.push(err('resource_precondition', `${comp.id}: requires ${n_pools} strips for pools but only ${config.strips_total} total strips configured`))
       }
 
-      // Referee capacity: check that at least one day has enough refs of the right type
-      const isSabre = comp.weapon === Weapon.SABRE
-      const refField = isSabre ? 'three_weapon_refs' : 'foil_epee_refs'
-      const refLabel = isSabre ? 'saber' : 'foil/epee'
-      const maxRefsOnAnyDay = config.referee_availability.reduce(
-        (max, day) => Math.max(max, day[refField]),
-        0,
-      )
-      if (maxRefsOnAnyDay < n_pools) {
-        errors.push(err('resource_precondition', `${comp.id}: requires ${n_pools} ${refLabel} refs for pools but only ${maxRefsOnAnyDay} configured`))
-      }
     }
   }
 

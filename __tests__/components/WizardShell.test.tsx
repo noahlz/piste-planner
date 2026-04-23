@@ -154,7 +154,7 @@ describe('WizardShell navigation', () => {
 
     expect(screen.getByText('Tournament')).toBeInTheDocument()
     expect(screen.getByText('Fencers')).toBeInTheDocument()
-    expect(screen.getByText('Refs & Strips')).toBeInTheDocument()
+    expect(screen.getByText('Strips')).toBeInTheDocument()
     expect(screen.getByText('Analysis')).toBeInTheDocument()
     expect(screen.getByText('Schedule')).toBeInTheDocument()
   })
@@ -273,8 +273,6 @@ describe('Stale banner', () => {
     useStore.getState().setDays(2)
     useStore.getState().setStrips(12)
     useStore.getState().applyTemplate('RYC Weekend')
-    useStore.getState().setDayRefs(0, { foil_epee_refs: 8, three_weapon_refs: 4 })
-    useStore.getState().setDayRefs(1, { foil_epee_refs: 8, three_weapon_refs: 4 })
     useStore.getState().markStale({ scheduleStale: true })
 
     // Verify no prior output

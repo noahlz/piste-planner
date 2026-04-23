@@ -11,6 +11,7 @@ import type {
   ScheduleResult,
   Bottleneck,
   GlobalState,
+  RefRequirementsByDay,
 } from './types.ts'
 import {
   Phase,
@@ -27,9 +28,9 @@ import type { ConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { sequenceEventsForDay } from './daySequencing.ts'
 import { validateConfig } from './validation.ts'
-import { recommendStripCount, recommendRefCount, peakDeStripDemand } from './stripBudget.ts'
+import { recommendStripCount, peakDeStripDemand } from './stripBudget.ts'
 import { dayConsumedCapacity } from './capacity.ts'
-import { peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
+import { peakPoolRefDemand, peakDeRefDemand, computeRefRequirements } from './refs.ts'
 
 const VALID_BOTTLENECK_CAUSES = new Set(Object.values(BottleneckCause))
 
@@ -63,6 +64,7 @@ function recordRelaxation(
 interface ScheduleAllResult {
   schedule: Record<string, ScheduleResult>
   bottlenecks: Bottleneck[]
+  ref_requirements_by_day?: RefRequirementsByDay[]
 }
 
 /**
@@ -267,9 +269,12 @@ export function scheduleAll(
   const postWarnings = postScheduleWarnings(state.schedule, config)
   state.bottlenecks.push(...postWarnings)
 
+  const ref_requirements_by_day = computeRefRequirements(state.ref_demand_by_day, config.days_available)
+
   return {
     schedule: state.schedule,
     bottlenecks: state.bottlenecks,
+    ref_requirements_by_day,
   }
 }
 
@@ -513,23 +518,6 @@ export function postScheduleDiagnostics(
     })
   }
 
-  // Ref recommendation
-  const rec = recommendRefCount(competitions, 1, config)
-  const totalRecommended = rec.three_weapon + rec.foil_epee
-  const maxConfiguredRefs = Math.max(
-    ...config.referee_availability.map(d => d.foil_epee_refs + d.three_weapon_refs),
-  )
-  if (totalRecommended > maxConfiguredRefs) {
-    results.push({
-      competition_id: '',
-      phase: Phase.POST_SCHEDULE,
-      cause: BottleneckCause.RESOURCE_RECOMMENDATION,
-      severity: BottleneckSeverity.INFO,
-      delay_mins: 0,
-      message: `Refs: need ${rec.three_weapon} three-weapon + ${rec.foil_epee} foil/epee (${totalRecommended} total), have ${maxConfiguredRefs} — add ${totalRecommended - maxConfiguredRefs} more.`,
-    })
-  }
-
   return results
 }
 
@@ -569,8 +557,6 @@ export function postScheduleDayBreakdown(
     }
   }
 
-  const refAvailByDay = new Map(config.referee_availability.map(r => [r.day, r]))
-
   for (const day of [...daysWithFailures].sort((a, b) => a - b)) {
     // Strip-hours summary
     const consumed = dayConsumedCapacity(day, state, competitions, config)
@@ -586,12 +572,6 @@ export function postScheduleDayBreakdown(
       message: `Day ${day + 1} strips: ${consumed.strip_hours_consumed.toFixed(1)} strip-hours consumed of ${totalCapacity.toFixed(1)} available${stripDeficit > 0 ? ` (${stripDeficit.toFixed(1)} over capacity)` : ''}.`,
     })
 
-    // Ref summary for this day
-    const dayRefConfig = refAvailByDay.get(day)
-    const configuredRefs = dayRefConfig
-      ? dayRefConfig.foil_epee_refs + dayRefConfig.three_weapon_refs
-      : 0
-
     // Sum peak ref demand across scheduled competitions on this day.
     // Each competition's peak is the larger of its pool and DE demand.
     const compsOnDay = competitions.filter(c => state.schedule[c.id]?.assigned_day === day)
@@ -603,15 +583,14 @@ export function postScheduleDayBreakdown(
       peakRefDemand += Math.max(poolDemand, deDemand)
     }
 
-    if (peakRefDemand > 0 || configuredRefs > 0) {
-      const refDeficit = Math.max(0, peakRefDemand - configuredRefs)
+    if (peakRefDemand > 0) {
       results.push({
         competition_id: '',
         phase: Phase.POST_SCHEDULE,
         cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
-        severity: refDeficit > 0 ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
+        severity: BottleneckSeverity.INFO,
         delay_mins: 0,
-        message: `Day ${day + 1} refs: peak demand ${peakRefDemand}, configured ${configuredRefs}${refDeficit > 0 ? ` — add ${refDeficit} more` : ''}.`,
+        message: `Day ${day + 1} refs: peak demand ${peakRefDemand}.`,
       })
     }
 
@@ -627,7 +606,7 @@ export function postScheduleDayBreakdown(
         competition_id: '',
         phase: Phase.POST_SCHEDULE,
         cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
-        severity: videoStageSum > configuredRefs ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
+        severity: BottleneckSeverity.INFO,
         delay_mins: 0,
         message: `Day ${day + 1} video-stage DE ref demand: ${videoStageSum} refs across ${stagedCount} staged events`,
       })
