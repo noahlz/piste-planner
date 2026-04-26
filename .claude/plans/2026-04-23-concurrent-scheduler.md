@@ -246,46 +246,21 @@ Variants emitted by other layers (day-assignment, pre-schedule analysis, post-sc
 
 Each phase ships independently and leaves the engine in a working state.
 
-### Phase 0 — Rename `de_capacity_mode` to `de_capacity_estimation`
+### Phases 0, A, B — COMPLETED 2026-04-26
 
-**Ships:** the existing config flag `de_capacity_mode: 'pod' | 'greedy'` renamed to `de_capacity_estimation: 'pod_packed' | 'spread'`. The flag is a day-assignment estimation heuristic, not a runtime allocator; the rename keeps the runtime "pod" terminology unambiguous from Phase A onward.
+Phase 0 (config flag rename), Phase A (interval-list strip data model), and Phase B (pod allocation primitive) are merged into the working tree. Phase 0 + A are committed (`9ea7c85f`). Phase B is uncommitted but green (29 test files, 774 passed | 1 todo, exit 0).
 
-**Files:**
-- `src/engine/types.ts` — rename `TournamentConfig.de_capacity_mode` field and the `DeCapacityMode` const.
-- `src/engine/capacity.ts` — update consumers.
-- `src/store/buildConfig.ts` — update bridge from store to engine.
-- `__tests__/engine/capacity.test.ts` — update fixtures.
-- `__tests__/helpers/factories.ts` — update default factories.
-- `METHODOLOGY.md` §DE Strip Allocation Models — rename to §DE Capacity Estimation Models, reframe as a day-assignment estimation heuristic.
+**Resulting state of the codebase:**
 
-**Acceptance:** mechanical rename, full test suite passes.
+- `TournamentConfig.de_capacity_estimation: 'pod_packed' | 'spread'` (renamed from `de_capacity_mode`). Day-assignment estimation flag, no runtime effect.
+- `GlobalState.strip_allocations: StripAllocation[][]` replaces `strip_free_at`. Each strip carries a per-strip chronological list. `EventTxLog.stripAllocationsAdded` replaces `stripChanges`.
+- `src/engine/resources.ts` exports the new primitives: `nextFreeTime`, `findAvailableStripsInWindow` (overlap-aware, returns `{ fit: 'ok' | 'none', earliest_next_start, reason: 'STRIPS' | 'TIME' }`), `allocateInterval`, `releaseEventAllocations`, `peakConcurrentStrips`. The serial scheduler runs unchanged via these helpers — `findAvailableStrips`, `earliestResourceWindow`, `rollbackEvent`, `snapshotState`/`restoreState`, `createGlobalState` all reimplemented over the new state shape.
+- `src/engine/pods.ts` exports `allocatePods(state, config, event_id, phase, total_strip_count, pod_size, start_time, duration, video_required): { pods: Pod[] } | null`. Pod IDs follow `${event_id}-${phase.toLowerCase()}-pod${i}`. StripAllocation entries written by pods carry the `pod_id`. `releaseEventAllocations` cleans them up by event_id filter.
+- `src/engine/refs.ts` exports `computePodRefDemand(state, competitions, daysAvailable, config)` — one RefDemandInterval (count=1) per unique pod_id. Allocations without pod_id are skipped. `computeRefRequirements` is unchanged. `findDayForTime` lives in `types.ts` next to `dayStart`/`dayEnd`.
+- `phaseSchedulers.ts` callsites updated to the new `allocateStrips(state, stripIds, startTime, endTime, eventId, phase, txLog?)` signature; the bronze finder uses `nextFreeTime`.
+- `METHODOLOGY.md` §DE Capacity Estimation Models renamed and reframed as a day-assignment heuristic.
 
-### Phase A — Interval-list strip data model
-
-**Ships:** the new data structure replacing `strip_free_at`, the new primitives, and a helper layer that keeps the serial scheduler running on top.
-
-**Files:**
-- `src/engine/types.ts` — add `StripAllocation`, `Pod`. Remove `strip_free_at: number[]` from `GlobalState`; add `strip_allocations: StripAllocation[][]`.
-- `src/engine/resources.ts` — add `findAvailableStripsInWindow`, `allocateInterval`, `releaseEventAllocations`, `peakConcurrentStrips`, and a `nextFreeTime(strip_index): number` helper for callers needing the "next-free-time" query (walks the strip's interval list and returns the latest `end_time`, or `0` if empty). Remove `findAvailableStrips` and `strip_free_at`. Update `allocateStrips` to write into the interval list.
-- `__tests__/engine/resources.test.ts` — rewrite all interval-related tests to assert against `state.strip_allocations` directly. Add tests for `findAvailableStripsInWindow` covering: overlap detection, partial overlap, video filtering, the `earliest_next_start` hint, and the `count`-strips-simultaneous-free invariant. The pre-existing "allocate same strip twice" test (`resources.test.ts:108–113`) becomes "two non-overlapping intervals on the same strip both succeed."
-
-**Acceptance:**
-- `state.strip_allocations` is the canonical strip-state representation.
-- `__tests__/engine/resources.test.ts` is rewritten; full test suite passes. Any non-`resources.test.ts` failure is a real bug in the helper layer and must be fixed before Phase B starts.
-- The serial scheduler continues to work via the `nextFreeTime` helper — `scheduleOne.ts`, `phaseSchedulers.ts`, `dayAssignment.ts` are not touched in this phase.
-
-The serial scheduler's only contract with the strip representation is "I want a window of N free strips starting at time T," preserved by `nextFreeTime`. Replacing `strip_free_at` with the interval list strictly increases information without changing that contract.
-
-### Phase B — Pod allocation primitive
-
-**Ships:** the pod abstraction layered on Phase A's interval list.
-
-**Files:**
-- `src/engine/pods.ts` (new) — `allocatePods` and the pod-id synthesis logic.
-- `__tests__/engine/pods.test.ts` (new) — pod sizing (full vs partial), video pod selection, multi-pod allocation in one call, rollback.
-- `src/engine/refs.ts` — extend `computeRefRequirements` to read pod IDs from `StripAllocation[]` and report ref demand at pod granularity (one head ref per pod).
-
-**Acceptance:** pod tests pass. `computeRefRequirements` produces the same per-day peak counts as today (pod-grouping is a presentation detail).
+**Resume here.** Phase C builds the concurrent scheduler on top of these primitives.
 
 ### Phase C — Concurrent scheduler
 

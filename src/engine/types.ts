@@ -474,3 +474,14 @@ export function dayEnd(d: number, config: TournamentConfig): number {
   }
   return d * config.DAY_LENGTH_MINS + config.DAY_LENGTH_MINS
 }
+
+/**
+ * Returns the day index d such that dayStart(d) <= t < dayEnd(d), or null when
+ * no day in [0, days_available) contains t.
+ */
+export function findDayForTime(config: TournamentConfig, t: number): number | null {
+  for (let d = 0; d < config.days_available; d++) {
+    if (dayStart(d, config) <= t && t < dayEnd(d, config)) return d
+  }
+  return null
+}
