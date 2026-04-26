@@ -25,7 +25,7 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
    - [Direct Elimination (DE)](#direct-elimination-de)
 8. [Resources](#resources)
    - [Strip Assignment](#strip-assignment)
-   - [Referee Allocation](#referee-allocation)
+   - [Referee Calculation](#referee-calculation)
 9. [Scheduling Algorithm](#scheduling-algorithm)
 10. [Tournament-Type Policies](#tournament-type-policies)
 11. [Auto-Suggestion Logic](#auto-suggestion-logic)
@@ -44,12 +44,9 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 - **Venue resources**:
   - **General strips**: used for pools or DEs; total count is optional — see [Auto-Suggestion Logic](#auto-suggestion-logic) — engine can suggest based on the largest single competition's pool count (see [`analysis.ts`](src/engine/analysis.ts))
   - **Video strip count** (NACs only): 4, 8 (default), 12, or 16. These strips are used for the Video stage of staged DEs. Default of 8 covers a standard Round of 16. Multiple events in the video stage contend for these strips.
-- **Referees**:
-  - **Total referee count**: optional — see [Auto-Suggestion Logic](#auto-suggestion-logic) — engine can suggest based on strip count (see [`refs.ts`](src/engine/refs.ts))
-  - **3-weapon refs**: default — all refs are assumed 3-weapon (can officiate foil, epee, and saber)
-  - **Foil/epee-only refs**: user can optionally specify how many refs cannot officiate saber; remainder are 3-weapon
-  - **Note**: the 3-weapon and foil/epee-only counts are set separately and sum to the total; only 3-weapon refs can be allocated to Saber events
-  - **Refs per pool**: 1 or 2 (default: 2) — configured before auto-suggest runs
+- **Referee policy** (not counts — counts are an output, see below):
+  - **Refs per pool**: 1 or 2 (default: 2) — affects how many refs the engine reports as needed
+  - **Use pod captains**: toggle that adds supervisory refs to DE rounds (see [Pod Captains](#pod-captains))
 - **Tournament duration**: 2–4 days (longer events, e.g. Summer Nationals, to be supported in a future version)
 - **Per-competition options**:
   - **DE mode**: determined by tournament type — NACs use "Staged DEs" (Prelim + Video stages); all other types use "Single Stage DE" (all DE rounds run as fast as possible)
@@ -64,6 +61,10 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 - **Day assignment** for each competition
 - **Pool round timing**: start and end times per competition
 - **DE phase timing**: prelim and video stage blocks with strip allocations (NACs); single block (all others)
+- **Referee requirements**: per-day peak demand, computed from the schedule. Reported as two numbers per day:
+  - **3-weapon refs needed** — peak total refs across all bouts (any weapon)
+  - **Saber refs needed** — peak refs needed for saber bouts specifically (a subset of the total). Saber bouts can only be officiated by 3-weapon refs, so this number sets the floor on the 3-weapon-certified portion of the staff.
+  - Foil/epee-only refs can fill the gap between the saber-refs and total-refs numbers. The organizer chooses the split when staffing.
 - **Bottleneck diagnostics**: warnings and errors identifying resource conflicts, constraint relaxations, or policy violations
 
 All times are minutes from midnight (e.g., 480 = 8:00 AM). The scheduling day runs from 8:00 AM to 10:00 PM (14 hours). Pool rounds cannot start after 4:00 PM. (see [`constants.ts`](src/engine/constants.ts))
@@ -107,7 +108,7 @@ Overlapping age categories MUST be on **different days** (per weapon and gender)
 
 ### Resource Preconditions
 
-Tournaments are never run resource-constrained. Strips and referees are preconditions, not variables the scheduler optimizes around. `validateConfig` must enforce:
+Strips are a precondition; referees are not (refs are calculated from the schedule, not supplied as input). `validateConfig` must enforce:
 
 **Strip minimum**: Every event must be able to run all its pools at once (or in two flights for flighted events):
 
@@ -117,16 +118,11 @@ strips_total >= max_pools_any_event
 
 Where `max_pools_any_event = max(ceil(fencer_count / 7))` across all events. For flighted events (200+ fencers in eligible categories), the requirement is halved: `ceil(pools / 2)`.
 
-**Referee minimum**: The hard floor is one referee per strip. Refs are split by certification (see [Referee Types](#referee-types)). Foil/epee events draw from both pools; saber events can only use 3-weapon refs. Two refs per pool is preferred but degrades gracefully to one ref per pool with a warning — it is not a hard failure.
-
-```
-three_weapon_refs                     >= max_saber_pools_any_event
-foil_epee_refs + three_weapon_refs    >= strips_total
-```
-
-These are **hard validation errors**, not warnings. The UI should auto-suggest values meeting these minimums when the user enters competition sizes.
+This is a **hard validation error**, not a warning. The UI should auto-suggest a strip count meeting this minimum when the user enters competition sizes.
 
 **Video strip minimum**: Tournaments with Cadet/Junior/Div 1 events (staged DE with video REQUIRED) need sufficient video strips for concurrent DE phases. Video strips come in multiples of 4. Minimum 4; 8+ recommended when multiple video-required events share a day.
+
+**Referees are not validated up front.** The engine assumes refs are available for every bout it schedules and reports the resulting peak demand as an output (see [Outputs](#outputs) and [Referee Calculation](#referee-calculation)). The organizer reads those numbers and staffs accordingly; understaffing is handled at staffing time, not by the scheduler.
 
 ### Team Events Require a Matching Individual
 
@@ -233,14 +229,6 @@ See Appendix A for exact values.
 | Cross-Weapon Same Demographic | 0.2 | Same gender+age, different weapon, same day (Veterans only) |
 | Y8/Y10 Early Scheduling | 0.3 | Y8/Y10 not starting at 8:00 AM |
 
-### Last-Day Referee Shortage
-
-- Large events on the last day when ref availability is below the daily average:
-  - "Large" is relative to event type:
-    - NAC: 300+ fencers is large → penalty (see Appendix A)
-    - ROC: 100+ fencers is large → moderate penalty (see Appendix A)
-  - Medium events (50–100 fencers): penalty (see Appendix A)
-
 ### Individual-Team Proximity
 
 - Applies to **Senior, Junior, and Cadet** only
@@ -294,7 +282,7 @@ See [Appendix A](#pool-duration-by-weapon-6-person-baseline-15-bouts) for base d
 
 #### Pool Parallelism
 
-- Concurrent pools = min(available strips, total pools, available refs ÷ refs-per-pool)
+- Concurrent pools = min(available strips, total pools)
 - Total pool round duration: `weighted_avg_pool_duration × ceil(total_pools / effective_parallelism)`
 
 ### Strip Budget
@@ -315,7 +303,6 @@ The strip budget model limits how many strips any single competition may occupy 
 
 - `computeStripCap(strips_total, pct, override)` — returns `floor(strips_total × effectivePct)`, where `effectivePct` is the override if provided, otherwise the global percentage
 - `recommendStripCount(competitions, config)` — advisory: suggests a strip total that keeps each competition within its pool cap
-- `recommendRefCount(strips, config)` — advisory: suggests a referee total proportional to peak strip usage
 - `flagFlightingCandidates(competitions, config)` — returns competition IDs where `n_pools > pool_strip_cap`
 
 ### Flighting
@@ -480,38 +467,50 @@ Phase-level rules:
 
 #### Resource Windows
 
-- For each phase (pool round, DE prelim, DE video stage), the engine finds the earliest time slot where both strips AND refs are simultaneously available
-- If resources aren't available at the ideal time, the engine scans forward in 30-minute slots
-- If delay exceeds a threshold, a bottleneck diagnostic is emitted (strip contention, ref contention, or both)
+- For each phase (pool round, DE prelim, DE video stage), the engine finds the earliest time slot where strips are available
+- If strips aren't available at the ideal time, the engine scans forward in 30-minute slots
+- If delay exceeds a threshold, a strip-contention bottleneck diagnostic is emitted
 
 #### Slot Granularity
 
 - All phase start times snap to 30-minute boundaries (8:00, 8:30, 9:00, etc.)
 - End times are not snapped — they reflect actual estimated duration
 
-### Referee Allocation
+### Referee Calculation
+
+Referees are an **output** of the scheduler, not an input. After the schedule is built, the engine sweeps every concurrent bout window and reports the peak ref demand per day. The organizer uses these numbers to staff the tournament.
 
 (see [`refs.ts`](src/engine/refs.ts))
 
-#### Referee Types
+#### Referee Types Reported
 
-- **3-Weapon Refs** (default): can officiate foil, epee, and saber
-- **Foil/Epee-Only Refs**: cannot officiate saber
-- By default, all refs are assumed to be 3-weapon
-- User can optionally specify a count of foil/epee-only refs
+- **3-weapon refs**: can officiate foil, epee, and saber. The reported "total refs needed" assumes this is the floor.
+- **Foil/epee-only refs**: cannot officiate saber. The organizer can substitute foil/epee-only refs for any ref slot **not** covering a saber bout — i.e., up to `total_refs_needed − saber_refs_needed` per day.
 
-#### Refs Per Pool
+#### Per-Day Output
+
+For each day, the engine computes:
+
+- **`peak_total_refs`**: maximum number of refs needed at any one moment, across all events and weapons
+- **`peak_saber_refs`**: maximum number of refs needed at any one moment for saber bouts specifically (subset of total)
+- **`peak_time`**: the moment of peak demand (informational)
+
+The minimum 3-weapon staff is `peak_saber_refs`. The remaining `peak_total_refs − peak_saber_refs` slots can be filled by either certification.
+
+#### Refs Per Pool (input that affects the output)
 
 - **One ref per pool**: minimum
-- **Two refs per pool** (default): preferred for higher-level events; falls back to one with a warning if insufficient refs
-- **Auto**: uses two-per-pool when supply allows; drops to one otherwise
+- **Two refs per pool** (default): preferred for higher-level events
+- **Auto**: uses two-per-pool
 
-(Logic implemented in `pools.ts:resolveRefsPerPool`. Double-duty referee logic also lives in `pools.ts`: when `refsPerPool=1` and excess refs are available, one ref can cover two strips.)
+This setting changes how many refs the engine reports as needed; it does not gate scheduling.
+
+(Logic implemented in `pools.ts:resolveRefsPerPool`. Double-duty referee logic also lives in `pools.ts`: when `refsPerPool=1`, one ref can be reported as covering two adjacent strips.)
 
 #### Pod Captains
 
 - Toggle: "Use Pod Captains to manage DEs"
-- When enabled, drawn from the referee pool:
+- When enabled, the reported ref demand includes supervisory pod captains:
   - **1 per 4 strips** for brackets ≤32 and R16 phases
   - **1 per 8 strips** for larger brackets and other phases
 - A `FORCE_4` override option sets the ratio to 1 per 4 strips unconditionally
@@ -548,9 +547,8 @@ Competitions sorted by **constraint score** (highest first = scheduled first). M
 Score factors:
 - **Crossover count**: how many other competitions this one conflicts with
 - **Window tightness**: how narrow the allowed time window is
-- **Saber scarcity**: for saber events, ratio of saber competitions to 3-weapon refs across days
 - **Video scarcity** (NACs only): ratio of staged DE events requiring video to video strips
-- **Referee intensity**: events requiring 2 refs/pool score higher (2.0) than 1 ref/pool (0.5)
+- **Referee intensity**: events requiring 2 refs/pool score higher (2.0) than 1 ref/pool (0.5) — purely a tie-breaker; no ref supply is consulted
 
 Within this ordering:
 - Mandatory competitions before optional
@@ -566,21 +564,24 @@ For each competition in priority order:
 
 ### Phase 5: Resource Allocation
 
-Once a day is chosen, find the earliest time window with strips and refs available: (see [`scheduleOne.ts`](src/engine/scheduleOne.ts))
+Once a day is chosen, find the earliest time window with strips available: (see [`scheduleOne.ts`](src/engine/scheduleOne.ts))
 
-1. **Pool round**: allocate resource window for all pools (or half strips if flighted); reserve strips and refs
+1. **Pool round**: allocate strip window for all pools (or half strips if flighted)
 2. **Admin gap**: 30-minute mandatory gap between pool end and DE start, snapped to next 30-minute slot
-3. **DE phases** (NACs, staged): Prelim phase on general strips, then Video phase on video strips; reserve refs for each
+3. **DE phases** (NACs, staged): Prelim phase on general strips, then Video phase on video strips
 
-If resources unavailable at ideal time, scan forward in 30-minute slots. If end time would breach the day boundary, retry with an earlier start slot (up to 3 attempts). If all retries fail, a deadline breach warning is recorded.
+If strips unavailable at ideal time, scan forward in 30-minute slots. If end time would breach the day boundary, retry with an earlier start slot (up to 3 attempts). If all retries fail, a deadline breach warning is recorded.
+
+Ref demand intervals are recorded as a side effect of each phase allocation; they are summarized into per-day peak totals in Phase 7.
 
 ### Phase 6: State Update
 
 - After each competition is scheduled, its resource usage is committed to shared global state
 - Subsequent competitions see updated availability
 
-### Phase 7: Post-Schedule Warnings
+### Phase 7: Post-Schedule Outputs and Warnings
 
+- **Referee requirements** computed by sweeping the recorded ref demand intervals (see [Referee Calculation](#referee-calculation)). Reported as `peak_total_refs` and `peak_saber_refs` per day.
 - For 4+ day events, warns if first or last day is significantly longer than average (unbalanced load)
 
 ---
@@ -634,11 +635,9 @@ The engine can auto-suggest configuration values to help organizers start with r
 - Finds the competition with the most pools (peak strip demand)
 - Suggests that number of strips as the baseline
 
-### Referee Suggestion
+### Referee Output
 
-- Heuristic: **one referee per strip in active use**
-- Split proportionally between 3-weapon and foil/epee-only based on the saber-to-foil/epee ratio of the competition mix
-- Uses peak concurrent demand per weapon per day from a preliminary schedule simulation
+Referee counts are computed from the schedule, not suggested as inputs (see [Referee Calculation](#referee-calculation)). The engine reports per-day `peak_total_refs` and `peak_saber_refs`; the organizer chooses the foil/epee-only vs 3-weapon split when staffing.
 
 ### Flighting Suggestion
 
@@ -745,13 +744,10 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Rest day violation | 1.5 | Junior↔Cadet or Junior↔Div 1 on consecutive days without rest |
 | Team before individual | 1.0 | Team event scheduled before its individual counterpart |
 | Weapon balance | 0.5 | All-ROW or all-epee day |
-| Last-day ref shortage (large NAC event, 300+) | 0.5 | Large NAC event on last day with below-average ref availability |
 | Proximity 3+ days apart | 0.5 | Related categories far apart in the schedule |
 | Y10 non-first-slot | 0.3 | Y10 event not starting at 8 AM |
-| Last-day ref shortage (large ROC event, 100+) | 0.3 | Large regional event on last day with below-average ref availability |
 | Ind+team 2+ days apart | 0.3 | Individual and team event far apart |
 | Cross-weapon same demographic (Vet only) | 0.2 | Same gender+age, different weapon on same day (Veterans only) |
-| Last-day ref shortage (medium event, 50–100) | 0.2 | Medium event on last day with below-average ref availability |
 | Proximity 1 day apart | -0.4 | **Bonus**: related categories on adjacent days |
 | Ind+team day after | -0.4 | **Bonus**: team event the day after individual |
 | Same population | ∞ | **Hard block**: identical age category + gender + weapon |

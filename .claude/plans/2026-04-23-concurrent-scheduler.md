@@ -260,3 +260,67 @@ These aren't blockers; they're decisions that should be made deliberately during
 - `as const` objects, never TypeScript enums.
 - Engine functions are pure — no global state, no singletons.
 - No unbounded loops — the scheduler loop has a bounded `max_iter` derived from the total phase count.
+
+---
+
+## Review issues to address (added 2026-04-26)
+
+Issues raised during a critical review of this plan. Work through these before starting Phase A. Each is small enough to resolve with a few sentences of plan revision; none require re-architecting the spine.
+
+### Coverage gaps — phase model is incomplete
+
+1. **Single-stage DE (non-NAC) is missing from the phase table.** Today `scheduleOne.ts:157` branches on `de_mode === DeMode.SINGLE_STAGE` and calls `scheduleSingleStageDePhase`. ROC, RYC, SYC, RJCC, SJCC events all use `SINGLE_STAGE` — that's B4, B5, B6 in the integration suite. The plan's phase table only enumerates the NAC staged-DE phases (`de_prelims`, `r16`, `quarters`, `semis_finals_bronze`). Without a `de` phase node, half the integration suite cannot run under the concurrent scheduler. **Resolution:** add a `de` phase node for `SINGLE_STAGE` events with `count = floor(bracketSize/2)`, no pods at runtime, no video requirement.
+
+2. **Flighting is not addressed.** `phaseSchedulers.ts:494` `allocateFlightedPools` splits a flighted event into Flight A + `FLIGHT_BUFFER_MINS` + Flight B. The plan's `pools` node implicitly assumes one contiguous block. Flighting trigger is `n_pools > pool_strip_cap` (default 80%) — see METHODOLOGY §Flighting. **Resolution:** model flighting as two `pools` phase nodes (`pools_flight_a`, `pools_flight_b`) at half strip count with a dependency edge plus the buffer.
+
+3. **Team event sequencing is not addressed.** `phaseSchedulers.ts:159–172` enforces "team must run after individual + `INDIV_TEAM_MIN_GAP_MINS` (120)" and emits `SEQUENCING_CONSTRAINT`. The plan's dependency map covers within-event phase ordering only. **Resolution:** add cross-event dependency edges from an individual event's last phase to its team counterpart's first phase on the same day.
+
+4. **Per-event strip cap (`max_pool_strip_pct`) enforcement.** `phaseSchedulers.ts:510` calls `computeStripCap` to clamp any one event at 80% of total strips during pools (and DEs at 80% via `max_de_strip_pct`). With true concurrency this matters more, not less — one event grabbing 100% of strips kills concurrency. **Resolution:** explicitly state that the loop's step 2b passes a capped count to `findAvailableStripsInWindow`, not the desired count.
+
+5. **Bronze fallback semantics.** `scheduleBronzePhase` (phaseSchedulers.ts:414) tries to allocate a separate bronze strip; if none available, bronze runs on the gold strip and `DE_FINALS_BRONZE_NO_STRIP` (WARN/INFO) is emitted. The plan's `semis_finals_bronze` single phase loses this conditional fallback. **Resolution:** decide whether bronze gets its own phase node with a soft-fail allocation (preferred), or bronze stays bundled and fallback is in-phase.
+
+### Bottleneck preservation
+
+6. **Bottleneck variants beyond `DEADLINE_BREACH_UNRESOLVABLE` must survive.** Current pipeline emits ~8 distinct variants: `DEADLINE_BREACH` (WARN, retried), `SAME_DAY_VIOLATION`, `DE_FINALS_BRONZE_NO_STRIP`, `NO_WINDOW_DIAGNOSTIC` with discriminated `STRIPS|TIME` reasons, `SEQUENCING_CONSTRAINT`, `FLIGHT_B_DELAYED`, `CONSTRAINT_RELAXED`. `assertScheduleIntegrity` (integration.test.ts:167–173) checks `constraint_relaxation_level` is reflected in matching `CONSTRAINT_RELAXED` bottlenecks. **Resolution:** Phase C acceptance criteria should enumerate every variant the new scheduler must preserve.
+
+### Naming / conceptual collision
+
+7. **`de_capacity_mode: 'pod' | 'greedy'` already exists as a strip-hour estimation model** in `capacity.ts` and `TournamentConfig.de_capacity_mode`. The plan's runtime pods are a different concept reusing the same word. **Resolution:** either rename one (e.g., runtime "strip groups"), or explicitly state runtime always uses pods of 4 and the existing config flag becomes day-assignment-only / vestigial.
+
+### Design tensions
+
+8. **"RUNNING is terminal" reduces resilience vs today's MAX_ATTEMPTS=3 retry.** Today `scheduleOne.ts:122–231` can retry an event by finding an earlier pool slot via `findEarlierSlotSameDay`. The plan's only escape is FAILED → cascade → release. On dense days (B7) where one event's late finals can be salvaged by shifting its own pool earlier, the new model gives up. **Resolution:** decide whether `releaseEventAllocations` + retry-with-earlier-start is allowed once before final FAILED.
+
+9. **Priority factor #3 wording is inverted.** Plan says "Larger strip_count / pod_count — bigger phases are harder to fit; place them when the pool is least fragmented." But the pool is *most* empty (least fragmented) at the start, not after smaller allocations. Bigger phases should go first. **Resolution:** re-word to "place them first, when the pool is empty" — or clarify whether the intent really was to defer big phases.
+
+10. **`releaseEventAllocations` scope is unspecified.** Today's `rollbackEvent` (resources.ts:304) restores strips, splices ref intervals by object identity, and the wrapping `restoreState` reverts `state.bottlenecks` and `state.schedule` wholesale. The plan's release function only mentions strip intervals. **Resolution:** specify whether release also touches `ref_demand_by_day` (yes — even though refs are post-schedule output, the intervals are still tagged per event), `state.schedule[event_id]`, and bottlenecks emitted during the failed pass.
+
+11. **Loop progress semantics.** Plan caps iterations at `max_iter = sum of phase counts`. But when a popped READY phase finds no window (strip pool busy), what happens? Re-pushed with later `ready_time`? Discarded? Without a "made-progress-or-defer" rule the loop converges by exhaustion but may discard recoverable phases. **Resolution:** specify the `notBefore` advancement rule when `findAvailableStripsInWindow` returns null.
+
+### Phase A risk
+
+12. **"All existing tests pass unchanged" is risky.** resources.test.ts has 33+ tests asserting against `strip_free_at` semantics. Tests like resources.test.ts:108–113 (allocate same strip twice) have ambiguous behavior under the new model. Maintaining both `strip_free_at` AND interval-list as dual sources of truth is a guaranteed source of bugs during the transition. **Resolution:** either accept that Phase A changes some test expectations and update them in-phase, or commit to a strict wrapper contract with property-based tests proving equivalence.
+
+### Acceptance criteria are too loose
+
+13. **B5/B6/B7 density-gain claim is unfalsifiable.** Baselines are `.toBeGreaterThanOrEqual(N)` lower bounds. "Density gain expected" with no metric means a regression that still meets the lower bound passes. **Resolution:** add explicit `≥ serial_count + N` assertions to Phase C for the scenarios where density gain is the point.
+
+### METHODOLOGY updates beyond what Phase D lists
+
+14. ~~§Resources → Referee Allocation describes refs as a scheduling input.~~ **RESOLVED 2026-04-26.** METHODOLOGY rewritten: refs are an output, with `peak_total_refs` and `peak_saber_refs` per day. Inputs section, Resource Preconditions, Phase 5, Phase 7, Auto-Suggestion, and Appendix A all updated. Section renamed Referee Allocation → Referee Calculation.
+
+15. ~~§Scheduling Algorithm Phase 5 repeats the "strips AND refs available" framing.~~ **RESOLVED 2026-04-26** (folded into #14).
+
+16. **§DE Strip Allocation Models** (METHODOLOGY.md:405–459) describes the existing pod/greedy modes as runtime allocators when they are actually capacity *estimation* models. With runtime pods introduced, this section needs disambiguation or demotion to "day-assignment heuristic only."
+
+17. **§Capacity-Aware Day Assignment** (METHODOLOGY.md:654–705): once `CAPACITY_TARGET_FILL` is re-tuned (open question in the plan), update the documented value here.
+
+### Suggested working order
+
+Roughly grouped from cheapest to most disruptive:
+
+- Naming + wording fixes: #7, #9 (1–2 sentences each)
+- Scope clarifications: #4, #6, #10, #11 (a paragraph each in the plan)
+- Phase model additions: #1, #2, #3, #5 (extend the phase table and dependency model)
+- Resilience + acceptance: #8, #12, #13 (decisions about retry budget and test strictness)
+- METHODOLOGY: #14, #15, #16, #17 (defer to Phase D, but list them now so they're not forgotten)
