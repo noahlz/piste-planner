@@ -14,7 +14,7 @@ const DAY_START_8AM = 480
 const DAY_END_10PM = 1320
 const LATEST_START_4PM = 960
 
-export type CompetitionKey = Pick<Competition, 'category' | 'gender' | 'weapon' | 'event_type' | 'id'>
+export type CompetitionKey = Pick<Competition, 'category' | 'gender' | 'weapon' | 'event_type' | 'id' | 'vet_age_group'>
 
 export function makeComp(
   id: string,
@@ -23,7 +23,7 @@ export function makeComp(
   weapon: Weapon,
   event_type: EventType = EventType.INDIVIDUAL,
 ): CompetitionKey {
-  return { id, category, gender, weapon, event_type }
+  return { id, category, gender, weapon, event_type, vet_age_group: null }
 }
 
 export function makeStrips(total: number, videoCount: number): Strip[] {

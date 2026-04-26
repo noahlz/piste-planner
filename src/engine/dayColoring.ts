@@ -36,7 +36,7 @@
  */
 
 import type { Competition, TournamentConfig } from './types.ts'
-import { EventType } from './types.ts'
+import { Category, EventType } from './types.ts'
 import { saberPileupPenalty } from './dayAssignment.ts'
 import type { ConstraintGraph } from './constraintGraph.ts'
 import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
@@ -256,6 +256,38 @@ function colorPenalty(
 }
 
 /**
+ * Veteran Age-Group Co-Day Rule (METHODOLOGY §Veteran Age-Group Co-Day Rule).
+ *
+ * If `self` is a Vet *individual* event and a sibling Vet individual event
+ * (same gender + weapon, different vet_age_group) is already colored, the
+ * sibling's day is the required color for `self`. The DSatur loop must
+ * restrict valid colors to that day; the rule is hard, not a soft pull.
+ *
+ * Returns the required color, or null if the rule does not bind (self is
+ * not Vet ind, or no sibling has been colored yet).
+ */
+function vetCoDayRequiredColor(
+  self: Competition,
+  coloring: Map<string, number>,
+  competitions: Competition[],
+): number | null {
+  if (self.category !== Category.VETERAN) return null
+  if (self.event_type !== EventType.INDIVIDUAL) return null
+
+  for (const other of competitions) {
+    if (other.id === self.id) continue
+    if (other.category !== Category.VETERAN) continue
+    if (other.event_type !== EventType.INDIVIDUAL) continue
+    if (other.gender !== self.gender) continue
+    if (other.weapon !== self.weapon) continue
+    const day = coloring.get(other.id)
+    if (day !== undefined) return day
+  }
+
+  return null
+}
+
+/**
  * Returns the set of edge targetIds that are INDIV_TEAM_RELAXABLE_BLOCKS edges
  * for this competition (same gender + weapon, matching indiv/team category pair).
  */
@@ -352,6 +384,7 @@ function dsaturLoop(
     if (!bestId) break // should not happen
 
     const id = bestId
+    const self = compMap.get(id)!
     const edges = graph.get(id) ?? []
 
     // Determine blocked colors (from hard-edge neighbors already colored)
@@ -363,10 +396,16 @@ function dsaturLoop(
       }
     }
 
+    // Vet Co-Day Rule: if a sibling Vet ind (same gender + weapon) is already
+    // colored, restrict valid colors to that day. Hard rule per METHODOLOGY
+    // §Veteran Age-Group Co-Day Rule.
+    const requiredColor = vetCoDayRequiredColor(self, coloring, competitions)
+
     // Valid colors in [0, nDays)
-    const validColors = Array.from({ length: nDays }, (_, i) => i).filter(
-      c => !blockedColors.has(c),
-    )
+    const allColors = Array.from({ length: nDays }, (_, i) => i)
+    const validColors = (requiredColor !== null
+      ? (blockedColors.has(requiredColor) ? [] : [requiredColor])
+      : allColors.filter(c => !blockedColors.has(c)))
 
     // Pick best valid color by soft penalty
     let chosenColor: number
