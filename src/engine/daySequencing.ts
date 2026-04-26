@@ -6,7 +6,7 @@
  * events receive earlier (prime morning) slots.
  */
 
-import { Category, EventType } from './types.ts'
+import { Category, EventType, VetAgeGroup } from './types.ts'
 import type { Competition, TournamentConfig } from './types.ts'
 import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
 
@@ -19,6 +19,46 @@ function isYouthPriority(comp: Competition): boolean {
 }
 
 /**
+ * Numeric sort weight for age-banded Vet groups where older = lower (sorts earlier).
+ * VET_COMBINED is intentionally absent — the helper returns null if either event
+ * lacks an age-banded group, ensuring graceful fallthrough to the next sort key.
+ */
+const VET_AGE_ORDER: Partial<Record<VetAgeGroup, number>> = {
+  [VetAgeGroup.VET80]: 0,
+  [VetAgeGroup.VET70]: 1,
+  [VetAgeGroup.VET60]: 2,
+  [VetAgeGroup.VET50]: 3,
+  [VetAgeGroup.VET40]: 4,
+}
+
+/**
+ * Returns a non-null sort key (weight(a) − weight(b)) when both events are
+ * Veteran INDIVIDUAL events with the same gender and weapon and both have
+ * age-banded vet_age_group values (VET40–VET80, not VET_COMBINED or null).
+ * A negative result places `a` before `b` (older age group first).
+ * Returns null for all other pairs so the caller falls through to the next key.
+ */
+function vetAgeOrderingKey(a: Competition, b: Competition): number | null {
+  if (
+    a.category !== Category.VETERAN ||
+    b.category !== Category.VETERAN ||
+    a.event_type !== EventType.INDIVIDUAL ||
+    b.event_type !== EventType.INDIVIDUAL ||
+    a.gender !== b.gender ||
+    a.weapon !== b.weapon
+  ) {
+    return null
+  }
+
+  const weightA = a.vet_age_group !== null ? VET_AGE_ORDER[a.vet_age_group] : undefined
+  const weightB = b.vet_age_group !== null ? VET_AGE_ORDER[b.vet_age_group] : undefined
+
+  if (weightA === undefined || weightB === undefined) return null
+
+  return weightA - weightB
+}
+
+/**
  * Sorts events assigned to the same day for optimal within-day resource
  * allocation. Earlier positions in the returned array correspond to earlier
  * (prime morning) scheduling slots.
@@ -27,6 +67,8 @@ function isYouthPriority(comp: Competition): boolean {
  *   1. Y8/Y10 first — must start in the first slot of the day
  *   2. Mandatory before optional
  *   3. Individual before team — when a same-day pair exists (same weapon + gender + category)
+ *   3.5. Vet age-descending for sibling pairs — VET80 → VET70 → VET60 → VET50 → VET40
+ *        (applies only to same-gender, same-weapon, age-banded Veteran INDIVIDUAL pairs)
  *   4. Strip demand descending — strips_allocated × categoryWeight
  *   5. Duration descending — total_strip_hours (longest events start earlier)
  *
@@ -62,6 +104,12 @@ export function sequenceEventsForDay(
     const indivA = a.event_type === EventType.INDIVIDUAL ? 1 : 0
     const indivB = b.event_type === EventType.INDIVIDUAL ? 1 : 0
     if (indivB !== indivA) return indivB - indivA
+
+    // 3.5. Vet age-descending for sibling pairs (same gender + weapon, age-banded).
+    // Returns null for non-sibling pairs (fall through to key 4) or 0 for identical
+    // age groups (also falls through — same-population is enforced elsewhere).
+    const vetKey = vetAgeOrderingKey(a, b)
+    if (vetKey !== null && vetKey !== 0) return vetKey
 
     // 4. Strip demand descending
     const demandDiff = (stripDemand.get(b.id) ?? 0) - (stripDemand.get(a.id) ?? 0)

@@ -11,6 +11,7 @@ import {
   BottleneckCause,
   BottleneckSeverity,
   Phase,
+  VetAgeGroup,
 } from '../../src/engine/types.ts'
 import type {
   Competition,
@@ -924,6 +925,103 @@ describe('postScheduleDayBreakdown', () => {
     const stripSummaries = result.filter(b => b.message.includes('strip-hours'))
     expect(stripSummaries.length).toBeGreaterThan(0)
     expect(stripSummaries[0].severity).toBe(BottleneckSeverity.INFO)
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// scheduleAll — Vet age-descending pool start (F3b)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('scheduleAll — Vet age-descending pool start (F3b)', () => {
+  it('Vet age-banded M Foil ind siblings start pools in age-descending order', () => {
+    // All three events have identical fencer counts and strip allocations.
+    // Without the new key 3.5, VET40 would sort first because its categoryWeight
+    // (0.8) produces higher strip demand than VET60/VET80 (0.6 each), which is
+    // key #4 in the comparator chain. Key 3.5 (Vet age-descending tiebreaker)
+    // overrides that and produces:
+    //   VET80.pool_start < VET60.pool_start < VET40.pool_start
+    //
+    // Strip count is set to exactly match each event's strips_allocated (2 each),
+    // with 2 total strips. This forces strict serialization: the next event cannot
+    // start until the previous one finishes and releases its strips. With 2 total
+    // strips and each event wanting 2, they must run one at a time.
+    //
+    // fencer_count kept small (6) so pool rounds are short and the test runs fast.
+    // The Vet co-day rule (F2b) places all three events on the same day; the test
+    // asserts that fact explicitly before comparing pool_starts (pool_start is
+    // global minutes-from-midnight, so a cross-day comparison would be misleading).
+    const config = makeConfig({
+      days_available: 2,
+      strips: makeStrips(2, 0),
+    })
+
+    const comps = [
+      makeCompetition({
+        id: 'vet40',
+        category: Category.VETERAN,
+        event_type: EventType.INDIVIDUAL,
+        gender: Gender.MEN,
+        weapon: Weapon.FOIL,
+        vet_age_group: VetAgeGroup.VET40,
+        fencer_count: 6,
+        strips_allocated: 2,
+      }),
+      makeCompetition({
+        id: 'vet60',
+        category: Category.VETERAN,
+        event_type: EventType.INDIVIDUAL,
+        gender: Gender.MEN,
+        weapon: Weapon.FOIL,
+        vet_age_group: VetAgeGroup.VET60,
+        fencer_count: 6,
+        strips_allocated: 2,
+      }),
+      makeCompetition({
+        id: 'vet80',
+        category: Category.VETERAN,
+        event_type: EventType.INDIVIDUAL,
+        gender: Gender.MEN,
+        weapon: Weapon.FOIL,
+        vet_age_group: VetAgeGroup.VET80,
+        fencer_count: 6,
+        strips_allocated: 2,
+      }),
+    ]
+
+    const { schedule, bottlenecks } = scheduleAll(comps, config)
+
+    // All three events must be scheduled with no errors
+    expect(schedule['vet80']).toBeDefined()
+    expect(schedule['vet60']).toBeDefined()
+    expect(schedule['vet40']).toBeDefined()
+    const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
+    expect(errors).toHaveLength(0)
+
+    // The Vet co-day rule must place all three on the same day. If this fails,
+    // the pool_start ordering check below would compare across days, which is
+    // not what F3b is testing.
+    const days = new Set([
+      schedule['vet80'].assigned_day,
+      schedule['vet60'].assigned_day,
+      schedule['vet40'].assigned_day,
+    ])
+    expect(days.size).toBe(1)
+
+    // pool_start is `number | null`. Pin it to a number before the ordering
+    // assertions so a null (e.g. from a partial scheduling result) becomes a
+    // visible test failure rather than a vacuous comparison.
+    const vet80Start = schedule['vet80'].pool_start
+    const vet60Start = schedule['vet60'].pool_start
+    const vet40Start = schedule['vet40'].pool_start
+    expect(vet80Start).not.toBeNull()
+    expect(vet60Start).not.toBeNull()
+    expect(vet40Start).not.toBeNull()
+
+    // Pool starts must be strictly age-descending: VET80 first, VET40 last.
+    // Strict serialization (2 strips shared across all 3 events with 2 each) means
+    // each event's pools start only after the previous event fully finishes.
+    expect(vet80Start).toBeLessThan(vet60Start as number)
+    expect(vet60Start).toBeLessThan(vet40Start as number)
   })
 })
 

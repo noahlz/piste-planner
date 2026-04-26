@@ -88,6 +88,12 @@ These rules cause scheduling to fail or produce errors. They are never relaxed. 
 - **Vet Combined is hard-blocked from sharing a day with any age-banded Vet ind event** for the same gender + weapon. A fencer typically enters their primary age-banded event AND Vet Combined, so co-locating those two events would double-book that fencer.
 - This is an additional hard rule beyond [Same-Population Conflicts](#same-population-conflicts) — it forces both *consolidation* (among age-banded events) and *separation* (Vet Combined from age-banded).
 
+#### Within-Day Age-Descending Order
+
+- **On a Vet co-day for (gender, weapon), age-banded events are sequenced in age-descending order:** VET80 → VET70 → VET60 → VET50 → VET40. Older fencers run first so a VET80 fencer can complete their primary event before starting any nested-eligible event (VET70/60/50/40 — USA Fencing Veterans are nested-eligible).
+- The serial scheduler enforces this via a within-day sort key, after the indiv-before-team rule and before strip-demand. With ample strips, age-banded siblings may still run in parallel — the sort key only governs which one starts first; full sequential completion (each event finishes before the next begins) requires resource contention or, in the future, an explicit dependency edge in the concurrent scheduler.
+- Implementation: `vetAgeOrderingKey` and `VET_AGE_ORDER` in [`src/engine/daySequencing.ts`](src/engine/daySequencing.ts), inserted as comparator key 3.5 in `sequenceEventsForDay`. The concurrent scheduler (forthcoming, see [`./.claude/plans/2026-04-23-concurrent-scheduler.md`](./.claude/plans/2026-04-23-concurrent-scheduler.md)) will add a dependency edge `younger_sibling.pools.ready_time = older_sibling.last_phase.end_time + ADMIN_GAP_MINS` to enforce strict serialization regardless of resource availability.
+
 ### Overlapping-Population Separation (Group 1)
 
 Overlapping age categories MUST be on **different days** (per weapon and gender). This prevents fencers who compete in multiple age categories from having schedule conflicts. (Ops Manual Ch.4, pp.26–27 — Group 1: Mandatory Criteria)
