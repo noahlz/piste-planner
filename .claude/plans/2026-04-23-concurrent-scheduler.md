@@ -273,7 +273,7 @@ Issues raised during a critical review of this plan. Work through these before s
 
 2. **Flighting is not addressed.** `phaseSchedulers.ts:494` `allocateFlightedPools` splits a flighted event into Flight A + `FLIGHT_BUFFER_MINS` + Flight B. The plan's `pools` node implicitly assumes one contiguous block. Flighting trigger is `n_pools > pool_strip_cap` (default 80%) — see METHODOLOGY §Flighting. **Resolution:** model flighting as two `pools` phase nodes (`pools_flight_a`, `pools_flight_b`) at half strip count with a dependency edge plus the buffer.
 
-3. **Team event sequencing is not addressed.** `phaseSchedulers.ts:159–172` enforces "team must run after individual + `INDIV_TEAM_MIN_GAP_MINS` (120)" and emits `SEQUENCING_CONSTRAINT`. The plan's dependency map covers within-event phase ordering only. **Resolution:** add cross-event dependency edges from an individual event's last phase to its team counterpart's first phase on the same day.
+3. ~~**Team event sequencing is not addressed.**~~ **RESOLVED 2026-04-26.** Same-day indv/team sequencing (`phaseSchedulers.ts:159–172`, +120 min gap) only fires for soft-penalty pairs (cross-population crossover, e.g. Div2 ↔ Vet Team) or level-3-relaxed pairs — same-category pairs (Junior↔Junior, Cadet↔Cadet) are hard-blocked from sharing a day by `crossoverPenalty` Infinity edges. The concurrent scheduler must add a cross-event dependency edge `indiv.last_phase + INDIV_TEAM_MIN_GAP_MINS → team.first_phase` only when both events landed on the same day; this is a narrow case, not the norm.
 
 4. **Per-event strip cap (`max_pool_strip_pct`) enforcement.** `phaseSchedulers.ts:510` calls `computeStripCap` to clamp any one event at 80% of total strips during pools (and DEs at 80% via `max_de_strip_pct`). With true concurrency this matters more, not less — one event grabbing 100% of strips kills concurrency. **Resolution:** explicitly state that the loop's step 2b passes a capped count to `findAvailableStripsInWindow`, not the desired count.
 
@@ -321,6 +321,17 @@ Roughly grouped from cheapest to most disruptive:
 
 - Naming + wording fixes: #7, #9 (1–2 sentences each)
 - Scope clarifications: #4, #6, #10, #11 (a paragraph each in the plan)
-- Phase model additions: #1, #2, #3, #5 (extend the phase table and dependency model)
+- Phase model additions: #1, #2, #5 (extend the phase table and dependency model). #3 also touches the dependency model, narrowly — see resolution above.
 - Resilience + acceptance: #8, #12, #13 (decisions about retry budget and test strictness)
 - METHODOLOGY: #14, #15, #16, #17 (defer to Phase D, but list them now so they're not forgotten)
+
+## Follow-up code fixes (separate from concurrent scheduler)
+
+Surfaced 2026-04-26 while resolving review issues #3. These are spec/code inconsistencies that exist in the *current* engine, independent of the concurrent scheduler. Fix in a dedicated task before or in parallel with Phase A — they are small but they affect day-assignment correctness and will skew any concurrent-scheduler benchmark on tournaments with veterans.
+
+- **F1. Remove Vet/Vet from `INDIV_TEAM_RELAXABLE_BLOCKS`.** `src/engine/constants.ts:535` lists `{ indivCategory: VETERAN, teamCategory: VETERAN }`. Per spec (METHODOLOGY §Same-Population Conflicts), same-weapon Vet ind ↔ Vet team is hard non-relaxable. Drop the entry; the existing same-category Infinity edge from `crossoverPenalty` is what prevents same-day, and at level 3 it should *not* be relaxed. Verify no test depends on level-3 relaxation of a Vet/Vet pair.
+
+- **F2. Veteran age-group handling in `crossoverPenalty` and a positive Vet Co-Day rule.** `src/engine/crossover.ts:78–88` ignores `vet_age_group`. Two coupled fixes:
+  - Treat the effective category for Veterans as the compound `(VETERAN, vet_age_group)` pair when checking same-population. Vet 40 M Foil ind + Vet 50 M Foil ind currently return Infinity from the same-category check; they should not, because they have different vet_age_groups.
+  - Add a hard rule (METHODOLOGY §Veteran Age-Group Co-Day Rule) that all Vet *individual* events for a given (gender, weapon) must share a day. This is *positive* enforcement (force-together), not the usual *negative* enforcement (block-apart) the constraint graph models. Likely needs a pre-coloring grouping pass that assigns all Vet age groups for a (gender, weapon) the same color, or a custom soft penalty with very high weight.
+  - Acceptance: a test fixture with Vet 40 M Foil + Vet 50 M Foil + Vet 60 M Foil schedules all three on the same day; same fixture with Vet 40 M Foil + Vet 40 M Foil Team schedules them on different days.

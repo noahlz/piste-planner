@@ -77,7 +77,15 @@ These rules cause scheduling to fail or produce errors. They are never relaxed. 
 
 ### Same-Population Conflicts
 
-- Two competitions with **identical age category, gender, and weapon** cannot be on the same day
+- Two competitions with **identical age category, gender, and weapon** cannot be on the same day. This includes individual + team pairs of the same category and weapon: Junior Men's Foil ind + Junior Men's Foil team, Cadet Women's Epee ind + Cadet Women's Epee team, **Vet Men's Foil ind + Vet Men's Foil team**, etc., all must be on different days. This is hard at every relaxation level.
+- For Veterans, "category" is read as the full `(VETERAN, vet_age_group)` pair: Vet 40 M Foil ind and Vet 50 M Foil ind are *different* categories and are not blocked by this rule (they are forced *together* by the Veteran Age-Group Co-Day Rule below). But Vet 40 M Foil ind and Vet 40 M Foil team share the full pair and are blocked.
+- Different-weapon pairs are not blocked: Vet Men's Saber ind + Vet Men's Epee team can share a day.
+
+### Veteran Age-Group Co-Day Rule
+
+- **All Veteran *individual* events for a given gender + weapon must be on the same day.** Vet 40, Vet 50, Vet 60, Vet 70, Vet 80 (and Vet Combined where applicable) for, say, Men's Foil all run on one day; they cannot be spread across multiple days.
+- Reason: a single fencer typically enters their Vet age group plus Vet Combined; staffing, refs, and venue setup for veteran events are coordinated on a single day per weapon-gender.
+- This is an additional hard rule beyond [Same-Population Conflicts](#same-population-conflicts) — it forces *consolidation*, not separation.
 
 ### Overlapping-Population Separation (Group 1)
 
@@ -159,16 +167,18 @@ These constraints apply as infinite penalties at constraint relaxation levels 0�
 
 ### Individual/Team Separation
 
-Hard-blocked pairs (Infinity penalty at level < 3, same weapon+gender required):
-- **Veteran ind ↔ Veteran team**: overlapping fencer pool
+Cross-category indv/team pairs that are hard-blocked at levels 0–2 but relaxable at level 3 (same weapon+gender required):
 - **Div 1 ind ↔ Junior team**: Junior team draws from Div 1 individual pool
 - **Junior ind ↔ Div 1 team**: Div 1 team draws from Junior individual pool
 
 (see [`constants.ts`](src/engine/constants.ts) — `INDIV_TEAM_RELAXABLE_BLOCKS`)
 
+Note: same-category indv/team pairs (Junior↔Junior, Cadet↔Cadet, Div1↔Open Team, Vet↔Vet, etc.) are hard-blocked by [Same-Population Conflicts](#same-population-conflicts) and are *not* relaxed at level 3.
+
 **For other overlapping individual/team pairs**: 4-hour separation required, in either direction
   - e.g., Vet Team at 8 AM allows Div 2 Individual at 10 AM
   - Individual before team is a soft preference, not a hard rule
+  - When such a pair lands on the same day (because their constraint is soft, not hard), the runtime sequencer enforces `team_pools_start >= indiv_DE_end + 120 min` and emits `SEQUENCING_CONSTRAINT` (INFO).
 
 ---
 
