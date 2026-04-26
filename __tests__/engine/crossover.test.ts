@@ -227,6 +227,43 @@ describe('crossoverPenalty', () => {
       const b = vetIndiv('vet60', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET60)
       expect(crossoverPenalty(a, b)).toBe(0.0)
     })
+
+    it('VET40 M Foil ind + VET_COMBINED M Foil ind → Infinity (F3a hard block)', () => {
+      // A fencer in VET40 typically also enters VET_COMBINED, so these must NOT share a day.
+      const a = vetIndiv('vet40', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vetcomb', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET_COMBINED)
+      expect(crossoverPenalty(a, b)).toBe(Infinity)
+    })
+
+    it('VET_COMBINED M Foil ind + VET80 M Foil ind → Infinity (symmetric direction, F3a hard block)', () => {
+      // Symmetric: VET_COMBINED first in argument order.
+      const a = vetIndiv('vetcomb', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET_COMBINED)
+      const b = vetIndiv('vet80', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET80)
+      expect(crossoverPenalty(a, b)).toBe(Infinity)
+    })
+
+    it('VET40 M Foil ind + VET_COMBINED W Foil ind (different gender) → 0.0 (gender mismatch, no block)', () => {
+      // Different gender — the hard block does not fire; existing matrix returns 0.0.
+      const a = vetIndiv('vet40-m', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vetcomb-w', Gender.WOMEN, Weapon.FOIL, VetAgeGroup.VET_COMBINED)
+      expect(crossoverPenalty(a, b)).toBe(0.0)
+    })
+
+    it('VET40 M Foil ind + VET_COMBINED M Sabre ind (different weapon) → 0.0 (weapon mismatch, no block)', () => {
+      // Different weapon — the hard block does not fire; pins the weapon guard
+      // independently from the gender guard.
+      const a = vetIndiv('vet40-foil', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vetcomb-sabre', Gender.MEN, Weapon.SABRE, VetAgeGroup.VET_COMBINED)
+      expect(crossoverPenalty(a, b)).toBe(0.0)
+    })
+
+    it('VET_COMBINED M Foil ind + Vet M Foil team → Infinity (same-population rule still fires, regression check)', () => {
+      // isSamePopulation: ind+team of same category+gender+weapon → Infinity.
+      // Verifies the existing rule wasn't broken by F3a changes.
+      const ind = vetIndiv('vetcomb-ind', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET_COMBINED)
+      const team = vetTeam('vet-team', Gender.MEN, Weapon.FOIL)
+      expect(crossoverPenalty(ind, team)).toBe(Infinity)
+    })
   })
 })
 

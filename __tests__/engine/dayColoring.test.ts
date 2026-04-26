@@ -603,6 +603,71 @@ describe('assignDaysByColoring — Veteran Co-Day Rule', () => {
     expect(d50).toBe(d40)
     expect(d60).toBe(d40)
   })
+
+  it('VET40 + VET60 share a day; VET_COMBINED is on a different day (F3a)', () => {
+    // Co-Day rule must bind VET40 and VET60 together, but must NOT bind
+    // VET_COMBINED to that same day. VET_COMBINED must land on a different day
+    // because fencers typically enter their age-banded event AND VET_COMBINED.
+    const vet40 = makeCompetition({
+      id: 'vet40-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+    const vet60 = makeCompetition({
+      id: 'vet60-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET60,
+    })
+    const vetCombined = makeCompetition({
+      id: 'vetcomb-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET_COMBINED,
+    })
+
+    const graph = buildConstraintGraph([vet40, vet60, vetCombined])
+    const config = makeConfig({ days_available: 3 })
+
+    const { dayMap } = assignDaysByColoring(graph, [vet40, vet60, vetCombined], config)
+
+    const d40 = dayMap.get('vet40-m-foil')
+    const d60 = dayMap.get('vet60-m-foil')
+    const dComb = dayMap.get('vetcomb-m-foil')
+
+    expect(d40).toBeDefined()
+    expect(d60).toBe(d40)
+    expect(dComb).toBeDefined()
+    expect(dComb).not.toBe(d40)
+  })
+
+  it('VET_COMBINED alone (no age-banded siblings) → assigns successfully (F3a)', () => {
+    // Co-Day rule must not crash or fail when no age-banded Vet ind siblings exist.
+    // The rule simply does not bind in that case.
+    const vetCombined = makeCompetition({
+      id: 'vetcomb-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET_COMBINED,
+    })
+
+    const graph = buildConstraintGraph([vetCombined])
+    const config = makeConfig({ days_available: 3 })
+
+    const { dayMap } = assignDaysByColoring(graph, [vetCombined], config)
+
+    const dComb = dayMap.get('vetcomb-m-foil')
+    expect(dComb).toBe(0)
+  })
 })
 
 describe('capacityPenalty ramp', () => {

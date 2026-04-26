@@ -83,9 +83,10 @@ These rules cause scheduling to fail or produce errors. They are never relaxed. 
 
 ### Veteran Age-Group Co-Day Rule
 
-- **All Veteran *individual* events for a given gender + weapon must be on the same day.** Vet 40, Vet 50, Vet 60, Vet 70, Vet 80 (and Vet Combined where applicable) for, say, Men's Foil all run on one day; they cannot be spread across multiple days.
-- Reason: a single fencer typically enters their Vet age group plus Vet Combined; staffing, refs, and venue setup for veteran events are coordinated on a single day per weapon-gender.
-- This is an additional hard rule beyond [Same-Population Conflicts](#same-population-conflicts) — it forces *consolidation*, not separation.
+- **All age-banded Veteran *individual* events for a given gender + weapon must be on the same day.** Vet 40, Vet 50, Vet 60, Vet 70, Vet 80 for, say, Men's Foil all run on one day; they cannot be spread across multiple days. The rule does *not* apply to Vet Combined.
+- Reason: staffing, refs, and venue setup for the age-banded veteran events are coordinated on a single day per weapon-gender, and nested age-eligibility means a single fencer often enters the age-banded events.
+- **Vet Combined is hard-blocked from sharing a day with any age-banded Vet ind event** for the same gender + weapon. A fencer typically enters their primary age-banded event AND Vet Combined, so co-locating those two events would double-book that fencer.
+- This is an additional hard rule beyond [Same-Population Conflicts](#same-population-conflicts) — it forces both *consolidation* (among age-banded events) and *separation* (Vet Combined from age-banded).
 
 ### Overlapping-Population Separation (Group 1)
 

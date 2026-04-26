@@ -36,7 +36,7 @@
  */
 
 import type { Competition, TournamentConfig } from './types.ts'
-import { Category, EventType } from './types.ts'
+import { Category, EventType, VetAgeGroup } from './types.ts'
 import { saberPileupPenalty } from './dayAssignment.ts'
 import type { ConstraintGraph } from './constraintGraph.ts'
 import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
@@ -258,13 +258,18 @@ function colorPenalty(
 /**
  * Veteran Age-Group Co-Day Rule (METHODOLOGY §Veteran Age-Group Co-Day Rule).
  *
- * If `self` is a Vet *individual* event and a sibling Vet individual event
- * (same gender + weapon, different vet_age_group) is already colored, the
- * sibling's day is the required color for `self`. The DSatur loop must
- * restrict valid colors to that day; the rule is hard, not a soft pull.
+ * Binds age-banded Vet individual events (VET40–VET80, same gender + weapon)
+ * to the same day. Explicitly excludes VET_COMBINED: because fencers typically
+ * enter their age-banded event AND VET_COMBINED, VET_COMBINED must land on a
+ * different day and must never be pulled into the co-day group.
+ *
+ * If `self` is an age-banded Vet individual event and a sibling age-banded Vet
+ * individual event (same gender + weapon) is already colored, the sibling's day
+ * is the required color for `self`. The DSatur loop restricts valid colors to
+ * that day; the rule is hard, not a soft pull.
  *
  * Returns the required color, or null if the rule does not bind (self is
- * not Vet ind, or no sibling has been colored yet).
+ * not an age-banded Vet ind, or no age-banded sibling has been colored yet).
  */
 function vetCoDayRequiredColor(
   self: Competition,
@@ -273,11 +278,15 @@ function vetCoDayRequiredColor(
 ): number | null {
   if (self.category !== Category.VETERAN) return null
   if (self.event_type !== EventType.INDIVIDUAL) return null
+  // VET_COMBINED must never join the co-day group.
+  if (self.vet_age_group === VetAgeGroup.VET_COMBINED) return null
 
   for (const other of competitions) {
     if (other.id === self.id) continue
     if (other.category !== Category.VETERAN) continue
     if (other.event_type !== EventType.INDIVIDUAL) continue
+    // Skip VET_COMBINED siblings — they are not part of the co-day group.
+    if (other.vet_age_group === VetAgeGroup.VET_COMBINED) continue
     if (other.gender !== self.gender) continue
     if (other.weapon !== self.weapon) continue
     const day = coloring.get(other.id)

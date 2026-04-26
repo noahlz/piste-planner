@@ -1,5 +1,5 @@
 import type { Category, Competition, ScheduleResult } from './types.ts'
-import { Category as CategoryEnum, EventType } from './types.ts'
+import { Category as CategoryEnum, EventType, VetAgeGroup } from './types.ts'
 import {
   CROSSOVER_GRAPH,
   GROUP_1_MANDATORY,
@@ -96,16 +96,52 @@ function isSamePopulation(c1: CompFields, c2: CompFields): boolean {
   return true
 }
 
+const VET_AGE_BANDED: ReadonlySet<VetAgeGroup> = new Set([
+  VetAgeGroup.VET40,
+  VetAgeGroup.VET50,
+  VetAgeGroup.VET60,
+  VetAgeGroup.VET70,
+  VetAgeGroup.VET80,
+])
+
+/**
+ * Hard-blocks a VET_COMBINED individual event from sharing a day with any
+ * age-banded Veteran individual event (VET40–VET80) of the same gender and weapon.
+ *
+ * Fencers typically enter their primary age-banded event AND VET_COMBINED, so
+ * those two must NOT share a day. The check is order-symmetric and does not
+ * fire for team events or for cross-gender / cross-weapon pairs.
+ */
+function isVetCombinedAgeBandedBlock(c1: CompFields, c2: CompFields): boolean {
+  if (c1.category !== CategoryEnum.VETERAN) return false
+  if (c2.category !== CategoryEnum.VETERAN) return false
+  if (c1.event_type !== EventType.INDIVIDUAL) return false
+  if (c2.event_type !== EventType.INDIVIDUAL) return false
+  if (c1.gender !== c2.gender) return false
+  if (c1.weapon !== c2.weapon) return false
+
+  const c1IsCombined = c1.vet_age_group === VetAgeGroup.VET_COMBINED
+  const c2IsCombined = c2.vet_age_group === VetAgeGroup.VET_COMBINED
+  const c1IsAgeBanded = c1.vet_age_group !== null && VET_AGE_BANDED.has(c1.vet_age_group)
+  const c2IsAgeBanded = c2.vet_age_group !== null && VET_AGE_BANDED.has(c2.vet_age_group)
+
+  return (c1IsCombined && c2IsAgeBanded) || (c2IsCombined && c1IsAgeBanded)
+}
+
 /**
  * Returns the penalty for scheduling two competitions on the same day.
  * Returns Infinity when the pairing would be a hard conflict.
  *
- * GROUP_1_MANDATORY is checked before the PENALTY_MATRIX because some mandatory
- * pairs (e.g. Div1↔Div1A) have no edge in CROSSOVER_GRAPH and would otherwise
- * return 0 before the hard-conflict check is reached.
+ * Hard-conflict checks in order:
+ *   1. Same-population (same category+gender+weapon, Vet-aware).
+ *   2. VET_COMBINED ↔ age-banded Vet ind (same gender+weapon): fencers typically
+ *      enter both, so they must be on different days.
+ *   3. GROUP_1_MANDATORY pairs (checked before PENALTY_MATRIX because some
+ *      mandatory pairs, e.g. Div1↔Div1A, have no edge in CROSSOVER_GRAPH).
  */
 export function crossoverPenalty(c1: CompFields, c2: CompFields): number {
   if (isSamePopulation(c1, c2)) return Infinity
+  if (isVetCombinedAgeBandedBlock(c1, c2)) return Infinity
   if (c1.gender !== c2.gender) return 0.0
   if (c1.weapon !== c2.weapon) return 0.0
 
