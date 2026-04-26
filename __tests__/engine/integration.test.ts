@@ -234,7 +234,7 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B2: 24 events; engine must schedule at least 9 (baseline from real engine output)
+      // B2: 24 events; engine must schedule at least 9
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
 
       // Ref requirements output
