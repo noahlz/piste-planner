@@ -33,7 +33,7 @@ import {
 } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
 import { findIndividualCounterpart } from './crossover.ts'
-import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, type NoWindowReason, type PoolContext, type ResourceWindowResult } from './resources.ts'
+import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, nextFreeTime, type NoWindowReason, type PoolContext, type ResourceWindowResult } from './resources.ts'
 import { SchedulingError } from './dayAssignment.ts'
 import { computeStripCap } from './stripBudget.ts'
 import { dayStart } from './types.ts'
@@ -245,7 +245,7 @@ export function scheduleDePrelimsPhase(
   const prelimsActual = snapToSlot(Math.ceil(blocks.prelims_dur / Math.max(prelimsRatio, 0.01)))
   const prelimsEnd = prelimsStart + prelimsActual
 
-  allocateStrips(state, prelimsWindow.stripIndices, prelimsEnd, txLog)
+  allocateStrips(state, prelimsWindow.stripIndices, prelimsStart, prelimsEnd, competition.id, Phase.DE_PRELIMS, txLog)
   allocateRefs(state, day, competition.weapon, config.DE_REFS, prelimsStart, prelimsEnd, txLog)
 
   partialResult.de_prelims_start = prelimsStart
@@ -293,7 +293,7 @@ export function scheduleR16Phase(
   const r16Actual = snapToSlot(Math.ceil(blocks.r16_dur / Math.max(r16Ratio, 0.01)))
   const r16End = r16Start + r16Actual
 
-  allocateStrips(state, r16Window.stripIndices, r16End, txLog)
+  allocateStrips(state, r16Window.stripIndices, r16Start, r16End, competition.id, Phase.DE_ROUND_OF_16, txLog)
   allocateRefs(state, day, competition.weapon, r16Strips, r16Start, r16End, txLog)
 
   partialResult.de_round_of_16_start = r16Start
@@ -340,7 +340,7 @@ export function scheduleDeFinalsPhase(
   const finActual = Math.max(blocks.finals_dur, config.DE_FINALS_MIN_MINS)
   const finEnd = finStart + finActual
 
-  allocateStrips(state, finWindow.stripIndices, finEnd, txLog)
+  allocateStrips(state, finWindow.stripIndices, finStart, finEnd, competition.id, Phase.DE_FINALS, txLog)
   allocateRefs(state, day, competition.weapon, 1, finStart, finEnd, txLog)
 
   partialResult.de_finals_start = finStart
@@ -395,7 +395,7 @@ export function scheduleSingleStageDePhase(
   const actualDur = ratio >= 1.0 ? totalDeBase : Math.ceil(totalDeBase / ratio)
   const deEnd = deStart + actualDur
 
-  allocateStrips(state, window.stripIndices, deEnd, txLog)
+  allocateStrips(state, window.stripIndices, deStart, deEnd, competition.id, Phase.DE, txLog)
   allocateRefs(state, day, competition.weapon, deRefsNeeded, deStart, deEnd, txLog)
 
   partialResult.de_start = deStart
@@ -425,13 +425,12 @@ export function scheduleBronzePhase(
 ): void {
   const goldSet = new Set(goldStripIndices)
   const strips = config.strips
-  const freeAt = state.strip_free_at
 
   // Find first strip not in goldSet that is free at finalsStart and matches the predicate.
   const findFreeBronzeStrip = (predicate: (videoCapable: boolean) => boolean): number | null => {
     for (let i = 0; i < strips.length; i++) {
       if (goldSet.has(i)) continue
-      if (predicate(strips[i].video_capable) && freeAt[i] <= finalsStart) return i
+      if (predicate(strips[i].video_capable) && nextFreeTime(state, i) <= finalsStart) return i
     }
     return null
   }
@@ -461,7 +460,7 @@ export function scheduleBronzePhase(
   }
 
   // Allocate bronze strip
-  allocateStrips(state, [bronzeIdx], finalsEnd, txLog)
+  allocateStrips(state, [bronzeIdx], finalsStart, finalsEnd, competition.id, Phase.DE_FINALS_BRONZE, txLog)
 
   // Allocate one ref for bronze — weapon-agnostic
   allocateRefs(state, day, competition.weapon, 1, finalsStart, finalsEnd, txLog)
@@ -538,7 +537,7 @@ function allocateFlightedPools({
 
   const Ta = windowA.startTime
   const flightAEnd = Ta + flightADur.actual_duration
-  allocateStrips(state, windowA.stripIndices, flightAEnd, txLog)
+  allocateStrips(state, windowA.stripIndices, Ta, flightAEnd, competition.id, Phase.FLIGHT_A, txLog)
   allocateRefs(state, day, competition.weapon, flightARefsNeeded, Ta, flightAEnd, txLog)
 
   partialResult.flight_a_start = Ta
@@ -582,7 +581,7 @@ function allocateFlightedPools({
     })
   }
 
-  allocateStrips(state, windowB.stripIndices, flightBEnd, txLog)
+  allocateStrips(state, windowB.stripIndices, Tb, flightBEnd, competition.id, Phase.FLIGHT_B, txLog)
   allocateRefs(state, day, competition.weapon, flightBRefsNeeded, Tb, flightBEnd, txLog)
 
   partialResult.flight_b_start = Tb
@@ -640,7 +639,7 @@ function allocateNonFlightedPools({
 
   const T = window.startTime
   const poolEnd = T + poolDur.actual_duration
-  allocateStrips(state, window.stripIndices, poolEnd, txLog)
+  allocateStrips(state, window.stripIndices, T, poolEnd, competition.id, Phase.POOLS, txLog)
   allocateRefs(state, day, competition.weapon, refRes.refs_needed, T, poolEnd, txLog)
 
   partialResult.pool_start = T

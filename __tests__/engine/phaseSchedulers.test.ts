@@ -19,7 +19,7 @@ import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts
 // ──────────────────────────────────────────────
 
 function freshTxLog(): EventTxLog {
-  return { stripChanges: [], refEvents: [] }
+  return { stripAllocationsAdded: [], refEvents: [] }
 }
 
 // Day 0, 8 AM in minutes-from-midnight
@@ -187,7 +187,7 @@ describe('scheduleDePrelimsPhase', () => {
     // at least one strip was used (strip count > 0)
     expect(partialResult.de_prelims_strip_count).toBeGreaterThan(0)
     // strips were actually allocated: at least one strip freed past notBefore
-    expect(txLog.stripChanges.length).toBeGreaterThan(0)
+    expect(txLog.stripAllocationsAdded.length).toBeGreaterThan(0)
   })
 
   it('prelims duration scales inversely with strip count', () => {
@@ -249,7 +249,7 @@ describe('scheduleR16Phase', () => {
     expect(partialResult.de_round_of_16_end).toBe(result.r16End)
     expect(partialResult.de_round_of_16_strip_count).toBeGreaterThan(0)
     // Strips allocated: txLog records strip reservation
-    expect(txLog.stripChanges.length).toBeGreaterThan(0)
+    expect(txLog.stripAllocationsAdded.length).toBeGreaterThan(0)
   })
 
   it('REQUIRED video policy: r16 allocates from video strips only', () => {

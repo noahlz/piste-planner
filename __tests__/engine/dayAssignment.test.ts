@@ -10,10 +10,12 @@ import {
   Weapon,
   DeMode,
   VideoPolicy,
+  Phase,
 } from '../../src/engine/types.ts'
 import type {
   GlobalState,
   PoolStructure,
+  StripAllocation,
 } from '../../src/engine/types.ts'
 import {
   makeStrips,
@@ -195,9 +197,10 @@ describe('findEarlierSlotSameDay', () => {
       ],
     })
 
-    // All strips free from the start of day 0
+    // All strips free from the start of day 0 — empty allocation lists mean
+    // nextFreeTime returns 0, which is <= dayStart(0)=480.
     const state: GlobalState = {
-      strip_free_at: Array(24).fill(480),
+      strip_allocations: Array.from({ length: 24 }, () => []),
       ref_demand_by_day: {},
       schedule: {},
       bottlenecks: [],
@@ -222,9 +225,16 @@ describe('findEarlierSlotSameDay', () => {
       strips: makeStrips(24, 4),
     })
 
-    // All strips occupied beyond the end of day → no window possible
+    // All strips occupied beyond the end of day → no window possible. Use a
+    // very large end_time (1e9) so nextFreeTime returns past any candidate.
+    const busyAlloc = (): StripAllocation => ({
+      event_id: 'busy',
+      phase: Phase.POOLS,
+      start_time: 0,
+      end_time: 1e9,
+    })
     const state: GlobalState = {
-      strip_free_at: Array(24).fill(Infinity),
+      strip_allocations: Array.from({ length: 24 }, () => [busyAlloc()]),
       ref_demand_by_day: {},
       schedule: {},
       bottlenecks: [],

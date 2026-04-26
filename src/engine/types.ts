@@ -88,11 +88,11 @@ export const PodCaptainOverride = {
 } as const
 export type PodCaptainOverride = (typeof PodCaptainOverride)[keyof typeof PodCaptainOverride]
 
-export const DeCapacityMode = {
-  POD: 'pod',
-  GREEDY: 'greedy',
+export const DeCapacityEstimation = {
+  POD_PACKED: 'pod_packed',
+  SPREAD: 'spread',
 } as const
-export type DeCapacityMode = (typeof DeCapacityMode)[keyof typeof DeCapacityMode]
+export type DeCapacityEstimation = (typeof DeCapacityEstimation)[keyof typeof DeCapacityEstimation]
 
 export const CutMode = {
   DISABLED: 'DISABLED',
@@ -241,7 +241,7 @@ export interface TournamentConfig {
   dayConfigs: DayConfig[]
   max_pool_strip_pct: number
   max_de_strip_pct: number
-  de_capacity_mode: DeCapacityMode
+  de_capacity_estimation: DeCapacityEstimation
 }
 
 export interface FlightingGroup {
@@ -325,8 +325,49 @@ export interface ScheduleResult {
   accepted_warnings: AcceptedWarning[]
 }
 
+/**
+ * One concrete usage of a strip during scheduling. Strip allocations are written
+ * once per allocateInterval call and never mutated afterward — rollback splices
+ * the allocation out of the strip's list rather than editing it in place.
+ *
+ * `start_time` and `end_time` are in minutes-from-tournament-start (T=0).
+ * `pod_id` is present for STAGED-DE pod allocations (Phase B onward), absent for
+ * pool and SINGLE_STAGE-DE allocations.
+ */
+export interface StripAllocation {
+  event_id: string
+  phase: Phase
+  pod_id?: string
+  start_time: number
+  end_time: number
+}
+
+/**
+ * Logical group of up to 4 strips that runs a STAGED-DE round together with one
+ * head referee. Pod IDs persist on StripAllocation entries so post-schedule ref
+ * staffing can group strips into ref-staffing units.
+ *
+ * The full pod abstraction is introduced in Phase B (`src/engine/pods.ts`); this
+ * type is exported now so Phase A's StripAllocation.pod_id field has a stable
+ * shape to point at.
+ */
+export interface Pod {
+  id: string
+  strip_indices: number[]
+}
+
 export interface GlobalState {
-  strip_free_at: number[]
+  /**
+   * Per-strip chronologically ordered list of intervals the strip has been
+   * allocated to. Outer index is strip index (matches config.strips). Inner
+   * arrays are kept sorted by start_time (invariant maintained by allocateInterval).
+   *
+   * "Strip is free at time T" is computed as nextFreeTime(state, i) <= T, where
+   * nextFreeTime returns the latest end_time across the strip's allocation list
+   * (or 0 if empty). Rollback removes entries by event_id; concurrent claims are
+   * first-class state.
+   */
+  strip_allocations: StripAllocation[][]
   ref_demand_by_day: Record<number, RefDemandByDay>
   schedule: Record<string, ScheduleResult>
   bottlenecks: Bottleneck[]
@@ -394,14 +435,17 @@ export interface CatalogueEntry {
  * Records mutations made during a single competition's phase scheduling so that
  * they can be rolled back if the event cannot be fully scheduled.
  *
- * - stripChanges: prior strip_free_at values, indexed by strip index
+ * - stripAllocationsAdded: direct object references to StripAllocation entries
+ *   pushed into state.strip_allocations[stripIdx]. Rollback removes by object
+ *   identity (indexOf + splice), which is order-independent and works even when
+ *   multiple events' allocations interleave in the same strip's list.
  * - refEvents: direct object references to pushed RefDemandInterval entries so rollback
  *   can find-and-remove by identity. Using object references instead of array indices
  *   is required for phase-major scheduling, where multiple events' txLogs interleave
  *   and rolling back one event's entries would shift another's recorded indices.
  */
 export interface EventTxLog {
-  stripChanges: Array<{ stripIdx: number; oldFreeAt: number }>
+  stripAllocationsAdded: Array<{ stripIdx: number; allocation: StripAllocation }>
   refEvents: Array<{ day: number; event: RefDemandInterval }>
 }
 

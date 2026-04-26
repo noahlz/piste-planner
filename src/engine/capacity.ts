@@ -6,7 +6,7 @@
  * capacity a competition consumes. Used as input to capacity-aware day assignment.
  */
 
-import { Category, DeCapacityMode, DeMode, EventType } from './types.ts'
+import { Category, DeCapacityEstimation, DeMode, EventType } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState } from './types.ts'
 import { CATEGORY_START_PREFERENCE, DE_POD_SIZE, DE_BOUT_DURATION } from './constants.ts'
 import { computePoolStructure, weightedPoolDuration, computeDeFencerCount } from './pools.ts'
@@ -191,8 +191,8 @@ function teamDeStripHours(
  *   Each pool runs on its own strip simultaneously; the number of pools is
  *   the parallel strip demand for the pool phase.
  *
- * DE strip-hours depend on de_capacity_mode (pod or greedy) for individual events.
- * Team events always use the greedy/round-by-round model.
+ * DE strip-hours depend on de_capacity_estimation (pod_packed or spread) for individual events.
+ * Team events always use the spread/round-by-round model.
  *
  * For STAGED: prelims use the selected capacity model; R16 and finals
  * phases use their own strip counts and durations unchanged.
@@ -242,13 +242,13 @@ export function estimateCompetitionStripHours(
     // Prelims use the selected capacity model
     const prelimsPromoted = promotedFencers
     let prelims_strip_hours: number
-    if (config.de_capacity_mode === DeCapacityMode.GREEDY) {
-      // Greedy for prelims: bouts before R16. For a bracket of N,
+    if (config.de_capacity_estimation === DeCapacityEstimation.SPREAD) {
+      // Spread for prelims: bouts before R16. For a bracket of N,
       // prelims bouts = promoted - 16 (everything before R16 consolidation)
       const prelimsBouts = Math.max(prelimsPromoted - 16, 0)
       prelims_strip_hours = prelimsBouts * DE_BOUT_DURATION[competition.weapon] / 60
     } else {
-      // Pod model for prelims only — compute pre-R16 strip-hours
+      // Pod-packed model for prelims only — compute pre-R16 strip-hours
       prelims_strip_hours = podPrelimsStripHours(
         prelimsPromoted,
         competition.strips_allocated,
@@ -264,7 +264,7 @@ export function estimateCompetitionStripHours(
     video_strip_hours = r16_strip_hours + finals_strip_hours
   } else {
     // SINGLE_STAGE: use selected capacity model
-    if (config.de_capacity_mode === DeCapacityMode.GREEDY) {
+    if (config.de_capacity_estimation === DeCapacityEstimation.SPREAD) {
       de_strip_hours = greedyDeStripHours(promotedFencers, competition.weapon)
     } else {
       de_strip_hours = podDeStripHours(
