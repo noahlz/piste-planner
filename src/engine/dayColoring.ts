@@ -172,6 +172,68 @@ function individualTeamOrderingPenalty(
   return PENALTY_WEIGHTS.INDIV_TEAM_2_PLUS_DAYS // |gap| >= 2
 }
 
+const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
+  VetAgeGroup.VET40,
+  VetAgeGroup.VET50,
+  VetAgeGroup.VET60,
+  VetAgeGroup.VET70,
+  VetAgeGroup.VET80,
+])
+
+/**
+ * VET_COMBINED day-after preference (F3c).
+ *
+ * For a VET_COMBINED individual event being colored on `proposedDay`, finds the
+ * first age-banded Vet individual sibling (same gender + weapon, vet_age_group in
+ * {VET40, VET50, VET60, VET70, VET80}) that has already been colored. Per the
+ * Co-Day rule (F3a), all age-banded siblings share the same day, so any colored
+ * sibling represents the whole co-day group.
+ *
+ * Penalty map (reuses INDIV_TEAM ordering weights):
+ *   gap === 1  → INDIV_TEAM_DAY_AFTER   (-0.4 bonus: VET_COMBINED on day after co-day — ideal)
+ *   gap === -1 → TEAM_BEFORE_INDIVIDUAL  (1.0 penalty: VET_COMBINED before co-day)
+ *   |gap| >= 2 → INDIV_TEAM_2_PLUS_DAYS  (0.3 penalty: too far apart)
+ *   gap === 0  → 0.0 (defensive — blocked by F3a hard rule, but safe to handle)
+ *
+ * Returns 0.0 if `competition` is not VET_COMBINED ind, or if no age-banded
+ * sibling has been colored yet.
+ */
+function vetCombinedOrderingPenalty(
+  competition: Competition,
+  proposedDay: number,
+  competitions: Competition[],
+  coloring: Map<string, number>,
+): number {
+  if (competition.category !== Category.VETERAN) return 0.0
+  if (competition.event_type !== EventType.INDIVIDUAL) return 0.0
+  if (competition.vet_age_group !== VetAgeGroup.VET_COMBINED) return 0.0
+
+  // Find the first age-banded sibling that is already colored
+  let siblingDay: number | undefined
+  for (const other of competitions) {
+    if (other.id === competition.id) continue
+    if (other.category !== Category.VETERAN) continue
+    if (other.event_type !== EventType.INDIVIDUAL) continue
+    if (other.vet_age_group === null) continue
+    if (!VET_AGE_BANDED_GROUPS.has(other.vet_age_group)) continue
+    if (other.gender !== competition.gender) continue
+    if (other.weapon !== competition.weapon) continue
+    const day = coloring.get(other.id)
+    if (day !== undefined) {
+      siblingDay = day
+      break
+    }
+  }
+
+  if (siblingDay === undefined) return 0.0
+
+  const gap = proposedDay - siblingDay
+  if (gap === 1) return PENALTY_WEIGHTS.INDIV_TEAM_DAY_AFTER
+  if (gap === 0) return 0.0 // defensive: F3a hard rule prevents this
+  if (gap === -1) return PENALTY_WEIGHTS.TEAM_BEFORE_INDIVIDUAL
+  return PENALTY_WEIGHTS.INDIV_TEAM_2_PLUS_DAYS // |gap| >= 2
+}
+
 /**
  * Computes the soft penalty for assigning `id` color `c`, given current coloring.
  * Includes:
@@ -179,6 +241,7 @@ function individualTeamOrderingPenalty(
  *   - rest-day penalties for adjacent days (same gender + weapon, REST_DAY_PAIRS)
  *   - proximity bonuses for adjacent days (same gender + weapon, PROXIMITY_GRAPH)
  *   - individual/team ordering penalties
+ *   - VET_COMBINED day-after preference (F3c)
  */
 function colorPenalty(
   id: string,
@@ -230,6 +293,8 @@ function colorPenalty(
 
   // Individual/team ordering
   total += individualTeamOrderingPenalty(self, c, competitions, coloring)
+  // VET_COMBINED day-after preference (F3c)
+  total += vetCombinedOrderingPenalty(self, c, competitions, coloring)
 
   // Saber pileup: discourage concentrating saber events on a single day.
   // Always active (not gated by loadBalance) — structural concern.

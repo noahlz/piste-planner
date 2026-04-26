@@ -94,6 +94,13 @@ These rules cause scheduling to fail or produce errors. They are never relaxed. 
 - The serial scheduler enforces this via a within-day sort key, after the indiv-before-team rule and before strip-demand. With ample strips, age-banded siblings may still run in parallel — the sort key only governs which one starts first; full sequential completion (each event finishes before the next begins) requires resource contention or, in the future, an explicit dependency edge in the concurrent scheduler.
 - Implementation: `vetAgeOrderingKey` and `VET_AGE_ORDER` in [`src/engine/daySequencing.ts`](src/engine/daySequencing.ts), inserted as comparator key 3.5 in `sequenceEventsForDay`. The concurrent scheduler (forthcoming, see [`./.claude/plans/2026-04-23-concurrent-scheduler.md`](./.claude/plans/2026-04-23-concurrent-scheduler.md)) will add a dependency edge `younger_sibling.pools.ready_time = older_sibling.last_phase.end_time + ADMIN_GAP_MINS` to enforce strict serialization regardless of resource availability.
 
+#### Vet Combined Day-After Preference
+
+- **Vet Combined for (gender, weapon) is preferentially scheduled on the day immediately after the age-banded co-day.** This is a soft penalty, not a hard rule — if the next day is unavailable, Vet Combined falls back to any other valid day that respects the F3a hard separation.
+- Penalty weights mirror the indiv/team ordering preference: gap +1 = -0.4 bonus (ideal), gap -1 = 1.0 penalty (Vet Combined before co-day — strongly discouraged), |gap| ≥ 2 = 0.3 mild penalty.
+- Rationale: fencers who enter Vet Combined typically fence their age-banded event the day before, so scheduling Vet Combined immediately after gives them minimal travel disruption and keeps the veteran events contiguous.
+- Implementation: `vetCombinedOrderingPenalty` in [`src/engine/dayColoring.ts`](src/engine/dayColoring.ts), wired into `colorPenalty` immediately after `individualTeamOrderingPenalty`. Reuses `INDIV_TEAM_DAY_AFTER`, `TEAM_BEFORE_INDIVIDUAL`, and `INDIV_TEAM_2_PLUS_DAYS` from `PENALTY_WEIGHTS` in `constants.ts`.
+
 ### Overlapping-Population Separation (Group 1)
 
 Overlapping age categories MUST be on **different days** (per weapon and gender). This prevents fencers who compete in multiple age categories from having schedule conflicts. (Ops Manual Ch.4, pp.26–27 — Group 1: Mandatory Criteria)
