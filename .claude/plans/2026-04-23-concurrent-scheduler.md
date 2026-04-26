@@ -208,7 +208,7 @@ The scheduler maintains a ready queue keyed by priority and a dependency map lin
 
 **Cross-event dependency edges.** Two narrow cases produce explicit edges between phase nodes of different events:
 - **Indv → team gap.** Same-day indv/team sequencing (today's `phaseSchedulers.ts:159–172`, +120 min gap) only fires for soft-penalty pairs (cross-population crossover, e.g. Div2 ↔ Vet Team) or level-3-relaxed pairs — same-category pairs are hard-blocked from sharing a day. When an indv/team pair did land on the same day, add `indiv.last_phase + INDIV_TEAM_MIN_GAP_MINS → team.first_phase`.
-- **Vet age-banded sibling order.** When two age-banded VET ind events of the same gender + weapon land on the same day (per the Veteran Age-Group Co-Day Rule), add `younger_sibling.pools.ready_time = older_sibling.last_phase.end_time + ADMIN_GAP_MINS` so each event runs end-to-end before the next-younger begins. See `.claude/plans/2026-04-26-vet-age-group-coday-and-ordering.md` for the F3b serial-scheduler equivalent shipping ahead of Phase C.
+- **Vet age-banded sibling order.** When two age-banded VET ind events of the same gender + weapon land on the same day (per the Veteran Age-Group Co-Day Rule), add `younger_sibling.pools.ready_time = older_sibling.last_phase.end_time + ADMIN_GAP_MINS` so each event runs end-to-end before the next-younger begins. The serial scheduler approximates this via a within-day sort key (`vetAgeOrderingKey` in `daySequencing.ts`); the explicit dependency edge is what enforces strict serialization under concurrency.
 
 ### Priority function
 
