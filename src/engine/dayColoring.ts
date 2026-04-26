@@ -36,7 +36,7 @@
  */
 
 import type { Competition, TournamentConfig } from './types.ts'
-import { EventType } from './types.ts'
+import { Category, EventType, VetAgeGroup } from './types.ts'
 import { saberPileupPenalty } from './dayAssignment.ts'
 import type { ConstraintGraph } from './constraintGraph.ts'
 import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
@@ -172,6 +172,68 @@ function individualTeamOrderingPenalty(
   return PENALTY_WEIGHTS.INDIV_TEAM_2_PLUS_DAYS // |gap| >= 2
 }
 
+const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
+  VetAgeGroup.VET40,
+  VetAgeGroup.VET50,
+  VetAgeGroup.VET60,
+  VetAgeGroup.VET70,
+  VetAgeGroup.VET80,
+])
+
+/**
+ * VET_COMBINED day-after preference (F3c).
+ *
+ * For a VET_COMBINED individual event being colored on `proposedDay`, finds the
+ * first age-banded Vet individual sibling (same gender + weapon, vet_age_group in
+ * {VET40, VET50, VET60, VET70, VET80}) that has already been colored. Per the
+ * Co-Day rule (F3a), all age-banded siblings share the same day, so any colored
+ * sibling represents the whole co-day group.
+ *
+ * Penalty map (reuses INDIV_TEAM ordering weights):
+ *   gap === 1  → INDIV_TEAM_DAY_AFTER   (-0.4 bonus: VET_COMBINED on day after co-day — ideal)
+ *   gap === -1 → TEAM_BEFORE_INDIVIDUAL  (1.0 penalty: VET_COMBINED before co-day)
+ *   |gap| >= 2 → INDIV_TEAM_2_PLUS_DAYS  (0.3 penalty: too far apart)
+ *   gap === 0  → 0.0 (defensive — blocked by F3a hard rule, but safe to handle)
+ *
+ * Returns 0.0 if `competition` is not VET_COMBINED ind, or if no age-banded
+ * sibling has been colored yet.
+ */
+function vetCombinedOrderingPenalty(
+  competition: Competition,
+  proposedDay: number,
+  competitions: Competition[],
+  coloring: Map<string, number>,
+): number {
+  if (competition.category !== Category.VETERAN) return 0.0
+  if (competition.event_type !== EventType.INDIVIDUAL) return 0.0
+  if (competition.vet_age_group !== VetAgeGroup.VET_COMBINED) return 0.0
+
+  // Find the first age-banded sibling that is already colored
+  let siblingDay: number | undefined
+  for (const other of competitions) {
+    if (other.id === competition.id) continue
+    if (other.category !== Category.VETERAN) continue
+    if (other.event_type !== EventType.INDIVIDUAL) continue
+    if (other.vet_age_group === null) continue
+    if (!VET_AGE_BANDED_GROUPS.has(other.vet_age_group)) continue
+    if (other.gender !== competition.gender) continue
+    if (other.weapon !== competition.weapon) continue
+    const day = coloring.get(other.id)
+    if (day !== undefined) {
+      siblingDay = day
+      break
+    }
+  }
+
+  if (siblingDay === undefined) return 0.0
+
+  const gap = proposedDay - siblingDay
+  if (gap === 1) return PENALTY_WEIGHTS.INDIV_TEAM_DAY_AFTER
+  if (gap === 0) return 0.0 // defensive: F3a hard rule prevents this
+  if (gap === -1) return PENALTY_WEIGHTS.TEAM_BEFORE_INDIVIDUAL
+  return PENALTY_WEIGHTS.INDIV_TEAM_2_PLUS_DAYS // |gap| >= 2
+}
+
 /**
  * Computes the soft penalty for assigning `id` color `c`, given current coloring.
  * Includes:
@@ -179,6 +241,7 @@ function individualTeamOrderingPenalty(
  *   - rest-day penalties for adjacent days (same gender + weapon, REST_DAY_PAIRS)
  *   - proximity bonuses for adjacent days (same gender + weapon, PROXIMITY_GRAPH)
  *   - individual/team ordering penalties
+ *   - VET_COMBINED day-after preference (F3c)
  */
 function colorPenalty(
   id: string,
@@ -230,6 +293,8 @@ function colorPenalty(
 
   // Individual/team ordering
   total += individualTeamOrderingPenalty(self, c, competitions, coloring)
+  // VET_COMBINED day-after preference (F3c)
+  total += vetCombinedOrderingPenalty(self, c, competitions, coloring)
 
   // Saber pileup: discourage concentrating saber events on a single day.
   // Always active (not gated by loadBalance) — structural concern.
@@ -253,6 +318,47 @@ function colorPenalty(
   }
 
   return total
+}
+
+/**
+ * Veteran Age-Group Co-Day Rule (METHODOLOGY §Veteran Age-Group Co-Day Rule).
+ *
+ * Binds age-banded Vet individual events (VET40–VET80, same gender + weapon)
+ * to the same day. Explicitly excludes VET_COMBINED: because fencers typically
+ * enter their age-banded event AND VET_COMBINED, VET_COMBINED must land on a
+ * different day and must never be pulled into the co-day group.
+ *
+ * If `self` is an age-banded Vet individual event and a sibling age-banded Vet
+ * individual event (same gender + weapon) is already colored, the sibling's day
+ * is the required color for `self`. The DSatur loop restricts valid colors to
+ * that day; the rule is hard, not a soft pull.
+ *
+ * Returns the required color, or null if the rule does not bind (self is
+ * not an age-banded Vet ind, or no age-banded sibling has been colored yet).
+ */
+function vetCoDayRequiredColor(
+  self: Competition,
+  coloring: Map<string, number>,
+  competitions: Competition[],
+): number | null {
+  if (self.category !== Category.VETERAN) return null
+  if (self.event_type !== EventType.INDIVIDUAL) return null
+  // VET_COMBINED must never join the co-day group.
+  if (self.vet_age_group === VetAgeGroup.VET_COMBINED) return null
+
+  for (const other of competitions) {
+    if (other.id === self.id) continue
+    if (other.category !== Category.VETERAN) continue
+    if (other.event_type !== EventType.INDIVIDUAL) continue
+    // Skip VET_COMBINED siblings — they are not part of the co-day group.
+    if (other.vet_age_group === VetAgeGroup.VET_COMBINED) continue
+    if (other.gender !== self.gender) continue
+    if (other.weapon !== self.weapon) continue
+    const day = coloring.get(other.id)
+    if (day !== undefined) return day
+  }
+
+  return null
 }
 
 /**
@@ -352,6 +458,7 @@ function dsaturLoop(
     if (!bestId) break // should not happen
 
     const id = bestId
+    const self = compMap.get(id)!
     const edges = graph.get(id) ?? []
 
     // Determine blocked colors (from hard-edge neighbors already colored)
@@ -363,10 +470,16 @@ function dsaturLoop(
       }
     }
 
+    // Vet Co-Day Rule: if a sibling Vet ind (same gender + weapon) is already
+    // colored, restrict valid colors to that day. Hard rule per METHODOLOGY
+    // §Veteran Age-Group Co-Day Rule.
+    const requiredColor = vetCoDayRequiredColor(self, coloring, competitions)
+
     // Valid colors in [0, nDays)
-    const validColors = Array.from({ length: nDays }, (_, i) => i).filter(
-      c => !blockedColors.has(c),
-    )
+    const allColors = Array.from({ length: nDays }, (_, i) => i)
+    const validColors = (requiredColor !== null
+      ? (blockedColors.has(requiredColor) ? [] : [requiredColor])
+      : allColors.filter(c => !blockedColors.has(c)))
 
     // Pick best valid color by soft penalty
     let chosenColor: number

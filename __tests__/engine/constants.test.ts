@@ -9,15 +9,11 @@ import {
 import { Category, CutMode, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
 
 describe('INDIV_TEAM_RELAXABLE_BLOCKS', () => {
-  it('has exactly 3 entries', () => {
-    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toHaveLength(3)
+  it('has exactly 2 entries', () => {
+    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toHaveLength(2)
   })
 
-  it('contains VETERAN/VETERAN, DIV1/JUNIOR, JUNIOR/DIV1', () => {
-    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toContainEqual({
-      indivCategory: Category.VETERAN,
-      teamCategory: Category.VETERAN,
-    })
+  it('contains DIV1/JUNIOR and JUNIOR/DIV1 (cross-category indv/team only)', () => {
     expect(INDIV_TEAM_RELAXABLE_BLOCKS).toContainEqual({
       indivCategory: Category.DIV1,
       teamCategory: Category.JUNIOR,
@@ -25,6 +21,13 @@ describe('INDIV_TEAM_RELAXABLE_BLOCKS', () => {
     expect(INDIV_TEAM_RELAXABLE_BLOCKS).toContainEqual({
       indivCategory: Category.JUNIOR,
       teamCategory: Category.DIV1,
+    })
+  })
+
+  it('does NOT contain VETERAN/VETERAN — same-weapon Vet ind/team is hard non-relaxable', () => {
+    expect(INDIV_TEAM_RELAXABLE_BLOCKS).not.toContainEqual({
+      indivCategory: Category.VETERAN,
+      teamCategory: Category.VETERAN,
     })
   })
 })

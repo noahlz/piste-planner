@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { assignDaysByColoring, capacityPenalty } from '../../src/engine/dayColoring.ts'
 import type { ConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
-import { Category, Gender, Weapon, EventType } from '../../src/engine/types.ts'
+import { Category, Gender, Weapon, EventType, VetAgeGroup } from '../../src/engine/types.ts'
+import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
 
 // ──────────────────────────────────────────────
 // Graph-building helpers
@@ -57,40 +58,45 @@ describe('assignDaysByColoring', () => {
   })
 
   it('records relaxation when INDIV_TEAM edge is relaxed to fit 3 events in 2 days', () => {
-    // VET INDIVIDUAL and VET TEAM (same gender + weapon) form an
-    // INDIV_TEAM_RELAXABLE_BLOCKS pair. A third event (DIV1 MEN FOIL INDIVIDUAL)
-    // hard-conflicts with both. With only 2 days, one pair must share a day —
-    // the coloring relaxes the VET INDIV/TEAM edge rather than the hard ones.
-    const vetIndiv = makeCompetition({
-      id: 'vet-indiv',
-      category: Category.VETERAN,
-      gender: Gender.MEN,
-      weapon: Weapon.FOIL,
-      event_type: EventType.INDIVIDUAL,
-    })
-    const vetTeam = makeCompetition({
-      id: 'vet-team',
-      category: Category.VETERAN,
-      gender: Gender.MEN,
-      weapon: Weapon.FOIL,
-      event_type: EventType.TEAM,
-    })
-    const div1 = makeCompetition({
-      id: 'div1',
+    // DIV1 INDIVIDUAL ↔ JUNIOR TEAM is the canonical INDIV_TEAM_RELAXABLE_BLOCKS
+    // pair (F1 dropped Vet/Vet — same-population Vet ind/team is hard
+    // non-relaxable, not in the relaxable list). A third event (CADET MEN FOIL
+    // INDIVIDUAL) hard-conflicts with both. Order is deterministic via packing
+    // footprint tie-break (smallest last): junior-team is the smallest, so
+    // it is colored last and triggers the relaxation of its DIV1-indiv edge.
+    const div1Indiv = makeCompetition({
+      id: 'div1-indiv',
       category: Category.DIV1,
       gender: Gender.MEN,
       weapon: Weapon.FOIL,
       event_type: EventType.INDIVIDUAL,
+      strips_allocated: 12,
+    })
+    const juniorTeam = makeCompetition({
+      id: 'junior-team',
+      category: Category.JUNIOR,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.TEAM,
+      strips_allocated: 1,
+    })
+    const cadet = makeCompetition({
+      id: 'cadet',
+      category: Category.CADET,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      strips_allocated: 12,
     })
     // All three pairs have hard edges — with 2 days the INDIV_TEAM edge gets relaxed
     const graph = buildGraph([
-      ['vet-indiv', 'vet-team', Infinity],
-      ['vet-indiv', 'div1', Infinity],
-      ['vet-team', 'div1', Infinity],
+      ['div1-indiv', 'junior-team', Infinity],
+      ['div1-indiv', 'cadet', Infinity],
+      ['junior-team', 'cadet', Infinity],
     ])
     const config = makeConfig({ days_available: 2 })
 
-    const { dayMap, relaxations } = assignDaysByColoring(graph, [vetIndiv, vetTeam, div1], config)
+    const { dayMap, relaxations } = assignDaysByColoring(graph, [div1Indiv, juniorTeam, cadet], config)
 
     // All 3 get assigned some day
     expect(dayMap.size).toBe(3)
@@ -100,6 +106,14 @@ describe('assignDaysByColoring', () => {
     for (const v of relaxations.values()) {
       expect(v).toBe(3)
     }
+    // The relaxation must land on an endpoint of the only relaxable edge
+    // (DIV1 ind ↔ JUNIOR team). It must NOT land on cadet — Cadet has no
+    // relaxable edge, so a relaxation recorded against cadet would mean the
+    // algorithm relaxed the wrong constraint.
+    expect(relaxations.has('cadet')).toBe(false)
+    const onRelaxableEndpoint =
+      relaxations.has('div1-indiv') || relaxations.has('junior-team')
+    expect(onRelaxableEndpoint).toBe(true)
   })
 
   it('soft conflicts prefer different days when enough colors available', () => {
@@ -373,6 +387,449 @@ describe('assignDaysByColoring', () => {
     const { dayMap } = assignDaysByColoring(graph, [big, candidate], config)
 
     expect(dayMap.get('candidate')).not.toBe(dayMap.get('big'))
+  })
+})
+
+// ──────────────────────────────────────────────
+// Veteran Age-Group Co-Day Rule (F2b)
+//
+// Per METHODOLOGY §Veteran Age-Group Co-Day Rule: all Vet *individual* events
+// for a given (gender, weapon) must be on the same day. Hard rule, beyond
+// Same-Population Conflicts — forces *consolidation*, not separation.
+// ──────────────────────────────────────────────
+
+describe('assignDaysByColoring — Veteran Co-Day Rule', () => {
+  it('Vet 40 + Vet 50 + Vet 60 (same gender+weapon, all individual) → all on the same day', () => {
+    const vet40 = makeCompetition({
+      id: 'vet40-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+    const vet50 = makeCompetition({
+      id: 'vet50-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET50,
+    })
+    const vet60 = makeCompetition({
+      id: 'vet60-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET60,
+    })
+
+    const graph = buildConstraintGraph([vet40, vet50, vet60])
+    const config = makeConfig({ days_available: 3 })
+
+    const { dayMap } = assignDaysByColoring(graph, [vet40, vet50, vet60], config)
+
+    const d40 = dayMap.get('vet40-m-foil')
+    const d50 = dayMap.get('vet50-m-foil')
+    const d60 = dayMap.get('vet60-m-foil')
+    expect(d40).toBeDefined()
+    expect(d50).toBe(d40)
+    expect(d60).toBe(d40)
+  })
+
+  it('Vet 40 individual + Vet 40 team (same gender+weapon, same age group) → different days (Same-Population block)', () => {
+    const vet40Indiv = makeCompetition({
+      id: 'vet40-m-foil-ind',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+    const vetTeam = makeCompetition({
+      id: 'vet-m-foil-team',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.TEAM,
+      vet_age_group: null,
+    })
+
+    const graph = buildConstraintGraph([vet40Indiv, vetTeam])
+    const config = makeConfig({ days_available: 2 })
+
+    const { dayMap } = assignDaysByColoring(graph, [vet40Indiv, vetTeam], config)
+
+    expect(dayMap.get('vet40-m-foil-ind')).not.toBe(dayMap.get('vet-m-foil-team'))
+  })
+
+  it('Vet 40 M Foil + Vet 40 W Foil (different gender) → NOT bound by Co-Day rule (placed on different days when forced)', () => {
+    // The Co-Day rule binds within (gender, weapon). When a hard edge would
+    // force separation between M and W Vets of the same age group, the rule
+    // must NOT veto the separation by binding them together.
+    const m = makeCompetition({
+      id: 'vet40-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+    const w = makeCompetition({
+      id: 'vet40-w-foil',
+      category: Category.VETERAN,
+      gender: Gender.WOMEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+
+    // Synthetic hard edge to force separation. If the Co-Day rule were
+    // misfiring across genders, the algorithm would still try to bind them
+    // and fail (the assertion would catch it via dayMap inequality).
+    const graph = buildGraph([['vet40-m-foil', 'vet40-w-foil', Infinity]])
+    const config = makeConfig({ days_available: 2 })
+
+    const { dayMap } = assignDaysByColoring(graph, [m, w], config)
+
+    expect(dayMap.get('vet40-m-foil')).not.toBe(dayMap.get('vet40-w-foil'))
+  })
+
+  it('Vet 40 M Foil + Vet 40 M Saber (different weapon) → NOT bound by Co-Day rule (placed on different days when forced)', () => {
+    const foil = makeCompetition({
+      id: 'vet40-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+    const saber = makeCompetition({
+      id: 'vet40-m-saber',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.SABRE,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+
+    const graph = buildGraph([['vet40-m-foil', 'vet40-m-saber', Infinity]])
+    const config = makeConfig({ days_available: 2 })
+
+    const { dayMap } = assignDaysByColoring(graph, [foil, saber], config)
+
+    expect(dayMap.get('vet40-m-foil')).not.toBe(dayMap.get('vet40-m-saber'))
+  })
+
+  it('Co-Day rule binds to the sibling\'s actual day (not a hardcoded zero)', () => {
+    // If a sibling Vet ind ends up colored on day 1 (not day 0), subsequent
+    // Vet ind events of the same gender+weapon must also land on day 1.
+    // We pin Vet 40 to day 1 by giving it a hard edge to a non-Vet event
+    // that DSatur will color on day 0 first.
+    const blocker = makeCompetition({
+      id: 'blocker',
+      category: Category.DIV1,
+      gender: Gender.MEN,
+      weapon: Weapon.SABRE,
+      event_type: EventType.INDIVIDUAL,
+      strips_allocated: 16, // larger packing footprint → colored first → day 0
+    })
+    const vet40 = makeCompetition({
+      id: 'vet40-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+      strips_allocated: 8,
+    })
+    const vet50 = makeCompetition({
+      id: 'vet50-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET50,
+      strips_allocated: 8,
+    })
+    // Hard edge between blocker and vet40: blocker takes day 0, vet40 must
+    // take day 1. Then vet50 must follow vet40 to day 1 via Co-Day.
+    const graph = buildGraph([
+      ['blocker', 'vet40-m-foil', Infinity],
+    ])
+    const config = makeConfig({ days_available: 3 })
+
+    const { dayMap } = assignDaysByColoring(graph, [blocker, vet40, vet50], config)
+
+    expect(dayMap.get('blocker')).toBe(0)
+    expect(dayMap.get('vet40-m-foil')).toBe(1)
+    expect(dayMap.get('vet50-m-foil')).toBe(1)
+  })
+
+  it('Co-Day rule survives load-balancing pressure that would otherwise scatter the Vets', () => {
+    // Three Vet ind events (M Foil) plus six unrelated Y10 W Epee events.
+    // Without the Co-Day rule, load balancing would likely scatter the Vets
+    // across multiple days. The rule forces all three Vets onto the same day
+    // regardless of how the unrelated events are spread.
+    const vet40 = makeCompetition({
+      id: 'vet40-m-foil', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL, vet_age_group: VetAgeGroup.VET40,
+    })
+    const vet50 = makeCompetition({
+      id: 'vet50-m-foil', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL, vet_age_group: VetAgeGroup.VET50,
+    })
+    const vet60 = makeCompetition({
+      id: 'vet60-m-foil', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL, vet_age_group: VetAgeGroup.VET60,
+    })
+    // Six other unrelated events to give load-balancing room to scatter
+    const others = [0, 1, 2, 3, 4, 5].map(i => makeCompetition({
+      id: `other-${i}`, category: Category.Y10, gender: Gender.WOMEN, weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL, fencer_count: 200, strips_allocated: 8,
+    }))
+
+    const all = [vet40, vet50, vet60, ...others]
+    const graph = buildConstraintGraph(all)
+    const config = makeConfig({ days_available: 4 })
+
+    const { dayMap } = assignDaysByColoring(graph, all, config)
+
+    const d40 = dayMap.get('vet40-m-foil')
+    const d50 = dayMap.get('vet50-m-foil')
+    const d60 = dayMap.get('vet60-m-foil')
+    expect(d40).toBeDefined()
+    expect(d50).toBe(d40)
+    expect(d60).toBe(d40)
+  })
+
+  it('VET40 + VET60 share a day; VET_COMBINED is on a different day (F3a)', () => {
+    // Co-Day rule must bind VET40 and VET60 together, but must NOT bind
+    // VET_COMBINED to that same day. VET_COMBINED must land on a different day
+    // because fencers typically enter their age-banded event AND VET_COMBINED.
+    const vet40 = makeCompetition({
+      id: 'vet40-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+    const vet60 = makeCompetition({
+      id: 'vet60-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET60,
+    })
+    const vetCombined = makeCompetition({
+      id: 'vetcomb-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET_COMBINED,
+    })
+
+    const graph = buildConstraintGraph([vet40, vet60, vetCombined])
+    const config = makeConfig({ days_available: 3 })
+
+    const { dayMap } = assignDaysByColoring(graph, [vet40, vet60, vetCombined], config)
+
+    const d40 = dayMap.get('vet40-m-foil')
+    const d60 = dayMap.get('vet60-m-foil')
+    const dComb = dayMap.get('vetcomb-m-foil')
+
+    expect(d40).toBeDefined()
+    expect(d60).toBe(d40)
+    expect(dComb).toBeDefined()
+    expect(dComb).not.toBe(d40)
+  })
+
+  it('VET_COMBINED alone (no age-banded siblings) → assigns successfully (F3a)', () => {
+    // Co-Day rule must not crash or fail when no age-banded Vet ind siblings exist.
+    // The rule simply does not bind in that case.
+    const vetCombined = makeCompetition({
+      id: 'vetcomb-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET_COMBINED,
+    })
+
+    const graph = buildConstraintGraph([vetCombined])
+    const config = makeConfig({ days_available: 3 })
+
+    const { dayMap } = assignDaysByColoring(graph, [vetCombined], config)
+
+    const dComb = dayMap.get('vetcomb-m-foil')
+    expect(dComb).toBe(0)
+  })
+})
+
+describe('assignDaysByColoring — VET_COMBINED Day-After Preference (F3c)', () => {
+  it('VET_COMBINED prefers the day immediately after the age-banded co-day', () => {
+    // VET40 + VET60 + VET80 (age-banded) must all share co-day D via Co-Day rule.
+    // VET_COMBINED soft preference should steer it to D+1.
+    //
+    // DSatur ordering note: VET_COMBINED has 3 hard edges (to the three age-banded
+    // siblings via F3a), giving it the highest initial degree. DSatur would color it
+    // first — before any sibling is colored — making the soft penalty inactive.
+    // To force a sibling to be colored first, we add a "blocker" event that has hard
+    // edges to all three age-banded siblings (degree=3, same as VET_COMBINED) but
+    // a much larger packing footprint (strips_allocated=20 vs 8). Footprint breaks
+    // the tie, so the blocker is colored first (day 0). That gives VET40/60/80 each
+    // saturation=1, beating VET_COMBINED's saturation=0. The first age-banded Vet
+    // (VET40, by Set insertion order) is colored on day 1 (blocked from day 0).
+    // Now vetCombinedOrderingPenalty fires for VET_COMBINED with sibling on day 1:
+    //   day 0 → gap=-1 → penalty 1.0; day 2 → gap=1 → bonus -0.4; day 3 → gap=2 → 0.3
+    // VET_COMBINED picks day 2 (gap=1, lowest cost). Result: d40=1, dComb=2=d40+1.
+    const blocker = makeCompetition({
+      id: 'blocker-div1',
+      category: Category.DIV1,
+      gender: Gender.WOMEN, // different gender/weapon — no same-population conflict
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      strips_allocated: 20, // footprint tiebreak over VET_COMBINED (default 8)
+    })
+    const vet40 = makeCompetition({
+      id: 'vet40-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+    const vet60 = makeCompetition({
+      id: 'vet60-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET60,
+    })
+    const vet80 = makeCompetition({
+      id: 'vet80-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET80,
+    })
+    const vetCombined = makeCompetition({
+      id: 'vetcomb-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET_COMBINED,
+    })
+
+    // Build the constraint graph for Vet events (F3a hard edges: vetcomb ↔ each banded),
+    // then inject the blocker with hard edges to all three age-banded siblings only.
+    const vetComps = [vet40, vet60, vet80, vetCombined]
+    const graph = buildConstraintGraph(vetComps)
+    graph.set('blocker-div1', [
+      { targetId: 'vet40-m-foil', weight: Infinity },
+      { targetId: 'vet60-m-foil', weight: Infinity },
+      { targetId: 'vet80-m-foil', weight: Infinity },
+    ])
+    graph.get('vet40-m-foil')!.push({ targetId: 'blocker-div1', weight: Infinity })
+    graph.get('vet60-m-foil')!.push({ targetId: 'blocker-div1', weight: Infinity })
+    graph.get('vet80-m-foil')!.push({ targetId: 'blocker-div1', weight: Infinity })
+
+    const comps = [blocker, vet40, vet60, vet80, vetCombined]
+    const config = makeConfig({ days_available: 4 })
+
+    const { dayMap } = assignDaysByColoring(graph, comps, config)
+
+    const d40 = dayMap.get('vet40-m-foil')!
+    const d60 = dayMap.get('vet60-m-foil')!
+    const d80 = dayMap.get('vet80-m-foil')!
+    const dComb = dayMap.get('vetcomb-m-foil')!
+
+    // Co-Day rule (F3a): all age-banded Vets share the same day
+    expect(d40).toBeDefined()
+    expect(d60).toBe(d40)
+    expect(d80).toBe(d40)
+
+    // F3c soft preference: VET_COMBINED should land on the day immediately after co-day
+    expect(dComb).toBe(d40 + 1)
+  })
+
+  it('soft-preference falls back gracefully when D+1 is occupied (no crash, F3a still holds)', () => {
+    // Same Vet events plus a JUNIOR event that will naturally occupy D+1.
+    // The important assertions are:
+    //   1. VET_COMBINED is NOT on the age-banded co-day (F3a hard rule holds).
+    //   2. VET_COMBINED is assigned a valid integer day (no crash).
+    const vet40 = makeCompetition({
+      id: 'vet40-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET40,
+    })
+    const vet60 = makeCompetition({
+      id: 'vet60-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET60,
+    })
+    const vet80 = makeCompetition({
+      id: 'vet80-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET80,
+    })
+    const vetCombined = makeCompetition({
+      id: 'vetcomb-m-foil',
+      category: Category.VETERAN,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      vet_age_group: VetAgeGroup.VET_COMBINED,
+    })
+    // Large Junior event to create capacity pressure and occupy other days
+    const junior = makeCompetition({
+      id: 'junior-m-foil',
+      category: Category.JUNIOR,
+      gender: Gender.MEN,
+      weapon: Weapon.FOIL,
+      event_type: EventType.INDIVIDUAL,
+      fencer_count: 200,
+      strips_allocated: 16,
+    })
+
+    const comps = [vet40, vet60, vet80, vetCombined, junior]
+    const graph = buildConstraintGraph(comps)
+    const config = makeConfig({ days_available: 4 })
+
+    const { dayMap } = assignDaysByColoring(graph, comps, config)
+
+    const dVet40 = dayMap.get('vet40-m-foil')!
+    const dVet60 = dayMap.get('vet60-m-foil')!
+    const dVet80 = dayMap.get('vet80-m-foil')!
+    const dComb = dayMap.get('vetcomb-m-foil')
+
+    // VET_COMBINED must be assigned (no crash)
+    expect(dComb).toBeDefined()
+    // VET_COMBINED must be on a valid day within the available range
+    expect(dComb).toBeGreaterThanOrEqual(0)
+    expect(dComb).toBeLessThan(4)
+    // F3a hard rule must still hold: VET_COMBINED not on the age-banded co-day
+    expect(dComb).not.toBe(dVet40)
+    expect(dComb).not.toBe(dVet60)
+    expect(dComb).not.toBe(dVet80)
+    // The soft preference is genuinely soft — we do not assert VET_COMBINED is on D+1
+    // because this test is specifically about fallback behavior when capacity pressure exists
   })
 })
 

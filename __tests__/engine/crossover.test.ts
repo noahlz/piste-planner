@@ -7,7 +7,7 @@ import {
   individualTeamProximityPenalty,
   findIndividualCounterpart,
 } from '../../src/engine/crossover.ts'
-import { Category, Gender, Weapon, EventType } from '../../src/engine/types.ts'
+import { Category, Gender, Weapon, EventType, VetAgeGroup } from '../../src/engine/types.ts'
 import { CROSSOVER_GRAPH } from '../../src/engine/constants.ts'
 import type { ScheduleResult } from '../../src/engine/types.ts'
 import { makeComp, makeCompetition, makeScheduleResult } from '../helpers/factories.ts'
@@ -150,6 +150,120 @@ describe('crossoverPenalty', () => {
         expect(weight).toBeLessThanOrEqual(0.8)
       }
     }
+  })
+
+  // ──────────────────────────────────────────────
+  // Veteran age-group same-population (F2a)
+  //
+  // Per METHODOLOGY §Same-Population Conflicts: for Veterans, "category" is
+  // read as the full (VETERAN, vet_age_group) pair. Different vet_age_groups
+  // are *different* populations and not blocked by the same-population check
+  // (they are forced *together* by the Vet Co-Day rule, which lives in
+  // dayColoring, not crossoverPenalty). Same-population is still Infinity
+  // when both events share the same vet_age_group, OR when one is a Vet
+  // individual and the other is a Vet team (the team event spans all Vet
+  // age groups).
+  // ──────────────────────────────────────────────
+
+  describe('crossoverPenalty — Veteran vet_age_group handling', () => {
+    function vetIndiv(id: string, gender: Gender, weapon: Weapon, ageGroup: VetAgeGroup) {
+      return makeCompetition({ id, category: Category.VETERAN, gender, weapon, event_type: EventType.INDIVIDUAL, vet_age_group: ageGroup })
+    }
+    function vetTeam(id: string, gender: Gender, weapon: Weapon) {
+      return makeCompetition({ id, category: Category.VETERAN, gender, weapon, event_type: EventType.TEAM, vet_age_group: null })
+    }
+
+    it('Vet 40 ind + Vet 50 ind (same gender+weapon) → NOT Infinity (different vet_age_groups, different populations)', () => {
+      const a = vetIndiv('vet40', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vet50', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET50)
+      const result = crossoverPenalty(a, b)
+      expect(result).not.toBe(Infinity)
+    })
+
+    it('Vet 40 ind + Vet 40 ind (same gender+weapon, same age group) → Infinity (same population)', () => {
+      const a = vetIndiv('vet40-a', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vet40-b', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      expect(crossoverPenalty(a, b)).toBe(Infinity)
+    })
+
+    it('Vet 40 ind + Vet team (same gender+weapon) → Infinity (team spans all Vet ages)', () => {
+      const ind = vetIndiv('vet40-ind', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const team = vetTeam('vet-team', Gender.MEN, Weapon.FOIL)
+      expect(crossoverPenalty(ind, team)).toBe(Infinity)
+    })
+
+    it('Vet 50 ind + Vet team (same gender+weapon) → Infinity (team spans all Vet ages)', () => {
+      const ind = vetIndiv('vet50-ind', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET50)
+      const team = vetTeam('vet-team', Gender.MEN, Weapon.FOIL)
+      expect(crossoverPenalty(ind, team)).toBe(Infinity)
+    })
+
+    it('Vet team + Vet 40 ind (team first, ind second — symmetric direction) → Infinity', () => {
+      // Verifies isSamePopulation is order-independent: the ind+team rule
+      // should fire regardless of which argument is the team.
+      const ind = vetIndiv('vet40-ind', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const team = vetTeam('vet-team', Gender.MEN, Weapon.FOIL)
+      expect(crossoverPenalty(team, ind)).toBe(Infinity)
+    })
+
+    it('Vet 40 M Foil ind + Vet 40 W Foil ind (different gender) → 0.0', () => {
+      const a = vetIndiv('m', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('w', Gender.WOMEN, Weapon.FOIL, VetAgeGroup.VET40)
+      expect(crossoverPenalty(a, b)).toBe(0.0)
+    })
+
+    it('Vet 40 M Foil ind + Vet 40 M Saber ind (different weapon) → 0.0', () => {
+      const a = vetIndiv('foil', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('saber', Gender.MEN, Weapon.SABRE, VetAgeGroup.VET40)
+      expect(crossoverPenalty(a, b)).toBe(0.0)
+    })
+
+    it('Vet 40 ind + Vet 60 ind (same gender+weapon, different age groups) → 0.0 (no negative penalty)', () => {
+      // After F2a, Vet ind events of different age groups are different
+      // populations and have no crossover edge to each other. The Vet Co-Day
+      // rule (handled in dayColoring) is what forces them onto the same day —
+      // crossoverPenalty itself is silent for this pair.
+      const a = vetIndiv('vet40', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vet60', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET60)
+      expect(crossoverPenalty(a, b)).toBe(0.0)
+    })
+
+    it('VET40 M Foil ind + VET_COMBINED M Foil ind → Infinity (F3a hard block)', () => {
+      // A fencer in VET40 typically also enters VET_COMBINED, so these must NOT share a day.
+      const a = vetIndiv('vet40', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vetcomb', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET_COMBINED)
+      expect(crossoverPenalty(a, b)).toBe(Infinity)
+    })
+
+    it('VET_COMBINED M Foil ind + VET80 M Foil ind → Infinity (symmetric direction, F3a hard block)', () => {
+      // Symmetric: VET_COMBINED first in argument order.
+      const a = vetIndiv('vetcomb', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET_COMBINED)
+      const b = vetIndiv('vet80', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET80)
+      expect(crossoverPenalty(a, b)).toBe(Infinity)
+    })
+
+    it('VET40 M Foil ind + VET_COMBINED W Foil ind (different gender) → 0.0 (gender mismatch, no block)', () => {
+      // Different gender — the hard block does not fire; existing matrix returns 0.0.
+      const a = vetIndiv('vet40-m', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vetcomb-w', Gender.WOMEN, Weapon.FOIL, VetAgeGroup.VET_COMBINED)
+      expect(crossoverPenalty(a, b)).toBe(0.0)
+    })
+
+    it('VET40 M Foil ind + VET_COMBINED M Sabre ind (different weapon) → 0.0 (weapon mismatch, no block)', () => {
+      // Different weapon — the hard block does not fire; pins the weapon guard
+      // independently from the gender guard.
+      const a = vetIndiv('vet40-foil', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET40)
+      const b = vetIndiv('vetcomb-sabre', Gender.MEN, Weapon.SABRE, VetAgeGroup.VET_COMBINED)
+      expect(crossoverPenalty(a, b)).toBe(0.0)
+    })
+
+    it('VET_COMBINED M Foil ind + Vet M Foil team → Infinity (same-population rule still fires, regression check)', () => {
+      // isSamePopulation: ind+team of same category+gender+weapon → Infinity.
+      // Verifies the existing rule wasn't broken by F3a changes.
+      const ind = vetIndiv('vetcomb-ind', Gender.MEN, Weapon.FOIL, VetAgeGroup.VET_COMBINED)
+      const team = vetTeam('vet-team', Gender.MEN, Weapon.FOIL)
+      expect(crossoverPenalty(ind, team)).toBe(Infinity)
+    })
   })
 })
 

@@ -76,7 +76,10 @@ describe('buildConstraintGraph', () => {
     expect(graph.get('div1-men-epee')).toHaveLength(0)
   })
 
-  it('INDIV_TEAM_RELAXABLE_BLOCKS: VET INDIVIDUAL + VET TEAM same gender+weapon -> hard edge (Infinity)', () => {
+  it('Same-population: VET INDIVIDUAL + VET TEAM same gender+weapon -> hard edge (Infinity, ind+team always blocks)', () => {
+    // Per METHODOLOGY §Same-Population Conflicts, Vet ind + Vet team (same
+    // gender+weapon) are hard-blocked because the team event spans all Vet
+    // age groups. Hard at every relaxation level — NOT in INDIV_TEAM_RELAXABLE_BLOCKS.
     const vetIndiv = makeCompetition({ id: 'vet-men-foil-indiv', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const vetTeam = makeCompetition({ id: 'vet-men-foil-team', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
 
