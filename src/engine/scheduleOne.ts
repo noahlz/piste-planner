@@ -131,7 +131,7 @@ export function scheduleCompetition(
   for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
     // Snapshot mutable state so we can roll back on retry
     const snapshot = snapshotState(state)
-    let txLog: EventTxLog = { stripChanges: [], refEvents: [] }
+    let txLog: EventTxLog = { stripAllocationsAdded: [], refEvents: [] }
 
     // ── POOL PHASE ──
     // schedulePoolPhase handles team/individual sequencing internally
@@ -151,7 +151,7 @@ export function scheduleCompetition(
     const deNotBefore = snapToSlot(poolEnd + config.ADMIN_GAP_MINS)
 
     // Reset txLog for DE phase (pool txLog is not needed separately — rollback uses snapshotState)
-    txLog = { stripChanges: [], refEvents: [] }
+    txLog = { stripAllocationsAdded: [], refEvents: [] }
 
     // ── DE PHASE ──
     if (competition.de_mode === DeMode.SINGLE_STAGE) {

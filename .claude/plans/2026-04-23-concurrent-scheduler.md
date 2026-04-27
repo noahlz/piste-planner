@@ -11,7 +11,7 @@ Density on dense scenarios (Cadet/Junior NACs, ROCs, multi-event SYCs) is bounde
 - **Same-day-per-event.** Every phase of an event (pools → DEs → finals → bronze) finishes on the event's assigned day. No phase splits across days.
 - **No pool-skipping / no pre-seeding.** Every event runs its pool round.
 - **Pool-then-DE phase order.** Pools must complete before any DE phase begins for the same event.
-- **DE phase order.** Prelims → R16 → QF → SF → Finals → Bronze, in sequence, per event.
+- **DE phase order.** Prelims → R16 → Finals → Bronze, in sequence, per event.
 - **Day assignment via DSatur.** The graph-coloring algorithm in `dayColoring.ts` decides which day each event lands on. Hard constraints (rest day, individual/team ordering, crossover hard edges) and soft penalties (proximity, capacity) carry forward.
 - **Video strip discipline.** Phases with `videoRequired = true` allocate from the `video_capable` subset of strips. Pools do not consume video strips except in the morning wave or single-event days.
 
@@ -115,14 +115,13 @@ Each event is decomposed into a sequence of *phases* (the unit the scheduler rea
 | Phase | Required strips | Video required? | Notes |
 |---|---|---|---|
 | `pools` (or `pools_flight_a` / `pools_flight_b` for flighted events) | many | no (except special cases) | non-flighted: one node; flighted: two nodes (see Flighting below) |
-| `de_prelims` (STAGED only) | half of pool strip count | no | |
-| `r16` (STAGED only) | 4 (1 pod) or 8 (2 pods) | yes (STAGED + REQUIRED) | |
-| `quarters` (STAGED only) | 4 (1 pod) | yes | |
-| `semis_finals` (STAGED only) | 2 (max), video | yes (STAGED + REQUIRED) | semis on 2 strips in parallel; gold + bronze share those same 2 strips |
+| `de_prelims` (STAGED only) | half of pool strip count | no | grouped into ⌈N/4⌉ pods |
+| `r16` (STAGED only) | `competition.de_round_of_16_strips` | yes when `de_video_policy = REQUIRED` | grouped into ⌈N/4⌉ pods (typically 1 pod) |
+| `de_finals` (STAGED only) | `competition.de_finals_strips` | yes when `de_video_policy ∈ {REQUIRED, FINALS_ONLY}` | grouped into ⌈N/4⌉ pods (typically 1 partial pod) |
 | `de` (SINGLE_STAGE only) | `floor(bracketSize / 2)`, capped via `computeStripCap` | no | flat strip allocation, no pods |
-| `bronze` | 0 (shares a `semis_finals` strip) | inherits from finals | sub-allocation within `semis_finals`; soft-fail when only 1 strip available |
+| `bronze` | 1, excluding gold strip | inherits from finals | independent allocation in the finals window; emits `DE_FINALS_BRONZE_NO_STRIP` if no eligible strip free |
 
-**STAGED vs SINGLE_STAGE.** STAGED events (NACs) decompose to `pools → de_prelims → r16 → quarters → semis_finals → bronze`. SINGLE_STAGE events (ROC, RYC, SYC, RJCC, SJCC) decompose to `pools → de → bronze`. The `de` phase node for SINGLE_STAGE has `desired_strip_count = floor(bracketSize / 2)` (matches today's `deOptimal` in `scheduleSingleStageDePhase`), `video_required = false`, no pods. Duration scales with the ratio `actualStrips / deOptimal` after the cap and window search resolve `actualStrips`: `actualDur = totalDeBase / ratio`. This preserves today's behavior in `scheduleSingleStageDePhase` (fewer strips → longer block).
+**STAGED vs SINGLE_STAGE.** STAGED events (NACs) decompose to `pools → de_prelims → r16 → de_finals → bronze`. SINGLE_STAGE events (ROC, RYC, SYC, RJCC, SJCC) decompose to `pools → de → bronze`. This matches today's serial decomposition; the quarters / semis_finals split is deferred as a focused later change. The `de` phase node for SINGLE_STAGE has `desired_strip_count = floor(bracketSize / 2)` (matches today's `deOptimal` in `scheduleSingleStageDePhase`), `video_required = false`, no pods. Duration scales with the ratio `actualStrips / deOptimal` after the cap and window search resolve `actualStrips`: `actualDur = totalDeBase / ratio`. This preserves today's behavior in `scheduleSingleStageDePhase` (fewer strips → longer block).
 
 **Flighting.** A competition is flighted when `n_pools > pool_strip_cap` (computed from `config.max_pool_strip_pct` and per-competition overrides; see METHODOLOGY §Flighting). Flighted events split the `pools` phase into two nodes:
 - `pools_flight_a`: `desired_strip_count = ceil(n_pools / 2)`, `desired_refs = ceil(refs_needed / 2)`, `duration = estimatePoolDuration(flightAPools, …)`, `ready_time = dayStart(assigned_day)`.
@@ -131,13 +130,11 @@ Each event is decomposed into a sequence of *phases* (the unit the scheduler rea
 
 Both flights must land on the assigned day. If `pools_flight_b.ready_time + duration > dayHardEnd(assigned_day)`, the loop emits `SAME_DAY_VIOLATION`. Different flights of the same event may land on different physical strips; Flight B's window search naturally finds available strips after Flight A's interval ends. The day-assignment layer (`analysis.ts` / `flighting.ts`) decides flighting per event before the scheduler runs; the concurrent scheduler reads that decision when building phase nodes.
 
-**Bronze.** Bronze runs at the same time as the gold final, on a strip already held by its predecessor — bronze never allocates its own strip when the predecessor has ≥ 2 strips.
+**Bronze.** Bronze runs alongside the gold bout on a separate strip and is allocated independently — same shape as today's serial behavior in `phaseSchedulers.ts:414–472`.
 
-For STAGED events: `predecessor = semis_finals`. The 2-strip semis_finals block runs both semifinals in parallel, then continues into the gold-final window. Gold runs on `semis_finals.strip_indices[0]`; bronze runs on `semis_finals.strip_indices[1]` for `bronze.duration = finals_duration` ending at `semis_finals.end_time`. The bronze phase node records the timing and the chosen strip index; no new `StripAllocation` entry is written — the existing semis_finals interval already covers the strip-time. The full SF → F → bronze tail consumes 2 video strips total.
+The bronze phase node calls `findAvailableStripsInWindow(1, finals_start, finals_duration, video_required)`, filtering out the strip indices already held by the predecessor's gold allocation. For STAGED events the predecessor is `de_finals`; for SINGLE_STAGE events the predecessor is `de`. On hit, bronze writes its own `StripAllocation` for `[finals_start, finals_end]`. On miss (no eligible strip free in the window), the scheduler emits `DE_FINALS_BRONZE_NO_STRIP` (`WARN` if `video_required`, `INFO` otherwise); bronze is recorded with `de_bronze_strip_id: null` and the event still counts as scheduled.
 
-For SINGLE_STAGE events: `predecessor = de`. The `de` phase typically holds many strips (`floor(bracketSize/2)`), so bronze picks any strip other than the one chosen for the gold bout, runs for `bout_duration` ending at `de.end_time`, and is again a sub-allocation within the predecessor's interval — no new StripAllocation written.
-
-**Soft-fail (1 strip available).** When the predecessor was capped to a single strip (e.g. semis_finals fell back to 1 video strip due to contention), there is no second strip to host bronze. Bronze runs on the gold strip after gold ends — outside the original predecessor interval — and `DE_FINALS_BRONZE_NO_STRIP` is emitted (`WARN` if videoRequired, `INFO` otherwise). This matches today's bottleneck in `scheduleBronzePhase` (`phaseSchedulers.ts:448–461`) for the no-strip case; the difference is that today's serial scheduler always writes a separate bronze allocation in the success case, while the concurrent model reuses the predecessor's strip.
+Bronze is short and low-pressure. The gold strip is held for the entire finals window so concurrent events cannot grab it, and the strip pool typically has at least one other free strip at the tail of the day. The occasional `DE_FINALS_BRONZE_NO_STRIP` warning is acceptable; if it becomes common in practice, a sub-allocation refinement (reusing one of the predecessor's strips) can land as a focused later change.
 
 ### Phase state
 
@@ -233,7 +230,7 @@ Scheduler-emitted variants:
 - `DEADLINE_BREACH` (WARN) — emitted on attempt 1's FAILED cascade, tagged with `attempt_id=1`.
 - `DEADLINE_BREACH_UNRESOLVABLE` (ERROR) — emitted on attempt 2's FAILED cascade, tagged with `attempt_id=2`.
 - `SAME_DAY_VIOLATION` (ERROR) — phase ends after `dayHardEnd` of its assigned day.
-- `DE_FINALS_BRONZE_NO_STRIP` (WARN if videoRequired, INFO otherwise) — bronze runs on the gold strip.
+- `DE_FINALS_BRONZE_NO_STRIP` (WARN if videoRequired, INFO otherwise) — bronze could not find a free strip in the finals window; recorded with null strip and the event still counts as scheduled.
 - `NO_WINDOW_DIAGNOSTIC` (INFO) — `findAvailableStripsInWindow` returned a miss; carries `reason: 'STRIPS' | 'TIME'`.
 - `SEQUENCING_CONSTRAINT` (INFO/WARN) — successor's `ready_time` pushed past predecessor's natural end (indv→team gap, Vet sibling gap, DE phase order).
 - `FLIGHT_B_DELAYED` (WARN) — Flight B slipped past `flightA.end + FLIGHT_BUFFER_MINS` due to strip contention.
@@ -246,56 +243,31 @@ Variants emitted by other layers (day-assignment, pre-schedule analysis, post-sc
 
 Each phase ships independently and leaves the engine in a working state.
 
-### Phase 0 — Rename `de_capacity_mode` to `de_capacity_estimation`
+### Phases 0, A, B — COMPLETED 2026-04-26
 
-**Ships:** the existing config flag `de_capacity_mode: 'pod' | 'greedy'` renamed to `de_capacity_estimation: 'pod_packed' | 'spread'`. The flag is a day-assignment estimation heuristic, not a runtime allocator; the rename keeps the runtime "pod" terminology unambiguous from Phase A onward.
+Phase 0 (config flag rename), Phase A (interval-list strip data model), and Phase B (pod allocation primitive) are committed: Phase 0 + A in `9ea7c85f`, Phase B in `a6ef3c07`.
 
-**Files:**
-- `src/engine/types.ts` — rename `TournamentConfig.de_capacity_mode` field and the `DeCapacityMode` const.
-- `src/engine/capacity.ts` — update consumers.
-- `src/store/buildConfig.ts` — update bridge from store to engine.
-- `__tests__/engine/capacity.test.ts` — update fixtures.
-- `__tests__/helpers/factories.ts` — update default factories.
-- `METHODOLOGY.md` §DE Strip Allocation Models — rename to §DE Capacity Estimation Models, reframe as a day-assignment estimation heuristic.
+**Resulting state of the codebase:**
 
-**Acceptance:** mechanical rename, full test suite passes.
+- `TournamentConfig.de_capacity_estimation: 'pod_packed' | 'spread'` (renamed from `de_capacity_mode`). Day-assignment estimation flag, no runtime effect.
+- `GlobalState.strip_allocations: StripAllocation[][]` replaces `strip_free_at`. Each strip carries a per-strip chronological list. `EventTxLog.stripAllocationsAdded` replaces `stripChanges`.
+- `src/engine/resources.ts` exports the new primitives: `nextFreeTime`, `findAvailableStripsInWindow` (overlap-aware, returns `{ fit: 'ok' | 'none', earliest_next_start, reason: 'STRIPS' | 'TIME' }`), `allocateInterval`, `releaseEventAllocations`, `peakConcurrentStrips`. The serial scheduler runs unchanged via these helpers — `findAvailableStrips`, `earliestResourceWindow`, `rollbackEvent`, `snapshotState`/`restoreState`, `createGlobalState` all reimplemented over the new state shape.
+- `src/engine/pods.ts` exports `allocatePods(state, config, event_id, phase, total_strip_count, pod_size, start_time, duration, video_required): { pods: Pod[] } | null`. Pod IDs follow `${event_id}-${phase.toLowerCase()}-pod${i}`. StripAllocation entries written by pods carry the `pod_id`. `releaseEventAllocations` cleans them up by event_id filter.
+- `src/engine/refs.ts` exports `computePodRefDemand(state, competitions, daysAvailable, config)` — one RefDemandInterval (count=1) per unique pod_id. Allocations without pod_id are skipped. `computeRefRequirements` is unchanged. `findDayForTime` lives in `types.ts` next to `dayStart`/`dayEnd`.
+- `phaseSchedulers.ts` callsites updated to the new `allocateStrips(state, stripIds, startTime, endTime, eventId, phase, txLog?)` signature; the bronze finder uses `nextFreeTime`.
+- `METHODOLOGY.md` §DE Capacity Estimation Models renamed and reframed as a day-assignment heuristic.
 
-### Phase A — Interval-list strip data model
+**Resume here.** Phase C builds the concurrent scheduler on top of these primitives.
 
-**Ships:** the new data structure replacing `strip_free_at`, the new primitives, and a helper layer that keeps the serial scheduler running on top.
+### Phase C — Concurrent scheduler (parallel file, no flag)
 
-**Files:**
-- `src/engine/types.ts` — add `StripAllocation`, `Pod`. Remove `strip_free_at: number[]` from `GlobalState`; add `strip_allocations: StripAllocation[][]`.
-- `src/engine/resources.ts` — add `findAvailableStripsInWindow`, `allocateInterval`, `releaseEventAllocations`, `peakConcurrentStrips`, and a `nextFreeTime(strip_index): number` helper for callers needing the "next-free-time" query (walks the strip's interval list and returns the latest `end_time`, or `0` if empty). Remove `findAvailableStrips` and `strip_free_at`. Update `allocateStrips` to write into the interval list.
-- `__tests__/engine/resources.test.ts` — rewrite all interval-related tests to assert against `state.strip_allocations` directly. Add tests for `findAvailableStripsInWindow` covering: overlap detection, partial overlap, video filtering, the `earliest_next_start` hint, and the `count`-strips-simultaneous-free invariant. The pre-existing "allocate same strip twice" test (`resources.test.ts:108–113`) becomes "two non-overlapping intervals on the same strip both succeed."
-
-**Acceptance:**
-- `state.strip_allocations` is the canonical strip-state representation.
-- `__tests__/engine/resources.test.ts` is rewritten; full test suite passes. Any non-`resources.test.ts` failure is a real bug in the helper layer and must be fixed before Phase B starts.
-- The serial scheduler continues to work via the `nextFreeTime` helper — `scheduleOne.ts`, `phaseSchedulers.ts`, `dayAssignment.ts` are not touched in this phase.
-
-The serial scheduler's only contract with the strip representation is "I want a window of N free strips starting at time T," preserved by `nextFreeTime`. Replacing `strip_free_at` with the interval list strictly increases information without changing that contract.
-
-### Phase B — Pod allocation primitive
-
-**Ships:** the pod abstraction layered on Phase A's interval list.
+**Ships:** `concurrentScheduler.ts` as a new entry point alongside the serial path. The existing `scheduleAll` continues to call the serial path; the new `scheduleAllConcurrent` is exercised only via direct test calls. No config flag, no dispatch shim, no `TournamentConfig` change.
 
 **Files:**
-- `src/engine/pods.ts` (new) — `allocatePods` and the pod-id synthesis logic.
-- `__tests__/engine/pods.test.ts` (new) — pod sizing (full vs partial), video pod selection, multi-pod allocation in one call, rollback.
-- `src/engine/refs.ts` — extend `computeRefRequirements` to read pod IDs from `StripAllocation[]` and report ref demand at pod granularity (one head ref per pod).
-
-**Acceptance:** pod tests pass. `computeRefRequirements` produces the same per-day peak counts as today (pod-grouping is a presentation detail).
-
-### Phase C — Concurrent scheduler
-
-**Ships:** the OS-process-scheduling loop, behind a config flag.
-
-**Files:**
-- `src/engine/concurrentScheduler.ts` (new) — `scheduleAllConcurrent(competitions, config)`. Reuses `assignDaysByColoring` from `dayAssignment.ts`, then runs the priority-queue loop above.
-- `src/engine/types.ts` — add `TournamentConfig.scheduler_mode: 'serial' | 'concurrent'` (default `'serial'` initially). Add `attempt_id` field to bottleneck entries.
-- `src/engine/scheduler.ts` — top-level `scheduleAll` dispatches on `scheduler_mode`.
-- `__tests__/engine/baselines.ts` (new) — capture and persist the actual scheduled counts produced by the serial scheduler against the integration suite, before the concurrent branch is wired in:
+- `src/engine/concurrentScheduler.ts` (new) — `scheduleAllConcurrent(competitions, config): ScheduleAllResult`. Reuses `assignDaysByColoring` from `dayAssignment.ts`, then runs the priority-queue loop above. Reuses pure helpers from `pools.ts`, `de.ts`, `stripBudget.ts`, and the new primitives in `resources.ts` / `pods.ts`. Does not call into `scheduleOne.ts` or `phaseSchedulers.ts`.
+- `src/engine/types.ts` — add `attempt_id?: number` field to `Bottleneck` so retry-tagged emissions can be filtered. No other type changes.
+- `src/engine/resources.ts` — extend `releaseEventAllocations` to accept an optional `attempt_id` and filter bottlenecks by both `event_id` and `attempt_id` when supplied. The Phase A behavior (filter by `event_id` only) remains the default when `attempt_id` is omitted.
+- `__tests__/engine/baselines.ts` (new) — captures the actual scheduled counts produced by the serial scheduler against the integration suite, recorded once before the concurrent suite is added:
 
     ```ts
     export const SERIAL_BASELINES = {
@@ -303,7 +275,7 @@ The serial scheduler's only contract with the strip representation is "I want a 
     } as const
     ```
 
-    These are the comparison floor.
+    These are the comparison floor. Inline comments record the date and the commit at which the numbers were captured.
 - `__tests__/engine/concurrentScheduler.test.ts` (new):
     - Toy 2-event scenario: both events run pools concurrently on disjoint strips at the same start time.
     - Toy 3-event scenario with video contention: video-required phase wins priority over non-video. Asserts `VIDEO_STRIP_CONTENTION` is emitted.
@@ -311,7 +283,7 @@ The serial scheduler's only contract with the strip representation is "I want a 
     - Toy rollback scenario: an event whose final phase fails has all its allocations cleanly removed via `releaseEventAllocations`.
     - Toy retry scenario: an event hits FAILED on attempt 1, retries from earlier start, succeeds on attempt 2. Asserts `DEADLINE_BREACH` (WARN) on attempt 1 and no `DEADLINE_BREACH_UNRESOLVABLE`.
     - Toy deadline-breach scenario: an event hits FAILED on attempts 1 AND 2. Asserts both `DEADLINE_BREACH` and `DEADLINE_BREACH_UNRESOLVABLE` fire with the correct `attempt_id` tags.
-- `__tests__/engine/integration.test.ts` — duplicate the B1–B7 scenarios with `scheduler_mode: 'concurrent'`. For B5, B6, B7 (the dense scenarios), assert strict gain over the serial baseline:
+- `__tests__/engine/integration.concurrent.test.ts` (new) — duplicates the B1–B7 scenarios calling `scheduleAllConcurrent` directly. For B5, B6, B7 (the dense scenarios), asserts strict gain over the serial baseline:
 
     ```ts
     expect(scheduledCount).toBeGreaterThanOrEqual(SERIAL_BASELINES.B5 + GAIN_B5)
@@ -319,27 +291,30 @@ The serial scheduler's only contract with the strip representation is "I want a 
     expect(scheduledCount).toBeGreaterThanOrEqual(SERIAL_BASELINES.B7 + GAIN_B7)
     ```
 
-    `GAIN_B*` is set to `(observed_concurrent_count − serial_count) − 1` (1-event safety margin for priority-tie non-determinism). B1–B4 keep `.toBeGreaterThanOrEqual(N)` — they are correctness scenarios, not density-gain scenarios — with N updated to whatever floor the concurrent scheduler establishes.
+    `GAIN_B*` is set to `(observed_concurrent_count − serial_count) − 1` (1-event safety margin for priority-tie non-determinism). B1–B4 use `.toBeGreaterThanOrEqual(N)` — they are correctness scenarios, not density-gain scenarios — with N matching whatever floor the concurrent scheduler establishes.
 
 **Acceptance:**
 - All concurrent toy tests pass with their bottleneck-emission assertions.
-- `B1..B7` pass under the concurrent scheduler. `B5, B6, B7` schedule strictly more events than the serial baseline.
+- `B1..B7` pass under `scheduleAllConcurrent`. `B5, B6, B7` schedule strictly more events than the serial baseline.
 - Hard constraints (rest day, individual/team, deadline, Vet co-day, Vet sibling order) continue to be respected.
 - `assertScheduleIntegrity` and `assertHardSeparations` pass on the concurrent output.
+- The serial path (`scheduleAll`) is unchanged; the existing serial test suite continues to pass.
 
 Inline test comments record the date the baselines were captured and the rationale, so future changes that drop concurrent counts below `SERIAL_BASELINES.B* + GAIN_B*` fail loudly.
 
-### Phase D — Migration and cleanup
+### Phase D — Switch over and delete serial
 
-**Ships:** concurrent becomes the default, legacy scheduler removed.
+**Ships:** `scheduleAll` swaps to call `scheduleAllConcurrent`; serial code deleted; integration baselines re-locked at the new (higher) numbers.
 
 **Files:**
-- `src/engine/types.ts` — remove `TournamentConfig.scheduler_mode` flag. Default behavior is concurrent.
-- `src/engine/scheduler.ts` — remove the serial branch.
-- `src/engine/scheduleOne.ts` — delete if unused; keep with an "internal helper" docstring if `concurrentScheduler.ts` calls into per-phase helpers from it.
-- `src/engine/phaseSchedulers.ts` — collapse into `concurrentScheduler.ts` if no other consumer.
-- `src/engine/resources.ts` — remove the serial-only helpers (`nextFreeTime` if the concurrent scheduler does not use it).
-- `__tests__/engine/integration.test.ts` — re-baseline B1–B7 thresholds to the new measured counts. Inline comments record the date.
+- `src/engine/scheduler.ts` — `scheduleAll` body is rewritten to call `scheduleAllConcurrent`. The serial-specific orchestration (per-day event loop with `snapshotState`/`restoreState`, the repair loop, `sortWithPairs`-driven event-major dispatch) is removed. `postScheduleDiagnostics`, `postScheduleDayBreakdown`, `postScheduleWarnings` are preserved or moved into `concurrentScheduler.ts` if they are the only consumers.
+- `src/engine/scheduleOne.ts` — delete.
+- `src/engine/phaseSchedulers.ts` — delete (logic re-expressed inside `concurrentScheduler.ts` during Phase C).
+- `src/engine/resources.ts` — remove the serial-only helpers: `findAvailableStrips`, `earliestResourceWindow`, `snapshotState`, `restoreState`, `allocateStrips` (txLog-coupled variant), `rollbackEvent`, `nextFreeTime` (if unused after deletion), `PoolContext` (if not needed by the concurrent loop), and the `EventTxLog`-rollback path.
+- `src/engine/types.ts` — remove `EventTxLog` interface.
+- `__tests__/engine/integration.test.ts` — re-baseline B1–B7 thresholds to the new measured counts; absorb the concurrent-suite assertions and delete `integration.concurrent.test.ts`. Inline comments record the date.
+- `__tests__/engine/scheduleOne.test.ts`, `__tests__/engine/phaseSchedulers.test.ts`, `__tests__/engine/scheduler.test.ts` — delete the serial-only tests; preserve any tests that exercise pure helpers that survive (pools, de, stripBudget).
+- `__tests__/engine/resources.test.ts` — drop the tests covering deleted serial helpers.
 - `METHODOLOGY.md` — add §"Concurrent Phase Scheduler" describing the model. Rewrite §Strip Allocation to describe the interval-list model. Update §Capacity-Aware Day Assignment with the new `CAPACITY_TARGET_FILL` value chosen empirically by re-running B1–B7 with progressively higher targets; inline-comment the date and source benchmark; note the conservative-fill rationale ("compensate for serial scheduler underutilization") no longer applies. Update §Flighting to cross-reference the two-phase-node model. §DE Capacity Estimation Models (renamed in Phase 0) gets a cross-reference to the new §Concurrent Phase Scheduler section noting that runtime DE allocation always uses pods of 4 for STAGED, regardless of the estimation heuristic.
 
 **Acceptance:**

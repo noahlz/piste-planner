@@ -1,5 +1,13 @@
 import { PodCaptainOverride, DeMode, Weapon, RefPolicy, Phase } from './types.ts'
-import type { TournamentConfig, Competition, RefDemandInterval, RefDemandByDay, RefRequirementsByDay } from './types.ts'
+import { findDayForTime } from './types.ts'
+import type {
+  TournamentConfig,
+  Competition,
+  RefDemandInterval,
+  RefDemandByDay,
+  RefRequirementsByDay,
+  GlobalState,
+} from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { computeBracketSize } from './de.ts'
 
@@ -120,6 +128,86 @@ function sweepLine(intervals: RefDemandInterval[]): { peak: number; peakTime: nu
   }
 
   return { peak, peakTime }
+}
+
+/**
+ * Computes pod-granularity ref demand from the interval-list strip state.
+ *
+ * One head referee per pod is the runtime ref-staffing unit for STAGED-DE
+ * phases (Phase B onward — see plan §Pods, lines 50-60). This helper groups
+ * StripAllocation entries by `pod_id` and emits one RefDemandInterval per pod
+ * bounded by the (min start_time, max end_time) of the pod's allocations
+ * (in practice every entry shares the same start/end because allocatePods
+ * writes them in a single call, but we tolerate divergence defensively).
+ *
+ * Allocations without a `pod_id` are skipped — those represent pool phases
+ * and SINGLE_STAGE flat DE allocations whose ref demand is recorded
+ * incrementally by the serial scheduler via `allocateRefs`. Phase C will wire
+ * this helper's output into `state.ref_demand_by_day` alongside the existing
+ * pool/SINGLE_STAGE flow.
+ *
+ * Day attribution: each pod is assigned to the day d satisfying
+ * `dayStart(d, config) <= start_time < dayEnd(d, config)`. When no day
+ * matches (out-of-range start_time), the pod is dropped — this only happens
+ * for malformed input.
+ *
+ * `competitions` supplies the event_id → weapon mapping. If a scheduled pod's
+ * `event_id` is not present in `competitions`, this function throws — that
+ * indicates a caller bug (a pod was allocated for an event the caller did not
+ * also pass in), not a runtime condition.
+ *
+ * Pure: reads only `state.strip_allocations` and `config`; allocates a fresh
+ * Record without mutating either. Bounded iteration over allocations + days.
+ */
+export function computePodRefDemand(
+  state: GlobalState,
+  config: TournamentConfig,
+  competitions: Pick<Competition, 'id' | 'weapon'>[],
+): Record<number, RefDemandByDay> {
+  // Build event_id → weapon lookup once.
+  const eventWeapons = new Map<string, Weapon>()
+  for (const c of competitions) {
+    eventWeapons.set(c.id, c.weapon)
+  }
+
+  // Group pod_id → { event_id, start_time, end_time } across all strips.
+  type PodAggregate = { event_id: string; start: number; end: number }
+  const pods = new Map<string, PodAggregate>()
+
+  for (const list of state.strip_allocations) {
+    for (const a of list) {
+      if (a.pod_id === undefined) continue
+      const existing = pods.get(a.pod_id)
+      if (existing === undefined) {
+        pods.set(a.pod_id, { event_id: a.event_id, start: a.start_time, end: a.end_time })
+      } else {
+        if (a.start_time < existing.start) existing.start = a.start_time
+        if (a.end_time > existing.end) existing.end = a.end_time
+      }
+    }
+  }
+
+  // Bucket each pod into its day and emit one interval (count=1) per pod.
+  const result: Record<number, RefDemandByDay> = {}
+  for (const agg of pods.values()) {
+    const weapon = eventWeapons.get(agg.event_id)
+    if (weapon === undefined) {
+      throw new Error(
+        `computePodRefDemand: pod allocated for event_id "${agg.event_id}" but no matching competition was supplied`,
+      )
+    }
+    const day = findDayForTime(config, agg.start)
+    if (day === null) continue
+    if (!result[day]) result[day] = { intervals: [] }
+    result[day].intervals.push({
+      startTime: agg.start,
+      endTime: agg.end,
+      count: 1,
+      weapon,
+    })
+  }
+
+  return result
 }
 
 /**

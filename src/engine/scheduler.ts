@@ -118,11 +118,14 @@ export function scheduleAll(
   //
   // Stage 6 Task 3 (2026-04-22) attempted to flip this to PHASE-MAJOR (all events'
   // pools → all events' DE_PRELIMS → ...). The attempt was reverted because:
-  //   (a) `EventTxLog`-based strip rollback is order-dependent: when multiple
-  //       events allocate the same strip across phases and any one fails,
-  //       per-event txLogs contain stale `oldFreeAt` values. Fix requires storing
-  //       strip allocations as an interval list per strip (major refactor),
-  //       not a single `strip_free_at` scalar.
+  //   (a) `EventTxLog`-based strip rollback was order-dependent under the old
+  //       `strip_free_at` scalar representation: when multiple events allocated
+  //       the same strip across phases and any one failed, per-event txLogs
+  //       contained stale snapshot values. Phase A (2026-04-26) replaced
+  //       `strip_free_at` with `strip_allocations: StripAllocation[][]`, so
+  //       rollback now splices by object identity and is order-independent.
+  //       Phase-major scheduling is unblocked from a rollback-correctness
+  //       standpoint; the density regression in (b) is the remaining concern.
   //   (b) Density regressed in video-strip-constrained B-scenarios (B5: 3 → 0,
   //       B7: 4 → 0) because clustering R16/Finals across events concurrently
   //       created NO_WINDOW failures that event-major avoided via serialization.

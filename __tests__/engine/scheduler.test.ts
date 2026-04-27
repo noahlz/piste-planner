@@ -1035,19 +1035,18 @@ describe('scheduleAll — Vet age-descending pool start (F3b)', () => {
 //
 // The change introduced two correctness issues and a density regression:
 //
-// 1. Cross-event strip rollback is ORDER-DEPENDENT and corrupts `strip_free_at`.
-//    In phase-major, multiple events' txLogs interleave allocations on the same
-//    strip across phases (event A pool uses strip 0 until 150; event B pool uses
-//    strip 0 from 150 to 300). On failure, rolling back event A first then B
-//    (or vice versa) cannot restore correct state because `strip_free_at` only
-//    stores the latest endTime, not a full history. The `oldFreeAt` snapshot
-//    recorded at allocation time becomes stale when a LATER event overwrites
-//    the strip. Object-identity tracking (as we did for refs) does not help
-//    here because strips have no "owner object" to find-and-remove.
+// 1. Cross-event strip rollback was ORDER-DEPENDENT under the old
+//    `strip_free_at` scalar representation: multiple events' txLogs interleaved
+//    allocations on the same strip across phases (event A pool used strip 0
+//    until 150; event B pool used strip 0 from 150 to 300). On failure, rolling
+//    back event A first then B (or vice versa) could not restore correct state
+//    because `strip_free_at` stored only the latest endTime, not a full history.
 //
-//    Fix would require storing strip allocations as a list of intervals per
-//    strip and computing `free_at` as max(end across non-rolled-back entries).
-//    This is a major data-model refactor out of scope for this attempt.
+//    Phase A (2026-04-26) replaced `strip_free_at` with
+//    `strip_allocations: StripAllocation[][]` and rolls back by object-identity
+//    splice — order-independent and complete. This issue is now resolved at the
+//    data-model level; the density regression in (2) is the remaining blocker
+//    on a phase-major flip.
 //
 // 2. Density regression — several B-scenarios lost events compared to baseline.
 //    Phase-major caused events' R16/Finals phases to cluster in time and

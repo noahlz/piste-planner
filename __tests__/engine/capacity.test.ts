@@ -18,7 +18,7 @@ function makeGlobalState(
   strips_total: number = 24,
 ): GlobalState {
   return {
-    strip_free_at: Array(strips_total).fill(480),
+    strip_allocations: Array.from({ length: strips_total }, () => []),
     ref_demand_by_day: {},
     schedule: scheduleEntries,
     bottlenecks: [],
@@ -147,8 +147,8 @@ describe('estimateCompetitionStripHours', () => {
     // 4 pods of 4 strips; sub-bracket = 64 per pod; pre-R16 = 15 batches × 20 min = 300 min
     // preR16StripHours = 16 × 300/60 = 80.0; r16StripHours = 4.667
     // scaleFactor = 240/380; total DE sh = 84.667 × 0.63158 ≈ 53.47
-    const podConfig = makeConfig({ de_capacity_mode: 'pod' })
-    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const podConfig = makeConfig({ de_capacity_estimation: 'pod_packed' })
+    const greedyConfig = makeConfig({ de_capacity_estimation: 'spread' })
     const comp = makeCompetition({
       id: 'pod-256',
       fencer_count: 256,
@@ -163,7 +163,7 @@ describe('estimateCompetitionStripHours', () => {
     const podResult = estimateCompetitionStripHours(comp, podConfig)
     const greedyResult = estimateCompetitionStripHours(comp, greedyConfig)
 
-    // Pool strip-hours are the same regardless of de_capacity_mode.
+    // Pool strip-hours are the same regardless of de_capacity_estimation.
     // Greedy DE for 256 fencers: (256-2) * 20/60 = 84.667. Isolate pool_sh then check pod DE.
     const greedyDeStripHours = (256 - 2) * 20 / 60
     const poolStripHours = greedyResult.total_strip_hours - greedyDeStripHours
@@ -173,7 +173,7 @@ describe('estimateCompetitionStripHours', () => {
 
   it('greedy model — 256 fencers, 20% cut → DE strip-hours ≈ 67.67', () => {
     // promoted = round(256 × 0.80) = 205; totalBouts = 203; 203 × 20/60 = 67.67
-    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const greedyConfig = makeConfig({ de_capacity_estimation: 'spread' })
     const cutComp = makeCompetition({
       id: 'greedy-256-cut',
       fencer_count: 256,
@@ -207,8 +207,8 @@ describe('estimateCompetitionStripHours', () => {
   it('pod model — bracket ≤ 16 (12 fencers, 8 strips) → DE strip-hours ≈ 3.0', () => {
     // podR16StripHours(12, 20, 60): walk 12→6→3→1; totalBoutDur=80; scaleFactor=60/80=0.75
     // totalStripHours = (2.667 + 1.0 + 0.333) × 0.75 = 4.0 × 0.75 = 3.0
-    const podConfig = makeConfig({ de_capacity_mode: 'pod' })
-    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const podConfig = makeConfig({ de_capacity_estimation: 'pod_packed' })
+    const greedyConfig = makeConfig({ de_capacity_estimation: 'spread' })
     const comp = makeCompetition({
       id: 'pod-small',
       fencer_count: 12,
@@ -231,11 +231,11 @@ describe('estimateCompetitionStripHours', () => {
     expect(podDeStripHours).toBeLessThan(8 * 60 / 60)
   })
 
-  it('team event — 33 teams, EPEE → uses team model regardless of de_capacity_mode', () => {
+  it('team event — 33 teams, EPEE → uses team model regardless of de_capacity_estimation', () => {
     // playInBouts=1 (33-32); rounds 32→16→8→4→2 (finals excluded)
     // teamDeStripHours = (1+16+8+4+2) × 20/60 = 31 × 20/60 ≈ 10.333
-    const podConfig = makeConfig({ de_capacity_mode: 'pod' })
-    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const podConfig = makeConfig({ de_capacity_estimation: 'pod_packed' })
+    const greedyConfig = makeConfig({ de_capacity_estimation: 'spread' })
     const comp = makeCompetition({
       id: 'team-33',
       fencer_count: 33,
@@ -250,7 +250,7 @@ describe('estimateCompetitionStripHours', () => {
     const podResult = estimateCompetitionStripHours(comp, podConfig)
     const greedyResult = estimateCompetitionStripHours(comp, greedyConfig)
 
-    // Team events use the team model regardless of de_capacity_mode — results must be equal
+    // Team events use the team model regardless of de_capacity_estimation — results must be equal
     expect(podResult.total_strip_hours).toBe(greedyResult.total_strip_hours)
     // Total = pool_strip_hours + 10.333; verify DE portion ≈ 10.333
     // Pool for 33 EPEE: n_pools=5, 3 pools of 7 (168 min each), 2 pools of 6 (120 min each)
@@ -263,7 +263,7 @@ describe('estimateCompetitionStripHours', () => {
   it('team event — 32 teams, EPEE → DE strip-hours = 10.0 (no play-ins)', () => {
     // 32 teams, no play-ins. R32:16 + R16:8 + QF:4 + SF:2 = 30 bouts (finals excluded)
     // teamDeStripHours = 30 × 20/60 = 10.0
-    const config = makeConfig({ de_capacity_mode: 'pod' })
+    const config = makeConfig({ de_capacity_estimation: 'pod_packed' })
     const comp = makeCompetition({
       id: 'team-32',
       fencer_count: 32,
@@ -285,7 +285,7 @@ describe('estimateCompetitionStripHours', () => {
   })
 
   it('greedy model — strip count does not affect total strip-hours', () => {
-    const config = makeConfig({ de_capacity_mode: 'greedy' })
+    const config = makeConfig({ de_capacity_estimation: 'spread' })
     const comp4 = makeCompetition({
       id: 'greedy-strips-4',
       fencer_count: 100,
@@ -314,8 +314,8 @@ describe('estimateCompetitionStripHours', () => {
   })
 
   it('pod model — 200-fencer EPEE on 16 strips produces fewer DE strip-hours than flat formula', () => {
-    const podConfig = makeConfig({ de_capacity_mode: 'pod' })
-    const greedyConfig = makeConfig({ de_capacity_mode: 'greedy' })
+    const podConfig = makeConfig({ de_capacity_estimation: 'pod_packed' })
+    const greedyConfig = makeConfig({ de_capacity_estimation: 'spread' })
     const comp = makeCompetition({
       id: 'pod-200-vs-flat',
       fencer_count: 200,

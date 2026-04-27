@@ -412,22 +412,22 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 ---
 
-## DE Strip Allocation Models
+## DE Capacity Estimation Models
 
-(see [`capacity.ts`](src/engine/capacity.ts), controlled by `de_capacity_mode` on `TournamentConfig`)
+(see [`capacity.ts`](src/engine/capacity.ts), controlled by `de_capacity_estimation` on `TournamentConfig`)
 
-Two models compute how many strip-hours an individual DE event consumes. Team events always use greedy regardless of mode.
+Two heuristics for **day-assignment** estimate how many strip-hours an individual DE event consumes. Team events always use the spread/round-by-round model regardless of the chosen heuristic. This flag is a day-assignment estimation knob, not a runtime allocator — runtime DE allocation always uses pods of 4 for STAGED events (see Concurrent Phase Scheduler).
 
 ### Configuration
 
-- `de_capacity_mode: 'pod' | 'greedy'` on `TournamentConfig` – default `'pod'`
+- `de_capacity_estimation: 'pod_packed' | 'spread'` on `TournamentConfig` – default `'pod_packed'`
 
 ### Constants
 
 - `DE_POD_SIZE = 4` strips per pod
 - `DE_BOUT_DURATION`: `{ EPEE: 20, FOIL: 20, SABRE: 10 }` minutes per bout
 
-### Pod Model (`de_capacity_mode: 'pod'`)
+### Pod-Packed Model (`de_capacity_estimation: 'pod_packed'`)
 
 Strips are organized into independent pods of 4 running sub-brackets in parallel.
 
@@ -451,7 +451,7 @@ Strips are organized into independent pods of 4 running sub-brackets in parallel
 - Elapsed time computed from bout counts per round (theoretical)
 - Strip-hours scaled by `table_duration / bout_based_duration` to stay calibrated to empirical table data
 
-### Greedy Model (`de_capacity_mode: 'greedy'`)
+### Spread Model (`de_capacity_estimation: 'spread'`)
 
 No pods – all strips treated as a single undifferentiated pool.
 
@@ -461,7 +461,7 @@ No pods – all strips treated as a single undifferentiated pool.
 
 ### Team Events
 
-Team DEs always use the greedy/round-by-round model regardless of `de_capacity_mode`.
+Team DEs always use the spread/round-by-round model regardless of `de_capacity_estimation`.
 
 - All bouts in a round run simultaneously – one strip per bout
 - Rounds are strictly sequential

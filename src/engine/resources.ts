@@ -7,9 +7,10 @@ import type {
   RefDemandInterval,
   EventTxLog,
   Strip,
+  StripAllocation,
   Weapon,
 } from './types.ts'
-import { dayStart } from './types.ts'
+import { dayStart, dayEnd } from './types.ts'
 import { MORNING_WAVE_WINDOW_MINS, SLOT_MINS } from './constants.ts'
 
 // ──────────────────────────────────────────────
@@ -49,6 +50,40 @@ export type ResourceWindowResult =
   | { type: 'FOUND'; startTime: number; stripIndices: number[]; bottlenecks: Bottleneck[] }
   | { type: 'NO_WINDOW'; reason?: NoWindowReason }
 
+/**
+ * Result of findAvailableStripsInWindow. On a hit, returns the selected strip
+ * indices. On a miss, the discriminated `reason` tells callers whether the strip
+ * pool was full (`STRIPS`) or the day-window expired (`TIME`), and
+ * `earliest_next_start` carries the soonest moment `count` strips of the right
+ * kind become simultaneously free — or `null` if no such slice exists.
+ */
+export type FindStripsInWindowResult =
+  | { fit: 'ok'; strip_indices: number[] }
+  | { fit: 'none'; earliest_next_start: number | null; reason: 'STRIPS' | 'TIME' }
+
+// ──────────────────────────────────────────────
+// nextFreeTime — bridge between interval list and "is this strip free at T?"
+// ──────────────────────────────────────────────
+
+/**
+ * Returns the earliest time at which the given strip is free, computed as the
+ * latest `end_time` across all of the strip's existing allocations (or 0 if the
+ * strip has never been allocated).
+ *
+ * Because the allocation list is kept sorted by start_time (not by end_time),
+ * we must walk the whole list to find the maximum end_time. In practice the
+ * lists are short (a handful of allocations per strip per tournament).
+ */
+export function nextFreeTime(state: GlobalState, strip_index: number): number {
+  const list = state.strip_allocations[strip_index]
+  if (!list || list.length === 0) return 0
+  let max = 0
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].end_time > max) max = list[i].end_time
+  }
+  return max
+}
+
 // ──────────────────────────────────────────────
 // snapshotState / restoreState
 // ──────────────────────────────────────────────
@@ -57,7 +92,10 @@ export type ResourceWindowResult =
  * Creates a targeted snapshot of mutable GlobalState fields for rollback during
  * retry loops. Avoids JSON.parse/stringify overhead by cloning only what changes:
  *
- * - strip_free_at: shallow array copy (numbers are primitives)
+ * - strip_allocations: each strip's interval list is shallow-copied so rollback
+ *   via txLog (object identity splice) is unaffected — the StripAllocation
+ *   objects themselves are write-once / immutable, shared across snapshot and
+ *   live state intentionally.
  * - ref_demand_by_day: each day's intervals array is shallow-copied so rollback via
  *   txLog (object identity splice) is unaffected — the interval objects themselves
  *   are shared across snapshot and live state, which is intentional.
@@ -71,7 +109,7 @@ export function snapshotState(state: GlobalState): GlobalState {
     refs[day] = { intervals: [...state.ref_demand_by_day[day].intervals] }
   }
   return {
-    strip_free_at: [...state.strip_free_at],
+    strip_allocations: state.strip_allocations.map(arr => [...arr]),
     ref_demand_by_day: refs,
     schedule: { ...state.schedule },
     bottlenecks: [...state.bottlenecks],
@@ -84,7 +122,7 @@ export function snapshotState(state: GlobalState): GlobalState {
  * see the rolled-back values (scheduleOne passes state by reference).
  */
 export function restoreState(target: GlobalState, snapshot: GlobalState): void {
-  target.strip_free_at = snapshot.strip_free_at
+  target.strip_allocations = snapshot.strip_allocations
   target.ref_demand_by_day = snapshot.ref_demand_by_day
   target.schedule = snapshot.schedule
   target.bottlenecks = snapshot.bottlenecks
@@ -96,16 +134,78 @@ export function restoreState(target: GlobalState, snapshot: GlobalState): void {
 
 /**
  * Initialises a fresh GlobalState from tournament config.
- * All strips are free at DAY_START_MINS (day 0 start).
+ * All strips have empty allocation lists.
  * Refs, schedule, and bottlenecks start empty.
  */
 export function createGlobalState(config: TournamentConfig): GlobalState {
   return {
-    // Strips become available at the start of day 0 in the scheduling time model
-    strip_free_at: config.strips.map(() => dayStart(0, config)),
+    strip_allocations: config.strips.map(() => []),
     ref_demand_by_day: {},
     schedule: {},
     bottlenecks: [],
+  }
+}
+
+// ──────────────────────────────────────────────
+// Interval-list primitives
+// ──────────────────────────────────────────────
+
+/**
+ * Inserts a single StripAllocation into one strip's list at the correct sorted
+ * position (sorted by start_time). Shared by allocateInterval — kept as a
+ * function so future callers can append one entry at a time without rebuilding
+ * the list.
+ */
+function insertSorted(list: StripAllocation[], allocation: StripAllocation): void {
+  // Lists are short — linear scan from the end is fast and keeps the code simple.
+  let i = list.length - 1
+  while (i >= 0 && list[i].start_time > allocation.start_time) i--
+  list.splice(i + 1, 0, allocation)
+}
+
+/**
+ * Appends one StripAllocation entry to each of the given strips' lists, keeping
+ * each list sorted by start_time. The shared-object pattern is set up for Phase
+ * B's pod-aware rollback where it pays off, while Phase A's rollback API is
+ * `releaseEventAllocations` which iterates by `event_id` and does not rely on
+ * object identity. The separate `allocateStrips` + txLog flow uses object-identity
+ * rollback via `rollbackEvent`, which `allocateInterval` does not participate in.
+ */
+export function allocateInterval(
+  state: GlobalState,
+  event_id: string,
+  phase: Phase,
+  strip_indices: number[],
+  start_time: number,
+  end_time: number,
+  pod_id?: string,
+): void {
+  const allocation: StripAllocation = pod_id !== undefined
+    ? { event_id, phase, pod_id, start_time, end_time }
+    : { event_id, phase, start_time, end_time }
+  for (const idx of strip_indices) {
+    insertSorted(state.strip_allocations[idx], allocation)
+  }
+}
+
+/**
+ * Removes every StripAllocation entry across all strips whose `event_id` matches.
+ * Order-independent — does not depend on a txLog. Also deletes the schedule
+ * entry and removes any bottlenecks for the event.
+ *
+ * Phase A scope: bottlenecks are filtered by `competition_id` only (no
+ * `attempt_id` field exists yet — Phase C adds it). `ref_demand_by_day` is
+ * intentionally not touched per the plan; ref demand is derived post-schedule.
+ */
+export function releaseEventAllocations(state: GlobalState, event_id: string): void {
+  for (const list of state.strip_allocations) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].event_id === event_id) list.splice(i, 1)
+    }
+  }
+  delete state.schedule[event_id]
+  for (let i = state.bottlenecks.length - 1; i >= 0; i--) {
+    if (state.bottlenecks[i].competition_id === event_id) state.bottlenecks.splice(i, 1)
   }
 }
 
@@ -114,38 +214,29 @@ export function createGlobalState(config: TournamentConfig): GlobalState {
 // ──────────────────────────────────────────────
 
 /**
- * Marks the given strip indices as occupied until endTime.
- * Later allocations always win — endTime is set directly (no max-guard needed
- * since the scheduler never allocates a strip that is still busy).
+ * Records the given strips as occupied for [startTime, endTime] under
+ * (eventId, phase). Pushes a single StripAllocation entry into each strip's
+ * sorted list and, when txLog is provided, records the entry's object identity
+ * so rollbackEvent can splice it out.
  *
- * If txLog is provided, the prior free_at value for each strip is recorded
- * before mutation so the allocation can be rolled back.
+ * Each StripAllocation is a write-once record — later allocations on the same
+ * strip add another interval rather than overwriting.
  */
-export function allocateStrips(state: GlobalState, stripIds: number[], endTime: number, txLog?: EventTxLog): void {
+export function allocateStrips(
+  state: GlobalState,
+  stripIds: number[],
+  startTime: number,
+  endTime: number,
+  eventId: string,
+  phase: Phase,
+  txLog?: EventTxLog,
+): void {
+  // Build a single allocation object shared by every strip in this call.
+  const allocation: StripAllocation = { event_id: eventId, phase, start_time: startTime, end_time: endTime }
   for (const idx of stripIds) {
+    insertSorted(state.strip_allocations[idx], allocation)
     if (txLog) {
-      txLog.stripChanges.push({ stripIdx: idx, oldFreeAt: state.strip_free_at[idx] })
-    }
-    state.strip_free_at[idx] = endTime
-  }
-}
-
-/**
- * No-op if the strip's free_at is already past endTime (the release is stale).
- * Only resets to endTime if the strip's current free_at equals endTime exactly,
- * which is the idempotent release case used by the scheduler.
- *
- * In practice this is not called during normal scheduling — strips expire
- * naturally when their free_at is reached. Kept for correctness and testing.
- */
-export function releaseStrips(state: GlobalState, stripIds: number[], endTime: number): void {
-  // Strips expire naturally via allocateStrips setting free_at. This function exists for
-  // completeness but is effectively a no-op in normal scheduling — strip_free_at is already
-  // set to the correct end time during allocation. We never roll back a later allocation
-  // or advance a strip that's already free.
-  for (const idx of stripIds) {
-    if (state.strip_free_at[idx] === endTime) {
-      // Already at the expected release time — no-op (idempotent)
+      txLog.stripAllocationsAdded.push({ stripIdx: idx, allocation })
     }
   }
 }
@@ -169,33 +260,39 @@ export function releaseStrips(state: GlobalState, stripIds: number[], endTime: n
  * non-video release times (Infinity if there are never enough non-video strips).
  *
  * Returns WAIT_UNTIL with the earliest time when enough suitable strips become free.
+ *
+ * This function is a thin shim that reads via `nextFreeTime` so the serial
+ * scheduler keeps working unchanged. Phase D removes it in favor of
+ * `findAvailableStripsInWindow`.
  */
 type IndexedStrip = { i: number; s: Strip; freeAt: number }
 
 /**
- * Annotate each strip with its index and current free_at time. Sorts by freeAt
+ * Annotate each strip with its index and current next-free time. Sorts by freeAt
  * when sort=true so callers can pick the earliest-free strips.
  */
 function indexStrips(
+  state: GlobalState,
   strips: readonly Strip[],
-  freeAt: readonly number[],
   predicate: (s: Strip, freeAt: number) => boolean,
   sort = false,
 ): IndexedStrip[] {
-  const result = strips
-    .map((s, i): IndexedStrip => ({ i, s, freeAt: freeAt[i] }))
-    .filter(x => predicate(x.s, x.freeAt))
+  const result: IndexedStrip[] = []
+  for (let i = 0; i < strips.length; i++) {
+    const freeAt = nextFreeTime(state, i)
+    if (predicate(strips[i], freeAt)) result.push({ i, s: strips[i], freeAt })
+  }
   return sort ? result.sort((a, b) => a.freeAt - b.freeAt) : result
 }
 
 /** Earliest time `count` strips matching the predicate become free, or Infinity. */
 function waitUntilForCount(
+  state: GlobalState,
   strips: readonly Strip[],
-  freeAt: readonly number[],
   count: number,
   predicate: (s: Strip) => boolean,
 ): number {
-  const sorted = indexStrips(strips, freeAt, (s) => predicate(s), true)
+  const sorted = indexStrips(state, strips, (s) => predicate(s), true)
   return sorted.length >= count ? sorted[count - 1].freeAt : Infinity
 }
 
@@ -208,14 +305,13 @@ export function findAvailableStrips(
   poolContext?: PoolContext,
 ): FindStripsResult {
   const strips = config.strips
-  const freeAt = state.strip_free_at
 
   if (videoRequired) {
-    const candidates = indexStrips(strips, freeAt, (s, t) => s.video_capable && t <= atTime)
+    const candidates = indexStrips(state, strips, (s, t) => s.video_capable && t <= atTime)
     if (candidates.length >= count) {
       return { type: 'FOUND', stripIndices: candidates.slice(0, count).map(x => x.i) }
     }
-    return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(strips, freeAt, count, (s) => s.video_capable) }
+    return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(state, strips, count, (s) => s.video_capable) }
   }
 
   // Pool video-strip preservation rule:
@@ -227,23 +323,207 @@ export function findAvailableStrips(
 
   if (applyPoolVideoExclusion) {
     // Non-video strips only — exclude video entirely
-    const freeNonVideo = indexStrips(strips, freeAt, (s, t) => !s.video_capable && t <= atTime, true)
+    const freeNonVideo = indexStrips(state, strips, (s, t) => !s.video_capable && t <= atTime, true)
     if (freeNonVideo.length >= count) {
       return { type: 'FOUND', stripIndices: freeNonVideo.slice(0, count).map(x => x.i) }
     }
-    return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(strips, freeAt, count, (s) => !s.video_capable) }
+    return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(state, strips, count, (s) => !s.video_capable) }
   }
 
   // Non-video preferred: collect free non-video strips first, then free video strips
-  const freeNonVideo = indexStrips(strips, freeAt, (s, t) => !s.video_capable && t <= atTime, true)
-  const freeVideo = indexStrips(strips, freeAt, (s, t) => s.video_capable && t <= atTime, true)
+  const freeNonVideo = indexStrips(state, strips, (s, t) => !s.video_capable && t <= atTime, true)
+  const freeVideo = indexStrips(state, strips, (s, t) => s.video_capable && t <= atTime, true)
   const candidates = [...freeNonVideo, ...freeVideo]
 
   if (candidates.length >= count) {
     return { type: 'FOUND', stripIndices: candidates.slice(0, count).map(x => x.i) }
   }
 
-  return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(strips, freeAt, count, () => true) }
+  return { type: 'WAIT_UNTIL', waitUntil: waitUntilForCount(state, strips, count, () => true) }
+}
+
+// ──────────────────────────────────────────────
+// findAvailableStripsInWindow — interval-aware primitive
+// ──────────────────────────────────────────────
+
+/**
+ * Returns true if the given strip has any allocation that overlaps
+ * [startTime, startTime + duration]. Overlap is defined as
+ * `existing.start_time < endTime && existing.end_time > startTime` — touching
+ * intervals (e.g. one ends at T and another starts at T) do not overlap.
+ */
+function stripOverlapsWindow(
+  state: GlobalState,
+  stripIdx: number,
+  startTime: number,
+  endTime: number,
+): boolean {
+  const list = state.strip_allocations[stripIdx]
+  if (!list) return false
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i]
+    if (a.start_time < endTime && a.end_time > startTime) return true
+    // Lists are sorted by start_time; once start_time >= endTime no further
+    // entries can overlap.
+    if (a.start_time >= endTime) break
+  }
+  return false
+}
+
+/**
+ * The earliest time at or after `startTime` at which this strip becomes free
+ * for `duration` minutes — i.e. the smallest T ≥ startTime such that no
+ * allocation overlaps [T, T + duration]. For Phase A's helper-layer use, we
+ * compute this as `max(startTime, nextFreeTime(strip))`: the strip becomes free
+ * for any duration once its last allocation ends.
+ */
+function earliestFreeStartFor(state: GlobalState, stripIdx: number, startTime: number): number {
+  return Math.max(startTime, nextFreeTime(state, stripIdx))
+}
+
+/**
+ * Find `count` strips simultaneously available for `[startTime, startTime+duration]`,
+ * honoring video preferences and the pool video-strip-preservation rule.
+ *
+ * On a miss (`fit: 'none'`):
+ * - `reason: 'STRIPS'` — not enough strips of the right kind exist (or every
+ *   candidate has at least one allocation overlapping the window).
+ * - `earliest_next_start` — the soonest moment at which `count` strips of the
+ *   right kind become simultaneously free for `duration` minutes, computed as
+ *   the count-th smallest `earliestFreeStartFor` across candidate strips. Returns
+ *   `null` when fewer than `count` candidate strips exist.
+ *
+ * The optional `day` parameter is the tournament day index used to compute the
+ * day-end clamp via `dayEnd(day, config)`. When omitted, the helper falls back
+ * to inferring the day from `floor(startTime / DAY_LENGTH_MINS)` and computes
+ * the day-end as `dayStart(inferredDay, config) + DAY_LENGTH_MINS`. The
+ * inference is approximate and only correct under uniform days — pass `day`
+ * explicitly whenever `dayConfigs` may override `day_start_time` /
+ * `day_end_time`.
+ *
+ * Phase A note: this primitive is currently used only by the new tests, while
+ * the serial scheduler calls `findAvailableStrips` / `earliestResourceWindow`
+ * and Phase C wires it into the concurrent scheduler.
+ */
+export function findAvailableStripsInWindow(
+  state: GlobalState,
+  config: TournamentConfig,
+  count: number,
+  startTime: number,
+  duration: number,
+  videoRequired: boolean,
+  poolContext?: PoolContext,
+  day?: number,
+): FindStripsInWindowResult {
+  const endTime = startTime + duration
+  const strips = config.strips
+
+  // Build the candidate strip set per the same rules as findAvailableStrips.
+  const applyPoolVideoExclusion = poolContext?.isPoolPhase === true
+    && !poolContext.isSingleEventDay
+    && startTime > dayStart(poolContext.day, config) + MORNING_WAVE_WINDOW_MINS
+
+  // Predicate decides which strips are eligible at all (independent of busy/free).
+  let candidatesAll: number[]
+  if (videoRequired) {
+    candidatesAll = strips.map((s, i) => s.video_capable ? i : -1).filter(i => i >= 0)
+  } else if (applyPoolVideoExclusion) {
+    candidatesAll = strips.map((s, i) => !s.video_capable ? i : -1).filter(i => i >= 0)
+  } else {
+    // Non-video preferred — split so we can prefer non-video first
+    const nonVideo = strips.map((s, i) => !s.video_capable ? i : -1).filter(i => i >= 0)
+    const video = strips.map((s, i) => s.video_capable ? i : -1).filter(i => i >= 0)
+    candidatesAll = [...nonVideo, ...video]
+  }
+
+  // Hit: pick the first `count` candidates whose interval lists do not overlap
+  // [startTime, endTime].
+  const free: number[] = []
+  for (const i of candidatesAll) {
+    if (!stripOverlapsWindow(state, i, startTime, endTime)) free.push(i)
+    if (free.length === count) break
+  }
+  if (free.length === count) {
+    return { fit: 'ok', strip_indices: free }
+  }
+
+  // Miss — compute earliest_next_start.
+  if (candidatesAll.length < count) {
+    return { fit: 'none', earliest_next_start: null, reason: 'STRIPS' }
+  }
+
+  const earliestPerStrip = candidatesAll.map(i => earliestFreeStartFor(state, i, startTime))
+  earliestPerStrip.sort((a, b) => a - b)
+  const candidate = earliestPerStrip[count - 1]
+
+  if (!isFinite(candidate)) {
+    return { fit: 'none', earliest_next_start: null, reason: 'STRIPS' }
+  }
+
+  // Determine reason: TIME if the candidate would push us past the assigned
+  // day's hard end, STRIPS otherwise. When `day` is supplied we honor per-day
+  // overrides via dayEnd(); otherwise we fall back to inferring the day from
+  // startTime and computing dayStart(inferredDay) + DAY_LENGTH_MINS, which is
+  // only correct under uniform days.
+  const dayHardEnd = day !== undefined
+    ? dayEnd(day, config)
+    : dayStart(
+        Math.max(0, Math.floor(startTime / Math.max(config.DAY_LENGTH_MINS, 1))),
+        config,
+      ) + config.DAY_LENGTH_MINS
+  const reason: 'STRIPS' | 'TIME' = candidate + duration > dayHardEnd ? 'TIME' : 'STRIPS'
+
+  return { fit: 'none', earliest_next_start: candidate, reason }
+}
+
+// ──────────────────────────────────────────────
+// peakConcurrentStrips — sweep-line over allocation intervals
+// ──────────────────────────────────────────────
+
+/**
+ * Returns the peak concurrent strip occupancy within `window`, separated into
+ * total strips and the video-strip subset. Walks every allocation across every
+ * strip in the state; small N keeps this cheap.
+ *
+ * Used by Phase B's referee-staffing layer (replaces the existing sweep-line on
+ * RefDemandInterval[]) and by post-schedule capacity reporting.
+ */
+export function peakConcurrentStrips(
+  state: GlobalState,
+  config: TournamentConfig,
+  window: { start: number; end: number },
+): { total: number; video: number } {
+  type Event = { time: number; deltaTotal: number; deltaVideo: number }
+  const events: Event[] = []
+
+  for (let i = 0; i < state.strip_allocations.length; i++) {
+    const isVideo = config.strips[i]?.video_capable === true
+    const list = state.strip_allocations[i]
+    for (const a of list) {
+      // Allocation overlaps window?
+      if (a.start_time >= window.end || a.end_time <= window.start) continue
+      const start = Math.max(a.start_time, window.start)
+      const end = Math.min(a.end_time, window.end)
+      events.push({ time: start, deltaTotal: 1, deltaVideo: isVideo ? 1 : 0 })
+      events.push({ time: end, deltaTotal: -1, deltaVideo: isVideo ? -1 : 0 })
+    }
+  }
+
+  // Sort: ascending by time. End events (negative delta) before start events at
+  // the same instant so touching intervals do not double-count.
+  events.sort((a, b) => a.time - b.time || a.deltaTotal - b.deltaTotal)
+
+  let curTotal = 0
+  let curVideo = 0
+  let peakTotal = 0
+  let peakVideo = 0
+  for (const e of events) {
+    curTotal += e.deltaTotal
+    curVideo += e.deltaVideo
+    if (curTotal > peakTotal) peakTotal = curTotal
+    if (curVideo > peakVideo) peakVideo = curVideo
+  }
+  return { total: peakTotal, video: peakVideo }
 }
 
 // ──────────────────────────────────────────────
@@ -293,8 +573,9 @@ export function allocateRefs(
 /**
  * Reverses all strip and ref allocations recorded in txLog.
  *
- * Strip changes: processed in reverse so that a strip allocated twice in one event
- * restores to its earliest observed value.
+ * Strip allocations: splice out each recorded allocation by object identity
+ * across all strips it was added to. Order-independent (the interval list is
+ * fully reconstructable from remaining entries).
  *
  * Ref changes: find-and-remove the recorded RefDemandInterval by object identity.
  * Object-reference tracking is required for phase-major scheduling where multiple
@@ -302,10 +583,14 @@ export function allocateRefs(
  * recorded by one event would be shifted by concurrent rollbacks.
  */
 export function rollbackEvent(state: GlobalState, txLog: EventTxLog): void {
-  // Restore strips in reverse order
-  for (let i = txLog.stripChanges.length - 1; i >= 0; i--) {
-    const { stripIdx, oldFreeAt } = txLog.stripChanges[i]
-    state.strip_free_at[stripIdx] = oldFreeAt
+  // Remove strip allocations in reverse order (no semantic dependence, but keeps
+  // the iteration shape symmetric with the txLog).
+  for (let i = txLog.stripAllocationsAdded.length - 1; i >= 0; i--) {
+    const { stripIdx, allocation } = txLog.stripAllocationsAdded[i]
+    const list = state.strip_allocations[stripIdx]
+    if (!list) continue
+    const idx = list.indexOf(allocation)
+    if (idx >= 0) list.splice(idx, 1)
   }
 
   // Remove ref intervals by object identity
@@ -320,7 +605,7 @@ export function rollbackEvent(state: GlobalState, txLog: EventTxLog): void {
     }
   }
 
-  txLog.stripChanges = []
+  txLog.stripAllocationsAdded = []
   txLog.refEvents = []
 }
 
@@ -353,9 +638,12 @@ function countFreeStrips(
   atTime: number,
   videoRequired: boolean,
 ): number {
-  return config.strips.filter(
-    (s, i) => (!videoRequired || s.video_capable) && state.strip_free_at[i] <= atTime,
-  ).length
+  let n = 0
+  for (let i = 0; i < config.strips.length; i++) {
+    const s = config.strips[i]
+    if ((!videoRequired || s.video_capable) && nextFreeTime(state, i) <= atTime) n++
+  }
+  return n
 }
 
 /**
@@ -393,6 +681,9 @@ function diagNoWindowReason(
  * 6. Return NO_WINDOW if time exceeds DAY_START + LATEST_START_OFFSET or DAY_END.
  *
  * The MAX_RESCHEDULE_ATTEMPTS guard prevents unbounded iteration.
+ *
+ * Reads strip availability via `nextFreeTime` so the underlying interval-list
+ * representation is opaque to the serial scheduler.
  */
 export function earliestResourceWindow(
   stripsNeeded: number,
@@ -465,7 +756,7 @@ export function earliestResourceWindow(
 
     // T is the latest of: candidate and all selected strip free_at values
     const stripFreeMax = selectedStrips.reduce(
-      (max, i) => Math.max(max, state.strip_free_at[i]),
+      (max, i) => Math.max(max, nextFreeTime(state, i)),
       0,
     )
     lastStripFreeMax = stripFreeMax

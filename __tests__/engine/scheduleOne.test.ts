@@ -11,7 +11,7 @@ import {
   dayStart,
   dayEnd,
 } from '../../src/engine/types.ts'
-import { createGlobalState } from '../../src/engine/resources.ts'
+import { createGlobalState, nextFreeTime } from '../../src/engine/resources.ts'
 import { SchedulingError } from '../../src/engine/dayAssignment.ts'
 import { makeStrips, makeConfig, makeCompetition } from '../helpers/factories.ts'
 import { RefPolicy } from '../../src/engine/types.ts'
@@ -74,7 +74,7 @@ describe('scheduleCompetition — non-flighted', () => {
     scheduleCompetition(comp, 0, state, config, [comp])
 
     // Some strips should be occupied past day start
-    const occupiedStrips = state.strip_free_at.filter(t => t > dayStart(0, config))
+    const occupiedStrips = state.strip_allocations.filter((_, i) => nextFreeTime(state, i) > dayStart(0, config))
     expect(occupiedStrips.length).toBeGreaterThan(0)
   })
 })
