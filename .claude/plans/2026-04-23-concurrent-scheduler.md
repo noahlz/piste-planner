@@ -206,9 +206,10 @@ The scheduler maintains a ready queue keyed by priority and a dependency map lin
 When multiple phases are READY, the higher-priority one is scheduled first. Ordering (descending precedence):
 
 1. **Earlier ready_time** — if event A's pool can start at 8am and event B's at 9am, A goes first.
-2. **Video-required phase** over non-video — claim scarce video strips before they're contested.
-3. **Larger strip_count / pod_count first** — bigger phases are hardest to fit, so place them when the strip pool is empty (least fragmented). Smaller phases backfill later.
-4. **Higher constraint score** (existing `constraintScore` from `dayAssignment.ts`) — most-constrained events first; breaks ties.
+2. **Y8/Y10 events first** — youth-priority categories must claim morning strip-time before larger events crowd them out. Mirrors `daySequencing.ts` rule 1; without it, large events grab strips at `dayStart` and small Y10 events get pushed past their DE windows on dense days (B3 regression diagnosed 2026-04-27).
+3. **Video-required phase** over non-video — claim scarce video strips before they're contested.
+4. **Larger strip_count / pod_count first** — bigger phases are hardest to fit, so place them when the strip pool is empty (least fragmented). Smaller phases backfill later.
+5. **Higher constraint score** (existing `constraintScore` from `dayAssignment.ts`) — most-constrained events first; breaks ties.
 
 Priority is local to a tick of the loop; it does not freeze global decisions. If a small phase blocks a large one, the large one falls back to a later start time on the same day via the notBefore-deferral path.
 
