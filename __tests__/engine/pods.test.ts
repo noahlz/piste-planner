@@ -79,7 +79,7 @@ describe('allocatePods — pod sizing', () => {
     const state = createGlobalState(config)
 
     const result = allocatePods(
-      state, config, TEST_EVT, Phase.DE_FINALS,
+      state, config, TEST_EVT, Phase.DE_PRELIMS,
       1, 4, START, DURATION, true,
     )
 
@@ -230,7 +230,7 @@ describe('allocatePods — no-window miss', () => {
     const state = createGlobalState(config)
 
     const result = allocatePods(
-      state, config, TEST_EVT, Phase.DE_FINALS,
+      state, config, TEST_EVT, Phase.DE_PRELIMS,
       0, 4, START, DURATION, false,
     )
 
@@ -243,7 +243,7 @@ describe('allocatePods — no-window miss', () => {
     const state = createGlobalState(config)
 
     const result = allocatePods(
-      state, config, TEST_EVT, Phase.DE_FINALS,
+      state, config, TEST_EVT, Phase.DE_PRELIMS,
       4, 0, START, DURATION, false,
     )
 

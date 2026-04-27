@@ -8,10 +8,10 @@ Density on dense scenarios (Cadet/Junior NACs, ROCs, multi-event SYCs) is bounde
 
 ## Constraints preserved from today
 
-- **Same-day-per-event.** Every phase of an event (pools → DEs → finals → bronze) finishes on the event's assigned day. No phase splits across days.
+- **Same-day-per-event.** Every scheduled phase of an event (pools → DEs through semifinals) finishes on the event's assigned day. Gold and bronze are not scheduled — see the stop-at-semis model in METHODOLOGY.md.
 - **No pool-skipping / no pre-seeding.** Every event runs its pool round.
 - **Pool-then-DE phase order.** Pools must complete before any DE phase begins for the same event.
-- **DE phase order.** Prelims → R16 → Finals → Bronze, in sequence, per event.
+- **DE phase order.** Prelims → R16, in sequence, per event. Gold and bronze are unallocated and absorbed by `tailEstimateMins` on `de_total_end`.
 - **Day assignment via DSatur.** The graph-coloring algorithm in `dayColoring.ts` decides which day each event lands on. Hard constraints (rest day, individual/team ordering, crossover hard edges) and soft penalties (proximity, capacity) carry forward.
 - **Video strip discipline.** Phases with `videoRequired = true` allocate from the `video_capable` subset of strips. Pools do not consume video strips except in the morning wave or single-event days.
 
@@ -54,7 +54,7 @@ Pod = {
 }
 ```
 
-- DE rounds with N strips required → ⌈N / 4⌉ pods. The last pod may be partial (1–3 strips). Finals = 1 strip = 1 partial-pod.
+- DE rounds with N strips required → ⌈N / 4⌉ pods. The last pod may be partial (1–3 strips). Under stop-at-semis, the terminal scheduled DE phase is r16 (which subsumes QF and SF in today's model); gold and bronze are unallocated.
 - Pods are assembled at allocation time from currently-free strips that satisfy the video requirement.
 - Pod IDs persist on the StripAllocation entries so the post-schedule referee output groups strips into ref-staffing units.
 - SINGLE_STAGE DE phases do not use pods — they allocate flat strip counts (see phase table below).
@@ -116,12 +116,10 @@ Each event is decomposed into a sequence of *phases* (the unit the scheduler rea
 |---|---|---|---|
 | `pools` (or `pools_flight_a` / `pools_flight_b` for flighted events) | many | no (except special cases) | non-flighted: one node; flighted: two nodes (see Flighting below) |
 | `de_prelims` (STAGED only) | half of pool strip count | no | grouped into ⌈N/4⌉ pods |
-| `r16` (STAGED only) | `competition.de_round_of_16_strips` | yes when `de_video_policy = REQUIRED` | grouped into ⌈N/4⌉ pods (typically 1 pod) |
-| `de_finals` (STAGED only) | `competition.de_finals_strips` | yes when `de_video_policy ∈ {REQUIRED, FINALS_ONLY}` | grouped into ⌈N/4⌉ pods (typically 1 partial pod) |
-| `de` (SINGLE_STAGE only) | `floor(bracketSize / 2)`, capped via `computeStripCap` | no | flat strip allocation, no pods |
-| `bronze` | 1, excluding gold strip | inherits from finals | independent allocation in the finals window; emits `DE_FINALS_BRONZE_NO_STRIP` if no eligible strip free |
+| `r16` (STAGED only) — terminal | `competition.de_round_of_16_strips` | yes when `de_video_policy = REQUIRED` | grouped into ⌈N/4⌉ pods (typically 1 pod). Subsumes QF + SF; gold/bronze unallocated. |
+| `de` (SINGLE_STAGE only) — terminal | `floor(bracketSize / 2)`, capped via `computeStripCap` | no | flat strip allocation, no pods. Excludes gold-bout time fraction. |
 
-**STAGED vs SINGLE_STAGE.** STAGED events (NACs) decompose to `pools → de_prelims → r16 → de_finals → bronze`. SINGLE_STAGE events (ROC, RYC, SYC, RJCC, SJCC) decompose to `pools → de → bronze`. This matches today's serial decomposition; the quarters / semis_finals split is deferred as a focused later change. The `de` phase node for SINGLE_STAGE has `desired_strip_count = floor(bracketSize / 2)` (matches today's `deOptimal` in `scheduleSingleStageDePhase`), `video_required = false`, no pods. Duration scales with the ratio `actualStrips / deOptimal` after the cap and window search resolve `actualStrips`: `actualDur = totalDeBase / ratio`. This preserves today's behavior in `scheduleSingleStageDePhase` (fewer strips → longer block).
+**STAGED vs SINGLE_STAGE.** STAGED events (NACs) decompose to `pools → de_prelims → r16` (gold + bronze unallocated). SINGLE_STAGE events (ROC, RYC, SYC, RJCC, SJCC) decompose to `pools → de`. The `de` phase node for SINGLE_STAGE has `desired_strip_count = floor(bracketSize / 2)`, `video_required = false`, no pods. Duration scales with the ratio `actualStrips / deOptimal` after the cap and window search resolve `actualStrips`: `actualDur = totalDeBase × (totalBouts − 1) / totalBouts / ratio` (the `(totalBouts − 1) / totalBouts` factor excludes the gold bout's share, which is captured by `tailEstimateMins` instead). The terminal-phase end-time is then extended by `tailEstimateMins(event_type)` to populate `de_total_end`.
 
 **Flighting.** A competition is flighted when `n_pools > pool_strip_cap` (computed from `config.max_pool_strip_pct` and per-competition overrides; see METHODOLOGY §Flighting). Flighted events split the `pools` phase into two nodes:
 - `pools_flight_a`: `desired_strip_count = ceil(n_pools / 2)`, `desired_refs = ceil(refs_needed / 2)`, `duration = estimatePoolDuration(flightAPools, …)`, `ready_time = dayStart(assigned_day)`.
@@ -130,11 +128,7 @@ Each event is decomposed into a sequence of *phases* (the unit the scheduler rea
 
 Both flights must land on the assigned day. If `pools_flight_b.ready_time + duration > dayHardEnd(assigned_day)`, the loop emits `SAME_DAY_VIOLATION`. Different flights of the same event may land on different physical strips; Flight B's window search naturally finds available strips after Flight A's interval ends. The day-assignment layer (`analysis.ts` / `flighting.ts`) decides flighting per event before the scheduler runs; the concurrent scheduler reads that decision when building phase nodes.
 
-**Bronze.** Bronze runs alongside the gold bout on a separate strip and is allocated independently — same shape as today's serial behavior in `phaseSchedulers.ts:414–472`.
-
-The bronze phase node calls `findAvailableStripsInWindow(1, finals_start, finals_duration, video_required)`, filtering out the strip indices already held by the predecessor's gold allocation. For STAGED events the predecessor is `de_finals`; for SINGLE_STAGE events the predecessor is `de`. On hit, bronze writes its own `StripAllocation` for `[finals_start, finals_end]`. On miss (no eligible strip free in the window), the scheduler emits `DE_FINALS_BRONZE_NO_STRIP` (`WARN` if `video_required`, `INFO` otherwise); bronze is recorded with `de_bronze_strip_id: null` and the event still counts as scheduled.
-
-Bronze is short and low-pressure. The gold strip is held for the entire finals window so concurrent events cannot grab it, and the strip pool typically has at least one other free strip at the tail of the day. The occasional `DE_FINALS_BRONZE_NO_STRIP` warning is acceptable; if it becomes common in practice, a sub-allocation refinement (reusing one of the predecessor's strips) can land as a focused later change.
+**Gold + bronze (not scheduled).** Per the stop-at-semis model (METHODOLOGY.md §"Scheduler Stops at Semis"), the gold and bronze bouts are not allocated. Tournament organizers run them ad-hoc on whatever strip + ref free up at the tail of the day. `de_total_end` extends the terminal scheduled phase end by `tailEstimateMins(event_type)` (30 min for individual, 60 min for team) so logistics see a realistic end-time. Gold/bronze ref load is absorbed by the staffing-buffer recommendation, not modeled as discrete demand intervals.
 
 ### Phase state
 
@@ -230,7 +224,6 @@ Scheduler-emitted variants:
 - `DEADLINE_BREACH` (WARN) — emitted on attempt 1's FAILED cascade, tagged with `attempt_id=1`.
 - `DEADLINE_BREACH_UNRESOLVABLE` (ERROR) — emitted on attempt 2's FAILED cascade, tagged with `attempt_id=2`.
 - `SAME_DAY_VIOLATION` (ERROR) — phase ends after `dayHardEnd` of its assigned day.
-- `DE_FINALS_BRONZE_NO_STRIP` (WARN if videoRequired, INFO otherwise) — bronze could not find a free strip in the finals window; recorded with null strip and the event still counts as scheduled.
 - `NO_WINDOW_DIAGNOSTIC` (INFO) — `findAvailableStripsInWindow` returned a miss; carries `reason: 'STRIPS' | 'TIME'`.
 - `SEQUENCING_CONSTRAINT` (INFO/WARN) — successor's `ready_time` pushed past predecessor's natural end (indv→team gap, Vet sibling gap, DE phase order).
 - `FLIGHT_B_DELAYED` (WARN) — Flight B slipped past `flightA.end + FLIGHT_BUFFER_MINS` due to strip contention.
@@ -280,7 +273,8 @@ Phase 0 (config flag rename), Phase A (interval-list strip data model), and Phas
     - Toy 2-event scenario: both events run pools concurrently on disjoint strips at the same start time.
     - Toy 3-event scenario with video contention: video-required phase wins priority over non-video. Asserts `VIDEO_STRIP_CONTENTION` is emitted.
     - Toy phase-dependency scenario: event's R16 cannot start until its pools and prelims complete.
-    - Toy rollback scenario: an event whose final phase fails has all its allocations cleanly removed via `releaseEventAllocations`.
+    - Toy rollback scenario: an event whose terminal phase fails has all its allocations cleanly removed via `releaseEventAllocations`.
+    - Toy tail scenario: STAGED INDIVIDUAL and STAGED TEAM events both produce `de_total_end = r16_end + tailEstimateMins(event_type)` (30 / 60 min respectively); same for SINGLE_STAGE on `de_end`.
     - Toy retry scenario: an event hits FAILED on attempt 1, retries from earlier start, succeeds on attempt 2. Asserts `DEADLINE_BREACH` (WARN) on attempt 1 and no `DEADLINE_BREACH_UNRESOLVABLE`.
     - Toy deadline-breach scenario: an event hits FAILED on attempts 1 AND 2. Asserts both `DEADLINE_BREACH` and `DEADLINE_BREACH_UNRESOLVABLE` fire with the correct `attempt_id` tags.
 - `__tests__/engine/integration.concurrent.test.ts` (new) — duplicates the B1–B7 scenarios calling `scheduleAllConcurrent` directly. For B5, B6, B7 (the dense scenarios), asserts strict gain over the serial baseline:

@@ -257,11 +257,12 @@ export function estimateCompetitionStripHours(
       )
     }
 
+    // Finals phase is no longer separately scheduled (stop-at-semis model);
+    // only R16 is attributed as a video strip block.
     const r16_strip_hours = competition.de_round_of_16_strips * (blocks.r16_dur / 60)
-    const finals_strip_hours = competition.de_finals_strips * (blocks.finals_dur / 60)
 
-    de_strip_hours = prelims_strip_hours + r16_strip_hours + finals_strip_hours
-    video_strip_hours = r16_strip_hours + finals_strip_hours
+    de_strip_hours = prelims_strip_hours + r16_strip_hours
+    video_strip_hours = r16_strip_hours
   } else {
     // SINGLE_STAGE: use selected capacity model
     if (config.de_capacity_estimation === DeCapacityEstimation.SPREAD) {

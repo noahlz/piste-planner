@@ -3,13 +3,11 @@ import {
   schedulePoolPhase,
   scheduleDePrelimsPhase,
   scheduleR16Phase,
-  scheduleDeFinalsPhase,
   scheduleSingleStageDePhase,
-  scheduleBronzePhase,
 } from '../../src/engine/phaseSchedulers.ts'
 import type { PartialScheduleResult } from '../../src/engine/phaseSchedulers.ts'
 import type { EventTxLog } from '../../src/engine/types.ts'
-import { DeMode, EventType, VideoPolicy } from '../../src/engine/types.ts'
+import { DeMode, VideoPolicy } from '../../src/engine/types.ts'
 import { createGlobalState } from '../../src/engine/resources.ts'
 import { computePoolStructure, weightedPoolDuration } from '../../src/engine/pools.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
@@ -282,66 +280,6 @@ describe('scheduleR16Phase', () => {
   })
 })
 
-// ──────────────────────────────────────────────
-// scheduleDeFinalsPhase
-// ──────────────────────────────────────────────
-
-describe('scheduleDeFinalsPhase', () => {
-  it('returns finalsEnd > notBefore with non-empty finalsStripIndices and populates partialResult', () => {
-    const config = makeConfig()
-    const state = createGlobalState(config)
-    const competition = makeCompetition({
-      id: 'staged-finals',
-      fencer_count: 128,
-      de_mode: DeMode.STAGED,
-    })
-    const partialResult: PartialScheduleResult = { de_round_of_16_end: NOT_BEFORE }
-    const txLog = freshTxLog()
-
-    const result = scheduleDeFinalsPhase(
-      competition,
-      DAY,
-      NOT_BEFORE,
-      state,
-      config,
-      partialResult,
-      txLog,
-    )
-
-    expect(result.finalsEnd).toBeGreaterThan(NOT_BEFORE)
-    expect(result.finalsStripIndices.length).toBeGreaterThan(0)
-    expect(partialResult.de_finals_start).toBe(NOT_BEFORE)
-    expect(partialResult.de_finals_end).toBe(result.finalsEnd)
-    expect(partialResult.de_finals_strip_count).toBe(result.finalsStripIndices.length)
-  })
-
-  it('finals duration is at least DE_FINALS_MIN_MINS', () => {
-    // The engine clamps: finActual = max(blocks.finals_dur, config.DE_FINALS_MIN_MINS).
-    // With 128 fencers the finals block should be >= 30 minutes (DE_FINALS_MIN_MINS default).
-    const config = makeConfig()
-    const state = createGlobalState(config)
-    const competition = makeCompetition({
-      id: 'finals-min-dur',
-      fencer_count: 128,
-      de_mode: DeMode.STAGED,
-    })
-    const partialResult: PartialScheduleResult = {}
-    const txLog = freshTxLog()
-
-    const result = scheduleDeFinalsPhase(
-      competition,
-      DAY,
-      NOT_BEFORE,
-      state,
-      config,
-      partialResult,
-      txLog,
-    )
-
-    const elapsed = result.finalsEnd - NOT_BEFORE
-    expect(elapsed).toBeGreaterThanOrEqual(config.DE_FINALS_MIN_MINS)
-  })
-})
 
 // ──────────────────────────────────────────────
 // scheduleSingleStageDePhase
@@ -374,8 +312,8 @@ describe('scheduleSingleStageDePhase', () => {
     expect(partialResult.de_start).toBe(NOT_BEFORE)
     expect(partialResult.de_end).toBe(result.deEnd)
     expect(partialResult.de_strip_count).toBe(result.deStripIndices.length)
-    // de_total_end is set and equals deEnd for a single-stage event
-    expect(partialResult.de_total_end).toBe(result.deEnd)
+    // de_total_end is NOT set by scheduleSingleStageDePhase — scheduleOne.ts owns it
+    expect(partialResult.de_total_end).toBeUndefined()
   })
 
   it('de_duration_actual equals de_end - de_start', () => {
@@ -401,117 +339,38 @@ describe('scheduleSingleStageDePhase', () => {
 
     expect(partialResult.de_duration_actual).toBe(result.deEnd - (partialResult.de_start ?? NOT_BEFORE))
   })
-})
 
-// ──────────────────────────────────────────────
-// scheduleBronzePhase
-// ──────────────────────────────────────────────
-
-describe('scheduleBronzePhase', () => {
-  it('allocates a separate strip for bronze and de_bronze_strip_id !== gold strip id', () => {
-    // Strip 0 is reserved for gold. Bronze must use a different strip.
+  it('scheduleSingleStageDePhase: returned deEnd excludes gold-bout time', () => {
+    // 24 fencers, FOIL → bracket=32, deOptimal=16.
+    // With 24 strips and max_de_strip_pct=0.80: effectiveCap=19, request=min(16,19)=16.
+    // 24 strips free → 16 allocated → ratio = 16/16 = 1.0 (plentiful strips case).
+    // totalDeBase = FOIL[32] = 90, totalBouts = 16.
+    // adjustedTotalDeBase = 90 * 15/16 = 84.375 → Math.round = 84.
+    // actualDur = 84 (ratio=1.0 branch: Math.round(adjustedTotalDeBase)).
+    // deEnd - deStart must equal 84.
     const config = makeConfig()
     const state = createGlobalState(config)
     const competition = makeCompetition({
-      id: 'team-bronze',
-      event_type: EventType.TEAM,
-      fencer_count: 8,
+      id: 'single-stage-gold-excluded',
+      fencer_count: 24,
       de_mode: DeMode.SINGLE_STAGE,
     })
-    // Pretend strip index 0 is already reserved for gold
-    const goldStripIndices = [0]
-    const partialResult: PartialScheduleResult = {
-      de_finals_start: NOT_BEFORE,
-      de_finals_end: NOT_BEFORE + 60,
-    }
-    const txLog = freshTxLog()
-
-    scheduleBronzePhase(
-      competition,
-      DAY,
-      NOT_BEFORE,
-      NOT_BEFORE + 60,
-      goldStripIndices,
-      state,
-      config,
-      partialResult,
-      txLog,
-      false,
-    )
-
-    // Bronze must be on a different strip than gold
-    expect(partialResult.de_bronze_strip_id).not.toBeNull()
-    expect(partialResult.de_bronze_strip_id).not.toBe(config.strips[0].id)
-    // Bronze timing is concurrent with finals
-    expect(partialResult.de_bronze_start).toBe(NOT_BEFORE)
-    expect(partialResult.de_bronze_end).toBe(NOT_BEFORE + 60)
-  })
-
-  it('emits DE_FINALS_BRONZE_NO_STRIP bottleneck when all strips are occupied by gold', () => {
-    // Only 1 strip total — gold takes index 0, no strip left for bronze.
-    const strips = makeStrips(1, 0)
-    const config = makeConfig({ strips, strips_total: 1, video_strips_total: 0 })
-    const state = createGlobalState(config)
-    const competition = makeCompetition({
-      id: 'team-bronze-nostrip',
-      event_type: EventType.TEAM,
-      fencer_count: 8,
-      de_mode: DeMode.SINGLE_STAGE,
-    })
-    const goldStripIndices = [0]
     const partialResult: PartialScheduleResult = {}
     const txLog = freshTxLog()
 
-    scheduleBronzePhase(
+    const result = scheduleSingleStageDePhase(
       competition,
       DAY,
       NOT_BEFORE,
-      NOT_BEFORE + 60,
-      goldStripIndices,
       state,
       config,
       partialResult,
       txLog,
-      false,
     )
 
-    // No strip allocated when all are taken by gold
-    expect(partialResult.de_bronze_strip_id).toBeUndefined()
-    // A bottleneck is emitted indicating the failure
-    const bronzeBottleneck = state.bottlenecks.find(b => b.cause === 'DE_FINALS_BRONZE_NO_STRIP')
-    expect(bronzeBottleneck).toBeDefined()
-  })
-
-  it('prefers non-video strip for non-video bronze over video strip', () => {
-    // 2 video strips (indices 0-1), 22 non-video (indices 2-23).
-    // Gold takes video strip 0. With videoRequired=false, bronze should prefer non-video (index 2+).
-    const config = makeConfig({ strips: makeStrips(24, 2) })
-    const state = createGlobalState(config)
-    const competition = makeCompetition({
-      id: 'bronze-prefer-nonvideo',
-      event_type: EventType.TEAM,
-      fencer_count: 8,
-    })
-    const goldStripIndices = [0] // gold on video strip 0
-    const partialResult: PartialScheduleResult = {}
-    const txLog = freshTxLog()
-
-    scheduleBronzePhase(
-      competition,
-      DAY,
-      NOT_BEFORE,
-      NOT_BEFORE + 60,
-      goldStripIndices,
-      state,
-      config,
-      partialResult,
-      txLog,
-      false, // videoRequired = false
-    )
-
-    expect(partialResult.de_bronze_strip_id).not.toBeNull()
-    // Bronze strip should be a non-video strip (not video strips 0 or 1)
-    const bronzeStrip = config.strips.find(s => s.id === partialResult.de_bronze_strip_id)
-    expect(bronzeStrip?.video_capable).toBe(false)
+    // bracket=32 → totalBouts=16, totalDeBase=90
+    // adjustedTotalDeBase = 90 * 15/16 = 84.375 → Math.round(84.375) = 84
+    expect(result.deEnd - NOT_BEFORE).toBe(84)
   })
 })
+

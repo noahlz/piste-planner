@@ -3,12 +3,12 @@ import { suggestStrips } from '../stripSuggestion'
 
 describe('suggestStrips', () => {
   it('returns null when no competitions', () => {
-    expect(suggestStrips({}, false)).toBeNull()
+    expect(suggestStrips({})).toBeNull()
   })
 
   it('returns null when all fencer counts are 0', () => {
     const comps = { 'comp-1': { fencer_count: 0, use_single_pool_override: false } }
-    expect(suggestStrips(comps, false)).toBeNull()
+    expect(suggestStrips(comps)).toBeNull()
   })
 
   it('suggests n_pools for largest competition', () => {
@@ -17,14 +17,7 @@ describe('suggestStrips', () => {
       'large': { fencer_count: 300, use_single_pool_override: false },
       'small': { fencer_count: 20, use_single_pool_override: false },
     }
-    expect(suggestStrips(comps, false)).toBe(43)
-  })
-
-  it('adds +1 when include finals strip is true', () => {
-    const comps = {
-      'large': { fencer_count: 300, use_single_pool_override: false },
-    }
-    expect(suggestStrips(comps, true)).toBe(44)
+    expect(suggestStrips(comps)).toBe(43)
   })
 
   it('handles single pool override', () => {
@@ -32,7 +25,7 @@ describe('suggestStrips', () => {
     const comps = {
       'small': { fencer_count: 10, use_single_pool_override: true },
     }
-    expect(suggestStrips(comps, false)).toBe(1)
+    expect(suggestStrips(comps)).toBe(1)
   })
 
   it('handles small competition (≤9 fencers)', () => {
@@ -40,7 +33,7 @@ describe('suggestStrips', () => {
     const comps = {
       'tiny': { fencer_count: 8, use_single_pool_override: false },
     }
-    expect(suggestStrips(comps, false)).toBe(1)
+    expect(suggestStrips(comps)).toBe(1)
   })
 
   it('skips competitions with fencer_count < 2', () => {
@@ -49,6 +42,6 @@ describe('suggestStrips', () => {
       'valid': { fencer_count: 50, use_single_pool_override: false },
     }
     // 50 fencers → ceil(50/7) = 8 pools
-    expect(suggestStrips(comps, false)).toBe(8)
+    expect(suggestStrips(comps)).toBe(8)
   })
 })

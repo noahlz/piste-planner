@@ -6,7 +6,7 @@ import {
   deBlockDurations,
   calculateDeDuration,
 } from '../../src/engine/de.ts'
-import { CutMode, EventType, Weapon, Phase } from '../../src/engine/types.ts'
+import { CutMode, EventType, Weapon, Phase, tailEstimateMins } from '../../src/engine/types.ts'
 import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
 
 describe('nextPowerOf2', () => {
@@ -47,42 +47,101 @@ describe('computeBracketSize', () => {
 })
 
 describe('dePhasesForBracket', () => {
-  it('bracket 64 → [DE_PRELIMS, DE_ROUND_OF_16, DE_FINALS]', () => {
-    expect(dePhasesForBracket(64)).toEqual([Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16, Phase.DE_FINALS])
+  it('bracket 64 → [DE_PRELIMS, DE_ROUND_OF_16]', () => {
+    expect(dePhasesForBracket(64)).toEqual([Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16])
   })
 
-  it('bracket 32 → [DE_ROUND_OF_16, DE_FINALS]', () => {
-    expect(dePhasesForBracket(32)).toEqual([Phase.DE_ROUND_OF_16, Phase.DE_FINALS])
+  it('bracket 32 → [DE_ROUND_OF_16]', () => {
+    expect(dePhasesForBracket(32)).toEqual([Phase.DE_ROUND_OF_16])
   })
 
-  it('bracket 16 → [DE_ROUND_OF_16, DE_FINALS]', () => {
-    expect(dePhasesForBracket(16)).toEqual([Phase.DE_ROUND_OF_16, Phase.DE_FINALS])
+  it('bracket 16 → [DE_ROUND_OF_16]', () => {
+    expect(dePhasesForBracket(16)).toEqual([Phase.DE_ROUND_OF_16])
   })
 
-  it('bracket 8 → [DE_FINALS]', () => {
-    expect(dePhasesForBracket(8)).toEqual([Phase.DE_FINALS])
+  it('bracket 8 → [DE_ROUND_OF_16] (tiny bracket absorbed into r16 phase)', () => {
+    expect(dePhasesForBracket(8)).toEqual([Phase.DE_ROUND_OF_16])
   })
 
-  it('bracket 4 → [DE_FINALS]', () => {
-    expect(dePhasesForBracket(4)).toEqual([Phase.DE_FINALS])
+  it('bracket 4 → [DE_ROUND_OF_16] (tiny bracket absorbed into r16 phase)', () => {
+    expect(dePhasesForBracket(4)).toEqual([Phase.DE_ROUND_OF_16])
   })
 })
 
 describe('deBlockDurations', () => {
-  // Exact values verified by hand against deBlockDurations algorithm:
-  // 1. Compute bout counts (totalBouts, r16Bouts, prelimsBouts)
-  // 2. Allocate proportionally via Math.round
-  // 3. Enforce 30-min finals floor, redistribute remainder
-  it('bracket 64, total 120 min → exact phase split', () => {
-    expect(deBlockDurations(64, 120)).toEqual({ prelims_dur: 3, r16_dur: 87, finals_dur: 30 })
+  // Bout split: totalBouts = bracketSize / 2
+  //   r16Bouts   = min(30, totalBouts - 1)  — rounds 16 through SF
+  //   prelimsBouts = max(totalBouts - 30 - 1, 0)  — rounds above 32
+  //   finals_bouts = 1 (gold) — unallocated; becomes tail estimate
+  //
+  // Proportional formula (no finals floor):
+  //   prelims_dur = round(totalDe * prelimsBouts / totalBouts)
+  //   r16_dur     = round(totalDe * r16Bouts    / totalBouts)
+  //
+  // Return shape has exactly { prelims_dur, r16_dur } — no finals_dur.
+
+  it('bracket 64, total 120 min → { prelims_dur, r16_dur } only (no finals_dur)', () => {
+    // totalBouts=32, r16Bouts=min(30,31)=30, prelimsBouts=max(32-30-1,0)=1
+    // prelims_dur = round(120 * 1/32) = round(3.75) = 4
+    // r16_dur     = round(120 * 30/32) = round(112.5) = 113
+    // sum(4+113) = 117 ≤ 120 (one bout's share — the gold — is unallocated)
+    const result = deBlockDurations(64, 120)
+    expect(result).not.toHaveProperty('finals_dur')
+    expect(result).toHaveProperty('prelims_dur', 4)
+    expect(result).toHaveProperty('r16_dur', 113)
+    expect(result.prelims_dur + result.r16_dur).toBeLessThanOrEqual(120)
   })
 
-  it('bracket 32, total 90 min → exact phase split', () => {
-    expect(deBlockDurations(32, 90)).toEqual({ prelims_dur: 0, r16_dur: 60, finals_dur: 30 })
+  it('bracket 32, total 90 min → { prelims_dur, r16_dur } only (no finals_dur)', () => {
+    // totalBouts=16, r16Bouts=min(30,15)=15, prelimsBouts=max(16-30-1,0)=0
+    // prelims_dur = round(90 * 0/16) = 0
+    // r16_dur     = round(90 * 15/16) = round(84.375) = 84
+    const result = deBlockDurations(32, 90)
+    expect(result).not.toHaveProperty('finals_dur')
+    expect(result).toHaveProperty('prelims_dur', 0)
+    expect(result).toHaveProperty('r16_dur', 84)
+    expect(result.prelims_dur + result.r16_dur).toBeLessThanOrEqual(90)
   })
 
-  it('bracket 8, total 45 min → exact phase split', () => {
-    expect(deBlockDurations(8, 45)).toEqual({ prelims_dur: 0, r16_dur: 15, finals_dur: 30 })
+  it('bracket 8, total 45 min → r16_dur covers R16+QF+SF bouts proportionally (no finals_dur)', () => {
+    // totalBouts=4, r16Bouts=min(30,3)=3, prelimsBouts=max(4-30-1,0)=0
+    // prelims_dur = round(45 * 0/4) = 0
+    // r16_dur     = round(45 * 3/4) = round(33.75) = 34
+    // gold's 1-bout share (≈11 min) is unallocated — becomes tail estimate
+    const result = deBlockDurations(8, 45)
+    expect(result).not.toHaveProperty('finals_dur')
+    expect(result).toHaveProperty('prelims_dur', 0)
+    expect(result).toHaveProperty('r16_dur', 34)
+    expect(result.prelims_dur + result.r16_dur).toBeLessThanOrEqual(45)
+  })
+
+  it('bracket 4 (very small): r16_bouts=1, prelims_bouts=0 → r16_dur = half of total', () => {
+    // totalBouts=2, r16Bouts=min(30,1)=1, prelimsBouts=max(2-30-1,0)=0
+    // prelims_dur = round(totalDe * 0/2) = 0
+    // r16_dur     = round(totalDe * 1/2) = totalDe/2
+    const totalDe = 30
+    const result = deBlockDurations(4, totalDe)
+    expect(result).not.toHaveProperty('finals_dur')
+    expect(result).toHaveProperty('prelims_dur', 0)
+    expect(result).toHaveProperty('r16_dur', Math.round(totalDe * 1 / 2))
+  })
+
+  it('edge case totalBouts <= 0: returns { prelims_dur: 0, r16_dur: totalDeDuration }', () => {
+    // bracketSize=0 → totalBouts=0, hit guard path
+    const result = deBlockDurations(0, 60)
+    expect(result).not.toHaveProperty('finals_dur')
+    expect(result).toHaveProperty('prelims_dur', 0)
+    expect(result).toHaveProperty('r16_dur', 60)
+  })
+})
+
+describe('tailEstimateMins', () => {
+  it('returns 30 for EventType.INDIVIDUAL', () => {
+    expect(tailEstimateMins(EventType.INDIVIDUAL)).toBe(30)
+  })
+
+  it('returns 60 for EventType.TEAM', () => {
+    expect(tailEstimateMins(EventType.TEAM)).toBe(60)
   })
 })
 

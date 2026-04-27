@@ -58,8 +58,13 @@ export const MORNING_WAVE_WINDOW_MINS = 120
 // DE / referee constants
 // ──────────────────────────────────────────────
 
+// Estimated minutes for the gold bout (and bronze for teams) that the scheduler does NOT allocate
+// strips for. Tournament organizers run these ad-hoc on whatever strip frees up next. Used by
+// ScheduleResult.de_total_end and ref-demand tail extension.
+export const INDIV_TAIL_MINS = 30
+export const TEAM_TAIL_MINS = 60
+
 export const DE_REFS = 1
-export const DE_FINALS_MIN_MINS = 30
 export const DE_POD_SIZE = 4
 export const DE_BOUT_DURATION: Record<Weapon, number> = {
   [Weapon.EPEE]: 20,

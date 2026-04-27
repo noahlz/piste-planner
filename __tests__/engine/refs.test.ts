@@ -12,35 +12,35 @@ import { makeConfig, makeStrips } from '../helpers/factories.ts'
 
 describe('podCaptainsNeeded', () => {
   it('DISABLED override → 0 regardless of strips', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.DISABLED, DeMode.SINGLE_STAGE, 32, Phase.DE_FINALS, 12)).toBe(0)
+    expect(podCaptainsNeeded(PodCaptainOverride.DISABLED, DeMode.SINGLE_STAGE, 32, Phase.DE_PRELIMS, 12)).toBe(0)
   })
 
   it('FORCE_4 override with 12 strips → ceil(12/4) = 3', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 32, Phase.DE_FINALS, 12)).toBe(3)
+    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 32, Phase.DE_PRELIMS, 12)).toBe(3)
   })
 
   it('AUTO, SINGLE_STAGE, bracket ≤32, 8 strips → ceil(8/4) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 32, Phase.DE_FINALS, 8)).toBe(2)
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 32, Phase.DE_PRELIMS, 8)).toBe(2)
   })
 
   it('AUTO, SINGLE_STAGE, bracket 64, 16 strips → ceil(16/8) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 64, Phase.DE_FINALS, 16)).toBe(2)
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 64, Phase.DE_PRELIMS, 16)).toBe(2)
   })
 
   it('AUTO, STAGED, DE_ROUND_OF_16 phase, 4 strips → ceil(4/4) = 1', () => {
     expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED, 64, Phase.DE_ROUND_OF_16, 4)).toBe(1)
   })
 
-  it('AUTO, STAGED, DE_FINALS phase, 8 strips → ceil(8/8) = 1', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED, 64, Phase.DE_FINALS, 8)).toBe(1)
+  it('AUTO, STAGED, DE_PRELIMS phase, 8 strips → ceil(8/8) = 1', () => {
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED, 64, Phase.DE_PRELIMS, 8)).toBe(1)
   })
 
   it('AUTO, SINGLE_STAGE, bracket ≤32, 9 strips → ceil(9/4) = 3', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 16, Phase.DE_FINALS, 9)).toBe(3)
+    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 16, Phase.DE_PRELIMS, 9)).toBe(3)
   })
 
   it('FORCE_4 with 7 strips → ceil(7/4) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 64, Phase.DE_FINALS, 7)).toBe(2)
+    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 64, Phase.DE_PRELIMS, 7)).toBe(2)
   })
 })
 
@@ -203,7 +203,7 @@ describe('computePodRefDemand', () => {
   it('partial last pod (1 strip) still emits one interval with count=1', () => {
     const config = makeConfig({ strips: makeStrips(8, 4) })
     const state = createGlobalState(config)
-    allocatePods(state, config, 'evt1', Phase.DE_FINALS, 1, 4, 600, 60, true)
+    allocatePods(state, config, 'evt1', Phase.DE_PRELIMS, 1, 4, 600, 60, true)
 
     const out = computePodRefDemand(state, config, [{ id: 'evt1', weapon: Weapon.EPEE }])
     expect(out[0].intervals).toEqual([

@@ -10,6 +10,7 @@ import {
   BottleneckCause,
   dayStart,
   dayEnd,
+  tailEstimateMins,
 } from '../../src/engine/types.ts'
 import { createGlobalState, nextFreeTime } from '../../src/engine/resources.ts'
 import { SchedulingError } from '../../src/engine/dayAssignment.ts'
@@ -209,7 +210,7 @@ describe('scheduleCompetition — flighting group', () => {
 // ──────────────────────────────────────────────
 
 describe('scheduleCompetition — STAGED', () => {
-  it('bracket 64 produces DE_PRELIMS + DE_ROUND_OF_16 + DE_FINALS', () => {
+  it('bracket 64 produces DE_PRELIMS + DE_ROUND_OF_16 (no allocated finals)', () => {
     // Need enough video strips for dayAssignment (which wrongly checks video for pools)
     const config = makeConfig({ strips: makeStrips(24, 12) })
     // 64 fencers, cut disabled → bracket 64
@@ -224,20 +225,18 @@ describe('scheduleCompetition — STAGED', () => {
     const state = createGlobalState(config)
     const result = scheduleCompetition(comp, 0, state, config, [comp])
 
-    // All three blocks populated
+    // Prelims and R16 populated
     expect(result.de_prelims_start).not.toBeNull()
     expect(result.de_prelims_end).not.toBeNull()
     expect(result.de_round_of_16_start).not.toBeNull()
     expect(result.de_round_of_16_end).not.toBeNull()
-    expect(result.de_finals_start).not.toBeNull()
-    expect(result.de_finals_end).not.toBeNull()
 
-    // Ordering: prelims < R16 < finals
+    // Ordering: prelims before R16
     expect(result.de_prelims_end!).toBeLessThanOrEqual(result.de_round_of_16_start!)
-    expect(result.de_round_of_16_end!).toBeLessThanOrEqual(result.de_finals_start!)
+
   })
 
-  it('bracket 16 produces DE_ROUND_OF_16 + DE_FINALS (no prelims)', () => {
+  it('bracket 16 produces DE_ROUND_OF_16 only (no prelims, no allocated finals)', () => {
     const config = makeConfig({ strips: makeStrips(24, 12) })
     // 16 fencers → bracket 16
     const comp = makeCompetition({
@@ -255,14 +254,13 @@ describe('scheduleCompetition — STAGED', () => {
     expect(result.de_prelims_start).toBeNull()
     expect(result.de_prelims_end).toBeNull()
 
-    // R16 and finals present
+    // R16 present
     expect(result.de_round_of_16_start).not.toBeNull()
     expect(result.de_round_of_16_end).not.toBeNull()
-    expect(result.de_finals_start).not.toBeNull()
-    expect(result.de_finals_end).not.toBeNull()
+
   })
 
-  it('video policy REQUIRED uses video strips for R16 and finals', () => {
+  it('video policy REQUIRED uses video strips for R16', () => {
     const config = makeConfig({ strips: makeStrips(24, 12) })
     const comp = makeCompetition({
       id: 'MF-DIV1-VIDEO',
@@ -275,16 +273,14 @@ describe('scheduleCompetition — STAGED', () => {
     const state = createGlobalState(config)
     const result = scheduleCompetition(comp, 0, state, config, [comp])
 
-    // 16 fencers → bracket 16 → de_round_of_16_strip_count = comp setting (4), de_finals_strip_count = comp setting (2)
+    // 16 fencers → bracket 16 → de_round_of_16_strip_count = comp setting (4)
     expect(result.de_round_of_16_strip_count).toBe(4)
-    expect(result.de_finals_strip_count).toBe(2)
   })
 
-  it('video policy FINALS_ONLY: R16 does NOT use video strips, finals DO use video strips', () => {
+  it('video policy FINALS_ONLY: R16 does NOT use video strips', () => {
     // Only 2 video strips (strips 0-1), 22 non-video (strips 2-23).
     // FINALS_ONLY → R16 allocates from non-video pool (4 strips requested, only 2 video available).
-    //              finals allocate from video pool (finalsVideoRequired=true).
-    // This verifies the per-block video flag split: r16VideoRequired=false, finalsVideoRequired=true.
+    // Finals are not allocated in STAGED mode — gold/bronze covered by tailEstimateMins.
     const strips = makeStrips(24, 2) // strips 0-1 are video_capable
     const config = makeConfig({
       strips,
@@ -299,38 +295,108 @@ describe('scheduleCompetition — STAGED', () => {
       de_video_policy: VideoPolicy.FINALS_ONLY,
       // Requesting 4 R16 strips — only 2 video available, so R16 must use non-video
       de_round_of_16_strips: 4,
-      de_finals_strips: 2,
       strips_allocated: 8,
     })
 
     const state = createGlobalState(config)
     const result = scheduleCompetition(comp, 0, state, config, [comp])
 
-    // Both phases scheduled successfully
+    // R16 scheduled successfully
     expect(result.de_round_of_16_start).not.toBeNull()
-    expect(result.de_finals_start).not.toBeNull()
 
     // R16 got 4 strips (pulled from non-video pool, not limited to 2 video strips)
     expect(result.de_round_of_16_strip_count).toBe(4)
-
-    // Finals used video strips (de_finals_strips=2, video_strips_total=2)
-    expect(result.de_finals_strip_count).toBe(2)
 
     // The fact that de_round_of_16_strip_count=4 was satisfied with only 2 video strips available
     // proves R16 used non-video strips — if videoRequired were true for R16, it could only
     // get 2 strips (video_strips_total=2) and de_round_of_16_strip_count would be ≤2.
   })
+
+  it('STAGED competition: de_total_end equals de_round_of_16_end + tailEstimateMins — INDIVIDUAL', () => {
+    const config = makeConfig({ strips: makeStrips(24, 12) })
+    const comp = makeCompetition({
+      id: 'MF-STAGED-TAIL-INDIV',
+      fencer_count: 16,
+      de_mode: DeMode.STAGED,
+      event_type: EventType.INDIVIDUAL,
+      strips_allocated: 8,
+    })
+
+    const state = createGlobalState(config)
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
+
+    expect(result.de_round_of_16_end).not.toBeNull()
+    expect(result.de_total_end).toBe(result.de_round_of_16_end! + tailEstimateMins(EventType.INDIVIDUAL))
+  })
+
+  it('STAGED competition: de_total_end equals de_round_of_16_end + tailEstimateMins — TEAM', () => {
+    const config = makeConfig({ strips: makeStrips(24, 12) })
+    const comp = makeCompetition({
+      id: 'MF-STAGED-TAIL-TEAM',
+      fencer_count: 16,
+      de_mode: DeMode.STAGED,
+      event_type: EventType.TEAM,
+      strips_allocated: 8,
+    })
+
+    const state = createGlobalState(config)
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
+
+    expect(result.de_round_of_16_end).not.toBeNull()
+    expect(result.de_total_end).toBe(result.de_round_of_16_end! + tailEstimateMins(EventType.TEAM))
+  })
+
+  it('STAGED competition: no strip allocation extends past de_round_of_16_end', () => {
+    // Bracket 16 — only R16 should be allocated; no phase comes after it in the schedule
+    const config = makeConfig({ strips: makeStrips(24, 12) })
+    const comp = makeCompetition({
+      id: 'MF-STAGED-LAST-PHASE',
+      fencer_count: 16,
+      de_mode: DeMode.STAGED,
+      strips_allocated: 8,
+    })
+
+    const state = createGlobalState(config)
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
+
+    const r16End = result.de_round_of_16_end!
+    // No strip allocation for this competition extends past r16End (the gold bout is unallocated).
+    for (const list of state.strip_allocations) {
+      for (const alloc of list) {
+        if (alloc.event_id === comp.id) {
+          expect(alloc.end_time).toBeLessThanOrEqual(r16End)
+        }
+      }
+    }
+  })
 })
 
 // ──────────────────────────────────────────────
-// Team bronze bout
+// SINGLE_STAGE
 // ──────────────────────────────────────────────
 
-describe('scheduleCompetition — team bronze bout', () => {
-  it('TEAM event gets bronze bout simultaneous with gold on separate strip', () => {
+describe('scheduleCompetition — SINGLE_STAGE', () => {
+  it('SINGLE_STAGE competition: de_total_end equals de_end + tailEstimateMins — INDIVIDUAL', () => {
     const config = makeConfig()
     const comp = makeCompetition({
-      id: 'MF-TEAM',
+      id: 'MF-SS-TAIL-INDIV',
+      fencer_count: 24,
+      event_type: EventType.INDIVIDUAL,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 8,
+    })
+
+    const state = createGlobalState(config)
+    const result = scheduleCompetition(comp, 0, state, config, [comp])
+
+    expect(result.de_end).not.toBeNull()
+    expect(result.de_total_end).toBe(result.de_end! + tailEstimateMins(EventType.INDIVIDUAL))
+  })
+
+  it('SINGLE_STAGE competition: de_total_end equals de_end + tailEstimateMins — TEAM', () => {
+    const config = makeConfig()
+    const comp = makeCompetition({
+      id: 'MF-SS-TAIL-TEAM',
       fencer_count: 16,
       event_type: EventType.TEAM,
       de_mode: DeMode.SINGLE_STAGE,
@@ -340,40 +406,8 @@ describe('scheduleCompetition — team bronze bout', () => {
     const state = createGlobalState(config)
     const result = scheduleCompetition(comp, 0, state, config, [comp])
 
-    // Bronze bout should be populated for TEAM event
-    expect(result.de_bronze_start).not.toBeNull()
-    expect(result.de_bronze_end).not.toBeNull()
-    expect(result.de_bronze_strip_id).not.toBeNull()
-
-    // de_total_end should be max of de_end/de_finals_end and de_bronze_end
-    expect(result.de_total_end).not.toBeNull()
-  })
-
-  it('emits DE_FINALS_BRONZE_NO_STRIP when no free strip for bronze', () => {
-    // Minimal strips so all are occupied by gold.
-    // max_de_strip_pct: 1.0 ensures the single strip is used for DE (floor(1*0.8)=0 would break it).
-    const strips = makeStrips(1, 0)
-    const config = makeConfig({
-      strips,
-      strips_total: 1,
-      video_strips_total: 0,
-      max_de_strip_pct: 1.0,
-    })
-    const comp = makeCompetition({
-      id: 'MF-TEAM-NOSTRIP',
-      fencer_count: 8,
-      event_type: EventType.TEAM,
-      de_mode: DeMode.SINGLE_STAGE,
-      strips_allocated: 1,
-    })
-
-    const state = createGlobalState(config)
-    scheduleCompetition(comp, 0, state, config, [comp])
-
-    const bronzeBottleneck = state.bottlenecks.find(
-      b => b.cause === BottleneckCause.DE_FINALS_BRONZE_NO_STRIP,
-    )
-    expect(bronzeBottleneck).toBeDefined()
+    expect(result.de_end).not.toBeNull()
+    expect(result.de_total_end).toBe(result.de_end! + tailEstimateMins(EventType.TEAM))
   })
 })
 
@@ -410,12 +444,12 @@ describe('scheduleCompetition — deadline breach', () => {
   })
 
   it('successfully reschedules to an earlier slot and emits DEADLINE_BREACH warning', () => {
-    // Day is 255 min. With earliest_start=180, pool phase starts at 180 and
-    // overruns dayEnd (180 + ~90 = 270 > 255). findEarlierSlotSameDay finds
-    // time 0 (strips free), retry from 0 succeeds (~90 + 30 + 60 = 180 < 255).
+    // Day is 270 min. With earliest_start=180, pool starts at 180 and overruns
+    // dayEnd (180 + 105 = 285 > 270). findEarlierSlotSameDay finds time 0,
+    // retry from 0 succeeds: pool(105) + gap at 135→150 slot + DE(84) + tail(30) = 264 < 270.
     const config = makeConfig({
-      DAY_LENGTH_MINS: 255,
-      LATEST_START_OFFSET: 255,
+      DAY_LENGTH_MINS: 270,
+      LATEST_START_OFFSET: 270,
       days_available: 1,
       MAX_RESCHEDULE_ATTEMPTS: 3,
     })
@@ -423,7 +457,7 @@ describe('scheduleCompetition — deadline breach', () => {
       id: 'MF-RESCHEDULE',
       fencer_count: 24,
       earliest_start: 180, // forces late pool start → overruns dayEnd
-      latest_end: 255,
+      latest_end: 270,
       strips_allocated: 8,
     })
 

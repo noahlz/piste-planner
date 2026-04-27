@@ -14,7 +14,6 @@ export interface SerializedState {
     dayConfigs: DayConfig[]
     strips_total: number
     video_strips_total: number
-    include_finals_strip?: boolean  // optional for backwards compat
     pod_captain_override: PodCaptainOverride
   }
   competitions: {
@@ -40,7 +39,6 @@ export function serializeState(state: StoreState): string {
       dayConfigs: state.dayConfigs,
       strips_total: state.strips_total,
       video_strips_total: state.video_strips_total,
-      include_finals_strip: state.include_finals_strip,
       pod_captain_override: state.pod_captain_override,
     },
     competitions: {
@@ -148,6 +146,8 @@ export function deserializeState(
   }
 
   const data = validation.data
+  // Extra fields on tournament/competitions (e.g., the legacy include_finals_strip flag) are
+  // silently dropped here — old saved tournaments load without error.
   return {
     state: {
       tournament_type: data.tournament.tournament_type,
@@ -155,7 +155,6 @@ export function deserializeState(
       dayConfigs: data.tournament.dayConfigs,
       strips_total: data.tournament.strips_total,
       video_strips_total: data.tournament.video_strips_total,
-      include_finals_strip: data.tournament.include_finals_strip ?? false,
       pod_captain_override: data.tournament.pod_captain_override,
       selectedCompetitions: data.competitions.selectedCompetitions,
       globalOverrides: data.competitions.globalOverrides,

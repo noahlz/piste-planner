@@ -28,10 +28,8 @@ import {
   scheduleSingleStageDePhase,
   scheduleDePrelimsPhase,
   scheduleR16Phase,
-  scheduleDeFinalsPhase,
-  scheduleBronzePhase,
 } from './phaseSchedulers.ts'
-import { EventType, VideoPolicy } from './types.ts'
+import { tailEstimateMins } from './types.ts'
 
 export function scheduleCompetition(
   competition: Competition,
@@ -96,12 +94,6 @@ export function scheduleCompetition(
     de_round_of_16_start: null,
     de_round_of_16_end: null,
     de_round_of_16_strip_count: 0,
-    de_finals_start: null,
-    de_finals_end: null,
-    de_finals_strip_count: 0,
-    de_bronze_start: null,
-    de_bronze_end: null,
-    de_bronze_strip_id: null,
     de_total_end: null,
     conflict_score: 0,
     pool_duration_baseline: wDuration,
@@ -155,17 +147,13 @@ export function scheduleCompetition(
 
     // ── DE PHASE ──
     if (competition.de_mode === DeMode.SINGLE_STAGE) {
-      const { deEnd, deStripIndices } = scheduleSingleStageDePhase(
+      const { deEnd } = scheduleSingleStageDePhase(
         competition, day, deNotBefore, state, config, result, txLog,
       )
-      // Bronze bout for TEAM events — runs alongside the gold bout on a separate strip.
-      // finalsStart = de_start (result was just populated), finalsEnd = deEnd.
-      if (competition.event_type === EventType.TEAM) {
-        const deStart = result.de_start!
-        scheduleBronzePhase(competition, day, deStart, deEnd, deStripIndices, state, config, result, txLog, false)
-      }
+      // Gold (and bronze for team) are unallocated — covered by tailEstimateMins().
+      result.de_total_end = deEnd + tailEstimateMins(competition.event_type)
     } else {
-      // STAGED: prelims (bracket >= 64) → R16 → finals → (optional bronze)
+      // STAGED: prelims (bracket >= 64) → R16. Gold and bronze are unallocated and covered by tailEstimateMins().
       const phases = dePhasesForBracket(bracketSize)
       let stagedNotBefore = deNotBefore
       let totalActual = 0
@@ -183,22 +171,8 @@ export function scheduleCompetition(
       )
       totalActual += (result.de_round_of_16_end! - result.de_round_of_16_start!)
 
-      const { finalsEnd, finalsStripIndices } = scheduleDeFinalsPhase(
-        competition, day, r16End, state, config, result, txLog,
-      )
-      totalActual += (result.de_finals_end! - result.de_finals_start!)
-
       result.de_duration_actual = totalActual
-      result.de_total_end = finalsEnd
-
-      // Bronze bout for TEAM events — runs alongside the gold bout on a separate strip.
-      // finalsStart = de_finals_start (just populated), finalsEnd = finalsEnd.
-      if (competition.event_type === EventType.TEAM) {
-        const policy = competition.de_video_policy
-        const finalsVideoRequired = policy === VideoPolicy.REQUIRED || policy === VideoPolicy.FINALS_ONLY
-        const finStart = result.de_finals_start!
-        scheduleBronzePhase(competition, day, finStart, finalsEnd, finalsStripIndices, state, config, result, txLog, finalsVideoRequired)
-      }
+      result.de_total_end = r16End + tailEstimateMins(competition.event_type)
     }
 
     // ── SAME-DAY VALIDATION ──
