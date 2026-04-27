@@ -1,7 +1,6 @@
 import { useStore } from '../../store/store.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { NumberInput } from '@/components/ui/number-input'
@@ -12,8 +11,6 @@ export function StripSetup() {
   const setStrips = useStore((s) => s.setStrips)
   const videoStripsTotal = useStore((s) => s.video_strips_total)
   const setVideoStrips = useStore((s) => s.setVideoStrips)
-  const includeFinalsStrip = useStore((s) => s.include_finals_strip)
-  const setIncludeFinalsStrip = useStore((s) => s.setIncludeFinalsStrip)
   const suggestStripsFn = useStore((s) => s.suggestStrips)
 
   return (
@@ -55,17 +52,6 @@ export function StripSetup() {
               max={stripsTotal}
               aria-label="Number of video strips"
             />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="finals-strip"
-              checked={includeFinalsStrip}
-              onCheckedChange={(checked) => setIncludeFinalsStrip(checked === true)}
-            />
-            <Label htmlFor="finals-strip" className="text-xs cursor-pointer">
-              Include Finals Strip
-            </Label>
           </div>
         </div>
       </CardContent>

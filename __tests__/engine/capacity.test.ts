@@ -97,7 +97,6 @@ describe('estimateCompetitionStripHours', () => {
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       de_round_of_16_strips: 4,
-      de_finals_strips: 2,
       strips_allocated: 8,
     })
 
@@ -107,19 +106,19 @@ describe('estimateCompetitionStripHours', () => {
     // poolDurationForSize(FOIL,7)=147, poolDurationForSize(FOIL,6)=105
     // weightedPoolDuration = round((10*147 + 5*105)/15) = round(133) = 133
     // pool_strip_hours = 15 * 133 / 60 = 33.25
-    // bracket = 128; deDuration(FOIL,128) = 180
-    // deBlockDurations(128,180): finalsDur=3 < 30 → floor applied: finals=30, remaining=150
-    // prelims = round(33/63 * 150) = 79, r16 = 71
-    // prelims_strip_hours = 8 * 79/60 = 10.5333
-    // r16_strip_hours = 4 * 71/60 = 4.7333, finals_strip_hours = 2 * 30/60 = 1.0
-    // video_strip_hours = 4.7333 + 1.0 = 5.7333
-    // total = 33.25 + 10.5333 + 4.7333 + 1.0 = 49.5167
+    // bracket = 128; deDuration(FOIL,128) = 180; deBlockDurations(128,180):
+    //   totalBouts=64, r16Bouts=min(30,63)=30, prelimsBouts=max(64-30-1,0)=33
+    //   r16_dur = round(180 * 30/64) = round(84.375) = 84
+    //   prelims_dur = round(180 * 33/64) = round(92.8125) = 93
+    // prelims_strip_hours = 8 * 93/60 = 12.4
+    // r16_strip_hours = 4 * 84/60 = 5.6
+    // Finals phase no longer separately allocated (stop-at-semis); video_strip_hours = r16 only.
+    // total = 33.25 + 12.4 + 5.6 = 51.25
     const expectedPoolStripHours = 15 * 133 / 60
-    const expectedPrelimsStripHours = 8 * 79 / 60
-    const expectedR16StripHours = 4 * 71 / 60
-    const expectedFinalsStripHours = 2 * 30 / 60
-    const expectedVideoStripHours = expectedR16StripHours + expectedFinalsStripHours
-    const expectedTotal = expectedPoolStripHours + expectedPrelimsStripHours + expectedR16StripHours + expectedFinalsStripHours
+    const expectedPrelimsStripHours = 8 * 93 / 60
+    const expectedR16StripHours = 4 * 84 / 60
+    const expectedVideoStripHours = expectedR16StripHours
+    const expectedTotal = expectedPoolStripHours + expectedPrelimsStripHours + expectedR16StripHours
     expect(result.video_strip_hours).toBeCloseTo(expectedVideoStripHours, 1)
     expect(result.total_strip_hours).toBeCloseTo(expectedTotal, 1)
   })
@@ -428,7 +427,6 @@ describe('dayConsumedCapacity', () => {
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       de_round_of_16_strips: 4,
-      de_finals_strips: 2,
       strips_allocated: 8,
     })
 
@@ -437,9 +435,10 @@ describe('dayConsumedCapacity', () => {
     const result = dayConsumedCapacity(0, state, [comp], config)
 
     // Same competition as in the estimateCompetitionStripHours STAGED test:
-    // r16_strip_hours = 4 * 71 / 60 = 4.7333; finals_strip_hours = 2 * 30 / 60 = 1.0
-    // video_strip_hours = 4.7333 + 1.0 = 5.7333
-    const expectedVideoStripHours = 4 * 71 / 60 + 2 * 30 / 60
+    // Finals phase no longer separately allocated (stop-at-semis); video_strip_hours = r16 only.
+    // deBlockDurations(128,180): r16_dur = round(180 * 30/64) = 84
+    // r16_strip_hours = 4 * 84 / 60 = 5.6
+    const expectedVideoStripHours = 4 * 84 / 60
     expect(result.video_strip_hours_consumed).toBeCloseTo(expectedVideoStripHours, 1)
   })
 })
@@ -503,7 +502,6 @@ describe('dayRemainingCapacity', () => {
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       de_round_of_16_strips: 4,
-      de_finals_strips: 2,
       strips_allocated: 8,
     })
 

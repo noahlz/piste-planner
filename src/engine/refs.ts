@@ -35,7 +35,7 @@ export function podCaptainsNeeded(
   if (deMode === DeMode.SINGLE_STAGE) {
     podSize = bracketSize <= 32 ? 4 : 8
   } else {
-    // STAGED: round-of-16 uses 4-strip pods; finals and prelims use 8-strip pods
+    // STAGED: round-of-16 uses 4-strip pods; prelims use 8-strip pods.
     podSize = dePhase === Phase.DE_ROUND_OF_16 ? 4 : 8
   }
 
@@ -71,13 +71,13 @@ export function peakDeRefDemand(comp: Competition, config: TournamentConfig): nu
     comp.event_type,
   )
 
-  // Use the larger of round-of-16 and finals strips as representative peak
-  const deStrips = Math.max(comp.de_round_of_16_strips, comp.de_finals_strips, comp.strips_allocated)
+  // Use the larger of round-of-16 strips and overall allocation as representative peak.
+  // Stop-at-semis: there is no separate finals phase to consider.
+  const deStrips = Math.max(comp.de_round_of_16_strips, comp.strips_allocated)
 
-  // DE refs: 1 per strip + pod captains for the phase with most strips
-  // Use DE_ROUND_OF_16 as the representative phase (typically more strips than finals)
-  const dePhasePeakStrips = comp.de_round_of_16_strips > 0 ? comp.de_round_of_16_strips : comp.de_finals_strips
-  const phase = comp.de_round_of_16_strips > 0 ? Phase.DE_ROUND_OF_16 : Phase.DE_FINALS
+  // DE refs: 1 per strip + pod captains for the round-of-16 phase (the terminal scheduled phase).
+  const dePhasePeakStrips = comp.de_round_of_16_strips
+  const phase = Phase.DE_ROUND_OF_16
 
   const refsPerStrip = config.DE_REFS
   const captains = podCaptainsNeeded(

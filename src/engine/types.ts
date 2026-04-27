@@ -107,11 +107,8 @@ export const Phase = {
   FLIGHT_B: 'FLIGHT_B',
   DE_PRELIMS: 'DE_PRELIMS',
   DE_ROUND_OF_16: 'DE_ROUND_OF_16',
-  DE_FINALS: 'DE_FINALS',
-  DE_FINALS_BRONZE: 'DE_FINALS_BRONZE',
   DE: 'DE',
   SEQUENCING: 'SEQUENCING',
-  BRONZE: 'BRONZE',
   DAY_ASSIGNMENT: 'DAY_ASSIGNMENT',
   CAPACITY: 'CAPACITY',
   FLIGHTING: 'FLIGHTING',
@@ -142,7 +139,6 @@ export const BottleneckCause = {
   FLIGHT_B_DELAYED: 'FLIGHT_B_DELAYED',
   STRIP_DEFICIT_NO_FLIGHTING: 'STRIP_DEFICIT_NO_FLIGHTING',
   VIDEO_STRIP_CONTENTION: 'VIDEO_STRIP_CONTENTION',
-  DE_FINALS_BRONZE_NO_STRIP: 'DE_FINALS_BRONZE_NO_STRIP',
   PROXIMITY_PREFERENCE_UNMET: 'PROXIMITY_PREFERENCE_UNMET',
   CONSTRAINT_RELAXED: 'CONSTRAINT_RELAXED',
   FLIGHTING_GROUP_NOT_LARGEST: 'FLIGHTING_GROUP_NOT_LARGEST',
@@ -193,12 +189,8 @@ export interface Competition {
   cut_value: number
   de_mode: DeMode
   de_video_policy: VideoPolicy
-  de_finals_strip_id: string | null
-  de_finals_strip_requirement: DeStripRequirement
   de_round_of_16_strips: number
   de_round_of_16_requirement: DeStripRequirement
-  de_finals_strips: number
-  de_finals_requirement: DeStripRequirement
   flighted: boolean
   flighting_group_id: string | null
   is_priority: boolean
@@ -229,7 +221,6 @@ export interface TournamentConfig {
   FLIGHT_BUFFER_MINS: number
   THRESHOLD_MINS: number
   DE_REFS: number
-  DE_FINALS_MIN_MINS: number
   SAME_TIME_WINDOW_MINS: number
   INDIV_TEAM_MIN_GAP_MINS: number
   EARLY_START_THRESHOLD: number
@@ -309,12 +300,6 @@ export interface ScheduleResult {
   de_round_of_16_start: number | null
   de_round_of_16_end: number | null
   de_round_of_16_strip_count: number
-  de_finals_start: number | null
-  de_finals_end: number | null
-  de_finals_strip_count: number
-  de_bronze_start: number | null
-  de_bronze_end: number | null
-  de_bronze_strip_id: string | null
   de_total_end: number | null
   conflict_score: number
   pool_duration_baseline: number
@@ -403,7 +388,6 @@ export interface RefResolution {
 export interface DeBlockDurations {
   prelims_dur: number
   r16_dur: number
-  finals_dur: number
 }
 
 export interface ValidationError {
@@ -452,6 +436,16 @@ export interface EventTxLog {
 // ──────────────────────────────────────────────
 // Helper functions
 // ──────────────────────────────────────────────
+
+/**
+ * Returns the estimated minutes for the gold (and bronze for team) bouts that follow the
+ * scheduler's last allocated phase. See METHODOLOGY.md §Scheduler Stops at Semis.
+ */
+export function tailEstimateMins(eventType: EventType): number {
+  // Import constants inline to avoid a circular-dependency (types.ts ← constants.ts ← types.ts).
+  // Values are duplicated from INDIV_TAIL_MINS / TEAM_TAIL_MINS and must stay in sync.
+  return eventType === EventType.TEAM ? 60 : 30
+}
 
 /**
  * Returns the absolute minute offset from T=0 for the start of the given day.

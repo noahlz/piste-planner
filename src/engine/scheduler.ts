@@ -110,9 +110,10 @@ export function scheduleAll(
 
   // ── Phase 3: Per-day scheduling loop (EVENT-MAJOR) ──
   //
-  // Each event runs fully (pool → DE_PRELIMS → R16 → FINALS → BRONZE) before the
-  // next event on the same day starts. `scheduleCompetition` is a thin orchestrator
-  // over the phase schedulers in `phaseSchedulers.ts`.
+  // Each event runs fully (pool → DE_PRELIMS → R16) before the next event on the
+  // same day starts. Gold and bronze are unallocated — covered by tailEstimateMins().
+  // `scheduleCompetition` is a thin orchestrator over the phase schedulers in
+  // `phaseSchedulers.ts`.
   //
   // ATTEMPT LOG — do not re-try without addressing these first:
   //

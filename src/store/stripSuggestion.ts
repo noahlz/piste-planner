@@ -8,7 +8,6 @@ import { computePoolStructure } from '../engine/pools.ts'
  */
 export function suggestStrips(
   competitions: Record<string, { fencer_count: number; use_single_pool_override: boolean }>,
-  includeFinalsStrip: boolean,
 ): number | null {
   let maxPools = 0
 
@@ -22,5 +21,5 @@ export function suggestStrips(
 
   if (maxPools === 0) return null
 
-  return includeFinalsStrip ? maxPools + 1 : maxPools
+  return maxPools
 }

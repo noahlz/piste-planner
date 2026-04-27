@@ -33,7 +33,7 @@ import {
 } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
 import { findIndividualCounterpart } from './crossover.ts'
-import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, nextFreeTime, type NoWindowReason, type PoolContext, type ResourceWindowResult } from './resources.ts'
+import { earliestResourceWindow, allocateStrips, allocateRefs, snapToSlot, type NoWindowReason, type PoolContext, type ResourceWindowResult } from './resources.ts'
 import { SchedulingError } from './dayAssignment.ts'
 import { computeStripCap } from './stripBudget.ts'
 import { dayStart } from './types.ts'
@@ -303,57 +303,11 @@ export function scheduleR16Phase(
   return { r16End }
 }
 
-/**
- * Schedules the DE finals block (top-8 and gold bout) for staged-DE competitions.
- * Returns the end time and the strip indices reserved for finals so bronze can reuse.
- */
-export function scheduleDeFinalsPhase(
-  competition: Competition,
-  day: number,
-  notBefore: number,
-  state: GlobalState,
-  config: TournamentConfig,
-  partialResult: PartialScheduleResult,
-  txLog: EventTxLog,
-): { finalsEnd: number; finalsStripIndices: number[] } {
-  const policy = competition.de_video_policy
-  const finalsVideoRequired = policy === VideoPolicy.REQUIRED || policy === VideoPolicy.FINALS_ONLY
-
-  const finTarget = competition.de_finals_strips
-  const finWindow = assertWindowFound(
-    earliestResourceWindow(
-      finTarget,
-      finalsVideoRequired,
-      notBefore, // continuous from R16 end — no gap
-      day,
-      state,
-      config,
-      competition.id,
-      Phase.DE_FINALS,
-    ),
-    competition, Phase.DE_FINALS, 'DE_FINALS', day, state,
-  )
-
-  const { blocks } = computeDeBlocks(competition, config)
-
-  const finStart = finWindow.startTime
-  const finActual = Math.max(blocks.finals_dur, config.DE_FINALS_MIN_MINS)
-  const finEnd = finStart + finActual
-
-  allocateStrips(state, finWindow.stripIndices, finStart, finEnd, competition.id, Phase.DE_FINALS, txLog)
-  allocateRefs(state, day, competition.weapon, 1, finStart, finEnd, txLog)
-
-  partialResult.de_finals_start = finStart
-  partialResult.de_finals_end = finEnd
-  partialResult.de_finals_strip_count = finWindow.stripIndices.length
-
-  return { finalsEnd: finEnd, finalsStripIndices: finWindow.stripIndices }
-}
 
 /**
  * Schedules the single-stage DE bracket (all rounds in one block).
  * Used when competition.de_mode === DeMode.SINGLE_STAGE.
- * Returns deEnd and deStripIndices so the caller can pass them to scheduleBronzePhase.
+ * Returns deEnd and deStripIndices for the caller's use.
  */
 export function scheduleSingleStageDePhase(
   competition: Competition,
@@ -392,7 +346,14 @@ export function scheduleSingleStageDePhase(
   const deStart = window.startTime
   const deStrips = window.stripIndices.length
   const ratio = Math.min(deStrips / Math.max(deOptimal, 1), 1.0)
-  const actualDur = ratio >= 1.0 ? totalDeBase : Math.ceil(totalDeBase / ratio)
+
+  // Exclude the gold-bout fraction (1/totalBouts) from the scheduled block.
+  // Gold (and bronze for team) are unallocated and covered by tailEstimateMins() in scheduleOne.ts.
+  const totalBouts = Math.floor(bracketSize / 2)
+  const adjustedTotalDeBase = totalBouts > 0 ? totalDeBase * (totalBouts - 1) / totalBouts : 0
+  const actualDur = ratio >= 1.0
+    ? Math.round(adjustedTotalDeBase)
+    : Math.ceil(adjustedTotalDeBase / ratio)
   const deEnd = deStart + actualDur
 
   allocateStrips(state, window.stripIndices, deStart, deEnd, competition.id, Phase.DE, txLog)
@@ -402,74 +363,11 @@ export function scheduleSingleStageDePhase(
   partialResult.de_end = deEnd
   partialResult.de_strip_count = deStrips
   partialResult.de_duration_actual = actualDur
-  partialResult.de_total_end = deEnd
+  // de_total_end is NOT set here — scheduleOne.ts owns it (sets deEnd + tailEstimateMins)
 
   return { deEnd, deStripIndices: window.stripIndices }
 }
 
-/**
- * Schedules the bronze-medal bout, which runs alongside the gold bout on a separate strip.
- * goldStripIndices are the strips already reserved for finals; bronze must use a different one.
- */
-export function scheduleBronzePhase(
-  competition: Competition,
-  day: number,
-  finalsStart: number,
-  finalsEnd: number,
-  goldStripIndices: number[],
-  state: GlobalState,
-  config: TournamentConfig,
-  partialResult: PartialScheduleResult,
-  txLog: EventTxLog,
-  videoRequired: boolean,
-): void {
-  const goldSet = new Set(goldStripIndices)
-  const strips = config.strips
-
-  // Find first strip not in goldSet that is free at finalsStart and matches the predicate.
-  const findFreeBronzeStrip = (predicate: (videoCapable: boolean) => boolean): number | null => {
-    for (let i = 0; i < strips.length; i++) {
-      if (goldSet.has(i)) continue
-      if (predicate(strips[i].video_capable) && nextFreeTime(state, i) <= finalsStart) return i
-    }
-    return null
-  }
-
-  let bronzeIdx: number | null
-  if (videoRequired) {
-    // Video strips only (excluding gold)
-    bronzeIdx = findFreeBronzeStrip((video) => video)
-  } else {
-    // Non-video preferred, fallback to video
-    bronzeIdx = findFreeBronzeStrip((video) => !video) ?? findFreeBronzeStrip((video) => video)
-  }
-
-  if (bronzeIdx === null) {
-    // No free strip for bronze — emit bottleneck
-    // Severity depends on video policy per METHODOLOGY.md §Video Replay Policy
-    const severity = videoRequired ? BottleneckSeverity.WARN : BottleneckSeverity.INFO
-    state.bottlenecks.push({
-      competition_id: competition.id,
-      phase: Phase.DE_FINALS_BRONZE,
-      cause: BottleneckCause.DE_FINALS_BRONZE_NO_STRIP,
-      severity,
-      delay_mins: 0,
-      message: `No free strip for bronze bout of ${competition.id}`,
-    })
-    return
-  }
-
-  // Allocate bronze strip
-  allocateStrips(state, [bronzeIdx], finalsStart, finalsEnd, competition.id, Phase.DE_FINALS_BRONZE, txLog)
-
-  // Allocate one ref for bronze — weapon-agnostic
-  allocateRefs(state, day, competition.weapon, 1, finalsStart, finalsEnd, txLog)
-
-  partialResult.de_bronze_start = finalsStart
-  partialResult.de_bronze_end = finalsEnd
-  partialResult.de_bronze_strip_id = strips[bronzeIdx].id
-  partialResult.de_total_end = Math.max(partialResult.de_total_end ?? 0, finalsEnd)
-}
 
 // ──────────────────────────────────────────────
 // Internal helpers (flighted / non-flighted pool allocation)

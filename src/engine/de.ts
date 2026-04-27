@@ -1,6 +1,5 @@
 import { Weapon, CutMode, EventType, Phase } from './types.ts'
 import type { DeBlockDurations } from './types.ts'
-import { DE_FINALS_MIN_MINS } from './constants.ts'
 import { computeDeFencerCount } from './pools.ts'
 
 /**
@@ -33,62 +32,47 @@ export function computeBracketSize(
 /**
  * Returns the ordered list of DE phases for a given bracket size.
  *
- * METHODOLOGY.md §DE Modes:
- * - bracket ≥ 64: prelims (top-half bouts before round of 16) + R16 + finals
- * - bracket ≥ 16: R16 + finals
- * - bracket < 16: finals only
+ * Stop-at-semis model: the gold-medal bout is excluded from scheduled blocks
+ * and covered by tailEstimateMins() instead. DE_FINALS is never returned here.
+ *
+ * - bracket ≥ 64: prelims (top-half bouts before round of 16) + R16
+ * - bracket ≥ 16: R16 only
+ * - bracket < 16: R16 only (tiny bracket absorbed into r16 phase; over-allocates
+ *   strips slightly but keeps the model uniform)
  */
 export function dePhasesForBracket(bracketSize: number): Phase[] {
   if (bracketSize >= 64) {
-    return [Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16, Phase.DE_FINALS]
+    return [Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16]
   }
-  if (bracketSize >= 16) {
-    return [Phase.DE_ROUND_OF_16, Phase.DE_FINALS]
-  }
-  return [Phase.DE_FINALS]
+  return [Phase.DE_ROUND_OF_16]
 }
 
 /**
- * Splits total DE time across phases proportionally by bout count.
+ * Splits total DE time across two scheduled phases proportionally by bout count.
  *
- * METHODOLOGY.md §DE Phase Breakdown (for Staged DEs) bout allocation:
- * - total_bouts = bracket_size / 2
- * - prelims_bouts = max(total_bouts - 30 - 1, 0)  (rounds above 32)
- * - r16_bouts = min(30, total_bouts - 1)  (rounds 16 through SF)
- * - finals_bouts = 1  (gold medal bout only, 30-min hard floor)
+ * Bout allocation:
+ * - total_bouts   = bracket_size / 2
+ * - prelims_bouts = max(total_bouts - 30 - 1, 0)  — rounds above 32 (bracket ≥ 64)
+ * - r16_bouts     = min(30, total_bouts - 1)       — rounds 16 through SF
+ * - finals_bouts  = 1 (gold medal only) — not allocated here; caller adds tailEstimateMins()
  *
- * If proportional finals allocation < DE_FINALS_MIN_MINS, finals is set to 30
- * and the remainder is redistributed to prelims and r16 proportionally.
+ * Returns only the two scheduled blocks. The gold-bout share is intentionally
+ * left out of both allocations and covered by the tail estimate.
  */
 export function deBlockDurations(bracketSize: number, totalDeDuration: number): DeBlockDurations {
   const totalBouts = bracketSize / 2
-  // finals = 1 bout (gold medal only); finals_dur computed as remainder after prelims + r16
+
+  if (totalBouts <= 0) {
+    return { prelims_dur: 0, r16_dur: totalDeDuration }
+  }
+
   const r16Bouts = Math.min(30, totalBouts - 1)
   const prelimsBouts = Math.max(totalBouts - 30 - 1, 0)
 
-  if (totalBouts <= 0) {
-    return { prelims_dur: 0, r16_dur: 0, finals_dur: totalDeDuration }
-  }
+  const prelimsDur = Math.round((totalDeDuration * prelimsBouts) / totalBouts)
+  const r16Dur = Math.round((totalDeDuration * r16Bouts) / totalBouts)
 
-  let prelimsDur = Math.round((totalDeDuration * prelimsBouts) / totalBouts)
-  let r16Dur = Math.round((totalDeDuration * r16Bouts) / totalBouts)
-  let finalsDur = totalDeDuration - prelimsDur - r16Dur
-
-  // 30-min hard floor for the finals (gold medal) block
-  if (finalsDur < DE_FINALS_MIN_MINS) {
-    finalsDur = Math.min(DE_FINALS_MIN_MINS, totalDeDuration)
-    const remaining = totalDeDuration - finalsDur
-    const nonFinalsBouts = prelimsBouts + r16Bouts
-    if (nonFinalsBouts === 0) {
-      prelimsDur = 0
-      r16Dur = 0
-    } else {
-      prelimsDur = Math.round((prelimsBouts / nonFinalsBouts) * remaining)
-      r16Dur = remaining - prelimsDur
-    }
-  }
-
-  return { prelims_dur: prelimsDur, r16_dur: r16Dur, finals_dur: finalsDur }
+  return { prelims_dur: prelimsDur, r16_dur: r16Dur }
 }
 
 /**

@@ -189,9 +189,6 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
     if (comp.de_round_of_16_strips > deStripCap) {
       errors.push(warn('de_round_of_16_strips', `${comp.id}: R16 requests ${comp.de_round_of_16_strips} strips but DE cap is ${deStripCap}`))
     }
-    if (comp.de_finals_strips > deStripCap) {
-      errors.push(warn('de_finals_strips', `${comp.id}: finals requests ${comp.de_finals_strips} strips but DE cap is ${deStripCap}`))
-    }
 
     // Resource precondition checks — skip competitions with invalid fencer counts
     if (comp.fencer_count >= config.MIN_FENCERS) {

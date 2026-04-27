@@ -4,7 +4,7 @@ import { useStore, type StoreState } from '../../src/store/store.ts'
 import type { Strip, Competition, FlightingGroup } from '../../src/engine/types.ts'
 import {
   DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
-  SLOT_MINS, DAY_LENGTH_MINS, DE_REFS, DE_FINALS_MIN_MINS,
+  SLOT_MINS, DAY_LENGTH_MINS, DE_REFS,
   SAME_TIME_WINDOW_MINS, INDIV_TEAM_MIN_GAP_MINS,
   EARLY_START_THRESHOLD, MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS, MIN_FENCERS,
@@ -146,12 +146,8 @@ describe('buildTournamentConfig', () => {
       expect(comp.earliest_start).toBe(0)
       expect(comp.latest_end).toBe(9999)
       expect(comp.optional).toBe(false)
-      expect(comp.de_finals_strip_id).toBeNull()
-      expect(comp.de_finals_strip_requirement).toBe(DeStripRequirement.HARD)
       expect(comp.de_round_of_16_strips).toBe(4)
       expect(comp.de_round_of_16_requirement).toBe(DeStripRequirement.HARD)
-      expect(comp.de_finals_strips).toBe(2)
-      expect(comp.de_finals_requirement).toBe(DeStripRequirement.HARD)
       expect(comp.flighted).toBe(false)
       expect(comp.flighting_group_id).toBeNull()
       expect(comp.is_priority).toBe(false)
@@ -232,7 +228,6 @@ describe('buildTournamentConfig', () => {
       expect(config.SLOT_MINS).toBe(SLOT_MINS)
       expect(config.DAY_LENGTH_MINS).toBe(DAY_LENGTH_MINS)
       expect(config.DE_REFS).toBe(DE_REFS)
-      expect(config.DE_FINALS_MIN_MINS).toBe(DE_FINALS_MIN_MINS)
       expect(config.SAME_TIME_WINDOW_MINS).toBe(SAME_TIME_WINDOW_MINS)
       expect(config.INDIV_TEAM_MIN_GAP_MINS).toBe(INDIV_TEAM_MIN_GAP_MINS)
       expect(config.EARLY_START_THRESHOLD).toBe(EARLY_START_THRESHOLD)

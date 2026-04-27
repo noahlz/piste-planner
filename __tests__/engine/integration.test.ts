@@ -202,8 +202,8 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B1: 24 events; engine must schedule at least 13 (baseline from real engine output)
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(13)
+      // B1: 24 events; engine must schedule at least 8 (baseline updated 2026-04-26 after stop-at-semis simplification — was 13; new R16 block durations and dropped finals phase changed per-event capacity).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(8)
 
       // Smoke test for ref_requirements_by_day
       expect(ref_requirements_by_day).toBeDefined()
@@ -234,8 +234,8 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B2: 24 events; engine must schedule at least 9
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
+      // B2: 24 events; engine must schedule at least 8 (baseline updated 2026-04-26 after stop-at-semis simplification — was 9; same cause as B1).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(8)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -265,8 +265,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
-      // B3: 24 events; engine must schedule at least 5 (baseline from real engine output)
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(5)
+      // B3: 24 events; engine must schedule at least 6 (baseline tightened 2026-04-26 after stop-at-semis simplification — was 5, now 6 due to freed strip-time on dense days)
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(6)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -298,9 +298,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B4: 30 events; engine must schedule at least 6 (baseline updated after saberPileupPenalty
-      // was added — saber events spread across days more, changing capacity allocation).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(6)
+      // B4: 30 events; engine must schedule at least 7 (baseline tightened 2026-04-26 after stop-at-semis simplification — was 6, now 7 due to freed strip-time on dense days).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(7)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -367,8 +366,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B6: 54 events; engine must schedule at least 17 (baseline from real engine output)
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(17)
+      // B6: 54 events; engine must schedule at least 18 (baseline tightened 2026-04-26 after stop-at-semis simplification — was 17, now 18 due to freed strip-time on dense days).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(18)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()

@@ -191,23 +191,15 @@
 
 ---
 
-### Task 7 — Extend ref demand with the gold/bronze tail
+### Task 7 — SKIPPED (user feedback 2026-04-26)
 
-**Files:**
-- Modify: `src/engine/scheduleOne.ts` (or `refs.ts` if there's a cleaner home)
-- Test: `__tests__/engine/refs.test.ts` and/or `__tests__/engine/scheduleOne.test.ts`
+Originally: extend ref demand with discrete intervals for the gold/bronze tail.
 
-- [ ] **Step 1: Write failing tests.** Add a test in `refs.test.ts` (or `scheduleOne.test.ts`):
-  - "After scheduling a STAGED INDIVIDUAL event, the day's ref-demand list contains an interval covering [r16_end, r16_end + 30] with count=1 (just the gold bout — individual events have no bronze)."
-  - "After scheduling a STAGED TEAM event, the tail interval covers [r16_end, r16_end + 60] with count=2 (gold + bronze refs queued in parallel)."
-  - Same two cases for SINGLE_STAGE: tail starts at `de_end`.
-  - Use `competition.weapon` to verify the interval's `weapon` field matches.
+**Skipped because:** Tournament organizers don't staff to a precise number of refs per minute; they staff a roster that covers scheduled competitions plus a buffer for cancellations, lunches, and ad-hoc bouts (gold/bronze). Modeling these as discrete `RefDemandInterval`s adds false precision and noise.
 
-- [ ] **Step 2: Run, verify failures.** Command: `timeout 120 pnpm --silent vitest run __tests__/engine/refs.test.ts __tests__/engine/scheduleOne.test.ts > ./tmp/test.log 2>&1`.
+**Implication for the model:** The existing `peakPoolRefDemand` / `peakDeRefDemand` functions in `refs.ts` continue to give peak concurrent demand for the scheduled phases only. Gold/bronze ref load is absorbed by the staffing-recommendation buffer at the UI/suggestion layer (not at the engine demand layer).
 
-- [ ] **Step 3: Implement.** In `scheduleOne.ts`, after the terminal DE phase (r16 for STAGED, de for SINGLE_STAGE) succeeds and `de_total_end` is computed, call `allocateRefs(state, day, competition.weapon, count, terminal_end, de_total_end, txLog)` where `count = 2` for TEAM and `count = 1` for INDIVIDUAL. (Individual events: just gold ref. Team events: gold + bronze refs running in parallel during the tail.)
-
-- [ ] **Step 4: Run tests.** Verify pass.
+**Implication for Task 13 (METHODOLOGY):** Document the buffer-absorbs-gold/bronze model rather than tail intervals.
 
 ---
 
@@ -335,7 +327,7 @@
   - The scheduler's terminal DE phase is `r16` (STAGED) or `de` (SINGLE_STAGE). It does not allocate strips for the gold or bronze bouts.
   - Tournament organizers handle gold + bronze ad-hoc, queueing for "ASAP strip / ref availability." Athletes accept queue waits.
   - `de_total_end` in `ScheduleResult` includes a tail estimate (`INDIV_TAIL_MINS = 30`, `TEAM_TAIL_MINS = 60`) so logistics see a realistic end-time.
-  - Ref demand intervals extend through the tail with count=1 (individual gold) or count=2 (team gold + bronze).
+  - Gold/bronze referee load is NOT modeled as discrete `RefDemandInterval`s. The existing peak-demand functions cover the scheduled phases only; gold/bronze ref needs are absorbed by the staffing-recommendation buffer (along with cancellations and lunch coverage) at the UI/suggestion layer.
   - Video policy: `REQUIRED` allocates video strips for the r16 phase (covering semis); `BEST_EFFORT` and `FINALS_ONLY` do not allocate video. Gold/bronze video, when needed, is found ad-hoc by organizers.
 
 - [ ] **Step 2: Update §DE Phase Breakdown.** Reflect the 2-block split: prelims_dur and r16_dur. Note that finals_dur was removed because the scheduler no longer allocates the gold bout.

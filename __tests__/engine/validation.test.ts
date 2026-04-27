@@ -47,7 +47,7 @@ describe('validateConfig — strip count', () => {
   })
 
   it('does not require strips_total to be divisible by 4', () => {
-    // 5 strips is valid (odd totals permitted due to finals strip)
+    // 5 strips is valid (odd totals are permitted)
     const strips = makeStrips(5, 1)
     const config = makeConfig({ strips, strips_total: 5, video_strips_total: 1 })
     const errors = validateConfig(config, [makeCompetition()])
@@ -463,31 +463,6 @@ describe('validateConfig — DE strip cap warnings', () => {
     })
     const errors = validateConfig(config, [comp])
     expect(errors.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
-  })
-
-  it('warns when de_finals_strips exceeds DE strip cap', () => {
-    // strips_total=24, max_de_strip_pct=0.33 → cap=7. Finals requests 10 → warn.
-    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.33 })
-    const comp = makeCompetition({
-      id: 'comp-fin-over',
-      de_finals_strips: 10,
-    })
-    const errors = validateConfig(config, [comp])
-    const warning = errors.find(e => e.field === 'de_finals_strips' && e.severity === BottleneckSeverity.WARN)
-    expect(warning).toBeDefined()
-    expect(warning?.message).toContain('comp-fin-over')
-    expect(warning?.message).toContain('finals')
-  })
-
-  it('does not warn when de_finals_strips is within DE strip cap', () => {
-    // strips_total=24, max_de_strip_pct=0.80 → cap=19. Finals requests 4 → ok.
-    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.80 })
-    const comp = makeCompetition({
-      id: 'comp-fin-ok',
-      de_finals_strips: 4,
-    })
-    const errors = validateConfig(config, [comp])
-    expect(errors.filter(e => e.field === 'de_finals_strips')).toHaveLength(0)
   })
 
   it('per-competition max_de_strip_pct_override takes precedence over global pct', () => {

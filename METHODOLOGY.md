@@ -30,7 +30,8 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 10. [Tournament-Type Policies](#tournament-type-policies)
 11. [Auto-Suggestion Logic](#auto-suggestion-logic)
 12. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
-13. [References](#references)
+13. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
+14. [References](#references)
 
 [Appendix A: Penalty & Constant Defaults](#appendix-a-penalty--constant-defaults)
 
@@ -388,9 +389,12 @@ Determined by event type. NACs always use Staged DEs, with the stage round start
 
 #### DE Phase Breakdown (for Staged DEs)
 
-- Bracket above the video round: Prelim phase on general strips, then Video phase on video strips
-- Bracket at or below the video round: Video phase only
-- Duration split proportionally by bout count
+Duration is split into two blocks:
+
+- **`prelims_dur`**: Prelim phase on general strips — covers all rounds above the video-stage round
+- **`r16_dur`**: Video phase on video strips — covers the video-stage round through the semis (the scheduler's terminal round)
+
+Brackets that start at or below the video round have no prelims block (all rounds are in the video phase). The gold and bronze bouts are **not** allocated; their time is captured by the `tailEstimateMins` buffer in `de_total_end` (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 
 #### Video Replay Policy
 
@@ -405,7 +409,7 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 | Vet 50, Vet 60, Vet 70 | Round of 8 | |
 | Div 1A, Div 2, Div 3 | Round of 4 | |
 | Vet 40, Vet 80, Vet Combined | Round of 4 | |
-| Teams | Gold/Bronze only | Gold medal bout scheduling not tracked — negligible impact |
+| Teams | Gold/Bronze only | The scheduler stops at semis — no gold/bronze phase is allocated. Video for gold/bronze is found ad-hoc (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)). |
 
 - Phases before the video round run on general strips
 - The video round and beyond run on video strips
@@ -441,10 +445,7 @@ Strips are organized into independent pods of 4 running sub-brackets in parallel
 - When 16 fencers remain across all pods, all pods merge to a single pod of 4 strips
 - Strips freed at consolidation become available for other events
 - QF runs on 4 strips; SF runs on 2 strips (the other 2 freed for cross-event use)
-
-**Finals exclusion:**
-
-- Gold medal bout runs on a dedicated finals strip, excluded from capacity planning
+- Gold and bronze bouts are **not** allocated — the scheduler stops at semis. The gold-bout share of total DE time is excluded from both `prelims_dur` and `r16_dur` and is captured by `tailEstimateMins(eventType)` instead (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 
 **Duration scaling:**
 
@@ -456,6 +457,7 @@ Strips are organized into independent pods of 4 running sub-brackets in parallel
 No pods – all strips treated as a single undifferentiated pool.
 
 - `strip_hours = total_bouts × bout_duration / 60`
+- `total_bouts = bracket_size / 2 − 1` — the gold bout is excluded (scheduler stops at semis); only the QF, SF, and earlier rounds are counted
 - Strip-count-independent: the same total strip-hours regardless of how many strips are allocated
 - No duration scaling applied
 
@@ -466,7 +468,7 @@ Team DEs always use the spread/round-by-round model regardless of `de_capacity_e
 - All bouts in a round run simultaneously – one strip per bout
 - Rounds are strictly sequential
 - Non-power-of-2 entry counts produce play-in bouts in the opening round
-- Finals excluded from capacity planning (same as individual)
+- The gold bout is excluded from capacity planning — the scheduler stops at semis. `total_bouts = bracket_size / 2 − 1`, same as the individual spread model (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 
 ---
 
@@ -476,16 +478,18 @@ Team DEs always use the spread/round-by-round model regardless of `de_capacity_e
 
 (see [`resources.ts`](src/engine/resources.ts))
 
+The scheduler allocates strips through the semifinal round only. Gold and bronze bouts are not assigned a strip block — organizers handle those ad-hoc on whatever strip becomes free first (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
+
 #### Video Strip Preservation
 
-Video strips are primarily reserved for staged DE phases (R16, QF, SF, Finals). Pool rounds may use video strips only under these conditions:
+Video strips are primarily reserved for staged DE phases (R16, QF, SF). Pool rounds may use video strips only under these conditions:
 
 - **Start-of-day pool wave**: video strips MAY be used by pool rounds running at day start (the first pool wave, when many events open concurrently). Once this wave ends, video strips become reserved for DEs — a later event starting its pools mid-day must run on general strips only.
 - **Single-event day**: when only one competition is scheduled for the entire day, video strips remain available for that event's pools at any time (morning or end-of-day). A single event cannot conflict with its own DEs (its DE phases run strictly after its pools), so reserving video strips adds no value.
 - **Multi-event mid-day pools**: not allowed. Once the morning pool wave completes on a multi-event day, video strips are locked to DE-only usage.
 
 Phase-level rules:
-- **`videoRequired=true`** (staged DE R16, QF, SF, Finals): only video-capable strips are considered.
+- **`videoRequired=true`** (staged DE R16, QF, SF — the scheduler's terminal round): only video-capable strips are considered. Gold/bronze video is not modeled; organizers find a video strip ad-hoc (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 - **`videoRequired=false` for DE prelims / single-stage DEs**: non-video strips selected first; video strips used as overflow when general strips are exhausted.
 - **`videoRequired=false` for pools**: subject to the pool-specific rules above (start-of-day wave, or single-event day).
 
@@ -720,15 +724,48 @@ This is added to the existing soft-preference penalty total, so a nearly-full da
 
 For day-assignment scoring, video strip capacity is tracked separately from general strip-hours. This budget governs how many staged-DE events a day can support; it does not prevent the runtime allocator from spilling non-video work onto idle video strips (see [Video Strip Preservation](#video-strip-preservation)).
 
-Peak concurrent demand is modeled: as staged DE rounds progress (R16 → R8 → QF → Finals), earlier rounds release their video strips and those strips become available to other events. If peak demand exceeds 70% of the video strip total, a moderate penalty (5.0) is applied; at 100% of capacity the penalty rises to 15.0.
+Peak concurrent demand is modeled: as staged DE rounds progress (R16 → R8 → QF → SF), earlier rounds release their video strips and those strips become available to other events. If peak demand exceeds 70% of the video strip total, a moderate penalty (5.0) is applied; at 100% of capacity the penalty rises to 15.0.
 
 ### Staged DE Strip Release
 
-For NAC staged DEs, each round (R16, R8, QF, Finals) runs in sequence on video strips and then releases them. Freed strips become available to other events on the same day, so multiple events can share a video strip pool without serializing their entire DE phase.
+For NAC staged DEs, each round (R16, R8, QF, SF) runs in sequence on video strips and then releases them. Freed strips become available to other events on the same day, so multiple events can share a video strip pool without serializing their entire DE phase.
 
 ---
 
 > **Note:** Gender equity pool-count validation (proportional strip allocation by gender during pool rounds) is to be added in a future version.
+
+---
+
+## Scheduler Stops at Semis
+
+The scheduler's terminal DE phase is the **r16 round** for Staged (NAC) events and the equivalent final allocated round for Single-Stage events. It does **not** allocate strips, refs, or time windows for the gold medal bout or the bronze (third-place) bout.
+
+### Operational Rationale
+
+Gold and bronze bouts are managed ad-hoc by organizers. Once the semifinal strips are cleared, the tournament director queues them to the next available strip and available referee. Athletes expect and accept this queue wait — it is standard NAC practice. The bouts are typically short (one bout per match) and the field is tiny (2–4 fencers), so strip contention is negligible.
+
+### End-Time Estimate
+
+`ScheduleResult.de_total_end` is `phase_end + tailEstimateMins(event_type)`:
+
+- `INDIV_TAIL_MINS = 30` minutes for individual events
+- `TEAM_TAIL_MINS = 60` minutes for team events
+
+This tail estimate gives logistics a realistic end-time for room turnover, awards, and volunteer release. It does not correspond to a scheduled strip block — it is a planning buffer only.
+
+### Referee Coverage
+
+Gold and bronze referee demand is **not** modeled as discrete `RefDemandInterval`s. The peak-demand sweep covers only the scheduled phases (pools through semis). Gold/bronze ref needs — along with cancellations and lunch coverage — are absorbed by the staffing-recommendation buffer applied at the UI/suggestion layer. Organizers should not interpret the reported peak as the total refs needed for the full day; a modest buffer (typically 2–4 refs) should be held in reserve for gold/bronze coverage.
+
+### Video Policy Interaction
+
+| Policy | Behavior |
+|---|---|
+| `REQUIRED` | Allocates video strips for the r16 phase (covering semis). Gold/bronze video is found ad-hoc. |
+| `BEST_EFFORT` | Does not allocate dedicated video strips. Gold/bronze video is found ad-hoc. |
+| `FINALS_ONLY` | Operationally identical to `BEST_EFFORT` — there is no `de_finals` phase to scope video to. The enum value is **preserved for save-file compatibility** with schedules saved before the stop-at-semis change. |
+
+For strip allocation and video strip preservation details, see [Strip Assignment](#strip-assignment) and [Video Strip Preservation](#video-strip-preservation).
 
 ## References
 

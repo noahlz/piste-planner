@@ -7,11 +7,11 @@ import { poolCountFor } from './pools.ts'
 import { peakDeRefDemand } from './refs.ts'
 
 /**
- * Peak strip count a staged DE will hold concurrently — the larger of
- * round-of-16 and finals allocations.
+ * Peak strip count a staged DE will hold concurrently — the round-of-16 allocation.
+ * Finals and beyond are run ad-hoc (stop-at-semis model) and not pre-allocated.
  */
 export function peakDeStripDemand(comp: Competition): number {
-  return Math.max(comp.de_round_of_16_strips, comp.de_finals_strips)
+  return comp.de_round_of_16_strips
 }
 
 /**
