@@ -365,6 +365,7 @@ export interface Bottleneck {
   severity: BottleneckSeverity
   delay_mins: number
   message: string
+  attempt_id?: number  // Phase C concurrent scheduler tags retry-emitted bottlenecks
 }
 
 export interface PoolStructure {

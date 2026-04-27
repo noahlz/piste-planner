@@ -191,13 +191,22 @@ export function allocateInterval(
 /**
  * Removes every StripAllocation entry across all strips whose `event_id` matches.
  * Order-independent — does not depend on a txLog. Also deletes the schedule
- * entry and removes any bottlenecks for the event.
+ * entry and removes bottlenecks for the event.
  *
- * Phase A scope: bottlenecks are filtered by `competition_id` only (no
- * `attempt_id` field exists yet — Phase C adds it). `ref_demand_by_day` is
- * intentionally not touched per the plan; ref demand is derived post-schedule.
+ * Strip allocations and the schedule entry are always filtered by `event_id` only.
+ *
+ * Bottleneck filtering depends on whether `attempt_id` is supplied:
+ * - When `attempt_id` is omitted (undefined): all bottlenecks matching
+ *   `competition_id === event_id` are removed, regardless of any `attempt_id`
+ *   field on them. This preserves Phase A / serial-scheduler semantics.
+ * - When `attempt_id` is supplied: only bottlenecks where BOTH
+ *   `competition_id === event_id` AND `entry.attempt_id === attempt_id` match
+ *   are removed. Bottlenecks without an `attempt_id` field are NOT removed —
+ *   they belong to non-retry emission paths and must persist.
+ *
+ * `ref_demand_by_day` is intentionally not touched; ref demand is derived post-schedule.
  */
-export function releaseEventAllocations(state: GlobalState, event_id: string): void {
+export function releaseEventAllocations(state: GlobalState, event_id: string, attempt_id?: number): void {
   for (const list of state.strip_allocations) {
     for (let i = list.length - 1; i >= 0; i--) {
       if (list[i].event_id === event_id) list.splice(i, 1)
@@ -205,7 +214,11 @@ export function releaseEventAllocations(state: GlobalState, event_id: string): v
   }
   delete state.schedule[event_id]
   for (let i = state.bottlenecks.length - 1; i >= 0; i--) {
-    if (state.bottlenecks[i].competition_id === event_id) state.bottlenecks.splice(i, 1)
+    const entry = state.bottlenecks[i]
+    if (entry.competition_id !== event_id) continue
+    if (attempt_id === undefined || entry.attempt_id === attempt_id) {
+      state.bottlenecks.splice(i, 1)
+    }
   }
 }
 

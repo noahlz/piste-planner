@@ -245,6 +245,66 @@ describe('releaseEventAllocations', () => {
 })
 
 // ──────────────────────────────────────────────
+// releaseEventAllocations — attempt_id filtering
+// ──────────────────────────────────────────────
+
+describe('releaseEventAllocations — attempt_id filtering', () => {
+  it('default (no attempt_id): removes all bottlenecks for the event regardless of attempt_id field', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    state.bottlenecks.push(
+      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a1', attempt_id: 1 },
+      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a2', attempt_id: 2 },
+      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-noattempt' },
+      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'b' },
+    )
+
+    releaseEventAllocations(state, 'evt-A')
+
+    expect(state.bottlenecks).toHaveLength(1)
+    expect(state.bottlenecks[0].competition_id).toBe('evt-B')
+  })
+
+  it('attempt_id=1: removes only bottlenecks with matching event_id AND attempt_id=1; leaves others', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    state.bottlenecks.push(
+      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-attempt1', attempt_id: 1 },
+      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-attempt2', attempt_id: 2 },
+      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-noattempt' },
+      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'b-attempt1', attempt_id: 1 },
+    )
+
+    releaseEventAllocations(state, 'evt-A', 1)
+
+    expect(state.bottlenecks).toHaveLength(3)
+    // evt-A attempt_id=2 survives
+    expect(state.bottlenecks.find(b => b.message === 'a-attempt2')).toBeDefined()
+    // evt-A with no attempt_id survives
+    expect(state.bottlenecks.find(b => b.message === 'a-noattempt')).toBeDefined()
+    // evt-B attempt_id=1 survives (different event)
+    expect(state.bottlenecks.find(b => b.message === 'b-attempt1')).toBeDefined()
+    // evt-A attempt_id=1 is gone
+    expect(state.bottlenecks.find(b => b.message === 'a-attempt1')).toBeUndefined()
+  })
+
+  it('cross-event isolation: removing evt-A attempt_id=1 leaves evt-B bottlenecks completely untouched', () => {
+    const config = makeConfig()
+    const state = createGlobalState(config)
+    state.bottlenecks.push(
+      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-attempt1', attempt_id: 1 },
+      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'b-attempt1', attempt_id: 1 },
+      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'b-noattempt' },
+    )
+
+    releaseEventAllocations(state, 'evt-A', 1)
+
+    expect(state.bottlenecks).toHaveLength(2)
+    expect(state.bottlenecks.every(b => b.competition_id === 'evt-B')).toBe(true)
+  })
+})
+
+// ──────────────────────────────────────────────
 // findAvailableStrips
 // ──────────────────────────────────────────────
 
