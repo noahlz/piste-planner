@@ -253,49 +253,19 @@ Phase 0 (config flag rename), Phase A (interval-list strip data model), and Phas
 
 **Resume here.** Phase C builds the concurrent scheduler on top of these primitives.
 
-### Phase C — Concurrent scheduler (parallel file, no flag)
+### Phase C — COMPLETED 2026-04-27
 
-**Ships:** `concurrentScheduler.ts` as a new entry point alongside the serial path. The existing `scheduleAll` continues to call the serial path; the new `scheduleAllConcurrent` is exercised only via direct test calls. No config flag, no dispatch shim, no `TournamentConfig` change.
+Concurrent scheduler shipped as `scheduleAllConcurrent` in `src/engine/concurrentScheduler.ts`, alongside the unchanged serial path. Committed in `6710faae`.
 
-**Files:**
-- `src/engine/concurrentScheduler.ts` (new) — `scheduleAllConcurrent(competitions, config): ScheduleAllResult`. Reuses `assignDaysByColoring` from `dayAssignment.ts`, then runs the priority-queue loop above. Reuses pure helpers from `pools.ts`, `de.ts`, `stripBudget.ts`, and the new primitives in `resources.ts` / `pods.ts`. Does not call into `scheduleOne.ts` or `phaseSchedulers.ts`.
-- `src/engine/types.ts` — add `attempt_id?: number` field to `Bottleneck` so retry-tagged emissions can be filtered. No other type changes.
-- `src/engine/resources.ts` — extend `releaseEventAllocations` to accept an optional `attempt_id` and filter bottlenecks by both `event_id` and `attempt_id` when supplied. The Phase A behavior (filter by `event_id` only) remains the default when `attempt_id` is omitted.
-- `__tests__/engine/baselines.ts` (new) — captures the actual scheduled counts produced by the serial scheduler against the integration suite, recorded once before the concurrent suite is added:
+**Resulting state of the codebase:**
 
-    ```ts
-    export const SERIAL_BASELINES = {
-      B1: ..., B2: ..., B3: ..., B4: ..., B5: ..., B6: ..., B7: ...,
-    } as const
-    ```
+- `Bottleneck` gains optional `attempt_id` field (`types.ts`). `releaseEventAllocations` (`resources.ts`) accepts optional `attempt_id` and filters bottlenecks by both keys when supplied.
+- `__tests__/engine/baselines.ts` records `SERIAL_BASELINES.B1..B7` (counts captured 2026-04-27 against the serial scheduler).
+- `__tests__/engine/concurrentScheduler.test.ts` covers the toy scenarios (concurrent pools, video contention, phase dependency, rollback, tail, retry, deadline breach).
+- `__tests__/engine/integration.concurrent.test.ts` runs B1–B7 under `scheduleAllConcurrent` and asserts strict gain over `SERIAL_BASELINES` for the dense scenarios. Observed density gains: 1.5×–4× over serial on B5/B6/B7.
+- B3 youth regression fixed by adding Y8/Y10 priority to `compareNodes` (priority rule 2 in this plan).
 
-    These are the comparison floor. Inline comments record the date and the commit at which the numbers were captured.
-- `__tests__/engine/concurrentScheduler.test.ts` (new):
-    - Toy 2-event scenario: both events run pools concurrently on disjoint strips at the same start time.
-    - Toy 3-event scenario with video contention: video-required phase wins priority over non-video. Asserts `VIDEO_STRIP_CONTENTION` is emitted.
-    - Toy phase-dependency scenario: event's R16 cannot start until its pools and prelims complete.
-    - Toy rollback scenario: an event whose terminal phase fails has all its allocations cleanly removed via `releaseEventAllocations`.
-    - Toy tail scenario: STAGED INDIVIDUAL and STAGED TEAM events both produce `de_total_end = r16_end + tailEstimateMins(event_type)` (30 / 60 min respectively); same for SINGLE_STAGE on `de_end`.
-    - Toy retry scenario: an event hits FAILED on attempt 1, retries from earlier start, succeeds on attempt 2. Asserts `DEADLINE_BREACH` (WARN) on attempt 1 and no `DEADLINE_BREACH_UNRESOLVABLE`.
-    - Toy deadline-breach scenario: an event hits FAILED on attempts 1 AND 2. Asserts both `DEADLINE_BREACH` and `DEADLINE_BREACH_UNRESOLVABLE` fire with the correct `attempt_id` tags.
-- `__tests__/engine/integration.concurrent.test.ts` (new) — duplicates the B1–B7 scenarios calling `scheduleAllConcurrent` directly. For B5, B6, B7 (the dense scenarios), asserts strict gain over the serial baseline:
-
-    ```ts
-    expect(scheduledCount).toBeGreaterThanOrEqual(SERIAL_BASELINES.B5 + GAIN_B5)
-    expect(scheduledCount).toBeGreaterThanOrEqual(SERIAL_BASELINES.B6 + GAIN_B6)
-    expect(scheduledCount).toBeGreaterThanOrEqual(SERIAL_BASELINES.B7 + GAIN_B7)
-    ```
-
-    `GAIN_B*` is set to `(observed_concurrent_count − serial_count) − 1` (1-event safety margin for priority-tie non-determinism). B1–B4 use `.toBeGreaterThanOrEqual(N)` — they are correctness scenarios, not density-gain scenarios — with N matching whatever floor the concurrent scheduler establishes.
-
-**Acceptance:**
-- All concurrent toy tests pass with their bottleneck-emission assertions.
-- `B1..B7` pass under `scheduleAllConcurrent`. `B5, B6, B7` schedule strictly more events than the serial baseline.
-- Hard constraints (rest day, individual/team, deadline, Vet co-day, Vet sibling order) continue to be respected.
-- `assertScheduleIntegrity` and `assertHardSeparations` pass on the concurrent output.
-- The serial path (`scheduleAll`) is unchanged; the existing serial test suite continues to pass.
-
-Inline test comments record the date the baselines were captured and the rationale, so future changes that drop concurrent counts below `SERIAL_BASELINES.B* + GAIN_B*` fail loudly.
+**Resume here.** Phase D switches `scheduleAll` over and deletes the serial path.
 
 ### Phase D — Switch over and delete serial
 
