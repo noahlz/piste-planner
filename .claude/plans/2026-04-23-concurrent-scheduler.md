@@ -267,7 +267,7 @@ Concurrent scheduler shipped as `scheduleAllConcurrent` in `src/engine/concurren
 
 **Resume here.** Phase D switches `scheduleAll` over and deletes the serial path.
 
-### Phase D — Switch over and delete serial
+### Phase D — COMPLETED 2026-04-27
 
 **Ships:** `scheduleAll` swaps to call `scheduleAllConcurrent`; serial code deleted; integration baselines re-locked at the new (higher) numbers.
 

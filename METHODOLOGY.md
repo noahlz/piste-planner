@@ -26,12 +26,13 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 8. [Resources](#resources)
    - [Strip Assignment](#strip-assignment)
    - [Referee Calculation](#referee-calculation)
-9. [Scheduling Algorithm](#scheduling-algorithm)
-10. [Tournament-Type Policies](#tournament-type-policies)
-11. [Auto-Suggestion Logic](#auto-suggestion-logic)
-12. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
-13. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
-14. [References](#references)
+9. [Concurrent Phase Scheduler](#concurrent-phase-scheduler)
+10. [Scheduling Algorithm](#scheduling-algorithm)
+11. [Tournament-Type Policies](#tournament-type-policies)
+12. [Auto-Suggestion Logic](#auto-suggestion-logic)
+13. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
+14. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
+15. [References](#references)
 
 [Appendix A: Penalty & Constant Defaults](#appendix-a-penalty--constant-defaults)
 
@@ -352,6 +353,10 @@ A competition is a flighting candidate when its pool count exceeds the per-event
 
 - Flighting is suggested when two same-day competitions' combined pool count exceeds `strips_total` but each fits individually within `pool_strip_cap`
 
+#### Runtime Decomposition
+
+Under the concurrent scheduler a flighted event's pools split into two dependent phase nodes — `pools_flight_a` and `pools_flight_b` — separated by `FLIGHT_BUFFER_MINS` (15). Both nodes must land on the assigned day; if Flight B's earliest start would push past `dayHardEnd`, the event fails and retries from `dayStart`. See [Concurrent Phase Scheduler](#concurrent-phase-scheduler).
+
 ### Direct Elimination (DE)
 
 (see [`de.ts`](src/engine/de.ts), [`scheduleOne.ts`](src/engine/scheduleOne.ts))
@@ -480,6 +485,16 @@ Team DEs always use the spread/round-by-round model regardless of `de_capacity_e
 
 The scheduler allocates strips through the semifinal round only. Gold and bronze bouts are not assigned a strip block — organizers handle those ad-hoc on whatever strip becomes free first (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 
+#### Interval-List Model
+
+Strip occupancy lives in `state.strip_allocations`, a `StripAllocation[][]` indexed by strip. Each `StripAllocation` records `{event_id, phase, pod_id?, start_time, end_time}` and the per-strip list is kept sorted by `start_time`. A strip is busy at `[startTime, endTime]` iff at least one of its allocations overlaps that window. Allocations are append-only inside a scheduling pass; rollback for a failed event is order-independent — `releaseEventAllocations(state, event_id, attempt_id?)` splices entries by `event_id` (and optionally `attempt_id` for bottlenecks) across every strip's list.
+
+The core primitive is `findAvailableStripsInWindow(state, config, count, startTime, duration, videoRequired, day?)`. It walks each candidate strip's interval list and returns either:
+- `{ fit: 'ok', strip_indices }` — `count` strips are simultaneously free for `[startTime, startTime + duration]`, or
+- `{ fit: 'none', earliest_next_start, reason }` — no fit at `startTime`. `earliest_next_start` is the soonest moment `count` candidate strips become simultaneously free for `duration` minutes, and `reason` is `'STRIPS'` (the strip pool was the limiter) or `'TIME'` (the candidate would push past the day's hard end). The concurrent scheduler uses `earliest_next_start` to defer a phase forward in time without retrying the whole event.
+
+Pod allocation (`allocatePods`, used by STAGED-DE phases) layers on top: it groups `count` strips into pods of `DE_POD_SIZE = 4`, stamps each `StripAllocation` with the pod ID, and returns the `Pod[]` so the post-schedule referee output can group strips into ref-staffing units.
+
 #### Video Strip Preservation
 
 Video strips are primarily reserved for staged DE phases (R16, QF, SF). Pool rounds may use video strips only under these conditions:
@@ -546,9 +561,66 @@ This setting changes how many refs the engine reports as needed; it does not gat
 
 ---
 
+## Concurrent Phase Scheduler
+
+The runtime scheduler is an **OS-process-scheduling-style loop over phase nodes**. Each event decomposes into a sequence of phase nodes (`pools` or `pools_flight_a → pools_flight_b`; `de_prelims → de_r16` for STAGED; `de` for SINGLE_STAGE), and the loop pops the highest-priority READY node, allocates strips via the [interval-list model](#interval-list-model), and pushes the successor onto the ready queue. Events with disjoint strip needs run truly concurrently in the same window. (see [`concurrentScheduler.ts`](src/engine/concurrentScheduler.ts))
+
+Shipped as Phase D on 2026-04-27. `scheduleAll` is now a thin shim over `scheduleAllConcurrent`.
+
+### Phase-Node Lifecycle
+
+Each phase node moves through `PENDING → READY → RUNNING → FAILED`. `READY` means the predecessor phase is RUNNING and the node is on the ready queue; `RUNNING` means the strips are allocated and `end_time` is set; `FAILED` is terminal for the current attempt and triggers the cascade described below.
+
+### Within-Day Priority Order
+
+When multiple phase nodes are READY, the loop picks the one with the highest priority. The comparator (`compareNodes` in [`concurrentScheduler.ts`](src/engine/concurrentScheduler.ts)) orders by:
+
+1. **Earlier `ready_time` first** — the node that can start sooner gets first pick of the strip pool.
+2. **Y8/Y10 first** — youth-priority events claim morning strip-time before larger events crowd them out (mirrors `daySequencing.ts` rule 1; without this, B3-style scenarios collapse).
+3. **Video-required first** — claim scarce video strips before they're contested.
+4. **Larger `desired_strip_count` first** — bigger phases are hardest to fit; place them when the pool is empty.
+5. **Higher `constraint_score` first** — most-constrained event wins ties.
+6. Stable on `event_id` for full determinism.
+
+### Allocation, Deferral, and Failure
+
+The loop calls `findAvailableStripsInWindow` (or `allocatePods` for STAGED-DE phases). On `fit: 'ok'` the node transitions to RUNNING, the successor's `ready_time` is set to `node.end_time + ADMIN_GAP_MINS` (or `+ FLIGHT_BUFFER_MINS` after `pools_flight_a`), and the successor is pushed onto the ready queue. On `fit: 'none'`:
+- If `earliest_next_start` lies within the day, the node is **deferred**: `ready_time` advances to `earliest_next_start`, `defer_count++`, and the node goes back onto the ready queue. A monotonicity invariant asserts `new_ready_time > old_ready_time`. `MAX_DEFERS_PER_PHASE = 16` is a circuit breaker against pathological states; the monotonicity invariant alone bounds termination.
+- Otherwise the node FAILS, and the failure cascades to all not-yet-RUNNING phases of the event.
+
+### Two-Attempt Retry
+
+The retry budget is **per-event**, not per-phase. On attempt 1's cascade, `releaseEventAllocations(state, event_id, 1)` rolls back every interval, schedule entry, and attempt-1-tagged bottleneck for the event; the event resets to PENDING/READY at `dayStart` and a `DEADLINE_BREACH` (WARN, `attempt_id=1`) is emitted. Attempt 2's failure emits `DEADLINE_BREACH_UNRESOLVABLE` (ERROR, `attempt_id=2`) and the event is permanently unscheduled. The notBefore-deferral path handles forward shifts inside a single attempt; retry's value is the **backward** shift (start the event earlier on the same day, freeing strip-time for the failing phase).
+
+### Cross-Event Dependency Edges
+
+Two narrow cases produce explicit edges between phase nodes of different events:
+
+- **Indv → team gap.** When a TEAM event lands on the same day as its individual counterpart, the team's first phase waits on `indiv.last_phase.end_time + INDIV_TEAM_MIN_GAP_MINS` (120 min).
+- **Vet age-banded sibling order.** When two age-banded VET individual events of the same gender + weapon land on the same day, the younger sibling's pools wait on the older sibling's last phase end + `ADMIN_GAP_MINS` (mirrors the within-day sort key in `daySequencing.ts`, but enforces strict end-to-end serialization regardless of resource availability).
+
+Both are wired in `applyCrossEventEdges`; the loop resolves them lazily and emits `SEQUENCING_CONSTRAINT` (INFO) when a dependency pushes a node's `ready_time` forward.
+
+### Termination Bound
+
+`max_iter = max(total_phase_count × MAX_DEFERS_PER_PHASE × 2, 1)`. The loop throws if it exceeds this — defensive against unbounded retry, though the monotonicity invariant should prevent it.
+
+### Bottlenecks Specific to the Concurrent Scheduler
+
+- `DEADLINE_BREACH` (WARN, `attempt_id=1`) — attempt 1 cascade.
+- `DEADLINE_BREACH_UNRESOLVABLE` (ERROR, `attempt_id=2`) — attempt 2 cascade; event permanently unscheduled.
+- `SAME_DAY_VIOLATION` (ERROR) — phase ends past `dayHardEnd`.
+- `NO_WINDOW_DIAGNOSTIC` (INFO) — a deferral occurred; carries `reason: 'STRIPS' | 'TIME'`.
+- `SEQUENCING_CONSTRAINT` (INFO) — cross-event predecessor pushed `ready_time` forward.
+- `FLIGHT_B_DELAYED` (WARN) — Flight B started more than 30 min past Flight A's natural buffer.
+- `VIDEO_STRIP_CONTENTION` (INFO) — video-required phase had to defer.
+- `STRIP_CONTENTION` (INFO) — generic one-shot diagnostic when no specific cause applies.
+
+---
+
 ## Scheduling Algorithm
 
-The auto-suggest engine uses a **priority-ordered, constraint-relaxing** approach to generate an initial schedule. The result is a **suggestion** — users can drag-and-drop competitions on the day/strip grid to refine it. The engine re-validates after each manual adjustment, showing warnings and errors for constraint violations. (see [`scheduler.ts`](src/engine/scheduler.ts), [`dayAssignment.ts`](src/engine/dayAssignment.ts), [`scheduleOne.ts`](src/engine/scheduleOne.ts))
+The auto-suggest engine uses a **priority-ordered, constraint-relaxing** approach to generate an initial schedule. The result is a **suggestion** — users can drag-and-drop competitions on the day/strip grid to refine it. The engine re-validates after each manual adjustment, showing warnings and errors for constraint violations. (see [`scheduler.ts`](src/engine/scheduler.ts), [`dayAssignment.ts`](src/engine/dayAssignment.ts), [`concurrentScheduler.ts`](src/engine/concurrentScheduler.ts))
 
 ### Phase 1: Validation
 
@@ -592,15 +664,17 @@ For each competition in priority order:
 
 ### Phase 5: Resource Allocation
 
-Once a day is chosen, find the earliest time window with strips available: (see [`scheduleOne.ts`](src/engine/scheduleOne.ts))
+Once days are chosen, the **[Concurrent Phase Scheduler](#concurrent-phase-scheduler)** runs a single OS-process-style loop over phase nodes across all events. Pool, DE-prelim, R16, and SINGLE_STAGE-DE phases are scheduled in priority order, with disjoint-strip events running truly concurrently in the same window.
 
-1. **Pool round**: allocate strip window for all pools (or half strips if flighted)
-2. **Admin gap**: 30-minute mandatory gap between pool end and DE start, snapped to next 30-minute slot
-3. **DE phases** (NACs, staged): Prelim phase on general strips, then Video phase on video strips
+Per-event phase decomposition:
 
-If strips unavailable at ideal time, scan forward in 30-minute slots. If end time would breach the day boundary, retry with an earlier start slot (up to 3 attempts). If all retries fail, a deadline breach warning is recorded.
+1. **Pool round**: one node (`pools`) or two nodes (`pools_flight_a → pools_flight_b` separated by `FLIGHT_BUFFER_MINS`).
+2. **Admin gap**: 30-minute mandatory gap between any phase and its successor (`ADMIN_GAP_MINS`).
+3. **DE phases**: STAGED events run `de_prelims → de_r16` as pods of `DE_POD_SIZE = 4`; SINGLE_STAGE events run a flat `de` allocation. Gold/bronze are unallocated — `de_total_end = terminal_phase_end + tailEstimateMins(event_type)`.
 
-Ref demand intervals are recorded as a side effect of each phase allocation; they are summarized into per-day peak totals in Phase 7.
+If strips are unavailable at the ideal time, the loop **defers** the phase to the earliest moment the right number of strips become simultaneously free, using `findAvailableStripsInWindow`'s `earliest_next_start`. If no in-day slot exists, the event fails and retries from `dayStart`; a second failure marks the event permanently unscheduled. See [Concurrent Phase Scheduler](#concurrent-phase-scheduler) for the full lifecycle.
+
+Ref demand is **derived post-schedule** from the final allocation state (`peakConcurrentStrips` for non-pod intervals, `computePodRefDemand` for STAGED-DE pods); the loop does not maintain it incrementally. It is summarized into per-day peak totals in Phase 7.
 
 ### Phase 6: State Update
 
@@ -681,7 +755,9 @@ See [Appendix A: Fencer Count Defaults](#fencer-count-defaults) for per-category
 
 Day assignment uses a **capacity-aware bin-packing** model. Each tournament day is a bin with a finite strip-hour budget; competitions are weighted items packed into those bins.
 
-(see [`dayAssignment.ts`](src/engine/dayAssignment.ts))
+(see [`dayAssignment.ts`](src/engine/dayAssignment.ts), [`dayColoring.ts`](src/engine/dayColoring.ts))
+
+> **Phase D note (2026-04-27).** `CAPACITY_TARGET_FILL = 0.3` (in `dayColoring.ts`) was tuned for the serial scheduler, where the historical rationale was "compensate for serial-scheduler underutilization" — events ran end-to-end and crowded each other off dense days, so day-count was inflated above the strip-hour minimum. The concurrent scheduler runs disjoint-strip events in parallel and absorbs 1.5×–4× more events on dense scenarios (B5/B6/B7), so the conservative-fill rationale no longer applies. Re-tuning `CAPACITY_TARGET_FILL` upward against the re-baselined B1–B7 counts is open follow-up. The constant is unchanged in this commit.
 
 ### Strip-Hour Capacity
 

@@ -62,18 +62,14 @@ import {
   deBlockDurations,
   dePhasesForBracket,
 } from './de.ts'
-import { computeStripCap } from './stripBudget.ts'
-import { computePodRefDemand, computeRefRequirements } from './refs.ts'
+import { computeStripCap, recommendStripCount, peakDeStripDemand } from './stripBudget.ts'
+import { computePodRefDemand, computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { constraintScore } from './dayAssignment.ts'
 import { validateConfig } from './validation.ts'
-import {
-  postScheduleDiagnostics,
-  postScheduleDayBreakdown,
-  postScheduleWarnings,
-} from './scheduler.ts'
+import { dayConsumedCapacity } from './capacity.ts'
 import { DE_POD_SIZE } from './constants.ts'
 
 // ──────────────────────────────────────────────
@@ -896,7 +892,7 @@ function tryAllocate(
     if (!fitsInDay) {
       // Try deferring once via window probe to confirm STRIPS vs TIME.
       const win = findAvailableStripsInWindow(
-        state, config, cappedCount, node.ready_time, duration, node.video_required, undefined, day,
+        state, config, cappedCount, node.ready_time, duration, node.video_required, day,
       )
       if (win.fit === 'none' && win.earliest_next_start !== null && win.earliest_next_start + duration <= dayHardEnd) {
         return { outcome: 'defer', next_ready_time: win.earliest_next_start, reason: win.reason }
@@ -911,7 +907,7 @@ function tryAllocate(
     if (podResult === null) {
       // Deferrable? Probe the window helper to find earliest_next_start.
       const win = findAvailableStripsInWindow(
-        state, config, cappedCount, node.ready_time, duration, node.video_required, undefined, day,
+        state, config, cappedCount, node.ready_time, duration, node.video_required, day,
       )
       if (win.fit === 'none' && win.earliest_next_start !== null && win.earliest_next_start + duration <= dayHardEnd) {
         return { outcome: 'defer', next_ready_time: snapToSlot(win.earliest_next_start), reason: win.reason }
@@ -940,7 +936,7 @@ function tryAllocate(
 
   // Non-pod (POOLS / FLIGHT_A / FLIGHT_B / DE_SINGLE).
   const win = findAvailableStripsInWindow(
-    state, config, cappedCount, node.ready_time, duration, node.video_required, undefined, day,
+    state, config, cappedCount, node.ready_time, duration, node.video_required, day,
   )
   if (win.fit === 'ok') {
     const startTime = node.ready_time
@@ -1304,4 +1300,207 @@ function computePostScheduleRefDemand(
   }
 
   return result
+}
+
+// ──────────────────────────────────────────────
+// postScheduleWarnings — METHODOLOGY.md §Phase 7: Post-Schedule Warnings
+// ──────────────────────────────────────────────
+
+/**
+ * Generates post-schedule warnings per METHODOLOGY.md §Phase 7: Post-Schedule Warnings (Ops Manual Group 2).
+ * For 4+ day events: warns if first or last day is longer than the average
+ * middle day duration.
+ */
+export function postScheduleWarnings(
+  schedule: Record<string, ScheduleResult>,
+  config: TournamentConfig,
+): Bottleneck[] {
+  const warnings: Bottleneck[] = []
+
+  if (config.days_available < 4) return warnings
+
+  // Compute max duration per day (from day start to latest event end)
+  const dayDurations: Record<number, number> = {}
+
+  for (const r of Object.values(schedule)) {
+    const end = r.de_total_end ?? r.pool_end
+    // start is only used as a null guard — if no pool/flight started, skip this event.
+    // Duration is measured from dayStart, not from the event's start time.
+    const start = r.pool_start ?? r.flight_a_start
+    if (end === null || start === null) continue
+
+    const ds = dayStart(r.assigned_day, config)
+    const duration = end - ds
+    dayDurations[r.assigned_day] = Math.max(dayDurations[r.assigned_day] ?? 0, duration)
+  }
+
+  // Middle days: indices 1 through (days_available - 2)
+  const middleDays: number[] = []
+  for (let d = 1; d <= config.days_available - 2; d++) {
+    middleDays.push(d)
+  }
+
+  if (middleDays.length === 0) return warnings
+
+  const avgMiddle =
+    middleDays.reduce((sum, d) => sum + (dayDurations[d] ?? 0), 0) / middleDays.length
+
+  const firstDayDur = dayDurations[0] ?? 0
+  const lastDayDur = dayDurations[config.days_available - 1] ?? 0
+
+  if (firstDayDur > avgMiddle * 1.1) {
+    warnings.push({
+      competition_id: '',
+      phase: Phase.POST_SCHEDULE,
+      cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
+      severity: BottleneckSeverity.WARN,
+      delay_mins: 0,
+      message: `First day (${firstDayDur} min) is longer than average middle day (${Math.round(avgMiddle)} min)`,
+    })
+  }
+
+  if (lastDayDur > avgMiddle * 1.1) {
+    warnings.push({
+      competition_id: '',
+      phase: Phase.POST_SCHEDULE,
+      cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
+      severity: BottleneckSeverity.WARN,
+      delay_mins: 0,
+      message: `Last day (${lastDayDur} min) is longer than average middle day (${Math.round(avgMiddle)} min)`,
+    })
+  }
+
+  return warnings
+}
+
+// ──────────────────────────────────────────────
+// postScheduleDiagnostics — resource recommendations
+// ──────────────────────────────────────────────
+
+/**
+ * When scheduling fails due to resource exhaustion, emits INFO-severity
+ * recommendations telling users how many strips and refs they actually need.
+ * Returns empty array if no RESOURCE_EXHAUSTION errors exist.
+ */
+export function postScheduleDiagnostics(
+  competitions: Competition[],
+  config: TournamentConfig,
+  bottlenecks: Bottleneck[],
+): Bottleneck[] {
+  const results: Bottleneck[] = []
+
+  const hasResourceExhaustion = bottlenecks.some(
+    b => b.severity === BottleneckSeverity.ERROR && b.cause === BottleneckCause.RESOURCE_EXHAUSTION,
+  )
+  if (!hasResourceExhaustion) return results
+
+  // Strip recommendation
+  const recommended = recommendStripCount(competitions, config.max_pool_strip_pct)
+  if (recommended > config.strips_total) {
+    results.push({
+      competition_id: '',
+      phase: Phase.POST_SCHEDULE,
+      cause: BottleneckCause.RESOURCE_RECOMMENDATION,
+      severity: BottleneckSeverity.INFO,
+      delay_mins: 0,
+      message: `Strips: need ${recommended}, have ${config.strips_total} — add ${recommended - config.strips_total} more (or enable flighting for large events).`,
+    })
+  }
+
+  return results
+}
+
+// ──────────────────────────────────────────────
+// postScheduleDayBreakdown — per-day resource summaries
+// ──────────────────────────────────────────────
+
+/**
+ * After scheduling, emits per-day resource summaries for days that have
+ * at least one failed competition. Shows strip-hour and ref usage vs capacity.
+ */
+export function postScheduleDayBreakdown(
+  competitions: Competition[],
+  config: TournamentConfig,
+  state: GlobalState,
+): Bottleneck[] {
+  const results: Bottleneck[] = []
+
+  // Identify days that have at least one failed event
+  const failedCompIds = new Set(
+    state.bottlenecks
+      .filter(b => b.severity === BottleneckSeverity.ERROR)
+      .map(b => b.competition_id)
+      .filter(id => id !== ''),
+  )
+  if (failedCompIds.size === 0) return results
+
+  // Determine which days had failures (assigned_day from schedule, or all days for unscheduled comps)
+  const daysWithFailures = new Set<number>()
+  for (const compId of failedCompIds) {
+    const sr = state.schedule[compId]
+    if (sr) {
+      daysWithFailures.add(sr.assigned_day)
+    } else {
+      // Competition never got a day assignment — all days are relevant
+      for (let d = 0; d < config.days_available; d++) daysWithFailures.add(d)
+    }
+  }
+
+  for (const day of [...daysWithFailures].sort((a, b) => a - b)) {
+    // Strip-hours summary
+    const consumed = dayConsumedCapacity(day, state, competitions, config)
+    const totalCapacity = config.strips_total * (config.DAY_LENGTH_MINS / 60)
+    const stripDeficit = Math.max(0, consumed.strip_hours_consumed - totalCapacity)
+
+    results.push({
+      competition_id: '',
+      phase: Phase.POST_SCHEDULE,
+      cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+      severity: stripDeficit > 0 ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
+      delay_mins: 0,
+      message: `Day ${day + 1} strips: ${consumed.strip_hours_consumed.toFixed(1)} strip-hours consumed of ${totalCapacity.toFixed(1)} available${stripDeficit > 0 ? ` (${stripDeficit.toFixed(1)} over capacity)` : ''}.`,
+    })
+
+    // Sum peak ref demand across scheduled competitions on this day.
+    // Each competition's peak is the larger of its pool and DE demand.
+    const compsOnDay = competitions.filter(c => state.schedule[c.id]?.assigned_day === day)
+    let peakRefDemand = 0
+    for (const comp of compsOnDay) {
+      if (comp.fencer_count <= 1) continue
+      const poolDemand = peakPoolRefDemand(comp, comp.ref_policy)
+      const deDemand = peakDeRefDemand(comp, config)
+      peakRefDemand += Math.max(poolDemand, deDemand)
+    }
+
+    if (peakRefDemand > 0) {
+      results.push({
+        competition_id: '',
+        phase: Phase.POST_SCHEDULE,
+        cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+        severity: BottleneckSeverity.INFO,
+        delay_mins: 0,
+        message: `Day ${day + 1} refs: peak demand ${peakRefDemand}.`,
+      })
+    }
+
+    // Video-stage DE ref contention
+    const stagedComps = compsOnDay.filter(c => c.de_mode === DeMode.STAGED)
+    const stagedCount = stagedComps.length
+    const videoStageSum = stagedComps.reduce(
+      (sum, c) => sum + peakDeStripDemand(c),
+      0,
+    )
+    if (videoStageSum > 0) {
+      results.push({
+        competition_id: '',
+        phase: Phase.POST_SCHEDULE,
+        cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+        severity: BottleneckSeverity.INFO,
+        delay_mins: 0,
+        message: `Day ${day + 1} video-stage DE ref demand: ${videoStageSum} refs across ${stagedCount} staged events`,
+      })
+    }
+  }
+
+  return results
 }

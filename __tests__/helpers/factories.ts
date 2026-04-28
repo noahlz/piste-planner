@@ -99,27 +99,6 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
   }
 }
 
-/**
- * Config with 4 video + 18 non-video strips (22 total) used by pool-context
- * video-overflow tests. max_pool_strip_pct=1.0 so all strips may be used for pools.
- */
-export function makePoolContextConfig(): TournamentConfig {
-  const strips: Strip[] = [
-    ...Array.from({ length: 4 }, (_, i) => ({ id: `video-${i}`, video_capable: true })),
-    ...Array.from({ length: 18 }, (_, i) => ({ id: `nonvideo-${i}`, video_capable: false })),
-  ]
-  return {
-    ...makeConfig({
-      strips,
-      strips_total: strips.length,
-      video_strips_total: 4,
-      days_available: 2,
-      max_pool_strip_pct: 1.0,
-      max_de_strip_pct: 0.80,
-    }),
-    ADMIN_GAP_MINS: 15,
-  }
-}
 
 export function makeScheduleResult(competition_id: string, assigned_day: number): ScheduleResult {
   return {
