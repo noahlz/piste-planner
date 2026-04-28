@@ -8,12 +8,9 @@ import {
   Weapon,
   DeMode,
   VideoPolicy,
-  Phase,
-  dayStart,
 } from './types.ts'
-import type { Competition, TournamentConfig, GlobalState, PoolStructure } from './types.ts'
+import type { Competition, TournamentConfig } from './types.ts'
 import { crossoverPenalty } from './crossover.ts'
-import { earliestResourceWindow, snapToSlot } from './resources.ts'
 
 // ──────────────────────────────────────────────
 // SchedulingError
@@ -102,55 +99,3 @@ export function saberPileupPenalty(
   return SABER_PILEUP_PENALTY_TABLE[idx]
 }
 
-// ──────────────────────────────────────────────
-// findEarlierSlotSameDay — METHODOLOGY.md §Capacity-Aware Day Assignment
-// ──────────────────────────────────────────────
-
-/**
- * Tries to find an earlier start slot on the given day by scanning slots
- * from day start to latest start offset, checking resource availability.
- *
- * Returns the earliest valid slot where the competition can finish within
- * the day, or null if no earlier slot is found.
- *
- * Bounded iteration: at most (LATEST_START_OFFSET / SLOT_MINS) attempts.
- */
-export function findEarlierSlotSameDay(
-  competition: Competition,
-  _poolStructure: PoolStructure,
-  day: number,
-  state: GlobalState,
-  config: TournamentConfig,
-): number | null {
-  const thisDayStart = dayStart(day, config)
-  const latestStart = thisDayStart + config.LATEST_START_OFFSET
-  const maxSlots = Math.ceil(config.LATEST_START_OFFSET / config.SLOT_MINS)
-
-  const videoRequired = competition.de_video_policy === VideoPolicy.REQUIRED
-
-  let slot = snapToSlot(thisDayStart)
-  let attempts = 0
-
-  while (slot <= latestStart && attempts < maxSlots) {
-    attempts++
-
-    const result = earliestResourceWindow(
-      competition.strips_allocated,
-      videoRequired,
-      slot,
-      day,
-      state,
-      config,
-      competition.id,
-      Phase.POOLS,
-    )
-
-    if (result.type === 'FOUND') {
-      return result.startTime
-    }
-
-    slot = snapToSlot(slot + config.SLOT_MINS)
-  }
-
-  return null
-}

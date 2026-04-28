@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   constraintScore,
-  findEarlierSlotSameDay,
   saberPileupPenalty,
 } from '../../src/engine/dayAssignment.ts'
 import {
@@ -10,30 +9,12 @@ import {
   Weapon,
   DeMode,
   VideoPolicy,
-  Phase,
-} from '../../src/engine/types.ts'
-import type {
-  GlobalState,
-  PoolStructure,
-  StripAllocation,
 } from '../../src/engine/types.ts'
 import {
   makeStrips,
   makeConfig,
   makeCompetition,
 } from '../helpers/factories.ts'
-
-// ──────────────────────────────────────────────
-// Test helpers (dayAssignment-specific)
-// ──────────────────────────────────────────────
-
-function makePoolStructure(overrides: Partial<PoolStructure> = {}): PoolStructure {
-  return {
-    n_pools: 8,
-    pool_sizes: Array(8).fill(7),
-    ...overrides,
-  }
-}
 
 // ──────────────────────────────────────────────
 // constraintScore
@@ -174,73 +155,3 @@ describe('saberPileupPenalty', () => {
   })
 })
 
-// ──────────────────────────────────────────────
-// findEarlierSlotSameDay
-// ──────────────────────────────────────────────
-
-describe('findEarlierSlotSameDay', () => {
-  it('resources available at day start → returns day start time', () => {
-    const comp = makeCompetition({
-      id: 'div1-m-foil',
-      category: Category.DIV1,
-      gender: Gender.MEN,
-      weapon: Weapon.FOIL,
-      strips_allocated: 4,
-      fencer_count: 30,
-    })
-    const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6) })
-    const config = makeConfig({
-      dayConfigs: [
-        { day_start_time: 480, day_end_time: 1320 },
-        { day_start_time: 1320, day_end_time: 2160 },
-        { day_start_time: 2160, day_end_time: 3000 },
-      ],
-    })
-
-    // All strips free from the start of day 0 — empty allocation lists mean
-    // nextFreeTime returns 0, which is <= dayStart(0)=480.
-    const state: GlobalState = {
-      strip_allocations: Array.from({ length: 24 }, () => []),
-      ref_demand_by_day: {},
-      schedule: {},
-      bottlenecks: [],
-    }
-
-    const result = findEarlierSlotSameDay(comp, poolStructure, 0, state, config)
-    expect(result).toBe(480)
-  })
-
-  it('no resources available (all strips occupied forever) → returns null', () => {
-    const comp = makeCompetition({
-      id: 'div1-m-foil',
-      category: Category.DIV1,
-      gender: Gender.MEN,
-      weapon: Weapon.FOIL,
-      strips_allocated: 4,
-      fencer_count: 30,
-    })
-    const poolStructure = makePoolStructure({ n_pools: 5, pool_sizes: Array(5).fill(6) })
-    const config = makeConfig({
-      days_available: 1,
-      strips: makeStrips(24, 4),
-    })
-
-    // All strips occupied beyond the end of day → no window possible. Use a
-    // very large end_time (1e9) so nextFreeTime returns past any candidate.
-    const busyAlloc = (): StripAllocation => ({
-      event_id: 'busy',
-      phase: Phase.POOLS,
-      start_time: 0,
-      end_time: 1e9,
-    })
-    const state: GlobalState = {
-      strip_allocations: Array.from({ length: 24 }, () => [busyAlloc()]),
-      ref_demand_by_day: {},
-      schedule: {},
-      bottlenecks: [],
-    }
-
-    const result = findEarlierSlotSameDay(comp, poolStructure, 0, state, config)
-    expect(result).toBeNull()
-  })
-})

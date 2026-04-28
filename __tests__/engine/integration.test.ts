@@ -13,6 +13,11 @@
  *   assignment now uses a strip-hour bin-packing model with category weights
  *   and a capacity penalty curve)
  * - Refs must be >= max pool count of any single event (engine doesn't wave pools).
+ *
+ * Phase D shipped 2026-04-27: the serial scheduler was deleted and scheduleAll
+ * is now a thin shim over scheduleAllConcurrent. Baselines below reflect the
+ * concurrent scheduler's output (higher than the old serial floors). Historical
+ * serial values preserved as inline comments on each assertion.
  */
 import { describe, it, expect } from 'vitest'
 import {
@@ -202,8 +207,8 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B1: 24 events; engine must schedule at least 8 (baseline updated 2026-04-26 after stop-at-semis simplification — was 13; new R16 block durations and dropped finals phase changed per-event capacity).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(8)
+      // B1: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 8 under serial; observed 15, floor 14 with 1-event safety margin).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(14)
 
       // Smoke test for ref_requirements_by_day
       expect(ref_requirements_by_day).toBeDefined()
@@ -234,8 +239,8 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B2: 24 events; engine must schedule at least 8 (baseline updated 2026-04-26 after stop-at-semis simplification — was 9; same cause as B1).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(8)
+      // B2: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 8 under serial; observed 12, floor 11 with 1-event safety margin).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(11)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -265,8 +270,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
-      // B3: 24 events; engine must schedule at least 6 (baseline tightened 2026-04-26 after stop-at-semis simplification — was 5, now 6 due to freed strip-time on dense days)
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(6)
+      // B3: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 6 under serial; observed 10, floor 9 with 1-event safety margin).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -298,8 +303,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B4: 30 events; engine must schedule at least 7 (baseline tightened 2026-04-26 after stop-at-semis simplification — was 6, now 7 due to freed strip-time on dense days).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(7)
+      // B4: 30 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 7 under serial; observed 10, floor 9 with 1-event safety margin).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -325,8 +330,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B5: 12 events; engine must schedule at least 3 (baseline from real engine output)
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(3)
+      // B5: 12 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 3 under serial; observed 12, floor 11 with 1-event safety margin).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(11)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -366,8 +371,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B6: 54 events; engine must schedule at least 18 (baseline tightened 2026-04-26 after stop-at-semis simplification — was 17, now 18 due to freed strip-time on dense days).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(18)
+      // B6: 54 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 18 under serial; observed 29, floor 28 with 1-event safety margin).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(28)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -395,8 +400,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
-      // B7: 18 events; engine must schedule at least 4 (baseline from real engine output)
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(4)
+      // B7: 18 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 4 under serial; observed 6, floor 5 with 1-event safety margin).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(5)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()

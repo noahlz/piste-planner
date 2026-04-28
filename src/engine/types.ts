@@ -413,28 +413,6 @@ export interface CatalogueEntry {
 }
 
 // ──────────────────────────────────────────────
-// Phase-scheduler transaction log
-// ──────────────────────────────────────────────
-
-/**
- * Records mutations made during a single competition's phase scheduling so that
- * they can be rolled back if the event cannot be fully scheduled.
- *
- * - stripAllocationsAdded: direct object references to StripAllocation entries
- *   pushed into state.strip_allocations[stripIdx]. Rollback removes by object
- *   identity (indexOf + splice), which is order-independent and works even when
- *   multiple events' allocations interleave in the same strip's list.
- * - refEvents: direct object references to pushed RefDemandInterval entries so rollback
- *   can find-and-remove by identity. Using object references instead of array indices
- *   is required for phase-major scheduling, where multiple events' txLogs interleave
- *   and rolling back one event's entries would shift another's recorded indices.
- */
-export interface EventTxLog {
-  stripAllocationsAdded: Array<{ stripIdx: number; allocation: StripAllocation }>
-  refEvents: Array<{ day: number; event: RefDemandInterval }>
-}
-
-// ──────────────────────────────────────────────
 // Helper functions
 // ──────────────────────────────────────────────
 
