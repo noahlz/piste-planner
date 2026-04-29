@@ -39,6 +39,7 @@ import type {
   GlobalState,
   RefRequirementsByDay,
   RefDemandByDay,
+  StripAllocation,
 } from './types.ts'
 import {
   createGlobalState,
@@ -80,6 +81,11 @@ interface ScheduleAllResult {
   schedule: Record<string, ScheduleResult>
   bottlenecks: Bottleneck[]
   ref_requirements_by_day?: RefRequirementsByDay[]
+  // Per-strip allocation lists exposed so post-schedule diagnostic tools
+  // (e.g. ASCII lane renderer) can reconstruct which strip ran which
+  // event-phase at each interval. Outer index = strip index; inner arrays
+  // are sorted by start_time, no overlap.
+  strip_allocations: StripAllocation[][]
 }
 
 /**
@@ -190,7 +196,11 @@ export function scheduleAllConcurrent(
   }
   const hasErrors = validationErrors.some(ve => ve.severity === BottleneckSeverity.ERROR)
   if (hasErrors) {
-    return { schedule: state.schedule, bottlenecks: state.bottlenecks }
+    return {
+      schedule: state.schedule,
+      bottlenecks: state.bottlenecks,
+      strip_allocations: state.strip_allocations,
+    }
   }
 
   // Day assignment via DSatur graph coloring.
@@ -249,6 +259,7 @@ export function scheduleAllConcurrent(
     schedule: state.schedule,
     bottlenecks: state.bottlenecks,
     ref_requirements_by_day,
+    strip_allocations: state.strip_allocations,
   }
 }
 

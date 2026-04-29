@@ -5,6 +5,7 @@ import { computeBracketSize, calculateDeDuration } from './de.ts'
 import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
 import { findIndividualCounterpart } from './crossover.ts'
+import { estimateCompetitionStripHours } from './capacity.ts'
 
 function err(field: string, message: string): ValidationError {
   return { field, message, severity: BottleneckSeverity.ERROR }
@@ -293,6 +294,78 @@ function validateDependencies(config: TournamentConfig, competitions: Competitio
 }
 
 /**
+ * Up-front feasibility check: total estimated strip-hours vs. tournament
+ * capacity. Catches *obviously* insufficient configs (e.g. 1 day for an
+ * 18-event NAC) before the scheduler spends effort. Real-world tournaments
+ * routinely sit within ~15% of the estimator's worst-case demand because
+ * scheduling slack and day-window padding overlap with the per-event
+ * estimate; we tolerate that band rather than false-fail.
+ *
+ * Runs in O(events). Skips silently when capacity inputs are zero or
+ * negative — those cases are caught by validateStripConfig with their own
+ * targeted messages.
+ */
+const FEASIBILITY_SLACK = 1.15
+
+export function validateFeasibility(
+  config: TournamentConfig,
+  competitions: Competition[],
+): ValidationError[] {
+  const errors: ValidationError[] = []
+  if (competitions.length === 0) return errors
+  if (config.strips_total <= 0 || config.days_available <= 0) return errors
+  if (config.DAY_LENGTH_MINS <= 0) return errors
+
+  let totalNeeded = 0
+  let videoNeeded = 0
+  for (const c of competitions) {
+    if (c.fencer_count < config.MIN_FENCERS || c.fencer_count > config.MAX_FENCERS) continue
+    const e = estimateCompetitionStripHours(c, config)
+    totalNeeded += e.total_strip_hours
+    videoNeeded += e.video_strip_hours
+  }
+
+  const dayLengthHours = config.DAY_LENGTH_MINS / 60
+  const totalAvailable = config.days_available * config.strips_total * dayLengthHours
+
+  if (totalNeeded > totalAvailable * FEASIBILITY_SLACK) {
+    const shortfall = totalNeeded - totalAvailable
+    const pct = Math.round((shortfall / totalAvailable) * 100)
+    const perExtraDay = config.strips_total * dayLengthHours
+    const perExtraStrip = config.days_available * dayLengthHours
+    const extraDays = Math.ceil(shortfall / perExtraDay)
+    const extraStrips = Math.ceil(shortfall / perExtraStrip)
+    errors.push(err(
+      'feasibility',
+      `RESOURCE_INSUFFICIENT: ${Math.round(totalNeeded)} strip-hours needed over ${competitions.length} events; ` +
+      `${Math.round(totalAvailable)} available (${config.days_available}d × ${config.strips_total}s × ${dayLengthHours}h). ` +
+      `Shortfall ${Math.round(shortfall)} (~${pct}%). Add ${extraDays} more day(s) OR ${extraStrips} more strip(s).`,
+    ))
+  }
+
+  // Video shortfall is meaningful only when any video work is required.
+  if (videoNeeded > 0) {
+    const videoAvailable = config.days_available * config.video_strips_total * dayLengthHours
+    if (videoNeeded > videoAvailable * FEASIBILITY_SLACK) {
+      const shortfall = videoNeeded - videoAvailable
+      const perExtraDay = config.video_strips_total * dayLengthHours
+      const perExtraStrip = config.days_available * dayLengthHours
+      const extraDays = perExtraDay > 0 ? Math.ceil(shortfall / perExtraDay) : Number.POSITIVE_INFINITY
+      const extraStrips = Math.ceil(shortfall / perExtraStrip)
+      const dayHint = Number.isFinite(extraDays) ? `${extraDays} more day(s)` : 'add video strips first'
+      errors.push(err(
+        'feasibility_video',
+        `RESOURCE_INSUFFICIENT (video): ${Math.round(videoNeeded)} video strip-hours needed; ` +
+        `${Math.round(videoAvailable)} available (${config.days_available}d × ${config.video_strips_total}vs × ${dayLengthHours}h). ` +
+        `Shortfall ${Math.round(shortfall)}. ${dayHint} OR ${extraStrips} more video strip(s).`,
+      ))
+    }
+  }
+
+  return errors
+}
+
+/**
  * Validates tournament configuration and competition list before scheduling.
  * Returns an array of ValidationErrors; empty array means valid.
  * Checks all conditions per METHODOLOGY.md §Phase 1: Validation.
@@ -314,5 +387,6 @@ export function validateConfig(
     ...validateCompetitionFields(config, competitions),
     ...validateTimingConstraints(config, competitions),
     ...validateDependencies(config, competitions),
+    ...validateFeasibility(config, competitions),
   ]
 }

@@ -33,6 +33,7 @@ import { findCompetition } from '../../src/engine/catalogue.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { crossoverPenalty } from '../../src/engine/crossover.ts'
 import { makeStrips, makeConfig, makeCompetition } from '../helpers/factories.ts'
+import { renderAsciiLanes } from '../../src/tools/asciiLaneRenderer.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -398,7 +399,7 @@ describe('Realistic tournament integration', () => {
     const config = tournamentConfig(4, 80, 8, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       // B7: 18 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 4 under serial; observed 6, floor 5 with 1-event safety margin).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(5)
@@ -409,6 +410,15 @@ describe('Realistic tournament integration', () => {
       for (const r of ref_requirements_by_day!) {
         expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
         expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
+
+      // Opt-in ASCII lane dump for diagnosing the scheduling-density gap.
+      // Set PISTE_VISUALIZE=1 to print B7's per-day strip occupancy.
+      if (process.env.PISTE_VISUALIZE === '1') {
+        // eslint-disable-next-line no-console
+        console.log('\n=== B7 ASCII LANES ===\n' + renderAsciiLanes({
+          schedule, strip_allocations, bottlenecks, config, competitions,
+        }))
       }
     })
   })
