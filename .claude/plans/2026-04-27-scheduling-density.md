@@ -1,203 +1,250 @@
 # Scheduling Density: Make the Engine Actually Place All Events
 
-## Vision
+## Status: largely solved by a model bug fix, not by the original plan
 
-Today's engine schedules ~30–60% of events in dense real-tournament scenarios. Real tournaments fit ~100% of the same events on the same resources. This plan closes that gap.
+Original baseline (verified 2026-04-27): B1 17/24, B3 8-10/24, B4 10/30, B7 6/18.
 
-Two thrusts:
+After 2026-04-28 work: B1 24/24, B2 24/24, B3 24/24, B4 16/30, B5 12/12, B6 44/54, B7 18/18, B8 51/53. Five of seven scenarios at 100%; B6 at 81%; B4 the genuinely tight one at 53%.
 
-1. **Iterative constraint relaxation.** When events fail to schedule on their assigned day, progressively relax hard edges in the constraint graph and re-run, until every event is placed or we exhaust the relaxation ladder.
-2. **ASCII lane visualizer.** A terminal-friendly per-day timeline that shows which strips are occupied by which event-phase at each time. Drives diagnosis: when an event fails, the lane chart shows exactly where the day ran out of strip-time.
+The density problem turned out to be a model bug, not a constraint-relaxation problem. The "next session" focus is no longer relaxation — it's a pod-allocation refactor and a few targeted gap investigations.
 
-A supporting third thrust:
+## Vision (unchanged)
 
-3. **Up-front feasibility validation.** Before scheduling, sum estimated strip-hours and compare to `days × strips × hours/day`. If insufficient, emit a clear `"need ~N more days OR ~M more strips"` ERROR and stop. Catches obviously-impossible inputs before the engine spends effort.
+Today's engine schedules all events in most real-tournament scenarios. Real tournaments fit ~100%. The remaining gap is genuinely tight per-day capacity, not constraint-graph saturation.
 
-## Engine policy decisions (anchor for the plan)
+## Engine policy decisions (unchanged anchors)
 
-- **Use all `days_available` days unconditionally.** The engine's job is to distribute events across the user's day budget, not compact onto fewer days. The user (or visualizer) decides whether the result can be compacted manually.
-- **Hard edges are relax-targets, not absolutes.** Today's `INDIV_TEAM_RELAXABLE_BLOCKS` already contemplates relaxation. We extend the principle: any hard edge that, if kept, would prevent scheduling can be downgraded to a soft penalty under iterative relaxation. The relaxation level is recorded on the schedule output and emitted as a `CONSTRAINT_RELAXED` bottleneck so the user sees what the engine had to bend.
-- **Feasibility failure surfaces up front, not via missing schedule entries.** If total work > total capacity, the engine reports it before day-coloring runs.
+- Use all `days_available` days unconditionally.
+- Hard edges are relax-targets, not absolutes (Tier 0–4 ladder still the right framing if relaxation work resumes).
+- Feasibility failure surfaces up front, not via missing schedule entries.
 
-## Current state diagnosis (verified 2026-04-27)
+## Component 1: ASCII lane visualizer — DONE
 
-For B1–B7 against integration test inputs:
+`src/tools/asciiLaneRenderer.ts` ships. Wired into all B-scenario integration tests via `maybeDumpAsciiLanes` helper, gated behind `PISTE_VISUALIZE=1`. 15 unit tests in `__tests__/tools/asciiLaneRenderer.test.ts`. Idle slots render as whitespace; phases shown as bracketed bars `[P-EVT...]` `[DEP-...]` `[R16-...]`. Strips grouped by identical allocation pattern. Time axis at 10-min/char resolution; 14-hour day fits inside 120 cols with 80 strips.
 
-| Scenario | Total | Scheduled | Failure phase |
-|---|---|---|---|
-| B1 Feb 2026 NAC (4d/80s/8v, 24 evt) | 24 | 17 | DE_PRELIMS deadline |
-| B3 Mar 2026 NAC (4d/80s/8v, 24 evt) | 24 | 8–10 | DE_PRELIMS deadline |
-| B4 Jan 2026 SYC (3d/40s/4v, 30 evt) | 30 | 10 | pools + DE_PRELIMS deadline |
-| B7 Oct 2025 NAC (4d/80s/8v, 18 evt) | 18 | 6 | DE_PRELIMS deadline |
+Drove every diagnosis in the session — directly surfaced the DE-strip-model bug.
 
-Failure pattern: `DEADLINE_BREACH_UNRESOLVABLE at DE_PRELIMS`. Day-assignment colors events across days, runtime scheduler can't fit pools→DE_PRELIMS→R16 within the day window for many of them, retries fail.
+## Component 2: Up-front feasibility validation — DONE
 
-Resource sweeps already done:
+`validateFeasibility()` in `src/engine/validation.ts`. Compares estimated strip-hours to capacity (and video-strip-hours when needed). Emits `RESOURCE_INSUFFICIENT` ERROR with shortfall and suggested days/strips deltas. 1.15× slack avoids false-positives on borderline-tight inputs (B4 sat at 1.114× and is genuinely feasible; the slack lets it through).
 
-- `CAPACITY_TARGET_FILL` 0.3 → 0.9: zero effect on counts (4-day cap binds first).
-- Video strips 8 → 12: zero effect on counts (DE_PRELIMS doesn't use video).
+8 new tests in `__tests__/engine/validation.test.ts`. B1–B8 all pass; obviously-undersized configs fail clearly.
 
-So resources aren't the binding constraint for B1/B3/B7. The two suspects are (a) hard edges in the constraint graph forcing events that *could* share a day onto separate days, and (b) per-event runtime cost (pool duration + DE blocks + tail) being too large for a single 14-hour day.
+## DE strip model fix — DONE (was not in the original plan)
 
-## Component 1: ASCII lane visualizer
+The root cause of the density gap. `src/engine/concurrentScheduler.ts` was setting `desired_strip_count = bracketSize/2` for DE phases, capped by `max_de_strip_pct=0.80`. For a 256-bracket event with 80 strips, this gave ONE event 64 strips for DE_PRELIMS — forcing all other events to wait their turn. With 4 events of similar size on a day, DEs serialized over 4–5 hours and the day ran out of time.
 
-Build first — diagnosis tool for everything that follows.
+Fix: `desired_strip_count = min(bracketSize/2, 4 × DE_POD_SIZE) = 16`, matching the real-world 4-pods-of-4-strips DE convention. Empirical durations in `de_duration_table` already assume this parallelism, so duration scaling is now coherent.
 
-### Output shape
+Effect: B7 6/18 → 18/18. All B1–B3 to 100%. B6 29/54 → 44/54. B8 added at 51/53.
 
-Per day, one screen of fixed-width text:
+## VET ↔ DIV crossover calibration — DONE (was not in the original plan)
 
+`CROSSOVER_GRAPH` had VETERAN ↔ DIV1/DIV1A/DIV2/DIV3 all at 0.8 — implying 80% fencer overlap. In practice ~5–10% of vets enter Div events. Lowered to 0.1. Test in `__tests__/engine/constraintGraph.test.ts` updated.
+
+This was discovered by working through the actual April 2026 NAC schedule (B8) and noticing the engine was treating Vet/Div pairings as near-hard conflicts when reality has them on the same day routinely.
+
+## Component 3: Iterative constraint relaxation — DEFERRED, REFRAMED
+
+The original premise — "hard edges force co-day events apart, relax to fit them together" — turned out to be wrong for the observed failure cases. Visualizer evidence showed days had 600+ idle strip-hours and events failed at runtime (`DEADLINE_CHECK`), not at day-coloring saturation.
+
+The DE strip model fix addressed the actual root cause. Constraint relaxation may still close edge cases (B4 at 16/30, B8 at 51/53, B6 at 44/54) but it's no longer the primary lever. Lower priority for the next session unless investigation of those gaps points back at it.
+
+The relaxation ladder design (Tier 0–4) remains valid as a structure if/when the work resumes. Specifically: lowering VET↔DIV crossover edges from 0.8 to 0.1 in this session was effectively a one-shot calibration that the iterative-relaxation framework was supposed to discover automatically. The framework is still the right destination; it just isn't urgent.
+
+---
+
+# Next session: pod allocation removal + targeted gap investigations
+
+## Component A: Remove pod allocation from the scheduler
+
+**Why now.** The session surfaced that `DE_POD_SIZE` and pod-aligned allocation are operational layout decisions, not scheduling constraints. The current model:
+
+- Forces `allocatePods()` to lump strips in 4-strip blocks during DE phases
+- Carries a `Pod` type and a `pod_id` field on `StripAllocation` purely for this layering
+- Can't represent heterogeneous pod sizes (the April 2026 venue had 2-strip pods D and M; the engine pretended every pod was 4 strips)
+- Makes the strip allocator conflate "where strips are" with "how the algorithm schedules"
+
+**The right model: strips are a fluid pool of indistinguishable units.**
+
+The engine schedules N strips for an event-phase from time T1 to T2. Post-schedule, the engine *recommends* pod groupings (analogous to how it recommends ref staffing today). Operators decide the layout day-of, which is what they do anyway.
+
+**Pool phase stays atomic. DE phase becomes fluid.**
+
+This is a critical distinction grounded in how tournaments actually run:
+
+- **Pool phase (atomic block).** All pools start and end together. The engine allocates N strips for the full pool round duration; strips release as a single unit at pool end. No mid-phase release. This is the existing behavior and stays unchanged.
+- **DE phase (fluid).** Organizers move fencers around as strips become available — pods are an organizational efficiency, not a hard structure. The engine should model strip allocation as fluid here: as bouts complete and rounds halve, strips become available to other events that need them.
+
+The "fluid DE" property is what Component B (sub-round modeling) provides. Component A just gets us off the rigid pod-aligned allocator so Component B has somewhere to land.
+
+**Scope.**
+
+1. Delete or rewrite `src/engine/pods.ts` (and remove `Pod` type from `types.ts`).
+2. Replace `allocatePods()` calls in `concurrentScheduler.ts` with a unified strip-allocation path. The `use_pods: true` flag on STAGED DE phase nodes goes away — same path as SINGLE_STAGE allocation.
+3. Remove `pod_id` from `StripAllocation`. Renderer doesn't use it.
+4. Add a post-schedule output: `PodRecommendationByDay[]` (or similar) — for each `(event, phase)`, report peak concurrent strip count and suggested pod count `⌈peak/4⌉`. Mirrors `RefDemandByDay`.
+5. Retire `__tests__/engine/pods.test.ts` (15 tests). Replace with tests on the new recommendation output shape.
+
+**Risks.**
+
+- Tests asserting on specific strip indices or `pod_id` values will need to be rebaselined. Most B-scenario tests assert event counts and integrity, so they should hold.
+- Strip-selection determinism: the new fluid allocator must pick strips deterministically (first-fit by index). Already what `findAvailableStripsInWindow` does, so probably fine.
+- R16 video-strip allocation: still needs N video-capable strips. Already supported by `video_required` flag on the strip-window helper. No new mechanism required.
+
+**Out of scope.**
+
+- Variable pod sizes in the recommendation. Default to pods-of-4 for now; heterogeneous output ("3 pods of 4, 1 pod of 2") is a future polish.
+- Changing the pool-phase allocation model. Pools stay atomic.
+- Changing the DE duration model. Empirical durations in `de_duration_table` still assume ~16-strip DE concurrency; that doesn't change here. (Component B does a finer breakdown.)
+
+**Acceptance.**
+
+- All 712 existing tests pass after rebaseline.
+- B-scenario schedule counts hold or improve relative to current numbers (B1–B3, B5, B7 at 100%; B4 ≥16; B6 ≥44; B8 ≥51).
+- New output: `pod_recommendations_by_day` exposes per-(event, phase) strip-peak and suggested pod count.
+- `Pod` type and `pod_id` field removed from `types.ts`.
+- Pool phase still allocates as one block (one `StripAllocation` per strip per pool phase); only DE phases use the new fluid path.
+
+## Component B: Sub-round strip release for DE phases
+
+**Why this is meaningful.** Currently a DE phase reserves its peak strip count (16 for the 4-pod model) for the full phase duration. As the bracket halves round-by-round, fewer strips are actually needed but the engine doesn't release the surplus. Other events that could use the freed strips wait until the whole phase ends. On dense days (B6 at 44/54, B8 at 51/53), this artificial holding of strips blocks later events that would otherwise fit.
+
+**The mechanic.** Replace each DE phase node's single `(desired_strip_count, duration_at_full)` with a sequence of sub-rounds, each with its own `(strip_count, duration)`:
+
+For DE_PRELIMS on bracket=256 (foil/epee, ~20 min/bout):
 ```
-DAY 1  (08:00–22:00)   strips: 80   video: 8   scheduled: 5/6
-        08:00 09:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00
-S01–S04 [P-Y14MEPEE.....][DEP-Y14MEPEE..][R16-Y14MEPEE]
-S05–S30 [P-Y14MEPEE......................................]
-S31–S60 [P-D2MFOIL.......][DEP-D2MFOIL...]
-S61–S64 [...................................][R16-D2MFOIL]
-V01–V08 (idle until)..................................[R16-Y14MEPEE]
-
-UNSCHEDULED (1):
-  CDT-W-EPEE-IND  — DEADLINE_BREACH at DE_PRELIMS (attempt 2/2)
-```
-
-Strips are grouped into ranges of contiguous identically-occupied strips for the time window. One line per strip-group. Time axis aligned across all rows. Phase abbreviations: `P=POOL`, `DEP=DE_PRELIMS`, `R16=DE_R16`, `DE=DE` (single-stage).
-
-Failed events appear in an "UNSCHEDULED" footer with reason + which phase ran out of room.
-
-### What it must read
-
-The visualizer is a pure function over schedule output:
-
-- `schedule: Record<string, ScheduleResult>` — phase timestamps per event
-- `strip_allocations: StripAllocation[][]` — per-strip interval lists (Phase A landed this in the engine state)
-- `bottlenecks: Bottleneck[]` — ERROR severity rows tell us why events failed
-- `config`, `competitions` — for labels and day boundaries
-
-### Where it lives
-
-`src/tools/asciiLaneRenderer.ts` (analogous to the SVG renderer in the existing visualizer plan). Pure function; no file I/O. Integration tests can call it and `console.log` the output for one scenario at a time, gated behind an env flag so CI stays quiet.
-
-### Out of scope
-
-- Pod-level coloring (dim future enhancement)
-- Multi-day side-by-side rendering (each day stands alone)
-- Interactive features
-
-### Acceptance
-
-- Renders B1–B7 outputs in a terminal at 120-column width without overflow
-- Each day shows time axis + strip-group rows + failed-events footer
-- Phase boundaries align with `pool_end`, `de_prelims_end`, etc. from `ScheduleResult`
-- Idle strips appear as blank rows or are collapsed into a "S?–S? idle" placeholder
-- Eyeballing B7 reveals which phase competes for time on each day
-
-## Component 2: Iterative constraint relaxation
-
-After Component 1 makes failures legible.
-
-### Mental model
-
-Today's day-coloring runs once with relaxations available only for `INDIV_TEAM_RELAXABLE_BLOCKS`. We extend it to a *retry loop*:
-
-1. Run scheduler with the current constraint graph.
-2. If every event scheduled, done.
-3. Otherwise, find the highest-priority relaxable hard edge among unscheduled events' neighborhoods, downgrade it to a soft edge (or remove it), and re-run.
-4. Stop when (a) all events scheduled, or (b) no relaxable edges remain.
-
-Each relaxation is recorded; the schedule reports back which edges were relaxed and at what level, surfaced to the user via existing `CONSTRAINT_RELAXED` bottlenecks.
-
-### The relaxation ladder
-
-Hard edges fall into tiers by how willing we are to bend them. Tier numbers indicate the order in which edges become relaxable:
-
-- **Tier 0 — never relax.** Veteran Co-Day rule (F2b): all Vet age-banded ind events of same gender+weapon must share a day. Bending this is a tournament-design violation.
-- **Tier 1 — relax first.** Soft preferences already encoded as hard edges (e.g. proximity preferences accidentally hardened). These are the cheapest wins.
-- **Tier 2.** `INDIV_TEAM_RELAXABLE_BLOCKS` (already in code). Drop the indv-before-team ordering for a same-(gender,weapon) pair.
-- **Tier 3.** Same-Population Conflicts that aren't truly same-fencer (e.g. category proximity edges). The user's intent test: if a fencer can plausibly be in both events, keep the edge; if it's a "scheduling preference" hardened to hard, relax.
-- **Tier 4 — last resort.** Same-fencer same-day conflicts (e.g. JUNIOR + CADET same gender + weapon, where overlapping fencers are likely). Relaxing this means the scheduler will produce a day where the same fencer is "supposed to" be in two places. The user must see this clearly and decide whether to override.
-
-The exact tier assignment for each edge type is the design work in this component. Source of truth: methodology doc + `crossover.ts` (CROSSOVER_GRAPH, GROUP_1_MANDATORY) + `dayColoring.ts` (REST_DAY_PAIRS, individualTeamOrderingPenalty inputs) + `constraintGraph.ts` builders.
-
-### Loop guardrails
-
-- **Bounded iteration.** Hard cap on retry count (e.g. tier-count + a few). No infinite loops. (Engine memory: "no unbounded loops".)
-- **Relaxations are recorded permanently.** Every edge that gets downgraded emits a `CONSTRAINT_RELAXED` bottleneck with severity = WARN (or ERROR for Tier 3+). The schedule's `constraint_relaxation_level` reflects the highest tier that fired.
-- **Monotonic relaxation.** Each iteration *adds* relaxations, never removes them. The retry can only become more permissive.
-- **Stop criterion.** Either (a) all events scheduled, or (b) the next relaxation would breach Tier 0, in which case the engine reports the remaining unscheduled events as `DEADLINE_BREACH_UNRESOLVABLE` with the highest tier reached.
-
-### Open design questions
-
-- **Granularity of relaxation.** Per-edge or per-tier? Per-edge gives finer control but more retries. Per-tier is simpler but coarser.
-- **Which events drive selection?** Only unscheduled events' edges, or the whole graph? Restricting to unscheduled events focuses the relaxation but may miss edges that block via transitive coloring constraints.
-- **Interaction with day-assignment vs runtime.** Does relaxation re-run the entire `scheduleAll`, or just re-color and try the runtime placement? Re-running the whole pipeline is simplest but slower; targeted re-coloring is faster but more error-prone.
-
-These get answered during execution, informed by the visualizer's evidence.
-
-### Acceptance
-
-- B1/B3/B4/B7 reach their real-world scheduled counts (or the engine emits a clear `RESOURCE_INSUFFICIENT` ERROR explaining what's actually missing).
-- Every relaxed event has a matching `CONSTRAINT_RELAXED` bottleneck at the correct tier.
-- Hard-constraint integrity tests still pass for events that *didn't* require relaxation.
-- Bounded loop: max iteration count provably terminates.
-
-## Component 3: Up-front feasibility validation
-
-Smallest of the three.
-
-### What it does
-
-Before day-coloring runs, compute:
-
-- `total_strip_hours_needed` = sum over events of `estimateCompetitionStripHours(c, config).total_strip_hours` (the function already exists).
-- `total_strip_hours_available` = `days_available × strips_total × DAY_LENGTH_MINS / 60`.
-- `total_video_strip_hours_needed` = sum of strip-hours for phases that require video strips.
-- `total_video_strip_hours_available` = `days × video_strips_total × hours/day`.
-
-If needed > available in either dimension, emit a fatal validation ERROR and return immediately without scheduling.
-
-### Diagnostic message shape
-
-```
-RESOURCE_INSUFFICIENT (ERROR)
-  Total work: 5400 strip-hours over 18 events
-  Total capacity: 4480 strip-hours (4 days × 80 strips × 14h)
-  Shortfall: 920 strip-hours (~21%)
-  Suggest: add 1 day OR add 17 strips
+sub_rounds: [
+  { strip_count: 16, duration: 80 },  // R128 → R64: 64 bouts ÷ 16 strips = 4 batches × 20 min
+  { strip_count: 8,  duration: 40 },  // R64 → R32: 32 bouts ÷ 8 strips = 4 batches × 10 min
+                                      // 8 strips released at start of R64
+]
 ```
 
-The "suggest" line picks the smaller delta in the dimension the user is more likely to control (typically days).
+For DE_R16 on a 4-strip pod (R32 → R16 → QF → SF):
+```
+sub_rounds: [
+  { strip_count: 4, duration: 20 },  // R32: 16 bouts ÷ 4 = 4 batches × 5 min (saber) / 20 min (foil)
+  { strip_count: 4, duration: 15 },  // R16
+  { strip_count: 4, duration: 10 },  // QF
+  { strip_count: 2, duration: 10 },  // SF (2 strips released)
+]
+```
 
-### Acceptance
+The aggregate sub-round duration must equal today's `de_duration_table[weapon][bracket]` so the existing calibration isn't disturbed. Initial implementation derives sub-round durations from `DE_BOUT_DURATION` and bouts-per-round, then renormalizes to match the table aggregate.
 
-- B1–B7 inputs all pass validation (real tournaments are feasible by definition).
-- An obviously-undersized config (e.g. 1 day for B7) fails validation with a clear message.
-- Validation runs in O(events) — no expensive work.
+**Why pools stay atomic.** "All pools start and end as a single unit (approximately)." Real tournaments wave-start pool rounds together so all fencers experience the round consistently. The last pool finishing 5 minutes early doesn't materially free strips for other events because the next phase (DE) needs the same strips on the same event. This is fundamentally different from DE: DE rounds halve in size and naturally release strips that other events can usefully claim.
 
-## Implementation order
+**Allocator change.**
 
-1. **ASCII lane visualizer** — small, self-contained, gives evidence for every following step.
-2. **Up-front feasibility validation** — small, well-scoped. Writing it forces us to be precise about what "feasible" means; that precision feeds the relaxation design.
-3. **Iterative constraint relaxation** — biggest piece. Designed and executed informed by what (1) reveals.
-4. **(Stretch)** Re-tune downstream calibration knobs (`LOAD_BALANCE_FULLNESS`, per-event strip caps) only if the relaxation ladder doesn't close the gap.
+Currently `allocatePods()` writes one `StripAllocation` per strip per phase, covering the full phase duration. With sub-round modeling, DE phases write *one allocation per strip per sub-round* — finer-grained intervals on the same per-strip lists. The `findAvailableStripsInWindow` logic doesn't change; finer intervals just give it more places to find fits.
 
-## What this plan deliberately does not do
+Pool phases keep one allocation per strip for the full pool duration.
 
-- Does **not** rebuild the methodology rules. Same-day-per-event, no-pool-skipping, pool→DE phase order, video discipline all stay.
-- Does **not** change the duration tables. If the runtime cost per event turns out to be the binding constraint, that's a separate calibration plan.
-- Does **not** add a graphical visualizer. The existing `schedule-visualizer.md` plan covers SVG; this plan adds ASCII for fast terminal use.
-- Does **not** change `MAX_EXPANDED_DAYS` or `CAPACITY_TARGET_FILL` semantics — both are slated for removal as a side-effect of "use all days_available unconditionally," already in flight in the working tree.
+**Scope.**
 
-## Out-of-tree state to address before starting
+1. Add `sub_rounds: Array<{ strip_count: number; duration: number }>` to phase nodes for DE phases (DE_PRELIMS, DE_R16, DE_SINGLE).
+2. Compute sub-round durations from `DE_BOUT_DURATION` × bouts-per-round, then normalize to match `de_duration_table` aggregate.
+3. In the allocator, for DE phases: walk sub-rounds, claim peak strips at phase start, release surplus strips at sub-round boundaries by setting `end_time` per strip according to which sub-round needed it.
+4. Pool phase allocation unchanged.
+5. Visualizer: existing renderer should work without changes since it walks per-strip allocation lists; finer intervals will produce narrower bracket bars at the right times.
+6. Tests: extend `__tests__/engine/integration.test.ts` to verify sub-round release frees strips for later events. Add unit tests for the sub-round duration computation.
 
-The working tree currently has uncommitted changes from earlier exploration in this conversation:
+**Risks and caveats.**
 
-- `dayColoring.ts` — removed expansion logic, dropped two constants
-- `dayColoring.test.ts` — three tests updated to match new behavior, one test failing (`rest-day pairs prefer non-adjacent days`)
-- `_diagnostic.test.ts` — temporary file, delete
+- **Director-continuity is operationally real but mathematically optional.** Real tournaments often keep all 16 strips visually assigned to an event for organizational tidiness, even when 8 are mathematically idle. The model represents what's mathematically possible, not what operators do today. Same framing as the wave-stagger discussion: model produces the optimum; operators add slack.
+- **More `StripAllocation` entries.** B7 day 1 currently ~150 entries; sub-round model probably ~3× that. Memory and rendering grow linearly. Visualizer at 10-min/char resolution still fits in 120 cols.
+- **Empirical-duration drift.** Sub-round durations computed from bouts may not perfectly match the table aggregate. Renormalization handles this, but if sub-round shapes drift far from reality we may need to recalibrate `DE_BOUT_DURATION` separately. Likely fine for v1.
+- **Interaction with R16 video.** R16 phase sub-rounds include the SF sub-round at 2 strips, which means 2 video strips become free mid-phase. Other events' R16 phases could potentially claim those. Need to verify the allocator handles partial video releases correctly.
 
-Two options:
+**Out of scope.**
 
-1. Revert all (`git checkout -- .` and remove the diagnostic file). Start the plan from `main` HEAD.
-2. Keep the dayColoring changes as the plan's baseline. Investigate the rest-day test regression as the first task; treat the "use all days" policy as the new policy that the rest of the plan builds on.
+- Bout-level scheduling. Too granular and brittle.
+- Per-fencer bout sequencing. The model says "round R128 takes 80 min on 16 strips"; it doesn't track which fencer is on which strip when.
+- Pool sub-round modeling. Pools are atomic per the user's clarification.
 
-User decision before execution begins.
+**Acceptance.**
+
+- All tests pass after rebaseline.
+- B-scenario schedule counts hold or improve. Specifically: B6 → 47+/54 (closing 3+ events), B8 → 53/53 (closing the 2 remaining women's epee misses) if the DE-strip release actually unblocks them. If it doesn't, the gap is on a different axis and Component C investigates.
+- Visualizer shows narrower DE bars in late sub-rounds (visible evidence that strips released).
+- Aggregate DE phase duration unchanged from current `de_duration_table` values.
+
+## Component C: Investigate remaining gaps
+
+Run these only if the gaps still seem worth closing after pod removal lands.
+
+### B4 — 16/30 (real tournament fits 30 in 3 days × 40 strips × 4 video)
+
+Visualizer evidence will show whether the gap is:
+- Constraint-graph driven (events forced to under-saturated days), or
+- Genuine runtime fit (40 strips × 14h = 560 strip-hours/day; 30 events × ~50 strip-hours = 1500 / 3 days = 500 — tight by the model but feasible by reality).
+
+If runtime fit: probably needs a lower-overhead pool model (real Y8/Y10 events finish in 2–3 hours, not 5–6 hours). Calibrate the `pool_round_duration_table` for youth events specifically.
+
+### B6 — 44/54 (real tournament fits 54 in 3 days × 48 strips × 4 video)
+
+54 events on 3 days is extreme density. Real ROCs schedule 5+ events per pod-of-strips per day. The engine's day-coloring may be too conservative. Visualizer first; then either day-coloring relaxation or duration calibration.
+
+### B8 — 51/53 (real tournament fit all 53)
+
+Two unscheduled women's epee events (`VET-W-EPEE-IND-VCMB` and `JR-W-EPEE-IND`). Visualizer should show whether they collide with same-population edges or fail at runtime. If runtime: 2-event misses on a 53-event tournament is fine for a v1.
+
+## What this plan deliberately does NOT do
+
+- Wave model / staggered start times. Decided this session: the engine should produce theoretical-optimum starts; operational stagger is the operator's choice.
+- Refs as input constraint. Refs stay as output.
+- Duration table recalibration for non-youth events. The DE model fix made existing durations coherent; broader calibration is its own project.
+- A graphical visualizer (separate `schedule-visualizer.md` plan covers SVG).
+- Changes to `MAX_EXPANDED_DAYS` or `CAPACITY_TARGET_FILL` (already removed in flight).
+
+---
+
+# Methodology updates from this session
+
+These are engine-wide decisions reached during diagnosis and discussion. They're documented here so future plans inherit the same model assumptions. Some are already shipped on this branch; others land with Components A and B.
+
+## Calibration values
+
+- **DE strip footprint is 16 strips per event regardless of bracket size.** Real-world DE convention is 4 pods × 4 strips. The empirical durations in `de_duration_table` are calibrated against this concurrency, not against `bracketSize/2` parallelism. Encoded as `desired_strip_count = min(bracketSize/2, 4 × DE_POD_SIZE)` in the runtime allocator. Already shipped (commit `bde95bc`).
+- **Veteran ↔ Division crossover weight = 0.1.** Vets and Div fencers share ~5–10% of the population, not 80%. Edges VETERAN ↔ DIV1, DIV1A, DIV2, DIV3 all set to 0.1 in `CROSSOVER_GRAPH`. Already shipped.
+- **Feasibility validation slack = 1.15×.** The strip-hour estimator is approximate; tight-but-real configs (e.g. B4 at 1.114× of capacity) shouldn't false-fail. Slack is a single tuning parameter on `validateFeasibility`. Already shipped.
+
+## Modeling rules
+
+- **Pool phase is atomic, DE phase is fluid.** Pool rounds start and end as a single block — all strips assigned for the full pool duration, released together at pool end. DE phases are sub-round-decomposed: as the bracket halves, surplus strips return to the pool for other events to use. Lands with Component B.
+- **Pods are operational, not algorithmic.** The engine schedules N strips for a phase; operators arrange those strips into pods (uniform, heterogeneous, whatever the venue dictates). Pod count is a post-schedule recommendation output, mirroring how ref demand is reported. Lands with Component A.
+- **Same-population key includes `vet_age_group`.** V40 ≠ V50 ≠ VCMB. Each is a distinct population for hard-conflict purposes. Already in `validation.ts` and `crossover.ts`.
+- **VET_COMBINED ↔ age-banded Vet is a hard same-day block.** Vet fencers typically enter both their age band AND VCMB, so the two events must be on different days. Already encoded as `isVetCombinedAgeBandedBlock` in `crossover.ts`.
+- **Junior ↔ Veteran has zero crossover.** Junior is U-20, Vet is 40+. No human can be both. `CROSSOVER_GRAPH` correctly has no edge here. Documented for clarity.
+- **Start times snap to `SLOT_MINS` (default 30 min).** Phase starts land on 8:00, 8:30, 9:00, … never 8:23. `SLOT_MINS` is configurable per-tournament. Already in `snapToSlot()`.
+- **Strip availability is tracked at minute resolution.** Underneath the slot-snapped start times, `StripAllocation.start_time` and `end_time` are minute-precise. The slot snap only affects when the *next phase* may begin, not when the *current phase* ended.
+
+## Engine boundaries (what the engine does NOT model)
+
+- **Operational stagger.** Real tournaments stagger event starts for operator/check-in/staffing reasons unrelated to strip availability. The engine produces theoretical-optimum (earliest available) starts; the operator adds slack. The B8 schedule in particular is mostly capacity-aware densification by humans — a strip-aware engine reproduces the same big-events-early, small-events-backfill shape automatically.
+- **Refs as a binding scheduling input.** Refs are calculated post-schedule. The engine does not ration concurrent pool starts by ref count. If 5 events can fit by strip availability, the engine starts 5; the operator decides whether they have 5 refs available.
+- **Heterogeneous pod sizes.** The April 2026 venue had 2-strip pods D and M. The engine reports total strip count (e.g., 68); it does not model which strips are physically grouped how. Pod recommendation output assumes uniform pods of 4; the operator adapts to actual venue layout.
+- **Para fencing events.** Para has its own video discipline and is operationally a parallel track. The engine doesn't model Para separately; Para events should be excluded from the input. (Encoded as a convention in B8's test data, not in the engine.)
+- **Bout-level scheduling.** Sub-round modeling (Component B) is the finest granularity the engine cares about. Individual bouts and per-fencer strip assignments are operator decisions.
+- **Director assignment, equipment setup, fencer check-in, hospitality.** None of these are scheduling inputs. The engine assumes infinite director and check-in capacity at start time; if real-world capacity binds, the operator widens the wave manually.
+- **Tournament-day weather, room temperature, lunch breaks.** Out of scope.
+
+## Methodology principles (philosophical anchors)
+
+- **The engine's output is the theoretical optimum.** Operational slack (stagger, ref shortages, lunch, bootstrap throughput) is added by humans on top of the engine's recommendation.
+- **The engine's value proposition is compression.** A schedule that finishes at 4 PM rather than 8 PM is a real win for fencers, refs, parents, hotels, hospitality. If the engine surfaces "you can finish 4 hours earlier than the as-run schedule," that's concrete advocacy data.
+- **Outputs over inputs for operational concerns.** Refs, pods, ref demand, pod recommendations — all post-schedule outputs. The engine schedules; humans staff.
+- **Visualizer first.** Every scheduling-density problem in this session was diagnosed by looking at the ASCII lane output. Future debugging starts with `PISTE_VISUALIZE=1` on the relevant B-scenario, not with code reading.
+- **Real-tournament data is the calibration target.** Tests B1–B8 derive from actual fencingtimelive event listings. When the engine's output diverges from a real tournament, the engine is wrong (or the input is). Don't tune to abstract benchmarks.
+
+---
+
+## Implementation order for the next session
+
+1. **Component A: pod allocation removal.** Self-contained refactor. Pool stays atomic; DE moves to the fluid path. ~1 session.
+2. **Component B: sub-round DE strip release.** Builds on Component A's fluid allocator. Adds the strip-release-at-round-boundary mechanic. ~1 session.
+3. **Component C: gap investigations.** Run only if gaps remain after A+B land.
+   - C-1: B4 (currently 16/30) — diagnose with visualizer; likely needs youth-event duration recalibration.
+   - C-2: B6 (currently 44/54) — most likely closes substantially with sub-round release; verify.
+   - C-3: B8 (currently 51/53) — verify the 2 remaining misses are no longer DEADLINE_BREACH after Component B.
