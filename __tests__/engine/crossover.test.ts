@@ -88,10 +88,10 @@ describe('crossoverPenalty', () => {
       expected: 0.0,
     },
     {
-      label: 'Same gender, same weapon, VET↔DIV1 → 0.8',
+      label: 'Same gender, same weapon, VET↔DIV1 → 0.1 (rare fencer overlap)',
       c1: makeComp('a', Category.VETERAN, Gender.WOMEN, Weapon.SABRE),
       c2: makeComp('b', Category.DIV1, Gender.WOMEN, Weapon.SABRE),
-      expected: 0.8,
+      expected: 0.1,
     },
     {
       label: 'Same gender, same weapon, Y14↔DIV1A → 0.6',

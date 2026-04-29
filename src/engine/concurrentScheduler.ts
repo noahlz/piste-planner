@@ -455,8 +455,21 @@ function buildPhaseNodes(
   }
 
   // DE phases.
+  //
+  // Real-world DE convention: each event runs DE rounds on ~4 pods of
+  // DE_POD_SIZE strips (16 strips total), with fencers queued through the
+  // pods round-by-round — NOT one bout per strip in parallel. A round of 128
+  // uses 4 pods of 4 strips and queues 8 bouts per pod, not 64 strips at
+  // once. The empirical durations in de_duration_table assume this 4-pod
+  // model. Using bracketSize/2 (e.g. 128 for a 256 bracket) here forced one
+  // event's DE to claim 64+ strips and serialize against any other event on
+  // the same day — events would queue for hours rather than sharing the
+  // strip pool concurrently. Capping at DEFAULT_DE_PODS × DE_POD_SIZE keeps
+  // each event's DE footprint small enough that 3-5 events can run DE phases
+  // concurrently across an 80-strip floor.
+  const DEFAULT_DE_PODS = 4
+  const deDesired = Math.max(1, Math.min(Math.floor(bracketSize / 2), DEFAULT_DE_PODS * DE_POD_SIZE))
   if (comp.de_mode === DeMode.SINGLE_STAGE) {
-    const deOptimal = Math.floor(bracketSize / 2)
     nodes.push({
       event_id: comp.id,
       kind: PhaseKind.DE_SINGLE,
@@ -467,7 +480,7 @@ function buildPhaseNodes(
       defer_count: 0,
       index: nodes.length,
       successor_index: -1,
-      desired_strip_count: deOptimal,
+      desired_strip_count: deDesired,
       duration_at_full: 0, // computed at allocation time (depends on cap)
       video_required: false, // SINGLE_STAGE never uses video
       use_pods: false,
@@ -478,7 +491,6 @@ function buildPhaseNodes(
     // STAGED: prelims (only when bracket >= 64) → R16.
     const phaseList = dePhasesForBracket(bracketSize)
     const blocks = deBlockDurations(bracketSize, calculateDeDuration(comp.weapon, bracketSize, config.de_duration_table))
-    const deOptimal = Math.floor(bracketSize / 2)
 
     if (phaseList.includes(Phase.DE_PRELIMS)) {
       nodes.push({
@@ -491,7 +503,7 @@ function buildPhaseNodes(
         defer_count: 0,
         index: nodes.length,
         successor_index: -1, // patched below
-        desired_strip_count: deOptimal,
+        desired_strip_count: deDesired,
         duration_at_full: blocks.prelims_dur,
         video_required: false,
         use_pods: true,

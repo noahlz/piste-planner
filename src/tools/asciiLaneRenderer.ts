@@ -115,7 +115,7 @@ function renderLane(
   dEnd: number,
   laneWidth: number,
 ): string {
-  const buf = new Array<string>(laneWidth).fill('.')
+  const buf = new Array<string>(laneWidth).fill(' ')
 
   for (const a of allocs) {
     if (a.end_time <= dStart || a.start_time >= dEnd) continue
@@ -140,7 +140,7 @@ function renderLane(
 
     const label = `${phaseAbbrev(a.phase)}-${a.event_id}`
     for (let k = 0; k < innerSpan; k++) {
-      buf[startCol + 1 + k] = k < label.length ? label[k] : '.'
+      buf[startCol + 1 + k] = k < label.length ? label[k] : ' '
     }
   }
 

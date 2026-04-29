@@ -52,8 +52,10 @@ describe('buildConstraintGraph', () => {
     expect(edges[0].targetId).toBe('vet-women-sabre')
     expect(edges[0].weight).toBeGreaterThan(0)
     expect(edges[0].weight).toBeLessThan(Infinity)
-    // Crossover weight should be around 0.8 per CROSSOVER_GRAPH
-    expect(edges[0].weight).toBeCloseTo(0.8, 1)
+    // VETERAN ↔ DIV1 has a small (~0.1) penalty: the populations rarely
+    // overlap (~5–10% of vets enter Div1), so this is a soft preference
+    // the day-coloring will happily relax under contention.
+    expect(edges[0].weight).toBeCloseTo(0.1, 2)
   })
 
   it('different gender events -> no edge', () => {

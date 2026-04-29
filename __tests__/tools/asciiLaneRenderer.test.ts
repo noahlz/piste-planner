@@ -91,10 +91,11 @@ describe('renderAsciiLanes — strip grouping splits on differing allocations', 
     expect(findLineStartingWith(out, 'S03-S06')).toBeDefined()
   })
 
-  it('idle strip group renders as all dots', () => {
+  it('idle strip group renders as blank lane content', () => {
     const idle = findLineStartingWith(out, 'S03-S06')!
-    const lane = idle.slice('S03-S06'.length).trim()
-    expect(lane).toMatch(/^\.+$/)
+    // Strip-group prefix is followed by lane chars; idle = pure whitespace.
+    const lane = idle.slice('S03-S06'.length)
+    expect(lane).toMatch(/^\s*$/)
   })
 })
 
