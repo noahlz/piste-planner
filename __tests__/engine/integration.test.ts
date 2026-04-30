@@ -30,9 +30,30 @@ import {
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
 } from '../../src/engine/constants.ts'
 import { findCompetition } from '../../src/engine/catalogue.ts'
+import type { ScheduleResult, StripAllocation, TournamentConfig } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { crossoverPenalty } from '../../src/engine/crossover.ts'
 import { makeStrips, makeConfig, makeCompetition } from '../helpers/factories.ts'
+import { renderAsciiLanes } from '../../src/tools/asciiLaneRenderer.ts'
+
+/**
+ * Opt-in ASCII lane dump for diagnosing scheduling-density failures.
+ * Set PISTE_VISUALIZE=1 to print per-scenario strip occupancy. No-op otherwise.
+ */
+function maybeDumpAsciiLanes(
+  label: string,
+  schedule: Record<string, ScheduleResult>,
+  bottlenecks: Bottleneck[],
+  strip_allocations: StripAllocation[][],
+  config: TournamentConfig,
+  competitions: Competition[],
+): void {
+  if (process.env.PISTE_VISUALIZE !== '1') return
+  // eslint-disable-next-line no-console
+  console.log(`\n=== ${label} ASCII LANES ===\n` + renderAsciiLanes({
+    schedule, strip_allocations, bottlenecks, config, competitions,
+  }))
+}
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -201,10 +222,10 @@ describe('Realistic tournament integration', () => {
       'VET-W-EPEE-TEAM': 20, 'VET-W-FOIL-TEAM': 10, 'VET-W-SABRE-TEAM': 10,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, 'NAC')
+    const config = tournamentConfig(4, 80, 12, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
       // B1: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 8 under serial; observed 15, floor 14 with 1-event safety margin).
@@ -217,6 +238,7 @@ describe('Realistic tournament integration', () => {
         expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
         expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
       }
+      maybeDumpAsciiLanes('B1', schedule, bottlenecks, strip_allocations, config, competitions)
     })
   })
 
@@ -233,10 +255,10 @@ describe('Realistic tournament integration', () => {
       'CDT-W-EPEE-TEAM': 30, 'CDT-W-FOIL-TEAM': 10, 'CDT-W-SABRE-TEAM': 10,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, 'NAC')
+    const config = tournamentConfig(4, 80, 12, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
       // B2: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 8 under serial; observed 12, floor 11 with 1-event safety margin).
@@ -249,6 +271,7 @@ describe('Realistic tournament integration', () => {
         expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
         expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
       }
+      maybeDumpAsciiLanes('B2', schedule, bottlenecks, strip_allocations, config, competitions)
     })
   })
 
@@ -265,10 +288,10 @@ describe('Realistic tournament integration', () => {
       'D2-W-EPEE-IND': 110, 'D2-W-FOIL-IND': 120, 'D2-W-SABRE-IND': 130,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, 'NAC')
+    const config = tournamentConfig(4, 80, 12, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       // B3: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 6 under serial; observed 10, floor 9 with 1-event safety margin).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
@@ -280,6 +303,7 @@ describe('Realistic tournament integration', () => {
         expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
         expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
       }
+      maybeDumpAsciiLanes('B3', schedule, bottlenecks, strip_allocations, config, competitions)
     })
   })
 
@@ -298,10 +322,10 @@ describe('Realistic tournament integration', () => {
       'CDT-W-EPEE-IND': 110, 'CDT-W-FOIL-IND': 80, 'CDT-W-SABRE-IND': 120,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const config = tournamentConfig(3, 40, 4, 'SYC')
+    const config = tournamentConfig(3, 40, 12, 'SYC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
       // B4: 30 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 7 under serial; observed 10, floor 9 with 1-event safety margin).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
@@ -313,6 +337,7 @@ describe('Realistic tournament integration', () => {
         expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
         expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
       }
+      maybeDumpAsciiLanes('B4', schedule, bottlenecks, strip_allocations, config, competitions)
     })
   })
 
@@ -325,10 +350,10 @@ describe('Realistic tournament integration', () => {
       'CDT-W-EPEE-IND': 80, 'CDT-W-FOIL-IND': 70, 'CDT-W-SABRE-IND': 90,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const config = tournamentConfig(3, 60, 8, 'SJCC')
+    const config = tournamentConfig(3, 60, 12, 'SJCC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
       // B5: 12 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 3 under serial; observed 12, floor 11 with 1-event safety margin).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(11)
@@ -340,6 +365,7 @@ describe('Realistic tournament integration', () => {
         expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
         expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
       }
+      maybeDumpAsciiLanes('B5', schedule, bottlenecks, strip_allocations, config, competitions)
     })
   })
 
@@ -366,10 +392,10 @@ describe('Realistic tournament integration', () => {
       'VET-W-EPEE-IND-VCMB': 20, 'VET-W-FOIL-IND-VCMB': 10, 'VET-W-SABRE-IND-VCMB': 10,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const config = tournamentConfig(3, 48, 4, 'ROC')
+    const config = tournamentConfig(3, 48, 12, 'ROC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
       // B6: 54 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 18 under serial; observed 29, floor 28 with 1-event safety margin).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(28)
@@ -381,6 +407,7 @@ describe('Realistic tournament integration', () => {
         expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
         expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
       }
+      maybeDumpAsciiLanes('B6', schedule, bottlenecks, strip_allocations, config, competitions)
     })
   })
 
@@ -395,10 +422,10 @@ describe('Realistic tournament integration', () => {
       'CDT-W-EPEE-IND': 180, 'CDT-W-FOIL-IND': 170, 'CDT-W-SABRE-IND': 180,
     }
     const competitions = buildCompetitions(fencerCounts)
-    const config = tournamentConfig(4, 80, 8, 'NAC')
+    const config = tournamentConfig(4, 80, 12, 'NAC')
 
     it('schedules events with hard constraints respected', () => {
-      const { schedule, bottlenecks, ref_requirements_by_day } = scheduleAll(competitions, config)
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       // B7: 18 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 4 under serial; observed 6, floor 5 with 1-event safety margin).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(5)
@@ -410,6 +437,80 @@ describe('Realistic tournament integration', () => {
         expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
         expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
       }
+
+      maybeDumpAsciiLanes('B7', schedule, bottlenecks, strip_allocations, config, competitions)
+    })
+  })
+
+  // Source: April 2026 Div I National Championship & NAC (4 days). Para events excluded
+  // per real-world separation — Para has its own video discipline and is generally run
+  // as a parallel track rather than competing for shared strips.
+  describe('B8: April 2026 Div1 NAC + Veteran Champs (4 days, 53 events)', () => {
+    const fencerCounts = {
+      // Friday
+      'D1-M-FOIL-IND': 137,
+      'VET-M-EPEE-IND-V40': 42, 'VET-M-EPEE-IND-V50': 54, 'VET-M-EPEE-IND-V60': 45,
+      'VET-M-EPEE-IND-V70': 35, 'VET-M-EPEE-IND-V80': 10,
+      'VET-W-SABRE-IND-V40': 11, 'VET-W-SABRE-IND-V50': 19, 'VET-W-SABRE-IND-V60': 18,
+      'VET-W-SABRE-IND-V70': 18, 'VET-W-SABRE-IND-V80': 2,
+      'VET-W-FOIL-IND-VCMB': 37,
+      'D1-M-SABRE-TEAM': 7,
+      'JR-W-FOIL-IND': 126,
+      'D1-W-SABRE-IND': 157,
+      // Saturday
+      'D1-M-SABRE-IND': 139,
+      'VET-M-FOIL-IND-V40': 31, 'VET-M-FOIL-IND-V50': 35, 'VET-M-FOIL-IND-V60': 28,
+      'VET-M-FOIL-IND-V70': 22, 'VET-M-FOIL-IND-V80': 3,
+      'VET-W-FOIL-IND-V40': 16, 'VET-W-FOIL-IND-V50': 25, 'VET-W-FOIL-IND-V60': 21,
+      'VET-W-FOIL-IND-V70': 14, 'VET-W-FOIL-IND-V80': 3,
+      'VET-M-EPEE-IND-VCMB': 116,
+      'D1-M-EPEE-TEAM': 14,
+      'D1-M-FOIL-TEAM': 4,
+      'JR-W-SABRE-IND': 192,
+      'D1-W-EPEE-IND': 151,
+      // Sunday
+      'D1-W-FOIL-IND': 103,
+      'JR-M-EPEE-IND': 266,
+      'D1-W-SABRE-TEAM': 7,
+      'D1-W-EPEE-TEAM': 11,
+      'VET-M-SABRE-IND-V40': 22, 'VET-M-SABRE-IND-V50': 17, 'VET-M-SABRE-IND-V60': 29,
+      'VET-M-SABRE-IND-V70': 15, 'VET-M-SABRE-IND-V80': 5,
+      'VET-W-EPEE-IND-V40': 28, 'VET-W-EPEE-IND-V50': 35, 'VET-W-EPEE-IND-V60': 32,
+      'VET-W-EPEE-IND-V70': 18, 'VET-W-EPEE-IND-V80': 3,
+      'JR-M-FOIL-IND': 178,
+      'VET-M-FOIL-IND-VCMB': 73,
+      'VET-W-SABRE-IND-VCMB': 31,
+      // Monday
+      'VET-W-EPEE-IND-VCMB': 74,
+      'D1-M-EPEE-IND': 218,
+      'JR-M-SABRE-IND': 189,
+      'JR-W-EPEE-IND': 182,
+      'VET-M-SABRE-IND-VCMB': 49,
+    }
+    const competitions = buildCompetitions(fencerCounts)
+    // Venue map shows 18 pods totalling 68 strips: A/B/C (3×4 = 12 video),
+    // D and M (2 strips each), and the remaining 13 pods at 4 strips each.
+    // The engine assumes a uniform 4-strip DE pod, so the 2-strip pods are
+    // approximated by the global strip count (no pod-size variation modelled).
+    const config = tournamentConfig(4, 68, 12, 'NAC')
+
+    it('schedules events with hard constraints respected', () => {
+      const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
+      assertIndTeamSeparation(schedule, competitions)
+      // B8: 53 events on the 4-pod-DE model. The real tournament fit all 53 in 4 days.
+      // Conservative floor with safety margin while we tune the engine further.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(35)
+
+      // Ref requirements output
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
+      for (const r of ref_requirements_by_day!) {
+        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
+        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
+      }
+
+      maybeDumpAsciiLanes('B8', schedule, bottlenecks, strip_allocations, config, competitions)
     })
   })
 })

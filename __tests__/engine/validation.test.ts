@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateConfig, validateSameDayCompletion } from '../../src/engine/validation.ts'
+import { validateConfig, validateSameDayCompletion, validateFeasibility } from '../../src/engine/validation.ts'
 import type { TournamentConfig, ValidationError } from '../../src/engine/types.ts'
 import {
   Category, CutMode, DeMode, EventType, Gender, TournamentType, VideoPolicy, Weapon,
@@ -533,5 +533,112 @@ describe('validateConfig — regional cut override warnings', () => {
     const errors = validateConfig(config, [comp])
     const warnings = errors.filter(e => e.field === 'cut_mode' && e.severity === BottleneckSeverity.WARN && e.message.includes('override'))
     expect(warnings).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// validateFeasibility — up-front capacity check
+// ──────────────────────────────────────────────
+
+describe('validateFeasibility', () => {
+  it('returns no errors when total strip-hour demand fits within capacity', () => {
+    const config = makeConfig({
+      days_available: 4,
+      strips: makeStrips(40, 4),
+    })
+    const comps = [
+      makeCompetition({ id: 'A', fencer_count: 24 }),
+      makeCompetition({ id: 'B', fencer_count: 24 }),
+    ]
+    expect(validateFeasibility(config, comps)).toHaveLength(0)
+  })
+
+  it('flags RESOURCE_INSUFFICIENT when total strip-hours exceed total capacity', () => {
+    // Tiny tournament + many large events → guaranteed shortfall.
+    const config = makeConfig({
+      days_available: 2,
+      strips: makeStrips(2, 0),
+    })
+    const comps = Array.from({ length: 20 }, (_, i) =>
+      makeCompetition({ id: `EVT-${i}`, fencer_count: 200 }),
+    )
+    const errors = validateFeasibility(config, comps)
+    const error = errors.find(e => e.field === 'feasibility')
+    expect(error).toBeDefined()
+    expect(error!.severity).toBe(BottleneckSeverity.ERROR)
+    expect(error!.message).toMatch(/RESOURCE_INSUFFICIENT/)
+    expect(error!.message).toMatch(/Add \d+ more day\(s\)/)
+    expect(error!.message).toMatch(/OR \d+ more strip\(s\)/)
+  })
+
+  it('reports a non-zero shortfall percentage in the diagnostic message', () => {
+    const config = makeConfig({
+      days_available: 2,
+      strips: makeStrips(4, 0),
+    })
+    const comps = Array.from({ length: 10 }, (_, i) =>
+      makeCompetition({ id: `EVT-${i}`, fencer_count: 200 }),
+    )
+    const errors = validateFeasibility(config, comps)
+    const error = errors.find(e => e.field === 'feasibility')!
+    expect(error.message).toMatch(/Shortfall \d+ \(~\d+%\)/)
+  })
+
+  it('skips silently when no competitions are provided', () => {
+    const config = makeConfig({ days_available: 4, strips: makeStrips(80, 8) })
+    expect(validateFeasibility(config, [])).toHaveLength(0)
+  })
+
+  it('skips silently when strips_total is zero (handled by strip-config validator)', () => {
+    const config = makeConfig({ days_available: 4, strips: [] })
+    const comps = [makeCompetition({ id: 'EVT', fencer_count: 100 })]
+    expect(validateFeasibility(config, comps)).toHaveLength(0)
+  })
+
+  it('flags video shortfall separately when staged events need more video strip-hours than available', () => {
+    // Many staged DE events, very few video strips. With bracket=256 sabre and
+    // 4 R16 strips per event, video need swamps the single video strip's
+    // 56 hours of capacity once we cross ~25 events.
+    const config = makeConfig({
+      days_available: 4,
+      strips: makeStrips(80, 1),
+    })
+    const comps = Array.from({ length: 40 }, (_, i) =>
+      makeCompetition({
+        id: `EVT-${i}`,
+        fencer_count: 200,
+        de_mode: DeMode.STAGED,
+        de_video_policy: VideoPolicy.REQUIRED,
+        de_round_of_16_strips: 4,
+      }),
+    )
+    const errors = validateFeasibility(config, comps)
+    const videoError = errors.find(e => e.field === 'feasibility_video')
+    expect(videoError).toBeDefined()
+    expect(videoError!.message).toMatch(/RESOURCE_INSUFFICIENT \(video\)/)
+  })
+})
+
+describe('validateConfig integrates feasibility', () => {
+  it('surfaces RESOURCE_INSUFFICIENT errors via the main validateConfig pipeline', () => {
+    const config = makeConfig({ days_available: 2, strips: makeStrips(2, 0) })
+    const comps = Array.from({ length: 20 }, (_, i) =>
+      makeCompetition({ id: `EVT-${i}`, fencer_count: 200 }),
+    )
+    const errors = validateConfig(config, comps)
+    const error = errors.find(e => e.field === 'feasibility')
+    expect(error).toBeDefined()
+    expect(error!.severity).toBe(BottleneckSeverity.ERROR)
+  })
+
+  it('does not flag B-series-style realistic configs', () => {
+    // Approximate B7: 4d, 80 strips, 8 video, 18 large events.
+    const config = makeConfig({ days_available: 4, strips: makeStrips(80, 8) })
+    const comps = Array.from({ length: 18 }, (_, i) =>
+      makeCompetition({ id: `EVT-${i}`, fencer_count: 240 }),
+    )
+    const errors = validateConfig(config, comps)
+    const feasibilityErrors = errors.filter(e => e.field === 'feasibility' || e.field === 'feasibility_video')
+    expect(feasibilityErrors).toHaveLength(0)
   })
 })

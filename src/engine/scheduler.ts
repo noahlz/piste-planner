@@ -7,13 +7,14 @@
  * from this module without change.
  */
 
-import type { Competition, TournamentConfig, ScheduleResult, Bottleneck, RefRequirementsByDay } from './types.ts'
+import type { Competition, TournamentConfig, ScheduleResult, Bottleneck, RefRequirementsByDay, StripAllocation } from './types.ts'
 import { scheduleAllConcurrent, postScheduleDiagnostics, postScheduleDayBreakdown, postScheduleWarnings } from './concurrentScheduler.ts'
 
 interface ScheduleAllResult {
   schedule: Record<string, ScheduleResult>
   bottlenecks: Bottleneck[]
   ref_requirements_by_day?: RefRequirementsByDay[]
+  strip_allocations: StripAllocation[][]
 }
 
 export function scheduleAll(

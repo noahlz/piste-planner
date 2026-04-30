@@ -416,11 +416,15 @@ export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>
     [Category.DIV1A]: 0.6,
   },
   [Category.JUNIOR]: { [Category.DIV1]: 0.8, [Category.DIV1A]: 0.8 },
+  // Veteran ↔ Division crossover: divisions are rating-based (open to any age)
+  // but in practice only ~5–10% of vet fencers also enter Div events. Keep a
+  // small penalty so the scheduler avoids same-day pairing when it can, but
+  // make it very relaxable — these are not strong fencer-overlap edges.
   [Category.VETERAN]: {
-    [Category.DIV1]: 0.8,
-    [Category.DIV2]: 0.8,
-    [Category.DIV3]: 0.8,
-    [Category.DIV1A]: 0.8,
+    [Category.DIV1]: 0.1,
+    [Category.DIV2]: 0.1,
+    [Category.DIV3]: 0.1,
+    [Category.DIV1A]: 0.1,
   },
   [Category.DIV3]: { [Category.DIV2]: 0.8, [Category.DIV1A]: 0.8 },
   [Category.DIV2]: { [Category.DIV1A]: 0.8 },
