@@ -4,9 +4,16 @@
 > [`2026-08-27-workbench-ui-design.md`](./2026-08-27-workbench-ui-design.md)
 > absorbed most of this list – real-tournament presets, the tournament setup
 > screen, the FLUID re-pack button, and drag-drop matrix repair are all covered
-> by its P1–P5 roadmap. What remains below is work that design does not cover.
+> by its P1–P5 roadmap.
+>
+> What remains below is work no phase plan has picked up. The design's "Open
+> items carried forward" table lists these same four items with their owner
+> phase, and points back here for the detail. **This file is the record, that
+> table is the index** – do not restate detail there.
 
 ## Per-type defaults in the rail's Advanced panel
+
+*No owner phase. Lands in the rail P3 builds – assign it before P3 is planned.*
 
 Defaults the Advanced panel should apply when the user picks a tournament type,
 shown as dim text on the collapsed panel so they are visible without expanding:
@@ -22,6 +29,9 @@ here – the user overrides those by placing events manually and accepting the
 warning.
 
 ## Global settings
+
+*No owner phase. P1 creates four of the constants below, so this needs a phase or
+an explicit "after P5".*
 
 All engine constants become a configuration file with defaults, reachable from
 a gears control in the top bar. Per-event and global weights, penalties, and
@@ -45,6 +55,11 @@ B4 currently predicts 5–6 hours for Y8/Y10 events that finish in 2–3 hours i
 reality. Recalibrate `pool_round_duration_table`, or add a youth-event
 multiplier, once there is evidence about whether the gap closes by
 densification or genuinely needs duration recalibration.
+
+P1's Task 6 widens this gap – removing double-stripping raises the duration of
+any event whose pool round is a single pool of 8 or more by about 1.67×. That
+task records B4's affected durations before and after, so the recalibration
+starts from a measured number rather than a re-derived one.
 
 ## Calibration debt
 

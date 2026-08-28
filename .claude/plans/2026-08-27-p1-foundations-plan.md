@@ -21,6 +21,21 @@ Supersedes `2026-05-06-phase1-foundations.md`. Design context lives in
 [`2026-08-27-workbench-ui-design.md`](./2026-08-27-workbench-ui-design.md) – this
 is its **P1**.
 
+## Clarifications
+
+### Session 2026-08-27
+
+- Q: Should `DE_REF_STRIP_GROUP = 4` exist? → A: No. Struck from Task 8 Step 6 – a
+  4-strip referee grouping is the pod-captain accounting Task 4 removes.
+- Q: What halts a task when drift exceeds expectation? → A: Any drop in scheduled
+  event count on any B1–B8 scenario. Time and day churn passes freely.
+- Q: Should the drift ledger cover the outputs Task 3 changes? → A: Yes. Per-day
+  peak referee figures and `recommendRefCount`'s output join the digest.
+- Q: Which categories get `YOUTH_VET_BOUT_DELTA`? → A: Y8, Y10, and any non-null
+  `vet_age_group`, `VET_COMBINED` included. Y12 and Y14 are unaffected.
+- Q: What happens to `distributeEvenly` once `podDeStripHours` is gone? → A:
+  Delete the export and its `describe` block together in Task 5.
+
 ## Global Constraints
 
 - `as const` objects, never TypeScript enums (`erasableSyntaxOnly` is on).
@@ -83,8 +98,8 @@ change.
 **Interfaces:**
 - Produces: a named export per scenario from `integration.test.ts`, each an
   object with `fencer_counts`, `days`, `strips`, `video_strips`,
-  `tournament_type`. Task 5 of the P2 plan moves these to `src/data/`, so keep
-  the shape flat and serializable.
+  `tournament_type`. P2's presets-to-`src/data` move consumes these, so keep the
+  shape flat and serializable.
 
 - [ ] **Step 1: Extract the eight B-scenario fixtures**
 
@@ -102,15 +117,28 @@ Expected: 8 passed, no assertion changes.
 - [ ] **Step 3: Write the drift-ledger snapshot test**
 
 New test file that, for each of B1–B8, runs `scheduleAll` and snapshots a
-normalized digest: the scheduled event count, the ERROR-severity bottleneck
-count, `ref_requirements_by_day` in full, and a per-event map of `assigned_day`,
-`pool_start`, `pool_end`, `de_start`, `de_total_end`, and `pool_strip_count`,
-with event ids sorted so ordering is stable. Do not snapshot bottleneck message
-strings – they carry times that churn for uninteresting reasons.
+normalized digest:
 
-Referee requirements are in the ledger specifically because Tasks 3 and 4 change
-them on purpose. The snapshot is how that change gets reviewed rather than
-assumed.
+- the scheduled event count and the ERROR-severity bottleneck count,
+- `ref_requirements_by_day` in full,
+- the per-day peak referee figure the `DAY_RESOURCE_SUMMARY` line reports,
+  recomputed from `peakPoolRefDemand` and `peakDeRefDemand` the same way
+  `concurrentScheduler.ts:1489-1496` does. Recompute rather than parse the number
+  out of the message string, so the digest stays free of message text.
+- `recommendRefCount`'s `{ three_weapon, foil_epee }` result and
+  `recommendStripCount`'s result from `stripBudget.ts`,
+- a per-event map of `assigned_day`, `pool_start`, `pool_end`, `de_start`,
+  `de_total_end`, and `pool_strip_count`, with event ids sorted so ordering is
+  stable.
+
+Do not snapshot bottleneck message strings – they carry times that churn for
+uninteresting reasons.
+
+The referee block covers three separate outputs on purpose. `ref_requirements_by_day`
+is what Task 4 changes. The day-summary peak and the strip-budget recommendation
+are the two outputs `peakDeRefDemand` feeds, and they are what Task 3 changes –
+without them in the digest, Task 3 moves user-visible numbers with nothing to
+review.
 
 - [ ] **Step 4: Generate and inspect the snapshot**
 
@@ -122,7 +150,7 @@ is the measured current state and confirms the ledger is wired to real output.
 - [ ] **Step 5: Full suite green**
 
 Run: `timeout 120 pnpm --silent test > ./tmp/test.log 2>&1`
-Expected: 713+ passed, 0 failed.
+Expected: the current baseline of 712 plus the new drift-ledger tests, 0 failed.
 
 - [ ] **Step 6: Dispatch `test-quality-reviewer` on the new test file**
 
@@ -130,6 +158,12 @@ Expected: 713+ passed, 0 failed.
 
 **From here on, every task ends by re-running the drift ledger and reviewing the
 snapshot diff before accepting it. An unexplained diff is a bug, not noise.**
+
+**Drift gate.** A task halts if any B1–B8 scenario schedules fewer events after it
+than before it. Resume only once the cause is identified and both counts are
+written into that task's commit message. Start-time shifts, day reassignments, and
+referee changes are expected churn and halt nothing – this gate exists solely to
+stop the one failure mode that compounds silently across seven tasks.
 
 ---
 
@@ -147,14 +181,25 @@ snapshot diff before accepting it. An unexplained diff is a bug, not noise.**
   per DE bout. Consumed by P5's allocator and P4's editor. Nothing in P1 calls
   it besides its tests – it is introduced now so the constant changes land with
   a tested helper.
+
+  This is not the speculative surface the Out of scope section rejects in
+  `video_stage_mode`. A pure function has no serialization, no store field, and
+  no UI binding, so carrying it costs one file and it pins this task's constant
+  changes under test. An unused config field would have to be threaded through
+  `TournamentConfig`, `buildConfig`, and both serialization directions before
+  anything read it.
 - Produces: `YOUTH_VET_BOUT_DELTA` (number, `-5`).
 
 - [ ] **Step 1: Write failing tests for `perBoutDuration`**
 
 Cover: foil and épée at 20 minutes for a senior category, sabre at 15, Y10 and
-Y8 at their weapon's value minus 5, every `VetAgeGroup` value at minus 5, and a
-senior category unaffected. Assert the delta applies to all three weapons, so
-sabre for Y10 is 10.
+Y8 at their weapon's value minus 5, every `VetAgeGroup` value at minus 5
+including `VET_COMBINED`, and a senior category unaffected. Assert the delta
+applies to all three weapons, so sabre for Y10 is 10.
+
+Assert explicitly that **Y12 and Y14 are unaffected**. Both sit between Y10 and
+cadet in the catalogue, so their absence from the rule needs to read as a
+decision rather than an oversight.
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -168,8 +213,12 @@ overhead, which is why sabre is 15 rather than the pure fencing time.
 
 - [ ] **Step 4: Implement `perBoutDuration` in `de.ts`**
 
-Returns the weapon's base duration plus the delta when the category is Y10, Y8,
-or any veteran age group – these run 10-touch DE bouts rather than 15-touch.
+Returns the weapon's base duration plus the delta when the category is Y8 or
+Y10, **or** when `vet_age_group` is non-null – these run 10-touch DE bouts rather
+than 15-touch. The veteran arm keys off `vet_age_group` rather than off
+`category`, so `VET_COMBINED` is covered and the helper does not depend on how a
+veteran event happens to set its category. Y12 and Y14 take the plain weapon
+duration.
 
 - [ ] **Step 5: Run the tests**
 
@@ -202,7 +251,8 @@ because it spans the store and UI and can be reviewed on its own.
   (`peakDeRefDemand`)
 - Modify: `src/engine/types.ts:84-89` (delete `PodCaptainOverride`), `:213`
   (delete the `pod_captain_override` field)
-- Modify: `src/store/store.ts:50,58,199-202` (state field, action, setter)
+- Modify: `src/store/store.ts:50,58,152,199-202` (state field, action,
+  initial-state default, setter)
 - Modify: `src/store/buildConfig.ts:45`
 - Modify: `src/store/serialization.ts:17,42,158`
 - Modify: `src/components/sections/TournamentSetup.tsx:2,31-37,75-76,158-175`
@@ -210,6 +260,10 @@ because it spans the store and UI and can be reviewed on its own.
   `__tests__/store/serialization.test.ts`,
   `__tests__/store/buildConfig.test.ts`,
   `__tests__/components/KitchenSinkPage.test.tsx`
+- Unchanged but affected: `src/engine/stripBudget.ts:84,89` calls
+  `peakDeRefDemand`, so `recommendRefCount`'s output moves with this task. The
+  signature does not change, so there is nothing to edit – the drift ledger is
+  what catches it.
 
 - [ ] **Step 1: Delete the pod-captain tests and update `peakDeRefDemand`'s tests**
 
@@ -248,11 +302,15 @@ Expected: both clean.
 
 - [ ] **Step 6: Review the drift-ledger diff**
 
-Expected: **no change to any schedule time or event count.** Referee numbers may
-move where pod captains were being added – `peakDeRefDemand` feeds the day-summary
-line, not `ref_requirements_by_day`, so the ledger's referee block should hold
-steady here and change in Task 4 instead. Any shift in a schedule time means
-something unintended moved.
+Expected: **no change to any schedule time or event count.** Any shift in a
+schedule time means something unintended moved.
+
+Referee numbers split three ways, and this is exactly why the ledger records all
+three. `ref_requirements_by_day` holds steady – pod captains never entered it,
+and Task 4 is what changes it. The **day-summary peak** and
+**`recommendRefCount`** both fall by the captain addend they were carrying, so
+expect them to drop here. A day-summary peak that does *not* move means
+`peakDeRefDemand` still has a captain path in it.
 
 - [ ] **Step 7: Dispatch `test-quality-reviewer` and `react-code-reviewer`**
 
@@ -269,8 +327,11 @@ a headline output deliberately.
 - Delete: `src/engine/pods.ts`, `__tests__/engine/pods.test.ts`
 - Modify: `src/engine/types.ts:319-341` (`StripAllocation.pod_id`, `Pod`)
 - Modify: `src/engine/resources.ts:88-100` (`allocateInterval` signature)
-- Modify: `src/engine/refs.ts:133-211` (`computePodRefDemand`)
-- Modify: `src/engine/concurrentScheduler.ts:9,52,74,164-165,414,431,451,470-471,486,509,529,879,912-958,1232,1258`
+- Modify: `src/engine/refs.ts:162-211` (`computePodRefDemand`)
+- Modify: `src/engine/concurrentScheduler.ts:9,52,67,74,164-165,241,414,431,451,470-471,486,509,529,879,912-958,1232,1239,1258,1303,1318`
+  – `:67` is the `computePodRefDemand` import, `:241` and `:1239` are doc
+  comments describing the pod split, `:1303` is the `Phase.DE` branch Step 6
+  widens, `:1318` is the call site Step 6 deletes.
 - Modify: `src/engine/constants.ts:68` (`DE_POD_SIZE`)
 - Modify: `__tests__/engine/resources.test.ts`, `__tests__/engine/refs.test.ts`,
   `__tests__/engine/concurrentScheduler.test.ts`
@@ -386,7 +447,10 @@ Expected: zero hits, including comments.
 - Modify: `src/engine/types.ts:91-95` (delete `DeCapacityEstimation`), `:235`
   (delete the field)
 - Modify: `src/store/buildConfig.ts:75`
-- Modify: `__tests__/engine/capacity.test.ts`, `__tests__/store/buildConfig.test.ts`
+- Modify: `__tests__/engine/capacity.test.ts`,
+  `__tests__/store/buildConfig.test.ts`,
+  `__tests__/helpers/factories.ts:67` (the shared factory sets
+  `de_capacity_estimation`, so it moves with the field)
 
 - [ ] **Step 1: Rewrite the capacity tests around one estimator**
 
@@ -395,6 +459,10 @@ between the two models. Keep and re-point the tests that assert pool
 strip-hours, STAGED prelims plus R16 attribution, video strip-hour attribution,
 and team strip-hours. Add a test asserting that a SINGLE_STAGE individual
 event's DE strip-hours equal `strips_allocated × table_duration / 60`.
+
+Also delete the `distributeEvenly` describe block at `capacity.test.ts:743-754`
+and its import at `:8`. Step 3 removes the function, and that block is its only
+remaining reference once `podDeStripHours` is gone.
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -413,8 +481,9 @@ parameter.
 `de_capacity_estimation` flag – team events always used it – so folding it into
 the table-driven model is a separate behavioral change, out of scope here.
 
-Delete `distributeEvenly` and `prevPowerOf2` only if nothing else imports them.
-`prevPowerOf2` is used by `teamDeStripHours`, so it stays.
+Delete `distributeEvenly` and its export. `podDeStripHours` at `capacity.ts:71`
+was its only production caller, and Step 1 removed its test block. Keep
+`prevPowerOf2` – `teamDeStripHours` uses it at `capacity.ts:166,176`.
 
 - [ ] **Step 4: Remove the config flag**
 
@@ -484,6 +553,12 @@ exactly 8 or 9 without it. Their pool duration rises by about 1.67×. On a
 120-minute pool round that is roughly 30 extra minutes for a handful of small
 veteran and team events. Confirm the affected event list is small and consists
 of the events you expect.
+
+Record B4's affected pool durations before and after. `TODO.md` notes that B4
+already predicts 5–6 hours for Y8/Y10 pool rounds that run 2–3 hours in reality,
+and this change pushes those events further in the same direction. The measured
+delta is the input the youth-duration recalibration needs, so capture it here
+rather than re-deriving it later.
 
 - [ ] **Step 6: Dispatch `test-quality-reviewer`**
 
@@ -583,7 +658,10 @@ under-count on staged DE events.
 - [ ] **Step 6: Update Appendix A**
 
 `SLOT_MINS` 5, `DE_BOUT_DURATION` sabre 15, new `YOUTH_VET_BOUT_DELTA` −5, new
-`DEFAULT_DE_STRIP_FOOTPRINT` 16, new `DE_REF_STRIP_GROUP` 4. Remove `DE_POD_SIZE`.
+`DEFAULT_DE_STRIP_FOOTPRINT` 16. Remove `DE_POD_SIZE`.
+
+There is no referee-grouping constant. DE referee demand is one per strip with no
+grouping factor anywhere, so Appendix A must not introduce one.
 
 - [ ] **Step 7: Run the acceptance sweep**
 
@@ -612,14 +690,20 @@ sentence here is a real defect.
 ## Acceptance
 
 - `pnpm test` green, `tsc -b` clean, `pnpm lint` clean.
-- `grep -rni "pod" src/` and `grep -rni "double[-_ ]?strip" src/` return nothing.
+- `grep -rni "pod" src/ METHODOLOGY.md` and
+  `grep -rni "double[-_ ]?strip" src/ METHODOLOGY.md` return nothing. Both greps
+  cover the document as well as the code, so Task 8's rewrite is gated rather
+  than assumed.
 - No references to `de_capacity_estimation` or `pod_captain_override` anywhere
   in `src/`.
 - The drift-ledger snapshot has been reviewed and accepted at every task, with
   each accepted change explained in its commit message.
+- **No B1–B8 scenario ends P1 scheduling fewer events than it did at Task 1**,
+  unless the drop is deliberate and its cause is recorded in the commit message
+  of the task that caused it, with before and after counts.
 - DE referee demand is one referee per strip on every path – staged, single
-  stage, and the day-summary line – with the increase visible and accepted in
-  the drift ledger.
+  stage, the day-summary line, and `recommendRefCount` – with the increase
+  visible and accepted in the drift ledger.
 - A saved config containing `pod_captain_override` still loads.
 
 ## Risks
@@ -635,9 +719,10 @@ sentence here is a real defect.
   be told why.
 - **Compounding drift.** Seven behavior-affecting tasks in sequence can drift
   the scenarios well past the ±1 event the original phase-1 plan predicted. The
-  drift ledger exists to make this visible per-task rather than in aggregate.
-  P2 re-baselines the integration floors regardless, since B1's floor of 14 is
-  already stale against an actual 24.
+  drift ledger exists to make this visible per-task rather than in aggregate,
+  and the drift gate after Task 1 is what converts that visibility into a stop
+  condition. P2 re-baselines the integration floors regardless, since B1's floor
+  of 14 is already stale against an actual 24.
 - **`grep -rni "pod"` false positives.** Words like "podium" would trip it.
   There are none today – confirm rather than assume when the sweep runs.
 

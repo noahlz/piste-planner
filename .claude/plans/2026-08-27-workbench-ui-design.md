@@ -215,7 +215,7 @@ is the design they all reference.
 
 | | Work | Depends on |
 |---|---|---|
-| **P1** | Foundations – `SLOT_MINS` 5, pod removal, double-strip removal, capacity model collapse, `perBoutDuration` helper. Planned in [`2026-08-27-p1-foundations-plan.md`](./2026-08-27-p1-foundations-plan.md) | – |
+| **P1** | Foundations – `SLOT_MINS` 5, pod removal, double-strip removal, capacity model collapse, `perBoutDuration` helper, and the staged-DE referee correction. Planned in [`2026-08-27-p1-foundations-plan.md`](./2026-08-27-p1-foundations-plan.md) | – |
 | **P2** | Derived state – placements as intent, store inversion, staleness removal, validation split, days cap widened, findings identity, presets moved to `src/data` | P1 |
 | **P3** | Workbench shell and canvas – visx matrix with zoom, virtualization, encoding, tooltip, rail, tray, drawer, view toggle. Deletes wizard, kitchen sink, and `layoutMode` | P2 |
 | **P4** | Manual placement – event-level drag, unpack-to-blocks, advisory edit validation, undo/redo, `Auto-fill unplaced` via pre-colored DSatur and pre-seeded scheduler state | P3 |
@@ -225,6 +225,12 @@ is the design they all reference.
 change: `createGlobalState` starts empty at `concurrentScheduler.ts:183` and
 `assignDaysByColoring` colors every vertex, so pinned events need pre-seeded
 strip intervals, pre-colored days, and exclusion from `buildEventStates`.
+
+P1 carries one item this design did not originally scope: DE referee demand
+becomes one referee per strip on every path, which raises staged-DE figures
+roughly 4× on the NAC scenarios. It is a correction to an under-count rather than
+a new feature, and the P1 plan's "Referee counting" section holds the reasoning.
+Anyone comparing referee numbers across P1 should expect a step change.
 
 ## Testing
 
@@ -250,12 +256,16 @@ strip intervals, pre-colored days, and exclusion from `buildEventStates`.
 
 ## Open items carried forward
 
-These predate this design and are unaffected by it:
+These predate this design and are unaffected by it. [`TODO.md`](./TODO.md) is the
+single record of each one – the entries below are pointers, not second copies, so
+detail goes there and nowhere else.
 
-- Youth-event pool duration calibration – B4 predicts 5–6 hours for Y8/Y10
-  events that finish in 2–3 hours in reality.
-- `CAPACITY_TARGET_FILL = 0.3` in `dayColoring.ts` was tuned for the deleted
-  serial scheduler and has never been re-tuned against concurrent-scheduler
-  baselines.
-- Global settings – engine constants as a user-editable configuration file with
-  defaults, where serialization persists only the overrides.
+| Item | Owner phase |
+|---|---|
+| Youth-event pool duration calibration | Unassigned. P1's Task 6 measures the delta it needs. |
+| `CAPACITY_TARGET_FILL = 0.3` re-tune | P2, alongside the integration-floor re-baseline |
+| Global settings – engine constants as a user-editable config file | **Unassigned.** P1 creates four of the constants it would expose, so this needs a phase or an explicit "after P5". |
+| Per-type defaults in the rail's Advanced panel | **Unassigned.** Describes P3 rail behavior but is in no roadmap row. |
+
+The two marked unassigned are open questions, not oversights left implicit. Decide
+them before P3 is planned, since both land in the rail it builds.
