@@ -56,10 +56,21 @@ checkable work), and `research.md` when decisions need their reasoning recorded.
 
 ## Git Ownership
 
-**The user runs all git commands.** No agent, subagent, or skill step runs `git`
-for any reason, including read-only inspection and `/speckit-implement`'s
-repository-detection step. Commit points appear in `tasks.md` as checkpoints
-marked "(user commits)".
+**The user owns what lands.** The final commit and the push are theirs, made with
+`commit-with-costs` so session cost metrics reach the trailers. Everything before
+that is the agents' to record.
+
+- **Read-only git is unrestricted** — `status`, `diff`, `log`, `show`,
+  `rev-parse`, `merge-base` — for the controller and for subagents. Review diffs
+  and drift comparisons depend on it.
+- **Feature work happens in a git worktree on its own branch, and agents commit
+  there.** Commit at the checkpoints `tasks.md` marks. Those messages carry the
+  evidence the drift ledger demands: before/after event counts when the gate
+  trips, and any deliberate correction to a headline output.
+- **No agent pushes, and no agent makes the closing commit.** When the branch is
+  ready, stop and hand it to the user.
+- No `merge`, `rebase`, branch deletion, `reset --hard`, or `clean -fdx` unless
+  the user asks for it by name. No commits straight to `main`.
 
 ## Governance
 
@@ -72,7 +83,10 @@ Amendments require a version bump and a note of what changed. `CLAUDE.md` and
 rules under `~/.claude` remain authoritative for anything this document does not
 cover.
 
+- 1.2.0 (2026-08-28): git ownership relaxed — read-only git unrestricted, agents
+  commit checkpoints on a worktree branch, the user still owns the closing
+  commit and the push.
 - 1.1.0 (2026-08-27): commands moved to `CLAUDE.md`, git ownership promoted to
   its own section.
 
-**Version**: 1.1.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-27
+**Version**: 1.2.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28

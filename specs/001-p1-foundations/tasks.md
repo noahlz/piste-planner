@@ -28,8 +28,11 @@ until the drift ledger exists.
   expected behavior. Code is written during execution.
 - Run tests as `timeout 120 pnpm --silent test > ./tmp/test.log 2>&1` and read
   `./tmp/test.log` only on failure.
-- **The user runs all git commands.** Never run `git` anything. Commit points are
-  marked "(user commits)".
+- **Work happens in a worktree on branch `001-p1-foundations`, and checkpoint
+  commits land there.** Read-only git is unrestricted. Commit points are marked
+  "(commit)" – each message carries that checkpoint's drift evidence. No agent
+  pushes and no agent makes the closing commit: when the branch is ready, the
+  user reviews it and lands it with `commit-with-costs`.
 - Every task after T006 ends by re-running the drift ledger and reviewing the
   snapshot diff before accepting it. An unexplained diff is a bug, not noise.
 - **Drift gate**: a task halts if any B1–B8 scenario schedules fewer events after
@@ -49,14 +52,14 @@ T001–T006.
 
 ### Drift-ledger snapshot
 
-- [ ] T001 Lift the eight B-scenario fixtures into a single exported record keyed `B1`–`B8` at the top of `__tests__/engine/integration.test.ts`, preserving every fencer count and config argument exactly as written today, moving the `Source:` comment URLs onto the fixture entries, and rewriting each `describe` to read from that record. Keep the shape flat and serializable – P2's move to `src/data` consumes it.
-- [ ] T002 Run `timeout 120 pnpm --silent vitest run __tests__/engine/integration.test.ts > ./tmp/test.log 2>&1` and confirm 8 passed with no assertion changes.
-- [ ] T003 Write the drift-ledger snapshot test in `__tests__/engine/driftLedger.test.ts`, running `scheduleAll` for each of B1–B8 and snapshotting the normalized digest described in [research.md](./research.md#d2-the-drift-ledger-is-the-guard-rail-and-it-comes-first): scheduled event count and ERROR bottleneck count, full `ref_requirements_by_day`, the per-day peak the `DAY_RESOURCE_SUMMARY` line reports recomputed from `peakPoolRefDemand` and `peakDeRefDemand` the same way `concurrentScheduler.ts:1489-1496` does, `recommendRefCount`'s `{ three_weapon, foil_epee }` and `recommendStripCount`'s result from `stripBudget.ts`, and a per-event map of `assigned_day`, `pool_start`, `pool_end`, `de_start`, `de_total_end`, `pool_strip_count` with event ids sorted. Snapshot no bottleneck message strings.
-- [ ] T004 Run `timeout 120 pnpm --silent vitest run __tests__/engine/driftLedger.test.ts > ./tmp/test.log 2>&1`, confirm 8 snapshots written and passing on a second run, then read `__tests__/engine/__snapshots__/driftLedger.test.ts.snap` and sanity-check that B1 shows 24 scheduled events and 0 errors.
-- [ ] T005 Run the full suite. Expected: the 712-test baseline plus the new drift-ledger tests, 0 failed.
-- [ ] T006 Dispatch `test-quality-reviewer` on `__tests__/engine/driftLedger.test.ts`.
+- [X] T001 Lift the eight B-scenario fixtures into a single exported record keyed `B1`–`B8` at the top of `__tests__/engine/integration.test.ts`, preserving every fencer count and config argument exactly as written today, moving the `Source:` comment URLs onto the fixture entries, and rewriting each `describe` to read from that record. Keep the shape flat and serializable – P2's move to `src/data` consumes it.
+- [X] T002 Run `timeout 120 pnpm --silent vitest run __tests__/engine/integration.test.ts > ./tmp/test.log 2>&1` and confirm 8 passed with no assertion changes.
+- [X] T003 Write the drift-ledger snapshot test in `__tests__/engine/driftLedger.test.ts`, running `scheduleAll` for each of B1–B8 and snapshotting the normalized digest described in [research.md](./research.md#d2-the-drift-ledger-is-the-guard-rail-and-it-comes-first): scheduled event count and ERROR bottleneck count, full `ref_requirements_by_day`, the per-day peak the `DAY_RESOURCE_SUMMARY` line reports recomputed from `peakPoolRefDemand` and `peakDeRefDemand` the same way `concurrentScheduler.ts:1489-1496` does, `recommendRefCount`'s `{ three_weapon, foil_epee }` and `recommendStripCount`'s result from `stripBudget.ts`, and a per-event map of `assigned_day`, `pool_start`, `pool_end`, `de_start`, `de_total_end`, `pool_strip_count` with event ids sorted. Snapshot no bottleneck message strings.
+- [X] T004 Run `timeout 120 pnpm --silent vitest run __tests__/engine/driftLedger.test.ts > ./tmp/test.log 2>&1`, confirm 8 snapshots written and passing on a second run, then read `__tests__/engine/__snapshots__/driftLedger.test.ts.snap` and sanity-check that B1 shows 24 scheduled events and 0 errors.
+- [X] T005 Run the full suite. Expected: the 712-test baseline plus the new drift-ledger tests, 0 failed.
+- [X] T006 Dispatch `test-quality-reviewer` on `__tests__/engine/driftLedger.test.ts`.
 
-**Checkpoint**: baseline captured (user commits). The drift gate is live from here.
+**Checkpoint**: baseline captured (commit). The drift gate is live from here.
 
 ### Per-bout duration helper and bout constants
 
@@ -72,7 +75,7 @@ tests – see [research.md](./research.md#d4-perboutduration-ships-without-a-p1-
 - [ ] T012 Run the full suite and review the drift-ledger diff. `DE_BOUT_DURATION` is read by `capacity.ts` in `podDeStripHours`, `greedyDeStripHours`, and `teamDeStripHours`, so the sabre change shifts day-assignment capacity estimates for sabre events. Day reassignments and time shifts are expected churn – a *drop* in scheduled event count is a finding.
 - [ ] T013 Accept the snapshot once the diff is explained, then dispatch `test-quality-reviewer`.
 
-**Checkpoint**: foundation ready (user commits). User story work can begin.
+**Checkpoint**: foundation ready (commit). User story work can begin.
 
 ---
 
@@ -100,7 +103,7 @@ reviewed on its own.
 - [ ] T020 [US1] Review the drift-ledger diff. Expected: **no change to any schedule time or event count** – any shift means something unintended moved. `ref_requirements_by_day` holds steady, since pod captains never entered it. The **day-summary peak** and **`recommendRefCount`** both fall by the captain addend they were carrying. A day-summary peak that does *not* move means `peakDeRefDemand` still has a captain path in it.
 - [ ] T021 [US1] Dispatch `test-quality-reviewer` and `react-code-reviewer`.
 
-**Checkpoint**: (user commits).
+**Checkpoint**: (commit).
 
 ### Remove pod allocation
 
@@ -116,7 +119,7 @@ reviewed on its own.
 - [ ] T031 [US1] Run `grep -rni "pod" src/`. Expected: zero hits, including comments.
 - [ ] T032 [US1] Dispatch `test-quality-reviewer`.
 
-**Checkpoint**: US1 complete – referee demand is one per strip on every path. (user commits, with the referee correction called out in the message.)
+**Checkpoint**: US1 complete – referee demand is one per strip on every path. (commit, with the referee correction called out in the message.)
 
 ---
 
@@ -134,7 +137,7 @@ reviewed on its own.
 - [ ] T037 [US2] Review the drift-ledger diff. Only events whose entire pool round is a single pool of 8 or more are affected – roughly 8 to 63 fencers with the single-pool override, or exactly 8 or 9 without it – and their pool duration rises by about 1.67×. Confirm the affected event list is small and consists of the events you expect. **Record B4's affected pool durations before and after** (SC-008): `docs/design/backlog.md` notes B4 already predicts 5–6 hours for Y8/Y10 pool rounds that run 2–3 hours in reality, and this change pushes them further the same way. The measured delta is what the youth-duration recalibration needs.
 - [ ] T038 [US2] Dispatch `test-quality-reviewer`.
 
-**Checkpoint**: US2 complete. (user commits, with B4's before/after durations in the message.)
+**Checkpoint**: US2 complete. (commit, with B4's before/after durations in the message.)
 
 ---
 
@@ -156,7 +159,7 @@ delete the config field that selected between them.
 - [ ] T046 [US3] Review the drift-ledger diff. The default was `pod_packed`, so SINGLE_STAGE individual events move from bout-based-scaled strip-hours to the flat table formula. Capacity estimates feed day-assignment penalties, so expect day reassignments on the regional scenarios (B4, B6) where SINGLE_STAGE dominates. Scheduled counts should hold – if a scenario loses events, record before and after counts in the commit message so the P2 re-baseline has the history.
 - [ ] T047 [US3] Dispatch `test-quality-reviewer`.
 
-**Checkpoint**: US3 complete. (user commits.)
+**Checkpoint**: US3 complete. (commit.)
 
 ---
 
@@ -177,7 +180,7 @@ every scenario and it must be reviewable alone.
 - [ ] T052 [US4] Review the drift-ledger diff. Expect broad churn and expect it to be *favorable* – deferred phases now resume at the true earliest free moment rather than rounding up to the next half hour, so start times should move earlier and scheduled counts should hold or rise. A scenario that schedules *fewer* events on a finer grid is a genuine finding.
 - [ ] T053 [US4] Dispatch `test-quality-reviewer`.
 
-**Checkpoint**: all four user stories complete. (user commits.)
+**Checkpoint**: all four user stories complete. (commit.)
 
 ---
 
@@ -207,7 +210,7 @@ same file and run sequentially.
 
 - [ ] T062 Read `METHODOLOGY.md` end to end and check that no remaining passage contradicts the new model.
 
-**Checkpoint**: feature complete. (user commits.)
+**Checkpoint**: feature complete. (commit.)
 
 ---
 
@@ -246,9 +249,8 @@ unattributable. Within a task, independent test-file edits may be batched.
 
 - Execute with `/speckit-implement`, dispatching tasks to subagents per
   `superpowers:subagent-driven-development`. Subagent prompts must state that
-  **no git commands may be run**.
-- Skip `/speckit-implement`'s repository-detection and ignore-file step. The
-  project's `.gitignore` already exists and is correct, and the detection command
-  is a `git` invocation.
+  **subagents never push and never make the closing commit**.
+- Skip `/speckit-implement`'s ignore-file step. The project's `.gitignore`
+  already exists and is correct.
 - Mark each task `[X]` as it completes.
 - An unexplained snapshot diff is a bug, not noise.

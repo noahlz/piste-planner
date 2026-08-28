@@ -38,7 +38,8 @@ at 8–11ms across B1, B6, and B8 (53 events, 4 days, 80 strips). No task here
 should move that materially.
 
 **Constraints**: Engine functions pure, no unbounded loops, `as const` over
-enums, time as minutes from midnight. The user runs all git commands.
+enums, time as minutes from midnight. Checkpoint commits land on the
+`001-p1-foundations` worktree branch; the user lands the branch.
 
 **Scale/Scope**: 8 scenario fixtures, ~24–54 events each, up to 80 strips over
 4 days. Roughly 20 source files and 12 test files change.
@@ -55,7 +56,7 @@ enums, time as minutes from midnight. The user runs all git commands.
 | IV. Bounded Computation | PASS | No loops added. Removing the pod branch removes a loop over pods. |
 | V. Erasable TypeScript | PASS | `DEFAULT_DE_STRIP_FOOTPRINT` and `YOUTH_VET_BOUT_DELTA` are plain constants. Two `as const` union types are deleted, none added. |
 | Planning artifacts | PASS | No implementation code in this plan or in tasks.md. Cross-phase design stays in `docs/design/`. |
-| Git ownership | PASS | Commit points appear as "(user commits)" checkpoints. `/speckit-implement`'s repository-detection step is skipped – `.gitignore` already exists and is correct. |
+| Git ownership | PASS | Commit points appear as "(commit)" checkpoints on the `001-p1-foundations` worktree branch (constitution 1.2.0). No agent pushes or makes the closing commit. |
 
 No violations. Complexity Tracking is empty.
 
@@ -116,7 +117,7 @@ No constitution violations to justify.
 
 Run `/speckit-implement` over [tasks.md](./tasks.md), dispatching each task to a
 subagent per `superpowers:subagent-driven-development`. Subagent prompts must
-state that no git commands may be run.
+state that subagents never push and never make the closing commit.
 
 Tasks are strictly ordered – each one's drift review depends on the ledger state
 the previous one left. `[P]` marks the few tasks that touch disjoint files within
