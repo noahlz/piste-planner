@@ -125,21 +125,10 @@ describe('allocateInterval', () => {
   it('records event_id, phase, start_time, and end_time on the StripAllocation', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
-    allocateInterval(state, 'evt-1', Phase.DE_ROUND_OF_16, [0, 1], 60, 180, 'pod-A')
+    allocateInterval(state, 'evt-1', Phase.DE_ROUND_OF_16, [0, 1], 60, 180)
     const alloc = state.strip_allocations[0][0]
     expect(alloc.event_id).toBe('evt-1')
     expect(alloc.phase).toBe(Phase.DE_ROUND_OF_16)
-    expect(alloc.start_time).toBe(60)
-    expect(alloc.end_time).toBe(180)
-  })
-
-  it('records event_id, phase, start_time, and end_time when no pod_id is provided', () => {
-    const config = makeConfig()
-    const state = createGlobalState(config)
-    allocateInterval(state, 'evt-1', Phase.POOLS, [0], 60, 180)
-    const alloc = state.strip_allocations[0][0]
-    expect(alloc.event_id).toBe('evt-1')
-    expect(alloc.phase).toBe(Phase.POOLS)
     expect(alloc.start_time).toBe(60)
     expect(alloc.end_time).toBe(180)
   })

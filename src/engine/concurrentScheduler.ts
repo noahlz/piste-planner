@@ -63,7 +63,7 @@ import {
   dePhasesForBracket,
 } from './de.ts'
 import { computeStripCap, recommendStripCount, peakDeStripDemand } from './stripBudget.ts'
-import { computePodRefDemand, computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
+import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
@@ -117,7 +117,7 @@ type PhaseKind = (typeof PhaseKind)[keyof typeof PhaseKind]
 /**
  * Per-event state for the loop: which phase nodes belong to it, day assignment,
  * retry attempt counter, partial result shell, and the bracket-derived constants
- * the phase nodes need (durations, pod counts).
+ * the phase nodes need (durations, strip targets).
  */
 interface EventState {
   competition: Competition
@@ -234,9 +234,9 @@ export function scheduleAllConcurrent(
     }
   }
 
-  // Post-schedule ref demand: pool intervals via peakConcurrentStrips,
-  // STAGED-DE pods via computePodRefDemand. Non-pod allocations (pools,
-  // SINGLE_STAGE DE) are emitted as one RefDemandInterval per (event, phase).
+  // Post-schedule ref demand via peakConcurrentStrips: one RefDemandInterval
+  // per (event, phase) allocation window, scaled by refs_per_pool (pools,
+  // flights) or DE_REFS (DE, DE_PRELIMS, DE_ROUND_OF_16).
   state.ref_demand_by_day = computePostScheduleRefDemand(state, config, competitions)
 
   // Standard post-schedule pipeline.
@@ -1199,15 +1199,12 @@ function predecessorReadyTime(node: PhaseNode, events: EventState[]): number | n
 /**
  * Builds ref_demand_by_day from final allocation state.
  *
- * Pool / Flight / SINGLE_STAGE-DE phases (no pod_id): one RefDemandInterval
- * per allocation interval, where `count` is sourced from `peakConcurrentStrips`
- * for that interval's window, scaled by `refs_per_pool` (pool/flight) or
- * `DE_REFS` (SINGLE_STAGE DE). Plan line 102: peakConcurrentStrips drives the
- * post-schedule ref output and replaces the older sweep-line on
+ * One RefDemandInterval per allocation interval, where `count` is sourced from
+ * `peakConcurrentStrips` for that interval's window, scaled by `refs_per_pool`
+ * (POOLS/FLIGHT_A/FLIGHT_B) or `DE_REFS` (DE, DE_PRELIMS, DE_ROUND_OF_16 —
+ * staged and single-stage DE alike). Plan line 102: peakConcurrentStrips drives
+ * the post-schedule ref output and replaces the older sweep-line on
  * RefDemandInterval[].
- *
- * STAGED-DE pods: `computePodRefDemand` emits one interval (count=1) per pod —
- * the pod abstraction already encodes "1 head ref per pod".
  */
 function computePostScheduleRefDemand(
   state: GlobalState,
@@ -1216,16 +1213,15 @@ function computePostScheduleRefDemand(
 ): Record<number, RefDemandByDay> {
   const result: Record<number, RefDemandByDay> = {}
 
-  // Distinct non-pod allocations keyed by (event_id, phase, start, end). Each
-  // unique window represents one phase block; we use peakConcurrentStrips to
-  // measure the actual concurrent strip occupancy in that window.
+  // Allocations keyed by (event_id, phase, start, end). Each unique window
+  // represents one phase block; we use peakConcurrentStrips to measure the
+  // actual concurrent strip occupancy in that window.
   const seen = new Set<string>()
-  type NonPodWindow = { event_id: string; phase: Phase; start: number; end: number }
-  const windows: NonPodWindow[] = []
+  type Window = { event_id: string; phase: Phase; start: number; end: number }
+  const windows: Window[] = []
   for (let i = 0; i < state.strip_allocations.length; i++) {
     const list = state.strip_allocations[i]
     for (const a of list) {
-      if (a.pod_id !== undefined) continue
       const key = `${a.event_id}|${a.phase}|${a.start_time}|${a.end_time}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -1270,7 +1266,7 @@ function computePostScheduleRefDemand(
       count = w.phase === Phase.POOLS
         ? refRes.refs_needed
         : Math.max(1, Math.round(refRes.refs_needed / 2))
-    } else if (w.phase === Phase.DE) {
+    } else if (w.phase === Phase.DE || w.phase === Phase.DE_PRELIMS || w.phase === Phase.DE_ROUND_OF_16) {
       count = stripsForEvent * config.DE_REFS
     } else {
       count = stripsForEvent
@@ -1282,14 +1278,6 @@ function computePostScheduleRefDemand(
       count,
       weapon: comp.weapon,
     })
-  }
-
-  // STAGED-DE pods.
-  const podDemand = computePodRefDemand(state, config, competitions)
-  for (const [dayKey, byDay] of Object.entries(podDemand)) {
-    const d = Number(dayKey)
-    if (!result[d]) result[d] = { intervals: [] }
-    result[d].intervals.push(...byDay.intervals)
   }
 
   return result

@@ -308,29 +308,12 @@ export interface ScheduleResult {
  * the allocation out of the strip's list rather than editing it in place.
  *
  * `start_time` and `end_time` are in minutes-from-tournament-start (T=0).
- * `pod_id` is present for STAGED-DE pod allocations (Phase B onward), absent for
- * pool and SINGLE_STAGE-DE allocations.
  */
 export interface StripAllocation {
   event_id: string
   phase: Phase
-  pod_id?: string
   start_time: number
   end_time: number
-}
-
-/**
- * Logical group of up to 4 strips that runs a STAGED-DE round together with one
- * head referee. Pod IDs persist on StripAllocation entries so post-schedule ref
- * staffing can group strips into ref-staffing units.
- *
- * The full pod abstraction is introduced in Phase B (`src/engine/pods.ts`); this
- * type is exported now so Phase A's StripAllocation.pod_id field has a stable
- * shape to point at.
- */
-export interface Pod {
-  id: string
-  strip_indices: number[]
 }
 
 export interface GlobalState {

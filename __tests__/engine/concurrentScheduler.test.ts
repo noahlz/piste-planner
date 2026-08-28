@@ -548,4 +548,29 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     expect(dayReq).toBeDefined()
     expect(dayReq!.peak_total_refs).toBe(expectedPoolRefs)
   })
+
+  it('STAGED event with DE_REFS=2: DE_ROUND_OF_16 block demand is strips × DE_REFS, not strips × 1', () => {
+    // Same bracket/strip shape as the "no prelims" R16 test above, but DE_REFS=2
+    // pins the × config.DE_REFS multiplier. The rest of this suite runs at the
+    // default DE_REFS=1, where "strips × DE_REFS" and "strips × 1" are numerically
+    // identical and so cannot catch a staged block landing in the wrong branch.
+    const e = comp('r16RefsEvt', {
+      fencer_count: 24,
+      de_mode: DeMode.STAGED,
+      cut_mode: CutMode.DISABLED,
+      de_round_of_16_strips: 16,
+      de_video_policy: VideoPolicy.BEST_EFFORT,
+    })
+    const config = smallConfig({ strips: makeStrips(20, 4), DE_REFS: 2 })
+    const result = scheduleAllConcurrent([e], config)
+    const s = result.schedule['r16RefsEvt']
+    expect(s).toBeDefined()
+    expect(s.de_prelims_strip_count).toBe(0)
+    expect(s.de_round_of_16_strip_count).toBeGreaterThan(0)
+    expect(s.pool_refs_count).toBeLessThan(s.de_round_of_16_strip_count)
+
+    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
+    expect(dayReq).toBeDefined()
+    expect(dayReq!.peak_total_refs).toBe(s.de_round_of_16_strip_count * config.DE_REFS)
+  })
 })
