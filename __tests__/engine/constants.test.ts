@@ -5,8 +5,10 @@ import {
   REGIONAL_CUT_TOURNAMENT_TYPES,
   VIDEO_STAGE_ROUND,
   SOFT_SEPARATION_PAIRS,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
 } from '../../src/engine/constants.ts'
-import { Category, CutMode, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
+import { Category, CutMode, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
 
 describe('INDIV_TEAM_RELAXABLE_BLOCKS', () => {
   it('has exactly 2 entries', () => {
@@ -77,6 +79,23 @@ describe('VIDEO_STAGE_ROUND', () => {
       expect(VIDEO_STAGE_ROUND[`${Category.VETERAN}:${ageGroup}`]).toBe(4)
     }
   )
+})
+
+describe('DE_BOUT_DURATION', () => {
+  it('foil and épée are 20', () => {
+    expect(DE_BOUT_DURATION[Weapon.FOIL]).toBe(20)
+    expect(DE_BOUT_DURATION[Weapon.EPEE]).toBe(20)
+  })
+
+  it('sabre is 15 (includes the 5-minute strip-changeover overhead)', () => {
+    expect(DE_BOUT_DURATION[Weapon.SABRE]).toBe(15)
+  })
+})
+
+describe('YOUTH_VET_BOUT_DELTA', () => {
+  it('is -5', () => {
+    expect(YOUTH_VET_BOUT_DELTA).toBe(-5)
+  })
 })
 
 describe('SOFT_SEPARATION_PAIRS', () => {

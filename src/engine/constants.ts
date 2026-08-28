@@ -66,11 +66,16 @@ export const TEAM_TAIL_MINS = 60
 
 export const DE_REFS = 1
 export const DE_POD_SIZE = 4
+// Per-bout time includes the 5-minute strip-changeover overhead, which is why
+// sabre is 15 rather than the pure fencing time.
 export const DE_BOUT_DURATION: Record<Weapon, number> = {
   [Weapon.EPEE]: 20,
   [Weapon.FOIL]: 20,
-  [Weapon.SABRE]: 10,
+  [Weapon.SABRE]: 15,
 }
+// Applied to DE_BOUT_DURATION for Y8/Y10 and all veteran age groups — shorter
+// bouts for these categories per USA Fencing rules.
+export const YOUTH_VET_BOUT_DELTA = -5
 export const SAME_TIME_WINDOW_MINS = 30
 export const INDIV_TEAM_MIN_GAP_MINS = 120
 

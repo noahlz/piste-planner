@@ -67,13 +67,13 @@ Produces `perBoutDuration(weapon, category, vet_age_group)` and
 `YOUTH_VET_BOUT_DELTA`. Nothing in this feature calls the helper besides its
 tests – see [research.md](./research.md#d4-perboutduration-ships-without-a-p1-consumer).
 
-- [ ] T007 Write failing tests for `perBoutDuration` in `__tests__/engine/de.test.ts`: foil and épée at 20 for a senior category, sabre at 15, Y10 and Y8 at their weapon's value minus 5 across all three weapons (so sabre for Y10 is 10), every `VetAgeGroup` value at minus 5 including `VET_COMBINED`, a senior category unaffected, and an explicit assertion that **Y12 and Y14 are unaffected**.
-- [ ] T008 Run `timeout 120 pnpm --silent vitest run __tests__/engine/de.test.ts > ./tmp/test.log 2>&1`. Expected: FAIL – `perBoutDuration` is not exported.
-- [ ] T009 In `src/engine/constants.ts:69-73`, change `DE_BOUT_DURATION.SABRE` from 10 to 15 and add `YOUTH_VET_BOUT_DELTA = -5`. Comment that per-bout time includes the 5-minute strip-changeover overhead, which is why sabre is 15 rather than the pure fencing time. Update `__tests__/engine/constants.test.ts`.
-- [ ] T010 Implement `perBoutDuration` in `src/engine/de.ts`: the weapon's base duration plus the delta when the category is Y8 or Y10 **or** `vet_age_group` is non-null. The veteran arm keys off `vet_age_group`, not category, so `VET_COMBINED` is covered. Y12 and Y14 take the plain weapon duration.
-- [ ] T011 Run `timeout 120 pnpm --silent vitest run __tests__/engine/de.test.ts __tests__/engine/constants.test.ts > ./tmp/test.log 2>&1`. Expected: PASS.
-- [ ] T012 Run the full suite and review the drift-ledger diff. `DE_BOUT_DURATION` is read by `capacity.ts` in `podDeStripHours`, `greedyDeStripHours`, and `teamDeStripHours`, so the sabre change shifts day-assignment capacity estimates for sabre events. Day reassignments and time shifts are expected churn – a *drop* in scheduled event count is a finding.
-- [ ] T013 Accept the snapshot once the diff is explained, then dispatch `test-quality-reviewer`.
+- [X] T007 Write failing tests for `perBoutDuration` in `__tests__/engine/de.test.ts`: foil and épée at 20 for a senior category, sabre at 15, Y10 and Y8 at their weapon's value minus 5 across all three weapons (so sabre for Y10 is 10), every `VetAgeGroup` value at minus 5 including `VET_COMBINED`, a senior category unaffected, and an explicit assertion that **Y12 and Y14 are unaffected**.
+- [X] T008 Run `timeout 120 pnpm --silent vitest run __tests__/engine/de.test.ts > ./tmp/test.log 2>&1`. Expected: FAIL – `perBoutDuration` is not exported.
+- [X] T009 In `src/engine/constants.ts:69-73`, change `DE_BOUT_DURATION.SABRE` from 10 to 15 and add `YOUTH_VET_BOUT_DELTA = -5`. Comment that per-bout time includes the 5-minute strip-changeover overhead, which is why sabre is 15 rather than the pure fencing time. Update `__tests__/engine/constants.test.ts`.
+- [X] T010 Implement `perBoutDuration` in `src/engine/de.ts`: the weapon's base duration plus the delta when the category is Y8 or Y10 **or** `vet_age_group` is non-null. The veteran arm keys off `vet_age_group`, not category, so `VET_COMBINED` is covered. Y12 and Y14 take the plain weapon duration.
+- [X] T011 Run `timeout 120 pnpm --silent vitest run __tests__/engine/de.test.ts __tests__/engine/constants.test.ts > ./tmp/test.log 2>&1`. Expected: PASS.
+- [X] T012 Run the full suite and review the drift-ledger diff. `DE_BOUT_DURATION` is read by `capacity.ts` in `podDeStripHours`, `greedyDeStripHours`, and `teamDeStripHours`, so the sabre change shifts day-assignment capacity estimates for sabre events. Day reassignments and time shifts are expected churn – a *drop* in scheduled event count is a finding.
+- [X] T013 Accept the snapshot once the diff is explained, then dispatch `test-quality-reviewer`.
 
 **Checkpoint**: foundation ready (commit). User story work can begin.
 
