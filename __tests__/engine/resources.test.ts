@@ -29,32 +29,32 @@ describe('snapToSlot', () => {
     expect(snapToSlot(0)).toBe(0)
   })
 
-  it('15 → 30 (halfway, rounds up)', () => {
-    expect(snapToSlot(15)).toBe(30)
+  it('2 → 5 (partway, rounds up)', () => {
+    expect(snapToSlot(2)).toBe(5)
   })
 
-  it('30 → 30 (on boundary, no change)', () => {
-    expect(snapToSlot(30)).toBe(30)
+  it('5 → 5 (on boundary, no change)', () => {
+    expect(snapToSlot(5)).toBe(5)
   })
 
-  it('31 → 60 (just past boundary)', () => {
-    expect(snapToSlot(31)).toBe(60)
-  })
-
-  it('45 → 60', () => {
-    expect(snapToSlot(45)).toBe(60)
-  })
-
-  it('60 → 60 (on boundary)', () => {
-    expect(snapToSlot(60)).toBe(60)
+  it('6 → 10 (just past boundary)', () => {
+    expect(snapToSlot(6)).toBe(10)
   })
 
   it('480 → 480 (day start, already aligned)', () => {
     expect(snapToSlot(480)).toBe(480)
   })
 
-  it('495 → 510 (15 min past hour)', () => {
-    expect(snapToSlot(495)).toBe(510)
+  it('482 → 485 (2 min past day start)', () => {
+    expect(snapToSlot(482)).toBe(485)
+  })
+
+  it('783 → 785 (13:03 → 13:05, independent test from spec)', () => {
+    expect(snapToSlot(783)).toBe(785)
+  })
+
+  it('785 → 785 (on boundary, no change)', () => {
+    expect(snapToSlot(785)).toBe(785)
   })
 })
 
