@@ -13,7 +13,7 @@ import {
 import {
   Category, Gender, Weapon, EventType,
   CutMode, DeMode, VideoPolicy, RefPolicy, DeStripRequirement,
-  PodCaptainOverride, TournamentType,
+  TournamentType,
 } from '../../src/engine/types.ts'
 
 /** Helper: reset store and apply partial state, returning the full state snapshot. */
@@ -37,7 +37,6 @@ function minimalState(): Partial<StoreState> {
     ],
     strips_total: 10,
     video_strips_total: 2,
-    pod_captain_override: PodCaptainOverride.AUTO,
     selectedCompetitions: {
       'D1-M-FOIL-IND': {
         fencer_count: 64,
@@ -67,7 +66,6 @@ describe('buildTournamentConfig', () => {
     expect(config.days_available).toBe(2)
     expect(config.strips_total).toBe(10)
     expect(config.video_strips_total).toBe(2)
-    expect(config.pod_captain_override).toBe(PodCaptainOverride.AUTO)
     expect(competitions).toHaveLength(1)
   })
 

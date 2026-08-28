@@ -1,4 +1,4 @@
-import { PodCaptainOverride, DeMode, Weapon, RefPolicy, Phase } from './types.ts'
+import { Weapon, RefPolicy } from './types.ts'
 import { findDayForTime } from './types.ts'
 import type {
   TournamentConfig,
@@ -9,38 +9,6 @@ import type {
   GlobalState,
 } from './types.ts'
 import { computePoolStructure } from './pools.ts'
-import { computeBracketSize } from './de.ts'
-
-/**
- * Returns the number of pod captains needed for a DE phase.
- *
- * METHODOLOGY.md §Pod Captains pod captain rules:
- * - DISABLED → 0 (no pod captains during DEs)
- * - FORCE_4  → always ceil(deStrips / 4)
- * - AUTO + SINGLE_STAGE: bracket ≤32 → 4-strip pods; bracket >32 → 8-strip pods
- * - AUTO + STAGED: DE_ROUND_OF_16 → 4-strip pods; all other phases → 8-strip pods
- */
-export function podCaptainsNeeded(
-  override: PodCaptainOverride,
-  deMode: DeMode,
-  bracketSize: number,
-  dePhase: Phase,
-  deStrips: number,
-): number {
-  if (override === PodCaptainOverride.DISABLED) return 0
-  if (override === PodCaptainOverride.FORCE_4) return Math.ceil(deStrips / 4)
-
-  // AUTO mode — pod size depends on de_mode and phase
-  let podSize: number
-  if (deMode === DeMode.SINGLE_STAGE) {
-    podSize = bracketSize <= 32 ? 4 : 8
-  } else {
-    // STAGED: round-of-16 uses 4-strip pods; prelims use 8-strip pods.
-    podSize = dePhase === Phase.DE_ROUND_OF_16 ? 4 : 8
-  }
-
-  return Math.ceil(deStrips / podSize)
-}
 
 /**
  * Estimates peak concurrent pool-round referee demand for a single competition.
@@ -57,40 +25,22 @@ export function peakPoolRefDemand(comp: Competition, ref_policy: RefPolicy): num
 }
 
 /**
- * Estimates peak concurrent DE referee demand for a single competition,
- * including pod captains (1 ref per strip + pod captains).
+ * Estimates peak concurrent DE referee demand for a single competition.
  *
  * With infinite refs, the DE phase uses all allocated strips concurrently.
  * DE always requires 1 ref per strip (DE_REFS = 1).
  */
 export function peakDeRefDemand(comp: Competition, config: TournamentConfig): number {
-  const bracketSize = computeBracketSize(
-    comp.fencer_count,
-    comp.cut_mode,
-    comp.cut_value,
-    comp.event_type,
-  )
-
   // Use the larger of round-of-16 strips and overall allocation as representative peak.
   // Stop-at-semis: there is no separate finals phase to consider.
   const deStrips = Math.max(comp.de_round_of_16_strips, comp.strips_allocated)
 
-  // DE refs: 1 per strip + pod captains for the round-of-16 phase (the terminal scheduled phase).
+  // DE refs: 1 per strip for the round-of-16 phase (the terminal scheduled phase).
   const dePhasePeakStrips = comp.de_round_of_16_strips
-  const phase = Phase.DE_ROUND_OF_16
-
-  const refsPerStrip = config.DE_REFS
-  const captains = podCaptainsNeeded(
-    config.pod_captain_override,
-    comp.de_mode,
-    bracketSize,
-    phase,
-    dePhasePeakStrips,
-  )
 
   // Strips for DE: the peak concurrent active strips
   const activeStrips = Math.min(dePhasePeakStrips, deStrips)
-  return refsPerStrip * activeStrips + captains
+  return config.DE_REFS * activeStrips
 }
 
 /**

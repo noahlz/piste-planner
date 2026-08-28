@@ -45,11 +45,6 @@ describe('KitchenSinkPage render tests', () => {
     expect(screen.getByRole('spinbutton', { name: 'Number of video strips' })).toBeInTheDocument()
   })
 
-  it('renders pod captain select', () => {
-    render(<KitchenSinkPage />)
-    expect(document.getElementById('pod-captain')).toBeInTheDocument()
-  })
-
   it('renders template selector', () => {
     render(<KitchenSinkPage />)
     // Template selector is now a ToggleGroup — check for a template name button

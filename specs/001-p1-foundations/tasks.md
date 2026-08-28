@@ -94,14 +94,14 @@ each equals allocated strips × the per-strip rate.
 Referee-side removal, separated from allocation-side removal so it can be
 reviewed on its own.
 
-- [ ] T014 [US1] Remove every `podCaptainsNeeded` test and rewrite `peakDeRefDemand` expectations to `DE_REFS × active strips` with no captain addend in `__tests__/engine/refs.test.ts`. Remove the pod-captain control assertions from `__tests__/store/store.test.ts`, `__tests__/store/serialization.test.ts`, `__tests__/store/buildConfig.test.ts`, and `__tests__/components/KitchenSinkPage.test.tsx`.
-- [ ] T015 [US1] Run the full suite. Expected: FAIL in `refs.test.ts` – `peakDeRefDemand` still adds captains.
-- [ ] T016 [US1] Delete `podCaptainsNeeded` (`src/engine/refs.ts:14-43`) and its call site, leaving `peakDeRefDemand` (`:66-94`) returning `refsPerStrip × activeStrips`. Delete the now-unused `PodCaptainOverride` and `DeMode` imports if nothing else uses them.
-- [ ] T017 [US1] Remove the type and every consumer: `PodCaptainOverride` (`src/engine/types.ts:84-89`) and the `pod_captain_override` field (`:213`), the store field, setter, action, and initial-state default (`src/store/store.ts:50,58,152,199-202`), the mapping in `src/store/buildConfig.ts:45`, both serialization directions (`src/store/serialization.ts:17,42,158`), and the Pod Captain Override control with its label and options constants (`src/components/sections/TournamentSetup.tsx:2,31-37,75-76,158-175`).
-- [ ] T018 [US1] Add a serialization back-compat test: a saved config or shared URL containing `pod_captain_override` loads successfully with the unknown key ignored rather than throwing (FR-010).
-- [ ] T019 [US1] Run `timeout 180 pnpm exec tsc -b > ./tmp/tsc.log 2>&1 && echo OK` and the full suite. Expected: both clean.
-- [ ] T020 [US1] Review the drift-ledger diff. Expected: **no change to any schedule time or event count** – any shift means something unintended moved. `ref_requirements_by_day` holds steady, since pod captains never entered it. The **day-summary peak** and **`recommendRefCount`** both fall by the captain addend they were carrying. A day-summary peak that does *not* move means `peakDeRefDemand` still has a captain path in it.
-- [ ] T021 [US1] Dispatch `test-quality-reviewer` and `react-code-reviewer`.
+- [X] T014 [US1] Remove every `podCaptainsNeeded` test and rewrite `peakDeRefDemand` expectations to `DE_REFS × active strips` with no captain addend in `__tests__/engine/refs.test.ts`. Remove the pod-captain control assertions from `__tests__/store/store.test.ts`, `__tests__/store/serialization.test.ts`, `__tests__/store/buildConfig.test.ts`, and `__tests__/components/KitchenSinkPage.test.tsx`.
+- [X] T015 [US1] Run the full suite. Expected: FAIL in `refs.test.ts` – `peakDeRefDemand` still adds captains.
+- [X] T016 [US1] Delete `podCaptainsNeeded` (`src/engine/refs.ts:14-43`) and its call site, leaving `peakDeRefDemand` (`:66-94`) returning `refsPerStrip × activeStrips`. Delete the now-unused `PodCaptainOverride` and `DeMode` imports if nothing else uses them.
+- [X] T017 [US1] Remove the type and every consumer: `PodCaptainOverride` (`src/engine/types.ts:84-89`) and the `pod_captain_override` field (`:213`), the store field, setter, action, and initial-state default (`src/store/store.ts:50,58,152,199-202`), the mapping in `src/store/buildConfig.ts:45`, both serialization directions (`src/store/serialization.ts:17,42,158`), and the Pod Captain Override control with its label and options constants (`src/components/sections/TournamentSetup.tsx:2,31-37,75-76,158-175`).
+- [X] T018 [US1] Add a serialization back-compat test: a saved config or shared URL containing `pod_captain_override` loads successfully with the unknown key ignored rather than throwing (FR-010).
+- [X] T019 [US1] Run `timeout 180 pnpm exec tsc -b > ./tmp/tsc.log 2>&1 && echo OK` and the full suite. Expected: both clean.
+- [X] T020 [US1] Review the drift-ledger diff. Expected: **no change to any schedule time or event count** – any shift means something unintended moved. `ref_requirements_by_day` holds steady, since pod captains never entered it. The **day-summary peak** and **`recommendRefCount`** both fall by the captain addend they were carrying. A day-summary peak that does *not* move means `peakDeRefDemand` still has a captain path in it.
+- [X] T021 [US1] Dispatch `test-quality-reviewer` and `react-code-reviewer`.
 
 **Checkpoint**: (commit).
 

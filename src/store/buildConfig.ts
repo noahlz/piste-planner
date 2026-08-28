@@ -42,7 +42,6 @@ export function buildTournamentConfig(state: StoreState): {
     strips,
     strips_total: state.strips_total,
     video_strips_total: state.video_strips_total,
-    pod_captain_override: state.pod_captain_override,
     dayConfigs: state.dayConfigs,
 
     // Global overrides from store

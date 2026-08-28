@@ -81,13 +81,6 @@ export const TournamentType = {
 } as const
 export type TournamentType = (typeof TournamentType)[keyof typeof TournamentType]
 
-export const PodCaptainOverride = {
-  AUTO: 'AUTO',
-  DISABLED: 'DISABLED',
-  FORCE_4: 'FORCE_4',
-} as const
-export type PodCaptainOverride = (typeof PodCaptainOverride)[keyof typeof PodCaptainOverride]
-
 export const DeCapacityEstimation = {
   POD_PACKED: 'pod_packed',
   SPREAD: 'spread',
@@ -210,7 +203,6 @@ export interface TournamentConfig {
   strips: Strip[]
   strips_total: number
   video_strips_total: number
-  pod_captain_override: PodCaptainOverride
   DAY_START_MINS: number
   DAY_END_MINS: number
   LATEST_START_MINS: number
