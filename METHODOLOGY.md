@@ -23,16 +23,17 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
    - [Strip Budget](#strip-budget)
    - [Flighting](#flighting)
    - [Direct Elimination (DE)](#direct-elimination-de)
-8. [Resources](#resources)
+8. [DE Capacity Estimation](#de-capacity-estimation)
+9. [Resources](#resources)
    - [Strip Assignment](#strip-assignment)
    - [Referee Calculation](#referee-calculation)
-9. [Concurrent Phase Scheduler](#concurrent-phase-scheduler)
-10. [Scheduling Algorithm](#scheduling-algorithm)
-11. [Tournament-Type Policies](#tournament-type-policies)
-12. [Auto-Suggestion Logic](#auto-suggestion-logic)
-13. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
-14. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
-15. [References](#references)
+10. [Concurrent Phase Scheduler](#concurrent-phase-scheduler)
+11. [Scheduling Algorithm](#scheduling-algorithm)
+12. [Tournament-Type Policies](#tournament-type-policies)
+13. [Auto-Suggestion Logic](#auto-suggestion-logic)
+14. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
+15. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
+16. [References](#references)
 
 [Appendix A: Penalty & Constant Defaults](#appendix-a-penalty--constant-defaults)
 
@@ -612,7 +613,6 @@ Score factors:
 - **Crossover count**: how many other competitions this one conflicts with
 - **Window tightness**: how narrow the allowed time window is
 - **Video scarcity** (NACs only): ratio of staged DE events requiring video to video strips
-- **Referee intensity**: events requiring 2 refs/pool score higher (2.0) than 1 ref/pool (0.5) — purely a tie-breaker; no ref supply is consulted
 
 Within this ordering:
 - Mandatory competitions before optional
@@ -625,6 +625,12 @@ For each competition in priority order:
 - Evaluate every available day; pick the one with the **lowest total penalty**
 - Penalty = sum of all applicable soft preferences vs. competitions already scheduled
 - If no day has finite penalty at current constraint level, escalate through [Constraint Relaxation](#constraint-relaxation)
+
+#### Saber Pileup
+
+Saber competitions carry an extra per-candidate-day penalty when other saber events are already on that day. `saberPileupPenalty` (`dayAssignment.ts:83-100`) counts how many other SABRE competitions are already assigned to the candidate day and looks up `SABER_PILEUP_PENALTY_TABLE = [0, 0.5, 2.0, 10.0, 50.0]`, indexed by that count and capped at the last entry – 4 or more other saber events on the day scores 50.0. Non-saber competitions always score 0.
+
+The penalty is always active, not gated by the load-balance flag, because saber refs are three-weapon specialists and are naturally scarce – concentrating saber events on one day is a structural staffing risk, not a load-balance nicety. Applied per candidate day inside `colorPenalty` (`dayColoring.ts:301`).
 
 ### Phase 5: Resource Allocation
 
@@ -923,7 +929,6 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 | Ind/team separation gap | 120 min | Minimum gap between individual and team (non-hard-blocked pairs) |
 | DE_REFS | 1 | Referees required per allocated DE strip |
 | DEFAULT_DE_STRIP_FOOTPRINT | 16 | Cap on strips a single DE phase can claim; `de_duration_table` durations are calibrated against this value |
-| RefPolicy.AUTO | 1.0 | Middle constraint score (between TWO=2.0 and ONE=0.5) |
 | DEFAULT_DE_DURATION_TABLE | (see `constants.ts`) | DE durations by bracket size and weapon |
 
 ### Capacity Model Constants
