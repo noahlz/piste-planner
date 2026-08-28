@@ -49,10 +49,15 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 43, B7: 18, B8: 50,
 }
 
-/** Scenarios that emit at least one `Day N refs: peak demand M.` summary line. */
-const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6', 'B8']
+/**
+ * Scenarios that emit at least one `Day N refs: peak demand M.` summary line.
+ * B4 is deliberately absent — it now trips the upfront feasibility gate before
+ * any per-day packing runs, so `postScheduleDayBreakdown` never executes and
+ * no summary line is ever emitted for it (see the B4-specific test below).
+ */
+const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B6', 'B8']
 
-/** Matches the refs line built at `concurrentScheduler.ts:1505`. */
+/** Matches the refs line built by `postScheduleDayBreakdown` in `concurrentScheduler.ts`. */
 const DAY_REFS_SUMMARY = /^Day (\d+) refs: peak demand (\d+)\.$/
 
 type EventDigest = {
@@ -91,9 +96,9 @@ function runScenario(id: ScenarioId) {
 }
 
 /**
- * Per-day peak ref demand, recomputed the way `concurrentScheduler.ts:1489-1496`
- * builds its DAY_RESOURCE_SUMMARY line: each competition on the day contributes
- * the larger of its pool and DE demand.
+ * Per-day peak ref demand, recomputed the way `postScheduleDayBreakdown`
+ * (`concurrentScheduler.ts`) builds its DAY_RESOURCE_SUMMARY line: each
+ * competition on the day contributes the larger of its pool and DE demand.
  *
  * Recomputed rather than parsed out of the message, and computed for EVERY day —
  * the scheduler only emits a summary for days with failures, and a ledger field

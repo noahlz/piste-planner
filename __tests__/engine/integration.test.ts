@@ -335,7 +335,7 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B8: 53 events on the 4-pod-DE model. The real tournament fit all 53 in 4 days.
+      // B8: 53 events under the current strip-footprint DE model. The real tournament fit all 53 in 4 days.
       // Conservative floor with safety margin while we tune the engine further.
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(35)
 

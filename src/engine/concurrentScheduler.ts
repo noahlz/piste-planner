@@ -12,9 +12,8 @@
  * `postScheduleWarnings`, `computeRefRequirements`) reused from the serial
  * scheduler unchanged.
  *
- * This file is a parallel entry point — the existing `scheduleAll` continues to
- * use the serial path. Phase D will switch `scheduleAll` over and delete the
- * serial code.
+ * Shipped as Phase D on 2026-04-27. The serial path is gone — `scheduleAll`
+ * (`scheduler.ts`) is a thin shim over `scheduleAllConcurrent` below.
  */
 
 import {

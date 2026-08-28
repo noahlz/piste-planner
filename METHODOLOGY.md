@@ -6,7 +6,7 @@ For tournament organizers evaluating the tool, developers contributing to the co
 
 For the underlying code, see [`src/engine/`](src/engine/). For USA Fencing source documents, see [References](#references).
 
-Piste Planner models tournament scheduling as a resource-constrained scheduling problem: strips are general-purpose queues (each pool is a unit of work during the pool round, each bout is a unit of work during DEs), referees are workers feeding off the queues, and the scheduler packs competitions into day/time/strip bins, minimizing constraint violations.
+Piste Planner models tournament scheduling as a resource-constrained scheduling problem: strips are general-purpose queues (each pool is a unit of work during the pool round while each bout is a unit of work during DEs), referees are workers feeding off the queues, and the scheduler packs competitions into day/time/strip bins, minimizing constraint violations.
 
 ---
 
@@ -424,7 +424,7 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 (see [`capacity.ts`](src/engine/capacity.ts))
 
-One table-driven model estimates the strip-hours a DE event consumes, for day-assignment. There is no configuration flag and no duration scaling — individual events read `de_duration_table` directly, and team events sum a round-by-round model.
+One table-driven model estimates the strip-hours a DE event consumes, for day-assignment. There is no configuration flag and no duration scaling – individual events read `de_duration_table` directly, and team events sum a round-by-round model.
 
 ### Individual Events
 
@@ -929,7 +929,7 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 | Two-hop crossover cap | 0.3 | Indirect relationship cap |
 | Ind/team separation gap | 120 min | Minimum gap between individual and team (non-hard-blocked pairs) |
 | DE_REFS | 1 | Referees required per allocated DE strip |
-| DEFAULT_DE_STRIP_FOOTPRINT | 16 | Cap on strips a single DE phase can claim; `de_duration_table` durations are calibrated against this value |
+| DEFAULT_DE_STRIP_FOOTPRINT | 16 | Cap on strips a single DE phase can claim – `de_duration_table` durations are calibrated against this value |
 | DEFAULT_DE_DURATION_TABLE | (see `constants.ts`) | DE durations by bracket size and weapon |
 
 ### Capacity Model Constants

@@ -239,10 +239,11 @@ export const SCENARIOS: Record<ScenarioId, ScenarioFixture> = {
       'VET-M-SABRE-IND-VCMB': 49,
     },
     days: 4,
-    // Venue map shows 18 pods totalling 68 strips: A/B/C (3×4 = 12 video),
-    // D and M (2 strips each), and the remaining 13 pods at 4 strips each.
-    // The engine assumes a uniform 4-strip DE pod, so the 2-strip pods are
-    // approximated by the global strip count (no pod-size variation modelled).
+    // Venue map shows 18 strip groups totalling 68 strips: A/B/C (3×4 = 12
+    // video), D and M (2 strips each), and the remaining 13 groups at 4
+    // strips each. A DE phase claims a contiguous, footprint-capped strip
+    // count from the global pool, so the 2-strip groups are approximated by
+    // the global strip count (no per-group variation modelled).
     strips: 68,
     videoStrips: 12, tournamentType: 'NAC',
   },
