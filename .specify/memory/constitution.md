@@ -56,10 +56,29 @@ checkable work), and `research.md` when decisions need their reasoning recorded.
 
 ## Git Ownership
 
-**The user runs all git commands.** No agent, subagent, or skill step runs `git`
-for any reason, including read-only inspection and `/speckit-implement`'s
-repository-detection step. Commit points appear in `tasks.md` as checkpoints
-marked "(user commits)".
+**The user owns what lands.** No agent, subagent, or skill step runs `git push`,
+`merge`, `rebase`, `reset --hard`, or branch deletion, and none makes the commit
+that closes a feature.
+
+- Read-only git – `status`, `diff`, `log`, `show`, `rev-parse` – is unrestricted
+  for agents and subagents.
+- **Inside a git worktree**, subagents commit incrementally to that worktree's
+  own branch. Those commits are the working record: drift counts, before and
+  after numbers, and deliberate corrections belong in their messages.
+- **Outside a worktree**, agents do not commit. Checkpoints appear in `tasks.md`
+  marked "(user commits)" and the user makes them with `commit-with-costs`, so
+  session cost metrics reach the commit trailers.
+
+Each feature picks one flow and names it in its `plan.md`:
+
+| Flow | Subagents commit | The user's `commit-with-costs` runs on |
+|---|---|---|
+| Worktree | yes, on the worktree branch | the squash-merge into `main` |
+| Root | no | each `tasks.md` checkpoint |
+
+The two do not mix within one feature. `commit-with-costs` commits staged
+changes and cannot land a branch, so work already committed inside a worktree
+has nothing left to stage at the root.
 
 ## Governance
 
@@ -74,5 +93,10 @@ cover.
 
 - 1.1.0 (2026-08-27): commands moved to `CLAUDE.md`, git ownership promoted to
   its own section.
+- 1.2.0 (2026-08-28): git ownership rewritten. Read-only git is permitted, and
+  subagents may commit inside a worktree. `commit-with-costs` is named as the
+  mechanism for root checkpoints, and each feature now declares a worktree or
+  root flow. This section is the rule's only home – `plan.md` and `tasks.md`
+  point at it rather than restating it.
 
-**Version**: 1.1.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-27
+**Version**: 1.2.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28

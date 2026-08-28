@@ -38,7 +38,8 @@ at 8–11ms across B1, B6, and B8 (53 events, 4 days, 80 strips). No task here
 should move that materially.
 
 **Constraints**: Engine functions pure, no unbounded loops, `as const` over
-enums, time as minutes from midnight. The user runs all git commands.
+enums, time as minutes from midnight. Git follows the constitution's
+[§Git Ownership](../../.specify/memory/constitution.md#git-ownership).
 
 **Scale/Scope**: 8 scenario fixtures, ~24–54 events each, up to 80 strips over
 4 days. Roughly 20 source files and 12 test files change.
@@ -55,7 +56,7 @@ enums, time as minutes from midnight. The user runs all git commands.
 | IV. Bounded Computation | PASS | No loops added. Removing the pod branch removes a loop over pods. |
 | V. Erasable TypeScript | PASS | `DEFAULT_DE_STRIP_FOOTPRINT` and `YOUTH_VET_BOUT_DELTA` are plain constants. Two `as const` union types are deleted, none added. |
 | Planning artifacts | PASS | No implementation code in this plan or in tasks.md. Cross-phase design stays in `docs/design/`. |
-| Git ownership | PASS | Commit points appear as "(user commits)" checkpoints. `/speckit-implement`'s repository-detection step is skipped – `.gitignore` already exists and is correct. |
+| Git ownership | PASS | **Root flow.** Subagents use read-only git and never commit. Each "(user commits)" checkpoint is the user's, made with `commit-with-costs`. |
 
 No violations. Complexity Tracking is empty.
 
@@ -115,8 +116,9 @@ No constitution violations to justify.
 ## Execution
 
 Run `/speckit-implement` over [tasks.md](./tasks.md), dispatching each task to a
-subagent per `superpowers:subagent-driven-development`. Subagent prompts must
-state that no git commands may be run.
+subagent per `superpowers:subagent-driven-development`. This feature runs the
+**root flow**, so subagent prompts must state that git is read-only and no
+subagent commits.
 
 Tasks are strictly ordered – each one's drift review depends on the ledger state
 the previous one left. `[P]` marks the few tasks that touch disjoint files within

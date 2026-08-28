@@ -28,8 +28,10 @@ until the drift ledger exists.
   expected behavior. Code is written during execution.
 - Run tests as `timeout 120 pnpm --silent test > ./tmp/test.log 2>&1` and read
   `./tmp/test.log` only on failure.
-- **The user runs all git commands.** Never run `git` anything. Commit points are
-  marked "(user commits)".
+- **Git: root flow** per the constitution's
+  [§Git Ownership](../../.specify/memory/constitution.md#git-ownership).
+  Read-only git only, and no subagent commits. Checkpoints marked
+  "(user commits)" are the user's, made with `commit-with-costs`.
 - Every task after T006 ends by re-running the drift ledger and reviewing the
   snapshot diff before accepting it. An unexplained diff is a bug, not noise.
 - **Drift gate**: a task halts if any B1–B8 scenario schedules fewer events after
@@ -246,9 +248,8 @@ unattributable. Within a task, independent test-file edits may be batched.
 
 - Execute with `/speckit-implement`, dispatching tasks to subagents per
   `superpowers:subagent-driven-development`. Subagent prompts must state that
-  **no git commands may be run**.
-- Skip `/speckit-implement`'s repository-detection and ignore-file step. The
-  project's `.gitignore` already exists and is correct, and the detection command
-  is a `git` invocation.
+  **git is read-only and no subagent commits** – this feature is root flow.
+- Skip `/speckit-implement`'s ignore-file step. The project's `.gitignore`
+  already exists and is correct.
 - Mark each task `[X]` as it completes.
 - An unexplained snapshot diff is a bug, not noise.
