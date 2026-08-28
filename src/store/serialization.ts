@@ -1,6 +1,6 @@
 import type { StoreState, CompetitionConfig, GlobalOverrides } from './store.ts'
-import type { DayConfig, TournamentType } from '../engine/types.ts'
-import { TournamentType as TT } from '../engine/types.ts'
+import type { DayConfig, TournamentType, Weapon as WeaponType } from '../engine/types.ts'
+import { TournamentType as TT, Weapon } from '../engine/types.ts'
 
 // ──────────────────────────────────────────────
 // Types
@@ -14,6 +14,8 @@ export interface SerializedState {
     dayConfigs: DayConfig[]
     strips_total: number
     video_strips_total: number
+    // Always written on save – optional only because reads tolerate its absence (schema leniency, research D3).
+    pool_round_duration_table?: Record<WeaponType, number>
   }
   competitions: {
     selectedCompetitions: Record<string, CompetitionConfig>
@@ -38,6 +40,7 @@ export function serializeState(state: StoreState): string {
       dayConfigs: state.dayConfigs,
       strips_total: state.strips_total,
       video_strips_total: state.video_strips_total,
+      pool_round_duration_table: state.pool_round_duration_table,
     },
     competitions: {
       selectedCompetitions: state.selectedCompetitions,
@@ -102,6 +105,33 @@ export function validateSchema(
     return { valid: false, error: 'video_strips_total must be >= 0 and <= strips_total' }
   }
 
+  // pool_round_duration_table – absent is valid (schema leniency), present must be complete and in range
+  if (t.pool_round_duration_table !== undefined) {
+    const table = t.pool_round_duration_table
+    if (table == null || typeof table !== 'object') {
+      return { valid: false, error: 'pool_round_duration_table must be an object' }
+    }
+    const tableObj = table as Record<string, unknown>
+    const weapons = Object.values(Weapon)
+    for (const key of Object.keys(tableObj)) {
+      if (!weapons.includes(key as WeaponType)) {
+        return { valid: false, error: `Unknown weapon "${key}" in pool_round_duration_table` }
+      }
+    }
+    for (const weapon of weapons) {
+      if (!(weapon in tableObj)) {
+        return { valid: false, error: `pool_round_duration_table is missing weapon "${weapon}"` }
+      }
+      const v = tableObj[weapon]
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 999) {
+        return {
+          valid: false,
+          error: `pool_round_duration_table.${weapon} must be an integer between 1 and 999`,
+        }
+      }
+    }
+  }
+
   // competitions
   if (obj.competitions == null || typeof obj.competitions !== 'object') {
     return { valid: false, error: 'Missing required field: competitions' }
@@ -146,17 +176,21 @@ export function deserializeState(
   const data = validation.data
   // Extra fields on tournament/competitions (e.g., the legacy include_finals_strip flag) are
   // silently dropped here — old saved tournaments load without error.
-  return {
-    state: {
-      tournament_type: data.tournament.tournament_type,
-      days_available: data.tournament.days_available,
-      dayConfigs: data.tournament.dayConfigs,
-      strips_total: data.tournament.strips_total,
-      video_strips_total: data.tournament.video_strips_total,
-      selectedCompetitions: data.competitions.selectedCompetitions,
-      globalOverrides: data.competitions.globalOverrides,
-    },
+  const state: Partial<StoreState> = {
+    tournament_type: data.tournament.tournament_type,
+    days_available: data.tournament.days_available,
+    dayConfigs: data.tournament.dayConfigs,
+    strips_total: data.tournament.strips_total,
+    video_strips_total: data.tournament.video_strips_total,
+    selectedCompetitions: data.competitions.selectedCompetitions,
+    globalOverrides: data.competitions.globalOverrides,
   }
+  // Only assign when present – a key set to undefined would clobber the store's
+  // seeded defaults through the useStore.setState merge (research D3).
+  if (data.tournament.pool_round_duration_table !== undefined) {
+    state.pool_round_duration_table = data.tournament.pool_round_duration_table
+  }
+  return { state }
 }
 
 // ──────────────────────────────────────────────
