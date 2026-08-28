@@ -173,12 +173,12 @@ start times moving earlier with scheduled counts holding or rising.
 Isolated as the last behavior change because it is the one most likely to move
 every scenario and it must be reviewable alone.
 
-- [ ] T048 [US4] Rewrite every test asserting a snapped time or the value of `SLOT_MINS` for a 5-minute grid, in `__tests__/engine/constants.test.ts` and `__tests__/engine/resources.test.ts`. `snapToSlot` at `src/engine/resources.ts:321` is believed to be the constant's only consumer – confirm with `grep -rn "SLOT_MINS" src/` rather than assuming.
-- [ ] T049 [US4] Run the full suite. Expected: FAIL on snapping assertions.
-- [ ] T050 [US4] Change `SLOT_MINS` from 30 to 5 in `src/engine/constants.ts:49`.
-- [ ] T051 [US4] Run the full suite.
-- [ ] T052 [US4] Review the drift-ledger diff. Expect broad churn and expect it to be *favorable* – deferred phases now resume at the true earliest free moment rather than rounding up to the next half hour, so start times should move earlier and scheduled counts should hold or rise. A scenario that schedules *fewer* events on a finer grid is a genuine finding.
-- [ ] T053 [US4] Dispatch `test-quality-reviewer`.
+- [X] T048 [US4] Rewrite every test asserting a snapped time or the value of `SLOT_MINS` for a 5-minute grid, in `__tests__/engine/constants.test.ts` and `__tests__/engine/resources.test.ts`. `snapToSlot` at `src/engine/resources.ts:321` is believed to be the constant's only consumer – confirm with `grep -rn "SLOT_MINS" src/` rather than assuming.
+- [X] T049 [US4] Run the full suite. Expected: FAIL on snapping assertions.
+- [X] T050 [US4] Change `SLOT_MINS` from 30 to 5 in `src/engine/constants.ts:49`.
+- [X] T051 [US4] Run the full suite.
+- [X] T052 [US4] Review the drift-ledger diff. Expect broad churn and expect it to be *favorable* – deferred phases now resume at the true earliest free moment rather than rounding up to the next half hour, so start times should move earlier and scheduled counts should hold or rise. A scenario that schedules *fewer* events on a finer grid is a genuine finding.
+- [X] T053 [US4] Dispatch `test-quality-reviewer`.
 
 **Checkpoint**: all four user stories complete. (commit.)
 
