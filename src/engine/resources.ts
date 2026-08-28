@@ -310,7 +310,7 @@ export function peakConcurrentStrips(
 
 /**
  * Rounds t up to the next SLOT_MINS boundary.
- * snapToSlot(0)=0, snapToSlot(15)=30, snapToSlot(30)=30, snapToSlot(31)=60.
+ * snapToSlot(0)=0, snapToSlot(3)=5, snapToSlot(5)=5, snapToSlot(6)=10.
  *
  * METHODOLOGY.md §Slot Granularity: applied to phase start times; NOT applied to phase end times.
  */

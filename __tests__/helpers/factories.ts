@@ -46,7 +46,7 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     DAY_END_MINS: DAY_END_10PM,
     LATEST_START_MINS: LATEST_START_4PM,
     LATEST_START_OFFSET: 480,
-    SLOT_MINS: 30,
+    SLOT_MINS: 5,
     DAY_LENGTH_MINS: 840,
     ADMIN_GAP_MINS: 30,
     FLIGHT_BUFFER_MINS: 15,
