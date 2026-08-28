@@ -21,7 +21,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  EventType, BottleneckSeverity, BottleneckCause,
+  EventType, BottleneckSeverity, BottleneckCause, Phase,
 } from '../../src/engine/types.ts'
 import type { Competition, Bottleneck } from '../../src/engine/types.ts'
 import type { ScheduleResult, StripAllocation, TournamentConfig } from '../../src/engine/types.ts'
@@ -237,17 +237,24 @@ describe('Realistic tournament integration', () => {
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B4: 30 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 7 under serial; observed 10, floor 9 with 1-event safety margin).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
+      // B4: T041's flat SINGLE_STAGE formula raises aggregate strip-hour demand
+      // past the upfront validateFeasibility gate (validation.ts:310), which
+      // aborts the whole build before any per-day packing runs — accepted under
+      // Ruling 11 (2161 strip-hours demanded vs. the 1932 threshold). This test
+      // pins that upfront-infeasibility result explicitly, by bottleneck cause
+      // and phase rather than message text, instead of the graceful per-event
+      // degradation `assertScheduleIntegrity` exercises for other scenarios.
+      expect(Object.keys(schedule).length).toBe(0)
 
-      // Ref requirements output
-      expect(ref_requirements_by_day).toBeDefined()
-      expect(ref_requirements_by_day).toHaveLength(config.days_available)
-      for (const r of ref_requirements_by_day!) {
-        expect(r.peak_total_refs).toBeGreaterThanOrEqual(0)
-        expect(r.peak_saber_refs).toBeLessThanOrEqual(r.peak_total_refs)
-      }
+      const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
+      expect(errors).toHaveLength(1)
+      expect(errors[0].cause).toBe(BottleneckCause.RESOURCE_EXHAUSTION)
+      expect(errors[0].phase).toBe(Phase.VALIDATION)
+
+      // The gate short-circuits before per-day scheduling, so no ref requirements
+      // are computed.
+      expect(ref_requirements_by_day).toBeUndefined()
+
       maybeDumpAsciiLanes('B4', schedule, bottlenecks, strip_allocations, config, competitions)
     })
   })

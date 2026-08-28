@@ -15,10 +15,9 @@
  * ERROR and WARN *counts* are in, the messages are out.
  */
 import { describe, it, expect } from 'vitest'
-import { BottleneckSeverity } from '../../src/engine/types.ts'
+import { BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
 import type {
   Bottleneck, Competition, RefRequirementsByDay, ScheduleResult, TournamentConfig,
-  BottleneckCause,
 } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from '../../src/engine/refs.ts'
@@ -40,9 +39,14 @@ const AUTO_REFS_PER_POOL = 2
  * A later task may deliberately RAISE a floor when it improves packing. Lowering
  * one is the regression the gate exists to catch: never edit a floor down to make
  * a red test pass — identify the cause first, and record both counts.
+ *
+ * B4's floor is 0, not a lowered regression: Ruling 11 accepted its collapse from
+ * 15 to 0 as the flat SINGLE_STAGE formula tripping the pre-existing upfront
+ * `validateFeasibility` gate. B4 gets its own dedicated test below pinning that
+ * exact behavior (0 scheduled, 1 validation error) instead of this generic floor.
  */
 const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 15, B5: 12, B6: 43, B7: 18, B8: 50,
+  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 43, B7: 18, B8: 50,
 }
 
 /** Scenarios that emit at least one `Day N refs: peak demand M.` summary line. */
@@ -189,6 +193,24 @@ describe('drift ledger', () => {
     it(`${id} digest is unchanged`, () => {
       expect(buildDigest(id)).toMatchSnapshot()
     })
+
+    // B4: Ruling 11 accepted the collapse from 15 scheduled to 0 — the flat
+    // SINGLE_STAGE formula raises B4's aggregate strip-hour demand past the
+    // upfront `validateFeasibility` gate (validation.ts:310), which aborts the
+    // whole build before any per-day packing runs. This test pins that exact
+    // outcome by cause and phase (not message text) so it trips if B4 ever
+    // silently schedules again or the gate stops firing.
+    if (id === 'B4') {
+      it('B4 trips the upfront feasibility gate — 0 scheduled, 1 validation error', () => {
+        const { bottlenecks } = runScenario(id)
+        const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
+        expect(errors).toHaveLength(1)
+        expect(errors[0].cause).toBe(BottleneckCause.RESOURCE_EXHAUSTION)
+        expect(errors[0].phase).toBe(Phase.VALIDATION)
+        expect(buildDigest(id).scheduledCount).toBe(0)
+      })
+      continue
+    }
 
     it(`${id} schedules at least its baseline event count`, () => {
       expect(buildDigest(id).scheduledCount).toBeGreaterThanOrEqual(SCHEDULED_FLOORS[id])
