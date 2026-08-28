@@ -16,9 +16,9 @@ The saved-file and share-URL format (`src/store/serialization.ts`) is the featur
     "strips_total": 30,
     "video_strips_total": 4,
     "pool_round_duration_table": {   // NEW – always written on save/share
-      "epee": 110,
-      "foil": 105,
-      "sabre": 75
+      "EPEE": 110,
+      "FOIL": 105,
+      "SABRE": 75
     }
   },
   "competitions": { /* unchanged */ }
@@ -33,7 +33,7 @@ The saved-file and share-URL format (`src/store/serialization.ts`) is the featur
 
 | Input | Outcome |
 |---|---|
-| Key present, object with exactly `epee`/`foil`/`sabre`, each an integer 1–999 | Load succeeds, table included in the returned partial state (FR-006) |
+| Key present, object with exactly `EPEE`/`FOIL`/`SABRE`, each an integer 1–999 | Load succeeds, table included in the returned partial state (FR-006) |
 | Key absent | Load succeeds, key **omitted** from the returned partial state – `useStore.setState` merge leaves the store's seeded defaults untouched (FR-007). Never emit the key with value `undefined`. Leniency keeps existing fixtures and hand-trimmed configs valid. |
 | Key present but wrong type, missing/extra weapon keys, non-integer, `< 1`, or `> 999` | Whole load fails with a field-specific `validateSchema` error naming the problem (FR-008) |
 
