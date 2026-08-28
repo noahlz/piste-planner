@@ -21,7 +21,7 @@
 
 **Purpose**: Isolated workspace with a verified-green baseline
 
-- [ ] T001 Create a git worktree on branch `002-configurable-pool-durations` from `main`, then confirm the baseline is green there: `timeout 120 pnpm --silent test > ./tmp/test.log 2>&1` and `timeout 180 pnpm exec tsc -b > ./tmp/tsc.log 2>&1` (read logs only on failure). No commit – nothing has changed.
+- [X] T001 Create a git worktree on branch `002-configurable-pool-durations` from `main`, then confirm the baseline is green there: `timeout 120 pnpm --silent test > ./tmp/test.log 2>&1` and `timeout 180 pnpm exec tsc -b > ./tmp/tsc.log 2>&1` (read logs only on failure). No commit – nothing has changed.
 
 ---
 
@@ -31,10 +31,10 @@
 
 **⚠️ CRITICAL**: No user story work begins until this phase is complete.
 
-- [ ] T002 Write failing store tests in `__tests__/store/store.test.ts`: `pool_round_duration_table` is seeded with the default values (epee 120, foil 105, sabre 75), `setPoolRoundDuration(weapon, minutes)` updates only that weapon and marks analysis + schedule stale, `resetPoolRoundDuration(weapon)` restores that weapon's default and marks stale, and setting a value equal to the default is allowed. Run the file and confirm the new tests fail because the field and actions do not exist (assertions on `undefined`, not compile errors – vitest strips types). Commit.
-- [ ] T003 Implement the store change in `src/store/store.ts`: add `pool_round_duration_table: Record<Weapon, number>` plus the two actions to `TournamentSlice` per research.md D1/D2, seeding from `DEFAULT_POOL_ROUND_DURATION_TABLE`. T002's tests pass, `timeout 180 pnpm exec tsc -b` clean. Commit.
-- [ ] T004 Write failing bridge tests in `__tests__/store/buildConfig.test.ts`: a store state with an overridden epee value produces `config.pool_round_duration_table` carrying that value, and a default store state produces a table equal to `DEFAULT_POOL_ROUND_DURATION_TABLE`. Run and confirm the override case fails because `src/store/buildConfig.ts:66` still hardcodes the constant. Commit.
-- [ ] T005 Implement the bridge pass-through in `src/store/buildConfig.ts` (the hardcoded constant becomes the store field – one line). T004's tests pass. Then run the drift check per research.md D7: `timeout 120 pnpm --silent vitest run __tests__/engine/driftLedger.test.ts > ./tmp/test.log 2>&1` and the integration suite in `__tests__/engine/integration.test.ts`. Expected: zero drift on B1–B8. Any diff halts this task until the cause is identified and recorded (constitution III). Record the zero-drift result in the commit message. Commit.
+- [X] T002 Write failing store tests in `__tests__/store/store.test.ts`: `pool_round_duration_table` is seeded with the default values (epee 120, foil 105, sabre 75), `setPoolRoundDuration(weapon, minutes)` updates only that weapon and marks analysis + schedule stale, `resetPoolRoundDuration(weapon)` restores that weapon's default and marks stale, and setting a value equal to the default is allowed. Run the file and confirm the new tests fail because the field and actions do not exist (assertions on `undefined`, not compile errors – vitest strips types). Commit.
+- [X] T003 Implement the store change in `src/store/store.ts`: add `pool_round_duration_table: Record<Weapon, number>` plus the two actions to `TournamentSlice` per research.md D1/D2, seeding from `DEFAULT_POOL_ROUND_DURATION_TABLE`. T002's tests pass, `timeout 180 pnpm exec tsc -b` clean. Commit.
+- [X] T004 Write failing bridge tests in `__tests__/store/buildConfig.test.ts`: a store state with an overridden epee value produces `config.pool_round_duration_table` carrying that value, and a default store state produces a table equal to `DEFAULT_POOL_ROUND_DURATION_TABLE`. Run and confirm the override case fails because `src/store/buildConfig.ts:66` still hardcodes the constant. Commit.
+- [X] T005 Implement the bridge pass-through in `src/store/buildConfig.ts` (the hardcoded constant becomes the store field – one line). T004's tests pass. Then run the drift check per research.md D7: `timeout 120 pnpm --silent vitest run __tests__/engine/driftLedger.test.ts > ./tmp/test.log 2>&1` and the integration suite in `__tests__/engine/integration.test.ts`. Expected: zero drift on B1–B8. Any diff halts this task until the cause is identified and recorded (constitution III). Record the zero-drift result in the commit message. Commit.
 - [ ] T006 Dispatch `test-quality-reviewer` covering the tests added in T002 and T004, apply accepted findings, and re-run the two test files. Commit if anything changed.
 
 **Checkpoint**: Store and bridge done, drift ledger proven zero. US1 and US2 can now proceed – in parallel if desired, since they touch disjoint files.

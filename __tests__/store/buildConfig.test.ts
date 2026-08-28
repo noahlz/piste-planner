@@ -239,7 +239,8 @@ describe('buildTournamentConfig', () => {
 
   describe('pool round durations', () => {
     it('passes the store pool_round_duration_table through to the engine config', () => {
-      const table = { EPEE: 110, FOIL: 105, SABRE: 75 }
+      // All three values off-default so a partial merge with the constant cannot pass
+      const table = { [Weapon.EPEE]: 111, [Weapon.FOIL]: 91, [Weapon.SABRE]: 61 }
       const state = storeWith({ ...minimalState(), pool_round_duration_table: table })
       const { config } = buildTournamentConfig(state)
 

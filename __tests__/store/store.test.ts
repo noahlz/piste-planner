@@ -29,6 +29,8 @@ describe('tournamentSlice', () => {
     it('seeds pool_round_duration_table from the engine defaults', () => {
       const state = useStore.getState()
       expect(state.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
+      // A copy, never an alias – store mutations must not corrupt the engine constant
+      expect(state.pool_round_duration_table).not.toBe(DEFAULT_POOL_ROUND_DURATION_TABLE)
     })
   })
 
@@ -134,23 +136,30 @@ describe('tournamentSlice', () => {
       expect(state.scheduleStale).toBe(true)
     })
 
-    it('accepts a value equal to the weapon default', () => {
+    it('accepts a value equal to the weapon default and still marks both stale flags', () => {
+      useStore.getState().setPoolRoundDuration(Weapon.SABRE, 90)
+      useStore.getState().clearStale()
+
       useStore.getState().setPoolRoundDuration(Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE])
 
       const state = useStore.getState()
       expect(state.pool_round_duration_table[Weapon.SABRE]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE])
+      expect(state.analysisStale).toBe(true)
+      expect(state.scheduleStale).toBe(true)
     })
   })
 
   describe('resetPoolRoundDuration', () => {
-    it('restores the weapon default after an override and marks both stale flags', () => {
+    it('restores only the given weapon default after an override and marks both stale flags', () => {
       useStore.getState().setPoolRoundDuration(Weapon.EPEE, 110)
+      useStore.getState().setPoolRoundDuration(Weapon.FOIL, 90)
       useStore.getState().clearStale()
 
       useStore.getState().resetPoolRoundDuration(Weapon.EPEE)
 
       const state = useStore.getState()
       expect(state.pool_round_duration_table[Weapon.EPEE]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.EPEE])
+      expect(state.pool_round_duration_table[Weapon.FOIL]).toBe(90)
       expect(state.analysisStale).toBe(true)
       expect(state.scheduleStale).toBe(true)
     })
