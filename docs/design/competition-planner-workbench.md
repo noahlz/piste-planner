@@ -1,9 +1,14 @@
 # Competition Planner Workbench — UI Design
 
 **Status**: approved design, 2026-08-27. Supersedes the 2026-05-06 four-phase
-Strip-Time Matrix rollout, whose plan files have been deleted. Its phase 1
-scope survives as P1 of the roadmap below and is now planned in detail in
-[`2026-08-27-p1-foundations-plan.md`](./2026-08-27-p1-foundations-plan.md).
+Strip-Time Matrix rollout, whose plan files have been deleted. Its phase 1 scope
+survives as P1 of the roadmap below and is specified in detail at
+[`specs/001-p1-foundations/`](../../specs/001-p1-foundations/spec.md).
+
+This is the cross-phase design document. It outlives any single feature, so it
+lives here rather than under `specs/`. Each phase gets its own Spec Kit feature
+directory when it is picked up, and those specs reference this document rather
+than restating it.
 
 ## Summary
 
@@ -210,12 +215,13 @@ is a full canvas, not an empty form.
 
 ## Roadmap
 
-Each phase gets its own implementation plan when it is picked up. This document
-is the design they all reference.
+Each phase gets its own Spec Kit feature – `specs/<nnn>-<short-name>/` with
+`spec.md`, `plan.md`, and `tasks.md` – when it is picked up. This document is the
+design they all reference.
 
 | | Work | Depends on |
 |---|---|---|
-| **P1** | Foundations – `SLOT_MINS` 5, pod removal, double-strip removal, capacity model collapse, `perBoutDuration` helper, and the staged-DE referee correction. Planned in [`2026-08-27-p1-foundations-plan.md`](./2026-08-27-p1-foundations-plan.md) | – |
+| **P1** | Foundations – `SLOT_MINS` 5, pod removal, double-strip removal, capacity model collapse, `perBoutDuration` helper, and the staged-DE referee correction. Specified in [`specs/001-p1-foundations/`](../../specs/001-p1-foundations/spec.md) | – |
 | **P2** | Derived state – placements as intent, store inversion, staleness removal, validation split, days cap widened, findings identity, presets moved to `src/data` | P1 |
 | **P3** | Workbench shell and canvas – visx matrix with zoom, virtualization, encoding, tooltip, rail, tray, drawer, view toggle. Deletes wizard, kitchen sink, and `layoutMode` | P2 |
 | **P4** | Manual placement – event-level drag, unpack-to-blocks, advisory edit validation, undo/redo, `Auto-fill unplaced` via pre-colored DSatur and pre-seeded scheduler state | P3 |
@@ -229,7 +235,8 @@ strip intervals, pre-colored days, and exclusion from `buildEventStates`.
 P1 carries one item this design did not originally scope: DE referee demand
 becomes one referee per strip on every path, which raises staged-DE figures
 roughly 4× on the NAC scenarios. It is a correction to an under-count rather than
-a new feature, and the P1 plan's "Referee counting" section holds the reasoning.
+a new feature, and decision D1 in [`specs/001-p1-foundations/research.md`](../../specs/001-p1-foundations/research.md)
+holds the reasoning.
 Anyone comparing referee numbers across P1 should expect a step change.
 
 ## Testing
@@ -256,13 +263,13 @@ Anyone comparing referee numbers across P1 should expect a step change.
 
 ## Open items carried forward
 
-These predate this design and are unaffected by it. [`TODO.md`](./TODO.md) is the
-single record of each one – the entries below are pointers, not second copies, so
-detail goes there and nowhere else.
+These predate this design and are unaffected by it. [`backlog.md`](./backlog.md)
+is the single record of each one – the entries below are pointers, not second
+copies, so detail goes there and nowhere else.
 
 | Item | Owner phase |
 |---|---|
-| Youth-event pool duration calibration | Unassigned. P1's Task 6 measures the delta it needs. |
+| Youth-event pool duration calibration | Unassigned. P1's US2 measures the delta it needs. |
 | `CAPACITY_TARGET_FILL = 0.3` re-tune | P2, alongside the integration-floor re-baseline |
 | Global settings – engine constants as a user-editable config file | **Unassigned.** P1 creates four of the constants it would expose, so this needs a phase or an explicit "after P5". |
 | Per-type defaults in the rail's Advanced panel | **Unassigned.** Describes P3 rail behavior but is in no roadmap row. |

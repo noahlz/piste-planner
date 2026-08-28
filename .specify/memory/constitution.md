@@ -1,50 +1,78 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Piste Planner Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Pure Engine Core
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+`src/engine/` is a pure library. Functions take inputs as arguments and return
+values — no global state, no singletons, no store reads, no React imports. Time
+is minutes from midnight. UI and state depend on the engine, never the reverse.
+`buildConfig.ts` is the only bridge from store state to engine types.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+Every result must be reproducible from its config alone. A snapshot test, a
+shared URL, and a running app have to agree.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Test-First
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+Write tests before the implementation they describe, run them to confirm they
+fail for the stated reason, then make them pass. Behavior changes update their
+tests in the same task, never afterwards.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Dispatch `test-quality-reviewer` after any task that adds or edits tests, and
+`react-code-reviewer` after any task touching React.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Behavior Drift Is Measured, Not Assumed
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Run any change to engine math, constants, or allocation against the B1–B8 drift
+ledger. Review and explain the snapshot diff before accepting it. A drop in
+scheduled event count on any scenario halts the task until the cause is
+identified and recorded.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+The engine outputs a schedule, not a boolean. Regressions hide as plausible
+numbers, and sequential refactors compound drift that no single diff reveals.
+
+### IV. Bounded Computation
+
+No unbounded loops. Every iteration is a direct computation or carries an
+explicit max-iteration guard that fails loudly. An algorithm that cannot
+converge reports failure, never spins.
+
+### V. Erasable TypeScript
+
+`erasableSyntaxOnly` is on. Use `as const` objects with derived union types —
+never enums, namespaces, or parameter properties.
+
+## Planning Artifacts
+
+Each unit of work is a Spec Kit feature in `specs/<nnn>-<short-name>/`:
+`spec.md` (what and why), `plan.md` (technical approach), `tasks.md` (ordered,
+checkable work), and `research.md` when decisions need their reasoning recorded.
+
+- Plans and tasks state intent and expected behavior, never pre-written
+  implementation code. Code is written during execution.
+- Cross-phase design that outlives one feature lives in `docs/design/`. Specs
+  reference it rather than restating it.
+- Each fact has exactly one home. A second copy is a pointer, never a restatement.
+
+## Git Ownership
+
+**The user runs all git commands.** No agent, subagent, or skill step runs `git`
+for any reason, including read-only inspection and `/speckit-implement`'s
+repository-detection step. Commit points appear in `tasks.md` as checkpoints
+marked "(user commits)".
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution governs every feature under `specs/`. Evaluate `plan.md`'s
+Constitution Check gate against these principles before design work and again
+after it. Record any violation in that plan's Complexity Tracking table with the
+simpler alternative that was rejected and why.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Amendments require a version bump and a note of what changed. `CLAUDE.md` and
+rules under `~/.claude` remain authoritative for anything this document does not
+cover.
+
+- 1.1.0 (2026-08-27): commands moved to `CLAUDE.md`, git ownership promoted to
+  its own section.
+
+**Version**: 1.1.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-27

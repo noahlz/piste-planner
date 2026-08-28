@@ -1,7 +1,10 @@
-# TODOs
+# Backlog
+
+Work no phase plan has picked up. Items here are not tracked in `specs/` – a
+Spec Kit feature directory is created for one only when it is assigned a phase.
 
 > **2026-08-27 update**: The workbench UI design at
-> [`2026-08-27-workbench-ui-design.md`](./2026-08-27-workbench-ui-design.md)
+> [`competition-planner-workbench.md`](./competition-planner-workbench.md)
 > absorbed most of this list – real-tournament presets, the tournament setup
 > screen, the FLUID re-pack button, and drag-drop matrix repair are all covered
 > by its P1–P5 roadmap.
@@ -56,10 +59,11 @@ reality. Recalibrate `pool_round_duration_table`, or add a youth-event
 multiplier, once there is evidence about whether the gap closes by
 densification or genuinely needs duration recalibration.
 
-P1's Task 6 widens this gap – removing double-stripping raises the duration of
-any event whose pool round is a single pool of 8 or more by about 1.67×. That
-task records B4's affected durations before and after, so the recalibration
-starts from a measured number rather than a re-derived one.
+P1's US2 widens this gap – removing double-stripping raises the duration of any
+event whose pool round is a single pool of 8 or more by about 1.67×. Task T037 in
+[`specs/001-p1-foundations/tasks.md`](../../specs/001-p1-foundations/tasks.md)
+records B4's affected durations before and after, so the recalibration starts
+from a measured number rather than a re-derived one.
 
 ## Calibration debt
 
