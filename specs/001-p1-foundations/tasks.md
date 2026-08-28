@@ -190,14 +190,14 @@ every scenario and it must be reviewable alone.
 specification, so a stale sentence in it is a real defect. All tasks touch the
 same file and run sequentially.
 
-- [ ] T054 In `METHODOLOGY.md` §Pool Duration Estimation (~line 307), delete the bullet stating that pools of 8 or more are double-stripped for a 40% reduction. The surrounding pool-sizing and scaling text stays.
-- [ ] T055 Update §Slot Granularity (~line 519): phase start times snap to 5-minute boundaries, end times remain unsnapped.
-- [ ] T056 Delete §Pod Captains (~lines 553-561) and the "Use pod captains" line from the Referee policy bullet under §Inputs. §Referee Calculation's remaining content is unaffected.
-- [ ] T057 Rewrite §DE Capacity Estimation Models (~lines 424-477) as §DE Capacity Estimation, collapsed to one model: DE strip-hours for individual events come from `de_duration_table` times the event's strip footprint, team events use the round-by-round model. Delete the `de_capacity_estimation` configuration bullet, the pod-packed subsection, the spread subsection, and the `DE_POD_SIZE` reference.
-- [ ] T058 Scrub pod language from §Strip Assignment (~lines 490-497), §Phase 5 resource allocation (~line 673), and §Concurrent Phase Scheduler (~line 566): delete the `allocatePods` paragraph, state that strips are a flat pool indexed by `Strip[]` with `video_capable` as the only categorical distinction, and that a DE phase claims a contiguous count of strips as one allocation. In §Referee Calculation, replace the derivation sentence naming `computePodRefDemand` with the rule plainly – DE phases require one referee per allocated strip, pool phases follow `refs_per_pool`, per-day peaks come from a sweep over those intervals – and record that this corrected a prior under-count on staged DE events.
-- [ ] T059 Update Appendix A: `SLOT_MINS` 5, `DE_BOUT_DURATION` sabre 15, new `YOUTH_VET_BOUT_DELTA` −5, new `DEFAULT_DE_STRIP_FOOTPRINT` 16, `DE_POD_SIZE` removed. **There is no referee-grouping constant** – DE referee demand is one per strip with no grouping factor anywhere, so Appendix A must not introduce one.
-- [ ] T060 Update `docs/design/backlog.md` if any constant this feature surfaced changed name from what that file lists.
-- [ ] T061 Run the acceptance sweep and confirm each result:
+- [X] T054 In `METHODOLOGY.md` §Pool Duration Estimation (~line 307), delete the bullet stating that pools of 8 or more are double-stripped for a 40% reduction. The surrounding pool-sizing and scaling text stays.
+- [X] T055 Update §Slot Granularity (~line 519): phase start times snap to 5-minute boundaries, end times remain unsnapped.
+- [X] T056 Delete §Pod Captains (~lines 553-561) and the "Use pod captains" line from the Referee policy bullet under §Inputs. §Referee Calculation's remaining content is unaffected.
+- [X] T057 Rewrite §DE Capacity Estimation Models (~lines 424-477) as §DE Capacity Estimation, collapsed to one model: DE strip-hours for individual events come from `de_duration_table` times the event's strip footprint, team events use the round-by-round model. Delete the `de_capacity_estimation` configuration bullet, the pod-packed subsection, the spread subsection, and the `DE_POD_SIZE` reference.
+- [X] T058 Scrub pod language from §Strip Assignment (~lines 490-497), §Phase 5 resource allocation (~line 673), and §Concurrent Phase Scheduler (~line 566): delete the `allocatePods` paragraph, state that strips are a flat pool indexed by `Strip[]` with `video_capable` as the only categorical distinction, and that a DE phase claims a contiguous count of strips as one allocation. In §Referee Calculation, replace the derivation sentence naming `computePodRefDemand` with the rule plainly – DE phases require one referee per allocated strip, pool phases follow `refs_per_pool`, per-day peaks come from a sweep over those intervals – and record that this corrected a prior under-count on staged DE events.
+- [X] T059 Update Appendix A: `SLOT_MINS` 5, `DE_BOUT_DURATION` sabre 15, new `YOUTH_VET_BOUT_DELTA` −5, new `DEFAULT_DE_STRIP_FOOTPRINT` 16, `DE_POD_SIZE` removed. **There is no referee-grouping constant** – DE referee demand is one per strip with no grouping factor anywhere, so Appendix A must not introduce one.
+- [X] T060 Update `docs/design/backlog.md` if any constant this feature surfaced changed name from what that file lists.
+- [X] T061 Run the acceptance sweep and confirm each result:
 
   ```text
   grep -rni "pod" src/ METHODOLOGY.md                          → nothing
@@ -208,7 +208,7 @@ same file and run sequentially.
   timeout 120 pnpm --silent test > ./tmp/test.log 2>&1
   ```
 
-- [ ] T062 Read `METHODOLOGY.md` end to end and check that no remaining passage contradicts the new model.
+- [X] T062 Read `METHODOLOGY.md` end to end and check that no remaining passage contradicts the new model.
 
 **Checkpoint**: feature complete. (commit.)
 
