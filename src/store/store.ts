@@ -12,6 +12,7 @@ import type {
   FlightingGroup,
   ScheduleResult,
   RefRequirementsByDay,
+  Weapon,
 } from '../engine/types.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { suggestStrips as computeStripSuggestion } from './stripSuggestion.ts'
@@ -21,6 +22,7 @@ import {
   ADMIN_GAP_MINS,
   FLIGHT_BUFFER_MINS,
   THRESHOLD_MINS,
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
@@ -46,6 +48,7 @@ export interface TournamentSlice {
   dayConfigs: DayConfig[]
   strips_total: number
   video_strips_total: number
+  pool_round_duration_table: Record<Weapon, number>
 
   setTournamentType: (type: TournamentType) => void
   setDays: (days: number) => void
@@ -53,6 +56,8 @@ export interface TournamentSlice {
   setStrips: (total: number) => void
   setVideoStrips: (total: number) => void
   suggestStrips: () => void
+  setPoolRoundDuration: (weapon: Weapon, minutes: number) => void
+  resetPoolRoundDuration: (weapon: Weapon) => void
 }
 
 export interface CompetitionConfig {
@@ -146,6 +151,8 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
     dayConfigs: [],
     strips_total: 0,
     video_strips_total: 0,
+    // Copied so store mutations never alias the engine constant
+    pool_round_duration_table: { ...DEFAULT_POOL_ROUND_DURATION_TABLE },
 
     setTournamentType: (type) => {
       set({ tournament_type: type })
@@ -190,6 +197,23 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
         set({ strips_total: suggested })
         get().markStale({ analysisStale: true, scheduleStale: true })
       }
+    },
+
+    setPoolRoundDuration: (weapon, minutes) => {
+      set((state) => ({
+        pool_round_duration_table: { ...state.pool_round_duration_table, [weapon]: minutes },
+      }))
+      get().markStale({ analysisStale: true, scheduleStale: true })
+    },
+
+    resetPoolRoundDuration: (weapon) => {
+      set((state) => ({
+        pool_round_duration_table: {
+          ...state.pool_round_duration_table,
+          [weapon]: DEFAULT_POOL_ROUND_DURATION_TABLE[weapon],
+        },
+      }))
+      get().markStale({ analysisStale: true, scheduleStale: true })
     },
   }
 }
