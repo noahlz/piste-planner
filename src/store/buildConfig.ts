@@ -69,9 +69,6 @@ export function buildTournamentConfig(state: StoreState): {
     // Strip budget defaults — per-event UI overrides to be added in a future task
     max_pool_strip_pct: 0.80,
     max_de_strip_pct: 0.80,
-
-    // DE capacity estimation model — pod_packed is default (sub-brackets with R16 consolidation)
-    de_capacity_estimation: 'pod_packed',
   }
 
   const competitions = buildCompetitions(state)

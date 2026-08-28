@@ -81,12 +81,6 @@ export const TournamentType = {
 } as const
 export type TournamentType = (typeof TournamentType)[keyof typeof TournamentType]
 
-export const DeCapacityEstimation = {
-  POD_PACKED: 'pod_packed',
-  SPREAD: 'spread',
-} as const
-export type DeCapacityEstimation = (typeof DeCapacityEstimation)[keyof typeof DeCapacityEstimation]
-
 export const CutMode = {
   DISABLED: 'DISABLED',
   PERCENTAGE: 'PERCENTAGE',
@@ -224,7 +218,6 @@ export interface TournamentConfig {
   dayConfigs: DayConfig[]
   max_pool_strip_pct: number
   max_de_strip_pct: number
-  de_capacity_estimation: DeCapacityEstimation
 }
 
 export interface FlightingGroup {

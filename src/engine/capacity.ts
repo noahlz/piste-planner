@@ -4,6 +4,10 @@
  * Provides strip-hour budgets for competitions and days.
  * Strip-hours = strips × hours; a proxy for how much of a day's scheduling
  * capacity a competition consumes. Used as input to capacity-aware day assignment.
+ *
+ * DE strip-hours are table-driven: individual events read `de_duration_table`
+ * directly, and team events sum round-by-round durations. There is no
+ * configurable estimation model.
  */
 
 import { Category, DeMode, EventType } from './types.ts'

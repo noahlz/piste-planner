@@ -2,7 +2,7 @@ import type { Competition, ScheduleResult, TournamentConfig, Strip } from '../..
 import {
   Category, Gender, Weapon,
   EventType, CutMode, DeMode, VideoPolicy,
-  RefPolicy, DeStripRequirement, TournamentType, DeCapacityEstimation,
+  RefPolicy, DeStripRequirement, TournamentType,
 } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -63,7 +63,6 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     dayConfigs: [],
     max_pool_strip_pct: 0.80,
     max_de_strip_pct: 0.80,
-    de_capacity_estimation: DeCapacityEstimation.POD_PACKED,
     ...overrides,
   }
 }
