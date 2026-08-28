@@ -10,6 +10,11 @@ interface NumberInputProps {
   min?: number
   max?: number
   step?: number
+  /**
+   * Treat an out-of-range typed entry as invalid on blur – restore the last
+   * committed value instead of clamping to min/max and committing.
+   */
+  rejectOutOfRange?: boolean
   className?: string
   'aria-label'?: string
 }
@@ -20,6 +25,7 @@ export function NumberInput({
   min = 0,
   max = Infinity,
   step = 1,
+  rejectOutOfRange = false,
   className,
   'aria-label': ariaLabel,
 }: NumberInputProps) {
@@ -45,7 +51,9 @@ export function NumberInput({
 
   function handleBlur() {
     const parsed = parseInt(localValue, 10)
-    if (isNaN(parsed)) {
+    // Non-numeric entries always revert, and out-of-range entries revert too in
+    // reject mode – clamping would commit a value the user never typed.
+    if (isNaN(parsed) || (rejectOutOfRange && (parsed < min || parsed > max))) {
       setLocalValue(String(value))
       return
     }
