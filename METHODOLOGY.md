@@ -628,7 +628,7 @@ For each competition in priority order:
 
 #### Saber Pileup
 
-Saber competitions carry an extra per-candidate-day penalty when other saber events are already on that day. `saberPileupPenalty` (`dayAssignment.ts:83-100`) counts how many other SABRE competitions are already assigned to the candidate day and looks up `SABER_PILEUP_PENALTY_TABLE = [0, 0.5, 2.0, 10.0, 50.0]`, indexed by that count and capped at the last entry – 4 or more other saber events on the day scores 50.0. Non-saber competitions always score 0.
+Saber competitions carry an extra per-candidate-day penalty when other saber events are already on that day. `saberPileupPenalty` (`dayAssignment.ts:83-100`) counts how many other SABRE competitions are already assigned to the candidate day and applies an escalating penalty, capped once four or more other saber events are already on the day. Non-saber competitions always score 0. See [Appendix A](#appendix-a-penalty--constant-defaults) for the exact values.
 
 The penalty is always active, not gated by the load-balance flag, because saber refs are three-weapon specialists and are naturally scarce – concentrating saber events on one day is a structural staffing risk, not a load-balance nicety. Applied per candidate day inside `colorPenalty` (`dayColoring.ts:301`).
 
@@ -851,6 +851,7 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Rest day violation | 1.5 | Junior↔Cadet or Junior↔Div 1 on consecutive days without rest |
 | Team before individual | 1.0 | Team event scheduled before its individual counterpart |
 | Weapon balance | 0.5 | All-ROW or all-epee day |
+| Saber pileup (per same-day saber count) | 0, 0.5, 2.0, 10.0, 50.0 (capped at 4+) | Escalating penalty for stacking saber events on one day, indexed by other same-day SABRE competitions |
 | Proximity 3+ days apart | 0.5 | Related categories far apart in the schedule |
 | Y10 non-first-slot | 0.3 | Y10 event not starting at 8 AM |
 | Ind+team 2+ days apart | 0.3 | Individual and team event far apart |
