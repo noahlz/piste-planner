@@ -405,11 +405,22 @@ describe('scheduleAllConcurrent — permanent deadline breach', () => {
 // ref per DE_POD_SIZE-strip pod.
 // ──────────────────────────────────────────────
 
+/**
+ * Finds `day`'s ref-requirements entry and returns its peak_total_refs,
+ * asserting the entry exists. Collapses the find/toBeDefined/read-field
+ * sequence repeated across the per-strip DE ref demand tests below.
+ */
+function peakRefsOnDay(result: ReturnType<typeof scheduleAllConcurrent>, day: number): number {
+  const dayReq = result.ref_requirements_by_day!.find(r => r.day === day)
+  expect(dayReq).toBeDefined()
+  return dayReq!.peak_total_refs
+}
+
 describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
   it('STAGED event: DE_PRELIMS block emits ref demand equal to its allocated strip count', () => {
     // Bracket 64 (fencer_count=64, cut disabled) forces a DE_PRELIMS block ahead
     // of DE_ROUND_OF_16. de_round_of_16_strips is kept small so DE_PRELIMS (capped
-    // at DEFAULT_DE_PODS * DE_POD_SIZE = 16) is the day's dominant demand.
+    // at DEFAULT_DE_STRIP_FOOTPRINT = 16) is the day's dominant demand.
     const e = comp('prelimsEvt', {
       fencer_count: 64,
       de_mode: DeMode.STAGED,
@@ -431,12 +442,10 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     expect(s.pool_refs_count).toBeLessThan(s.de_prelims_strip_count)
     expect(s.de_round_of_16_strip_count).toBeLessThan(s.de_prelims_strip_count)
 
-    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
-    expect(dayReq).toBeDefined()
     // Target: one ref per allocated strip (config.DE_REFS=1) — same model as
     // DE_SINGLE — not one ref per DE_POD_SIZE-strip pod (which would report
     // ceil(strip_count / DE_POD_SIZE) instead).
-    expect(dayReq!.peak_total_refs).toBe(s.de_prelims_strip_count * config.DE_REFS)
+    expect(peakRefsOnDay(result, s.assigned_day)).toBe(s.de_prelims_strip_count * config.DE_REFS)
   })
 
   it('STAGED event with bracket < 64 (no prelims): DE_ROUND_OF_16 block emits ref demand equal to its allocated strip count', () => {
@@ -457,9 +466,7 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     expect(s.de_round_of_16_strip_count).toBeGreaterThan(0)
     expect(s.pool_refs_count).toBeLessThan(s.de_round_of_16_strip_count)
 
-    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
-    expect(dayReq).toBeDefined()
-    expect(dayReq!.peak_total_refs).toBe(s.de_round_of_16_strip_count * config.DE_REFS)
+    expect(peakRefsOnDay(result, s.assigned_day)).toBe(s.de_round_of_16_strip_count * config.DE_REFS)
   })
 
   it('SINGLE_STAGE event: DE block ref demand is unchanged — still one ref per allocated strip', () => {
@@ -475,9 +482,7 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     expect(s.de_strip_count).toBeGreaterThan(0)
     expect(s.pool_refs_count).toBeLessThan(s.de_strip_count)
 
-    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
-    expect(dayReq).toBeDefined()
-    expect(dayReq!.peak_total_refs).toBe(s.de_strip_count * config.DE_REFS)
+    expect(peakRefsOnDay(result, s.assigned_day)).toBe(s.de_strip_count * config.DE_REFS)
   })
 
   it('two concurrent STAGED events emit independent per-strip DE_ROUND_OF_16 intervals that sum at their overlap', () => {
@@ -513,11 +518,9 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     expect(s1.de_round_of_16_start).toBe(s2.de_round_of_16_start)
     expect(s1.de_round_of_16_end).toBe(s2.de_round_of_16_end)
 
-    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s1.assigned_day)
-    expect(dayReq).toBeDefined()
     // Each event's block is an independent interval, so overlapping demand
     // adds — not one shared pod count for the pair.
-    expect(dayReq!.peak_total_refs).toBe(
+    expect(peakRefsOnDay(result, s1.assigned_day)).toBe(
       (s1.de_round_of_16_strip_count + s2.de_round_of_16_strip_count) * config.DE_REFS,
     )
   })
@@ -544,9 +547,7 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     // day's peak reflects only the pool phase's resolveRefsPerPool count.
     expect(s.de_round_of_16_strip_count).toBeLessThan(expectedPoolRefs)
 
-    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
-    expect(dayReq).toBeDefined()
-    expect(dayReq!.peak_total_refs).toBe(expectedPoolRefs)
+    expect(peakRefsOnDay(result, s.assigned_day)).toBe(expectedPoolRefs)
   })
 
   it('STAGED event with DE_REFS=2: DE_ROUND_OF_16 block demand is strips × DE_REFS, not strips × 1', () => {
@@ -569,8 +570,6 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     expect(s.de_round_of_16_strip_count).toBeGreaterThan(0)
     expect(s.pool_refs_count).toBeLessThan(s.de_round_of_16_strip_count)
 
-    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
-    expect(dayReq).toBeDefined()
-    expect(dayReq!.peak_total_refs).toBe(s.de_round_of_16_strip_count * config.DE_REFS)
+    expect(peakRefsOnDay(result, s.assigned_day)).toBe(s.de_round_of_16_strip_count * config.DE_REFS)
   })
 })
