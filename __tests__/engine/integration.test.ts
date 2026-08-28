@@ -235,7 +235,7 @@ describe('Realistic tournament integration', () => {
     const competitions = buildCompetitions(fencerCounts)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
-    it('schedules events with hard constraints respected', () => {
+    it('B4 trips the upfront feasibility gate — nothing scheduled (Ruling 11)', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       // B4: T041's flat SINGLE_STAGE formula raises aggregate strip-hour demand
       // past the upfront validateFeasibility gate (validation.ts:310), which

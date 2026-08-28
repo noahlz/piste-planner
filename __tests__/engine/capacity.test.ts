@@ -56,6 +56,60 @@ describe('estimateCompetitionStripHours', () => {
     expect(result.video_strip_hours).toBe(0) // SINGLE_STAGE, no video strip hours
   })
 
+  it('SINGLE_STAGE DE strip-hours scale with strips_allocated (US3: was strip-count-independent under spread)', () => {
+    // Same bracket as the baseline test above (64 EPEE fencers, cut disabled,
+    // bracketSize=64, table_duration=120) — only strips_allocated differs (10 → 5).
+    // Under the old spread model this competition's DE strip-hours would be
+    // unchanged; the flat formula halves them.
+    const config = makeConfig()
+    const comp = makeCompetition({
+      id: 'single-stage-flat-half-strips',
+      fencer_count: 64,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 5,
+    })
+
+    const result = estimateCompetitionStripHours(comp, config)
+
+    // Pool strip-hours unchanged from the baseline (same fencer_count/weapon: 10 * 139 / 60).
+    // DE strip-hours = strips_allocated × table_duration / 60 = 5 × 120 / 60 = 10.0
+    const expectedPoolStripHours = 10 * 139 / 60
+    const deStripHours = result.total_strip_hours - expectedPoolStripHours
+    expect(deStripHours).toBeCloseTo(10, 10)
+  })
+
+  it('SINGLE_STAGE DE strip-hours change with bracket size (cut alters table_duration)', () => {
+    // Same fencer_count/weapon/strips_allocated as the baseline test, but a 50%
+    // cut promotes 32 fencers instead of 64, dropping bracketSize from 64 to 32
+    // and table_duration from 120 to 90 — proving the duration term is a real
+    // table lookup, not a value hardcoded to this test's fencer count.
+    const config = makeConfig()
+    const comp = makeCompetition({
+      id: 'single-stage-flat-cut',
+      fencer_count: 64,
+      weapon: Weapon.EPEE,
+      event_type: EventType.INDIVIDUAL,
+      cut_mode: CutMode.PERCENTAGE,
+      cut_value: 50,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 10,
+    })
+
+    const result = estimateCompetitionStripHours(comp, config)
+
+    // Pool strip-hours unchanged (pool structure is computed pre-cut, from raw fencer_count).
+    // promoted = round(64 × (1 - 50/100)) = 32; bracketSize = nextPowerOf2(32) = 32
+    // table_duration = deDuration(EPEE, 32) = 90
+    // DE strip-hours = strips_allocated × table_duration / 60 = 10 × 90 / 60 = 15.0
+    const expectedPoolStripHours = 10 * 139 / 60
+    const deStripHours = result.total_strip_hours - expectedPoolStripHours
+    expect(deStripHours).toBeCloseTo(15, 10)
+  })
+
   it('team event with 30 fencers → much smaller strip-hour footprint than large individual', () => {
     const config = makeConfig()
     const teamComp = makeCompetition({
