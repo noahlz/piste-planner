@@ -130,10 +130,10 @@ reviewed on its own.
 **Independent Test**: A single pool of 8 returns the same value as
 `poolDurationForSize` for size 8.
 
-- [ ] T033 [US2] In `__tests__/engine/pools.test.ts`, change the tests asserting the 0.6× factor for a single pool of 8 or more to assert the plain weighted average, and keep a test that a single pool of 8 now returns the same value as `poolDurationForSize` for size 8 – the clearest statement of the new behavior.
-- [ ] T034 [US2] Run `timeout 120 pnpm --silent vitest run __tests__/engine/pools.test.ts > ./tmp/test.log 2>&1`. Expected: FAIL – values still scaled by 0.6.
-- [ ] T035 [US2] In `src/engine/pools.ts:78-97`, make `weightedPoolDuration` return the rounded weighted average unconditionally. `estimatePoolDuration` is untouched.
-- [ ] T036 [US2] Run the full suite.
+- [x] T033 [US2] In `__tests__/engine/pools.test.ts`, change the tests asserting the 0.6× factor for a single pool of 8 or more to assert the plain weighted average, and keep a test that a single pool of 8 now returns the same value as `poolDurationForSize` for size 8 – the clearest statement of the new behavior.
+- [x] T034 [US2] Run `timeout 120 pnpm --silent vitest run __tests__/engine/pools.test.ts > ./tmp/test.log 2>&1`. Expected: FAIL – values still scaled by 0.6.
+- [x] T035 [US2] In `src/engine/pools.ts:78-97`, make `weightedPoolDuration` return the rounded weighted average unconditionally. `estimatePoolDuration` is untouched.
+- [x] T036 [US2] Run the full suite.
 - [ ] T037 [US2] Review the drift-ledger diff. Only events whose entire pool round is a single pool of 8 or more are affected – roughly 8 to 63 fencers with the single-pool override, or exactly 8 or 9 without it – and their pool duration rises by about 1.67×. Confirm the affected event list is small and consists of the events you expect. **Record B4's affected pool durations before and after** (SC-008): `docs/design/backlog.md` notes B4 already predicts 5–6 hours for Y8/Y10 pool rounds that run 2–3 hours in reality, and this change pushes them further the same way. The measured delta is what the youth-duration recalibration needs.
 - [ ] T038 [US2] Dispatch `test-quality-reviewer`.
 
