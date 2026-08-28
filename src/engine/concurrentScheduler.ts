@@ -9,8 +9,8 @@
  * Resources: `findAvailableStripsInWindow` / `allocateInterval` from Phases A/B.
  * Day assignment: `assignDaysByColoring` from `dayColoring.ts`. Post-schedule
  * pipeline (`postScheduleDiagnostics`, `postScheduleDayBreakdown`,
- * `postScheduleWarnings`, `computeRefRequirements`) reused from the serial
- * scheduler unchanged.
+ * `postScheduleWarnings` are defined below in this file, while
+ * `computeRefRequirements` comes from `refs.ts`) runs once the loop completes.
  *
  * Shipped as Phase D on 2026-04-27. The serial path is gone — `scheduleAll`
  * (`scheduler.ts`) is a thin shim over `scheduleAllConcurrent` below.
