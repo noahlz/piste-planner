@@ -15,6 +15,7 @@ import {
   tailEstimateMins,
 } from '../../src/engine/types.ts'
 import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
+import { computePoolStructure, resolveRefsPerPool } from '../../src/engine/pools.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
@@ -395,5 +396,156 @@ describe('scheduleAllConcurrent — permanent deadline breach', () => {
     expect(errors.some(e => e.attempt_id === 2)).toBe(true)
     // Schedule does not contain the event.
     expect(result.schedule['huge']).toBeUndefined()
+  })
+})
+
+// ──────────────────────────────────────────────
+// Test 8: Per-strip DE referee demand (US1) — staged DE blocks report one ref
+// per allocated strip, matching the existing DE_SINGLE branch, instead of one
+// ref per DE_POD_SIZE-strip pod.
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
+  it('STAGED event: DE_PRELIMS block emits ref demand equal to its allocated strip count', () => {
+    // Bracket 64 (fencer_count=64, cut disabled) forces a DE_PRELIMS block ahead
+    // of DE_ROUND_OF_16. de_round_of_16_strips is kept small so DE_PRELIMS (capped
+    // at DEFAULT_DE_PODS * DE_POD_SIZE = 16) is the day's dominant demand.
+    const e = comp('prelimsEvt', {
+      fencer_count: 64,
+      de_mode: DeMode.STAGED,
+      cut_mode: CutMode.DISABLED,
+      de_round_of_16_strips: 4,
+      de_video_policy: VideoPolicy.BEST_EFFORT,
+    })
+    const config = smallConfig({
+      days_available: 2,
+      strips: makeStrips(40, 8),
+    })
+    const result = scheduleAllConcurrent([e], config)
+    const s = result.schedule['prelimsEvt']
+    expect(s).toBeDefined()
+    expect(s.de_prelims_strip_count).toBeGreaterThan(0)
+
+    // Guard: prelims genuinely dominates the day (not pools or R16), so the
+    // day's peak can only reflect the prelims block's own ref count.
+    expect(s.pool_refs_count).toBeLessThan(s.de_prelims_strip_count)
+    expect(s.de_round_of_16_strip_count).toBeLessThan(s.de_prelims_strip_count)
+
+    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
+    expect(dayReq).toBeDefined()
+    // Target: one ref per allocated strip (config.DE_REFS=1) — same model as
+    // DE_SINGLE — not one ref per DE_POD_SIZE-strip pod (which would report
+    // ceil(strip_count / DE_POD_SIZE) instead).
+    expect(dayReq!.peak_total_refs).toBe(s.de_prelims_strip_count * config.DE_REFS)
+  })
+
+  it('STAGED event with bracket < 64 (no prelims): DE_ROUND_OF_16 block emits ref demand equal to its allocated strip count', () => {
+    // Bracket 32 (fencer_count=24) — dePhasesForBracket returns just
+    // [DE_ROUND_OF_16], isolating the R16 block from any DE_PRELIMS contribution.
+    const e = comp('r16Evt', {
+      fencer_count: 24,
+      de_mode: DeMode.STAGED,
+      cut_mode: CutMode.DISABLED,
+      de_round_of_16_strips: 16,
+      de_video_policy: VideoPolicy.BEST_EFFORT,
+    })
+    const config = smallConfig({ strips: makeStrips(20, 4) })
+    const result = scheduleAllConcurrent([e], config)
+    const s = result.schedule['r16Evt']
+    expect(s).toBeDefined()
+    expect(s.de_prelims_strip_count).toBe(0)
+    expect(s.de_round_of_16_strip_count).toBeGreaterThan(0)
+    expect(s.pool_refs_count).toBeLessThan(s.de_round_of_16_strip_count)
+
+    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
+    expect(dayReq).toBeDefined()
+    expect(dayReq!.peak_total_refs).toBe(s.de_round_of_16_strip_count * config.DE_REFS)
+  })
+
+  it('SINGLE_STAGE event: DE block ref demand is unchanged — still one ref per allocated strip', () => {
+    const e = comp('singleEvt', {
+      fencer_count: 24,
+      de_mode: DeMode.SINGLE_STAGE,
+      cut_mode: CutMode.DISABLED,
+    })
+    const config = smallConfig({ strips: makeStrips(20, 4) })
+    const result = scheduleAllConcurrent([e], config)
+    const s = result.schedule['singleEvt']
+    expect(s).toBeDefined()
+    expect(s.de_strip_count).toBeGreaterThan(0)
+    expect(s.pool_refs_count).toBeLessThan(s.de_strip_count)
+
+    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
+    expect(dayReq).toBeDefined()
+    expect(dayReq!.peak_total_refs).toBe(s.de_strip_count * config.DE_REFS)
+  })
+
+  it('two concurrent STAGED events emit independent per-strip DE_ROUND_OF_16 intervals that sum at their overlap', () => {
+    // Symmetric competitions (same fencer_count/weapon/strip target, differing
+    // only by gender) with abundant single-day capacity produce identical R16
+    // windows — the overlap guard below confirms that determinism.
+    const a = comp('r16A', {
+      gender: Gender.MEN, weapon: Weapon.EPEE, category: Category.DIV1,
+      fencer_count: 24,
+      de_mode: DeMode.STAGED,
+      cut_mode: CutMode.DISABLED,
+      de_round_of_16_strips: 8,
+      de_video_policy: VideoPolicy.BEST_EFFORT,
+    })
+    const b = comp('r16B', {
+      gender: Gender.WOMEN, weapon: Weapon.EPEE, category: Category.DIV1,
+      fencer_count: 24,
+      de_mode: DeMode.STAGED,
+      cut_mode: CutMode.DISABLED,
+      de_round_of_16_strips: 8,
+      de_video_policy: VideoPolicy.BEST_EFFORT,
+    })
+    const config = smallConfig({ days_available: 2, strips: makeStrips(40, 8) })
+    const result = scheduleAllConcurrent([a, b], config)
+    const s1 = result.schedule['r16A']
+    const s2 = result.schedule['r16B']
+    expect(s1).toBeDefined()
+    expect(s2).toBeDefined()
+    // Guard: symmetric competitions with abundant capacity land on the same day.
+    expect(s1.assigned_day).toBe(s2.assigned_day)
+
+    // Guard: confirms the two R16 windows genuinely overlap in time.
+    expect(s1.de_round_of_16_start).toBe(s2.de_round_of_16_start)
+    expect(s1.de_round_of_16_end).toBe(s2.de_round_of_16_end)
+
+    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s1.assigned_day)
+    expect(dayReq).toBeDefined()
+    // Each event's block is an independent interval, so overlapping demand
+    // adds — not one shared pod count for the pair.
+    expect(dayReq!.peak_total_refs).toBe(
+      (s1.de_round_of_16_strip_count + s2.de_round_of_16_strip_count) * config.DE_REFS,
+    )
+  })
+
+  it('pool phase ref demand still uses resolveRefsPerPool, unaffected by the DE pod removal', () => {
+    const e = comp('poolEvt', {
+      fencer_count: 30,
+      de_mode: DeMode.STAGED,
+      cut_mode: CutMode.DISABLED,
+      de_round_of_16_strips: 1,
+      de_video_policy: VideoPolicy.BEST_EFFORT,
+    })
+    const config = smallConfig({ strips: makeStrips(20, 4) })
+    const result = scheduleAllConcurrent([e], config)
+    const s = result.schedule['poolEvt']
+    expect(s).toBeDefined()
+
+    const expectedPoolRefs = resolveRefsPerPool(
+      e.ref_policy,
+      computePoolStructure(e.fencer_count, e.use_single_pool_override).n_pools,
+    ).refs_needed
+    expect(s.pool_refs_count).toBe(expectedPoolRefs)
+    // Guard: pools genuinely dominate the day (DE strip count is tiny), so the
+    // day's peak reflects only the pool phase's resolveRefsPerPool count.
+    expect(s.de_round_of_16_strip_count).toBeLessThan(expectedPoolRefs)
+
+    const dayReq = result.ref_requirements_by_day!.find(r => r.day === s.assigned_day)
+    expect(dayReq).toBeDefined()
+    expect(dayReq!.peak_total_refs).toBe(expectedPoolRefs)
   })
 })

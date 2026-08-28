@@ -122,18 +122,26 @@ describe('allocateInterval', () => {
     expect(state.strip_allocations[1][0]).toBe(state.strip_allocations[2][0])
   })
 
-  it('records pod_id when provided', () => {
+  it('records event_id, phase, start_time, and end_time on the StripAllocation', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
     allocateInterval(state, 'evt-1', Phase.DE_ROUND_OF_16, [0, 1], 60, 180, 'pod-A')
-    expect(state.strip_allocations[0][0].pod_id).toBe('pod-A')
+    const alloc = state.strip_allocations[0][0]
+    expect(alloc.event_id).toBe('evt-1')
+    expect(alloc.phase).toBe(Phase.DE_ROUND_OF_16)
+    expect(alloc.start_time).toBe(60)
+    expect(alloc.end_time).toBe(180)
   })
 
-  it('omits pod_id when not provided', () => {
+  it('records event_id, phase, start_time, and end_time when no pod_id is provided', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
     allocateInterval(state, 'evt-1', Phase.POOLS, [0], 60, 180)
-    expect(state.strip_allocations[0][0].pod_id).toBeUndefined()
+    const alloc = state.strip_allocations[0][0]
+    expect(alloc.event_id).toBe('evt-1')
+    expect(alloc.phase).toBe(Phase.POOLS)
+    expect(alloc.start_time).toBe(60)
+    expect(alloc.end_time).toBe(180)
   })
 })
 
