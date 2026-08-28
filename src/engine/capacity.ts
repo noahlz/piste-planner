@@ -8,9 +8,14 @@
 
 import { Category, DeCapacityEstimation, DeMode, EventType } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState } from './types.ts'
-import { CATEGORY_START_PREFERENCE, DE_POD_SIZE, DE_BOUT_DURATION } from './constants.ts'
+import { CATEGORY_START_PREFERENCE, DE_BOUT_DURATION } from './constants.ts'
 import { computePoolStructure, weightedPoolDuration, computeDeFencerCount } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
+
+// The pod estimators below (podDeStripHours, podR16StripHours) model the
+// scheduler's now-removed pod abstraction and are deleted in US3 (T028+).
+// Kept local here so their math stays bit-identical until then.
+const DE_POD_SIZE = 4
 
 interface CompetitionStripHours {
   /** Total estimated strip-hours consumed by this competition (pools + DE). */

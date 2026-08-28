@@ -6,7 +6,7 @@
  * The loop pops the highest-priority READY phase, allocates resources via the
  * interval-list strip primitives, and pushes successors as READY.
  *
- * Resources: `findAvailableStripsInWindow` and `allocatePods` from Phases A/B.
+ * Resources: `findAvailableStripsInWindow` / `allocateInterval` from Phases A/B.
  * Day assignment: `assignDaysByColoring` from `dayColoring.ts`. Post-schedule
  * pipeline (`postScheduleDiagnostics`, `postScheduleDayBreakdown`,
  * `postScheduleWarnings`, `computeRefRequirements`) reused from the serial
@@ -49,7 +49,6 @@ import {
   peakConcurrentStrips,
   snapToSlot,
 } from './resources.ts'
-import { allocatePods } from './pods.ts'
 import {
   computePoolStructure,
   resolveRefsPerPool,
@@ -71,7 +70,7 @@ import { assignDaysByColoring } from './dayColoring.ts'
 import { constraintScore } from './dayAssignment.ts'
 import { validateConfig } from './validation.ts'
 import { dayConsumedCapacity } from './capacity.ts'
-import { DE_POD_SIZE } from './constants.ts'
+import { DEFAULT_DE_STRIP_FOOTPRINT } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // Types
@@ -161,8 +160,6 @@ interface PhaseNode {
   desired_strip_count: number
   duration_at_full: number
   video_required: boolean
-  // For STAGED DE phases: pods of DE_POD_SIZE.
-  use_pods: boolean
   // The cap to apply (pool_cap or de_cap).
   cap_kind: 'POOL' | 'DE'
   // For Flight B and DE phases: explicit cross-event deps to enforce indv→team
@@ -411,7 +408,6 @@ function buildPhaseNodes(
       desired_strip_count: flightAPools,
       duration_at_full: flightADur,
       video_required: false,
-      use_pods: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
     })
@@ -428,7 +424,6 @@ function buildPhaseNodes(
       desired_strip_count: flightBPools,
       duration_at_full: flightBDur,
       video_required: false,
-      use_pods: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
     })
@@ -448,7 +443,6 @@ function buildPhaseNodes(
       desired_strip_count: poolStructure.n_pools,
       duration_at_full: poolDur,
       video_required: false,
-      use_pods: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
     })
@@ -456,19 +450,15 @@ function buildPhaseNodes(
 
   // DE phases.
   //
-  // Real-world DE convention: each event runs DE rounds on ~4 pods of
-  // DE_POD_SIZE strips (16 strips total), with fencers queued through the
-  // pods round-by-round — NOT one bout per strip in parallel. A round of 128
-  // uses 4 pods of 4 strips and queues 8 bouts per pod, not 64 strips at
-  // once. The empirical durations in de_duration_table assume this 4-pod
-  // model. Using bracketSize/2 (e.g. 128 for a 256 bracket) here forced one
-  // event's DE to claim 64+ strips and serialize against any other event on
+  // Empirical DE durations in de_duration_table are calibrated against a
+  // DEFAULT_DE_STRIP_FOOTPRINT-strip cap per event, not bracketSize/2. Using
+  // bracketSize/2 directly (e.g. 128 for a 256 bracket) would let one
+  // event's DE claim 64+ strips and serialize against any other event on
   // the same day — events would queue for hours rather than sharing the
-  // strip pool concurrently. Capping at DEFAULT_DE_PODS × DE_POD_SIZE keeps
-  // each event's DE footprint small enough that 3-5 events can run DE phases
-  // concurrently across an 80-strip floor.
-  const DEFAULT_DE_PODS = 4
-  const deDesired = Math.max(1, Math.min(Math.floor(bracketSize / 2), DEFAULT_DE_PODS * DE_POD_SIZE))
+  // strip pool concurrently. Capping desired_strip_count at
+  // DEFAULT_DE_STRIP_FOOTPRINT keeps each event's DE footprint small enough
+  // that 3-5 events can run DE phases concurrently across an 80-strip floor.
+  const deDesired = Math.max(1, Math.min(Math.floor(bracketSize / 2), DEFAULT_DE_STRIP_FOOTPRINT))
   if (comp.de_mode === DeMode.SINGLE_STAGE) {
     nodes.push({
       event_id: comp.id,
@@ -483,7 +473,6 @@ function buildPhaseNodes(
       desired_strip_count: deDesired,
       duration_at_full: 0, // computed at allocation time (depends on cap)
       video_required: false, // SINGLE_STAGE never uses video
-      use_pods: false,
       cap_kind: 'DE',
       cross_event_predecessors: [],
     })
@@ -506,7 +495,6 @@ function buildPhaseNodes(
         desired_strip_count: deDesired,
         duration_at_full: blocks.prelims_dur,
         video_required: false,
-        use_pods: true,
         cap_kind: 'DE',
         cross_event_predecessors: [],
       })
@@ -526,7 +514,6 @@ function buildPhaseNodes(
       desired_strip_count: comp.de_round_of_16_strips,
       duration_at_full: blocks.r16_dur,
       video_required: r16VideoRequired,
-      use_pods: true,
       cap_kind: 'DE',
       cross_event_predecessors: [],
     })
@@ -876,9 +863,9 @@ type AllocateOutcome =
 
 /**
  * Attempts to allocate the phase node. On success mutates the event's result
- * and the global state via `allocateInterval` / `allocatePods`. On a deferrable
- * miss returns `next_ready_time`. On an unrecoverable miss (no slot before
- * dayHardEnd) returns `fail`.
+ * and the global state via `allocateInterval`. On a deferrable miss returns
+ * `next_ready_time`. On an unrecoverable miss (no slot before dayHardEnd)
+ * returns `fail`.
  */
 function tryAllocate(
   node: PhaseNode,
@@ -908,9 +895,12 @@ function tryAllocate(
   // Duration depends on phase kind.
   const duration = computePhaseDuration(node, cappedCount, event)
 
-  // STAGED-DE phases use pods.
-  if (node.use_pods) {
-    const podSize = DE_POD_SIZE
+  // STAGED-DE phases (prelims, R16) pre-check whether the phase can fit
+  // before dayHardEnd at all, before searching for strips. Without this, a
+  // phase whose duration alone overruns the day would still search for
+  // strips and — if strips happened to be free at ready_time — fail with a
+  // SAME_DAY_VIOLATION instead of deferring or failing cleanly.
+  if (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16) {
     const fitsInDay = node.ready_time + duration <= dayHardEnd
     if (!fitsInDay) {
       // Try deferring once via window probe to confirm STRIPS vs TIME.
@@ -922,42 +912,10 @@ function tryAllocate(
       }
       return { outcome: 'fail' }
     }
-
-    const podResult = allocatePods(
-      state, config, event.competition.id, node.phase_label,
-      cappedCount, podSize, node.ready_time, duration, node.video_required,
-    )
-    if (podResult === null) {
-      // Deferrable? Probe the window helper to find earliest_next_start.
-      const win = findAvailableStripsInWindow(
-        state, config, cappedCount, node.ready_time, duration, node.video_required, day,
-      )
-      if (win.fit === 'none' && win.earliest_next_start !== null && win.earliest_next_start + duration <= dayHardEnd) {
-        return { outcome: 'defer', next_ready_time: snapToSlot(win.earliest_next_start), reason: win.reason }
-      }
-      return { outcome: 'fail' }
-    }
-
-    // Success — record on result.
-    node.state = PhaseState.RUNNING
-    node.end_time = node.ready_time + duration
-    onPhaseAllocated(node, event, cappedCount, state, config)
-    // Video contention bottleneck for video phases that had to delay.
-    if (node.video_required && node.defer_count > 0) {
-      state.bottlenecks.push({
-        competition_id: event.competition.id,
-        phase: node.phase_label,
-        cause: BottleneckCause.VIDEO_STRIP_CONTENTION,
-        severity: BottleneckSeverity.INFO,
-        delay_mins: 0,
-        message: `${event.competition.id} ${node.phase_label}: video-required phase delayed by contention`,
-        attempt_id: event.attempt_id,
-      })
-    }
-    return { outcome: 'ok' }
   }
 
-  // Non-pod (POOLS / FLIGHT_A / FLIGHT_B / DE_SINGLE).
+  // Claim cappedCount strips for the phase duration as a single allocation —
+  // the same path every phase kind uses (pools, flights, and both DE modes).
   const win = findAvailableStripsInWindow(
     state, config, cappedCount, node.ready_time, duration, node.video_required, day,
   )
@@ -981,6 +939,18 @@ function tryAllocate(
     node.state = PhaseState.RUNNING
     node.end_time = endTime
     onPhaseAllocated(node, event, win.strip_indices.length, state, config)
+    // Video contention bottleneck for video-required phases that had to delay.
+    if (node.video_required && node.defer_count > 0) {
+      state.bottlenecks.push({
+        competition_id: event.competition.id,
+        phase: node.phase_label,
+        cause: BottleneckCause.VIDEO_STRIP_CONTENTION,
+        severity: BottleneckSeverity.INFO,
+        delay_mins: 0,
+        message: `${event.competition.id} ${node.phase_label}: video-required phase delayed by contention`,
+        attempt_id: event.attempt_id,
+      })
+    }
     return { outcome: 'ok' }
   }
 

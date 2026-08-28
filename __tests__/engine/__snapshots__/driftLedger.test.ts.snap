@@ -2709,13 +2709,13 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     {
       "day": 2,
-      "peak_saber_refs": 68,
+      "peak_saber_refs": 80,
       "peak_time": 1680,
       "peak_total_refs": 156,
     },
     {
       "day": 3,
-      "peak_saber_refs": 64,
+      "peak_saber_refs": 68,
       "peak_time": 2520,
       "peak_total_refs": 142,
     },
@@ -3515,7 +3515,7 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     {
       "day": 3,
-      "peak_saber_refs": 54,
+      "peak_saber_refs": 62,
       "peak_time": 2520,
       "peak_total_refs": 136,
     },

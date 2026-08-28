@@ -65,7 +65,10 @@ export const INDIV_TAIL_MINS = 30
 export const TEAM_TAIL_MINS = 60
 
 export const DE_REFS = 1
-export const DE_POD_SIZE = 4
+// DE phase strip footprint cap (concurrentScheduler.ts). de_duration_table's
+// empirical durations are calibrated against this value — changing it
+// requires re-deriving the table.
+export const DEFAULT_DE_STRIP_FOOTPRINT = 16
 // Per-bout time includes the 5-minute strip-changeover overhead, which is why
 // sabre is 15 rather than the pure fencing time.
 export const DE_BOUT_DURATION: Record<Weapon, number> = {
