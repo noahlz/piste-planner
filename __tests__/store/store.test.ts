@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import { TournamentType, PodCaptainOverride, BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
+import { TournamentType, BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
 import type { ValidationError, Bottleneck, AnalysisResult, ScheduleResult } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import { DEFAULT_CUT_BY_CATEGORY, DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../src/engine/constants.ts'
@@ -20,7 +20,6 @@ describe('tournamentSlice', () => {
       expect(state.dayConfigs).toEqual([])
       expect(state.strips_total).toBe(0)
       expect(state.video_strips_total).toBe(0)
-      expect(state.pod_captain_override).toBe('AUTO')
     })
   })
 
@@ -109,17 +108,6 @@ describe('tournamentSlice', () => {
 
       const state = useStore.getState()
       expect(state.video_strips_total).toBe(4)
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
-    })
-  })
-
-  describe('setPodCaptainOverride', () => {
-    it('sets pod_captain_override and marks both stale flags', () => {
-      useStore.getState().setPodCaptainOverride(PodCaptainOverride.FORCE_4)
-
-      const state = useStore.getState()
-      expect(state.pod_captain_override).toBe('FORCE_4')
       expect(state.analysisStale).toBe(true)
       expect(state.scheduleStale).toBe(true)
     })

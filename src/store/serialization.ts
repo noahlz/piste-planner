@@ -1,5 +1,5 @@
 import type { StoreState, CompetitionConfig, GlobalOverrides } from './store.ts'
-import type { DayConfig, TournamentType, PodCaptainOverride } from '../engine/types.ts'
+import type { DayConfig, TournamentType } from '../engine/types.ts'
 import { TournamentType as TT } from '../engine/types.ts'
 
 // ──────────────────────────────────────────────
@@ -14,7 +14,6 @@ export interface SerializedState {
     dayConfigs: DayConfig[]
     strips_total: number
     video_strips_total: number
-    pod_captain_override: PodCaptainOverride
   }
   competitions: {
     selectedCompetitions: Record<string, CompetitionConfig>
@@ -39,7 +38,6 @@ export function serializeState(state: StoreState): string {
       dayConfigs: state.dayConfigs,
       strips_total: state.strips_total,
       video_strips_total: state.video_strips_total,
-      pod_captain_override: state.pod_captain_override,
     },
     competitions: {
       selectedCompetitions: state.selectedCompetitions,
@@ -155,7 +153,6 @@ export function deserializeState(
       dayConfigs: data.tournament.dayConfigs,
       strips_total: data.tournament.strips_total,
       video_strips_total: data.tournament.video_strips_total,
-      pod_captain_override: data.tournament.pod_captain_override,
       selectedCompetitions: data.competitions.selectedCompetitions,
       globalOverrides: data.competitions.globalOverrides,
     },

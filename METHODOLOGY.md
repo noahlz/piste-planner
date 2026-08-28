@@ -6,7 +6,7 @@ For tournament organizers evaluating the tool, developers contributing to the co
 
 For the underlying code, see [`src/engine/`](src/engine/). For USA Fencing source documents, see [References](#references).
 
-Piste Planner models tournament scheduling as a resource-constrained scheduling problem: strips are general-purpose queues (each pool is a unit of work during the pool round; double-stripping splits one pool across two strip queues; each bout is a unit of work during DEs), referees are workers feeding off the queues, and the scheduler packs competitions into day/time/strip bins, minimizing constraint violations.
+Piste Planner models tournament scheduling as a resource-constrained scheduling problem: strips are general-purpose queues (each pool is a unit of work during the pool round while each bout is a unit of work during DEs), referees are workers feeding off the queues, and the scheduler packs competitions into day/time/strip bins, minimizing constraint violations.
 
 ---
 
@@ -23,16 +23,17 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
    - [Strip Budget](#strip-budget)
    - [Flighting](#flighting)
    - [Direct Elimination (DE)](#direct-elimination-de)
-8. [Resources](#resources)
+8. [DE Capacity Estimation](#de-capacity-estimation)
+9. [Resources](#resources)
    - [Strip Assignment](#strip-assignment)
    - [Referee Calculation](#referee-calculation)
-9. [Concurrent Phase Scheduler](#concurrent-phase-scheduler)
-10. [Scheduling Algorithm](#scheduling-algorithm)
-11. [Tournament-Type Policies](#tournament-type-policies)
-12. [Auto-Suggestion Logic](#auto-suggestion-logic)
-13. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
-14. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
-15. [References](#references)
+10. [Concurrent Phase Scheduler](#concurrent-phase-scheduler)
+11. [Scheduling Algorithm](#scheduling-algorithm)
+12. [Tournament-Type Policies](#tournament-type-policies)
+13. [Auto-Suggestion Logic](#auto-suggestion-logic)
+14. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
+15. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
+16. [References](#references)
 
 [Appendix A: Penalty & Constant Defaults](#appendix-a-penalty--constant-defaults)
 
@@ -48,7 +49,6 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
   - **Video strip count** (NACs only): 4, 8 (default), 12, or 16. These strips are used for the Video stage of staged DEs. Default of 8 covers a standard Round of 16. Multiple events in the video stage contend for these strips.
 - **Referee policy** (not counts — counts are an output, see below):
   - **Refs per pool**: 1 or 2 (default: 2) — affects how many refs the engine reports as needed
-  - **Use pod captains**: toggle that adds supervisory refs to DE rounds (see [Pod Captains](#pod-captains))
 - **Tournament duration**: 2–4 days (longer events, e.g. Summer Nationals, to be supported in a future version)
 - **Per-competition options**:
   - **DE mode**: determined by tournament type — NACs use "Staged DEs" (Prelim + Video stages); all other types use "Single Stage DE" (all DE rounds run as fast as possible)
@@ -304,7 +304,6 @@ See [Appendix A](#pool-duration-by-weapon-6-person-baseline-15-bouts) for base d
 
 - Other pool sizes scaled proportionally by bout count
   - e.g., 7-person pool = 21 bouts → ~1.4x baseline
-- Pools with 8+ fencers are **double-stripped** (two bouts simultaneously), reducing effective duration by ~40% (not exactly half due to friction between bouts and fencer rest time)
 
 #### Pool Parallelism
 
@@ -421,59 +420,28 @@ As such, video strips are automatic when the type is NAC. For all other tourname
 
 ---
 
-## DE Capacity Estimation Models
+## DE Capacity Estimation
 
-(see [`capacity.ts`](src/engine/capacity.ts), controlled by `de_capacity_estimation` on `TournamentConfig`)
+(see [`capacity.ts`](src/engine/capacity.ts))
 
-Two heuristics for **day-assignment** estimate how many strip-hours an individual DE event consumes. Team events always use the spread/round-by-round model regardless of the chosen heuristic. This flag is a day-assignment estimation knob, not a runtime allocator — runtime DE allocation always uses pods of 4 for STAGED events (see Concurrent Phase Scheduler).
+One table-driven model estimates the strip-hours a DE event consumes, for day-assignment. There is no configuration flag and no duration scaling – individual events read `de_duration_table` directly, and team events sum a round-by-round model.
 
-### Configuration
+### Individual Events
 
-- `de_capacity_estimation: 'pod_packed' | 'spread'` on `TournamentConfig` – default `'pod_packed'`
-
-### Constants
-
-- `DE_POD_SIZE = 4` strips per pod
-- `DE_BOUT_DURATION`: `{ EPEE: 20, FOIL: 20, SABRE: 10 }` minutes per bout
-
-### Pod-Packed Model (`de_capacity_estimation: 'pod_packed'`)
-
-Strips are organized into independent pods of 4 running sub-brackets in parallel.
-
-**Pod structure:**
-
-- `n_pods = ceil(strips / DE_POD_SIZE)`; remainder strips distributed so larger pods get one extra strip when not evenly divisible
-- All pods fence simultaneously – no serial pod sequencing
-
-**R16 consolidation:**
-
-- When 16 fencers remain across all pods, all pods merge to a single pod of 4 strips
-- Strips freed at consolidation become available for other events
-- QF runs on 4 strips; SF runs on 2 strips (the other 2 freed for cross-event use)
-- Gold and bronze bouts are **not** allocated — the scheduler stops at semis. The gold-bout share of total DE time is excluded from both `prelims_dur` and `r16_dur` and is captured by `tailEstimateMins(eventType)` instead (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
-
-**Duration scaling:**
-
-- Elapsed time computed from bout counts per round (theoretical)
-- Strip-hours scaled by `table_duration / bout_based_duration` to stay calibrated to empirical table data
-
-### Spread Model (`de_capacity_estimation: 'spread'`)
-
-No pods – all strips treated as a single undifferentiated pool.
-
-- `strip_hours = total_bouts × bout_duration / 60`
-- `total_bouts = bracket_size / 2 − 1` — the gold bout is excluded (scheduler stops at semis); only the QF, SF, and earlier rounds are counted
-- Strip-count-independent: the same total strip-hours regardless of how many strips are allocated
-- No duration scaling applied
+- **SINGLE_STAGE**: `de_strip_hours = strips_allocated × table_duration / 60` (`capacity.ts:146`), where `table_duration = calculateDeDuration(weapon, bracket_size, config.de_duration_table)`.
+- **STAGED**: `deBlockDurations` splits `table_duration` into prelims and R16 blocks.
+  - Prelims: `strips_allocated × prelims_dur / 60` – zero when 16 or fewer fencers are promoted to the DE bracket (no prelims phase is scheduled).
+  - R16: `de_round_of_16_strips × r16_dur / 60`.
+  - Video strip-hours equal the R16 block only. The scheduler stops at semis, so finals are not separately attributed (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 
 ### Team Events
 
-Team DEs always use the spread/round-by-round model regardless of `de_capacity_estimation`.
+Team DEs always use the round-by-round model (`teamDeStripHours`, `capacity.ts:48-74`):
 
-- All bouts in a round run simultaneously – one strip per bout
-- Rounds are strictly sequential
-- Non-power-of-2 entry counts produce play-in bouts in the opening round
-- The gold bout is excluded from capacity planning — the scheduler stops at semis. `total_bouts = bracket_size / 2 − 1`, same as the individual spread model (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
+- All bouts in a round run simultaneously, one strip per bout.
+- Rounds run strictly sequentially.
+- Non-power-of-2 entry counts produce play-in bouts in the opening round.
+- The finals bout is excluded – the scheduler stops at semis (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 
 ---
 
@@ -487,13 +455,13 @@ The scheduler allocates strips through the semifinal round only. Gold and bronze
 
 #### Interval-List Model
 
-Strip occupancy lives in `state.strip_allocations`, a `StripAllocation[][]` indexed by strip. Each `StripAllocation` records `{event_id, phase, pod_id?, start_time, end_time}` and the per-strip list is kept sorted by `start_time`. A strip is busy at `[startTime, endTime]` iff at least one of its allocations overlaps that window. Allocations are append-only inside a scheduling pass; rollback for a failed event is order-independent — `releaseEventAllocations(state, event_id, attempt_id?)` splices entries by `event_id` (and optionally `attempt_id` for bottlenecks) across every strip's list.
+Strip occupancy lives in `state.strip_allocations`, a `StripAllocation[][]` indexed by strip. Each `StripAllocation` records `{event_id, phase, start_time, end_time}` and the per-strip list is kept sorted by `start_time`. A strip is busy at `[startTime, endTime]` iff at least one of its allocations overlaps that window. Allocations are append-only inside a scheduling pass; rollback for a failed event is order-independent — `releaseEventAllocations(state, event_id, attempt_id?)` splices entries by `event_id` (and optionally `attempt_id` for bottlenecks) across every strip's list.
 
 The core primitive is `findAvailableStripsInWindow(state, config, count, startTime, duration, videoRequired, day?)`. It walks each candidate strip's interval list and returns either:
 - `{ fit: 'ok', strip_indices }` — `count` strips are simultaneously free for `[startTime, startTime + duration]`, or
 - `{ fit: 'none', earliest_next_start, reason }` — no fit at `startTime`. `earliest_next_start` is the soonest moment `count` candidate strips become simultaneously free for `duration` minutes, and `reason` is `'STRIPS'` (the strip pool was the limiter) or `'TIME'` (the candidate would push past the day's hard end). The concurrent scheduler uses `earliest_next_start` to defer a phase forward in time without retrying the whole event.
 
-Pod allocation (`allocatePods`, used by STAGED-DE phases) layers on top: it groups `count` strips into pods of `DE_POD_SIZE = 4`, stamps each `StripAllocation` with the pod ID, and returns the `Pod[]` so the post-schedule referee output can group strips into ref-staffing units.
+Strips are a flat pool – `video_capable` is the only categorical distinction between them. A DE phase claims a contiguous count of strips as one allocation, whether STAGED or SINGLE_STAGE.
 
 #### Video Strip Preservation
 
@@ -511,12 +479,12 @@ Phase-level rules:
 #### Resource Windows
 
 - For each phase (pool round, DE prelim, DE video stage), the engine finds the earliest time slot where strips are available
-- If strips aren't available at the ideal time, the engine scans forward in 30-minute slots
+- If strips aren't available at the ideal time, the engine defers straight to the soonest moment enough strips are simultaneously free, rather than scanning forward slot by slot
 - If delay exceeds a threshold, a strip-contention bottleneck diagnostic is emitted
 
 #### Slot Granularity
 
-- All phase start times snap to 30-minute boundaries (8:00, 8:30, 9:00, etc.)
+- All phase start times snap to 5-minute boundaries (13:00, 13:05, 13:10, etc.) – a start time that lands between boundaries rounds up to the next one (e.g., 13:03 → 13:05)
 - End times are not snapped — they reflect actual estimated duration
 
 ### Referee Calculation
@@ -548,16 +516,13 @@ The minimum 3-weapon staff is `peak_saber_refs`. The remaining `peak_total_refs 
 
 This setting changes how many refs the engine reports as needed; it does not gate scheduling.
 
-(Logic implemented in `pools.ts:resolveRefsPerPool`. Double-duty referee logic also lives in `pools.ts`: when `refsPerPool=1`, one ref can be reported as covering two adjacent strips.)
+(Logic implemented in `pools.ts:resolveRefsPerPool`.)
 
-#### Pod Captains
+#### Ref Demand Derivation
 
-- Toggle: "Use Pod Captains to manage DEs"
-- When enabled, the reported ref demand includes supervisory pod captains:
-  - **1 per 4 strips** for brackets ≤32 and R16 phases
-  - **1 per 8 strips** for larger brackets and other phases
-- A `FORCE_4` override option sets the ratio to 1 per 4 strips unconditionally
-- Pod captains supervise groups of strips during DE phases (NACs)
+Ref demand is derived post-schedule from the allocation intervals (`computePostScheduleRefDemand` in `concurrentScheduler.ts`), not maintained incrementally by the scheduling loop. **DE phases require one referee per allocated strip.** Pool phases follow `refs_per_pool`. Per-day peaks come from a sweep over those intervals.
+
+This corrected a prior under-count on staged DE events – the earlier model reported roughly one referee per 4-strip group, so the fix raised staged-DE referee demand by roughly 4×.
 
 ---
 
@@ -584,7 +549,7 @@ When multiple phase nodes are READY, the loop picks the one with the highest pri
 
 ### Allocation, Deferral, and Failure
 
-The loop calls `findAvailableStripsInWindow` (or `allocatePods` for STAGED-DE phases). On `fit: 'ok'` the node transitions to RUNNING, the successor's `ready_time` is set to `node.end_time + ADMIN_GAP_MINS` (or `+ FLIGHT_BUFFER_MINS` after `pools_flight_a`), and the successor is pushed onto the ready queue. On `fit: 'none'`:
+The loop calls `findAvailableStripsInWindow`. On `fit: 'ok'` the node transitions to RUNNING, the successor's `ready_time` is set to `node.end_time + ADMIN_GAP_MINS` (or `+ FLIGHT_BUFFER_MINS` after `pools_flight_a`), and the successor is pushed onto the ready queue. On `fit: 'none'`:
 - If `earliest_next_start` lies within the day, the node is **deferred**: `ready_time` advances to `earliest_next_start`, `defer_count++`, and the node goes back onto the ready queue. A monotonicity invariant asserts `new_ready_time > old_ready_time`. `MAX_DEFERS_PER_PHASE = 16` is a circuit breaker against pathological states; the monotonicity invariant alone bounds termination.
 - Otherwise the node FAILS, and the failure cascades to all not-yet-RUNNING phases of the event.
 
@@ -648,7 +613,6 @@ Score factors:
 - **Crossover count**: how many other competitions this one conflicts with
 - **Window tightness**: how narrow the allowed time window is
 - **Video scarcity** (NACs only): ratio of staged DE events requiring video to video strips
-- **Referee intensity**: events requiring 2 refs/pool score higher (2.0) than 1 ref/pool (0.5) — purely a tie-breaker; no ref supply is consulted
 
 Within this ordering:
 - Mandatory competitions before optional
@@ -662,6 +626,12 @@ For each competition in priority order:
 - Penalty = sum of all applicable soft preferences vs. competitions already scheduled
 - If no day has finite penalty at current constraint level, escalate through [Constraint Relaxation](#constraint-relaxation)
 
+#### Saber Pileup
+
+Saber competitions carry an extra per-candidate-day penalty when other saber events are already on that day. `saberPileupPenalty` (`dayAssignment.ts:83-100`) counts how many other SABRE competitions are already assigned to the candidate day and applies an escalating penalty, capped once four or more other saber events are already on the day. Non-saber competitions always score 0. See [Appendix A](#appendix-a-penalty--constant-defaults) for the exact values.
+
+The penalty is always active, not gated by the load-balance flag, because saber refs are three-weapon specialists and are naturally scarce – concentrating saber events on one day is a structural staffing risk, not a load-balance nicety. Applied per candidate day inside `colorPenalty` (`dayColoring.ts:301`).
+
 ### Phase 5: Resource Allocation
 
 Once days are chosen, the **[Concurrent Phase Scheduler](#concurrent-phase-scheduler)** runs a single OS-process-style loop over phase nodes across all events. Pool, DE-prelim, R16, and SINGLE_STAGE-DE phases are scheduled in priority order, with disjoint-strip events running truly concurrently in the same window.
@@ -670,11 +640,11 @@ Per-event phase decomposition:
 
 1. **Pool round**: one node (`pools`) or two nodes (`pools_flight_a → pools_flight_b` separated by `FLIGHT_BUFFER_MINS`).
 2. **Admin gap**: 30-minute mandatory gap between any phase and its successor (`ADMIN_GAP_MINS`).
-3. **DE phases**: STAGED events run `de_prelims → de_r16` as pods of `DE_POD_SIZE = 4`; SINGLE_STAGE events run a flat `de` allocation. Gold/bronze are unallocated — `de_total_end = terminal_phase_end + tailEstimateMins(event_type)`.
+3. **DE phases**: STAGED events run `de_prelims → de_r16`; SINGLE_STAGE events run a flat `de` allocation. Gold/bronze are unallocated — `de_total_end = terminal_phase_end + tailEstimateMins(event_type)`.
 
 If strips are unavailable at the ideal time, the loop **defers** the phase to the earliest moment the right number of strips become simultaneously free, using `findAvailableStripsInWindow`'s `earliest_next_start`. If no in-day slot exists, the event fails and retries from `dayStart`; a second failure marks the event permanently unscheduled. See [Concurrent Phase Scheduler](#concurrent-phase-scheduler) for the full lifecycle.
 
-Ref demand is **derived post-schedule** from the final allocation state (`peakConcurrentStrips` for non-pod intervals, `computePodRefDemand` for STAGED-DE pods); the loop does not maintain it incrementally. It is summarized into per-day peak totals in Phase 7.
+Ref demand is **derived post-schedule** from the final allocation state (`computePostScheduleRefDemand`), not maintained incrementally by the loop. It is summarized into per-day peak totals in Phase 7.
 
 ### Phase 6: State Update
 
@@ -881,6 +851,7 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Rest day violation | 1.5 | Junior↔Cadet or Junior↔Div 1 on consecutive days without rest |
 | Team before individual | 1.0 | Team event scheduled before its individual counterpart |
 | Weapon balance | 0.5 | All-ROW or all-epee day |
+| Saber pileup (per same-day saber count) | 0, 0.5, 2.0, 10.0, 50.0 (capped at 4+) | Escalating penalty for stacking saber events on one day, indexed by other same-day SABRE competitions |
 | Proximity 3+ days apart | 0.5 | Related categories far apart in the schedule |
 | Y10 non-first-slot | 0.3 | Y10 event not starting at 8 AM |
 | Ind+team 2+ days apart | 0.3 | Individual and team event far apart |
@@ -900,10 +871,12 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Day length | 14 hours | Total scheduling window |
 | Pool-round cutoff | 4:00 PM (960 min) | Pool rounds cannot start after this time |
 | Admin gap | 30 min | Mandatory gap between pool end and DE start |
-| Slot granularity | 30 min | All phase start times snap to 30-minute boundaries |
+| Slot granularity | 5 min | All phase start times snap to 5-minute boundaries |
 | FLIGHT_BUFFER_MINS | 15 min | Buffer between flighted flights |
 | THRESHOLD_MINS / EARLY_START_THRESHOLD | 10 min | Bottleneck detection threshold / early start window |
 | SAME_TIME_WINDOW_MINS | 30 min | Window for same-time crossover penalty |
+| DE_BOUT_DURATION | Épée 20, Foil 20, Sabre 15 | Minutes per DE bout, including strip-changeover overhead |
+| YOUTH_VET_BOUT_DELTA | −5 min | Applied to DE_BOUT_DURATION for Y8/Y10 and all veteran age groups |
 
 ### Pool Duration by Weapon (6-person baseline, 15 bouts)
 
@@ -949,15 +922,14 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 |---|---|---|
 | Flighting threshold | n_pools > pool_strip_cap (default 80% of strips) | Strip-budget trigger; replaces old 200+ fencer rule |
 | Video strip options | 4, 8, 12, 16 | Available video strip counts (NACs only); 8 is default |
-| Pod captain ratio | 1 per 4 or 8 strips | Varies by bracket size/phase (see [Pod Captains](#pod-captains)) |
 | Fencer count bounds | 2–500 | Valid range per competition |
 | DE minimum advancement | 2 fencers | Minimum fencers advancing to DE bracket |
 | Pool size targets | 6–7 | Target pool size; `ceil(fencerCount / 7)` pools |
 | Maximum crossover weight | 0.8 | Crossover graph edge cap |
 | Two-hop crossover cap | 0.3 | Indirect relationship cap |
 | Ind/team separation gap | 120 min | Minimum gap between individual and team (non-hard-blocked pairs) |
-| DE_REFS | 1 | One referee per DE bout |
-| RefPolicy.AUTO | 1.0 | Middle constraint score (between TWO=2.0 and ONE=0.5) |
+| DE_REFS | 1 | Referees required per allocated DE strip |
+| DEFAULT_DE_STRIP_FOOTPRINT | 16 | Cap on strips a single DE phase can claim – `de_duration_table` durations are calibrated against this value |
 | DEFAULT_DE_DURATION_TABLE | (see `constants.ts`) | DE durations by bracket size and weapon |
 
 ### Capacity Model Constants

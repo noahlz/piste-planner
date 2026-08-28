@@ -42,7 +42,6 @@ export function buildTournamentConfig(state: StoreState): {
     strips,
     strips_total: state.strips_total,
     video_strips_total: state.video_strips_total,
-    pod_captain_override: state.pod_captain_override,
     dayConfigs: state.dayConfigs,
 
     // Global overrides from store
@@ -70,9 +69,6 @@ export function buildTournamentConfig(state: StoreState): {
     // Strip budget defaults — per-event UI overrides to be added in a future task
     max_pool_strip_pct: 0.80,
     max_de_strip_pct: 0.80,
-
-    // DE capacity estimation model — pod_packed is default (sub-brackets with R16 consolidation)
-    de_capacity_estimation: 'pod_packed',
   }
 
   const competitions = buildCompetitions(state)

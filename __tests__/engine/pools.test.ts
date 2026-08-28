@@ -127,27 +127,25 @@ describe('weightedPoolDuration', () => {
     expect(result).toBe(90)
   })
 
-  it('single pool of 8 EPEE → double-stripped, 0.6×', () => {
+  it('single pool of 8 EPEE → equals poolDurationForSize for size 8 (plain weighted average, no double-stripping reduction)', () => {
     const structure = computePoolStructure(8) // 1×8
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
     // poolDurationForSize(EPEE, 8) = round(120 * 28/15) = 224
-    // Single pool of 8+ → 0.6×: round(224 * 0.6) = 134
-    expect(result).toBe(134)
+    expect(result).toBe(224)
+    expect(result).toBe(poolDurationForSize(Weapon.EPEE, 8, DEFAULT_POOL_ROUND_DURATION_TABLE))
   })
 
-  it('single pool of 9 SABRE → double-stripped, 0.6×', () => {
+  it('single pool of 9 SABRE → plain weighted average, no double-stripping reduction', () => {
     const structure = computePoolStructure(9) // 1×9
     const result = weightedPoolDuration(structure, Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE)
     // poolDurationForSize(SABRE, 9) = round(75 * 36/15) = 180
-    // Single pool of 9+ → 0.6×: round(180 * 0.6) = 108
-    expect(result).toBe(108)
+    expect(result).toBe(180)
   })
 
-  it('single pool of 7 is NOT double-stripped', () => {
+  it('single pool of 7 → plain weighted average (no special-casing by pool size)', () => {
     const structure = computePoolStructure(7) // 1×7
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
     // poolDurationForSize(EPEE, 7) = round(120 * 21/15) = 168
-    // Pool of 7 → no halving
     expect(result).toBe(168)
   })
 })

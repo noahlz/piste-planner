@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import type {
   DayConfig,
   TournamentType,
-  PodCaptainOverride,
   RefPolicy,
   CutMode,
   DeMode,
@@ -47,7 +46,6 @@ export interface TournamentSlice {
   dayConfigs: DayConfig[]
   strips_total: number
   video_strips_total: number
-  pod_captain_override: PodCaptainOverride
 
   setTournamentType: (type: TournamentType) => void
   setDays: (days: number) => void
@@ -55,7 +53,6 @@ export interface TournamentSlice {
   setStrips: (total: number) => void
   setVideoStrips: (total: number) => void
   suggestStrips: () => void
-  setPodCaptainOverride: (override: PodCaptainOverride) => void
 }
 
 export interface CompetitionConfig {
@@ -149,7 +146,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
     dayConfigs: [],
     strips_total: 0,
     video_strips_total: 0,
-    pod_captain_override: 'AUTO',
 
     setTournamentType: (type) => {
       set({ tournament_type: type })
@@ -194,11 +190,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
         set({ strips_total: suggested })
         get().markStale({ analysisStale: true, scheduleStale: true })
       }
-    },
-
-    setPodCaptainOverride: (override) => {
-      set({ pod_captain_override: override })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
   }
 }

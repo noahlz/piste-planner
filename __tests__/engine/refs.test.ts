@@ -1,46 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { podCaptainsNeeded, computeRefRequirements, computePodRefDemand } from '../../src/engine/refs.ts'
-import { PodCaptainOverride, DeMode, Weapon, Phase } from '../../src/engine/types.ts'
+import { computeRefRequirements, peakDeRefDemand } from '../../src/engine/refs.ts'
+import { DeMode, Weapon } from '../../src/engine/types.ts'
 import type { RefDemandByDay } from '../../src/engine/types.ts'
-import { createGlobalState, allocateInterval } from '../../src/engine/resources.ts'
-import { allocatePods } from '../../src/engine/pods.ts'
-import { makeConfig, makeStrips } from '../helpers/factories.ts'
+import { makeConfig, makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
-// podCaptainsNeeded
+// peakDeRefDemand
 // ──────────────────────────────────────────────
 
-describe('podCaptainsNeeded', () => {
-  it('DISABLED override → 0 regardless of strips', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.DISABLED, DeMode.SINGLE_STAGE, 32, Phase.DE_PRELIMS, 12)).toBe(0)
+describe('peakDeRefDemand', () => {
+  const config = makeConfig()
+
+  it('STAGED event → DE_REFS × round-of-16 strips, no captain addend', () => {
+    const comp = makeCompetition({ de_mode: DeMode.STAGED, de_round_of_16_strips: 16 })
+    expect(peakDeRefDemand(comp, config)).toBe(16)
   })
 
-  it('FORCE_4 override with 12 strips → ceil(12/4) = 3', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 32, Phase.DE_PRELIMS, 12)).toBe(3)
+  it('SINGLE_STAGE event → DE_REFS × active strips, no captain addend', () => {
+    const comp = makeCompetition({ de_round_of_16_strips: 8, strips_allocated: 8 })
+    expect(peakDeRefDemand(comp, config)).toBe(8)
   })
 
-  it('AUTO, SINGLE_STAGE, bracket ≤32, 8 strips → ceil(8/4) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 32, Phase.DE_PRELIMS, 8)).toBe(2)
-  })
-
-  it('AUTO, SINGLE_STAGE, bracket 64, 16 strips → ceil(16/8) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 64, Phase.DE_PRELIMS, 16)).toBe(2)
-  })
-
-  it('AUTO, STAGED, DE_ROUND_OF_16 phase, 4 strips → ceil(4/4) = 1', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED, 64, Phase.DE_ROUND_OF_16, 4)).toBe(1)
-  })
-
-  it('AUTO, STAGED, DE_PRELIMS phase, 8 strips → ceil(8/8) = 1', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.STAGED, 64, Phase.DE_PRELIMS, 8)).toBe(1)
-  })
-
-  it('AUTO, SINGLE_STAGE, bracket ≤32, 9 strips → ceil(9/4) = 3', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.AUTO, DeMode.SINGLE_STAGE, 16, Phase.DE_PRELIMS, 9)).toBe(3)
-  })
-
-  it('FORCE_4 with 7 strips → ceil(7/4) = 2', () => {
-    expect(podCaptainsNeeded(PodCaptainOverride.FORCE_4, DeMode.SINGLE_STAGE, 64, Phase.DE_PRELIMS, 7)).toBe(2)
+  it('strips_allocated exceeding de_round_of_16_strips is capped, not added', () => {
+    const comp = makeCompetition({ de_round_of_16_strips: 4, strips_allocated: 12 })
+    expect(peakDeRefDemand(comp, config)).toBe(4)
   })
 })
 
@@ -158,107 +141,5 @@ describe('computeRefRequirements', () => {
     const result = computeRefRequirements(demand, 1)
     expect(result[0].peak_total_refs).toBe(7)
     expect(result[0].peak_time).toBe(660)
-  })
-})
-
-
-// ──────────────────────────────────────────────
-// computePodRefDemand
-// ──────────────────────────────────────────────
-
-describe('computePodRefDemand', () => {
-  it('empty state → empty record', () => {
-    const config = makeConfig({ strips: makeStrips(8, 4) })
-    const state = createGlobalState(config)
-    expect(computePodRefDemand(state, config, [])).toEqual({})
-  })
-
-  it('single 4-strip pod → one ref interval with count=1', () => {
-    const config = makeConfig({ strips: makeStrips(8, 4) })
-    const state = createGlobalState(config)
-    // Day 0 starts at 0 (uniform days, DAY_LENGTH_MINS=840). Pod runs at t=600.
-    allocatePods(state, config, 'evt1', Phase.DE_ROUND_OF_16, 4, 4, 600, 60, true)
-
-    const out = computePodRefDemand(state, config, [{ id: 'evt1', weapon: Weapon.FOIL }])
-    expect(out[0].intervals).toEqual([
-      { startTime: 600, endTime: 660, count: 1, weapon: Weapon.FOIL },
-    ])
-  })
-
-  it('two pods of 4 strips → two ref intervals, one per pod', () => {
-    const config = makeConfig({ strips: makeStrips(16, 8) })
-    const state = createGlobalState(config)
-    allocatePods(state, config, 'evt1', Phase.DE_ROUND_OF_16, 8, 4, 600, 60, true)
-
-    const out = computePodRefDemand(state, config, [{ id: 'evt1', weapon: Weapon.SABRE }])
-    expect(out[0].intervals).toHaveLength(2)
-    for (const iv of out[0].intervals) {
-      expect(iv.count).toBe(1)
-      expect(iv.weapon).toBe(Weapon.SABRE)
-      expect(iv.startTime).toBe(600)
-      expect(iv.endTime).toBe(660)
-    }
-  })
-
-  it('partial last pod (1 strip) still emits one interval with count=1', () => {
-    const config = makeConfig({ strips: makeStrips(8, 4) })
-    const state = createGlobalState(config)
-    allocatePods(state, config, 'evt1', Phase.DE_PRELIMS, 1, 4, 600, 60, true)
-
-    const out = computePodRefDemand(state, config, [{ id: 'evt1', weapon: Weapon.EPEE }])
-    expect(out[0].intervals).toEqual([
-      { startTime: 600, endTime: 660, count: 1, weapon: Weapon.EPEE },
-    ])
-  })
-
-  it('skips StripAllocation entries without a pod_id (pool phase)', () => {
-    const config = makeConfig({ strips: makeStrips(8, 4) })
-    const state = createGlobalState(config)
-    // Pool phase — no pod_id
-    allocateInterval(state, 'evt1', Phase.POOLS, [0, 1, 2, 3], 480, 540)
-    // DE pod phase — has pod_id
-    allocatePods(state, config, 'evt1', Phase.DE_ROUND_OF_16, 4, 4, 600, 60, true)
-
-    const out = computePodRefDemand(state, config, [{ id: 'evt1', weapon: Weapon.FOIL }])
-    expect(out[0].intervals).toHaveLength(1)
-    expect(out[0].intervals[0].startTime).toBe(600)
-  })
-
-  it('attributes each pod to the day containing its start_time', () => {
-    // 3 days with uniform DAY_LENGTH_MINS=840: day 0 [0,840), day 1 [840,1680), day 2 [1680,2520)
-    const config = makeConfig({ strips: makeStrips(8, 4), days_available: 3 })
-    const state = createGlobalState(config)
-    // Day 0 pod
-    allocatePods(state, config, 'evt1', Phase.DE_ROUND_OF_16, 4, 4, 600, 60, true)
-    // Day 2 pod
-    allocatePods(state, config, 'evt2', Phase.DE_ROUND_OF_16, 4, 4, 1700, 60, true)
-
-    const out = computePodRefDemand(state, config, [
-      { id: 'evt1', weapon: Weapon.FOIL },
-      { id: 'evt2', weapon: Weapon.SABRE },
-    ])
-    expect(Object.keys(out).sort()).toEqual(['0', '2'])
-    expect(out[0].intervals[0].weapon).toBe(Weapon.FOIL)
-    expect(out[2].intervals[0].weapon).toBe(Weapon.SABRE)
-  })
-
-  it('feeds computeRefRequirements: 2 concurrent pods → peak_total=2', () => {
-    const config = makeConfig({ strips: makeStrips(16, 8) })
-    const state = createGlobalState(config)
-    allocatePods(state, config, 'evt1', Phase.DE_ROUND_OF_16, 8, 4, 600, 60, true)
-
-    const demand = computePodRefDemand(state, config, [{ id: 'evt1', weapon: Weapon.FOIL }])
-    const reqs = computeRefRequirements(demand, config.days_available)
-    expect(reqs[0].peak_total_refs).toBe(2)
-    expect(reqs[0].peak_time).toBe(600)
-  })
-
-  it('throws when a scheduled pod has no matching competition entry', () => {
-    const config = makeConfig({ strips: makeStrips(8, 4) })
-    const state = createGlobalState(config)
-    allocatePods(state, config, 'evt1', Phase.DE_ROUND_OF_16, 4, 4, 600, 60, true)
-
-    // No competition entry for evt1 → caller bug, helper throws.
-    expect(() => computePodRefDemand(state, config, [])).toThrow(/evt1/)
   })
 })

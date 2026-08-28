@@ -5,8 +5,9 @@ import {
   dePhasesForBracket,
   deBlockDurations,
   calculateDeDuration,
+  perBoutDuration,
 } from '../../src/engine/de.ts'
-import { CutMode, EventType, Weapon, Phase, tailEstimateMins } from '../../src/engine/types.ts'
+import { CutMode, EventType, Weapon, Phase, Category, VetAgeGroup, tailEstimateMins } from '../../src/engine/types.ts'
 import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
 
 describe('nextPowerOf2', () => {
@@ -165,5 +166,51 @@ describe('calculateDeDuration', () => {
         ).toBe(expected)
       }
     }
+  })
+})
+
+describe('perBoutDuration', () => {
+  // base = DE_BOUT_DURATION[weapon] (foil/epee 20, sabre 15 after strip-changeover overhead)
+  // YOUTH_VET_BOUT_DELTA (-5) applies when category is Y8 or Y10, or vet_age_group is non-null.
+  // Y12, Y14, and senior (DIV1) categories take the plain weapon duration.
+  const cases: [string, Weapon, Category, VetAgeGroup | null, number][] = [
+    // senior (DIV1) — unaffected, plain weapon duration
+    ['FOIL + DIV1 (senior) → 20', Weapon.FOIL, Category.DIV1, null, 20],
+    ['EPEE + DIV1 (senior) → 20', Weapon.EPEE, Category.DIV1, null, 20],
+    ['SABRE + DIV1 (senior) → 15', Weapon.SABRE, Category.DIV1, null, 15],
+
+    // Y10 — delta across all three weapons
+    ['FOIL + Y10 → 15 (20-5)', Weapon.FOIL, Category.Y10, null, 15],
+    ['EPEE + Y10 → 15 (20-5)', Weapon.EPEE, Category.Y10, null, 15],
+    ['SABRE + Y10 → 10 (15-5)', Weapon.SABRE, Category.Y10, null, 10],
+
+    // Y8 — delta across all three weapons
+    ['FOIL + Y8 → 15 (20-5)', Weapon.FOIL, Category.Y8, null, 15],
+    ['EPEE + Y8 → 15 (20-5)', Weapon.EPEE, Category.Y8, null, 15],
+    ['SABRE + Y8 → 10 (15-5)', Weapon.SABRE, Category.Y8, null, 10],
+
+    // every VetAgeGroup — delta applies, keyed off vet_age_group not category
+    ['FOIL + VETERAN:VET40 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET40, 15],
+    ['FOIL + VETERAN:VET50 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET50, 15],
+    ['FOIL + VETERAN:VET60 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET60, 15],
+    ['FOIL + VETERAN:VET70 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET70, 15],
+    ['FOIL + VETERAN:VET80 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET80, 15],
+    ['FOIL + VETERAN:VET_COMBINED → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET_COMBINED, 15],
+    // VETERAN category with no age group set → 20, unaffected: the delta keys off
+    // vet_age_group, not category, so a null age group gets nothing subtracted
+    // even though the category is VETERAN.
+    ['FOIL + VETERAN, vet_age_group null → 20 (no delta without an age group)', Weapon.FOIL, Category.VETERAN, null, 20],
+
+    // Y12, Y14 — explicitly unaffected
+    ['FOIL + Y12 → 20 (unaffected)', Weapon.FOIL, Category.Y12, null, 20],
+    ['FOIL + Y14 → 20 (unaffected)', Weapon.FOIL, Category.Y14, null, 20],
+
+    // Both predicates true at once (Y8 + a set vet_age_group) → a single delta,
+    // not two: 20 - 5 = 15, never 10.
+    ['FOIL + Y8 + VETERAN:VET40 → 15, single delta not double', Weapon.FOIL, Category.Y8, VetAgeGroup.VET40, 15],
+  ]
+
+  it.each(cases)('%s', (_description, weapon, category, vetAgeGroup, expected) => {
+    expect(perBoutDuration(weapon, category, vetAgeGroup)).toBe(expected)
   })
 })

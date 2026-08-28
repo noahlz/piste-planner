@@ -46,7 +46,7 @@ export const DAY_START_MINS = 480 // 8:00 AM
 export const DAY_END_MINS = 1320 // 10:00 PM
 export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start after this
 export const LATEST_START_OFFSET = 480 // offset from DAY_START to LATEST_START
-export const SLOT_MINS = 30
+export const SLOT_MINS = 5
 export const DAY_LENGTH_MINS = 840 // DAY_END_MINS - DAY_START_MINS
 export const ADMIN_GAP_MINS = 30
 export const FLIGHT_BUFFER_MINS = 15
@@ -65,12 +65,20 @@ export const INDIV_TAIL_MINS = 30
 export const TEAM_TAIL_MINS = 60
 
 export const DE_REFS = 1
-export const DE_POD_SIZE = 4
+// DE phase strip footprint cap (concurrentScheduler.ts). de_duration_table's
+// empirical durations are calibrated against this value — changing it
+// requires re-deriving the table.
+export const DEFAULT_DE_STRIP_FOOTPRINT = 16
+// Per-bout time includes the 5-minute strip-changeover overhead, which is why
+// sabre is 15 rather than the pure fencing time.
 export const DE_BOUT_DURATION: Record<Weapon, number> = {
   [Weapon.EPEE]: 20,
   [Weapon.FOIL]: 20,
-  [Weapon.SABRE]: 10,
+  [Weapon.SABRE]: 15,
 }
+// Applied to DE_BOUT_DURATION for Y8/Y10 and all veteran age groups — shorter
+// bouts for these categories per USA Fencing rules.
+export const YOUTH_VET_BOUT_DELTA = -5
 export const SAME_TIME_WINDOW_MINS = 30
 export const INDIV_TEAM_MIN_GAP_MINS = 120
 

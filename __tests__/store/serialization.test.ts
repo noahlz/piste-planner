@@ -22,7 +22,6 @@ function populatedState(): StoreState {
   store.getState().setDays(2)
   store.getState().setStrips(12)
   store.getState().setVideoStrips(4)
-  store.getState().setPodCaptainOverride('FORCE_4')
   store.getState().selectCompetitions(['CDT-M-FOIL-IND'])
   store.getState().updateCompetition('CDT-M-FOIL-IND', { fencer_count: 64 })
   store.getState().setGlobalOverrides({ ADMIN_GAP_MINS: 20 })
@@ -42,7 +41,6 @@ function validSerializedData(): SerializedState {
       ],
       strips_total: 10,
       video_strips_total: 2,
-      pod_captain_override: 'AUTO',
     },
     competitions: {
       selectedCompetitions: {
@@ -83,7 +81,6 @@ describe('serializeState', () => {
     expect(parsed.tournament.days_available).toBe(2)
     expect(parsed.tournament.strips_total).toBe(12)
     expect(parsed.tournament.video_strips_total).toBe(4)
-    expect(parsed.tournament.pod_captain_override).toBe('FORCE_4')
     expect(parsed.tournament.dayConfigs).toHaveLength(2)
 
     expect(parsed.competitions.selectedCompetitions['CDT-M-FOIL-IND'].fencer_count).toBe(64)
@@ -243,7 +240,6 @@ describe('deserializeState', () => {
         dayConfigs: [],
         strips_total: 20,
         video_strips_total: 4,
-        pod_captain_override: 'AUTO',
       },
       competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
       referees: { dayRefs: [{ foil_epee_refs: 5, three_weapon_refs: 3 }] },
@@ -255,6 +251,52 @@ describe('deserializeState', () => {
       expect(result.state.strips_total).toBe(20)
       // No ref fields in the returned state
       expect((result.state as Record<string, unknown>)['dayRefs']).toBeUndefined()
+    }
+  })
+
+  it('load: legacy pod_captain_override field in tournament is silently ignored (FR-010)', () => {
+    const legacy = JSON.stringify({
+      schemaVersion: 1,
+      tournament: {
+        tournament_type: 'NAC',
+        days_available: 2,
+        dayConfigs: [],
+        strips_total: 20,
+        video_strips_total: 4,
+        pod_captain_override: 'FORCE_4',
+      },
+      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+    })
+    const result = deserializeState(legacy)
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      expect(result.state.tournament_type).toBe('NAC')
+      expect(result.state.strips_total).toBe(20)
+      // The removed field is not present on the returned state
+      expect((result.state as Record<string, unknown>)['pod_captain_override']).toBeUndefined()
+    }
+  })
+
+  it('load: legacy de_capacity_estimation field in tournament is silently ignored (FR-010)', () => {
+    const legacy = JSON.stringify({
+      schemaVersion: 1,
+      tournament: {
+        tournament_type: 'NAC',
+        days_available: 2,
+        dayConfigs: [],
+        strips_total: 20,
+        video_strips_total: 4,
+        de_capacity_estimation: 'pod_packed',
+      },
+      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+    })
+    const result = deserializeState(legacy)
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      expect(result.state.tournament_type).toBe('NAC')
+      expect(result.state.strips_total).toBe(20)
+      // The removed field is not present on the returned state
+      expect((result.state as Record<string, unknown>)['de_capacity_estimation']).toBeUndefined()
     }
   })
 })
@@ -277,7 +319,6 @@ describe('round-trip: serializeState → deserializeState', () => {
     expect(loaded.dayConfigs).toEqual(original.dayConfigs)
     expect(loaded.strips_total).toBe(original.strips_total)
     expect(loaded.video_strips_total).toBe(original.video_strips_total)
-    expect(loaded.pod_captain_override).toBe(original.pod_captain_override)
     expect(loaded.selectedCompetitions).toEqual(original.selectedCompetitions)
     expect(loaded.globalOverrides).toEqual(original.globalOverrides)
   })
@@ -321,6 +362,50 @@ describe('decodeFromUrl', () => {
   it('missing #config= prefix returns error', () => {
     const result = decodeFromUrl('no-prefix')
     expect('error' in result).toBe(true)
+  })
+
+  it('shared URL carrying legacy pod_captain_override loads successfully (FR-010)', () => {
+    const legacy = {
+      schemaVersion: 1,
+      tournament: {
+        tournament_type: 'NAC',
+        days_available: 2,
+        dayConfigs: [],
+        strips_total: 20,
+        video_strips_total: 4,
+        pod_captain_override: 'FORCE_4',
+      },
+      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+    }
+    const b64url = btoa(JSON.stringify(legacy)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const result = decodeFromUrl(`#config=${b64url}`)
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      expect(result.state.tournament_type).toBe('NAC')
+      expect((result.state as Record<string, unknown>)['pod_captain_override']).toBeUndefined()
+    }
+  })
+
+  it('shared URL carrying legacy de_capacity_estimation loads successfully (FR-010)', () => {
+    const legacy = {
+      schemaVersion: 1,
+      tournament: {
+        tournament_type: 'NAC',
+        days_available: 2,
+        dayConfigs: [],
+        strips_total: 20,
+        video_strips_total: 4,
+        de_capacity_estimation: 'pod_packed',
+      },
+      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+    }
+    const b64url = btoa(JSON.stringify(legacy)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const result = decodeFromUrl(`#config=${b64url}`)
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      expect(result.state.tournament_type).toBe('NAC')
+      expect((result.state as Record<string, unknown>)['de_capacity_estimation']).toBeUndefined()
+    }
   })
 })
 

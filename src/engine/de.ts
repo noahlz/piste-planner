@@ -1,6 +1,7 @@
-import { Weapon, CutMode, EventType, Phase } from './types.ts'
+import { Weapon, CutMode, EventType, Phase, Category, VetAgeGroup } from './types.ts'
 import type { DeBlockDurations } from './types.ts'
 import { computeDeFencerCount } from './pools.ts'
+import { DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA } from './constants.ts'
 
 /**
  * Returns the smallest power of 2 that is ≥ n.
@@ -85,4 +86,21 @@ export function calculateDeDuration(
   durationTable: Record<Weapon, Record<number, number>>,
 ): number {
   return durationTable[weapon][bracketSize]
+}
+
+/**
+ * Returns per-bout DE duration in minutes for a weapon/category/vet_age_group combination.
+ * Applies YOUTH_VET_BOUT_DELTA when category is Y8 or Y10, or when vet_age_group is
+ * non-null. The veteran arm keys off vet_age_group rather than category so it covers
+ * VET_COMBINED regardless of how a veteran event sets its category.
+ */
+export function perBoutDuration(
+  weapon: Weapon,
+  category: Category,
+  vet_age_group: VetAgeGroup | null,
+): number {
+  const base = DE_BOUT_DURATION[weapon]
+  const isYouth = category === Category.Y8 || category === Category.Y10
+  const isVet = vet_age_group !== null
+  return isYouth || isVet ? base + YOUTH_VET_BOUT_DELTA : base
 }

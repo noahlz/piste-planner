@@ -81,19 +81,6 @@ export const TournamentType = {
 } as const
 export type TournamentType = (typeof TournamentType)[keyof typeof TournamentType]
 
-export const PodCaptainOverride = {
-  AUTO: 'AUTO',
-  DISABLED: 'DISABLED',
-  FORCE_4: 'FORCE_4',
-} as const
-export type PodCaptainOverride = (typeof PodCaptainOverride)[keyof typeof PodCaptainOverride]
-
-export const DeCapacityEstimation = {
-  POD_PACKED: 'pod_packed',
-  SPREAD: 'spread',
-} as const
-export type DeCapacityEstimation = (typeof DeCapacityEstimation)[keyof typeof DeCapacityEstimation]
-
 export const CutMode = {
   DISABLED: 'DISABLED',
   PERCENTAGE: 'PERCENTAGE',
@@ -210,7 +197,6 @@ export interface TournamentConfig {
   strips: Strip[]
   strips_total: number
   video_strips_total: number
-  pod_captain_override: PodCaptainOverride
   DAY_START_MINS: number
   DAY_END_MINS: number
   LATEST_START_MINS: number
@@ -232,7 +218,6 @@ export interface TournamentConfig {
   dayConfigs: DayConfig[]
   max_pool_strip_pct: number
   max_de_strip_pct: number
-  de_capacity_estimation: DeCapacityEstimation
 }
 
 export interface FlightingGroup {
@@ -316,29 +301,12 @@ export interface ScheduleResult {
  * the allocation out of the strip's list rather than editing it in place.
  *
  * `start_time` and `end_time` are in minutes-from-tournament-start (T=0).
- * `pod_id` is present for STAGED-DE pod allocations (Phase B onward), absent for
- * pool and SINGLE_STAGE-DE allocations.
  */
 export interface StripAllocation {
   event_id: string
   phase: Phase
-  pod_id?: string
   start_time: number
   end_time: number
-}
-
-/**
- * Logical group of up to 4 strips that runs a STAGED-DE round together with one
- * head referee. Pod IDs persist on StripAllocation entries so post-schedule ref
- * staffing can group strips into ref-staffing units.
- *
- * The full pod abstraction is introduced in Phase B (`src/engine/pods.ts`); this
- * type is exported now so Phase A's StripAllocation.pod_id field has a stable
- * shape to point at.
- */
-export interface Pod {
-  id: string
-  strip_indices: number[]
 }
 
 export interface GlobalState {

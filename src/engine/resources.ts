@@ -82,8 +82,7 @@ function insertSorted(list: StripAllocation[], allocation: StripAllocation): voi
 
 /**
  * Appends one StripAllocation entry to each of the given strips' lists, keeping
- * each list sorted by start_time. The shared-object pattern is set up for Phase
- * B's pod-aware rollback where it pays off.
+ * each list sorted by start_time.
  */
 export function allocateInterval(
   state: GlobalState,
@@ -92,11 +91,8 @@ export function allocateInterval(
   strip_indices: number[],
   start_time: number,
   end_time: number,
-  pod_id?: string,
 ): void {
-  const allocation: StripAllocation = pod_id !== undefined
-    ? { event_id, phase, pod_id, start_time, end_time }
-    : { event_id, phase, start_time, end_time }
+  const allocation: StripAllocation = { event_id, phase, start_time, end_time }
   for (const idx of strip_indices) {
     insertSorted(state.strip_allocations[idx], allocation)
   }
@@ -314,7 +310,7 @@ export function peakConcurrentStrips(
 
 /**
  * Rounds t up to the next SLOT_MINS boundary.
- * snapToSlot(0)=0, snapToSlot(15)=30, snapToSlot(30)=30, snapToSlot(31)=60.
+ * snapToSlot(0)=0, snapToSlot(3)=5, snapToSlot(5)=5, snapToSlot(6)=10.
  *
  * METHODOLOGY.md §Slot Granularity: applied to phase start times; NOT applied to phase end times.
  */

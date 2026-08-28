@@ -2,7 +2,7 @@ import type { Competition, ScheduleResult, TournamentConfig, Strip } from '../..
 import {
   Category, Gender, Weapon,
   EventType, CutMode, DeMode, VideoPolicy,
-  RefPolicy, DeStripRequirement, TournamentType, PodCaptainOverride, DeCapacityEstimation,
+  RefPolicy, DeStripRequirement, TournamentType,
 } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -42,12 +42,11 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     strips,
     strips_total: strips.length,
     video_strips_total: strips.filter(s => s.video_capable).length,
-    pod_captain_override: PodCaptainOverride.AUTO,
     DAY_START_MINS: DAY_START_8AM,
     DAY_END_MINS: DAY_END_10PM,
     LATEST_START_MINS: LATEST_START_4PM,
     LATEST_START_OFFSET: 480,
-    SLOT_MINS: 30,
+    SLOT_MINS: 5,
     DAY_LENGTH_MINS: 840,
     ADMIN_GAP_MINS: 30,
     FLIGHT_BUFFER_MINS: 15,
@@ -64,7 +63,6 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     dayConfigs: [],
     max_pool_strip_pct: 0.80,
     max_de_strip_pct: 0.80,
-    de_capacity_estimation: DeCapacityEstimation.POD_PACKED,
     ...overrides,
   }
 }
