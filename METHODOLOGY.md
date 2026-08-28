@@ -6,7 +6,7 @@ For tournament organizers evaluating the tool, developers contributing to the co
 
 For the underlying code, see [`src/engine/`](src/engine/). For USA Fencing source documents, see [References](#references).
 
-Piste Planner models tournament scheduling as a resource-constrained scheduling problem: strips are general-purpose queues (each pool is a unit of work during the pool round; double-stripping splits one pool across two strip queues; each bout is a unit of work during DEs), referees are workers feeding off the queues, and the scheduler packs competitions into day/time/strip bins, minimizing constraint violations.
+Piste Planner models tournament scheduling as a resource-constrained scheduling problem: strips are general-purpose queues (each pool is a unit of work during the pool round, each bout is a unit of work during DEs), referees are workers feeding off the queues, and the scheduler packs competitions into day/time/strip bins, minimizing constraint violations.
 
 ---
 
@@ -48,7 +48,6 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
   - **Video strip count** (NACs only): 4, 8 (default), 12, or 16. These strips are used for the Video stage of staged DEs. Default of 8 covers a standard Round of 16. Multiple events in the video stage contend for these strips.
 - **Referee policy** (not counts — counts are an output, see below):
   - **Refs per pool**: 1 or 2 (default: 2) — affects how many refs the engine reports as needed
-  - **Use pod captains**: toggle that adds supervisory refs to DE rounds (see [Pod Captains](#pod-captains))
 - **Tournament duration**: 2–4 days (longer events, e.g. Summer Nationals, to be supported in a future version)
 - **Per-competition options**:
   - **DE mode**: determined by tournament type — NACs use "Staged DEs" (Prelim + Video stages); all other types use "Single Stage DE" (all DE rounds run as fast as possible)
@@ -304,7 +303,6 @@ See [Appendix A](#pool-duration-by-weapon-6-person-baseline-15-bouts) for base d
 
 - Other pool sizes scaled proportionally by bout count
   - e.g., 7-person pool = 21 bouts → ~1.4x baseline
-- Pools with 8+ fencers are **double-stripped** (two bouts simultaneously), reducing effective duration by ~40% (not exactly half due to friction between bouts and fencer rest time)
 
 #### Pool Parallelism
 
@@ -511,12 +509,12 @@ Phase-level rules:
 #### Resource Windows
 
 - For each phase (pool round, DE prelim, DE video stage), the engine finds the earliest time slot where strips are available
-- If strips aren't available at the ideal time, the engine scans forward in 30-minute slots
+- If strips aren't available at the ideal time, the engine defers straight to the soonest moment enough strips are simultaneously free, rather than scanning forward slot by slot
 - If delay exceeds a threshold, a strip-contention bottleneck diagnostic is emitted
 
 #### Slot Granularity
 
-- All phase start times snap to 30-minute boundaries (8:00, 8:30, 9:00, etc.)
+- All phase start times snap to 5-minute boundaries (13:00, 13:05, 13:10, etc.) – a start time that lands between boundaries rounds up to the next one (e.g., 13:03 → 13:05)
 - End times are not snapped — they reflect actual estimated duration
 
 ### Referee Calculation
@@ -549,15 +547,6 @@ The minimum 3-weapon staff is `peak_saber_refs`. The remaining `peak_total_refs 
 This setting changes how many refs the engine reports as needed; it does not gate scheduling.
 
 (Logic implemented in `pools.ts:resolveRefsPerPool`. Double-duty referee logic also lives in `pools.ts`: when `refsPerPool=1`, one ref can be reported as covering two adjacent strips.)
-
-#### Pod Captains
-
-- Toggle: "Use Pod Captains to manage DEs"
-- When enabled, the reported ref demand includes supervisory pod captains:
-  - **1 per 4 strips** for brackets ≤32 and R16 phases
-  - **1 per 8 strips** for larger brackets and other phases
-- A `FORCE_4` override option sets the ratio to 1 per 4 strips unconditionally
-- Pod captains supervise groups of strips during DE phases (NACs)
 
 ---
 
