@@ -43,7 +43,7 @@ function prevPowerOf2(n: number): number {
 
 /**
  * Team DE strip-hours: round-by-round, all bouts in a round run simultaneously.
- * No pods. Non-power-of-2 entries cause play-in bouts. Finals excluded.
+ * Non-power-of-2 entries cause play-in bouts. Finals excluded.
  */
 function teamDeStripHours(
   teamCount: number,
