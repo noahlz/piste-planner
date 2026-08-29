@@ -4,7 +4,7 @@ import { WizardShell } from '../../src/components/wizard/WizardShell.tsx'
 import { ScheduleView } from '../../src/components/ScheduleView.tsx'
 import { useStore } from '../../src/store/store.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { PlacementSource } from '../../src/engine/types.ts'
+import { makePlacement } from '../helpers/factories.ts'
 import App from '../../src/App.tsx'
 
 // Reset store before each test
@@ -25,16 +25,7 @@ function seedPlacedCompetition(): string {
   seedValidConfig()
   useStore.getState().addCompetition(id)
   useStore.getState().updateCompetition(id, { fencer_count: 30 })
-  useStore.getState().setPlacementsFromAuto({
-    [id]: {
-      day: 0,
-      start_time: 480,
-      strip_count: 5,
-      strips: null,
-      source: PlacementSource.AUTO,
-      pinned: false,
-    },
-  })
+  useStore.getState().setPlacementsFromAuto({ [id]: makePlacement({ strip_count: 5 }) })
   return id
 }
 

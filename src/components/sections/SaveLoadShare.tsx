@@ -117,13 +117,20 @@ export function SaveLoadShare() {
               {loadError}
             </p>
           )}
-          {droppedPlacements.length > 0 && (
-            <p className="mt-2 text-sm text-warning-text" role="status">
-              Dropped {droppedPlacements.length} placement
-              {droppedPlacements.length === 1 ? '' : 's'} for events not in this
-              configuration: {droppedPlacements.join(', ')}
-            </p>
-          )}
+          {/* Always mounted: a live region only announces changes if it exists
+              in the DOM before the content lands. */}
+          <p
+            className={droppedPlacements.length > 0 ? 'mt-2 text-sm text-warning-text' : undefined}
+            role="status"
+          >
+            {droppedPlacements.length > 0 && (
+              <>
+                Dropped {droppedPlacements.length} placement
+                {droppedPlacements.length === 1 ? '' : 's'} for events not in this
+                configuration: {droppedPlacements.join(', ')}
+              </>
+            )}
+          </p>
         </div>
 
         {/* Share */}

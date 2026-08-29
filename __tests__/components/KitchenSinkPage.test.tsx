@@ -4,7 +4,7 @@ import { KitchenSinkPage } from '../../src/components/KitchenSinkPage.tsx'
 import { useStore } from '../../src/store/store.ts'
 import { serializeState } from '../../src/store/serialization.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { PlacementSource } from '../../src/engine/types.ts'
+import { makePlacement } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // Setup
@@ -20,6 +20,14 @@ function seedValidConfig(): void {
   useStore.getState().setDays(3)
   useStore.getState().setStrips(12)
   useStore.getState().setVideoStrips(2)
+}
+
+/** Selects a file in SaveLoadShare's hidden input and fires the change event. */
+function uploadJson(json: string): void {
+  const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+  const file = new File([json], 'tournament.piste.json', { type: 'application/json' })
+  Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
+  fireEvent.change(fileInput)
 }
 
 // ──────────────────────────────────────────────
@@ -313,16 +321,7 @@ describe('SaveLoadShare save tests', () => {
     const id = TEMPLATES['RYC Weekend'][0]
     useStore.getState().applyTemplate('RYC Weekend')
     useStore.getState().setStrips(12)
-    useStore.getState().setPlacementsFromAuto({
-      [id]: {
-        day: 0,
-        start_time: 480,
-        strip_count: 5,
-        strips: null,
-        source: PlacementSource.AUTO,
-        pinned: false,
-      },
-    })
+    useStore.getState().setPlacementsFromAuto({ [id]: makePlacement({ strip_count: 5 }) })
 
     let capturedBlob: Blob | null = null
     const createObjectURL = vi.fn((blob: Blob) => {
@@ -364,13 +363,6 @@ describe('SaveLoadShare save tests', () => {
 describe('SaveLoadShare load tests', () => {
   // Validation findings render as role="alert" on every page now, so load errors
   // are matched by their text rather than by role.
-  function uploadJson(json: string): void {
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-    const file = new File([json], 'tournament.piste.json', { type: 'application/json' })
-    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
-    fireEvent.change(fileInput)
-  }
-
   it('loading valid JSON hydrates store state', async () => {
     // Prepare a valid serialized state
     useStore.getState().setStrips(18)
@@ -441,7 +433,8 @@ describe('SaveLoadShare load tests', () => {
     await waitFor(() => {
       expect(useStore.getState().strips_total).toBe(18)
     })
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    // The live region is always mounted (so it can announce), just empty here
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
   it('loading valid JSON clears any previous load error', async () => {
@@ -487,12 +480,7 @@ describe('SaveLoadShare load tests', () => {
 describe('KitchenSinkPage error state tests', () => {
   it('malformed file upload shows error message', async () => {
     render(<KitchenSinkPage />)
-
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-    const file = new File(['malformed!!!content'], 'bad.json', { type: 'application/json' })
-
-    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
-    fireEvent.change(fileInput)
+    uploadJson('malformed!!!content')
 
     await waitFor(() => {
       expect(screen.getByText(/invalid|malformed|error|parse|json/i)).toBeInTheDocument()
@@ -527,16 +515,7 @@ describe('KitchenSinkPage error state tests', () => {
     seedValidConfig()
     useStore.getState().addCompetition(id)
     useStore.getState().updateCompetition(id, { fencer_count: 30 })
-    useStore.getState().setPlacementsFromAuto({
-      [id]: {
-        day: 0,
-        start_time: 480,
-        strip_count: 5,
-        strips: null,
-        source: PlacementSource.AUTO,
-        pinned: false,
-      },
-    })
+    useStore.getState().setPlacementsFromAuto({ [id]: makePlacement({ strip_count: 5 }) })
 
     render(<KitchenSinkPage />)
 
@@ -551,16 +530,7 @@ describe('KitchenSinkPage error state tests', () => {
     seedValidConfig()
     useStore.getState().addCompetition(id)
     useStore.getState().updateCompetition(id, { fencer_count: 30 })
-    useStore.getState().setPlacementsFromAuto({
-      [id]: {
-        day: 7,
-        start_time: 480,
-        strip_count: 5,
-        strips: null,
-        source: PlacementSource.AUTO,
-        pinned: false,
-      },
-    })
+    useStore.getState().setPlacementsFromAuto({ [id]: makePlacement({ day: 7, strip_count: 5 }) })
 
     render(<KitchenSinkPage />)
 

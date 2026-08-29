@@ -59,7 +59,7 @@ are complicated enough to consider Opus at dispatch time (constitution
 - [x] T010 [US1] Implement serialization v2 in src/store/serialization.ts per contracts/serialization-v2.md until T005 passes **(commit)**
 - [X] T011 [US1] Dispatch test-quality-reviewer over T009's tests and apply its findings
 - [X] T012 [US1] Re-point components at derived selectors and delete every staleness surface: src/components/ScheduleView.tsx, src/components/wizard/WizardStep4.tsx, src/components/sections/{ScheduleOutput,AnalysisOutput,RefRequirementsReport,ActionButtons,SaveLoadShare}.tsx – updating their tests in the same task (constitution II); both layouts stay functional (FR-005) **(commit)**
-- [ ] T013 [US1] Dispatch react-code-reviewer over T012's changes and apply its findings
+- [x] T013 [US1] Dispatch react-code-reviewer over T012's changes and apply its findings
 - [ ] T014 [US1] US1 checkpoint: full gate per quickstart.md, `grep -rn "analysisStale\|scheduleStale\|markStale\|clearStale" src/` empty (SC-002), drift ledger identical to baseline **(commit)**
 
 **Checkpoint**: MVP – inverted store proven by tests and both layouts working.

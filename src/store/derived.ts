@@ -84,6 +84,9 @@ function scheduleDeps(
     state.video_strips_total,
     state.pool_round_duration_table,
     state.globalOverrides,
+    // Read inside buildCompetitions when applying accepted suggestions, so an
+    // accept/reject click must invalidate even though nothing here touches it.
+    state.flightingSuggestionStates,
     flightingSuggestions,
   ]
 }
