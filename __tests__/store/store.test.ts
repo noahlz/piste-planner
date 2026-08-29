@@ -1,14 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import { TournamentType, BottleneckSeverity, BottleneckCause, Phase, Weapon } from '../../src/engine/types.ts'
-import type { ValidationError, Bottleneck, AnalysisResult, ScheduleResult } from '../../src/engine/types.ts'
+import { TournamentType, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../../src/engine/constants.ts'
-import { makeScheduleResult } from '../helpers/factories.ts'
 
 // Reset store to initial state before each test
 beforeEach(() => {
@@ -35,13 +33,10 @@ describe('tournamentSlice', () => {
   })
 
   describe('setTournamentType', () => {
-    it('sets tournament_type and marks both stale flags', () => {
+    it('sets tournament_type', () => {
       useStore.getState().setTournamentType(TournamentType.RYC)
 
-      const state = useStore.getState()
-      expect(state.tournament_type).toBe('RYC')
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
+      expect(useStore.getState().tournament_type).toBe('RYC')
     })
   })
 
@@ -57,20 +52,11 @@ describe('tournamentSlice', () => {
         expect(dc.day_end_time).toBe(1320)
       }
     })
-
-    it('marks both stale flags', () => {
-      useStore.getState().setDays(2)
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
-    })
   })
 
   describe('updateDayConfig', () => {
     it('updates a specific day start time', () => {
       useStore.getState().setDays(3)
-      useStore.getState().clearStale()
 
       useStore.getState().updateDayConfig(1, { day_start_time: 540 })
 
@@ -81,7 +67,6 @@ describe('tournamentSlice', () => {
 
     it('updates a specific day end time', () => {
       useStore.getState().setDays(3)
-      useStore.getState().clearStale()
 
       useStore.getState().updateDayConfig(2, { day_end_time: 1200 })
 
@@ -89,79 +74,55 @@ describe('tournamentSlice', () => {
       expect(state.dayConfigs[2].day_end_time).toBe(1200)
       expect(state.dayConfigs[2].day_start_time).toBe(480)
     })
-
-    it('marks both stale flags', () => {
-      useStore.getState().setDays(2)
-      useStore.getState().clearStale()
-
-      useStore.getState().updateDayConfig(0, { day_start_time: 600 })
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
-    })
   })
 
   describe('setStrips', () => {
-    it('sets strips_total and marks both stale flags', () => {
+    it('sets strips_total', () => {
       useStore.getState().setStrips(24)
 
-      const state = useStore.getState()
-      expect(state.strips_total).toBe(24)
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
+      expect(useStore.getState().strips_total).toBe(24)
     })
   })
 
   describe('setVideoStrips', () => {
-    it('sets video_strips_total and marks both stale flags', () => {
+    it('sets video_strips_total', () => {
       useStore.getState().setVideoStrips(4)
 
-      const state = useStore.getState()
-      expect(state.video_strips_total).toBe(4)
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
+      expect(useStore.getState().video_strips_total).toBe(4)
     })
   })
 
   describe('setPoolRoundDuration', () => {
-    it('updates only the given weapon and marks both stale flags', () => {
+    it('updates only the given weapon', () => {
       useStore.getState().setPoolRoundDuration(Weapon.EPEE, 110)
 
       const state = useStore.getState()
       expect(state.pool_round_duration_table[Weapon.EPEE]).toBe(110)
       expect(state.pool_round_duration_table[Weapon.FOIL]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.FOIL])
       expect(state.pool_round_duration_table[Weapon.SABRE]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE])
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
     })
 
-    it('accepts a value equal to the weapon default and still marks both stale flags', () => {
+    it('accepts a value equal to the weapon default', () => {
       useStore.getState().setPoolRoundDuration(Weapon.SABRE, 90)
-      useStore.getState().clearStale()
 
       useStore.getState().setPoolRoundDuration(Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE])
 
-      const state = useStore.getState()
-      expect(state.pool_round_duration_table[Weapon.SABRE]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE])
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
+      expect(useStore.getState().pool_round_duration_table[Weapon.SABRE]).toBe(
+        DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE],
+      )
     })
   })
 
   describe('resetPoolRoundDuration', () => {
-    it('restores only the given weapon default after an override and marks both stale flags', () => {
+    it('restores only the given weapon default after an override', () => {
       useStore.getState().setPoolRoundDuration(Weapon.EPEE, 110)
       useStore.getState().setPoolRoundDuration(Weapon.FOIL, 90)
-      useStore.getState().clearStale()
 
       useStore.getState().resetPoolRoundDuration(Weapon.EPEE)
 
       const state = useStore.getState()
       expect(state.pool_round_duration_table[Weapon.EPEE]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.EPEE])
       expect(state.pool_round_duration_table[Weapon.FOIL]).toBe(90)
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
     })
   })
 })
@@ -172,8 +133,6 @@ describe('uiSlice', () => {
       const state = useStore.getState()
       expect(state.layoutMode).toBe('wizard')
       expect(state.wizardStep).toBe(0)
-      expect(state.analysisStale).toBe(false)
-      expect(state.scheduleStale).toBe(false)
     })
   })
 
@@ -197,42 +156,6 @@ describe('uiSlice', () => {
     })
   })
 
-  describe('markStale', () => {
-    it('sets analysisStale when specified', () => {
-      useStore.getState().markStale({ analysisStale: true })
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(false)
-    })
-
-    it('sets scheduleStale when specified', () => {
-      useStore.getState().markStale({ scheduleStale: true })
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(false)
-      expect(state.scheduleStale).toBe(true)
-    })
-
-    it('sets both stale flags when both specified', () => {
-      useStore.getState().markStale({ analysisStale: true, scheduleStale: true })
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
-    })
-  })
-
-  describe('clearStale', () => {
-    it('resets both stale flags', () => {
-      useStore.getState().markStale({ analysisStale: true, scheduleStale: true })
-      useStore.getState().clearStale()
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(false)
-      expect(state.scheduleStale).toBe(false)
-    })
-  })
 })
 
 describe('competitionSlice', () => {
@@ -287,20 +210,11 @@ describe('competitionSlice', () => {
       const state = useStore.getState()
       expect(Object.keys(state.selectedCompetitions)).toEqual([CADET_MF])
     })
-
-    it('marks both stale flags', () => {
-      useStore.getState().selectCompetitions([CADET_MF])
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
-    })
   })
 
   describe('updateCompetition', () => {
     it('updates a single competition config field', () => {
       useStore.getState().selectCompetitions([CADET_MF])
-      useStore.getState().clearStale()
 
       useStore.getState().updateCompetition(CADET_MF, { fencer_count: 64 })
 
@@ -309,40 +223,17 @@ describe('competitionSlice', () => {
       // Other fields remain unchanged
       expect(state.selectedCompetitions[CADET_MF].ref_policy).toBe('AUTO')
     })
-
-    it('marks both stale flags', () => {
-      useStore.getState().selectCompetitions([CADET_MF])
-      useStore.getState().clearStale()
-
-      useStore.getState().updateCompetition(CADET_MF, { fencer_count: 32 })
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
-    })
   })
 
   describe('removeCompetition', () => {
     it('removes a competition from the map', () => {
       useStore.getState().selectCompetitions([CADET_MF, JUNIOR_WE])
-      useStore.getState().clearStale()
 
       useStore.getState().removeCompetition(CADET_MF)
 
       const state = useStore.getState()
       expect(state.selectedCompetitions[CADET_MF]).toBeUndefined()
       expect(state.selectedCompetitions[JUNIOR_WE]).toBeDefined()
-    })
-
-    it('marks both stale flags', () => {
-      useStore.getState().selectCompetitions([CADET_MF])
-      useStore.getState().clearStale()
-
-      useStore.getState().removeCompetition(CADET_MF)
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
     })
   })
 
@@ -363,14 +254,6 @@ describe('competitionSlice', () => {
       const templateIds = TEMPLATES['RYC Weekend']
       expect(Object.keys(state.selectedCompetitions).sort()).toEqual([...templateIds].sort())
     })
-
-    it('marks both stale flags', () => {
-      useStore.getState().applyTemplate('RYC Weekend')
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
-    })
   })
 
   describe('setGlobalOverrides', () => {
@@ -383,78 +266,23 @@ describe('competitionSlice', () => {
       expect(state.globalOverrides.FLIGHT_BUFFER_MINS).toBe(15)
       expect(state.globalOverrides.THRESHOLD_MINS).toBe(10)
     })
-
-    it('marks both stale flags', () => {
-      useStore.getState().setGlobalOverrides({ THRESHOLD_MINS: 5 })
-
-      const state = useStore.getState()
-      expect(state.analysisStale).toBe(true)
-      expect(state.scheduleStale).toBe(true)
-    })
   })
 })
 
 // ──────────────────────────────────────────────
-// analysisSlice
+// analysisSlice — accept/reject intent only, the suggestions themselves derive
 // ──────────────────────────────────────────────
 
 describe('analysisSlice', () => {
   describe('initial state', () => {
-    it('has empty defaults', () => {
-      const state = useStore.getState()
-      expect(state.validationErrors).toEqual([])
-      expect(state.warnings).toEqual([])
-      expect(state.suggestions).toEqual([])
-      expect(state.flightingSuggestionStates).toEqual([])
-    })
-  })
-
-  describe('setAnalysisResults', () => {
-    it('stores results from validateConfig + initialAnalysis', () => {
-      const errors: ValidationError[] = [
-        { field: 'strips_total', message: 'Must be > 0', severity: BottleneckSeverity.ERROR },
-      ]
-      const result: AnalysisResult = {
-        warnings: [
-          {
-            competition_id: 'CDT-M-FOIL-IND',
-            phase: Phase.POOLS,
-            cause: BottleneckCause.STRIP_CONTENTION,
-            severity: BottleneckSeverity.WARN,
-            delay_mins: 10,
-            message: 'Strip contention expected',
-          },
-        ],
-        suggestions: ['Consider adding more strips', 'Flight the cadet events'],
-        flightingSuggestions: [
-          { priority_competition_id: 'A', flighted_competition_id: 'B', strips_for_priority: 6, strips_for_flighted: 4 },
-          { priority_competition_id: 'C', flighted_competition_id: 'D', strips_for_priority: 5, strips_for_flighted: 5 },
-        ],
-      }
-
-      useStore.getState().setAnalysisResults(errors, result)
-
-      const state = useStore.getState()
-      expect(state.validationErrors).toEqual(errors)
-      expect(state.warnings).toEqual(result.warnings)
-      expect(state.suggestions).toEqual(result.suggestions)
-      expect(state.flightingSuggestions).toEqual(result.flightingSuggestions)
-      // One state per flighting suggestion, all start as pending
-      expect(state.flightingSuggestionStates).toEqual(['pending', 'pending'])
+    it('has no recorded accept/reject intent', () => {
+      expect(useStore.getState().flightingSuggestionStates).toEqual([])
     })
   })
 
   describe('acceptFlightingSuggestion', () => {
-    it('marks a suggestion as accepted', () => {
-      const result: AnalysisResult = {
-        warnings: [],
-        suggestions: ['Suggestion A', 'Suggestion B'],
-        flightingSuggestions: [
-          { priority_competition_id: 'A', flighted_competition_id: 'B', strips_for_priority: 6, strips_for_flighted: 4 },
-          { priority_competition_id: 'C', flighted_competition_id: 'D', strips_for_priority: 5, strips_for_flighted: 5 },
-        ],
-      }
-      useStore.getState().setAnalysisResults([], result)
+    it('marks the suggestion at that index accepted, leaving its neighbour alone', () => {
+      useStore.setState({ flightingSuggestionStates: ['pending', 'pending'] })
 
       useStore.getState().acceptFlightingSuggestion(0)
 
@@ -465,110 +293,14 @@ describe('analysisSlice', () => {
   })
 
   describe('rejectFlightingSuggestion', () => {
-    it('marks a suggestion as rejected', () => {
-      const result: AnalysisResult = {
-        warnings: [],
-        suggestions: ['Suggestion A', 'Suggestion B'],
-        flightingSuggestions: [
-          { priority_competition_id: 'A', flighted_competition_id: 'B', strips_for_priority: 6, strips_for_flighted: 4 },
-          { priority_competition_id: 'C', flighted_competition_id: 'D', strips_for_priority: 5, strips_for_flighted: 5 },
-        ],
-      }
-      useStore.getState().setAnalysisResults([], result)
+    it('marks the suggestion at that index rejected, leaving its neighbour alone', () => {
+      useStore.setState({ flightingSuggestionStates: ['pending', 'pending'] })
 
       useStore.getState().rejectFlightingSuggestion(1)
 
       const state = useStore.getState()
       expect(state.flightingSuggestionStates[0]).toBe('pending')
       expect(state.flightingSuggestionStates[1]).toBe('rejected')
-    })
-  })
-
-  describe('clearAnalysis', () => {
-    it('resets all analysis state', () => {
-      const result: AnalysisResult = {
-        warnings: [
-          {
-            competition_id: 'X',
-            phase: Phase.POOLS,
-            cause: BottleneckCause.STRIP_CONTENTION,
-            severity: BottleneckSeverity.WARN,
-            delay_mins: 5,
-            message: 'warning',
-          },
-        ],
-        suggestions: ['do something'],
-        flightingSuggestions: [
-          { priority_competition_id: 'A', flighted_competition_id: 'B', strips_for_priority: 6, strips_for_flighted: 4 },
-        ],
-      }
-      useStore.getState().setAnalysisResults(
-        [{ field: 'f', message: 'm', severity: BottleneckSeverity.ERROR }],
-        result,
-      )
-      useStore.getState().acceptFlightingSuggestion(0)
-
-      useStore.getState().clearAnalysis()
-
-      const state = useStore.getState()
-      expect(state.validationErrors).toEqual([])
-      expect(state.warnings).toEqual([])
-      expect(state.suggestions).toEqual([])
-      expect(state.flightingSuggestionStates).toEqual([])
-    })
-  })
-})
-
-// ──────────────────────────────────────────────
-// scheduleSlice
-// ──────────────────────────────────────────────
-
-describe('scheduleSlice', () => {
-  describe('initial state', () => {
-    it('scheduleResults is empty and bottlenecks is empty', () => {
-      const state = useStore.getState()
-      expect(state.scheduleResults).toEqual({})
-      expect(state.bottlenecks).toEqual([])
-    })
-  })
-
-  describe('setScheduleResults', () => {
-    it('stores results from scheduleAll', () => {
-      const results: Record<string, ScheduleResult> = {
-        'CDT-M-FOIL-IND': makeScheduleResult('CDT-M-FOIL-IND', 0),
-        'JR-W-EPEE-IND': makeScheduleResult('JR-W-EPEE-IND', 0),
-      }
-      const bottlenecks: Bottleneck[] = [
-        {
-          competition_id: 'CDT-M-FOIL-IND',
-          phase: Phase.POOLS,
-          cause: BottleneckCause.STRIP_CONTENTION,
-          severity: BottleneckSeverity.WARN,
-          delay_mins: 5,
-          message: 'Strip contention',
-        },
-      ]
-
-      useStore.getState().setScheduleResults(results, bottlenecks)
-
-      const state = useStore.getState()
-      expect(state.scheduleResults).toEqual(results)
-      expect(state.bottlenecks).toEqual(bottlenecks)
-    })
-  })
-
-  describe('clearSchedule', () => {
-    it('resets schedule state', () => {
-      useStore.getState().setScheduleResults(
-        { 'X': makeScheduleResult('X', 0) },
-        [{ competition_id: 'X', phase: Phase.DE, cause: BottleneckCause.DEADLINE_BREACH, severity: BottleneckSeverity.ERROR, delay_mins: 30, message: 'late' }],
-      )
-
-      useStore.getState().clearSchedule()
-
-      const state = useStore.getState()
-      expect(state.scheduleResults).toEqual({})
-      expect(state.bottlenecks).toEqual([])
     })
   })
 })

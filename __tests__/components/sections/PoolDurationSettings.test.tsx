@@ -99,14 +99,15 @@ describe('PoolDurationSettings override entry', () => {
     expect(input.value).toBe('600')
   })
 
-  it('a blur with no change commits nothing and marks nothing stale', () => {
+  it('a blur with no change commits nothing', () => {
     render(<PoolDurationSettings />)
-    useStore.getState().clearStale()
+    // Every commit writes a fresh table object, so an unchanged reference is
+    // proof no write happened – not merely that the values still match.
+    const before = storedTable()
 
     fireEvent.blur(durationInput(/epee/i))
 
-    expect(useStore.getState().analysisStale).toBe(false)
-    expect(useStore.getState().scheduleStale).toBe(false)
+    expect(storedTable()).toBe(before)
   })
 })
 

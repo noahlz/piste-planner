@@ -6,14 +6,10 @@ import type {
   CutMode,
   DeMode,
   VideoPolicy,
-  ValidationError,
-  Bottleneck,
-  AnalysisResult,
-  FlightingGroup,
-  ScheduleResult,
-  RefRequirementsByDay,
+  Placement,
   Weapon,
 } from '../engine/types.ts'
+import { PlacementSource } from '../engine/types.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { suggestStrips as computeStripSuggestion } from './stripSuggestion.ts'
 import {
@@ -91,13 +87,30 @@ export interface CompetitionSlice {
 export interface UiSlice {
   layoutMode: LayoutMode
   wizardStep: number
-  analysisStale: boolean
-  scheduleStale: boolean
 
   setLayoutMode: (mode: LayoutMode) => void
   setStep: (step: number) => void
-  markStale: (flags: { analysisStale?: boolean; scheduleStale?: boolean }) => void
-  clearStale: () => void
+}
+
+/** Where an event sits. The only schedule state — everything else derives from it. */
+export interface PlacementsSlice {
+  placements: Record<string, Placement>
+
+  /** Replaces the whole map. Every entry lands as auto and unpinned. */
+  setPlacementsFromAuto: (placements: Record<string, Placement>) => void
+  /** Merges a partial into an existing entry, marking it manual and pinned. */
+  updatePlacement: (id: string, partial: Partial<Placement>) => void
+  removePlacement: (id: string) => void
+  clearPlacements: () => void
+  setPinned: (id: string, pinned: boolean) => void
+}
+
+/** Findings the user has waved off, keyed by stable finding id. */
+export interface DismissalsSlice {
+  dismissedFindings: Record<string, true>
+
+  dismissFinding: (id: string) => void
+  undismissFinding: (id: string) => void
 }
 
 const SuggestionState = {
@@ -107,33 +120,20 @@ const SuggestionState = {
 } as const
 type SuggestionState = (typeof SuggestionState)[keyof typeof SuggestionState]
 
+/** Accept/reject intent only — the suggestions themselves derive from current inputs. */
 export interface AnalysisSlice {
-  validationErrors: ValidationError[]
-  warnings: Bottleneck[]
-  suggestions: string[]
-  flightingSuggestions: FlightingGroup[]
   flightingSuggestionStates: SuggestionState[]
 
-  setAnalysisResults: (errors: ValidationError[], result: AnalysisResult) => void
   acceptFlightingSuggestion: (index: number) => void
   rejectFlightingSuggestion: (index: number) => void
-  clearAnalysis: () => void
 }
 
-export interface ScheduleSlice {
-  scheduleResults: Record<string, ScheduleResult>
-  bottlenecks: Bottleneck[]
-  refRequirementsByDay: RefRequirementsByDay[]
-
-  setScheduleResults: (
-    results: Record<string, ScheduleResult>,
-    bottlenecks: Bottleneck[],
-    refRequirementsByDay?: RefRequirementsByDay[],
-  ) => void
-  clearSchedule: () => void
-}
-
-export type StoreState = TournamentSlice & UiSlice & CompetitionSlice & AnalysisSlice & ScheduleSlice
+export type StoreState = TournamentSlice &
+  UiSlice &
+  CompetitionSlice &
+  AnalysisSlice &
+  PlacementsSlice &
+  DismissalsSlice
 
 // ──────────────────────────────────────────────
 // Slice creators
@@ -156,7 +156,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
 
     setTournamentType: (type) => {
       set({ tournament_type: type })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     setDays: (days) => {
@@ -165,7 +164,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
         day_end_time: DAY_END,
       }))
       set({ days_available: days, dayConfigs })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     updateDayConfig: (dayIndex, partial) => {
@@ -175,17 +173,14 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
         )
         return { dayConfigs: updated }
       })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     setStrips: (total) => {
       set({ strips_total: total })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     setVideoStrips: (total) => {
       set({ video_strips_total: total })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     suggestStrips: () => {
@@ -195,7 +190,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
       )
       if (suggested !== null) {
         set({ strips_total: suggested })
-        get().markStale({ analysisStale: true, scheduleStale: true })
       }
     },
 
@@ -203,7 +197,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
       set((state) => ({
         pool_round_duration_table: { ...state.pool_round_duration_table, [weapon]: minutes },
       }))
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     resetPoolRoundDuration: (weapon) => {
@@ -213,7 +206,6 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
           [weapon]: DEFAULT_POOL_ROUND_DURATION_TABLE[weapon],
         },
       }))
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
   }
 }
@@ -243,7 +235,7 @@ function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): Co
   }
 }
 
-function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice {
+function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice {
   return {
     selectedCompetitions: {},
     globalOverrides: {
@@ -259,7 +251,6 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
         if (config) map[id] = config
       }
       set({ selectedCompetitions: map })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     addCompetition: (id) => {
@@ -268,7 +259,6 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
       set((state) => ({
         selectedCompetitions: { ...state.selectedCompetitions, [id]: config },
       }))
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     updateCompetition: (id, partial) => {
@@ -282,15 +272,16 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
           },
         }
       })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     removeCompetition: (id) => {
+      // The placement goes with the competition, in one action — a placement
+      // for an unselected event is an orphan nothing can derive from.
       set((state) => {
-        const { [id]: _, ...rest } = state.selectedCompetitions
-        return { selectedCompetitions: rest }
+        const { [id]: _config, ...restCompetitions } = state.selectedCompetitions
+        const { [id]: _placement, ...restPlacements } = state.placements
+        return { selectedCompetitions: restCompetitions, placements: restPlacements }
       })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     applyTemplate: (templateName) => {
@@ -302,14 +293,12 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
         if (config) map[id] = config
       }
       set({ selectedCompetitions: map })
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
 
     setGlobalOverrides: (partial) => {
       set((state) => ({
         globalOverrides: { ...state.globalOverrides, ...partial },
       }))
-      get().markStale({ analysisStale: true, scheduleStale: true })
     },
   }
 }
@@ -318,40 +307,76 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
     layoutMode: 'wizard',
     wizardStep: 0,
-    analysisStale: false,
-    scheduleStale: false,
 
     setLayoutMode: (mode) => set({ layoutMode: mode }),
     setStep: (step) => set({ wizardStep: step }),
+  }
+}
 
-    markStale: (flags) => {
-      set((state) => ({
-        analysisStale: flags.analysisStale ?? state.analysisStale,
-        scheduleStale: flags.scheduleStale ?? state.scheduleStale,
-      }))
+function createPlacementsSlice(set: SetState, _get: GetState): PlacementsSlice {
+  return {
+    placements: {},
+
+    setPlacementsFromAuto: (placements) => {
+      const normalised: Record<string, Placement> = {}
+      for (const [id, placement] of Object.entries(placements)) {
+        normalised[id] = { ...placement, source: PlacementSource.AUTO, pinned: false }
+      }
+      set({ placements: normalised })
     },
 
-    clearStale: () => set({ analysisStale: false, scheduleStale: false }),
+    updatePlacement: (id, partial) => {
+      set((state) => {
+        const existing = state.placements[id]
+        if (!existing) return {}
+        return {
+          placements: {
+            ...state.placements,
+            [id]: { ...existing, ...partial, source: PlacementSource.MANUAL, pinned: true },
+          },
+        }
+      })
+    },
+
+    removePlacement: (id) => {
+      set((state) => {
+        const { [id]: _removed, ...rest } = state.placements
+        return { placements: rest }
+      })
+    },
+
+    clearPlacements: () => set({ placements: {} }),
+
+    setPinned: (id, pinned) => {
+      set((state) => {
+        const existing = state.placements[id]
+        if (!existing) return {}
+        return { placements: { ...state.placements, [id]: { ...existing, pinned } } }
+      })
+    },
+  }
+}
+
+function createDismissalsSlice(set: SetState, _get: GetState): DismissalsSlice {
+  return {
+    dismissedFindings: {},
+
+    dismissFinding: (id) => {
+      set((state) => ({ dismissedFindings: { ...state.dismissedFindings, [id]: true } }))
+    },
+
+    undismissFinding: (id) => {
+      set((state) => {
+        const { [id]: _removed, ...rest } = state.dismissedFindings
+        return { dismissedFindings: rest }
+      })
+    },
   }
 }
 
 function createAnalysisSlice(set: SetState, _get: GetState): AnalysisSlice {
   return {
-    validationErrors: [],
-    warnings: [],
-    suggestions: [],
-    flightingSuggestions: [],
     flightingSuggestionStates: [],
-
-    setAnalysisResults: (errors, result) => {
-      set({
-        validationErrors: errors,
-        warnings: result.warnings,
-        suggestions: result.suggestions,
-        flightingSuggestions: result.flightingSuggestions ?? [],
-        flightingSuggestionStates: (result.flightingSuggestions ?? []).map(() => SuggestionState.PENDING),
-      })
-    },
 
     acceptFlightingSuggestion: (index) => {
       set((state) => {
@@ -368,32 +393,6 @@ function createAnalysisSlice(set: SetState, _get: GetState): AnalysisSlice {
         return { flightingSuggestionStates: updated }
       })
     },
-
-    clearAnalysis: () => {
-      set({
-        validationErrors: [],
-        warnings: [],
-        suggestions: [],
-        flightingSuggestions: [],
-        flightingSuggestionStates: [],
-      })
-    },
-  }
-}
-
-function createScheduleSlice(set: SetState, _get: GetState): ScheduleSlice {
-  return {
-    scheduleResults: {},
-    bottlenecks: [],
-    refRequirementsByDay: [],
-
-    setScheduleResults: (results, bottlenecks, refRequirementsByDay = []) => {
-      set({ scheduleResults: results, bottlenecks, refRequirementsByDay })
-    },
-
-    clearSchedule: () => {
-      set({ scheduleResults: {}, bottlenecks: [], refRequirementsByDay: [] })
-    },
   }
 }
 
@@ -406,5 +405,6 @@ export const useStore = create<StoreState>()((set, get) => ({
   ...createCompetitionSlice(set as SetState, get as GetState),
   ...createUiSlice(set as SetState, get as GetState),
   ...createAnalysisSlice(set as SetState, get as GetState),
-  ...createScheduleSlice(set as SetState, get as GetState),
+  ...createPlacementsSlice(set as SetState, get as GetState),
+  ...createDismissalsSlice(set as SetState, get as GetState),
 }))

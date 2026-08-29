@@ -337,9 +337,9 @@ describe('buildTournamentConfig', () => {
       }
     }
 
-    it('leaves competitions unflighted when flightingSuggestions is empty', () => {
-      const state = storeWith({ ...twoCompState(), flightingSuggestions: [], flightingSuggestionStates: [] })
-      const { competitions } = buildTournamentConfig(state)
+    it('leaves competitions unflighted when no suggestions are passed in', () => {
+      const state = storeWith({ ...twoCompState(), flightingSuggestionStates: [] })
+      const { competitions } = buildTournamentConfig(state, [])
 
       for (const comp of competitions) {
         expect(comp.flighted).toBe(false)
@@ -358,10 +358,9 @@ describe('buildTournamentConfig', () => {
       }
       const state = storeWith({
         ...twoCompState(),
-        flightingSuggestions: [suggestion],
         flightingSuggestionStates: ['pending'],
       })
-      const { competitions } = buildTournamentConfig(state)
+      const { competitions } = buildTournamentConfig(state, [suggestion])
 
       for (const comp of competitions) {
         expect(comp.flighted).toBe(false)
@@ -377,10 +376,9 @@ describe('buildTournamentConfig', () => {
       }
       const state = storeWith({
         ...twoCompState(),
-        flightingSuggestions: [suggestion],
         flightingSuggestionStates: ['rejected'],
       })
-      const { competitions } = buildTournamentConfig(state)
+      const { competitions } = buildTournamentConfig(state, [suggestion])
 
       for (const comp of competitions) {
         expect(comp.flighted).toBe(false)
@@ -396,10 +394,9 @@ describe('buildTournamentConfig', () => {
       }
       const state = storeWith({
         ...twoCompState(),
-        flightingSuggestions: [suggestion],
         flightingSuggestionStates: ['accepted'],
       })
-      const { competitions } = buildTournamentConfig(state)
+      const { competitions } = buildTournamentConfig(state, [suggestion])
 
       const expectedGroupId = 'D1-M-FOIL-IND+CDT-W-EPEE-IND'
       const priority = competitions.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
@@ -427,10 +424,9 @@ describe('buildTournamentConfig', () => {
       }
       const state = storeWith({
         ...twoCompState(),
-        flightingSuggestions: [accepted],
         flightingSuggestionStates: ['accepted'],
       })
-      const { competitions } = buildTournamentConfig(state)
+      const { competitions } = buildTournamentConfig(state, [accepted])
 
       const priority = competitions.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
       expect(priority!.flighted).toBe(true)
@@ -438,10 +434,9 @@ describe('buildTournamentConfig', () => {
       // A second scenario: same suggestions but both rejected
       const stateRejected = storeWith({
         ...twoCompState(),
-        flightingSuggestions: [accepted],
         flightingSuggestionStates: ['rejected'],
       })
-      const { competitions: compsRejected } = buildTournamentConfig(stateRejected)
+      const { competitions: compsRejected } = buildTournamentConfig(stateRejected, [accepted])
       const priorityRejected = compsRejected.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
       expect(priorityRejected!.flighted).toBe(false)
     })
