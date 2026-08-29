@@ -37,6 +37,9 @@ function setupB5(): void {
 }
 
 beforeEach(() => {
+  // Resets store state only. The selectors' module-level memo caches persist
+  // across tests, which is benign: they are pure functions of their deps, so a
+  // cache hit can only return the value a fresh compute would produce.
   useStore.setState(useStore.getInitialState())
 })
 
@@ -135,22 +138,25 @@ describe('memoization', () => {
   it('memoizes selectDerivedFindings and selectDerivedRefRequirements independently of each other', () => {
     setupB5()
     const f1 = selectDerivedFindings(useStore.getState())
-    const f2 = selectDerivedFindings(useStore.getState())
-    expect(f2).toBe(f1)
-
     const r1 = selectDerivedRefRequirements(useStore.getState())
-    const r2 = selectDerivedRefRequirements(useStore.getState())
-    expect(r2).toBe(r1)
+
+    // Interleaved re-reads: if the two selectors shared one cache slot,
+    // computing r1 would have evicted f1, and this re-read would rebuild it.
+    expect(selectDerivedFindings(useStore.getState())).toBe(f1)
+    expect(selectDerivedRefRequirements(useStore.getState())).toBe(r1)
   })
 })
 
 describe('selectDerivedFindings', () => {
-  it('returns validation errors and analysis output shaped from current inputs', () => {
+  it('reports validation errors from current inputs – a zero strip count surfaces and clears', () => {
     setupB5()
-    const findings = selectDerivedFindings(useStore.getState())
-    expect(Array.isArray(findings.validationErrors)).toBe(true)
-    expect(Array.isArray(findings.analysis.warnings)).toBe(true)
-    expect(Array.isArray(findings.analysis.suggestions)).toBe(true)
+    useStore.getState().setStrips(0)
+    const broken = selectDerivedFindings(useStore.getState())
+    expect(broken.validationErrors.some((e) => e.field === 'strips_total')).toBe(true)
+
+    useStore.getState().setStrips(SCENARIOS.B5.strips)
+    const fixed = selectDerivedFindings(useStore.getState())
+    expect(fixed.validationErrors.some((e) => e.field === 'strips_total')).toBe(false)
   })
 
   it('uses a placement day for day assignment when present, falling back to round-robin otherwise', () => {
