@@ -70,6 +70,54 @@ two homes for one rule). Post-hoc severity rewrite of ERROR findings in
 advisory mode (rejected – existing WARNs like the regional-cut notice would
 be indistinguishable from downgraded ERRORs, and per-rule intent is lost).
 
+### Correction (2026-08-29): three rule kinds, not two
+
+**Decision**: The flat structural/policy split above is replaced by a third
+kind, `notice` – WARN in both `binding` and `advisory` modes, never escalates,
+never blocks. `RuleKind = 'structural' | 'policy' | 'notice'`. Reclassified
+from `policy` to `notice`: regional cut overrides, the video dead-config hint
+(REQUIRED + SINGLE_STAGE, no effect), `de_round_of_16_strips` over the DE
+strip cap, and `days_available` outside 2–4. Everything else D3 named as
+`policy` keeps that kind (ERROR binding / WARN advisory). `structural` is
+unchanged (ERROR both modes, days bounds 1–14).
+
+**Rationale**: T015's failing-test drift probe ran `validateConfig` over the
+B1–B8 drift-ledger fixtures under the flat model and found the regional-cut
+override rule (`validation.ts:213`) firing on B4 (12×), B5 (12×), B6 (18×),
+and the video dead-config rule (`validation.ts:172`) firing on B2 (6×) and B8
+(5×). Under `policy` these escalate to ERROR in binding mode, and
+`concurrentScheduler.ts:195` aborts scheduling on any ERROR – so binding-mode
+validation would newly collapse B2, B5, B6, and B8 (D7's `SCHEDULED_FLOORS`
+of 24, 12, 43, 50 – all currently nonzero) and inflate B4's dedicated pinned
+test (0 scheduled, 1 validation error) by 12 more errors it does not have
+today. Constitution III treats that as a halting drop, not a modeling
+nuance.
+Separately, `days_available` outside 2–4 as `policy`→ERROR-binding
+contradicts spec acceptance scenario 3 (`spec.md:106-108`): a 5-day
+tournament must warn while remaining schedulable, not abort. The DE
+strip-cap rule (`de_round_of_16_strips` over cap) fires zero times across
+B1–B8 so it carries no drift risk, but it is the same "soft, user may have
+intentionally overridden" class as the other three – the code's own comment
+at `validation.ts:184` already frames it that way – so it moves with them for
+consistency rather than staying `policy` on a technicality of the current
+fixture set.
+
+Net effect: because these four rules were WARN-only in the codebase before
+this feature (never ERROR, in any mode, today), `notice` reproduces exactly
+that – binding-mode severities across the whole rule set come out
+byte-identical to `main` at d7f44c410b. Advisory mode is the only mode that
+changes shape, and only by gaining `kind` tags on findings that were already
+WARN.
+
+**Alternatives considered**: Keep the flat model and re-tune
+`SCHEDULED_FLOORS` downward for the newly-blocked scenarios (rejected –
+Constitution III requires the cause of a drop to be identified and recorded,
+not absorbed into a new floor; here the cause is a modeling gap, not a real
+regression). Keep the flat model and special-case these four rules to WARN
+under `binding` at the call site (rejected – reintroduces the "post-hoc
+severity rewrite" alternative D3 already rejected, for the same reason: an
+intentional-WARN rule becomes indistinguishable from a downgraded ERROR).
+
 ## D4: Finding identity – rule id plus canonical subject key
 
 **Decision**: `ValidationError` grows into a finding with `rule` (stable

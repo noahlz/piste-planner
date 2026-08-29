@@ -74,8 +74,8 @@ are complicated enough to consider Opus at dispatch time (constitution
 
 ### Tests for User Story 2 (write first, confirm failing)
 
-- [ ] T015 [US2] Write failing tests in __tests__/engine/validation.test.ts: for each policy rule one definition yields ERROR under `binding` and WARN under `advisory` with identical substance; structural rules ERROR in both; days 1 (warn), 2–4 (clean), 5 (warn), 14 (warn), 15 (structural error); rule catalogue counted equal across modes (research D3)
-- [ ] T016 [US2] Dispatch test-quality-reviewer over T015 and apply its findings
+- [x] T015 [US2] Write failing tests in __tests__/engine/validation.test.ts: for each policy rule one definition yields ERROR under `binding` and WARN under `advisory` with identical substance; structural rules ERROR in both; days 1 (warn), 2–4 (clean), 5 (warn), 14 (warn), 15 (structural error); rule catalogue counted equal across modes (research D3)
+- [x] T016 [US2] Dispatch test-quality-reviewer over T015 and apply its findings
 
 ### Implementation for User Story 2
 

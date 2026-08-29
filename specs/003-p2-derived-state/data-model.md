@@ -44,11 +44,11 @@ config)`:
 | Field | Type | Notes |
 |---|---|---|
 | `rule` | `string` | Stable kebab-case rule id, e.g. `same-population` |
-| `kind` | `RuleKind` | `'structural' \| 'policy'` |
+| `kind` | `RuleKind` | `'structural' \| 'policy' \| 'notice'` (research D3 correction, 2026-08-29) |
 | `subjects` | `string[]` | Sorted competition ids, or `[field]` for global rules |
 | `field` | `string` | Retained – existing UI groups by it |
 | `message` | `string` | Human text, magnitudes allowed, excluded from identity |
-| `severity` | `BottleneckSeverity` | Computed: structural → ERROR; policy → ERROR (binding) / WARN (advisory) |
+| `severity` | `BottleneckSeverity` | Computed: structural → ERROR both modes; policy → ERROR (binding) / WARN (advisory); notice → WARN both modes |
 
 Identity: `` `${rule}:${subjects.join('+')}` `` (research D4). Two findings
 with equal identity in one recompute are a rule bug – the rule must widen its
@@ -57,8 +57,10 @@ subject key, not silently merge.
 ### Validation modes
 
 `ValidationMode = 'binding' | 'advisory'` (`as const`). `validateConfig`
-takes the mode; every rule is defined once. Day bounds: structural 1–14,
-policy 2–4 (clarifications 2026-08-28).
+takes the mode; every rule is defined once. Day bounds: structural 1–14
+(ERROR both modes, clarification 2026-08-28), notice outside 2–4 (WARN both
+modes – research D3 correction, 2026-08-29, reclassified from policy so a
+5-day tournament stays schedulable per spec acceptance scenario 3).
 
 ## Dismissals
 
