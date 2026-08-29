@@ -15,6 +15,7 @@ interface NumberInputProps {
    * committed value instead of clamping to min/max and committing.
    */
   rejectOutOfRange?: boolean
+  id?: string
   className?: string
   'aria-label'?: string
 }
@@ -26,6 +27,7 @@ export function NumberInput({
   max = Infinity,
   step = 1,
   rejectOutOfRange = false,
+  id,
   className,
   'aria-label': ariaLabel,
 }: NumberInputProps) {
@@ -50,16 +52,23 @@ export function NumberInput({
   }
 
   function handleBlur() {
-    const parsed = parseInt(localValue, 10)
-    // Non-numeric entries always revert, and out-of-range entries revert too in
-    // reject mode – clamping would commit a value the user never typed.
-    if (isNaN(parsed) || (rejectOutOfRange && (parsed < min || parsed > max))) {
+    // Number over parseInt so "1e2" reads as 100, not 1. Number('') is 0, so
+    // an emptied field needs its own guard to stay a revert.
+    const trimmed = localValue.trim()
+    const parsed = trimmed === '' ? NaN : Number(trimmed)
+    // Non-numeric entries always revert. Reject mode also reverts out-of-range
+    // and fractional entries – clamping or truncating would commit a value the
+    // user never typed.
+    if (
+      isNaN(parsed) ||
+      (rejectOutOfRange && (!Number.isInteger(parsed) || parsed < min || parsed > max))
+    ) {
       setLocalValue(String(value))
       return
     }
-    const clamped = clamp(parsed)
-    onChange(clamped)
-    setLocalValue(String(clamped))
+    const committed = clamp(Math.trunc(parsed))
+    if (committed !== value) onChange(committed)
+    setLocalValue(String(committed))
   }
 
   return (
@@ -70,11 +79,12 @@ export function NumberInput({
         size="icon-xs"
         onClick={handleDecrement}
         disabled={value <= min}
-        aria-label="Decrement"
+        aria-label={ariaLabel ? `Decrease ${ariaLabel}` : 'Decrement'}
       >
         <Minus />
       </Button>
       <Input
+        id={id}
         type="number"
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
@@ -90,7 +100,7 @@ export function NumberInput({
         size="icon-xs"
         onClick={handleIncrement}
         disabled={value >= max}
-        aria-label="Increment"
+        aria-label={ariaLabel ? `Increase ${ariaLabel}` : 'Increment'}
       >
         <Plus />
       </Button>

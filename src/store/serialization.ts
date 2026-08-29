@@ -1,6 +1,7 @@
 import type { StoreState, CompetitionConfig, GlobalOverrides } from './store.ts'
 import type { DayConfig, TournamentType, Weapon as WeaponType } from '../engine/types.ts'
 import { TournamentType as TT, Weapon } from '../engine/types.ts'
+import { POOL_DURATION_MIN, POOL_DURATION_MAX } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
 // Types
@@ -123,10 +124,15 @@ export function validateSchema(
         return { valid: false, error: `pool_round_duration_table is missing weapon "${weapon}"` }
       }
       const v = tableObj[weapon]
-      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 999) {
+      if (
+        typeof v !== 'number' ||
+        !Number.isInteger(v) ||
+        v < POOL_DURATION_MIN ||
+        v > POOL_DURATION_MAX
+      ) {
         return {
           valid: false,
-          error: `pool_round_duration_table.${weapon} must be an integer between 1 and 999`,
+          error: `pool_round_duration_table.${weapon} must be an integer between ${POOL_DURATION_MIN} and ${POOL_DURATION_MAX}`,
         }
       }
     }

@@ -1,6 +1,10 @@
 import { useStore } from '../../store/store.ts'
 import { Weapon } from '../../engine/types.ts'
-import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../../engine/constants.ts'
+import {
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
+  POOL_DURATION_MIN,
+  POOL_DURATION_MAX,
+} from '../../engine/constants.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -34,19 +38,21 @@ export function PoolDurationSettings() {
           const isDefault = durations[weapon] === defaultMinutes
           return (
             <div key={weapon} className="flex items-center gap-2">
-              <Label className="w-12 text-xs">{label}</Label>
+              <Label htmlFor={`pool-duration-${weapon}`} className="w-12 text-xs">
+                {label}
+              </Label>
               <NumberInput
+                id={`pool-duration-${weapon}`}
                 value={durations[weapon]}
                 onChange={(minutes) => setPoolRoundDuration(weapon, minutes)}
-                min={1}
-                max={999}
+                min={POOL_DURATION_MIN}
+                max={POOL_DURATION_MAX}
                 rejectOutOfRange
                 aria-label={`${label} pool round duration`}
               />
               <span className="text-xs text-muted-foreground">min</span>
-              {isDefault ? (
-                <DefaultLabel isDefault />
-              ) : (
+              <DefaultLabel isDefault={isDefault} />
+              {!isDefault && (
                 <>
                   <span className="text-xs text-muted-foreground">
                     default: {defaultMinutes} min

@@ -117,6 +117,11 @@ export const DEFAULT_POOL_ROUND_DURATION_TABLE: Record<Weapon, number> = {
   [Weapon.SABRE]: 75,
 }
 
+// Validation bounds for user-supplied pool round durations (spec 002, research D5).
+// Shared by the editor UI and the serialization schema so the fact has one home.
+export const POOL_DURATION_MIN = 1
+export const POOL_DURATION_MAX = 999
+
 // ──────────────────────────────────────────────
 // Default DE bout durations by weapon and bracket size (minutes per round)
 // ──────────────────────────────────────────────
