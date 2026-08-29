@@ -50,7 +50,7 @@
 - [X] T007 [US1] Write failing component tests in `__tests__/components/sections/PoolDurationSettings.test.tsx`: renders three rows pre-filled with 120/105/75 and a "Default" badge each, never a blank input (spec US1 scenario 1), editing epee to 110 calls `setPoolRoundDuration` and shows the default (120) as reference text plus a revert control (scenarios 2–3), the revert control calls `resetPoolRoundDuration` (scenario 4), and an invalid entry (0, negative, cleared field) is rejected with the last valid value still in effect (scenario 5, bounds 1–999 per research.md D5). Follow existing section-test patterns and `__tests__/helpers/factories.ts`. Run and confirm all fail – the component does not exist. Commit.
 - [X] T008 [US1] Implement `src/components/sections/PoolDurationSettings.tsx` per research.md D6: one row per weapon using `NumberInput` (`src/components/ui/number-input.tsx`, min 1 max 999) and the `DefaultLabel` badge (`src/components/common/DefaultLabel.tsx`) when the value equals the default, switching to a "default: N min" reference and revert control when overridden. State is derived by comparing to `DEFAULT_POOL_ROUND_DURATION_TABLE` – no stored flag (data-model.md). T007's tests pass. Commit.
 - [X] T009 [US1] Render the section in both layouts: `src/components/wizard/WizardStep1.tsx` (beside `TournamentSetup`) and `src/components/KitchenSinkPage.tsx`. Full test suite still green. Commit.
-- [ ] T010 [US1] Dispatch `react-code-reviewer` covering T008–T009 and `test-quality-reviewer` covering T007 (parallel dispatch is fine). Apply accepted findings, re-run the component tests and lint. Commit if anything changed.
+- [X] T010 [US1] Dispatch `react-code-reviewer` covering T008–T009 and `test-quality-reviewer` covering T007 (parallel dispatch is fine). Apply accepted findings, re-run the component tests and lint. Commit if anything changed.
 
 **Checkpoint**: US1 fully functional – overrides flow store → bridge → engine and the UI honors defaults-visible/revert. This is the MVP.
 
@@ -73,7 +73,7 @@
 ## Phase 5: Polish & Cross-Cutting Concerns
 
 - [X] T014 [P] Update `docs/design/backlog.md`: the "Configurable pool round durations" entry (line 68) becomes a one-line pointer to `specs/002-configurable-pool-durations/` – the spec is now the fact's home (constitution: each fact has exactly one home). Keep the youth-calibration cross-reference intact by pointing it at research.md D4. Commit.
-- [ ] T015 Full validation per quickstart.md: `timeout 120 pnpm --silent test`, `timeout 180 pnpm exec tsc -b`, `timeout 120 pnpm --silent lint`, drift ledger zero on B1–B8. Read logs only on failure, fix anything red, record results in the commit message. Commit. The branch is now ready for the user's squash-merge via `commit-with-costs` – stop here.
+- [X] T015 Full validation per quickstart.md: `timeout 120 pnpm --silent test`, `timeout 180 pnpm exec tsc -b`, `timeout 120 pnpm --silent lint`, drift ledger zero on B1–B8. Read logs only on failure, fix anything red, record results in the commit message. Commit. The branch is now ready for the user's squash-merge via `commit-with-costs` – stop here.
 
 ---
 
