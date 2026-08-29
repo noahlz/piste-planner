@@ -3,6 +3,7 @@ import type { DerivedEventSchedule } from '../engine/derive.ts'
 import { validateConfig } from '../engine/validation.ts'
 import { initialAnalysis } from '../engine/analysis.ts'
 import { computeRefRequirements } from '../engine/refs.ts'
+import { ValidationMode } from '../engine/types.ts'
 import type {
   AnalysisResult,
   Competition,
@@ -126,7 +127,8 @@ function computeDerivedFindings(
     dayAssignments[competition.id] = placement ? placement.day : i % state.days_available
   })
 
-  const validationErrors = validateConfig(config, competitions)
+  // Binding mode in P2 — tasks.md T017: advisory-mode UI wiring is later work.
+  const validationErrors = validateConfig(config, competitions, ValidationMode.BINDING)
   const analysis = initialAnalysis(config, competitions, dayAssignments)
 
   return { validationErrors, analysis }

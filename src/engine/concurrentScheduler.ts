@@ -29,6 +29,7 @@ import {
   dayEnd,
   findDayForTime,
   tailEstimateMins,
+  ValidationMode,
 } from './types.ts'
 import type {
   Competition,
@@ -180,8 +181,9 @@ export function scheduleAllConcurrent(
 ): ScheduleAllResult {
   const state = createGlobalState(config)
 
-  // Validation pass — same shape as serial scheduleAll.
-  const validationErrors = validateConfig(config, competitions)
+  // Validation pass — same shape as serial scheduleAll. The scheduler is the
+  // binding consumer: policy findings gate scheduling as errors (research D3).
+  const validationErrors = validateConfig(config, competitions, ValidationMode.BINDING)
   for (const ve of validationErrors) {
     state.bottlenecks.push({
       competition_id: '',

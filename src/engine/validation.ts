@@ -1,4 +1,4 @@
-import { BottleneckSeverity, CutMode, DeMode, EventType, VideoPolicy, Weapon } from './types.ts'
+import { BottleneckSeverity, CutMode, DeMode, EventType, RuleKind, ValidationMode, VideoPolicy, Weapon } from './types.ts'
 import type { Competition, TournamentConfig, ValidationError } from './types.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration } from './de.ts'
@@ -11,13 +11,30 @@ function err(field: string, message: string): ValidationError {
   return { field, message, severity: BottleneckSeverity.ERROR }
 }
 
-function warn(field: string, message: string): ValidationError {
-  return { field, message, severity: BottleneckSeverity.WARN }
+/** Structural finding: leaves nothing to draw, ERROR in both validation modes (research D3). */
+function structural(field: string, message: string): ValidationError {
+  return { field, message, severity: BottleneckSeverity.ERROR, kind: RuleKind.STRUCTURAL }
+}
+
+/** Notice finding: WARN in both modes, never escalates (research D3 correction, 2026-08-29). */
+function notice(field: string, message: string): ValidationError {
+  return { field, message, severity: BottleneckSeverity.WARN, kind: RuleKind.NOTICE }
+}
+
+/** Policy finding: ERROR under binding mode, WARN under advisory, same substance either way. */
+function policy(field: string, message: string, mode: ValidationMode): ValidationError {
+  return {
+    field,
+    message,
+    severity: mode === ValidationMode.BINDING ? BottleneckSeverity.ERROR : BottleneckSeverity.WARN,
+    kind: RuleKind.POLICY,
+  }
 }
 
 /**
- * Pushes an error if the DE duration table has no entry for the given weapon/bracket.
- * Shared by individual and team DE-entry validation.
+ * Pushes a structural error if the DE duration table has no entry for the given
+ * weapon/bracket — an undefined table lookup leaves nothing to draw. Shared by
+ * individual and team DE-entry validation.
  */
 function checkDeDurationEntry(
   compId: string,
@@ -25,11 +42,10 @@ function checkDeDurationEntry(
   bracketSize: number,
   table: TournamentConfig['de_duration_table'],
   errors: ValidationError[],
-  errFn: typeof err,
 ): void {
   const deDuration = table[weapon]?.[bracketSize]
   if (deDuration === undefined) {
-    errors.push(errFn('de_duration_table', `${compId}: no DE duration entry for weapon=${weapon} bracket=${bracketSize}`))
+    errors.push(structural('de_duration_table', `${compId}: no DE duration entry for weapon=${weapon} bracket=${bracketSize}`))
   }
 }
 
@@ -61,14 +77,15 @@ export function validateSameDayCompletion(
 
 // ── Sub-validators ─────────────────────────────────────────────────────────────
 
-function validateStripConfig(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
+function validateStripConfig(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
   const errors: ValidationError[] = []
 
   if (config.strips_total === 0) {
-    errors.push(err('strips_total', 'strips_total must be > 0'))
+    errors.push(structural('strips_total', 'strips_total must be > 0'))
   }
 
-  // Flighting group strips exceed strips_total
+  // Flighting group strips exceed strips_total — same resource-capacity class
+  // as resource_precondition's strip minimum shortfalls (research D3).
   // Group competitions by their flighting_group_id, sum strips_allocated, check against total
   const flightingGroupStrips = new Map<string, number>()
   for (const comp of competitions) {
@@ -79,7 +96,7 @@ function validateStripConfig(config: TournamentConfig, competitions: Competition
   }
   for (const [groupId, totalStrips] of flightingGroupStrips) {
     if (totalStrips > config.strips_total) {
-      errors.push(err('flighting_group', `Flighting group "${groupId}" requires ${totalStrips} strips but strips_total is ${config.strips_total}`))
+      errors.push(policy('flighting_group', `Flighting group "${groupId}" requires ${totalStrips} strips but strips_total is ${config.strips_total}`, mode))
     }
   }
 
@@ -90,13 +107,13 @@ function validateRefConfig(_config: TournamentConfig, _competitions: Competition
   return []
 }
 
-function validateCompetitionFields(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
+function validateCompetitionFields(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
   const errors: ValidationError[] = []
 
   const seenIds = new Set<string>()
   for (const comp of competitions) {
     if (seenIds.has(comp.id)) {
-      errors.push(err('competition.id', `Duplicate competition ID: "${comp.id}"`))
+      errors.push(structural('competition.id', `Duplicate competition ID: "${comp.id}"`))
     }
     seenIds.add(comp.id)
   }
@@ -104,25 +121,25 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
   for (const comp of competitions) {
     // Fencer count bounds
     if (comp.fencer_count <= 0 || comp.fencer_count < config.MIN_FENCERS) {
-      errors.push(err('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} is below minimum ${config.MIN_FENCERS}`))
+      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} is below minimum ${config.MIN_FENCERS}`))
     } else if (comp.fencer_count > config.MAX_FENCERS) {
-      errors.push(err('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} exceeds maximum ${config.MAX_FENCERS}`))
+      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} exceeds maximum ${config.MAX_FENCERS}`))
     }
 
     // Team events must not use cuts
     if (comp.event_type === EventType.TEAM && comp.cut_mode !== CutMode.DISABLED) {
-      errors.push(err('cut_mode', `${comp.id}: team events must have cut_mode=DISABLED`))
+      errors.push(policy('cut_mode', `${comp.id}: team events must have cut_mode=DISABLED`, mode))
     }
 
     // Cut value range checks (individual events only)
     if (comp.event_type === EventType.INDIVIDUAL) {
       if (comp.cut_mode === CutMode.PERCENTAGE) {
         if (comp.cut_value <= 0 || comp.cut_value > 100) {
-          errors.push(err('cut_value', `${comp.id}: PERCENTAGE cut_value must be in (0, 100], got ${comp.cut_value}`))
+          errors.push(structural('cut_value', `${comp.id}: PERCENTAGE cut_value must be in (0, 100], got ${comp.cut_value}`))
         }
       } else if (comp.cut_mode === CutMode.COUNT) {
         if (comp.cut_value > comp.fencer_count) {
-          errors.push(err('cut_value', `${comp.id}: COUNT cut_value ${comp.cut_value} exceeds fencer_count ${comp.fencer_count}`))
+          errors.push(structural('cut_value', `${comp.id}: COUNT cut_value ${comp.cut_value} exceeds fencer_count ${comp.fencer_count}`))
         }
       }
 
@@ -137,7 +154,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
           rawPromoted = Math.min(comp.cut_value, comp.fencer_count)
         }
         if (rawPromoted < 2) {
-          errors.push(err('cut_value', `${comp.id}: cut produces only ${rawPromoted} promoted fencer(s); minimum is 2`))
+          errors.push(structural('cut_value', `${comp.id}: cut produces only ${rawPromoted} promoted fencer(s); minimum is 2`))
         }
       }
 
@@ -149,7 +166,6 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
           computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type),
           config.de_duration_table,
           errors,
-          err,
         )
       }
     }
@@ -162,14 +178,14 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
         computeBracketSize(comp.fencer_count, CutMode.DISABLED, 100, comp.event_type),
         config.de_duration_table,
         errors,
-        err,
       )
     }
 
     // Video policy checks
     if (comp.de_video_policy === VideoPolicy.REQUIRED && comp.de_mode === DeMode.SINGLE_STAGE) {
-      // REQUIRED + SINGLE_STAGE is dead config: SINGLE_STAGE doesn't use staged video strips
-      errors.push(warn('de_video_policy', `${comp.id}: REQUIRED video policy has no effect with SINGLE_STAGE de_mode`))
+      // REQUIRED + SINGLE_STAGE is dead config: SINGLE_STAGE doesn't use staged video strips.
+      // Soft hint, not a gate (research D3 correction).
+      errors.push(notice('de_video_policy', `${comp.id}: REQUIRED video policy has no effect with SINGLE_STAGE de_mode`))
     }
 
     if (
@@ -177,18 +193,20 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       comp.de_video_policy === VideoPolicy.REQUIRED &&
       config.video_strips_total < comp.de_round_of_16_strips
     ) {
-      errors.push(err('de_video_policy', `${comp.id}: REQUIRED video policy needs ${comp.de_round_of_16_strips} video strips for R16 but only ${config.video_strips_total} available`))
+      // Physical resource impossibility for the R16 stage — structural.
+      errors.push(structural('de_video_policy', `${comp.id}: REQUIRED video policy needs ${comp.de_round_of_16_strips} video strips for R16 but only ${config.video_strips_total} available`))
     }
 
-    // Soft warnings: DE strip requests exceed the computed DE cap.
-    // These are warnings (not errors) because the user may have intentionally overridden.
+    // DE strip requests exceed the computed DE cap. Soft resource-tuning
+    // guidance (research D3 correction) because the user may have
+    // intentionally overridden.
     const deStripCap = computeStripCap(
       config.strips_total,
       config.max_de_strip_pct,
       comp.max_de_strip_pct_override,
     )
     if (comp.de_round_of_16_strips > deStripCap) {
-      errors.push(warn('de_round_of_16_strips', `${comp.id}: R16 requests ${comp.de_round_of_16_strips} strips but DE cap is ${deStripCap}`))
+      errors.push(notice('de_round_of_16_strips', `${comp.id}: R16 requests ${comp.de_round_of_16_strips} strips but DE cap is ${deStripCap}`))
     }
 
     // Resource precondition checks — skip competitions with invalid fencer counts
@@ -198,19 +216,20 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       // Strip capacity: n_pools strips needed (one per pool running in parallel).
       // strips_total is a global scalar — no per-day strip availability model yet.
       if (n_pools > config.strips_total) {
-        errors.push(err('resource_precondition', `${comp.id}: requires ${n_pools} strips for pools but only ${config.strips_total} total strips configured`))
+        errors.push(policy('resource_precondition', `${comp.id}: requires ${n_pools} strips for pools but only ${config.strips_total} total strips configured`, mode))
       }
 
     }
   }
 
-  // Regional tournament cut override warnings
-  // Warn when a regional tournament has a competition with custom cuts on an override category.
-  // buildConfig applies the override automatically; this surfaces it to the user.
+  // Regional tournament cut override notices
+  // Heads-up when a regional tournament has a competition with custom cuts on
+  // an override category. buildConfig applies the override automatically
+  // regardless, so this blocks nothing (research D3 correction).
   if (REGIONAL_CUT_TOURNAMENT_TYPES.has(config.tournament_type)) {
     for (const comp of competitions) {
       if (REGIONAL_CUT_OVERRIDES[comp.category] && comp.cut_mode !== CutMode.DISABLED) {
-        errors.push(warn(
+        errors.push(notice(
           'cut_mode',
           `${comp.id}: regional tournament (${config.tournament_type}) requires all-advance for ${comp.category} — cut_mode will be overridden to DISABLED`,
         ))
@@ -221,7 +240,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
   return errors
 }
 
-function validateTimingConstraints(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
+function validateTimingConstraints(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
   const errors: ValidationError[] = []
 
   // Individual + team same-day worst-case duration
@@ -248,14 +267,14 @@ function validateTimingConstraints(config: TournamentConfig, competitions: Compe
 
     const combinedTotal = indivTotal + config.INDIV_TEAM_MIN_GAP_MINS + teamTotal
     if (combinedTotal > config.DAY_LENGTH_MINS) {
-      errors.push(err('indiv_team_same_day', `Individual ${matchingIndividual.id} + team ${team.id} worst-case same-day duration ${combinedTotal} min exceeds DAY_LENGTH_MINS ${config.DAY_LENGTH_MINS} min`))
+      errors.push(policy('indiv_team_same_day', `Individual ${matchingIndividual.id} + team ${team.id} worst-case same-day duration ${combinedTotal} min exceeds DAY_LENGTH_MINS ${config.DAY_LENGTH_MINS} min`, mode))
     }
   }
 
   return errors
 }
 
-function validateDependencies(config: TournamentConfig, competitions: Competition[]): ValidationError[] {
+function validateDependencies(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
   const errors: ValidationError[] = []
 
   // Team events require a matching individual
@@ -268,7 +287,7 @@ function validateDependencies(config: TournamentConfig, competitions: Competitio
     if (comp.event_type === EventType.TEAM) {
       const key = `${comp.category}|${comp.gender}|${comp.weapon}`
       if (!individualKeys.has(key)) {
-        errors.push(err('event_type', `${comp.id}: team event has no matching individual for ${comp.category} ${comp.gender} ${comp.weapon}`))
+        errors.push(policy('event_type', `${comp.id}: team event has no matching individual for ${comp.category} ${comp.gender} ${comp.weapon}`, mode))
       }
     }
   }
@@ -286,7 +305,7 @@ function validateDependencies(config: TournamentConfig, competitions: Competitio
   }
   for (const [key, count] of populationCounts) {
     if (count > config.days_available) {
-      errors.push(err('same_population', `Same-population group [${key}] has ${count} individual events but only ${config.days_available} days available`))
+      errors.push(policy('same_population', `Same-population group [${key}] has ${count} individual events but only ${config.days_available} days available`, mode))
     }
   }
 
@@ -306,6 +325,17 @@ function validateDependencies(config: TournamentConfig, competitions: Competitio
  * targeted messages.
  */
 const FEASIBILITY_SLACK = 1.15
+
+/**
+ * Feasibility finding: kind is always 'policy' (research D3 — grouped with
+ * resource shortfalls), but severity stays ERROR regardless of mode. This
+ * function's own 2-arg contract is unchanged by the T017 mode split —
+ * `validateConfig` re-derives mode-driven severity when it assembles these
+ * findings into its pipeline (see below).
+ */
+function feasibilityErr(field: string, message: string): ValidationError {
+  return { field, message, severity: BottleneckSeverity.ERROR, kind: RuleKind.POLICY }
+}
 
 export function validateFeasibility(
   config: TournamentConfig,
@@ -335,7 +365,7 @@ export function validateFeasibility(
     const perExtraStrip = config.days_available * dayLengthHours
     const extraDays = Math.ceil(shortfall / perExtraDay)
     const extraStrips = Math.ceil(shortfall / perExtraStrip)
-    errors.push(err(
+    errors.push(feasibilityErr(
       'feasibility',
       `RESOURCE_INSUFFICIENT: ${Math.round(totalNeeded)} strip-hours needed over ${competitions.length} events; ` +
       `${Math.round(totalAvailable)} available (${config.days_available}d × ${config.strips_total}s × ${dayLengthHours}h). ` +
@@ -353,7 +383,7 @@ export function validateFeasibility(
       const extraDays = perExtraDay > 0 ? Math.ceil(shortfall / perExtraDay) : Number.POSITIVE_INFINITY
       const extraStrips = Math.ceil(shortfall / perExtraStrip)
       const dayHint = Number.isFinite(extraDays) ? `${extraDays} more day(s)` : 'add video strips first'
-      errors.push(err(
+      errors.push(feasibilityErr(
         'feasibility_video',
         `RESOURCE_INSUFFICIENT (video): ${Math.round(videoNeeded)} video strip-hours needed; ` +
         `${Math.round(videoAvailable)} available (${config.days_available}d × ${config.video_strips_total}vs × ${dayLengthHours}h). ` +
@@ -369,24 +399,41 @@ export function validateFeasibility(
  * Validates tournament configuration and competition list before scheduling.
  * Returns an array of ValidationErrors; empty array means valid.
  * Checks all conditions per METHODOLOGY.md §Phase 1: Validation.
+ *
+ * `mode` computes severity from each rule's `kind` (research D3): structural
+ * findings are ERROR in both modes, policy findings are ERROR under `binding`
+ * and WARN under `advisory`, and notice findings are WARN in both modes and
+ * never escalate. The rule catalogue itself — which fields fire, with what
+ * message — is identical across modes; only severity differs.
  */
 export function validateConfig(
   config: TournamentConfig,
   competitions: Competition[],
+  mode: ValidationMode,
 ): ValidationError[] {
   const globalErrors: ValidationError[] = []
 
-  if (config.days_available < 2 || config.days_available > 4) {
-    globalErrors.push(err('days_available', `days_available must be 2–4, got ${config.days_available}`))
+  if (config.days_available < 1 || config.days_available > 14) {
+    globalErrors.push(structural('days_available', `days_available must be 1–14, got ${config.days_available}`))
+  } else if (config.days_available < 2 || config.days_available > 4) {
+    globalErrors.push(notice('days_available', `days_available outside the recommended 2–4 day range, got ${config.days_available} — the schedule can still be computed`))
   }
+
+  // Feasibility findings are always ERROR from validateFeasibility itself
+  // (its own 2-arg contract), so re-derive severity from mode here — the
+  // same policy-kind mapping every other policy finding gets.
+  const feasibilityFindings = validateFeasibility(config, competitions).map(finding => ({
+    ...finding,
+    severity: mode === ValidationMode.BINDING ? BottleneckSeverity.ERROR : BottleneckSeverity.WARN,
+  }))
 
   return [
     ...globalErrors,
-    ...validateStripConfig(config, competitions),
+    ...validateStripConfig(config, competitions, mode),
     ...validateRefConfig(config, competitions),
-    ...validateCompetitionFields(config, competitions),
-    ...validateTimingConstraints(config, competitions),
-    ...validateDependencies(config, competitions),
-    ...validateFeasibility(config, competitions),
+    ...validateCompetitionFields(config, competitions, mode),
+    ...validateTimingConstraints(config, competitions, mode),
+    ...validateDependencies(config, competitions, mode),
+    ...feasibilityFindings,
   ]
 }

@@ -159,6 +159,7 @@ export type PlacementSource = (typeof PlacementSource)[keyof typeof PlacementSou
 export const RuleKind = {
   STRUCTURAL: 'structural',
   POLICY: 'policy',
+  NOTICE: 'notice',
 } as const
 export type RuleKind = (typeof RuleKind)[keyof typeof RuleKind]
 
