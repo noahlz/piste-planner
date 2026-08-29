@@ -76,10 +76,16 @@ override system.
 
 ## Calibration debt
 
-- `CAPACITY_TARGET_FILL = 0.3` in `dayColoring.ts` was tuned for the serial
-  scheduler that Phase D deleted. The "compensate for serial-scheduler
-  underutilization" rationale no longer applies. Re-tune upward against the
-  concurrent-scheduler B1–B7 baselines.
-- Integration-test floors are stale. B1 asserts at least 14 scheduled events
-  while actually scheduling 24 of 24, which makes the assertion nearly vacuous.
-  Re-baseline B1–B8 (tracked as part of P2).
+- `CAPACITY_TARGET_FILL` re-tune: done, in
+  [`specs/003-p2-derived-state/`](../../specs/003-p2-derived-state/) –
+  [research.md D8](../../specs/003-p2-derived-state/research.md) records the
+  measured sweep. 0.3 stands – the sweep was non-discriminating, a structural
+  finding rather than a tie. See D8 for the re-tune's precondition.
+- Integration-test floors: done, re-baselined in
+  [`specs/003-p2-derived-state/`](../../specs/003-p2-derived-state/) –
+  [research.md D7](../../specs/003-p2-derived-state/research.md) records the
+  measured counts B1–B8 now assert against.
+- New candidate: a drift scenario with `days_available` set above the
+  chromatic number, so a future `CAPACITY_TARGET_FILL` re-tune has a scenario
+  the current B1–B8 set lacks – see research D8's correction for why none of
+  today's scenarios can discriminate the constant.
