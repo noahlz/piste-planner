@@ -73,12 +73,25 @@ Each feature picks one flow and names it in its `plan.md`:
 
 | Flow | Subagents commit | The user's `commit-with-costs` runs on |
 |---|---|---|
-| Worktree | yes, on the worktree branch | the squash-merge into `main` |
+| Worktree | yes, on the worktree branch | the merge commit that lands the branch in `main` |
 | Root | no | each `tasks.md` checkpoint |
 
-The two do not mix within one feature. `commit-with-costs` commits staged
-changes and cannot land a branch, so work already committed inside a worktree
-has nothing left to stage at the root.
+The two do not mix within one feature. Branches land in `main` by true merge,
+never squash – the full worktree commit history is part of the record. The
+user runs `git merge --no-ff --no-commit <branch>` and then `commit-with-costs`
+completes the pending merge, so the cost trailers ride the merge commit while
+every branch commit survives.
+
+## Orchestration & Model Roles
+
+The root session is an orchestrator, and the orchestrator NEVER writes code
+directly. The single exception is a small edit of 1–5 lines. Anything larger
+is dispatched to a subagent.
+
+Opus and Sonnet are for subagent development only. Coding subagents dispatch
+preferring Sonnet, with Opus reserved for complicated tasks. The orchestrator
+uses its judgment to decide what counts as complicated and which model a
+dispatch gets.
 
 ## Governance
 
@@ -98,5 +111,12 @@ cover.
   mechanism for root checkpoints, and each feature now declares a worktree or
   root flow. This section is the rule's only home – `plan.md` and `tasks.md`
   point at it rather than restating it.
+- 1.3.0 (2026-08-28): orchestration and model roles added. The orchestrator
+  never writes code beyond 1–5 line edits, coding subagents run on Sonnet by
+  default with Opus for complicated tasks, and the orchestrator judges the
+  split.
+- 1.4.0 (2026-08-28): squash-merges abolished. Worktree branches land by true
+  merge (`git merge --no-ff --no-commit` completed by `commit-with-costs`), so
+  branch history is preserved and cost trailers live on the merge commit.
 
-**Version**: 1.2.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28
+**Version**: 1.4.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28

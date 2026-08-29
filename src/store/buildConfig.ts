@@ -19,7 +19,6 @@ import {
   MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS,
   MIN_FENCERS,
-  DEFAULT_POOL_ROUND_DURATION_TABLE,
   DEFAULT_DE_DURATION_TABLE,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
@@ -63,7 +62,7 @@ export function buildTournamentConfig(state: StoreState): {
     MAX_RESCHEDULE_ATTEMPTS,
     MAX_FENCERS,
     MIN_FENCERS,
-    pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
+    pool_round_duration_table: state.pool_round_duration_table,
     de_duration_table: DEFAULT_DE_DURATION_TABLE,
 
     // Strip budget defaults — per-event UI overrides to be added in a future task

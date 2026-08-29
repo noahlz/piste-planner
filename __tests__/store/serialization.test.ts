@@ -63,6 +63,33 @@ function validSerializedData(): SerializedState {
   }
 }
 
+/** The default table as it appears in serialized form – the engine's `Weapon` keys (research D4). */
+function validPoolDurationTable(): Record<string, number> {
+  return { EPEE: 120, FOIL: 105, SABRE: 75 }
+}
+
+/** The single override used by the mixed-table fixtures and their expectations. */
+const EPEE_OVERRIDE = 110
+
+/** validPoolDurationTable() with the epee override applied – the expected mixed table. */
+function mixedPoolDurationTable(): Record<string, number> {
+  return { ...validPoolDurationTable(), EPEE: EPEE_OVERRIDE }
+}
+
+/** validSerializedData() with a pool_round_duration_table injected into tournament. */
+function serializedDataWithTable(table: unknown): Record<string, unknown> {
+  const data = validSerializedData() as unknown as { tournament: Record<string, unknown> }
+  data.tournament.pool_round_duration_table = table
+  return data as unknown as Record<string, unknown>
+}
+
+/** populatedState() plus one duration override – epee overridden while foil and sabre keep their defaults. */
+function populatedStateWithMixedTable(): StoreState {
+  populatedState()
+  useStore.getState().setPoolRoundDuration('EPEE', EPEE_OVERRIDE)
+  return useStore.getState()
+}
+
 // ──────────────────────────────────────────────
 // serializeState
 // ──────────────────────────────────────────────
@@ -96,6 +123,25 @@ describe('serializeState', () => {
     expect(Object.keys(parsed).sort()).toEqual(
       ['competitions', 'schemaVersion', 'tournament'].sort(),
     )
+  })
+
+  it('always writes the full pool_round_duration_table from an untouched store', () => {
+    const store = useStore
+    store.setState(store.getInitialState())
+    const parsed = JSON.parse(serializeState(store.getState()))
+
+    expect(parsed.tournament.pool_round_duration_table).toEqual({
+      EPEE: 120,
+      FOIL: 105,
+      SABRE: 75,
+    })
+  })
+
+  it('writes all three weapon keys when one duration is overridden', () => {
+    const state = populatedStateWithMixedTable()
+    const parsed = JSON.parse(serializeState(state))
+
+    expect(parsed.tournament.pool_round_duration_table).toEqual(mixedPoolDurationTable())
   })
 })
 
@@ -191,6 +237,84 @@ describe('validateSchema', () => {
     const result = validateSchema('not an object')
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.error.length).toBeGreaterThan(0)
+  })
+
+  it('accepts a valid pool_round_duration_table', () => {
+    const result = validateSchema(serializedDataWithTable(validPoolDurationTable()))
+    expect(result.valid).toBe(true)
+  })
+
+  it('accepts durations at the range boundaries and far from the defaults', () => {
+    // 1 and 999 pin the exact bounds against off-by-one regressions, and 600 is
+    // the extreme-but-valid value the spec's edge case names.
+    const result = validateSchema(serializedDataWithTable({ EPEE: 1, FOIL: 999, SABRE: 600 }))
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects pool_round_duration_table of the wrong type (FR-008)', () => {
+    // null is a separate case – typeof null === 'object' would slip past a naive typeof check
+    for (const bad of ['fast', null]) {
+      const result = validateSchema(serializedDataWithTable(bad))
+      expect(result.valid, `table ${JSON.stringify(bad)}`).toBe(false)
+      if (!result.valid) expect(result.error).toMatch(/pool_round_duration_table.*object/i)
+    }
+  })
+
+  it('rejects pool_round_duration_table missing a weapon key (FR-008)', () => {
+    const table = validPoolDurationTable()
+    delete table.SABRE
+    const result = validateSchema(serializedDataWithTable(table))
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.error).toMatch(/pool_round_duration_table/i)
+      expect(result.error).toMatch(/SABRE/)
+    }
+  })
+
+  it('rejects pool_round_duration_table with an extra key (FR-008)', () => {
+    const table = validPoolDurationTable()
+    table.DAGGER = 90
+    const result = validateSchema(serializedDataWithTable(table))
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.error).toMatch(/pool_round_duration_table/i)
+      expect(result.error).toMatch(/DAGGER/)
+    }
+  })
+
+  it('rejects a non-integer pool round duration (FR-008)', () => {
+    const table = validPoolDurationTable()
+    table.EPEE = 110.5
+    const result = validateSchema(serializedDataWithTable(table))
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.error).toMatch(/pool_round_duration_table/i)
+      expect(result.error).toMatch(/EPEE/)
+    }
+  })
+
+  it('rejects pool round durations below 1 (FR-008)', () => {
+    for (const bad of [0, -5]) {
+      const table = validPoolDurationTable()
+      table.EPEE = bad
+      const result = validateSchema(serializedDataWithTable(table))
+      expect(result.valid, `value ${bad}`).toBe(false)
+      if (!result.valid) {
+        expect(result.error).toMatch(/pool_round_duration_table/i)
+        expect(result.error).toMatch(/EPEE/)
+      }
+    }
+  })
+
+  it('rejects a pool round duration above 999 (FR-008)', () => {
+    const table = validPoolDurationTable()
+    table.EPEE = 1000
+    const result = validateSchema(serializedDataWithTable(table))
+    expect(result.valid).toBe(false)
+    if (!result.valid) {
+      expect(result.error).toMatch(/pool_round_duration_table/i)
+      expect(result.error).toMatch(/EPEE/)
+    }
   })
 })
 
@@ -299,6 +423,32 @@ describe('deserializeState', () => {
       expect((result.state as Record<string, unknown>)['de_capacity_estimation']).toBeUndefined()
     }
   })
+
+  it('load: a present valid pool_round_duration_table is included in the returned state (FR-006)', () => {
+    const data = serializedDataWithTable(mixedPoolDurationTable())
+    const result = deserializeState(JSON.stringify(data))
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      expect(result.state.pool_round_duration_table).toEqual(mixedPoolDurationTable())
+    }
+  })
+
+  it('load: a malformed pool_round_duration_table fails the whole load (FR-008)', () => {
+    const result = deserializeState(JSON.stringify(serializedDataWithTable('fast')))
+    expect('error' in result).toBe(true)
+    if ('error' in result) expect(result.error).toMatch(/pool_round_duration_table/i)
+  })
+
+  it('load: JSON without pool_round_duration_table omits the key from the returned state entirely (FR-007)', () => {
+    const json = JSON.stringify(validSerializedData())
+    const result = deserializeState(json)
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      // The key must be absent, not present-as-undefined – a present-but-undefined key
+      // would clobber the store's seeded defaults through useStore.setState merge.
+      expect('pool_round_duration_table' in result.state).toBe(false)
+    }
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -321,6 +471,15 @@ describe('round-trip: serializeState → deserializeState', () => {
     expect(loaded.video_strips_total).toBe(original.video_strips_total)
     expect(loaded.selectedCompetitions).toEqual(original.selectedCompetitions)
     expect(loaded.globalOverrides).toEqual(original.globalOverrides)
+  })
+
+  it('restores a mixed pool_round_duration_table exactly (one override, two defaults)', () => {
+    const original = populatedStateWithMixedTable()
+    const result = deserializeState(serializeState(original))
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+
+    expect(result.state.pool_round_duration_table).toEqual(mixedPoolDurationTable())
   })
 })
 
@@ -422,6 +581,15 @@ describe('URL round-trip: encodeToUrl → decodeFromUrl', () => {
     expect(loaded.days_available).toBe(original.days_available)
     expect(loaded.strips_total).toBe(original.strips_total)
     expect(loaded.selectedCompetitions).toEqual(original.selectedCompetitions)
+  })
+
+  it('restores a mixed pool_round_duration_table exactly through encode then decode', () => {
+    const original = populatedStateWithMixedTable()
+    const result = decodeFromUrl(encodeToUrl(original))
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+
+    expect(result.state.pool_round_duration_table).toEqual(mixedPoolDurationTable())
   })
 })
 

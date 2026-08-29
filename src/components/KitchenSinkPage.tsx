@@ -1,4 +1,5 @@
 import { TournamentSetup } from './sections/TournamentSetup.tsx'
+import { PoolDurationSettings } from './sections/PoolDurationSettings.tsx'
 import { TemplateSelector } from './sections/TemplateSelector.tsx'
 import { CompetitionMatrix } from './sections/CompetitionMatrix.tsx'
 import { FencerCounts } from './sections/FencerCounts.tsx'
@@ -13,6 +14,7 @@ export function KitchenSinkPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4">
       <TournamentSetup />
+      <PoolDurationSettings />
       <TemplateSelector />
       <CompetitionMatrix />
       <FencerCounts />

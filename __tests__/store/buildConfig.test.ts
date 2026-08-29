@@ -237,6 +237,24 @@ describe('buildTournamentConfig', () => {
     })
   })
 
+  describe('pool round durations', () => {
+    it('passes the store pool_round_duration_table through to the engine config', () => {
+      // All three values off-default so a partial merge with the constant cannot pass
+      const table = { [Weapon.EPEE]: 111, [Weapon.FOIL]: 91, [Weapon.SABRE]: 61 }
+      const state = storeWith({ ...minimalState(), pool_round_duration_table: table })
+      const { config } = buildTournamentConfig(state)
+
+      expect(config.pool_round_duration_table).toEqual(table)
+    })
+
+    it('uses the seeded default table when the store is untouched', () => {
+      const state = storeWith(minimalState())
+      const { config } = buildTournamentConfig(state)
+
+      expect(config.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
+    })
+  })
+
   describe('regional cut overrides', () => {
     function regionalCutState(
       tournamentType: TournamentType,

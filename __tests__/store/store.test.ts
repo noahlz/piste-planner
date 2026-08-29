@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import { TournamentType, BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
+import { TournamentType, BottleneckSeverity, BottleneckCause, Phase, Weapon } from '../../src/engine/types.ts'
 import type { ValidationError, Bottleneck, AnalysisResult, ScheduleResult } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
-import { DEFAULT_CUT_BY_CATEGORY, DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../src/engine/constants.ts'
+import {
+  DEFAULT_CUT_BY_CATEGORY,
+  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
+} from '../../src/engine/constants.ts'
 import { makeScheduleResult } from '../helpers/factories.ts'
 
 // Reset store to initial state before each test
@@ -20,6 +24,13 @@ describe('tournamentSlice', () => {
       expect(state.dayConfigs).toEqual([])
       expect(state.strips_total).toBe(0)
       expect(state.video_strips_total).toBe(0)
+    })
+
+    it('seeds pool_round_duration_table from the engine defaults', () => {
+      const state = useStore.getState()
+      expect(state.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
+      // A copy, never an alias – store mutations must not corrupt the engine constant
+      expect(state.pool_round_duration_table).not.toBe(DEFAULT_POOL_ROUND_DURATION_TABLE)
     })
   })
 
@@ -108,6 +119,47 @@ describe('tournamentSlice', () => {
 
       const state = useStore.getState()
       expect(state.video_strips_total).toBe(4)
+      expect(state.analysisStale).toBe(true)
+      expect(state.scheduleStale).toBe(true)
+    })
+  })
+
+  describe('setPoolRoundDuration', () => {
+    it('updates only the given weapon and marks both stale flags', () => {
+      useStore.getState().setPoolRoundDuration(Weapon.EPEE, 110)
+
+      const state = useStore.getState()
+      expect(state.pool_round_duration_table[Weapon.EPEE]).toBe(110)
+      expect(state.pool_round_duration_table[Weapon.FOIL]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.FOIL])
+      expect(state.pool_round_duration_table[Weapon.SABRE]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE])
+      expect(state.analysisStale).toBe(true)
+      expect(state.scheduleStale).toBe(true)
+    })
+
+    it('accepts a value equal to the weapon default and still marks both stale flags', () => {
+      useStore.getState().setPoolRoundDuration(Weapon.SABRE, 90)
+      useStore.getState().clearStale()
+
+      useStore.getState().setPoolRoundDuration(Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE])
+
+      const state = useStore.getState()
+      expect(state.pool_round_duration_table[Weapon.SABRE]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.SABRE])
+      expect(state.analysisStale).toBe(true)
+      expect(state.scheduleStale).toBe(true)
+    })
+  })
+
+  describe('resetPoolRoundDuration', () => {
+    it('restores only the given weapon default after an override and marks both stale flags', () => {
+      useStore.getState().setPoolRoundDuration(Weapon.EPEE, 110)
+      useStore.getState().setPoolRoundDuration(Weapon.FOIL, 90)
+      useStore.getState().clearStale()
+
+      useStore.getState().resetPoolRoundDuration(Weapon.EPEE)
+
+      const state = useStore.getState()
+      expect(state.pool_round_duration_table[Weapon.EPEE]).toBe(DEFAULT_POOL_ROUND_DURATION_TABLE[Weapon.EPEE])
+      expect(state.pool_round_duration_table[Weapon.FOIL]).toBe(90)
       expect(state.analysisStale).toBe(true)
       expect(state.scheduleStale).toBe(true)
     })
