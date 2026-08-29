@@ -42,7 +42,7 @@ Expose the engine's existing `pool_round_duration_table` (per-weapon minutes for
 
 **Post-design re-check**: PASS – Phase 1 artifacts add no engine surface, no new stateful modules, and no schema version bump (additive optional key, see [research.md](./research.md) D3).
 
-**Git flow (constitution, Git Ownership)**: **Worktree** – subagents commit incrementally on the `002-configurable-pool-durations` worktree branch, and the user's `commit-with-costs` runs on the squash-merge into `main`.
+**Git flow (constitution, Git Ownership)**: **Worktree** – subagents commit incrementally on the `002-configurable-pool-durations` worktree branch, and the user's `commit-with-costs` completes the `--no-ff --no-commit` merge into `main` (constitution 1.4.0).
 
 ## Project Structure
 

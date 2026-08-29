@@ -6,7 +6,7 @@
 
 **Tests**: Included and mandatory – constitution II is test-first. Every implementation task is preceded by a task that writes its tests and confirms they fail for the stated reason.
 
-**Git flow**: Worktree ([plan.md](./plan.md)). Every task below commits its work on the `002-configurable-pool-durations` worktree branch when it completes – those commits are the working record. The user makes the closing squash-merge into `main` with `commit-with-costs`. No agent pushes, merges, or commits to `main`.
+**Git flow**: Worktree ([plan.md](./plan.md)). Every task below commits its work on the `002-configurable-pool-durations` worktree branch when it completes – those commits are the working record. The user lands the branch with a true merge – `git merge --no-ff --no-commit`, completed by `commit-with-costs` (constitution 1.4.0). No agent pushes, merges, or commits to `main`.
 
 **Organization**: Tasks are grouped by user story so each story is an independently testable increment.
 
@@ -73,7 +73,7 @@
 ## Phase 5: Polish & Cross-Cutting Concerns
 
 - [X] T014 [P] Update `docs/design/backlog.md`: the "Configurable pool round durations" entry (line 68) becomes a one-line pointer to `specs/002-configurable-pool-durations/` – the spec is now the fact's home (constitution: each fact has exactly one home). Keep the youth-calibration cross-reference intact by pointing it at research.md D4. Commit.
-- [X] T015 Full validation per quickstart.md: `timeout 120 pnpm --silent test`, `timeout 180 pnpm exec tsc -b`, `timeout 120 pnpm --silent lint`, drift ledger zero on B1–B8. Read logs only on failure, fix anything red, record results in the commit message. Commit. The branch is now ready for the user's squash-merge via `commit-with-costs` – stop here.
+- [X] T015 Full validation per quickstart.md: `timeout 120 pnpm --silent test`, `timeout 180 pnpm exec tsc -b`, `timeout 120 pnpm --silent lint`, drift ledger zero on B1–B8. Read logs only on failure, fix anything red, record results in the commit message. Commit. The branch is now ready for the user's merge via `git merge --no-ff --no-commit` + `commit-with-costs` – stop here.
 
 ---
 
@@ -117,4 +117,4 @@ Either track may also pick up T014 at any point.
 
 - [P] tasks touch different files with no pending dependencies
 - Every task commits on the worktree branch – drift evidence and before/after counts go in commit messages
-- The user owns the squash-merge into `main` (`commit-with-costs`) – no agent performs it
+- The user owns the merge into `main` (`git merge --no-ff --no-commit` + `commit-with-costs`) – no agent performs it

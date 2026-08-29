@@ -73,12 +73,14 @@ Each feature picks one flow and names it in its `plan.md`:
 
 | Flow | Subagents commit | The user's `commit-with-costs` runs on |
 |---|---|---|
-| Worktree | yes, on the worktree branch | the squash-merge into `main` |
+| Worktree | yes, on the worktree branch | the merge commit that lands the branch in `main` |
 | Root | no | each `tasks.md` checkpoint |
 
-The two do not mix within one feature. `commit-with-costs` commits staged
-changes and cannot land a branch, so work already committed inside a worktree
-has nothing left to stage at the root.
+The two do not mix within one feature. Branches land in `main` by true merge,
+never squash – the full worktree commit history is part of the record. The
+user runs `git merge --no-ff --no-commit <branch>` and then `commit-with-costs`
+completes the pending merge, so the cost trailers ride the merge commit while
+every branch commit survives.
 
 ## Orchestration & Model Roles
 
@@ -113,5 +115,8 @@ cover.
   never writes code beyond 1–5 line edits, coding subagents run on Sonnet by
   default with Opus for complicated tasks, and the orchestrator judges the
   split.
+- 1.4.0 (2026-08-28): squash-merges abolished. Worktree branches land by true
+  merge (`git merge --no-ff --no-commit` completed by `commit-with-costs`), so
+  branch history is preserved and cost trailers live on the merge commit.
 
-**Version**: 1.3.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28
+**Version**: 1.4.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28
