@@ -128,7 +128,7 @@ are complicated enough to consider Opus at dispatch time (constitution
 
 ### Implementation for User Story 5 (ordered last so the re-tune lands on a quiet engine)
 
-- [ ] T024 [US5] Re-baseline floors in __tests__/engine/integration.test.ts: measure per-scenario scheduled counts on the branch, raise each `toBeGreaterThanOrEqual` floor to the measured count (B1's `>= 14` included), preserve B4's dedicated pin (research D7); record old → new per scenario in the commit message **(commit)**
+- [x] T024 [US5] Re-baseline floors in __tests__/engine/integration.test.ts: measure per-scenario scheduled counts on the branch, raise each `toBeGreaterThanOrEqual` floor to the measured count (B1's `>= 14` included), preserve B4's dedicated pin (research D7); record old → new per scenario in the commit message **(commit)**
 - [ ] T025 [US5] Dispatch test-quality-reviewer over T024 and apply its findings
 - [ ] T026 [US5] Sanity-check the floor change by breaking one scenario intentionally in a scratch run (drop its strips) and confirming the floor now fails – then revert the scratch change; no commit if clean revert leaves no diff
 - [ ] T027 [US5] Re-tune `CAPACITY_TARGET_FILL` in src/engine/dayColoring.ts per research D8: sweep candidates 0.4–0.8 in 0.1 steps, drift ledger per candidate, select the highest value with no scenario below its T024 floor and no ERROR-count rise – or record that 0.3 stands with the sweep evidence; update the constant's comment rationale; all eight before/after counts in the commit message (constitution III) **(commit)**
