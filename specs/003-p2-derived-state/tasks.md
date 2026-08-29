@@ -32,7 +32,7 @@ are complicated enough to consider Opus at dispatch time (constitution
 
 **Purpose**: Shared types every story builds on. No user story starts before this completes.
 
-- [ ] T002 Add foundation types to src/engine/types.ts: `Placement` record and `PlacementSource` (`'auto' | 'manual'`), `RuleKind` (`'structural' | 'policy'`), `ValidationMode` (`'binding' | 'advisory'`), and extend `ValidationError` with `rule`, `kind`, `subjects` fields – all `as const` objects with derived unions (constitution V), shapes per data-model.md. Gate: `tsc -b` clean, suite still green **(commit)**
+- [X] T002 Add foundation types to src/engine/types.ts: `Placement` record and `PlacementSource` (`'auto' | 'manual'`), `RuleKind` (`'structural' | 'policy'`), `ValidationMode` (`'binding' | 'advisory'`), and extend `ValidationError` with `rule`, `kind`, `subjects` fields – all `as const` objects with derived unions (constitution V), shapes per data-model.md. Gate: `tsc -b` clean, suite still green **(commit)**
 
 **Checkpoint**: Types compile – US1/US2 can start (US4 needs neither).
 

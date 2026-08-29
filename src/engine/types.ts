@@ -150,6 +150,24 @@ export const BottleneckSeverity = {
 } as const
 export type BottleneckSeverity = (typeof BottleneckSeverity)[keyof typeof BottleneckSeverity]
 
+export const PlacementSource = {
+  AUTO: 'auto',
+  MANUAL: 'manual',
+} as const
+export type PlacementSource = (typeof PlacementSource)[keyof typeof PlacementSource]
+
+export const RuleKind = {
+  STRUCTURAL: 'structural',
+  POLICY: 'policy',
+} as const
+export type RuleKind = (typeof RuleKind)[keyof typeof RuleKind]
+
+export const ValidationMode = {
+  BINDING: 'binding',
+  ADVISORY: 'advisory',
+} as const
+export type ValidationMode = (typeof ValidationMode)[keyof typeof ValidationMode]
+
 // ──────────────────────────────────────────────
 // Interfaces
 // ──────────────────────────────────────────────
@@ -363,6 +381,22 @@ export interface ValidationError {
   field: string
   message: string
   severity: BottleneckSeverity
+  /** Stable kebab-case rule id, e.g. 'same-population'. Optional until T017/T021 populate producers. */
+  rule?: string
+  kind?: RuleKind
+  /** Sorted competition ids, or [field] for global rules. */
+  subjects?: string[]
+}
+
+/** Never stores geometry — day is 0-based, start_time is minutes from midnight. Blocks derive in derive.ts. */
+export interface Placement {
+  day: number
+  start_time: number
+  strip_count: number
+  /** Explicit strip indices — null until unpacked to blocks (P4). */
+  strips: number[] | null
+  source: PlacementSource
+  pinned: boolean
 }
 
 export interface AnalysisResult {
