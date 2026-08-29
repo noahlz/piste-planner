@@ -141,7 +141,7 @@ are complicated enough to consider Opus at dispatch time (constitution
 ## Phase 8: Polish & Cross-Cutting
 
 - [X] T029 [P] Update docs: mark the two P2 rows done – backlog.md §Calibration debt entries and the design doc's "Open items carried forward" `CAPACITY_TARGET_FILL` row – as pointers to specs/003-p2-derived-state/ (one home per fact, no detail restated) **(commit)**
-- [ ] T030 Final validation: full gate, quickstart.md manual smoke of both layouts (schedule renders, no staleness surface, share URL round-trips), drift summary against T001 baseline; leave the branch ready for the user's `git merge --no-ff --no-commit` + `commit-with-costs` – no agent merges or pushes **(commit)**
+- [X] T030 Final validation: full gate, quickstart.md manual smoke of both layouts (schedule renders, no staleness surface, share URL round-trips), drift summary against T001 baseline; leave the branch ready for the user's `git merge --no-ff --no-commit` + `commit-with-costs` – no agent merges or pushes **(commit)**
 
 ---
 
