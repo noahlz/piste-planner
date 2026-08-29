@@ -14,6 +14,7 @@ const URL_SIZE_WARNING_BYTES = 2048
 
 export function SaveLoadShare() {
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [droppedPlacements, setDroppedPlacements] = useState<string[]>([])
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -39,6 +40,9 @@ export function SaveLoadShare() {
       } else {
         useStore.setState(result.state)
         setLoadError(null)
+        // A lenient load keeps going but says what it threw away, so a
+        // silently shorter schedule never looks like the saved one.
+        setDroppedPlacements(result.droppedPlacements)
       }
     }
     reader.readAsText(file)
@@ -111,6 +115,13 @@ export function SaveLoadShare() {
           {loadError && (
             <p className="mt-2 text-sm text-error-text" role="alert">
               {loadError}
+            </p>
+          )}
+          {droppedPlacements.length > 0 && (
+            <p className="mt-2 text-sm text-warning-text" role="status">
+              Dropped {droppedPlacements.length} placement
+              {droppedPlacements.length === 1 ? '' : 's'} for events not in this
+              configuration: {droppedPlacements.join(', ')}
             </p>
           )}
         </div>

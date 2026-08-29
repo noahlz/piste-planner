@@ -37,6 +37,12 @@ function App() {
         console.error('Failed to load config from URL:', result.error)
       } else {
         useStore.setState(result.state)
+        if (result.droppedPlacements.length > 0) {
+          console.warn(
+            'Dropped placements for events not in the shared configuration:',
+            result.droppedPlacements.join(', '),
+          )
+        }
       }
     }
   }, [])

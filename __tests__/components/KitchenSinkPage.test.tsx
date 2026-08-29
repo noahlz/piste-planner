@@ -4,7 +4,7 @@ import { KitchenSinkPage } from '../../src/components/KitchenSinkPage.tsx'
 import { useStore } from '../../src/store/store.ts'
 import { serializeState } from '../../src/store/serialization.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { BottleneckSeverity, BottleneckCause, CutMode, DeMode, Phase, VideoPolicy } from '../../src/engine/types.ts'
+import { PlacementSource } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
 // Setup
@@ -15,6 +15,13 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 
+/** Config with no hard validation errors: strips set, no competitions to over-subscribe them. */
+function seedValidConfig(): void {
+  useStore.getState().setDays(3)
+  useStore.getState().setStrips(12)
+  useStore.getState().setVideoStrips(2)
+}
+
 // ──────────────────────────────────────────────
 // Step 11.1: Render tests
 // ──────────────────────────────────────────────
@@ -22,7 +29,7 @@ beforeEach(() => {
 describe('KitchenSinkPage render tests', () => {
   it('renders without crashing', () => {
     render(<KitchenSinkPage />)
-    expect(screen.getByRole('button', { name: 'Validate' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Generate Schedule' })).toBeInTheDocument()
   })
 
   it('renders tournament type dropdown', () => {
@@ -51,9 +58,9 @@ describe('KitchenSinkPage render tests', () => {
     expect(screen.getByRole('radio', { name: 'RYC Weekend' })).toBeInTheDocument()
   })
 
-  it('renders Validate button', () => {
+  it('renders no Validate button — findings derive on every render', () => {
     render(<KitchenSinkPage />)
-    expect(screen.getByRole('button', { name: 'Validate' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument()
   })
 
   it('renders Generate Schedule button', () => {
@@ -71,14 +78,23 @@ describe('KitchenSinkPage render tests', () => {
     expect(screen.getByRole('button', { name: 'Generate Link' })).toBeInTheDocument()
   })
 
-  it('shows placeholder text in AnalysisOutput before validate', () => {
+  it('shows findings on first render with no validate run', () => {
+    // strips_total is 0 in the initial store — a hard error the derived findings
+    // surface immediately.
     render(<KitchenSinkPage />)
-    expect(screen.getByText('Run Validate to see results.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Validation' })).toBeInTheDocument()
+    expect(screen.getByText(/strips_total must be > 0/)).toBeInTheDocument()
   })
 
-  it('shows placeholder text in ScheduleOutput before generate', () => {
+  it('shows the analysis empty state when the inputs raise nothing', () => {
+    seedValidConfig()
     render(<KitchenSinkPage />)
-    expect(screen.getByText('Run Generate Schedule to see results.')).toBeInTheDocument()
+    expect(screen.getByText('Nothing to report for the current inputs.')).toBeInTheDocument()
+  })
+
+  it('shows the schedule empty state before anything is placed', () => {
+    render(<KitchenSinkPage />)
+    expect(screen.getByText('No events placed yet.')).toBeInTheDocument()
   })
 
   it('shows empty fencer counts message when no competitions selected', () => {
@@ -140,20 +156,19 @@ describe('KitchenSinkPage user flow tests', () => {
     expect((firstInput as HTMLInputElement).value).toBe('48')
   })
 
-  it('after validate, analysis output appears', () => {
-    // Set up config with competitions but 0 strips — guarantees validation errors
-    useStore.getState().applyTemplate('RYC Weekend')
-    useStore.getState().setDays(2)
-    // strips_total stays at 0 (default), so validation will produce errors
-
+  it('analysis output follows an input change with no run in between', async () => {
+    seedValidConfig()
     render(<KitchenSinkPage />)
-    fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
 
-    // Validation errors are guaranteed with 0 strips, so placeholder should be gone
-    expect(screen.queryByText('Run Validate to see results.')).not.toBeInTheDocument()
-    // And errors should be visible
-    const state = useStore.getState()
-    expect(state.validationErrors.length).toBeGreaterThan(0)
+    expect(screen.getByText('Nothing to report for the current inputs.')).toBeInTheDocument()
+
+    // Drop strips to 0 — the derived findings pick it up on the re-render alone
+    await act(async () => {
+      useStore.getState().setStrips(0)
+    })
+
+    expect(screen.queryByText('Nothing to report for the current inputs.')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Validation' })).toBeInTheDocument()
   })
 
   it('validation errors appear when strips is 0 with competitions selected', () => {
@@ -161,53 +176,44 @@ describe('KitchenSinkPage user flow tests', () => {
     // strips_total stays at 0 (default) — guaranteed validation error
 
     render(<KitchenSinkPage />)
-    fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
 
-    // Placeholder should be replaced with actual validation content
-    expect(screen.queryByText('Run Validate to see results.')).not.toBeInTheDocument()
-    // Validation heading should appear (errors are grouped under it)
+    // Validation heading appears without any button press
     expect(screen.getByRole('heading', { name: 'Validation' })).toBeInTheDocument()
   })
 
-  it('clicking Generate Schedule populates schedule output table', () => {
-    // Set up config with enough resources for scheduling to succeed
-    useStore.getState().applyTemplate('RYC Weekend')
-    useStore.getState().setDays(2)
-    useStore.getState().setStrips(24)
-    useStore.getState().setVideoStrips(4)
+  it('clicking Generate Schedule writes placements and renders the derived table', async () => {
+    const id = TEMPLATES['RYC Weekend'][0]
+    seedValidConfig()
+    useStore.getState().addCompetition(id)
+    useStore.getState().updateCompetition(id, { fencer_count: 30 })
 
     render(<KitchenSinkPage />)
     fireEvent.click(screen.getByRole('button', { name: 'Generate Schedule' }))
 
-    // Schedule table should now be visible (placeholder gone)
-    expect(screen.queryByText('Run Generate Schedule to see results.')).not.toBeInTheDocument()
-    // Schedule output should have results or at least bottleneck messages
-    const state = useStore.getState()
-    const hasResults = Object.keys(state.scheduleResults).length > 0 || state.bottlenecks.length > 0
-    expect(hasResults).toBe(true)
+    await waitFor(() => {
+      expect(useStore.getState().placements[id]).toBeDefined()
+      expect(screen.queryByText('No events placed yet.')).not.toBeInTheDocument()
+      expect(screen.getByText(id)).toBeInTheDocument()
+    })
   })
 
-  it('full flow: template -> fencer counts -> validate -> see validation section', () => {
+  it('full flow: template -> strips -> fencer counts -> findings track every edit', () => {
     // Radix Select doesn't work with fireEvent in jsdom; call store directly
     useStore.getState().applyTemplate('RYC Weekend')
     render(<KitchenSinkPage />)
 
-    // Step 2: Set strips (Radix-style: call store directly)
     act(() => {
       useStore.getState().setStrips(12)
     })
 
-    // Step 3: Enter some fencer counts
     const fencerInputs = screen.getAllByRole('spinbutton', { name: /Fencer count for/ })
     fencerInputs.forEach((input) => {
       fireEvent.change(input, { target: { value: '30' } })
     })
 
-    // Step 4: Validate
-    fireEvent.click(screen.getByRole('button', { name: 'Validate' }))
-
-    // Validation section header should appear
-    expect(screen.queryByText('Run Validate to see results.')).not.toBeInTheDocument()
+    // 18 events across 3 days on 12 strips still raises findings — and they are
+    // on screen without a validate step.
+    expect(screen.getByRole('heading', { name: 'Validation' })).toBeInTheDocument()
   })
 })
 
@@ -261,15 +267,18 @@ describe('KitchenSinkPage store integration tests', () => {
     expect(useStore.getState().selectedCompetitions[firstId].fencer_count).toBe(64)
   })
 
-  it('applying template marks store as stale', () => {
+  it('applying a template immediately changes what the analysis shows', async () => {
+    seedValidConfig()
     render(<KitchenSinkPage />)
-    // Radix Select doesn't work with fireEvent in jsdom; call store directly
-    act(() => {
+
+    expect(screen.getByText('Nothing to report for the current inputs.')).toBeInTheDocument()
+
+    await act(async () => {
       useStore.getState().applyTemplate('RYC Weekend')
     })
 
-    expect(useStore.getState().analysisStale).toBe(true)
-    expect(useStore.getState().scheduleStale).toBe(true)
+    // No stale flag, no validate run — 18 more events change the findings on the spot
+    expect(screen.queryByText('Nothing to report for the current inputs.')).not.toBeInTheDocument()
   })
 })
 
@@ -300,9 +309,20 @@ describe('SaveLoadShare save tests', () => {
     expect(mockAnchor.download).toBe('tournament.piste.json')
   })
 
-  it('saved JSON contains expected structure', () => {
+  it('saved JSON carries the v2 shape including placements', () => {
+    const id = TEMPLATES['RYC Weekend'][0]
     useStore.getState().applyTemplate('RYC Weekend')
     useStore.getState().setStrips(12)
+    useStore.getState().setPlacementsFromAuto({
+      [id]: {
+        day: 0,
+        start_time: 480,
+        strip_count: 5,
+        strips: null,
+        source: PlacementSource.AUTO,
+        pinned: false,
+      },
+    })
 
     let capturedBlob: Blob | null = null
     const createObjectURL = vi.fn((blob: Blob) => {
@@ -328,10 +348,12 @@ describe('SaveLoadShare save tests', () => {
       const reader = new FileReader()
       reader.onload = () => {
         const parsed = JSON.parse(reader.result as string)
-        expect(parsed.schemaVersion).toBe(1)
+        expect(parsed.schemaVersion).toBe(2)
         expect(parsed.tournament).toBeDefined()
         expect(parsed.competitions).toBeDefined()
         expect(parsed.tournament.strips_total).toBe(12)
+        expect(parsed.placements[id].start_time).toBe(480)
+        expect(parsed.dismissedFindings).toEqual([])
         resolve()
       }
       reader.readAsText(capturedBlob!)
@@ -340,85 +362,120 @@ describe('SaveLoadShare save tests', () => {
 })
 
 describe('SaveLoadShare load tests', () => {
+  // Validation findings render as role="alert" on every page now, so load errors
+  // are matched by their text rather than by role.
+  function uploadJson(json: string): void {
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File([json], 'tournament.piste.json', { type: 'application/json' })
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
+    fireEvent.change(fileInput)
+  }
+
   it('loading valid JSON hydrates store state', async () => {
     // Prepare a valid serialized state
     useStore.getState().setStrips(18)
     useStore.getState().applyTemplate('RJCC Weekend')
-    const state = useStore.getState()
-    const json = serializeState(state)
+    const json = serializeState(useStore.getState())
 
     // Reset store
     useStore.setState(useStore.getInitialState())
     expect(useStore.getState().strips_total).toBe(0)
 
     render(<KitchenSinkPage />)
-
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-    const file = new File([json], 'tournament.piste.json', { type: 'application/json' })
-
-    // Simulate file selection
-    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
-    fireEvent.change(fileInput)
+    uploadJson(json)
 
     await waitFor(() => {
       expect(useStore.getState().strips_total).toBe(18)
     })
   })
 
+  it('loading a placement whose event is not selected reports the drop', async () => {
+    render(<KitchenSinkPage />)
+
+    const json = JSON.stringify({
+      schemaVersion: 2,
+      tournament: {
+        tournament_type: 'RYC',
+        days_available: 2,
+        dayConfigs: [],
+        strips_total: 12,
+        video_strips_total: 2,
+      },
+      competitions: {
+        selectedCompetitions: {},
+        globalOverrides: { ADMIN_GAP_MINS: 10, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 30 },
+      },
+      placements: {
+        'GHOST-EVENT': {
+          day: 0,
+          start_time: 480,
+          strip_count: 4,
+          strips: null,
+          source: 'auto',
+          pinned: false,
+        },
+      },
+      dismissedFindings: [],
+    })
+    uploadJson(json)
+
+    await waitFor(() => {
+      const notice = screen.getByRole('status')
+      expect(notice.textContent).toMatch(/Dropped 1 placement/)
+      expect(notice.textContent).toMatch(/GHOST-EVENT/)
+    })
+    // The rest of the configuration still loaded
+    expect(useStore.getState().strips_total).toBe(12)
+    expect(useStore.getState().placements).toEqual({})
+  })
+
+  it('loading a file with no orphan placements shows no drop notice', async () => {
+    useStore.getState().setStrips(18)
+    useStore.getState().applyTemplate('RJCC Weekend')
+    const json = serializeState(useStore.getState())
+    useStore.setState(useStore.getInitialState())
+
+    render(<KitchenSinkPage />)
+    uploadJson(json)
+
+    await waitFor(() => {
+      expect(useStore.getState().strips_total).toBe(18)
+    })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
   it('loading valid JSON clears any previous load error', async () => {
-    // First trigger an error
     useStore.setState(useStore.getInitialState())
     render(<KitchenSinkPage />)
 
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-
-    // Upload invalid JSON to set error
-    const invalidFile = new File(['not valid json!!!'], 'bad.json', { type: 'application/json' })
-    Object.defineProperty(fileInput, 'files', { value: [invalidFile], configurable: true })
-    fireEvent.change(fileInput)
+    uploadJson('not valid json!!!')
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument()
+      expect(screen.getByText('Invalid JSON')).toBeInTheDocument()
     })
 
-    // Now upload valid JSON
-    const validJson = serializeState(useStore.getState())
-    const validFile = new File([validJson], 'tournament.piste.json', { type: 'application/json' })
-    Object.defineProperty(fileInput, 'files', { value: [validFile], configurable: true })
-    fireEvent.change(fileInput)
+    uploadJson(serializeState(useStore.getState()))
 
     await waitFor(() => {
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.queryByText('Invalid JSON')).not.toBeInTheDocument()
     })
   })
 
   it('loading invalid JSON shows error message', async () => {
     render(<KitchenSinkPage />)
-
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-    const file = new File(['{ this is not valid json }'], 'bad.json', { type: 'application/json' })
-
-    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
-    fireEvent.change(fileInput)
+    uploadJson('{ this is not valid json }')
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument()
+      expect(screen.getByText('Invalid JSON')).toBeInTheDocument()
     })
   })
 
   it('loading JSON with wrong schema shows error message', async () => {
     render(<KitchenSinkPage />)
-
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-    // Valid JSON but wrong schema (missing required fields)
-    const wrongSchema = JSON.stringify({ schemaVersion: 2, foo: 'bar' })
-    const file = new File([wrongSchema], 'wrong.json', { type: 'application/json' })
-
-    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true })
-    fireEvent.change(fileInput)
+    uploadJson(JSON.stringify({ schemaVersion: 2, foo: 'bar' }))
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument()
+      expect(screen.getByText(/Unknown top-level field/)).toBeInTheDocument()
     })
   })
 })
@@ -438,102 +495,77 @@ describe('KitchenSinkPage error state tests', () => {
     fireEvent.change(fileInput)
 
     await waitFor(() => {
-      const alert = screen.getByRole('alert')
-      expect(alert).toBeInTheDocument()
-      expect(alert.textContent).toMatch(/invalid|malformed|error|parse|json/i)
+      expect(screen.getByText(/invalid|malformed|error|parse|json/i)).toBeInTheDocument()
     })
   })
 
-  it('Generate Schedule button is disabled when there are hard validation errors', () => {
-    // Inject hard ERROR into store directly
-    useStore.getState().setAnalysisResults(
-      [{ field: 'strips_total', message: 'Must be > 0', severity: BottleneckSeverity.ERROR }],
-      { warnings: [], suggestions: [] },
-    )
+  it('Generate Schedule is disabled while derived findings hold a hard error', () => {
+    // strips_total 0 with competitions selected is a structural error
+    useStore.getState().applyTemplate('RYC Weekend')
 
     render(<KitchenSinkPage />)
 
-    const generateBtn = screen.getByRole('button', { name: 'Generate Schedule' })
-    expect(generateBtn).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Generate Schedule' })).toBeDisabled()
   })
 
-  it('Generate Schedule button is enabled when there are only warnings', () => {
-    useStore.getState().setAnalysisResults(
-      [],
-      {
-        warnings: [{
-          competition_id: 'CDT-M-FOIL-IND',
-          phase: Phase.POOLS,
-          cause: BottleneckCause.STRIP_CONTENTION,
-          severity: BottleneckSeverity.WARN,
-          delay_mins: 10,
-          message: 'Strip contention',
-        }],
-        suggestions: [],
-      },
-    )
-
+  it('Generate Schedule is enabled once the hard error is fixed', async () => {
+    useStore.getState().applyTemplate('RYC Weekend')
     render(<KitchenSinkPage />)
 
-    const generateBtn = screen.getByRole('button', { name: 'Generate Schedule' })
-    expect(generateBtn).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Generate Schedule' })).toBeDisabled()
+
+    await act(async () => {
+      useStore.getState().selectCompetitions([])
+      useStore.getState().setStrips(12)
+    })
+
+    expect(screen.getByRole('button', { name: 'Generate Schedule' })).not.toBeDisabled()
   })
 
-  it('schedule output shows results after setScheduleResults in store', () => {
-    const results = {
-      'CDT-M-FOIL-IND': {
-        competition_id: 'CDT-M-FOIL-IND',
-        assigned_day: 0,
-        use_flighting: false,
-        is_priority: false,
-        flighting_group_id: null,
-        pool_start: 480,
-        pool_end: 600,
-        pool_strip_count: 4,
-        pool_refs_count: 4,
-        flight_a_start: null,
-        flight_a_end: null,
-        flight_a_strips: 0,
-        flight_a_refs: 0,
-        flight_b_start: null,
-        flight_b_end: null,
-        flight_b_strips: 0,
-        flight_b_refs: 0,
-        entry_fencer_count: 30,
-        promoted_fencer_count: 30,
-        bracket_size: 32,
-        cut_mode: CutMode.DISABLED,
-        cut_value: 0,
-        de_mode: DeMode.SINGLE_STAGE,
-        de_video_policy: VideoPolicy.BEST_EFFORT,
-        de_start: 610,
-        de_end: null,
-        de_strip_count: 4,
-        de_prelims_start: null,
-        de_prelims_end: null,
-        de_prelims_strip_count: 0,
-        de_round_of_16_start: null,
-        de_round_of_16_end: null,
-        de_round_of_16_strip_count: 0,
-        de_total_end: 750,
-        conflict_score: 0,
-        pool_duration_baseline: 120,
-        pool_duration_actual: 120,
-        de_duration_baseline: 140,
-        de_duration_actual: 140,
-        constraint_relaxation_level: 0,
-        accepted_warnings: [],
+  it('schedule output renders a row derived from a seeded placement', () => {
+    const id = TEMPLATES['RYC Weekend'][0]
+    seedValidConfig()
+    useStore.getState().addCompetition(id)
+    useStore.getState().updateCompetition(id, { fencer_count: 30 })
+    useStore.getState().setPlacementsFromAuto({
+      [id]: {
+        day: 0,
+        start_time: 480,
+        strip_count: 5,
+        strips: null,
+        source: PlacementSource.AUTO,
+        pinned: false,
       },
-    }
-
-    useStore.getState().setScheduleResults(results, [])
+    })
 
     render(<KitchenSinkPage />)
 
-    // The schedule table should be visible
-    expect(screen.getByText('Competition')).toBeInTheDocument()
-    expect(screen.getByText('CDT-M-FOIL-IND')).toBeInTheDocument()
-    expect(screen.queryByText('Run Generate Schedule to see results.')).not.toBeInTheDocument()
+    expect(screen.getByText(id)).toBeInTheDocument()
+    // Pool start comes straight from the placement (480 minutes = 8:00)
+    expect(screen.getAllByText('8:00').length).toBeGreaterThan(0)
+    expect(screen.queryByText('No events placed yet.')).not.toBeInTheDocument()
+  })
+
+  it('a placement on a day past days_available is flagged, not hidden', () => {
+    const id = TEMPLATES['RYC Weekend'][0]
+    seedValidConfig()
+    useStore.getState().addCompetition(id)
+    useStore.getState().updateCompetition(id, { fencer_count: 30 })
+    useStore.getState().setPlacementsFromAuto({
+      [id]: {
+        day: 7,
+        start_time: 480,
+        strip_count: 5,
+        strips: null,
+        source: PlacementSource.AUTO,
+        pinned: false,
+      },
+    })
+
+    render(<KitchenSinkPage />)
+
+    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(screen.getByText('Day 8 out of range')).toBeInTheDocument()
   })
 
   it('Generate Link produces URL containing #config= hash', () => {
@@ -552,29 +584,26 @@ describe('KitchenSinkPage error state tests', () => {
 // ──────────────────────────────────────────────
 
 describe('AnalysisOutput section', () => {
-  it('shows Validation heading when there are validation errors', () => {
-    useStore.getState().setAnalysisResults(
-      [{ field: 'strips_total', message: 'Must be > 0', severity: BottleneckSeverity.ERROR }],
-      { warnings: [], suggestions: [] },
-    )
+  /** One large event on a single strip: a strip deficit that raises warnings and one flighting suggestion. */
+  function seedStripDeficit(): string {
+    const id = TEMPLATES['RYC Weekend'][0]
+    useStore.getState().setDays(3)
+    useStore.getState().setStrips(1)
+    useStore.getState().addCompetition(id)
+    useStore.getState().updateCompetition(id, { fencer_count: 60 })
+    return id
+  }
+
+  it('shows Validation heading when the inputs produce validation errors', () => {
+    useStore.getState().applyTemplate('RYC Weekend')
 
     render(<KitchenSinkPage />)
 
     expect(screen.getByRole('heading', { name: 'Validation' })).toBeInTheDocument()
   })
 
-  it('shows Warnings heading when there are warnings', () => {
-    useStore.getState().setAnalysisResults([], {
-      warnings: [{
-        competition_id: 'CDT-M-FOIL-IND',
-        phase: Phase.POOLS,
-        cause: BottleneckCause.STRIP_CONTENTION,
-        severity: BottleneckSeverity.WARN,
-        delay_mins: 10,
-        message: 'Strip contention expected',
-      }],
-      suggestions: [],
-    })
+  it('shows Warnings heading when the analysis raises warnings', () => {
+    seedStripDeficit()
 
     render(<KitchenSinkPage />)
 
@@ -582,10 +611,7 @@ describe('AnalysisOutput section', () => {
   })
 
   it('shows Flighting Suggestions heading with Accept/Reject buttons', () => {
-    useStore.getState().setAnalysisResults([], {
-      warnings: [],
-      suggestions: ['Flight the cadet events on day 1 and day 2'],
-    })
+    seedStripDeficit()
 
     render(<KitchenSinkPage />)
 
@@ -595,10 +621,7 @@ describe('AnalysisOutput section', () => {
   })
 
   it('clicking Accept changes suggestion state to Accepted', () => {
-    useStore.getState().setAnalysisResults([], {
-      warnings: [],
-      suggestions: ['Flight the cadet events'],
-    })
+    seedStripDeficit()
 
     render(<KitchenSinkPage />)
 
@@ -609,10 +632,7 @@ describe('AnalysisOutput section', () => {
   })
 
   it('clicking Reject changes suggestion state to Rejected', () => {
-    useStore.getState().setAnalysisResults([], {
-      warnings: [],
-      suggestions: ['Flight the cadet events'],
-    })
+    seedStripDeficit()
 
     render(<KitchenSinkPage />)
 

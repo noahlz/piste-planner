@@ -57,8 +57,8 @@ are complicated enough to consider Opus at dispatch time (constitution
 - [X] T008 [US1] Invert the store: in src/store/store.ts add `PlacementsSlice` and a state-only `DismissalsSlice` (guards arrive in US3), delete staleness from `UiSlice`, delete `ScheduleSlice`, strip `AnalysisSlice` to flighting accept/reject intent; rewrite src/store/runActions.ts so auto-schedule extracts placements from `scheduleAll` output (research D2) until T004 passes **(commit)**
 - [X] T009 [US1] Create src/store/derived.ts memoized selectors – derived schedule view model via derive.ts, derived analysis/findings, derived ref requirements – with tests written first in __tests__/store/derived.test.ts confirming derived values track input changes with nothing cached in state **(commit)**
 - [x] T010 [US1] Implement serialization v2 in src/store/serialization.ts per contracts/serialization-v2.md until T005 passes **(commit)**
-- [ ] T011 [US1] Dispatch test-quality-reviewer over T009's tests and apply its findings
-- [ ] T012 [US1] Re-point components at derived selectors and delete every staleness surface: src/components/ScheduleView.tsx, src/components/wizard/WizardStep4.tsx, src/components/sections/{ScheduleOutput,AnalysisOutput,RefRequirementsReport,ActionButtons,SaveLoadShare}.tsx – updating their tests in the same task (constitution II); both layouts stay functional (FR-005) **(commit)**
+- [X] T011 [US1] Dispatch test-quality-reviewer over T009's tests and apply its findings
+- [X] T012 [US1] Re-point components at derived selectors and delete every staleness surface: src/components/ScheduleView.tsx, src/components/wizard/WizardStep4.tsx, src/components/sections/{ScheduleOutput,AnalysisOutput,RefRequirementsReport,ActionButtons,SaveLoadShare}.tsx – updating their tests in the same task (constitution II); both layouts stay functional (FR-005) **(commit)**
 - [ ] T013 [US1] Dispatch react-code-reviewer over T012's changes and apply its findings
 - [ ] T014 [US1] US1 checkpoint: full gate per quickstart.md, `grep -rn "analysisStale\|scheduleStale\|markStale\|clearStale" src/` empty (SC-002), drift ledger identical to baseline **(commit)**
 

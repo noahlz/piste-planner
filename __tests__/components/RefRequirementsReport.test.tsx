@@ -48,7 +48,7 @@ describe('RefRequirementsReport', () => {
   it('shows placeholder for empty array', () => {
     render(<RefRequirementsReport requirements={[]} />)
 
-    expect(screen.getByText('Run Generate Schedule to see results.')).toBeInTheDocument()
+    expect(screen.getByText('No referee demand — nothing is placed yet.')).toBeInTheDocument()
     // Table should not render
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
@@ -56,7 +56,23 @@ describe('RefRequirementsReport', () => {
   it('shows placeholder for undefined prop', () => {
     render(<RefRequirementsReport requirements={undefined} />)
 
-    expect(screen.getByText('Run Generate Schedule to see results.')).toBeInTheDocument()
+    expect(screen.getByText('No referee demand — nothing is placed yet.')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('shows placeholder when every day derives zero demand', () => {
+    // Demand derives per day whether or not anything is placed, so an unplaced
+    // tournament arrives as a full-length array of zeros, not an empty one.
+    render(
+      <RefRequirementsReport
+        requirements={[
+          { day: 0, peak_total_refs: 0, peak_saber_refs: 0, peak_time: 0 },
+          { day: 1, peak_total_refs: 0, peak_saber_refs: 0, peak_time: 0 },
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('No referee demand — nothing is placed yet.')).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 

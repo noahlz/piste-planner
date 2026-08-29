@@ -3,13 +3,40 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { WizardShell } from '../../src/components/wizard/WizardShell.tsx'
 import { ScheduleView } from '../../src/components/ScheduleView.tsx'
 import { useStore } from '../../src/store/store.ts'
-import { BottleneckSeverity } from '../../src/engine/types.ts'
+import { TEMPLATES } from '../../src/engine/catalogue.ts'
+import { PlacementSource } from '../../src/engine/types.ts'
 import App from '../../src/App.tsx'
 
 // Reset store before each test
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
 })
+
+/** Config with no hard validation errors: strips set, no competitions to over-subscribe them. */
+function seedValidConfig(): void {
+  useStore.getState().setDays(3)
+  useStore.getState().setStrips(12)
+  useStore.getState().setVideoStrips(2)
+}
+
+/** Selects one competition and places it, so the schedule view has something derived to show. */
+function seedPlacedCompetition(): string {
+  const id = TEMPLATES['RYC Weekend'][0]
+  seedValidConfig()
+  useStore.getState().addCompetition(id)
+  useStore.getState().updateCompetition(id, { fencer_count: 30 })
+  useStore.getState().setPlacementsFromAuto({
+    [id]: {
+      day: 0,
+      start_time: 480,
+      strip_count: 5,
+      strips: null,
+      source: PlacementSource.AUTO,
+      pinned: false,
+    },
+  })
+  return id
+}
 
 // ──────────────────────────────────────────────
 // Step 13.1: Wizard navigation tests
@@ -75,10 +102,8 @@ describe('WizardShell navigation', () => {
   })
 
   it('Forward button shows "View Schedule" on Step 4 (Analysis, index 3)', () => {
-    // Bypass step 3 auto-analysis by setting step directly then clearing stale
+    seedValidConfig()
     useStore.getState().setStep(3)
-    // Pre-set empty analysis results so WizardStep4's useEffect doesn't create hard errors
-    useStore.getState().setAnalysisResults([], { warnings: [], suggestions: [] })
 
     render(<WizardShell />)
 
@@ -93,33 +118,19 @@ describe('WizardShell navigation', () => {
     expect(screen.queryByRole('button', { name: 'View Schedule' })).not.toBeInTheDocument()
   })
 
-  it('Forward blocked on Step 4 (Analysis) when hard ERROR validation errors exist', async () => {
+  it('Forward blocked on Step 4 (Analysis) when hard ERROR validation errors exist', () => {
+    // strips_total is 0 in the initial store — a hard error the derived findings
+    // report on first render, with no validate run to wait for.
     useStore.getState().setStep(3)
-    // WizardStep4 auto-runs validate on mount; with empty store it produces errors.
-    // We wait for the store to reflect validation errors from WizardStep4's useEffect.
 
     render(<WizardShell />)
 
-    await waitFor(() => {
-      const state = useStore.getState()
-      const hasHardErrors = state.validationErrors.some((e) => e.severity === BottleneckSeverity.ERROR)
-      expect(hasHardErrors).toBe(true)
-    })
-
-    const viewScheduleBtn = screen.getByRole('button', { name: 'View Schedule' })
-    expect(viewScheduleBtn).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'View Schedule' })).toBeDisabled()
   })
 
-  it('Forward blocked on Step 4 does not advance step when clicked', async () => {
+  it('Forward blocked on Step 4 does not advance step when clicked', () => {
     useStore.getState().setStep(3)
     render(<WizardShell />)
-
-    await waitFor(() => {
-      const errors = useStore.getState().validationErrors.filter((e) => e.severity === BottleneckSeverity.ERROR)
-      expect(errors.length).toBeGreaterThan(0)
-      // Validation of an empty store should produce a strips_total or days_available error
-      expect(errors.some((e) => e.field === 'strips_total' || e.field === 'days_available')).toBe(true)
-    })
 
     fireEvent.click(screen.getByRole('button', { name: 'View Schedule' }))
 
@@ -127,25 +138,25 @@ describe('WizardShell navigation', () => {
     expect(useStore.getState().wizardStep).toBe(3)
   })
 
-  it('Forward allowed on Step 4 when no hard errors', async () => {
+  it('Forward allowed on Step 4 when no hard errors', () => {
+    seedValidConfig()
+    useStore.getState().setStep(3)
+
+    render(<WizardShell />)
+
+    expect(screen.getByRole('button', { name: 'View Schedule' })).not.toBeDisabled()
+  })
+
+  it('fixing strips re-enables Forward without any validate run', async () => {
     useStore.getState().setStep(3)
     render(<WizardShell />)
 
-    // WizardStep4 auto-runs validate+analyze on mount; wait for the effect to populate errors
-    await waitFor(() => {
-      expect(useStore.getState().validationErrors.length).toBeGreaterThan(0)
-    })
+    expect(screen.getByRole('button', { name: 'View Schedule' })).toBeDisabled()
 
-    // Override validation results with warnings only (no hard ERRORs) to simulate valid config.
-    // Wrap in act so React processes the resulting re-render synchronously.
     await act(async () => {
-      useStore.getState().setAnalysisResults(
-        [{ field: 'note', message: 'Just a warning', severity: 'WARN' as const }],
-        { warnings: [], suggestions: [] },
-      )
+      useStore.getState().setStrips(12)
     })
 
-    // View Schedule button should now be enabled (no hard ERROR-severity errors)
     expect(screen.getByRole('button', { name: 'View Schedule' })).not.toBeDisabled()
   })
 
@@ -243,65 +254,76 @@ describe('Layout toggle', () => {
 })
 
 // ──────────────────────────────────────────────
-// Step 13.3: Stale banner tests
+// Step 13.3: Schedule view reads placements, never cached results
 // ──────────────────────────────────────────────
 
-describe('Stale banner', () => {
-  it('stale banner not shown when scheduleStale is false', () => {
+describe('ScheduleView derived output', () => {
+  it('renders no staleness banner — placements are always current', () => {
+    seedPlacedCompetition()
     render(<ScheduleView />)
 
     expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
   })
 
-  it('stale banner appears when scheduleStale is true', () => {
-    useStore.getState().markStale({ scheduleStale: true })
+  it('a placement seeded into the store renders as a schedule row', () => {
+    const id = seedPlacedCompetition()
     render(<ScheduleView />)
 
-    expect(screen.getByText(/Results are outdated/)).toBeInTheDocument()
+    expect(screen.getByText(id)).toBeInTheDocument()
+    // Pool start derives straight from the placement's start_time (480 = 8:00)
+    expect(screen.getAllByText('8:00').length).toBeGreaterThan(0)
+    expect(screen.queryByText('No events placed yet.')).not.toBeInTheDocument()
   })
 
-  it('stale banner appears when navigating to Schedule step (index 4) after config change', () => {
-    useStore.getState().setStep(4)
-    useStore.getState().markStale({ scheduleStale: true })
-    render(<WizardShell />)
+  it('shows the empty state when nothing is placed', () => {
+    seedValidConfig()
+    render(<ScheduleView />)
 
-    expect(screen.getByText(/Results are outdated/)).toBeInTheDocument()
+    expect(screen.getByText('No events placed yet.')).toBeInTheDocument()
+    expect(screen.getByText('No referee demand — nothing is placed yet.')).toBeInTheDocument()
   })
 
-  it('Regenerate button re-runs engine and produces output', async () => {
-    // Set up config so the engine has something to process
-    useStore.getState().setDays(2)
-    useStore.getState().setStrips(12)
-    useStore.getState().applyTemplate('RYC Weekend')
-    useStore.getState().markStale({ scheduleStale: true })
+  it('referee requirements derive from the placement, not from a scheduler run', () => {
+    seedPlacedCompetition()
+    render(<ScheduleView />)
 
-    // Verify no prior output
-    expect(Object.keys(useStore.getState().scheduleResults).length).toBe(0)
-    expect(useStore.getState().bottlenecks.length).toBe(0)
+    expect(screen.getByText('Referee Requirements')).toBeInTheDocument()
+    expect(screen.getByText('Peak Total Refs')).toBeInTheDocument()
+    expect(screen.queryByText('No referee demand — nothing is placed yet.')).not.toBeInTheDocument()
+  })
+
+  it('Regenerate writes placements and the derived table follows', async () => {
+    const id = TEMPLATES['RYC Weekend'][0]
+    seedValidConfig()
+    useStore.getState().addCompetition(id)
+    useStore.getState().updateCompetition(id, { fencer_count: 30 })
+
+    expect(Object.keys(useStore.getState().placements)).toHaveLength(0)
 
     render(<ScheduleView />)
-    expect(screen.getByText(/Results are outdated/)).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
-
-    // Engine should have re-run — schedule results or bottleneck messages populated,
-    // and the stale flag should be cleared (engine completed a run regardless of outcome)
-    await waitFor(() => {
-      const state = useStore.getState()
-      const hasOutput = Object.keys(state.scheduleResults).length > 0 || state.bottlenecks.length > 0
-      expect(hasOutput).toBe(true)
-      expect(state.scheduleStale).toBe(false)
-    })
-  })
-
-  it('stale banner disappears after Regenerate clears stale flag', async () => {
-    useStore.getState().markStale({ scheduleStale: true })
-    render(<ScheduleView />)
+    expect(screen.getByText('No events placed yet.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
 
     await waitFor(() => {
-      expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
+      expect(useStore.getState().placements[id]).toBeDefined()
+      expect(screen.getByText(id)).toBeInTheDocument()
     })
+  })
+
+  it('editing a placement changes the rendered schedule with no re-run', async () => {
+    const id = seedPlacedCompetition()
+    render(<ScheduleView />)
+
+    expect(screen.getAllByText('8:00').length).toBeGreaterThan(0)
+
+    await act(async () => {
+      useStore.getState().updatePlacement(id, { start_time: 600 })
+    })
+
+    // 600 minutes = 10:00 — the derived row moved without touching Regenerate
+    expect(screen.getAllByText('10:00').length).toBeGreaterThan(0)
+    expect(screen.queryAllByText('8:00')).toHaveLength(0)
   })
 })

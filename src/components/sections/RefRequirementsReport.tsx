@@ -15,14 +15,20 @@ interface RefRequirementsReportProps {
 }
 
 export function RefRequirementsReport({ requirements }: RefRequirementsReportProps) {
-  if (!requirements || requirements.length === 0) {
+  // Demand derives from placements, so a row exists per day whether or not
+  // anything is placed. All-zero peaks mean nothing is placed, not "no data".
+  const hasDemand = requirements?.some((req) => req.peak_total_refs > 0) ?? false
+
+  if (!requirements || requirements.length === 0 || !hasDemand) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-muted-foreground">Referee Requirements</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">Run Generate Schedule to see results.</p>
+          <p className="text-sm text-muted-foreground">
+            No referee demand — nothing is placed yet.
+          </p>
         </CardContent>
       </Card>
     )
