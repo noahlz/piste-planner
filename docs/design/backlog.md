@@ -67,17 +67,12 @@ from a measured number rather than a re-derived one.
 
 ## Configurable pool round durations
 
-`pool_round_duration_table` is already a `TournamentConfig` field the engine
-threads through `poolDurationForSize`, but `buildConfig.ts` pins it to
-`DEFAULT_POOL_ROUND_DURATION_TABLE` and no store state or UI writes it. Make it
-user-configurable so better completion-time data from USA Fencing can be applied
-without a release: store field, editor UI (defaults shown, per-weapon override),
-`buildConfig.ts` bridge, and serialization. Serializing the table is mandatory
-once it is configurable – results must stay reproducible from config alone
-(constitution I), and a shared URL that drops the table would silently revert to
-defaults. Follow the omitted-key back-compat pattern from P1's removed-field
-tests. Shape the config so the per-category dimension the youth calibration
-(above) may add lands in the same table rather than a second override system.
+Specified and implemented in
+[`specs/002-configurable-pool-durations/`](../../specs/002-configurable-pool-durations/) –
+[research.md D4](../../specs/002-configurable-pool-durations/research.md)
+records how the table widens so the per-category dimension the youth
+calibration (above) may add lands in the same table rather than a second
+override system.
 
 ## Calibration debt
 
