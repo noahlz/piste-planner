@@ -46,7 +46,7 @@ const AUTO_REFS_PER_POOL = 2
  * exact behavior (0 scheduled, 1 validation error) instead of this generic floor.
  */
 const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 43, B7: 18, B8: 50,
+  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 44, B7: 18, B8: 52,
 }
 
 /**

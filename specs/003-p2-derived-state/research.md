@@ -181,8 +181,8 @@ the drift this design exists to prevent).
 `__tests__/engine/integration.test.ts` (B1 currently `>= 14` at line 175)
 are raised to the counts each scenario actually schedules, measured at task
 time on the feature branch before any engine change. The drift ledger's
-`SCHEDULED_FLOORS` (B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 43, B7: 18,
-B8: 50) is the expected reference. B4 keeps its dedicated pinned test
+`SCHEDULED_FLOORS` (B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 44, B7: 18,
+B8: 52) is the expected reference. B4 keeps its dedicated pinned test
 (0 scheduled, 1 validation error – Ruling 11) rather than a generic floor.
 
 **Rationale**: Backlog §Calibration debt and design §Testing – `>= 14`
@@ -193,6 +193,12 @@ changes gives the re-tune (D8) an honest baseline to be judged against.
 – slack is exactly the vacuousness being removed; deliberate floor changes
 are cheap to make consciously). Snapshot-only (rejected – defeated by
 `vitest -u`, as the ledger header notes).
+
+**Correction (2026-08-29, T027)**: B6 and B8 above originally read 43 and 50.
+Both are measured at 44 and 52 – confirmed three times (T024's re-baseline,
+T025's review, T027's sweep). `integration.test.ts` was already correct at
+44/52 from T024; the drift ledger's `SCHEDULED_FLOORS` and the numbers in this
+paragraph were the stale copies and are now raised to match.
 
 ## D8: `CAPACITY_TARGET_FILL` re-tuned by measured sweep, not chosen here
 
@@ -217,3 +223,26 @@ at `dayColoring.ts:619` whose interaction with penalty minimization is
 exactly what the scenarios measure). Deleting the derating entirely (fill =
 1.0) (rejected as a starting assumption – it may fall out of the sweep, but
 only the sweep can say so).
+
+**Outcome (2026-08-29, T027)**: the sweep ran 0.3 / 0.4 / 0.5 / 0.6 / 0.7 / 0.8
+over B1–B8. All six candidates produced identical scheduled counts, identical
+ERROR counts, and identical drift digests. The cause is structural, not a tie:
+on every one of the eight scenarios `chromaticN` already equals
+`expansionCap` (`min(days_available, MAX_EXPANDED_DAYS)`), so
+`effectiveDays = max(chromaticN, min(capacityDays, expansionCap))` reduces to
+`chromaticN` and `capacityDays` is discarded whatever it holds – 4–13 at 0.3,
+2–5 at 0.8, against a cap of 3 or 4.
+
+This is a third outcome D8 did not anticipate: not "a candidate wins" and not
+"every candidate drops a scenario", but "the ledger cannot measure this
+constant". Read literally the selection rule names 0.8 (nothing drops, no ERROR
+count rises), but it would name 0.8 on evidence that says nothing about 0.8 –
+constitution III's bar is measured behavior, and an unmeasured raise is the
+assumption it forbids. The asymmetry also favors staying: too low a target
+over-spreads a small tournament across days it does not need (a plausibility
+cost), while too high a target packs days denser than they schedule (a
+schedulability cost, the engine's actual failure mode). **0.3 stands.** The
+constant's comment now records the sweep instead of the dead serial-scheduler
+rationale. Re-tuning it needs a scenario where the expansion cap is slack –
+`days_available` above the chromatic number – which the B1–B8 ledger does not
+currently contain.
