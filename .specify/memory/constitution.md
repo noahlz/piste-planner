@@ -80,6 +80,17 @@ The two do not mix within one feature. `commit-with-costs` commits staged
 changes and cannot land a branch, so work already committed inside a worktree
 has nothing left to stage at the root.
 
+## Orchestration & Model Roles
+
+The root session is an orchestrator, and the orchestrator NEVER writes code
+directly. The single exception is a small edit of 1–5 lines. Anything larger
+is dispatched to a subagent.
+
+Opus and Sonnet are for subagent development only. Coding subagents dispatch
+preferring Sonnet, with Opus reserved for complicated tasks. The orchestrator
+uses its judgment to decide what counts as complicated and which model a
+dispatch gets.
+
 ## Governance
 
 This constitution governs every feature under `specs/`. Evaluate `plan.md`'s
@@ -98,5 +109,9 @@ cover.
   mechanism for root checkpoints, and each feature now declares a worktree or
   root flow. This section is the rule's only home – `plan.md` and `tasks.md`
   point at it rather than restating it.
+- 1.3.0 (2026-08-28): orchestration and model roles added. The orchestrator
+  never writes code beyond 1–5 line edits, coding subagents run on Sonnet by
+  default with Opus for complicated tasks, and the orchestrator judges the
+  split.
 
-**Version**: 1.2.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28
+**Version**: 1.3.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28
