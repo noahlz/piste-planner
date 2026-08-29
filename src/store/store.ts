@@ -9,9 +9,14 @@ import type {
   Placement,
   Weapon,
 } from '../engine/types.ts'
-import { PlacementSource } from '../engine/types.ts'
+import { BottleneckSeverity, PlacementSource } from '../engine/types.ts'
+import { findingIdentity } from '../engine/validation.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { suggestStrips as computeStripSuggestion } from './stripSuggestion.ts'
+// Value import of a sibling module that itself imports `StoreState` from this
+// file as a type-only import (erased at compile time, per erasableSyntaxOnly)
+// — no runtime cycle, only a type-level one that TS resolves fine.
+import { selectDerivedFindings } from './derived.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
@@ -357,11 +362,20 @@ function createPlacementsSlice(set: SetState, _get: GetState): PlacementsSlice {
   }
 }
 
-function createDismissalsSlice(set: SetState, _get: GetState): DismissalsSlice {
+function createDismissalsSlice(set: SetState, get: GetState): DismissalsSlice {
   return {
     dismissedFindings: {},
 
+    // Advisory-only guard (data-model.md §Dismissals, spec clarification
+    // 2026-08-28): an id only takes effect when it currently matches a
+    // WARN-severity finding on the derived findings surface. ERROR ids and
+    // unknown ids are silent no-ops — no state change.
     dismissFinding: (id) => {
+      const { validationErrors } = selectDerivedFindings(get())
+      const isCurrentWarn = validationErrors.some(
+        (finding) => finding.severity === BottleneckSeverity.WARN && findingIdentity(finding) === id,
+      )
+      if (!isCurrentWarn) return
       set((state) => ({ dismissedFindings: { ...state.dismissedFindings, [id]: true } }))
     },
 

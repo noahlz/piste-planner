@@ -12,23 +12,36 @@ function err(field: string, message: string): ValidationError {
 }
 
 /** Structural finding: leaves nothing to draw, ERROR in both validation modes (research D3). */
-function structural(field: string, message: string): ValidationError {
-  return { field, message, severity: BottleneckSeverity.ERROR, kind: RuleKind.STRUCTURAL }
+function structural(field: string, message: string, rule: string, subjects: string[]): ValidationError {
+  return { field, message, severity: BottleneckSeverity.ERROR, kind: RuleKind.STRUCTURAL, rule, subjects }
 }
 
 /** Notice finding: WARN in both modes, never escalates (research D3 correction, 2026-08-29). */
-function notice(field: string, message: string): ValidationError {
-  return { field, message, severity: BottleneckSeverity.WARN, kind: RuleKind.NOTICE }
+function notice(field: string, message: string, rule: string, subjects: string[]): ValidationError {
+  return { field, message, severity: BottleneckSeverity.WARN, kind: RuleKind.NOTICE, rule, subjects }
 }
 
 /** Policy finding: ERROR under binding mode, WARN under advisory, same substance either way. */
-function policy(field: string, message: string, mode: ValidationMode): ValidationError {
+function policy(field: string, message: string, mode: ValidationMode, rule: string, subjects: string[]): ValidationError {
   return {
     field,
     message,
     severity: mode === ValidationMode.BINDING ? BottleneckSeverity.ERROR : BottleneckSeverity.WARN,
     kind: RuleKind.POLICY,
+    rule,
+    subjects,
   }
+}
+
+/**
+ * Finding identity (research D4, data-model.md §Finding): `rule` plus the
+ * canonical `subjects` key, with no message text or magnitudes. Stable
+ * across recomputes of the same violation, distinct per subject, and never
+ * expected to collide within one `validateConfig` call — a collision means
+ * the producing rule's subject key is too narrow and must widen, not merge.
+ */
+export function findingIdentity(finding: ValidationError): string {
+  return `${finding.rule ?? ''}:${(finding.subjects ?? []).join('+')}`
 }
 
 /**
@@ -45,7 +58,12 @@ function checkDeDurationEntry(
 ): void {
   const deDuration = table[weapon]?.[bracketSize]
   if (deDuration === undefined) {
-    errors.push(structural('de_duration_table', `${compId}: no DE duration entry for weapon=${weapon} bracket=${bracketSize}`))
+    errors.push(structural(
+      'de_duration_table',
+      `${compId}: no DE duration entry for weapon=${weapon} bracket=${bracketSize}`,
+      'de-duration-table-missing-entry',
+      [compId],
+    ))
   }
 }
 
@@ -81,22 +99,31 @@ function validateStripConfig(config: TournamentConfig, competitions: Competition
   const errors: ValidationError[] = []
 
   if (config.strips_total === 0) {
-    errors.push(structural('strips_total', 'strips_total must be > 0'))
+    errors.push(structural('strips_total', 'strips_total must be > 0', 'strips-total-positive', ['strips_total']))
   }
 
   // Flighting group strips exceed strips_total — same resource-capacity class
   // as resource_precondition's strip minimum shortfalls (research D3).
-  // Group competitions by their flighting_group_id, sum strips_allocated, check against total
-  const flightingGroupStrips = new Map<string, number>()
+  // Group competitions by their flighting_group_id, sum strips_allocated and
+  // collect member ids, check the sum against total.
+  const flightingGroups = new Map<string, { total: number; ids: string[] }>()
   for (const comp of competitions) {
     if (comp.flighted && comp.flighting_group_id) {
-      const current = flightingGroupStrips.get(comp.flighting_group_id) ?? 0
-      flightingGroupStrips.set(comp.flighting_group_id, current + comp.strips_allocated)
+      const group = flightingGroups.get(comp.flighting_group_id) ?? { total: 0, ids: [] }
+      group.total += comp.strips_allocated
+      group.ids.push(comp.id)
+      flightingGroups.set(comp.flighting_group_id, group)
     }
   }
-  for (const [groupId, totalStrips] of flightingGroupStrips) {
-    if (totalStrips > config.strips_total) {
-      errors.push(policy('flighting_group', `Flighting group "${groupId}" requires ${totalStrips} strips but strips_total is ${config.strips_total}`, mode))
+  for (const [groupId, group] of flightingGroups) {
+    if (group.total > config.strips_total) {
+      errors.push(policy(
+        'flighting_group',
+        `Flighting group "${groupId}" requires ${group.total} strips but strips_total is ${config.strips_total}`,
+        mode,
+        'flighting-group-strips',
+        [...group.ids].sort(),
+      ))
     }
   }
 
@@ -113,7 +140,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
   const seenIds = new Set<string>()
   for (const comp of competitions) {
     if (seenIds.has(comp.id)) {
-      errors.push(structural('competition.id', `Duplicate competition ID: "${comp.id}"`))
+      errors.push(structural('competition.id', `Duplicate competition ID: "${comp.id}"`, 'duplicate-competition-id', [comp.id]))
     }
     seenIds.add(comp.id)
   }
@@ -121,25 +148,25 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
   for (const comp of competitions) {
     // Fencer count bounds
     if (comp.fencer_count <= 0 || comp.fencer_count < config.MIN_FENCERS) {
-      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} is below minimum ${config.MIN_FENCERS}`))
+      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} is below minimum ${config.MIN_FENCERS}`, 'fencer-count-bounds', [comp.id]))
     } else if (comp.fencer_count > config.MAX_FENCERS) {
-      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} exceeds maximum ${config.MAX_FENCERS}`))
+      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} exceeds maximum ${config.MAX_FENCERS}`, 'fencer-count-bounds', [comp.id]))
     }
 
     // Team events must not use cuts
     if (comp.event_type === EventType.TEAM && comp.cut_mode !== CutMode.DISABLED) {
-      errors.push(policy('cut_mode', `${comp.id}: team events must have cut_mode=DISABLED`, mode))
+      errors.push(policy('cut_mode', `${comp.id}: team events must have cut_mode=DISABLED`, mode, 'cut-on-team', [comp.id]))
     }
 
     // Cut value range checks (individual events only)
     if (comp.event_type === EventType.INDIVIDUAL) {
       if (comp.cut_mode === CutMode.PERCENTAGE) {
         if (comp.cut_value <= 0 || comp.cut_value > 100) {
-          errors.push(structural('cut_value', `${comp.id}: PERCENTAGE cut_value must be in (0, 100], got ${comp.cut_value}`))
+          errors.push(structural('cut_value', `${comp.id}: PERCENTAGE cut_value must be in (0, 100], got ${comp.cut_value}`, 'cut-value-range', [comp.id]))
         }
       } else if (comp.cut_mode === CutMode.COUNT) {
         if (comp.cut_value > comp.fencer_count) {
-          errors.push(structural('cut_value', `${comp.id}: COUNT cut_value ${comp.cut_value} exceeds fencer_count ${comp.fencer_count}`))
+          errors.push(structural('cut_value', `${comp.id}: COUNT cut_value ${comp.cut_value} exceeds fencer_count ${comp.fencer_count}`, 'cut-value-range', [comp.id]))
         }
       }
 
@@ -154,7 +181,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
           rawPromoted = Math.min(comp.cut_value, comp.fencer_count)
         }
         if (rawPromoted < 2) {
-          errors.push(structural('cut_value', `${comp.id}: cut produces only ${rawPromoted} promoted fencer(s); minimum is 2`))
+          errors.push(structural('cut_value', `${comp.id}: cut produces only ${rawPromoted} promoted fencer(s); minimum is 2`, 'cut-value-min-promotions', [comp.id]))
         }
       }
 
@@ -185,7 +212,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
     if (comp.de_video_policy === VideoPolicy.REQUIRED && comp.de_mode === DeMode.SINGLE_STAGE) {
       // REQUIRED + SINGLE_STAGE is dead config: SINGLE_STAGE doesn't use staged video strips.
       // Soft hint, not a gate (research D3 correction).
-      errors.push(notice('de_video_policy', `${comp.id}: REQUIRED video policy has no effect with SINGLE_STAGE de_mode`))
+      errors.push(notice('de_video_policy', `${comp.id}: REQUIRED video policy has no effect with SINGLE_STAGE de_mode`, 'video-dead-config', [comp.id]))
     }
 
     if (
@@ -194,7 +221,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       config.video_strips_total < comp.de_round_of_16_strips
     ) {
       // Physical resource impossibility for the R16 stage — structural.
-      errors.push(structural('de_video_policy', `${comp.id}: REQUIRED video policy needs ${comp.de_round_of_16_strips} video strips for R16 but only ${config.video_strips_total} available`))
+      errors.push(structural('de_video_policy', `${comp.id}: REQUIRED video policy needs ${comp.de_round_of_16_strips} video strips for R16 but only ${config.video_strips_total} available`, 'video-r16-strip-shortfall', [comp.id]))
     }
 
     // DE strip requests exceed the computed DE cap. Soft resource-tuning
@@ -206,7 +233,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       comp.max_de_strip_pct_override,
     )
     if (comp.de_round_of_16_strips > deStripCap) {
-      errors.push(notice('de_round_of_16_strips', `${comp.id}: R16 requests ${comp.de_round_of_16_strips} strips but DE cap is ${deStripCap}`))
+      errors.push(notice('de_round_of_16_strips', `${comp.id}: R16 requests ${comp.de_round_of_16_strips} strips but DE cap is ${deStripCap}`, 'r16-over-cap', [comp.id]))
     }
 
     // Resource precondition checks — skip competitions with invalid fencer counts
@@ -216,7 +243,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       // Strip capacity: n_pools strips needed (one per pool running in parallel).
       // strips_total is a global scalar — no per-day strip availability model yet.
       if (n_pools > config.strips_total) {
-        errors.push(policy('resource_precondition', `${comp.id}: requires ${n_pools} strips for pools but only ${config.strips_total} total strips configured`, mode))
+        errors.push(policy('resource_precondition', `${comp.id}: requires ${n_pools} strips for pools but only ${config.strips_total} total strips configured`, mode, 'resource-precondition-strips', [comp.id]))
       }
 
     }
@@ -232,6 +259,8 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
         errors.push(notice(
           'cut_mode',
           `${comp.id}: regional tournament (${config.tournament_type}) requires all-advance for ${comp.category} — cut_mode will be overridden to DISABLED`,
+          'regional-cut-override',
+          [comp.id],
         ))
       }
     }
@@ -267,7 +296,13 @@ function validateTimingConstraints(config: TournamentConfig, competitions: Compe
 
     const combinedTotal = indivTotal + config.INDIV_TEAM_MIN_GAP_MINS + teamTotal
     if (combinedTotal > config.DAY_LENGTH_MINS) {
-      errors.push(policy('indiv_team_same_day', `Individual ${matchingIndividual.id} + team ${team.id} worst-case same-day duration ${combinedTotal} min exceeds DAY_LENGTH_MINS ${config.DAY_LENGTH_MINS} min`, mode))
+      errors.push(policy(
+        'indiv_team_same_day',
+        `Individual ${matchingIndividual.id} + team ${team.id} worst-case same-day duration ${combinedTotal} min exceeds DAY_LENGTH_MINS ${config.DAY_LENGTH_MINS} min`,
+        mode,
+        'indiv-team-same-day',
+        [matchingIndividual.id, team.id].sort(),
+      ))
     }
   }
 
@@ -287,25 +322,33 @@ function validateDependencies(config: TournamentConfig, competitions: Competitio
     if (comp.event_type === EventType.TEAM) {
       const key = `${comp.category}|${comp.gender}|${comp.weapon}`
       if (!individualKeys.has(key)) {
-        errors.push(policy('event_type', `${comp.id}: team event has no matching individual for ${comp.category} ${comp.gender} ${comp.weapon}`, mode))
+        errors.push(policy('event_type', `${comp.id}: team event has no matching individual for ${comp.category} ${comp.gender} ${comp.weapon}`, mode, 'team-requires-individual', [comp.id]))
       }
     }
   }
 
   // Same population: N individual events for same category+gender+weapon
   // Veteran events include vet_age_group in the key because each age group is a distinct population.
-  const populationCounts = new Map<string, number>()
+  const populationGroups = new Map<string, string[]>()
   for (const comp of competitions) {
     if (comp.event_type === EventType.INDIVIDUAL) {
       const key = comp.vet_age_group !== null
         ? `${comp.category}|${comp.gender}|${comp.weapon}|${comp.vet_age_group}`
         : `${comp.category}|${comp.gender}|${comp.weapon}`
-      populationCounts.set(key, (populationCounts.get(key) ?? 0) + 1)
+      const ids = populationGroups.get(key) ?? []
+      ids.push(comp.id)
+      populationGroups.set(key, ids)
     }
   }
-  for (const [key, count] of populationCounts) {
-    if (count > config.days_available) {
-      errors.push(policy('same_population', `Same-population group [${key}] has ${count} individual events but only ${config.days_available} days available`, mode))
+  for (const [key, ids] of populationGroups) {
+    if (ids.length > config.days_available) {
+      errors.push(policy(
+        'same_population',
+        `Same-population group [${key}] has ${ids.length} individual events but only ${config.days_available} days available`,
+        mode,
+        'same-population',
+        [...ids].sort(),
+      ))
     }
   }
 
@@ -331,10 +374,11 @@ const FEASIBILITY_SLACK = 1.15
  * resource shortfalls), but severity stays ERROR regardless of mode. This
  * function's own 2-arg contract is unchanged by the T017 mode split —
  * `validateConfig` re-derives mode-driven severity when it assembles these
- * findings into its pipeline (see below).
+ * findings into its pipeline (see below). `subjects` is `[field]` since
+ * feasibility aggregates across the whole competition list, not one subject.
  */
-function feasibilityErr(field: string, message: string): ValidationError {
-  return { field, message, severity: BottleneckSeverity.ERROR, kind: RuleKind.POLICY }
+function feasibilityErr(field: string, message: string, rule: string): ValidationError {
+  return { field, message, severity: BottleneckSeverity.ERROR, kind: RuleKind.POLICY, rule, subjects: [field] }
 }
 
 export function validateFeasibility(
@@ -370,6 +414,7 @@ export function validateFeasibility(
       `RESOURCE_INSUFFICIENT: ${Math.round(totalNeeded)} strip-hours needed over ${competitions.length} events; ` +
       `${Math.round(totalAvailable)} available (${config.days_available}d × ${config.strips_total}s × ${dayLengthHours}h). ` +
       `Shortfall ${Math.round(shortfall)} (~${pct}%). Add ${extraDays} more day(s) OR ${extraStrips} more strip(s).`,
+      'feasibility-strip-hours',
     ))
   }
 
@@ -388,6 +433,7 @@ export function validateFeasibility(
         `RESOURCE_INSUFFICIENT (video): ${Math.round(videoNeeded)} video strip-hours needed; ` +
         `${Math.round(videoAvailable)} available (${config.days_available}d × ${config.video_strips_total}vs × ${dayLengthHours}h). ` +
         `Shortfall ${Math.round(shortfall)}. ${dayHint} OR ${extraStrips} more video strip(s).`,
+        'feasibility-video-strip-hours',
       ))
     }
   }
@@ -414,9 +460,9 @@ export function validateConfig(
   const globalErrors: ValidationError[] = []
 
   if (config.days_available < 1 || config.days_available > 14) {
-    globalErrors.push(structural('days_available', `days_available must be 1–14, got ${config.days_available}`))
+    globalErrors.push(structural('days_available', `days_available must be 1–14, got ${config.days_available}`, 'days-available-bounds', ['days_available']))
   } else if (config.days_available < 2 || config.days_available > 4) {
-    globalErrors.push(notice('days_available', `days_available outside the recommended 2–4 day range, got ${config.days_available} — the schedule can still be computed`))
+    globalErrors.push(notice('days_available', `days_available outside the recommended 2–4 day range, got ${config.days_available} — the schedule can still be computed`, 'days-available-range', ['days_available']))
   }
 
   // Feasibility findings are always ERROR from validateFeasibility itself

@@ -99,7 +99,7 @@ are complicated enough to consider Opus at dispatch time (constitution
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Populate `rule` and `subjects` on every finding in src/engine/validation.ts, add the identity helper (`rule:subjects.join('+')`, research D4), and wire `DismissalsSlice` guards in src/store/store.ts plus `dismissedFindings` handling in src/store/serialization.ts until T019 passes. Drift ledger before/after – identical expected (identity fields are additive) **(commit)**
+- [x] T021 [US3] Populate `rule` and `subjects` on every finding in src/engine/validation.ts, add the identity helper (`rule:subjects.join('+')`, research D4), and wire `DismissalsSlice` guards in src/store/store.ts plus `dismissedFindings` handling in src/store/serialization.ts until T019 passes. Drift ledger before/after – identical expected (identity fields are additive) **(commit)**
 - [ ] T022 [US3] US3 checkpoint: full gate **(commit)**
 
 **Checkpoint**: Findings model complete for P3's drawer.

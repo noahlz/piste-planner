@@ -163,30 +163,14 @@ describe('placementsSlice', () => {
   })
 })
 
-// These tests encode DismissalsSlice as T008 leaves it: an unguarded,
-// state-only action. US3/T021 adds the advisory-only guard (finding must
-// still be an active advisory to be dismissable) and will revisit this file.
+// T021 added the advisory-only guard: dismissFinding only takes effect for
+// an id matching a CURRENT WARN-severity finding on the derived findings
+// surface. That guarded contract (plus undismissFinding, sticky-through-
+// flicker, and serialization) is covered by __tests__/store/dismissals.test.ts.
+// This block keeps only initial-state coverage, which needs no live finding.
 describe('dismissalsSlice', () => {
   describe('initial state', () => {
     it('dismissedFindings is an empty object', () => {
-      expect(futureState().dismissedFindings).toEqual({})
-    })
-  })
-
-  describe('dismissFinding', () => {
-    it('marks the finding id dismissed', () => {
-      futureState().dismissFinding('same-population:A+B')
-
-      expect(futureState().dismissedFindings).toEqual({ 'same-population:A+B': true })
-    })
-  })
-
-  describe('undismissFinding', () => {
-    it('clears a dismissed finding id', () => {
-      futureState().dismissFinding('same-population:A+B')
-
-      futureState().undismissFinding('same-population:A+B')
-
       expect(futureState().dismissedFindings).toEqual({})
     })
   })
