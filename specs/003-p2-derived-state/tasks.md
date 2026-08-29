@@ -94,8 +94,8 @@ are complicated enough to consider Opus at dispatch time (constitution
 
 ### Tests for User Story 3 (write first, confirm failing)
 
-- [ ] T019 [US3] Write failing tests: in __tests__/engine/validation.test.ts identity equality across recomputes, magnitude-invariance, distinctness per subject, no silent identity collisions (spec US3); in __tests__/store/dismissals.test.ts advisory-only guard, stickiness through rule flicker, `dismissedFindings` serialization round-trip per contracts/serialization-v2.md
-- [ ] T020 [US3] Dispatch test-quality-reviewer over T019 and apply its findings
+- [X] T019 [US3] Write failing tests: in __tests__/engine/validation.test.ts identity equality across recomputes, magnitude-invariance, distinctness per subject, no silent identity collisions (spec US3); in __tests__/store/dismissals.test.ts advisory-only guard, stickiness through rule flicker, `dismissedFindings` serialization round-trip per contracts/serialization-v2.md
+- [X] T020 [US3] Dispatch test-quality-reviewer over T019 and apply its findings
 
 ### Implementation for User Story 3
 

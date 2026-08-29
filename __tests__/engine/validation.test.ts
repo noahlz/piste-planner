@@ -1,11 +1,30 @@
 import { describe, it, expect } from 'vitest'
 import { validateConfig, validateSameDayCompletion, validateFeasibility } from '../../src/engine/validation.ts'
+import * as validationEngine from '../../src/engine/validation.ts'
 import type { TournamentConfig, ValidationError, Competition } from '../../src/engine/types.ts'
 import {
   Category, CutMode, DeMode, EventType, Gender, TournamentType, VideoPolicy, Weapon,
   BottleneckSeverity, RuleKind, ValidationMode,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
+
+/**
+ * `findingIdentity` — the identity helper T021 adds to validation.ts
+ * (research D4, data-model.md §Finding): `${rule}:${subjects.join('+')}`.
+ * This name IS the contract T021 must satisfy — do not rename it here to
+ * make a test pass; change validation.ts to export this name instead.
+ * Referenced through an `unknown` cast (same pattern as
+ * __tests__/store/placements.test.ts's FutureState) so this file keeps
+ * compiling clean before the export exists — the TDD failure is a runtime
+ * error here, not a tsc error.
+ */
+function findingIdentity(finding: ValidationError): string {
+  const engine = validationEngine as unknown as { findingIdentity?: (f: ValidationError) => string }
+  if (!engine.findingIdentity) {
+    throw new Error('validation.ts does not yet export findingIdentity (T021)')
+  }
+  return engine.findingIdentity(finding)
+}
 
 // ──────────────────────────────────────────────
 // Rule → kind catalogue (research.md D3 + Correction 2026-08-29,
@@ -679,6 +698,120 @@ describe('validateConfig — rule catalogue is equal across modes', () => {
     expect(noticeBinding.length).toBeGreaterThan(0)
     expect(noticeBinding.every(e => e.severity === BottleneckSeverity.WARN)).toBe(true)
     expect(noticeAdvisory.every(e => e.severity === BottleneckSeverity.WARN)).toBe(true)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Finding identity (US3, research D4, data-model.md §Finding) — rule id
+// plus subjects, stable across recomputes, independent of message
+// magnitudes, distinct per subject, never colliding within one recompute.
+// ──────────────────────────────────────────────
+
+describe('finding identity — stable across recomputes (US3, research D4)', () => {
+  it('is equal across two recomputes of the same config for the same finding', () => {
+    const config = makeConfig({ days_available: 3 })
+    const comps = [1, 2, 3, 4].map(i =>
+      makeCompetition({
+        id: `indiv-${i}`,
+        gender: Gender.MEN,
+        category: Category.DIV1,
+        weapon: Weapon.FOIL,
+        event_type: EventType.INDIVIDUAL,
+      }),
+    )
+    const first = validateConfig(config, comps, ValidationMode.BINDING)
+    const second = validateConfig(config, comps, ValidationMode.BINDING)
+
+    const firstFinding = first.find(e => e.field === 'same_population')
+    const secondFinding = second.find(e => e.field === 'same_population')
+    expect(firstFinding, 'first recompute should still fire same_population').toBeDefined()
+    expect(secondFinding, 'second recompute should still fire same_population').toBeDefined()
+    expect(findingIdentity(firstFinding!)).toBe(findingIdentity(secondFinding!))
+  })
+
+  it('is unchanged when only a magnitude in the message changes, not the violating subject', () => {
+    // MEN-JR-EPEE-IND, 70 fencers → ceil(70/7)=10 pools, fires
+    // resource_precondition at both strips_total=8 and strips_total=9 — same
+    // rule, same violating competition, only the "only N total strips"
+    // magnitude in the message differs.
+    const comp = makeCompetition({ id: 'MEN-JR-EPEE-IND', fencer_count: 70, weapon: Weapon.EPEE })
+    const lowStrips = validateConfig(makeConfig({ strips: makeStrips(8, 1) }), [comp], ValidationMode.BINDING)
+    const higherStrips = validateConfig(makeConfig({ strips: makeStrips(9, 1) }), [comp], ValidationMode.BINDING)
+
+    const findingLow = lowStrips.find(e => e.field === 'resource_precondition')
+    const findingHigh = higherStrips.find(e => e.field === 'resource_precondition')
+    expect(findingLow, 'strips_total=8 should still fire resource_precondition').toBeDefined()
+    expect(findingHigh, 'strips_total=9 should still fire resource_precondition').toBeDefined()
+    expect(findingLow!.message).not.toBe(findingHigh!.message) // sanity: the magnitude actually changed
+    expect(findingIdentity(findingLow!)).toBe(findingIdentity(findingHigh!))
+  })
+
+  it('is distinct for the same rule fired on different subjects, and no two findings in one recompute collide', () => {
+    // Two independent competitions each exceeding strips_total=5 on the same
+    // resource_precondition rule: EVT-A needs 10 pools (70 fencers), EVT-B
+    // needs 8 pools (50 fencers).
+    const config = makeConfig({ strips: makeStrips(5, 1) })
+    const compA = makeCompetition({ id: 'EVT-A', fencer_count: 70, weapon: Weapon.EPEE })
+    const compB = makeCompetition({ id: 'EVT-B', fencer_count: 50, weapon: Weapon.EPEE })
+    const findings = validateConfig(config, [compA, compB], ValidationMode.BINDING)
+
+    const resourceFindings = findings.filter(e => e.field === 'resource_precondition')
+    expect(resourceFindings).toHaveLength(2)
+    expect(findingIdentity(resourceFindings[0])).not.toBe(findingIdentity(resourceFindings[1]))
+
+    const identities = findings.map(findingIdentity)
+    expect(new Set(identities).size).toBe(identities.length)
+  })
+})
+
+describe('finding identity — rule and subjects per kind (US3, data-model.md §Finding)', () => {
+  const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+
+  it('structural: rule is kebab-case, stable across recomputes, subjects is the violating competition id', () => {
+    const comp = makeCompetition({ id: 'bad-fencer-count', fencer_count: 0 })
+    const first = validateConfig(makeConfig(), [comp], ValidationMode.BINDING)
+    const second = validateConfig(makeConfig(), [comp], ValidationMode.BINDING)
+    const f1 = first.find(e => e.field === 'fencer_count')
+    const f2 = second.find(e => e.field === 'fencer_count')
+    expect(f1).toBeDefined()
+    expect(f2).toBeDefined()
+    expect(f1!.kind).toBe(RuleKind.STRUCTURAL)
+    expect(f1!.rule).toMatch(KEBAB_CASE)
+    expect(f1!.rule).toBe(f2!.rule)
+    expect(f1!.subjects).toEqual(['bad-fencer-count'])
+  })
+
+  it('policy: same-population rule id is exactly "same-population" — already pinned by contracts/serialization-v2.md and placements.test.ts dismissal fixtures', () => {
+    const config = makeConfig({ days_available: 3 })
+    const comps = [1, 2, 3, 4].map(i =>
+      makeCompetition({
+        id: `indiv-${i}`,
+        gender: Gender.MEN,
+        category: Category.DIV1,
+        weapon: Weapon.FOIL,
+        event_type: EventType.INDIVIDUAL,
+      }),
+    )
+    const findings = validateConfig(config, comps, ValidationMode.BINDING)
+    const finding = findings.find(e => e.field === 'same_population')
+    expect(finding).toBeDefined()
+    expect(finding!.kind).toBe(RuleKind.POLICY)
+    expect(finding!.rule).toBe('same-population')
+    expect(finding!.subjects).toEqual(['indiv-1', 'indiv-2', 'indiv-3', 'indiv-4'])
+  })
+
+  it('notice: days_available rule is kebab-case, stable, and subjects is [field] for this global rule', () => {
+    const config = makeConfig({ days_available: 1 })
+    const first = validateConfig(config, [makeCompetition()], ValidationMode.BINDING)
+    const second = validateConfig(config, [makeCompetition()], ValidationMode.BINDING)
+    const f1 = first.find(e => e.field === 'days_available')
+    const f2 = second.find(e => e.field === 'days_available')
+    expect(f1).toBeDefined()
+    expect(f2).toBeDefined()
+    expect(f1!.kind).toBe('notice')
+    expect(f1!.rule).toMatch(KEBAB_CASE)
+    expect(f1!.rule).toBe(f2!.rule)
+    expect(f1!.subjects).toEqual(['days_available'])
   })
 })
 
