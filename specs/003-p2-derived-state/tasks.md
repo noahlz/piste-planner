@@ -80,7 +80,7 @@ are complicated enough to consider Opus at dispatch time (constitution
 ### Implementation for User Story 2
 
 - [x] T017 [US2] Implement the split in src/engine/validation.ts: tag every rule with `RuleKind`, add the `ValidationMode` parameter, compute severity from kind+mode, replace the days check at validation.ts:379 with structural 1–14 + policy 2–4; scheduler stays the binding consumer at src/engine/concurrentScheduler.ts:182, store callers (src/store/runActions.ts, src/store/derived.ts) pass binding in P2. Run the drift ledger before/after – expected identical (all scenarios use 3–4 days); any diff halts until explained in the commit message **(commit)**
-- [ ] T018 [US2] US2 checkpoint: full gate, B4's pinned behavior (0 scheduled, 1 validation error) confirmed intact **(commit)**
+- [X] T018 [US2] US2 checkpoint: full gate, B4's pinned behavior (0 scheduled, 1 validation error) confirmed intact **(commit)**
 
 **Checkpoint**: Validation split ready for US3 identity and for P4's advisory consumer.
 
