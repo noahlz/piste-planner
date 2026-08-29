@@ -60,6 +60,9 @@ import {
   calculateDeDuration,
   deBlockDurations,
   dePhasesForBracket,
+  deSingleStageDuration,
+  deStagedPhaseDuration,
+  deStripFootprint,
 } from './de.ts'
 import { computeStripCap, recommendStripCount, peakDeStripDemand } from './stripBudget.ts'
 import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
@@ -69,7 +72,6 @@ import { assignDaysByColoring } from './dayColoring.ts'
 import { constraintScore } from './dayAssignment.ts'
 import { validateConfig } from './validation.ts'
 import { dayConsumedCapacity } from './capacity.ts'
-import { DEFAULT_DE_STRIP_FOOTPRINT } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // Types
@@ -447,17 +449,9 @@ function buildPhaseNodes(
     })
   }
 
-  // DE phases.
-  //
-  // Empirical DE durations in de_duration_table are calibrated against a
-  // DEFAULT_DE_STRIP_FOOTPRINT-strip cap per event, not bracketSize/2. Using
-  // bracketSize/2 directly (e.g. 128 for a 256 bracket) would let one
-  // event's DE claim 64+ strips and serialize against any other event on
-  // the same day — events would queue for hours rather than sharing the
-  // strip pool concurrently. Capping desired_strip_count at
-  // DEFAULT_DE_STRIP_FOOTPRINT keeps each event's DE footprint small enough
-  // that 3-5 events can run DE phases concurrently across an 80-strip floor.
-  const deDesired = Math.max(1, Math.min(Math.floor(bracketSize / 2), DEFAULT_DE_STRIP_FOOTPRINT))
+  // DE phases. See deStripFootprint for why the ask is capped rather than
+  // bracketSize/2 — a 3-5 event day has to share the strip pool concurrently.
+  const deDesired = deStripFootprint(bracketSize)
   if (comp.de_mode === DeMode.SINGLE_STAGE) {
     nodes.push({
       event_id: comp.id,
@@ -984,20 +978,16 @@ function computePhaseDuration(node: PhaseNode, cappedCount: number, event: Event
     const flightBPools = Math.floor(event.poolStructure.n_pools / 2)
     return estimatePoolDuration(flightBPools, event.poolBaseline, cappedCount, event.poolRefRes.refs_per_pool).actual_duration
   }
-  if (node.kind === PhaseKind.DE_PRELIMS) {
-    const ratio = cappedCount / Math.max(node.desired_strip_count, 1)
-    return snapToSlot(Math.ceil(node.duration_at_full / Math.max(ratio, 0.01)))
-  }
-  if (node.kind === PhaseKind.DE_R16) {
-    const ratio = cappedCount / Math.max(node.desired_strip_count, 1)
-    return snapToSlot(Math.ceil(node.duration_at_full / Math.max(ratio, 0.01)))
+  if (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16) {
+    return deStagedPhaseDuration(node.duration_at_full, cappedCount, node.desired_strip_count)
   }
   // DE_SINGLE: duration scales with ratio, but excludes gold-bout fraction.
-  const totalBouts = Math.floor(event.bracketSize / 2)
-  const adjustedTotal = totalBouts > 0 ? event.totalDeBase * (totalBouts - 1) / totalBouts : 0
-  const ratio = Math.min(cappedCount / Math.max(node.desired_strip_count, 1), 1.0)
-  if (ratio >= 1.0) return Math.round(adjustedTotal)
-  return Math.ceil(adjustedTotal / ratio)
+  return deSingleStageDuration(
+    event.totalDeBase,
+    event.bracketSize,
+    cappedCount,
+    node.desired_strip_count,
+  )
 }
 
 /**
