@@ -46,10 +46,10 @@ are complicated enough to consider Opus at dispatch time (constitution
 
 ### Tests for User Story 1 (write first, confirm failing)
 
-- [ ] T003 [P] [US1] Write failing engine tests in __tests__/engine/derive.test.ts: block geometry derived from `(placement, competition, config)` for pool-only, single-stage DE, staged DE, and flighted events; identical output on repeated calls (purity); out-of-range `day` returns flagged blocks instead of throwing (research D1, data-model.md)
-- [ ] T004 [P] [US1] Write failing store tests in __tests__/store/placements.test.ts: `PlacementsSlice` actions per data-model.md (auto-replace-all, update, remove-with-competition, pin), `runScheduleAll` writing auto placements instead of `scheduleResults`, and absence of `analysisStale`/`scheduleStale`/`markStale`/`clearStale` from the store type
-- [ ] T005 [P] [US1] Write failing serialization tests in __tests__/store/serialization.test.ts: schema v2 per contracts/serialization-v2.md – round-trip of placements byte-for-byte (SC-001), v1 rejection, days 1–14 bounds, lenient drop-and-report of unknown placement event ids, out-of-range `day` accepted
-- [ ] T006 [US1] Dispatch test-quality-reviewer over T003–T005 test files and apply its findings
+- [X] T003 [P] [US1] Write failing engine tests in __tests__/engine/derive.test.ts: block geometry derived from `(placement, competition, config)` for pool-only, single-stage DE, staged DE, and flighted events; identical output on repeated calls (purity); out-of-range `day` returns flagged blocks instead of throwing (research D1, data-model.md)
+- [X] T004 [P] [US1] Write failing store tests in __tests__/store/placements.test.ts: `PlacementsSlice` actions per data-model.md (auto-replace-all, update, remove-with-competition, pin), `runScheduleAll` writing auto placements instead of `scheduleResults`, and absence of `analysisStale`/`scheduleStale`/`markStale`/`clearStale` from the store type
+- [X] T005 [P] [US1] Write failing serialization tests in __tests__/store/serialization.test.ts: schema v2 per contracts/serialization-v2.md – round-trip of placements byte-for-byte (SC-001), v1 rejection, days 1–14 bounds, lenient drop-and-report of unknown placement event ids, out-of-range `day` accepted
+- [X] T006 [US1] Dispatch test-quality-reviewer over T003–T005 test files and apply its findings
 
 ### Implementation for User Story 1
 

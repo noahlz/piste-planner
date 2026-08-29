@@ -54,6 +54,8 @@ the JSON below. This contract governs what `serializeState` writes and what
   load fine – they are sticky records that may match future findings.
 - Unknown top-level keys remain rejected, unknown nested extras remain
   silently dropped, both as v1 behaved.
+- A stray top-level `referees` key is rejected like any other unknown key –
+  v1's legacy carve-out for it does not carry over to v2.
 
 ## Round-trip guarantee
 
