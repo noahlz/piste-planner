@@ -114,7 +114,7 @@ are complicated enough to consider Opus at dispatch time (constitution
 
 ### Implementation for User Story 4 (pure relocation – existing suites are its tests)
 
-- [ ] T023 [P] [US4] Move `SCENARIO_IDS`, `ScenarioId`, `ScenarioFixture`, and `SCENARIOS` to src/data/tournaments.ts; __tests__/helpers/scenarios.ts keeps `buildCompetitions`/`tournamentConfig` and re-exports the moved data (research D6); full gate green with unchanged scheduled counts, then drift ledger confirmed identical **(commit)**
+- [x] T023 [P] [US4] Move `SCENARIO_IDS`, `ScenarioId`, `ScenarioFixture`, and `SCENARIOS` to src/data/tournaments.ts; __tests__/helpers/scenarios.ts keeps `buildCompetitions`/`tournamentConfig` and re-exports the moved data (research D6); full gate green with unchanged scheduled counts, then drift ledger confirmed identical **(commit)**
 
 **Checkpoint**: P3's preset picker has its data source.
 
