@@ -132,7 +132,7 @@ are complicated enough to consider Opus at dispatch time (constitution
 - [x] T025 [US5] Dispatch test-quality-reviewer over T024 and apply its findings
 - [X] T026 [US5] Sanity-check the floor change by breaking one scenario intentionally in a scratch run (drop its strips) and confirming the floor now fails – then revert the scratch change; no commit if clean revert leaves no diff
 - [X] T027 [US5] Re-tune `CAPACITY_TARGET_FILL` in src/engine/dayColoring.ts per research D8: sweep candidates 0.4–0.8 in 0.1 steps, drift ledger per candidate, select the highest value with no scenario below its T024 floor and no ERROR-count rise – or record that 0.3 stands with the sweep evidence; update the constant's comment rationale; all eight before/after counts in the commit message (constitution III) **(commit)**
-- [ ] T028 [US5] US5 checkpoint: full gate, drift ledger reviewed against T001 baseline with every difference explained in the commit message **(commit)**
+- [X] T028 [US5] US5 checkpoint: full gate, drift ledger reviewed against T001 baseline with every difference explained in the commit message **(commit)**
 
 **Checkpoint**: Calibration debt paid, evidence in branch history.
 
