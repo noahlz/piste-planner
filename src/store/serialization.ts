@@ -1,6 +1,6 @@
 import type { StoreState, CompetitionConfig, GlobalOverrides } from './store.ts'
-import type { DayConfig, TournamentType, Weapon as WeaponType } from '../engine/types.ts'
-import { TournamentType as TT, Weapon } from '../engine/types.ts'
+import type { DayConfig, TournamentType, Weapon as WeaponType, Placement } from '../engine/types.ts'
+import { TournamentType as TT, Weapon, PlacementSource } from '../engine/types.ts'
 import { POOL_DURATION_MIN, POOL_DURATION_MAX } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
@@ -8,7 +8,7 @@ import { POOL_DURATION_MIN, POOL_DURATION_MAX } from '../engine/constants.ts'
 // ──────────────────────────────────────────────
 
 export interface SerializedState {
-  schemaVersion: 1
+  schemaVersion: 2
   tournament: {
     tournament_type: TournamentType
     days_available: number
@@ -22,9 +22,17 @@ export interface SerializedState {
     selectedCompetitions: Record<string, CompetitionConfig>
     globalOverrides: GlobalOverrides
   }
+  placements: Record<string, Placement>
+  dismissedFindings: string[]
 }
 
-const VALID_TOP_LEVEL_KEYS = ['schemaVersion', 'tournament', 'competitions'] as const
+const VALID_TOP_LEVEL_KEYS = [
+  'schemaVersion',
+  'tournament',
+  'competitions',
+  'placements',
+  'dismissedFindings',
+] as const
 const VALID_TOURNAMENT_TYPES = new Set(Object.values(TT))
 
 // ──────────────────────────────────────────────
@@ -34,7 +42,7 @@ const VALID_TOURNAMENT_TYPES = new Set(Object.values(TT))
 /** Serialize current store state to JSON string. Only serializable slices are included. */
 export function serializeState(state: StoreState): string {
   const serialized: SerializedState = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     tournament: {
       tournament_type: state.tournament_type,
       days_available: state.days_available,
@@ -47,6 +55,8 @@ export function serializeState(state: StoreState): string {
       selectedCompetitions: state.selectedCompetitions,
       globalOverrides: state.globalOverrides,
     },
+    placements: state.placements,
+    dismissedFindings: Object.keys(state.dismissedFindings),
   }
   return JSON.stringify(serialized)
 }
@@ -63,11 +73,10 @@ export function validateSchema(
     return { valid: false, error: 'Input must be a non-null object' }
   }
 
-  // Strip legacy 'referees' key for backward compat before validation
-  const obj = { ...(data as Record<string, unknown>) }
-  delete obj['referees']
+  const obj = data as Record<string, unknown>
 
-  // Check for unknown top-level fields
+  // Check for unknown top-level fields. v1's legacy carve-out for a stray
+  // "referees" key does not carry over – it is rejected like any other unknown field.
   const allowedKeys = new Set<string>(VALID_TOP_LEVEL_KEYS)
   for (const key of Object.keys(obj)) {
     if (!allowedKeys.has(key)) {
@@ -76,8 +85,8 @@ export function validateSchema(
   }
 
   // schemaVersion
-  if (obj.schemaVersion !== 1) {
-    return { valid: false, error: 'schemaVersion must be 1' }
+  if (obj.schemaVersion !== 2) {
+    return { valid: false, error: 'schemaVersion must be 2' }
   }
 
   // tournament
@@ -90,8 +99,8 @@ export function validateSchema(
     return { valid: false, error: `Invalid tournament_type: "${String(t.tournament_type)}"` }
   }
 
-  if (typeof t.days_available !== 'number' || t.days_available < 2 || t.days_available > 4) {
-    return { valid: false, error: 'days_available must be between 2 and 4' }
+  if (typeof t.days_available !== 'number' || t.days_available < 1 || t.days_available > 14) {
+    return { valid: false, error: 'days_available must be between 1 and 14' }
   }
 
   if (typeof t.strips_total !== 'number' || t.strips_total < 0) {
@@ -153,6 +162,59 @@ export function validateSchema(
     }
   }
 
+  // placements – required key, keyed by event id. A day beyond days_available - 1 is
+  // accepted here (stored intent); it surfaces as a finding elsewhere, not a load error.
+  if (obj.placements == null || typeof obj.placements !== 'object' || Array.isArray(obj.placements)) {
+    return { valid: false, error: 'placements must be an object' }
+  }
+  const placementsObj = obj.placements as Record<string, unknown>
+  for (const [id, entry] of Object.entries(placementsObj)) {
+    if (entry == null || typeof entry !== 'object') {
+      return { valid: false, error: `placement for "${id}" must be an object` }
+    }
+    const p = entry as Record<string, unknown>
+
+    if (typeof p.day !== 'number' || !Number.isInteger(p.day) || p.day < 0) {
+      return { valid: false, error: `placement.day for "${id}" must be a non-negative integer` }
+    }
+    if (typeof p.start_time !== 'number' || !Number.isInteger(p.start_time) || p.start_time < 0) {
+      return { valid: false, error: `placement.start_time for "${id}" must be a non-negative integer` }
+    }
+    if (typeof p.strip_count !== 'number' || !Number.isInteger(p.strip_count) || p.strip_count < 1) {
+      return { valid: false, error: `placement.strip_count for "${id}" must be an integer >= 1` }
+    }
+    if (p.source !== PlacementSource.AUTO && p.source !== PlacementSource.MANUAL) {
+      return { valid: false, error: `placement.source for "${id}" must be "auto" or "manual"` }
+    }
+    if (typeof p.pinned !== 'boolean') {
+      return { valid: false, error: `placement.pinned for "${id}" must be a boolean` }
+    }
+    if (p.strips !== null) {
+      if (!Array.isArray(p.strips)) {
+        return { valid: false, error: `placement.strips for "${id}" must be null or an array of integers` }
+      }
+      for (const idx of p.strips) {
+        if (typeof idx !== 'number' || !Number.isInteger(idx) || idx < 0) {
+          return {
+            valid: false,
+            error: `placement.strips for "${id}" must contain only non-negative integers`,
+          }
+        }
+      }
+    }
+  }
+
+  // dismissedFindings – required key, array of finding identities. Unknown identities are
+  // accepted (sticky records that may match a future recompute), so no cross-check here.
+  if (!Array.isArray(obj.dismissedFindings)) {
+    return { valid: false, error: 'dismissedFindings must be an array' }
+  }
+  for (const entry of obj.dismissedFindings) {
+    if (typeof entry !== 'string') {
+      return { valid: false, error: 'dismissedFindings must contain only strings' }
+    }
+  }
+
   return { valid: true, data: obj as unknown as SerializedState }
 }
 
@@ -162,11 +224,13 @@ export function validateSchema(
 
 /**
  * Deserialize JSON string back to partial store state.
- * Returns { state } on success, { error } on failure.
+ * Returns { state, droppedPlacements } on success, { error } on failure.
+ * droppedPlacements lists placement event ids dropped because they no longer
+ * match a selected competition (lenient load, always present, empty when none dropped).
  */
 export function deserializeState(
   json: string,
-): { state: Partial<StoreState> } | { error: string } {
+): { state: Partial<StoreState>; droppedPlacements: string[] } | { error: string } {
   let parsed: unknown
   try {
     parsed = JSON.parse(json)
@@ -196,7 +260,28 @@ export function deserializeState(
   if (data.tournament.pool_round_duration_table !== undefined) {
     state.pool_round_duration_table = data.tournament.pool_round_duration_table
   }
-  return { state }
+
+  // Lenient load: a placement whose event id isn't selected is dropped and reported,
+  // not an error (contract "Acceptance rules").
+  const knownIds = new Set(Object.keys(data.competitions.selectedCompetitions))
+  const placements: Record<string, Placement> = {}
+  const droppedPlacements: string[] = []
+  for (const [id, placement] of Object.entries(data.placements)) {
+    if (knownIds.has(id)) {
+      placements[id] = placement
+    } else {
+      droppedPlacements.push(id)
+    }
+  }
+  state.placements = placements
+
+  const dismissedFindings: Record<string, true> = {}
+  for (const id of data.dismissedFindings) {
+    dismissedFindings[id] = true
+  }
+  state.dismissedFindings = dismissedFindings
+
+  return { state, droppedPlacements }
 }
 
 // ──────────────────────────────────────────────
@@ -230,7 +315,7 @@ export function encodeToUrl(state: StoreState): string {
 /** Decode URL hash string back to partial store state. */
 export function decodeFromUrl(
   hash: string,
-): { state: Partial<StoreState> } | { error: string } {
+): { state: Partial<StoreState>; droppedPlacements: string[] } | { error: string } {
   if (!hash.startsWith(URL_PREFIX)) {
     return { error: `URL hash must start with "${URL_PREFIX}"` }
   }
