@@ -10,6 +10,41 @@ fill them in.
 Rows are numbered within each source file so the tally is countable at a
 glance: 47 + 27 + 4 = 78.
 
+## S2 amendments (2026-08-30)
+
+Two things S1's handoff left for S2 to settle, settled here before T009–T012
+created any file. Only the `Destination` column moved — no `Decision` changed.
+
+**1. The bucket-merge rule is applied consistently.** `plan.md`'s rule ("a
+bucket that ends up holding two cases is merged into its neighbour rather than
+kept for symmetry") was applied by T007 and not by T006. Applying it everywhere
+gives exactly the four files `plan.md` provisionally named:
+
+| File | Rows | Mounts |
+|---|---:|---|
+| `saveLoadShare.test.tsx` | 12 | `SaveLoadShare` |
+| `configEditing.test.tsx` | 11 | `TournamentSetup` ×2, `StripSetup` ×3, `FencerCounts` ×4, `CompetitionMatrix` ×1, one composed host ×1 |
+| `analysisOutput.test.tsx` | 9 | `AnalysisOutput` |
+| `scheduleOutput.test.tsx` | 7 | `ScheduleOutput` ×5 cases, `ScheduleView` ×3 cases |
+
+`refRequirementsReport.test.tsx` (2) and `scheduleView.test.tsx` (1) are **not
+created**; their rows fold into `scheduleOutput.test.tsx`, each case still
+mounting the component recorded for it. A second, decisive reason applies to the
+first: `__tests__/components/RefRequirementsReport.test.tsx` already exists with
+7 prop-driven cases, and macOS's case-insensitive filesystem makes
+`refRequirementsReport.test.tsx` the same path.
+
+**2. Rows 24 (referee half), 25 and 26 mount `ScheduleView`, not
+`RefRequirementsReport`.** S1 recorded `RefRequirementsReport` for rows 24 and
+25. That mount cannot exhibit the recorded behavior:
+`RefRequirementsReport.tsx` takes `requirements` as a prop and reads no store,
+so mounting it with a hand-built array asserts prop rendering — which the
+existing `RefRequirementsReport.test.tsx` already covers at
+`shows placeholder when every day derives zero demand` and
+`shows peak_total_refs and peak_saber_refs correctly`. `ScheduleView` is the
+smallest surviving component that wires `selectDerivedRefRequirements` into the
+report, so it is the mount D1's own rule selects. Row 26 already named it.
+
 ---
 
 ## `__tests__/components/KitchenSinkPage.test.tsx` (47)
@@ -91,9 +126,9 @@ glance: 47 + 27 + 4 = 78.
 | 21 | Layout toggle | wizard step is preserved when switching layouts | deleted | Asserts that toggling `layoutMode` does not reset `wizardStep`. Both the toggle and the wizard-step slice's product behavior leave with the wizard. |
 | 22 | ScheduleView derived output | renders no staleness banner — placements are always current | re-targeted | `__tests__/components/scheduleOutput.test.tsx`, mounts `ScheduleOutput`. Pure negative rendering check against `ScheduleOutput.tsx`, which owns the schedule-rows display. |
 | 23 | ScheduleView derived output | a placement seeded into the store renders as a schedule row | re-targeted | `__tests__/components/scheduleOutput.test.tsx`, mounts `ScheduleOutput`. Asserts only `ScheduleOutput.tsx`'s own row rendering (competition id, pool-start time) and its own empty-state text. |
-| 24 | ScheduleView derived output | shows the empty state when nothing is placed | re-targeted | Splits across two single-component destinations, not genuinely cross-section: `__tests__/components/scheduleOutput.test.tsx` mounting `ScheduleOutput` for "No events placed yet.", and `__tests__/components/refRequirementsReport.test.tsx` mounting `RefRequirementsReport` for "No referee demand — nothing is placed yet." Neither text depends on the other component being present — the original case bundled two independent single-component empty states because it rendered the composite `ScheduleView`. See report. |
-| 25 | ScheduleView derived output | referee requirements derive from the placement, not from a scheduler run | re-targeted | `__tests__/components/refRequirementsReport.test.tsx`, mounts `RefRequirementsReport`. Deviates from research D1's cluster table, which lists `ScheduleOutput` for "referee figures deriving from placements" — but `ScheduleOutput.tsx` renders no referee text at all ("Referee Requirements", "Peak Total Refs", "No referee demand..." are all `RefRequirementsReport.tsx`'s own strings). `RefRequirementsReport` is the actual smallest surviving component exhibiting this behavior, consistent with D1's own rule if not its summary table. Flagged for reconciliation — see report. |
-| 26 | ScheduleView derived output | Regenerate writes placements and the derived table follows | re-targeted | `__tests__/components/scheduleView.test.tsx`, mounts `ScheduleView`. The Regenerate button and its `runScheduleAll()` call are defined directly in `src/components/ScheduleView.tsx`, which is not under `src/components/sections/` and is not among 004 T020's deletions (research D6 names only `KitchenSinkPage.tsx` and the 5 files under `wizard/`) — so it remains the smallest surviving component containing this behavior. This is a gap in D1's cluster table, which addresses only `ActionButtons`/`TemplateSelector` as deleted triggers; `ScheduleView.tsx`'s own inline button is a third, uncovered case. Flagged for reconciliation — see report. |
+| 24 | ScheduleView derived output | shows the empty state when nothing is placed | re-targeted | Splits into two cases, both in `__tests__/components/scheduleOutput.test.tsx`: one mounting `ScheduleOutput` for "No events placed yet.", one mounting `ScheduleView` for "No referee demand — nothing is placed yet." Neither text depends on the other assertion — the original case bundled two independent empty states because it rendered the composite `ScheduleView`. **S2 amendment**: the referee half was recorded against a bare `RefRequirementsReport` mount, which reads no store and would duplicate that file's existing `shows placeholder when every day derives zero demand`. `ScheduleView` supplies the prop from `selectDerivedRefRequirements`, so it is the mount that exhibits the behavior. |
+| 25 | ScheduleView derived output | referee requirements derive from the placement, not from a scheduler run | re-targeted | `__tests__/components/scheduleOutput.test.tsx`, mounts `ScheduleView`. Deviates from research D1's cluster table, which lists `ScheduleOutput` for "referee figures deriving from placements" — but `ScheduleOutput.tsx` renders no referee text at all ("Referee Requirements", "Peak Total Refs", "No referee demand..." are all `RefRequirementsReport.tsx`'s own strings). **S2 amendment**: S1 recorded a bare `RefRequirementsReport` mount. That component takes `requirements` as a prop and reads no store, so a hand-built array cannot show anything deriving from a placement. `ScheduleView` is the smallest surviving component that wires the selector into the report — D1's own rule, if not its summary table. |
+| 26 | ScheduleView derived output | Regenerate writes placements and the derived table follows | re-targeted | `__tests__/components/scheduleOutput.test.tsx` (**S2 amendment**: bucket merged, was `scheduleView.test.tsx`), mounts `ScheduleView`. The Regenerate button and its `runScheduleAll()` call are defined directly in `src/components/ScheduleView.tsx`, which is not under `src/components/sections/` and is not among 004 T020's deletions (research D6 names only `KitchenSinkPage.tsx` and the 5 files under `wizard/`) — so it remains the smallest surviving component containing this behavior. This is a gap in D1's cluster table, which addresses only `ActionButtons`/`TemplateSelector` as deleted triggers; `ScheduleView.tsx`'s own inline button is a third, uncovered case. Flagged for reconciliation — see report. |
 | 27 | ScheduleView derived output | editing a placement changes the rendered schedule with no re-run | re-targeted | `__tests__/components/scheduleOutput.test.tsx`, mounts `ScheduleOutput`. Asserts only `ScheduleOutput.tsx`'s own row rendering following a `updatePlacement` call. |
 
 ## `__tests__/store/store.test.ts` — `describe('uiSlice')` (4)
