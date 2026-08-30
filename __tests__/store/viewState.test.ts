@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   loadViewState,
   saveViewState,
@@ -140,6 +140,24 @@ describe('viewState corrupt-storage handling', () => {
     expect(() => loadViewState()).not.toThrow()
     expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })
+
+  it('returns defaults when the stored value is the JSON literal null', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, 'null')
+    expect(() => loadViewState()).not.toThrow()
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults and does not throw when localStorage.getItem itself throws (e.g. Safari private mode)', () => {
+    const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError')
+    })
+    try {
+      expect(() => loadViewState()).not.toThrow()
+      expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+    } finally {
+      getItemSpy.mockRestore()
+    }
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -147,7 +165,12 @@ describe('viewState corrupt-storage handling', () => {
 // ──────────────────────────────────────────────
 
 describe('viewState is absent from the serialized tournament payload', () => {
-  it('never appears in serializeState output, under default or non-default view state', () => {
+  it('no ViewState field name appears as a key in the serialized payload', () => {
+    // saveViewState here is not exercising loadViewState/serializeState wiring
+    // (serializeState only ever reads its `state` parameter) — it guards
+    // against a future serializeState that starts reading loadViewState() as
+    // a side channel instead. If that ever happened, these field names would
+    // leak into the payload and the assertion below would catch it.
     saveViewState(sampleViewState())
     const state = populatedState()
     const json = serializeState(state)
