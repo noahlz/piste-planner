@@ -7,6 +7,11 @@
 #   ./scripts/run-chain.sh S1           # just the first link
 #   ./scripts/run-chain.sh S1 S2 S3     # add S3 — see the caution below
 #
+# Each link streams its progress to your terminal as it works — one line per
+# assistant message and per tool call — so you can watch it rather than staring
+# at a blank prompt for twenty minutes. The full event stream is also kept at
+# tmp/<link>.jsonl for reading afterwards.
+#
 # Each link is a separate `claude -p` process, so each starts with an empty
 # context and picks up state from three places, in decreasing order of trust:
 #
@@ -29,6 +34,14 @@
 # quickstart.md also puts SC-002 and SC-004 on a human observer.
 
 set -uo pipefail
+
+# This script relies on PIPESTATUS to tell a failed session apart from a failed
+# renderer. zsh spells that $pipestatus and sh has no equivalent, so a stray
+# `sh run-chain.sh` would read every link as successful. Refuse instead.
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "run-chain.sh needs bash. Run ./scripts/run-chain.sh or: bash scripts/run-chain.sh"
+  exit 1
+fi
 
 FEATURE=004-p3-workbench-shell
 BRANCH="$FEATURE"
@@ -82,6 +95,31 @@ if [ ! -f "$WT/$SPEC/tasks.md" ]; then
   exit 1
 fi
 
+# ── Live progress ────────────────────────────────────────────────────────────
+# Renders the stream-json event feed as readable lines. Always exits 0 — a
+# rendering hiccup must never take down the pipeline carrying the real work.
+# Add --include-partial-messages to the claude call below if you want text as
+# it is typed rather than per completed message; it is a lot noisier.
+
+render() {
+  jq -r --unbuffered '
+    if .type == "assistant" then
+      (.message.content // [])[]
+      | if .type == "text" then
+          "  " + (.text | gsub("\\s+"; " ") | .[0:150])
+        elif .type == "tool_use" then
+          "  · " + .name + "  "
+          + ((.input.description // .input.command // .input.file_path // "")
+             | tostring | gsub("\\s+"; " ") | .[0:90])
+        else empty end
+    elif .type == "system" and .subtype == "init" then
+      "  [session started]"
+    elif .type == "result" then
+      "  [session ended]"
+    else empty end
+  ' 2>/dev/null || true
+}
+
 # ── Verdict extraction ───────────────────────────────────────────────────────
 # --json-schema should make .result an object. Older shapes hand back a string
 # holding JSON, or prose with a fenced block. Try each rather than assuming.
@@ -108,7 +146,8 @@ gate() {
 
 for s in "${SESSIONS[@]}"; do
   prompt="$WT/$SPEC/sessions/$s.md"
-  out="tmp/$s.json"
+  raw="tmp/$s.jsonl"    # full event stream
+  out="tmp/$s.json"     # just the final result event
 
   [ -f "$prompt" ] || { echo "✗ no prompt file at $prompt"; exit 1; }
 
@@ -121,7 +160,8 @@ for s in "${SESSIONS[@]}"; do
       -n "$FEATURE-$s" \
       --permission-mode "$PERM_MODE" \
       --max-budget-usd "$BUDGET_USD" \
-      --output-format json \
+      --output-format stream-json \
+      --verbose \
       --json-schema '{
         "type": "object",
         "properties": {
@@ -131,13 +171,18 @@ for s in "${SESSIONS[@]}"; do
         },
         "required": ["status", "reason", "tasks_done"]
       }' \
-  ) > "$ROOT/$out"
-  rc=$?
+  ) | tee "$ROOT/$raw" | render
+  rc=${PIPESTATUS[0]}
 
-  if [ $rc -ne 0 ]; then
-    echo "✗ $s: claude exited $rc — see $out"
+  if [ "$rc" -ne 0 ]; then
+    echo "✗ $s: claude exited $rc — full event stream in $raw"
     exit 1
   fi
+
+  # The verdict is the last result event in the stream. Filter to lines that
+  # are plausibly JSON first, so one malformed line cannot stop jq.
+  grep -a '^{' "$ROOT/$raw" | jq -c 'select(.type == "result")' 2>/dev/null \
+    | tail -1 > "$ROOT/$out"
 
   status=$(extract "$out" status)
   reason=$(extract "$out" reason)
@@ -150,14 +195,21 @@ for s in "${SESSIONS[@]}"; do
                   else empty end) //
        []) | join(", ")' "$out" 2>/dev/null)
 
+  spend=$(jq -r '.total_cost_usd // empty' "$out" 2>/dev/null)
+
+  echo
   if [ -z "$status" ]; then
-    echo "✗ $s: no verdict found in $out — inspect it by hand before continuing"
+    echo "✗ $s: no verdict found — the session ended without one."
+    echo "  Result event: $out"
+    echo "  Full stream : $raw"
     exit 1
   fi
 
   echo "  verdict : $status"
   echo "  reason  : $reason"
   echo "  tasks   : ${done_tasks:-none reported}"
+  [ -n "$spend" ] && echo "  spend   : \$$spend"
+  echo "  stream  : $raw"
 
   if [ "$status" != "ok" ]; then
     echo "✗ $s halted. Read $WT/$SPEC/sessions/handoff.md, then continue by hand."
