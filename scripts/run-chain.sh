@@ -52,22 +52,34 @@ command -v jq >/dev/null || { echo "jq is required"; exit 1; }
 mkdir -p tmp
 
 # ── Preflight ────────────────────────────────────────────────────────────────
-# The spec artifacts are untracked on main. A worktree checked out from main
-# would not carry them, so they are copied in before the first link and T001
-# commits them onto the branch.
+# The feature's artifacts are tracked on main (60d7fd39df), so a worktree
+# checked out from main carries them and there is nothing to copy. Nothing is
+# copied in deliberately: doing so would drag uncommitted edits from the main
+# checkout into the branch, where they would look like committed work.
+#
+# Branch off origin/main when it is reachable, so a stale local main cannot
+# silently seed the branch from an older tree.
 
 if [ -d "$WT" ]; then
   echo "→ worktree $WT already exists, reusing it"
 else
-  echo "→ creating worktree $WT on branch $BRANCH"
-  git worktree add -b "$BRANCH" "$WT" main || exit 1
+  base=main
+  if git rev-parse --verify --quiet origin/main >/dev/null; then
+    git fetch --quiet origin main 2>/dev/null || true
+    base=origin/main
+  fi
+  echo "→ creating worktree $WT on branch $BRANCH from $base"
+  git worktree add -b "$BRANCH" "$WT" "$base" || exit 1
+  mkdir -p "$WT/tmp"
+fi
 
-  echo "→ copying untracked feature artifacts into the worktree"
-  mkdir -p "$WT/$SPEC" "$WT/tmp"
-  cp -R "$SPEC/." "$WT/$SPEC/"
-  cp docs/design/backlog.md                      "$WT/docs/design/backlog.md"
-  cp docs/design/competition-planner-workbench.md "$WT/docs/design/competition-planner-workbench.md"
-  cp scripts/run-chain.sh                        "$WT/scripts/run-chain.sh"
+# The chain is worthless if the branch did not start from a tree containing the
+# feature. Fail here rather than three links deep.
+if [ ! -f "$WT/$SPEC/tasks.md" ]; then
+  echo "✗ $WT/$SPEC/tasks.md is missing — the branch was cut from a tree without"
+  echo "  the feature artifacts. Confirm they are committed and reachable, then"
+  echo "  remove the worktree (git worktree remove $WT) and rerun."
+  exit 1
 fi
 
 # ── Verdict extraction ───────────────────────────────────────────────────────

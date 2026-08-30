@@ -43,7 +43,7 @@ The user lands the branch with `git merge --no-ff --no-commit` completed by
 
 **Purpose**: Isolate the work and capture the numbers the drift gate will need.
 
-- [ ] T001 Commit the feature's spec artifacts and the two `docs/design/` edits onto the branch, following the pattern `specs/003-p2-derived-state/` used at its T001. **The worktree and branch already exist** – `scripts/run-chain.sh` creates them and copies the untracked artifacts in before the first session starts, because a worktree checked out from `main` would not otherwise carry them *(subagent commits)*
+- [ ] T001 Confirm the starting point and record it: the worktree is on `004-p3-workbench-shell`, the working tree is clean, every artifact under `specs/004-p3-workbench-shell/` is present and tracked, and the branch's merge-base with `main` is noted for T002's baseline. **The worktree and branch already exist** – `scripts/run-chain.sh` creates them before the first session runs, and the feature's artifacts landed on `main` in 60d7fd39df so the checkout carries them
 - [ ] T002 Capture the pre-change B1–B8 baseline – scheduled event count, pool referee demand, and DE referee demand per scenario – into `specs/004-p3-workbench-shell/drift-baseline.md`, before any source file is edited, so the US4 gate compares against untouched `main` *(subagent commits)*
 
 **Checkpoint**: Worktree ready, baseline recorded.
