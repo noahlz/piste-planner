@@ -27,7 +27,10 @@ export interface ViewState {
   scorecardExpanded: boolean
 }
 
-export const DEFAULT_VIEW_STATE: ViewState = {
+// Frozen so a future accidental write (e.g. `state.timeZoom = x` instead of a
+// copy) throws immediately in strict mode rather than corrupting every
+// caller that shares this reference.
+export const DEFAULT_VIEW_STATE: ViewState = Object.freeze({
   viewMode: ViewMode.SCHEDULE,
   rowHeightStep: RowHeightStep.NORMAL,
   timeZoom: 1,
@@ -35,7 +38,7 @@ export const DEFAULT_VIEW_STATE: ViewState = {
   rowScroll: 0,
   drawerHeight: 240,
   scorecardExpanded: false,
-}
+})
 
 export const VIEW_STATE_STORAGE_KEY = 'piste-planner:view-state'
 
@@ -56,10 +59,29 @@ function isValidViewState(value: unknown): value is ViewState {
 
   if (typeof v.viewMode !== 'string' || !VIEW_MODES.has(v.viewMode)) return false
   if (typeof v.rowHeightStep !== 'string' || !ROW_HEIGHT_STEPS.has(v.rowHeightStep)) return false
-  if (typeof v.timeZoom !== 'number') return false
-  if (typeof v.timeScroll !== 'number') return false
-  if (typeof v.rowScroll !== 'number') return false
-  if (typeof v.drawerHeight !== 'number') return false
+  // Range checks, not just typeof: a stored value out of range is as
+  // untrustworthy as one of the wrong type, and falls back to the same
+  // wholesale default rather than being clamped or merged field-by-field.
+  // Number.isFinite is required explicitly — typeof Infinity === 'number'
+  // and Infinity satisfies both `> 0` and `>= 0` bounds below.
+  if (typeof v.timeZoom !== 'number' || !Number.isFinite(v.timeZoom) || v.timeZoom <= 0) {
+    return false
+  }
+  if (typeof v.timeScroll !== 'number' || !Number.isFinite(v.timeScroll) || v.timeScroll < 0) {
+    return false
+  }
+  // Number.isInteger(Infinity) is false, so this already excludes non-finite
+  // values without a separate Number.isFinite check.
+  if (typeof v.rowScroll !== 'number' || !Number.isInteger(v.rowScroll) || v.rowScroll < 0) {
+    return false
+  }
+  if (
+    typeof v.drawerHeight !== 'number' ||
+    !Number.isFinite(v.drawerHeight) ||
+    v.drawerHeight < 0
+  ) {
+    return false
+  }
   if (typeof v.scorecardExpanded !== 'boolean') return false
 
   return true
@@ -75,27 +97,37 @@ export function loadViewState(): ViewState {
   try {
     raw = localStorage.getItem(VIEW_STATE_STORAGE_KEY)
   } catch {
-    return DEFAULT_VIEW_STATE
+    return { ...DEFAULT_VIEW_STATE }
   }
   if (raw == null || raw === '') {
-    return DEFAULT_VIEW_STATE
+    return { ...DEFAULT_VIEW_STATE }
   }
 
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
-    return DEFAULT_VIEW_STATE
+    return { ...DEFAULT_VIEW_STATE }
   }
 
   if (!isValidViewState(parsed)) {
-    return DEFAULT_VIEW_STATE
+    return { ...DEFAULT_VIEW_STATE }
   }
 
   return parsed
 }
 
-/** Writes viewer preferences to localStorage, overwriting any previous value under the same key. */
+/**
+ * Writes viewer preferences to localStorage, overwriting any previous value
+ * under the same key. Never throws — a full quota or a browser that denies
+ * storage access (e.g. Safari private mode) must not interrupt the caller,
+ * matching the tolerance loadViewState() already has for a throwing getItem.
+ */
 export function saveViewState(state: ViewState): void {
-  localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify(state))
+  try {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // Storage unavailable or full: the view preference silently doesn't
+    // persist for this session, which is preferable to breaking the caller.
+  }
 }
