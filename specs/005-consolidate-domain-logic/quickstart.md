@@ -114,5 +114,7 @@ Before 004's S2 starts:
 2. 004's `sessions/S2.md` and `S3.md` reflect that triage is done and point at
    `triage-record.md`, and no longer instruct S3 to make 78 judgment calls or
    act on the superseded 52 and 79 counts ([research D5](./research.md)).
-3. `scripts/run-chain.sh`'s header caution about S3 is updated for the same
-   reason.
+`scripts/run-chain.sh` is deliberately not updated. The session-chaining
+experiment was abandoned on 2026-08-30 — sessions are now driven by pointing
+Claude at a file under `sessions/`, so the script's header caution instructs
+nobody.
