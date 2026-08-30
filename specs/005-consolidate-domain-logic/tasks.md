@@ -139,7 +139,7 @@ reconciles to `878 − deleted + added`.
 - [x] T018 Update `specs/004-p3-workbench-shell/sessions/S2.md` and `S3.md` so S3 no longer instructs 78 judgment calls and no longer cites the superseded 52 and 79 counts. Point S3 at `triage-record.md` instead, and reduce its T021–T022 brief to re-pointing already-triaged tests at the workbench. **Do not touch 004's `tasks.md`, `plan.md`, `spec.md`, or `research.md`** ([research D5](./research.md)). `scripts/run-chain.sh` is **not** updated – the session-chaining experiment was abandoned on 2026-08-30 and sessions are now driven by pointing Claude at a `sessions/*.md` file. Removing the script is the user's call, not this task's *(subagent commits)*
 - [x] T019 Point `.specify/feature.json` back at `specs/004-p3-workbench-shell` so 004's remaining sessions resolve correctly
 - [x] T020 Write `specs/005-consolidate-domain-logic/sessions/handoff.md`: tasks completed with commit SHAs, the re-targeted and deleted tally with where survivors went, **any coverage knowingly dropped and why** – the thing most worth writing down and easiest to leave out – the final suite count and how it reconciles, and anything not finished *(subagent commits)*
-- [ ] T021 Feature checkpoint **(user commits)**. The branch is ready; hand it back with a paste-ready resume prompt for 004's S2
+- [x] T021 Feature checkpoint **(user commits)**. The branch is ready; hand it back with a paste-ready resume prompt for 004's S2
 
 **Checkpoint**: Feature complete. 004's S2 can begin.
 
