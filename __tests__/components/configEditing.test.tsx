@@ -8,10 +8,11 @@ import { AnalysisOutput } from '../../src/components/sections/AnalysisOutput.tsx
 import { useStore } from '../../src/store/store.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 
-// 005 T012: 11 config-editing cases moved out of KitchenSinkPage.test.tsx
-// (triage-record.md rows 2, 3, 4, 5, 14, 15, 18, 19, 23, 26, 27), each mounting
-// one section component alone instead of the departing page. Row 23's case
-// mounts a small composed host, the one genuinely cross-section case.
+// 005 T012: 11 config-editing cases moved out of the departing layout test
+// file (triage-record.md rows 2, 3, 4, 5, 14, 15, 18, 19, 23, 26, 27), each
+// mounting one section component alone instead of the departing page. Row
+// 23's case mounts a small composed host, the one genuinely cross-section
+// case.
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())

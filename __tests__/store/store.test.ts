@@ -127,37 +127,6 @@ describe('tournamentSlice', () => {
   })
 })
 
-describe('uiSlice', () => {
-  describe('initial state', () => {
-    it('has correct defaults', () => {
-      const state = useStore.getState()
-      expect(state.layoutMode).toBe('wizard')
-      expect(state.wizardStep).toBe(0)
-    })
-  })
-
-  describe('setLayoutMode', () => {
-    it('sets layout mode to wizard', () => {
-      useStore.getState().setLayoutMode('wizard')
-      expect(useStore.getState().layoutMode).toBe('wizard')
-    })
-
-    it('sets layout mode to kitchen-sink', () => {
-      useStore.getState().setLayoutMode('wizard')
-      useStore.getState().setLayoutMode('kitchen-sink')
-      expect(useStore.getState().layoutMode).toBe('kitchen-sink')
-    })
-  })
-
-  describe('setStep', () => {
-    it('sets wizardStep', () => {
-      useStore.getState().setStep(3)
-      expect(useStore.getState().wizardStep).toBe(3)
-    })
-  })
-
-})
-
 describe('competitionSlice', () => {
   // Known catalogue IDs for testing — Cadet Men's Foil and Junior Women's Epee
   const CADET_MF = 'CDT-M-FOIL-IND'

@@ -6,13 +6,13 @@ import { useStore } from '../../src/store/store.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { makePlacement } from '../helpers/factories.ts'
 
-// 005 T011: 7 schedule-output rows moved out of KitchenSinkPage.test.tsx and
-// WizardShell.test.tsx (triage-record.md rows: WizardShell 22, 23, 24, 25, 26,
-// 27; KitchenSinkPage 41). Row 24 splits into two cases — a schedule half
-// mounting ScheduleOutput and a referee half mounting ScheduleView — since one
-// source case asserted both empty states at once. Five cases mount
-// ScheduleOutput alone; three mount ScheduleView, the smallest surviving
-// component that wires selectDerivedRefRequirements into
+// 005 T011: 7 schedule-output rows moved out of the two departing layout test
+// files (triage-record.md rows: one departing file's rows 22, 23, 24, 25, 26,
+// 27; the other departing file's row 41). Row 24 splits into two cases — a
+// schedule half mounting ScheduleOutput and a referee half mounting
+// ScheduleView — since one source case asserted both empty states at once.
+// Five cases mount ScheduleOutput alone; three mount ScheduleView, the
+// smallest surviving component that wires selectDerivedRefRequirements into
 // RefRequirementsReport (see triage-record.md's S2 amendments).
 
 beforeEach(() => {
