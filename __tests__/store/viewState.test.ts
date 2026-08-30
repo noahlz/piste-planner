@@ -31,6 +31,25 @@ function sampleViewState(): ViewState {
   }
 }
 
+/**
+ * Serializes sampleViewState() to JSON text with one numeric field replaced
+ * by a raw `1e999` literal — valid JSON, but it parses to +Infinity (IEEE
+ * double overflow). JSON.stringify(Infinity) would serialize that field to
+ * `null` instead, which isValidViewState already rejects on `typeof` alone,
+ * so a round trip through JSON.stringify would fail these cases for the
+ * wrong reason. Building the payload text by hand is the only way to store
+ * an actual non-finite number.
+ */
+function jsonWithNonFiniteField(field: 'timeZoom' | 'timeScroll' | 'drawerHeight'): string {
+  const sample = sampleViewState()
+  const entries = (Object.keys(sample) as (keyof ViewState)[]).map((key) =>
+    key === field
+      ? `${JSON.stringify(key)}:1e999`
+      : `${JSON.stringify(key)}:${JSON.stringify(sample[key])}`,
+  )
+  return `{${entries.join(',')}}`
+}
+
 /** A populated store snapshot, for the "untouched by serializeState" test. */
 function populatedState() {
   const store = useStore
@@ -232,6 +251,26 @@ describe('viewState range validation', () => {
       VIEW_STATE_STORAGE_KEY,
       JSON.stringify({ ...sampleViewState(), drawerHeight: -240 }),
     )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  // typeof Infinity === 'number' and Infinity satisfies both `> 0` and
+  // `>= 0`, so only an explicit finiteness check rejects it — a bound check
+  // alone is not enough. (rowScroll is exempt: Number.isInteger(Infinity)
+  // is false, so the integer rule already catches it.)
+
+  it('returns defaults wholesale when timeZoom is +Infinity', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, jsonWithNonFiniteField('timeZoom'))
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when timeScroll is +Infinity', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, jsonWithNonFiniteField('timeScroll'))
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when drawerHeight is +Infinity', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, jsonWithNonFiniteField('drawerHeight'))
     expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })
 })
