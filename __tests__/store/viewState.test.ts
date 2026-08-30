@@ -71,6 +71,23 @@ describe('viewState round trip', () => {
 })
 
 // ──────────────────────────────────────────────
+// saveViewState and storage failures
+// ──────────────────────────────────────────────
+
+describe('viewState save-storage-failure handling', () => {
+  it('does not throw when localStorage.setItem throws (e.g. quota exceeded)', () => {
+    const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError')
+    })
+    try {
+      expect(() => saveViewState(DEFAULT_VIEW_STATE)).not.toThrow()
+    } finally {
+      setItemSpy.mockRestore()
+    }
+  })
+})
+
+// ──────────────────────────────────────────────
 // Defaults when absent
 // ──────────────────────────────────────────────
 
@@ -78,6 +95,27 @@ describe('viewState defaults', () => {
   it('returns DEFAULT_VIEW_STATE when the key is absent', () => {
     expect(localStorage.getItem(VIEW_STATE_STORAGE_KEY)).toBeNull()
     expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Shared-reference safety
+// ──────────────────────────────────────────────
+
+describe('viewState shared-reference safety', () => {
+  it('does not leak a mutation of one loadViewState() result into a later call', () => {
+    const first = loadViewState()
+    const originalRowScroll = first.rowScroll
+    first.rowScroll = originalRowScroll + 1
+    try {
+      const second = loadViewState()
+      expect(second.rowScroll).toBe(originalRowScroll)
+    } finally {
+      // Restore in case loadViewState() handed back a shared reference (the
+      // defect this case targets) — keeps this case's failure from cascading
+      // into unrelated cases later in the file.
+      first.rowScroll = originalRowScroll
+    }
   })
 })
 
@@ -157,6 +195,44 @@ describe('viewState corrupt-storage handling', () => {
     } finally {
       getItemSpy.mockRestore()
     }
+  })
+})
+
+// ──────────────────────────────────────────────
+// Numeric fields are range-checked, not just type-checked
+// ──────────────────────────────────────────────
+
+describe('viewState range validation', () => {
+  it('returns defaults wholesale when timeZoom is not greater than zero', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), timeZoom: 0 }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when timeScroll is negative', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), timeScroll: -30 }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when rowScroll is not an integer', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), rowScroll: 2.5 }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when drawerHeight is negative', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), drawerHeight: -240 }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })
 })
 
