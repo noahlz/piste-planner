@@ -68,39 +68,39 @@ glance: 47 + 27 + 4 = 78.
 
 | # | Source (describe block) | Case | Decision | Destination / reason |
 |---:|---|---|---|---|
-| 1 | WizardShell navigation | renders step 1 (Tournament) by default | | |
-| 2 | WizardShell navigation | Forward button advances to the next step | | |
-| 3 | WizardShell navigation | Back button retreats to the previous step | | |
-| 4 | WizardShell navigation | Back button is disabled on Step 1 (index 0) | | |
-| 5 | WizardShell navigation | Back button is enabled when not on Step 1 | | |
-| 6 | WizardShell navigation | clicking Back on Step 1 does not go below step 0 | | |
-| 7 | WizardShell navigation | Forward button shows "Next" on steps 0–2 | | |
-| 8 | WizardShell navigation | Forward button shows "View Schedule" on Step 4 (Analysis, index 3) | | |
-| 9 | WizardShell navigation | Forward button is not rendered on Step 5 (Schedule, index 4) | | |
-| 10 | WizardShell navigation | Forward blocked on Step 4 (Analysis) when hard ERROR validation errors exist | | |
-| 11 | WizardShell navigation | Forward blocked on Step 4 does not advance step when clicked | | |
-| 12 | WizardShell navigation | Forward allowed on Step 4 when no hard errors | | |
-| 13 | WizardShell navigation | fixing strips re-enables Forward without any validate run | | |
-| 14 | WizardShell navigation | step indicator renders all 5 step labels | | |
-| 15 | Layout toggle | default layout mode is wizard | | |
-| 16 | Layout toggle | switching to wizard layout renders wizard content | | |
-| 17 | Layout toggle | switching to kitchen-sink layout hides wizard content | | |
-| 18 | Layout toggle | wizard layout renders WizardShell step indicator labels | | |
-| 19 | Layout toggle | kitchen-sink layout does not render wizard step indicators | | |
-| 20 | Layout toggle | state (strips_total) is preserved when switching layouts | | |
-| 21 | Layout toggle | wizard step is preserved when switching layouts | | |
-| 22 | ScheduleView derived output | renders no staleness banner — placements are always current | | |
-| 23 | ScheduleView derived output | a placement seeded into the store renders as a schedule row | | |
-| 24 | ScheduleView derived output | shows the empty state when nothing is placed | | |
-| 25 | ScheduleView derived output | referee requirements derive from the placement, not from a scheduler run | | |
-| 26 | ScheduleView derived output | Regenerate writes placements and the derived table follows | | |
-| 27 | ScheduleView derived output | editing a placement changes the rendered schedule with no re-run | | |
+| 1 | WizardShell navigation | renders step 1 (Tournament) by default | deleted | Asserts the wizard's default step-1 rendering; the workbench has no step sequence to default into. |
+| 2 | WizardShell navigation | Forward button advances to the next step | deleted | Asserts Forward-button step advancement; the workbench has no Forward button or step sequence. |
+| 3 | WizardShell navigation | Back button retreats to the previous step | deleted | Asserts Back-button step retreat; the workbench has no Back button or step sequence. |
+| 4 | WizardShell navigation | Back button is disabled on Step 1 (index 0) | deleted | Asserts Back-button disabled state tied to step index; the workbench has no Back button. |
+| 5 | WizardShell navigation | Back button is enabled when not on Step 1 | deleted | Asserts Back-button enabled state tied to step index; the workbench has no Back button. |
+| 6 | WizardShell navigation | clicking Back on Step 1 does not go below step 0 | deleted | Asserts a step-index floor on the Back button; the workbench has no Back button or step index. |
+| 7 | WizardShell navigation | Forward button shows "Next" on steps 0–2 | deleted | Asserts Forward-button label switching by step; the workbench has no Forward button or steps. |
+| 8 | WizardShell navigation | Forward button shows "View Schedule" on Step 4 (Analysis, index 3) | deleted | Asserts Forward-button label switching by step; the workbench has no Forward button or steps. |
+| 9 | WizardShell navigation | Forward button is not rendered on Step 5 (Schedule, index 4) | deleted | Asserts Forward-button presence tied to step index; the workbench has no Forward button or steps. |
+| 10 | WizardShell navigation | Forward blocked on Step 4 (Analysis) when hard ERROR validation errors exist | deleted | Asserts Forward-button disabled state gated on hard validation errors; the workbench has no Forward button. Hard-error detection itself is covered independently (e.g. KitchenSinkPage error-state tests, AnalysisOutput's Validation heading tests). |
+| 11 | WizardShell navigation | Forward blocked on Step 4 does not advance step when clicked | deleted | Asserts that a disabled Forward button does not advance the step on click; the workbench has no Forward button or step index. |
+| 12 | WizardShell navigation | Forward allowed on Step 4 when no hard errors | deleted | Asserts Forward-button enabled state when no hard errors; the workbench has no Forward button. |
+| 13 | WizardShell navigation | fixing strips re-enables Forward without any validate run | deleted | Its navigation half (Forward-button disabled/enabled state) leaves with the Forward button. Its derived-findings half (validation recomputes on setStrips with no explicit validate call) needs no new home: it is already covered by `__tests__/store/derived.test.ts`'s `selectDerivedFindings > reports validation errors from current inputs – a zero strip count surfaces and clears`, which exercises the identical zero-strips-then-fixed sequence against the same selector this button's `disabled` prop reads. See report for the full reasoning. |
+| 14 | WizardShell navigation | step indicator renders all 5 step labels | deleted | Asserts the step-indicator chrome; the workbench has no step indicator. |
+| 15 | Layout toggle | default layout mode is wizard | deleted | Asserts the default `layoutMode` value; the wizard/kitchen-sink toggle leaves the product at 004's T020. The `layoutMode` field itself persists dormant in the store until then (research D6) but the toggle behavior it drives does not. |
+| 16 | Layout toggle | switching to wizard layout renders wizard content | deleted | Asserts the layout toggle switching to the wizard view; the toggle and the wizard both leave the product. |
+| 17 | Layout toggle | switching to kitchen-sink layout hides wizard content | deleted | Asserts the layout toggle switching to the kitchen-sink view; the toggle and the wizard both leave the product. |
+| 18 | Layout toggle | wizard layout renders WizardShell step indicator labels | deleted | Asserts the layout toggle plus the step indicator it reveals; both leave the product. |
+| 19 | Layout toggle | kitchen-sink layout does not render wizard step indicators | deleted | Asserts the layout toggle plus the step indicator's absence in the other mode; both leave the product. |
+| 20 | Layout toggle | state (strips_total) is preserved when switching layouts | deleted | Asserts that toggling `layoutMode` does not reset unrelated store state (`strips_total`). The toggle itself is removed, so there is no longer a layout switch for any state to be preserved across. |
+| 21 | Layout toggle | wizard step is preserved when switching layouts | deleted | Asserts that toggling `layoutMode` does not reset `wizardStep`. Both the toggle and the wizard-step slice's product behavior leave with the wizard. |
+| 22 | ScheduleView derived output | renders no staleness banner — placements are always current | re-targeted | `__tests__/components/scheduleOutput.test.tsx`, mounts `ScheduleOutput`. Pure negative rendering check against `ScheduleOutput.tsx`, which owns the schedule-rows display. |
+| 23 | ScheduleView derived output | a placement seeded into the store renders as a schedule row | re-targeted | `__tests__/components/scheduleOutput.test.tsx`, mounts `ScheduleOutput`. Asserts only `ScheduleOutput.tsx`'s own row rendering (competition id, pool-start time) and its own empty-state text. |
+| 24 | ScheduleView derived output | shows the empty state when nothing is placed | re-targeted | Splits across two single-component destinations, not genuinely cross-section: `__tests__/components/scheduleOutput.test.tsx` mounting `ScheduleOutput` for "No events placed yet.", and `__tests__/components/refRequirementsReport.test.tsx` mounting `RefRequirementsReport` for "No referee demand — nothing is placed yet." Neither text depends on the other component being present — the original case bundled two independent single-component empty states because it rendered the composite `ScheduleView`. See report. |
+| 25 | ScheduleView derived output | referee requirements derive from the placement, not from a scheduler run | re-targeted | `__tests__/components/refRequirementsReport.test.tsx`, mounts `RefRequirementsReport`. Deviates from research D1's cluster table, which lists `ScheduleOutput` for "referee figures deriving from placements" — but `ScheduleOutput.tsx` renders no referee text at all ("Referee Requirements", "Peak Total Refs", "No referee demand..." are all `RefRequirementsReport.tsx`'s own strings). `RefRequirementsReport` is the actual smallest surviving component exhibiting this behavior, consistent with D1's own rule if not its summary table. Flagged for reconciliation — see report. |
+| 26 | ScheduleView derived output | Regenerate writes placements and the derived table follows | re-targeted | `__tests__/components/scheduleView.test.tsx`, mounts `ScheduleView`. The Regenerate button and its `runScheduleAll()` call are defined directly in `src/components/ScheduleView.tsx`, which is not under `src/components/sections/` and is not among 004 T020's deletions (research D6 names only `KitchenSinkPage.tsx` and the 5 files under `wizard/`) — so it remains the smallest surviving component containing this behavior. This is a gap in D1's cluster table, which addresses only `ActionButtons`/`TemplateSelector` as deleted triggers; `ScheduleView.tsx`'s own inline button is a third, uncovered case. Flagged for reconciliation — see report. |
+| 27 | ScheduleView derived output | editing a placement changes the rendered schedule with no re-run | re-targeted | `__tests__/components/scheduleOutput.test.tsx`, mounts `ScheduleOutput`. Asserts only `ScheduleOutput.tsx`'s own row rendering following a `updatePlacement` call. |
 
 ## `__tests__/store/store.test.ts` — `describe('uiSlice')` (4)
 
 | # | Source (describe block) | Case | Decision | Destination / reason |
 |---:|---|---|---|---|
-| 1 | uiSlice > initial state | has correct defaults | | |
-| 2 | uiSlice > setLayoutMode | sets layout mode to wizard | | |
-| 3 | uiSlice > setLayoutMode | sets layout mode to kitchen-sink | | |
-| 4 | uiSlice > setStep | sets wizardStep | | |
+| 1 | uiSlice > initial state | has correct defaults | deleted | Asserts the default values of `layoutMode` and `wizardStep`. The layout toggle and the wizard's step sequence leave the product at 004's T020, even though both fields persist dormant in the store until then (research D6). |
+| 2 | uiSlice > setLayoutMode | sets layout mode to wizard | deleted | Asserts `setLayoutMode('wizard')`; the layout toggle leaves the product with the wizard/kitchen-sink distinction it switches between. |
+| 3 | uiSlice > setLayoutMode | sets layout mode to kitchen-sink | deleted | Asserts `setLayoutMode('kitchen-sink')`; the layout toggle leaves the product with the wizard/kitchen-sink distinction it switches between. |
+| 4 | uiSlice > setStep | sets wizardStep | deleted | Asserts `setStep`; wizard step navigation leaves the product with the wizard. |
