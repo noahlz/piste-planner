@@ -69,6 +69,9 @@ export function Drawer() {
         role="separator"
         aria-label="Resize drawer"
         aria-orientation="horizontal"
+        aria-valuenow={height}
+        aria-valuemin={MIN_HEIGHT}
+        aria-valuemax={MAX_HEIGHT}
         tabIndex={0}
         className="h-1.5 shrink-0 cursor-row-resize bg-border hover:bg-foreground/20"
         onKeyDown={handleKeyDown}

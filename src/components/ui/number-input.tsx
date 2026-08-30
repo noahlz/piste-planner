@@ -59,15 +59,21 @@ export function NumberInput({
     const next = e.target.value
     setLocalValue(next)
     if (!commitOnChange) return
-    // An unparseable or empty field commits nothing on this path — the field
-    // keeps its local text and the last committed value stands until blur
-    // (or a later keystroke) resolves it, matching handleBlur's own revert.
+    // An unparseable, empty, or out-of-range field commits nothing on this
+    // path — the field keeps its local text and the last committed value
+    // stands until blur (or a later keystroke) resolves it, matching
+    // handleBlur's own revert. Unlike blur, this path never clamps: clamping
+    // mid-keystroke would commit a value the user never typed and rewrite
+    // the field's text out from under them (review finding E) — e.g. typing
+    // "-1" into a min=0 field would commit 0 and overwrite "-1" with "0"
+    // before the user finished typing.
     const trimmed = next.trim()
     if (trimmed === '') return
     const parsed = Number(trimmed)
     if (isNaN(parsed)) return
-    const committed = clamp(Math.trunc(parsed))
-    if (committed !== value) onChange(committed)
+    const truncated = Math.trunc(parsed)
+    if (truncated < min || truncated > max) return
+    if (truncated !== value) onChange(truncated)
   }
 
   function handleBlur() {

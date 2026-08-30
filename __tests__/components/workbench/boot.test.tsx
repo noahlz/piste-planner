@@ -30,6 +30,17 @@ describe('bootstrap with no usable fragment', () => {
     expect(within(center).queryByText('No events placed yet.')).not.toBeInTheDocument()
     expect(within(center).getAllByRole('row').length).toBeGreaterThan(1)
   })
+
+  // review finding B: the preset picker is a local useState in TopBar today,
+  // set only by its own change handler, so boot()'s applyPreset call never
+  // reaches it and the combobox reads blank on a normal first load.
+  it('leaves the preset picker showing the loaded preset without any picker interaction', () => {
+    bootstrap('')
+    render(<WorkbenchShell />)
+
+    const preset = SCENARIOS[DEFAULT_PRESET_ID]
+    expect(screen.getByRole('combobox', { name: 'Preset' })).toHaveTextContent(preset.label)
+  })
 })
 
 describe('bootstrap with a #config= fragment', () => {

@@ -20,10 +20,13 @@ export const CENTER_SETTLE_MS = 150
  *    `useDeferredValue`: React flushes a deferred value inside `act()`, which
  *    would make the test proving the center did *not* relayout vacuous.
  * 2. Dimmed invalid (FR-009). While any derived finding is ERROR the commit is
- *    suppressed outright, so the center goes on showing the last valid layout
- *    rather than an empty or half-derived one. It never blanks, under any
- *    sequence of edits. The dim itself tracks the *live* findings, so it lands
- *    on the keystroke that broke the config rather than a settle later.
+ *    suppressed outright, so the center goes on showing whatever it last
+ *    committed — the last valid layout once an edit has broken a config that
+ *    was valid, or the invalid derivation itself on a cold boot into an
+ *    already-invalid config (e.g. a shared URL), since there is no valid
+ *    layout yet to fall back to. Dimmed, never blanked, either way, under any
+ *    sequence of edits. The dim itself tracks the *live* findings, so it
+ *    lands on the keystroke that broke the config rather than a settle later.
  */
 export function CenterView() {
   const live = useStore(selectDerivedSchedule)
@@ -55,6 +58,8 @@ export function CenterView() {
       {hasBlocking && (
         <section
           aria-label="Blocking findings"
+          aria-live="assertive"
+          aria-atomic="true"
           className="absolute inset-x-4 top-4 rounded-md border border-red-200 bg-error p-4 text-error-text shadow-lg"
         >
           <h2 className="flex items-center gap-2 text-sm font-semibold">

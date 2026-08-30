@@ -22,9 +22,9 @@ const DAY_COUNTS = [2, 3, 4]
  * The gears control is US5's; no placeholder for it here.
  */
 export function TopBar() {
-  const [presetId, setPresetId] = useState<string>('')
   const [saveShareOpen, setSaveShareOpen] = useState(false)
 
+  const loadedPresetId = useStore((s) => s.loadedPresetId)
   const tournamentType = useStore((s) => s.tournament_type)
   const setTournamentType = useStore((s) => s.setTournamentType)
   const daysAvailable = useStore((s) => s.days_available)
@@ -36,7 +36,6 @@ export function TopBar() {
   const hasHardErrors = validationErrors.some((e) => e.severity === 'ERROR')
 
   function handlePresetChange(id: string) {
-    setPresetId(id)
     applyPreset(id as ScenarioId)
     runScheduleAll()
   }
@@ -46,7 +45,7 @@ export function TopBar() {
       aria-label="Top bar"
       className="flex shrink-0 items-center gap-4 border-b bg-slate-800 px-4 py-2 text-white"
     >
-      <Select value={presetId} onValueChange={handlePresetChange}>
+      <Select value={loadedPresetId ?? ''} onValueChange={handlePresetChange}>
         <SelectTrigger id="topbar-preset" aria-label="Preset" className="w-56">
           <SelectValue placeholder="Preset" />
         </SelectTrigger>

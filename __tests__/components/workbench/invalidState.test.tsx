@@ -73,6 +73,10 @@ describe('CenterView dimmed-invalid rule', () => {
       within(overlay).getByRole('heading', { name: 'Configuration is invalid' }),
     ).toBeInTheDocument()
     expect(overlay.textContent).toContain('strips_total: strips_total must be > 0')
+    // review finding C: the overlay must be announced to assistive tech the
+    // instant a config goes invalid, not just visible to sighted users.
+    expect(overlay).toHaveAttribute('aria-live', 'assertive')
+    expect(overlay).toHaveAttribute('aria-atomic', 'true')
   })
 
   it('lists one line per ERROR finding when more than one is present at once', () => {

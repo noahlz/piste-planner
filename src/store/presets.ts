@@ -21,4 +21,8 @@ export function applyPreset(id: ScenarioId, state: StoreState = useStore.getStat
   for (const [competitionId, fencerCount] of Object.entries(fixture.fencerCounts)) {
     state.updateCompetition(competitionId, { fencer_count: fencerCount })
   }
+
+  // Records which preset is loaded so the top bar's picker reflects it even
+  // when boot(), not a picker interaction, is what loaded it (review finding B).
+  state.setLoadedPresetId(id)
 }
