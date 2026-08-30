@@ -69,6 +69,29 @@ Constants that P1 newly surfaces and that belong in this file:
 
 `video_stage_mode` arrives with P5, not P1.
 
+## Save / load / share browser plumbing
+
+*Specified and cut from
+[`specs/005-consolidate-domain-logic/`](../../specs/005-consolidate-domain-logic/spec.md)
+on 2026-08-30. Unassigned.*
+
+`SaveLoadShare.tsx` defines its save, load, and share handlers inline: a blob
+built and downloaded through a synthetic anchor, a `FileReader` read, a share
+URL assembled from `window.location`, a clipboard write, and a 2KB size
+threshold. None of it is layout, but all of it is reachable only by rendering
+the component, which is why its cases sat in `KitchenSinkPage.test.tsx` and had
+to be re-homed rather than pointed at a module.
+
+The serialization underneath is already extracted and already carries 76 tests
+in `__tests__/store/serialization.test.ts`. What is left is the browser
+plumbing wrapped around it.
+
+Cut from 005 because `SaveLoadShare.tsx` survives 004's T020 deletion – it is
+re-homed into the workbench top bar intact – so nothing breaks without the
+extraction, and doing it there would have traded a test dependency on one
+layout for a dependency on another. Worth picking up when the top bar is
+settled and the trade is no longer circular.
+
 ## Youth-event pool duration calibration
 
 B4 currently predicts 5–6 hours for Y8/Y10 events that finish in 2–3 hours in

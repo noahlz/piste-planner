@@ -43,8 +43,8 @@ The user lands the branch with `git merge --no-ff --no-commit` completed by
 
 **Purpose**: Isolate the work and capture the numbers the drift gate will need.
 
-- [ ] T001 Confirm the starting point and record it: the worktree is on `004-p3-workbench-shell`, the working tree is clean, every artifact under `specs/004-p3-workbench-shell/` is present and tracked, and the branch's merge-base with `main` is noted for T002's baseline. **The worktree and branch already exist** – `scripts/run-chain.sh` creates them before the first session runs, and the feature's artifacts landed on `main` in 60d7fd39df so the checkout carries them
-- [ ] T002 Capture the pre-change B1–B8 baseline – scheduled event count, pool referee demand, and DE referee demand per scenario – into `specs/004-p3-workbench-shell/drift-baseline.md`, before any source file is edited, so the US4 gate compares against untouched `main` *(subagent commits)*
+- [x] T001 Confirm the starting point and record it: the worktree is on `004-p3-workbench-shell`, the working tree is clean, every artifact under `specs/004-p3-workbench-shell/` is present and tracked, and the branch's merge-base with `main` is noted for T002's baseline. **The worktree and branch already exist** – `scripts/run-chain.sh` creates them before the first session runs, and the feature's artifacts landed on `main` in 60d7fd39df so the checkout carries them
+- [x] T002 Capture the pre-change B1–B8 baseline – scheduled event count, pool referee demand, and DE referee demand per scenario – into `specs/004-p3-workbench-shell/drift-baseline.md`, before any source file is edited, so the US4 gate compares against untouched `main` *(subagent commits)*
 
 **Checkpoint**: Worktree ready, baseline recorded.
 
@@ -56,9 +56,9 @@ The user lands the branch with `git merge --no-ff --no-commit` completed by
 
 **⚠️ No user story work begins until this phase is complete.**
 
-- [ ] T003 Write failing tests for the view-state module in `__tests__/store/viewState.test.ts` – round-trips through `localStorage`, returns defaults when the key is absent or unparseable, and is untouched by `serializeState`
-- [ ] T004 Implement the view-state module in `src/store/viewState.ts` per [data-model.md](./data-model.md) §New: view state, keeping it outside `src/store/serialization.ts` so an unnamed field cannot reach a share URL (research D10)
-- [ ] T005 Dispatch `test-quality-reviewer` on T003's tests
+- [x] T003 Write failing tests for the view-state module in `__tests__/store/viewState.test.ts` – round-trips through `localStorage`, returns defaults when the key is absent or unparseable, and is untouched by `serializeState`
+- [x] T004 Implement the view-state module in `src/store/viewState.ts` per [data-model.md](./data-model.md) §New: view state, keeping it outside `src/store/serialization.ts` so an unnamed field cannot reach a share URL (research D10)
+- [x] T005 Dispatch `test-quality-reviewer` on T003's tests
 
 **Checkpoint**: Viewer preferences persist. User stories may begin.
 
