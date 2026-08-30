@@ -94,7 +94,9 @@ describe('memoization', () => {
     // A store update to a field selectDerivedSchedule does not depend on still
     // replaces the top-level state object reference in Zustand — memoization
     // must be keyed on the relevant slices, not on that identity.
-    useStore.getState().setLayoutMode('kitchen-sink')
+    // undismissFinding always calls set() (even for an id that was never
+    // dismissed), and dismissedFindings is not a scheduleDeps entry.
+    useStore.getState().undismissFinding('unrelated-finding-id')
     const second = selectDerivedSchedule(useStore.getState())
 
     expect(second).toBe(first)

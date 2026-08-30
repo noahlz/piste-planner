@@ -31,6 +31,25 @@ function sampleViewState(): ViewState {
   }
 }
 
+/**
+ * Serializes sampleViewState() to JSON text with one numeric field replaced
+ * by a raw `1e999` literal — valid JSON, but it parses to +Infinity (IEEE
+ * double overflow). JSON.stringify(Infinity) would serialize that field to
+ * `null` instead, which isValidViewState already rejects on `typeof` alone,
+ * so a round trip through JSON.stringify would fail these cases for the
+ * wrong reason. Building the payload text by hand is the only way to store
+ * an actual non-finite number.
+ */
+function jsonWithNonFiniteField(field: 'timeZoom' | 'timeScroll' | 'drawerHeight'): string {
+  const sample = sampleViewState()
+  const entries = (Object.keys(sample) as (keyof ViewState)[]).map((key) =>
+    key === field
+      ? `${JSON.stringify(key)}:1e999`
+      : `${JSON.stringify(key)}:${JSON.stringify(sample[key])}`,
+  )
+  return `{${entries.join(',')}}`
+}
+
 /** A populated store snapshot, for the "untouched by serializeState" test. */
 function populatedState() {
   const store = useStore
@@ -71,6 +90,23 @@ describe('viewState round trip', () => {
 })
 
 // ──────────────────────────────────────────────
+// saveViewState and storage failures
+// ──────────────────────────────────────────────
+
+describe('viewState save-storage-failure handling', () => {
+  it('does not throw when localStorage.setItem throws (e.g. quota exceeded)', () => {
+    const setItemSpy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError')
+    })
+    try {
+      expect(() => saveViewState(DEFAULT_VIEW_STATE)).not.toThrow()
+    } finally {
+      setItemSpy.mockRestore()
+    }
+  })
+})
+
+// ──────────────────────────────────────────────
 // Defaults when absent
 // ──────────────────────────────────────────────
 
@@ -78,6 +114,76 @@ describe('viewState defaults', () => {
   it('returns DEFAULT_VIEW_STATE when the key is absent', () => {
     expect(localStorage.getItem(VIEW_STATE_STORAGE_KEY)).toBeNull()
     expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Shared-reference safety
+// ──────────────────────────────────────────────
+
+describe('viewState shared-reference safety', () => {
+  it('does not leak a mutation of one loadViewState() result into a later call', () => {
+    const first = loadViewState()
+    const originalRowScroll = first.rowScroll
+    first.rowScroll = originalRowScroll + 1
+    try {
+      const second = loadViewState()
+      expect(second.rowScroll).toBe(originalRowScroll)
+    } finally {
+      // Restore in case loadViewState() handed back a shared reference (the
+      // defect this case targets) — keeps this case's failure from cascading
+      // into unrelated cases later in the file.
+      first.rowScroll = originalRowScroll
+    }
+  })
+
+  // The case above only exercises the "key absent" fallback branch.
+  // loadViewState() has three other fallback sites that return the same
+  // `{ ...DEFAULT_VIEW_STATE }` copy — getItem throwing, malformed JSON, and
+  // failed shape validation — and each is a separate line of source that
+  // could regress to returning the shared DEFAULT_VIEW_STATE reference
+  // without any of the existing toEqual-only corrupt-storage cases noticing,
+  // since toEqual compares values, not identity.
+
+  it('does not leak a mutation of one loadViewState() result into a later call when localStorage.getItem throws', () => {
+    const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError')
+    })
+    try {
+      const first = loadViewState()
+      const originalRowScroll = first.rowScroll
+      first.rowScroll = originalRowScroll + 1
+      const second = loadViewState()
+      expect(second.rowScroll).toBe(originalRowScroll)
+    } finally {
+      getItemSpy.mockRestore()
+    }
+  })
+
+  it('does not leak a mutation of one loadViewState() result into a later call when the stored value is malformed JSON', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, '{not valid json')
+    const first = loadViewState()
+    const originalRowScroll = first.rowScroll
+    first.rowScroll = originalRowScroll + 1
+    try {
+      const second = loadViewState()
+      expect(second.rowScroll).toBe(originalRowScroll)
+    } finally {
+      first.rowScroll = originalRowScroll
+    }
+  })
+
+  it('does not leak a mutation of one loadViewState() result into a later call when the stored value fails shape validation', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify({ foo: 'bar' }))
+    const first = loadViewState()
+    const originalRowScroll = first.rowScroll
+    first.rowScroll = originalRowScroll + 1
+    try {
+      const second = loadViewState()
+      expect(second.rowScroll).toBe(originalRowScroll)
+    } finally {
+      first.rowScroll = originalRowScroll
+    }
   })
 })
 
@@ -157,6 +263,64 @@ describe('viewState corrupt-storage handling', () => {
     } finally {
       getItemSpy.mockRestore()
     }
+  })
+})
+
+// ──────────────────────────────────────────────
+// Numeric fields are range-checked, not just type-checked
+// ──────────────────────────────────────────────
+
+describe('viewState range validation', () => {
+  it('returns defaults wholesale when timeZoom is not greater than zero', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), timeZoom: 0 }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when timeScroll is negative', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), timeScroll: -30 }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when rowScroll is not an integer', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), rowScroll: 2.5 }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when drawerHeight is negative', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), drawerHeight: -240 }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  // typeof Infinity === 'number' and Infinity satisfies both `> 0` and
+  // `>= 0`, so only an explicit finiteness check rejects it — a bound check
+  // alone is not enough. (rowScroll is exempt: Number.isInteger(Infinity)
+  // is false, so the integer rule already catches it.)
+
+  it('returns defaults wholesale when timeZoom is +Infinity', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, jsonWithNonFiniteField('timeZoom'))
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when timeScroll is +Infinity', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, jsonWithNonFiniteField('timeScroll'))
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when drawerHeight is +Infinity', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, jsonWithNonFiniteField('drawerHeight'))
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })
 })
 
