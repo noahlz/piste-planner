@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { KitchenSinkPage } from './components/KitchenSinkPage.tsx'
 import { WizardShell } from './components/wizard/WizardShell.tsx'
+import { WorkbenchShell } from './components/workbench/WorkbenchShell.tsx'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { LayoutDashboard, Wand2 } from 'lucide-react'
-import { decodeFromUrl } from './store/serialization.ts'
+import { LayoutDashboard, Wand2, Wrench } from 'lucide-react'
+import { bootstrap } from './store/boot.ts'
 import { useStore } from './store/store.ts'
 
 function LayoutToggle() {
@@ -13,6 +14,10 @@ function LayoutToggle() {
   return (
     <Tabs value={layoutMode} onValueChange={(v) => setLayoutMode(v as typeof layoutMode)}>
       <TabsList className="bg-slate-700">
+        <TabsTrigger value="workbench" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
+          <Wrench className="mr-1.5 h-4 w-4" />
+          Workbench
+        </TabsTrigger>
         <TabsTrigger value="kitchen-sink" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
           <LayoutDashboard className="mr-1.5 h-4 w-4" />
           Single Page
@@ -28,23 +33,14 @@ function LayoutToggle() {
 
 function App() {
   const layoutMode = useStore((s) => s.layoutMode)
+  const booted = useRef(false)
 
+  // StrictMode invokes mount effects twice in development. Booting twice would
+  // re-apply the preset over a shared link's state, so the ref gates it.
   useEffect(() => {
-    const hash = window.location.hash
-    if (hash.startsWith('#config=')) {
-      const result = decodeFromUrl(hash)
-      if ('error' in result) {
-        console.error('Failed to load config from URL:', result.error)
-      } else {
-        useStore.setState(result.state)
-        if (result.droppedPlacements.length > 0) {
-          console.warn(
-            'Dropped placements for events not in the shared configuration:',
-            result.droppedPlacements.join(', '),
-          )
-        }
-      }
-    }
+    if (booted.current) return
+    booted.current = true
+    bootstrap()
   }, [])
 
   return (
@@ -56,7 +52,13 @@ function App() {
         </div>
         <LayoutToggle />
       </header>
-      {layoutMode === 'wizard' ? <WizardShell /> : <KitchenSinkPage />}
+      {layoutMode === 'workbench' ? (
+        <WorkbenchShell />
+      ) : layoutMode === 'wizard' ? (
+        <WizardShell />
+      ) : (
+        <KitchenSinkPage />
+      )}
     </div>
   )
 }

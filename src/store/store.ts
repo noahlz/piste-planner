@@ -36,6 +36,7 @@ const DAY_END = 1320 // 10:00 PM in minutes from midnight
 const LayoutMode = {
   KITCHEN_SINK: 'kitchen-sink',
   WIZARD: 'wizard',
+  WORKBENCH: 'workbench',
 } as const
 type LayoutMode = (typeof LayoutMode)[keyof typeof LayoutMode]
 
@@ -310,7 +311,7 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
 
 function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
-    layoutMode: 'wizard',
+    layoutMode: 'workbench',
     wizardStep: 0,
 
     setLayoutMode: (mode) => set({ layoutMode: mode }),
