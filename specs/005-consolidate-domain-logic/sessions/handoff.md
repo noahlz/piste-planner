@@ -244,3 +244,181 @@ mid-implementation is the re-plan the constitution forbids.
 Nothing in scope was left undone, and no halt condition fired. T009 onward was
 out of scope by instruction and was not started. S2 begins at **T009** with the
 US2 triage complete and every decision recorded.
+
+## S2
+
+**Scope**: T009–T020 — the mechanical half. T021 is the user's commit and was
+not made.
+
+### Tasks completed
+
+| Task | Commit | What landed |
+|---|---|---|
+| — | `0777323df6` | The two decisions S1 left open, settled before any file was created. See below. |
+| T009 | `156a57981f` | `saveLoadShare.test.tsx` — 12 cases, mounts `SaveLoadShare` |
+| T010 | `290f941944` | `analysisOutput.test.tsx` — 9 cases, mounts `AnalysisOutput` |
+| T011 | `3120139d01` | `scheduleOutput.test.tsx` — 8 cases, 5 on `ScheduleOutput` and 3 on `ScheduleView` |
+| T012 | `97509acdc0` | `configEditing.test.tsx` — 11 cases across 4 section components plus one composed host |
+| T013 | `183510c89c` | Both departing files deleted, `uiSlice` block removed, plus two remediations folded in |
+| T014 | – (no artifact) | Both FR-008 greps verified empty by the orchestrator, independently of T013's report |
+| T015 | – (no artifact) | `test-quality-reviewer` on all four new files plus the edited `derived.test.ts` case. **No coverage gaps found; no findings applied.** |
+| T016 | – (no artifact) | Gate, suite run twice. See below. |
+| T017 | – (no artifact) | B1–B8 re-run. Zero movement on all 8 scenarios × 3 columns. |
+| T018 | `5448b87f7c` | 004's `S2.md` and `S3.md` retargeted at the finished triage record |
+| T019 | – (gitignored) | `.specify/feature.json` back to `specs/004-p3-workbench-shell` |
+| T020 | this section | – |
+
+### Gate at end of session
+
+`tsc -b` exit 0, `lint` exit 0, full suite **852 passed (852)** across 36 files,
+run twice with identical results.
+
+### Suite count reconciliation
+
+**890 → 852**, and the arithmetic closes exactly:
+
+```
+890  at S1 close
+− 78  every triaged case, removed from its old home
++ 40  the survivors, in their new homes
+= 852
+```
+
+The +40 against 39 re-targeted rows is not a discrepancy. One row —
+`shows the empty state when nothing is placed` — splits into two `it()` blocks,
+because its two assertions land on two different components. Both live in
+`scheduleOutput.test.tsx`; the referee half is the only case in this feature
+whose title changed, to `shows the referee empty state when nothing is placed`,
+since two cases in one file cannot share a title.
+
+Against S2.md's stated `878 − deleted + added`: `878 − 78 + 40 = 840`, plus S1's
+12 US1 additions = 852. Both framings agree.
+
+### The two decisions S1 left open, and how they were settled
+
+Settled and committed **before** T009–T012 created any file, so no subagent
+worked against an unresolved record. Both are written into
+`triage-record.md`'s own `## S2 amendments` section — the record and the tree
+describe each other.
+
+**1. The bucket-merge rule is applied everywhere.** T007 applied `plan.md`'s
+rule ("a bucket that ends up holding two cases is merged into its neighbour")
+and T006 did not. Applying it consistently folds `refRequirementsReport` (2) and
+`scheduleView` (1) into `scheduleOutput.test.tsx`, giving exactly the four files
+`plan.md` provisionally named. Each case still mounts the component recorded for
+it — a file is a bucket, not a shared mount, which is the same shape
+`configEditing.test.tsx` already had.
+
+A second reason settles it independently of the rule:
+`__tests__/components/RefRequirementsReport.test.tsx` **already exists** with 7
+prop-driven cases, and macOS's case-insensitive filesystem makes
+`refRequirementsReport.test.tsx` the same path. S1 could not have known this
+without listing the directory.
+
+**2. Rows 24 (referee half) and 25 mount `ScheduleView`, not
+`RefRequirementsReport`.** This is a correction to the triage record, recorded
+loudly rather than made silently. `RefRequirementsReport.tsx` takes
+`requirements` as a prop and reads no store. Mounting it with a hand-built array
+cannot exhibit "referee requirements derive from the placement" — the claim the
+case exists to make — and would duplicate the existing file's
+`shows placeholder when every day derives zero demand` and
+`shows peak_total_refs and peak_saber_refs correctly`. `ScheduleView` reads
+`selectDerivedRefRequirements` and passes it down, so it is the mount D1's own
+rule selects. Row 26 had already named it. **No `Decision` cell changed** — the
+39/39 split is S1's, untouched.
+
+### Where the survivors went
+
+| File | Rows | Cases | Mounts |
+|---|---:|---:|---|
+| `saveLoadShare.test.tsx` | 12 | 12 | `SaveLoadShare` |
+| `configEditing.test.tsx` | 11 | 11 | `TournamentSetup` ×2, `StripSetup` ×3, `FencerCounts` ×4, `CompetitionMatrix` ×1, composed host ×1 |
+| `analysisOutput.test.tsx` | 9 | 9 | `AnalysisOutput` |
+| `scheduleOutput.test.tsx` | 7 | 8 | `ScheduleOutput` ×5, `ScheduleView` ×3 |
+| **Total** | **39** | **40** | |
+
+Every section component mounted here takes no props and reads the store
+directly, so each move was a straight swap of the page for one component. The
+one exception is `configEditing.test.tsx`'s cross-section case, which composes a
+local `FencerCountsAndAnalysis` rendering `<><FencerCounts /><AnalysisOutput /></>`
+inside the test file — D1's escape hatch, not a page import.
+
+### Coverage knowingly dropped
+
+**By S2 itself: none.** Every one of the 39 re-targeted rows landed, with its
+assertions carried over verbatim. `test-quality-reviewer` diffed all 40 cases
+against the originals recovered at `97509acdc0` and found no weakened or dropped
+assertion. S1's three knowingly-dropped behaviors — (a) the ERROR-severity
+scheduling gate, (b) render coverage for a template picker, (c) "no action
+button triggers scheduling on demand" — are unchanged and still stand as
+written in §S1. **(a) remains a product gap for 004 to build, not a test to
+restore.**
+
+**One vacuous assertion was carried forward rather than fixed.**
+`scheduleOutput.test.tsx`'s `renders no staleness banner — placements are always
+current` asserts the absence of "Results are outdated" / "out of date", and
+neither string exists anywhere in `src/components/`. It was vacuous in its
+original `ScheduleView` mount too, so this is pre-existing, not introduced by
+the move. It was kept because deleting it would re-decide a triage row S1 made
+and would break the count reconciliation this feature exists to protect.
+Whoever owns the staleness banner should either implement it or delete the
+assertion — it is not S2's call to make on the way past.
+
+### Things 004's S2 must not be surprised by
+
+- **`derived.test.ts`'s unrelated setter changed.** The memoization case
+  `ignores unrelated store changes — same output reference even after an
+  unrelated set() call` used `setLayoutMode('kitchen-sink')` as its deliberately
+  unrelated write. It now uses `undismissFinding`, verified on both criteria
+  that make the test non-vacuous: `dismissedFindings` is absent from
+  `scheduleDeps` (`src/store/derived.ts:74–93`), and `undismissFinding`
+  (`src/store/store.ts:382–387`) calls `set()` unconditionally, so it still
+  replaces the top-level state reference — which is the identity the test exists
+  to prove memoization does *not* key on. `dismissFinding` was rejected as a
+  substitute: it is a guarded no-op that only fires for an id currently matching
+  a WARN-severity finding, so it would have silently made the test vacuous.
+- **S1's claim that T014's grep would catch `derived.test.ts:97` was wrong.**
+  The call was `setLayoutMode`, capital L; `grep "layoutMode"` is
+  case-sensitive and never matched it. The line was fixed anyway, folded into
+  T013 as instructed — but a green T014 would never have surfaced it, and the
+  §S1 note describing the grep as the safety net should not be relied on.
+- **Three provenance comments were reworded.** T009–T012 wrote header comments
+  naming `KitchenSinkPage.test.tsx` / `WizardShell.test.tsx` as the source of
+  each moved case. Harmless as code, but T014's gate is "the grep returns
+  nothing", not "no import exists" — so the comments now say "the departing
+  layout test files" and keep their `triage-record.md` row citations, which is
+  what a reader actually follows.
+- **`analysisOutput.test.tsx` gained a `describe` wrapper.** T010 left its 9
+  cases at top level while importing `describe`, which failed both `tsc -b`
+  (TS6133) and `lint`. Wrapped in `describe('AnalysisOutput')` to match its three
+  siblings. No case title, body, or assertion changed.
+- **`src/` is untouched except `viewState.ts`.** `git diff --stat main..HEAD -- src/`
+  shows one file, US1's. `src/engine/` is byte-identical to `main`, which is why
+  T017 is proof rather than a diff. `src/store/store.ts`'s `layoutMode` slice,
+  `KitchenSinkPage.tsx`, and everything under `src/components/wizard/` are all
+  still there, still rendered by `src/App.tsx:60`. **004's T020 owns their
+  removal and is now a source-only deletion.**
+
+### What changed in 004's session prompts
+
+`S3.md` no longer instructs anyone to triage. Its superseded 52 and 79 counts
+are gone, replaced by the real ones, and it now states both the 39 re-targeted
+rows and the 40 resulting cases rather than picking one and hiding the split.
+Its orient list flags research D12's counts as superseded and points at
+`triage-record.md`. T020 is marked source-only. T021–T022 shrank from a
+case-by-case triage to: confirm the four files still pass against what S2
+builds, fix a mount only if a component's props or context changed, and halt if
+a fix would require changing what a test asserts. T023's smoke-repair section
+and T024–T025 were left alone — they cited nothing stale.
+
+`S2.md` needed exactly one fix: its "do not start T020" paragraph described
+T021/T022 as working through "79 test cases one at a time", which no longer
+describes those tasks.
+
+004's `tasks.md`, `plan.md`, `spec.md`, and `research.md` were not touched.
+
+### Not finished, and why
+
+Nothing in scope was left undone and no halt condition fired. T021 is the
+user's commit by instruction and was not made — the branch is handed back
+ready. Feature 005 is complete.
