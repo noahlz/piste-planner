@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, within, act } from '@testing-library/react'
-import { CenterView } from '../../../src/components/workbench/CenterView.tsx'
+import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import { makePlacement } from '../../helpers/factories.ts'
@@ -114,5 +114,94 @@ describe('CenterView across an edit sequence', () => {
     expect(screen.getByText(id)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
     expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
+  })
+})
+
+// The suite above proves the dim and the overlay, both of which are driven by
+// *live* findings and land synchronously. The suppression rule itself — that
+// the CENTER_SETTLE_MS timer never replaces `committed` while a finding is
+// ERROR — only shows up once that timer is given a chance to fire, which
+// needs fake timers: on real timers (as above) the debounce simply never
+// elapses inside the test, so a version of CenterView with the suppression
+// guard deleted would pass every case above unnoticed.
+describe('CenterView suppresses the settle-timer commit while blocking (FR-009)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** The row's cells in table order: id, day, pool start, pool end, DE start, DE end, strips. */
+  function rowCells(id: string): string[] {
+    const row = screen.getByText(id).closest('tr')
+    if (!row) throw new Error(`no <tr> found for ${id}`)
+    return within(row).getAllByRole('cell').map((cell) => cell.textContent ?? '')
+  }
+
+  it('still shows the pre-edit row after the settle timer elapses, not the ERROR-state one', () => {
+    const id = seedPlacedCompetition()
+    render(<CenterView />)
+
+    const before = rowCells(id)
+    expect(before[3]).toBe('9:45') // pool end at strips_total=12
+    expect(before[6]).toBe('5') // pool_strip_count at strips_total=12
+
+    act(() => {
+      // strips_total 12 -> 3: n_pools (5) > strips_total raises
+      // resource_precondition, and also lowers the pool strip cap, so the
+      // derived pool geometry actually changes (5 strips -> 2, pool end
+      // 9:45 -> 13:15) — a dirty edit, not one the debounce would have
+      // reproduced unchanged anyway.
+      useStore.getState().setStrips(3)
+    })
+
+    // Dim + overlay track live findings and land on this same render.
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
+    const overlay = screen.getByRole('region', { name: 'Blocking findings' })
+    expect(overlay.textContent).toContain('resource_precondition')
+    expect(overlay.textContent).toContain('requires 5 strips for pools but only 3 total strips configured')
+
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS + 10)
+    })
+
+    // Past the settle point, still the pre-edit row — never replaced by the
+    // ERROR-state derived values (pool_strip_count 2, pool end 13:15).
+    expect(rowCells(id)).toEqual(before)
+  })
+
+  it('catches up once the config is valid again, so the freeze above is not permanent', () => {
+    const id = seedPlacedCompetition()
+    render(<CenterView />)
+
+    const before = rowCells(id)
+
+    act(() => {
+      useStore.getState().setStrips(3)
+    })
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS + 10)
+    })
+    expect(rowCells(id)).toEqual(before) // still suppressed, as above
+
+    act(() => {
+      // A different valid strip count than the seeded 12 (not a round trip
+      // back to `before`'s own numbers), so a center that is simply frozen
+      // forever on the first committed row cannot satisfy this case.
+      useStore.getState().setStrips(6)
+    })
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS + 10)
+    })
+
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
+    expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
+
+    const after = rowCells(id)
+    expect(after).not.toEqual(before)
+    expect(after[3]).toBe('11:30') // pool end at strips_total=6
+    expect(after[6]).toBe('4') // pool_strip_count at strips_total=6
   })
 })
