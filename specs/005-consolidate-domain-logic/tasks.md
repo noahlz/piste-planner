@@ -49,7 +49,7 @@ No agent pushes, merges, or makes the closing commit.
 
 **Purpose**: Fix the numbers every later check compares against.
 
-- [ ] T001 Confirm and record the starting point in `specs/005-consolidate-domain-logic/sessions/handoff.md`: on branch `004-p3-workbench-shell` in the worktree, the working tree clean, and the suite green. Record the case counts two independent ways – `grep -cE '^\s*(it|test)\('` per file and vitest's own per-file report – for `__tests__/components/KitchenSinkPage.test.tsx` (expect 47), `__tests__/components/WizardShell.test.tsx` (expect 27), and the `layoutMode` cases in `__tests__/store/store.test.ts` (expect 4), plus the whole-suite total (expect 878 across 34 files). **If any count differs from the expected value, stop and report it** – the numbers in 004's artifacts were already wrong once
+- [x] T001 Confirm and record the starting point in `specs/005-consolidate-domain-logic/sessions/handoff.md`: on branch `004-p3-workbench-shell` in the worktree, the working tree clean, and the suite green. Record the case counts two independent ways – `grep -cE '^\s*(it|test)\('` per file and vitest's own per-file report – for `__tests__/components/KitchenSinkPage.test.tsx` (expect 47), `__tests__/components/WizardShell.test.tsx` (expect 27), and the `layoutMode` cases in `__tests__/store/store.test.ts` (expect 4), plus the whole-suite total (expect 878 across 34 files). **If any count differs from the expected value, stop and report it** – the numbers in 004's artifacts were already wrong once
 
 **Checkpoint**: The starting numbers are recorded and verified, not assumed.
 
@@ -79,12 +79,12 @@ default object rather than a repaired one.
 
 ### Tests for User Story 1 ⚠️ Write first, confirm they fail
 
-- [ ] T002 [US1] Extend `__tests__/store/viewState.test.ts` with failing cases for all three defects, and run them against the **unmodified** module to confirm each fails for its stated reason: (a) load twice with nothing stored, mutate the first result, assert the second still holds defaults – this one currently passes-by-accident on some shapes, so assert on a field the mutation actually changed; (b) make `setItem` throw and assert `saveViewState` returns normally; (c) one case per range rule in [data-model.md](./data-model.md) – `timeZoom: 0`, `timeScroll: -30`, `rowScroll: 2.5`, `drawerHeight: -240` – each asserting the whole default object comes back. Note that on Node 24 these exercise the `src/test-setup.ts` shim, not jsdom's `Storage` (004 handoff §S1, surprise 1) *(subagent commits)*
+- [x] T002 [US1] Extend `__tests__/store/viewState.test.ts` with failing cases for all three defects, and run them against the **unmodified** module to confirm each fails for its stated reason: (a) load twice with nothing stored, mutate the first result, assert the second still holds defaults – this one currently passes-by-accident on some shapes, so assert on a field the mutation actually changed; (b) make `setItem` throw and assert `saveViewState` returns normally; (c) one case per range rule in [data-model.md](./data-model.md) – `timeZoom: 0`, `timeScroll: -30`, `rowScroll: 2.5`, `drawerHeight: -240` – each asserting the whole default object comes back. Note that on Node 24 these exercise the `src/test-setup.ts` shim, not jsdom's `Storage` (004 handoff §S1, surprise 1) *(subagent commits)*
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] Implement the three changes in `src/store/viewState.ts` per [research D3](./research.md): return `{ ...DEFAULT_VIEW_STATE }` on every fallback path and freeze `DEFAULT_VIEW_STATE`; wrap `saveViewState`'s write in `try`/`catch`; add the four range predicates to `isValidViewState`. Do not add upper bounds and do not clamp – an out-of-range value falls back wholesale, matching the module's existing idiom *(subagent commits)*
-- [ ] T004 [US1] Dispatch `test-quality-reviewer` on T002's tests. Apply findings that identify a real gap; record and skip the rest with a reason, as 004's T005 did
+- [x] T003 [US1] Implement the three changes in `src/store/viewState.ts` per [research D3](./research.md): return `{ ...DEFAULT_VIEW_STATE }` on every fallback path and freeze `DEFAULT_VIEW_STATE`; wrap `saveViewState`'s write in `try`/`catch`; add the four range predicates to `isValidViewState`. Do not add upper bounds and do not clamp – an out-of-range value falls back wholesale, matching the module's existing idiom *(subagent commits)*
+- [x] T004 [US1] Dispatch `test-quality-reviewer` on T002's tests. Apply findings that identify a real gap; record and skip the rest with a reason, as 004's T005 did
 
 **Checkpoint**: US1 is complete and shippable on its own. Suite green.
 
@@ -103,15 +103,15 @@ reconciles to `878 − deleted + added`.
 
 ### Inventory before judgment
 
-- [ ] T005 [US2] Create `specs/005-consolidate-domain-logic/triage-record.md` with one row per case and the Decision column blank, in the shape [data-model.md](./data-model.md) §Triage record specifies. Enumerate from the files themselves, not from any planning document. **The row count must be 78** – if it is not, stop and report rather than proceeding on a wrong denominator *(subagent commits)*
+- [x] T005 [US2] Create `specs/005-consolidate-domain-logic/triage-record.md` with one row per case and the Decision column blank, in the shape [data-model.md](./data-model.md) §Triage record specifies. Enumerate from the files themselves, not from any planning document. **The row count must be 78** – if it is not, stop and report rather than proceeding on a wrong denominator *(subagent commits)*
 
 ### Triage, source by source
 
 > These three tasks all write `triage-record.md`, so they are sequential, not parallel.
 
-- [ ] T006 [US2] Triage the 27 cases in `__tests__/components/WizardShell.test.tsx` and fill their decisions. This file splits cleanly at `describe` boundaries per [research D1](./research.md) – `WizardShell navigation` (14) and `Layout toggle` (7) are deletions, `ScheduleView derived output` (6) survives and re-targets at `ScheduleOutput`. Confirm the boundaries against the file rather than trusting this description *(subagent commits)*
-- [ ] T007 [US2] Triage the 47 cases in `__tests__/components/KitchenSinkPage.test.tsx` **one case at a time** and fill their decisions. No wholesale calls. For each, name the surviving section component that exhibits the behavior, or the product behavior being removed. A case asserting both surviving and departing behavior in one block is split; if it cannot be split, **halt and ask** rather than rounding it into a bucket ([spec.md](./spec.md) §Edge Cases) *(subagent commits)*
-- [ ] T008 [US2] Triage the 4 `layoutMode` and `setLayoutMode` cases at `__tests__/store/store.test.ts:134–148` and fill their decisions. These assert a slice 004's T020 removes, so they are expected deletions – record them as such rather than assuming it *(subagent commits)*
+- [x] T006 [US2] Triage the 27 cases in `__tests__/components/WizardShell.test.tsx` and fill their decisions. This file splits cleanly at `describe` boundaries per [research D1](./research.md) – `WizardShell navigation` (14) and `Layout toggle` (7) are deletions, `ScheduleView derived output` (6) survives and re-targets at `ScheduleOutput`. Confirm the boundaries against the file rather than trusting this description *(subagent commits)*
+- [x] T007 [US2] Triage the 47 cases in `__tests__/components/KitchenSinkPage.test.tsx` **one case at a time** and fill their decisions. No wholesale calls. For each, name the surviving section component that exhibits the behavior, or the product behavior being removed. A case asserting both surviving and departing behavior in one block is split; if it cannot be split, **halt and ask** rather than rounding it into a bucket ([spec.md](./spec.md) §Edge Cases) *(subagent commits)*
+- [x] T008 [US2] Triage the 4 `layoutMode` and `setLayoutMode` cases at `__tests__/store/store.test.ts:134–148` and fill their decisions. These assert a slice 004's T020 removes, so they are expected deletions – record them as such rather than assuming it *(subagent commits)*
 
 ### Re-home the survivors
 
