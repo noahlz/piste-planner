@@ -136,6 +136,55 @@ describe('viewState shared-reference safety', () => {
       first.rowScroll = originalRowScroll
     }
   })
+
+  // The case above only exercises the "key absent" fallback branch.
+  // loadViewState() has three other fallback sites that return the same
+  // `{ ...DEFAULT_VIEW_STATE }` copy — getItem throwing, malformed JSON, and
+  // failed shape validation — and each is a separate line of source that
+  // could regress to returning the shared DEFAULT_VIEW_STATE reference
+  // without any of the existing toEqual-only corrupt-storage cases noticing,
+  // since toEqual compares values, not identity.
+
+  it('does not leak a mutation of one loadViewState() result into a later call when localStorage.getItem throws', () => {
+    const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError')
+    })
+    try {
+      const first = loadViewState()
+      const originalRowScroll = first.rowScroll
+      first.rowScroll = originalRowScroll + 1
+      const second = loadViewState()
+      expect(second.rowScroll).toBe(originalRowScroll)
+    } finally {
+      getItemSpy.mockRestore()
+    }
+  })
+
+  it('does not leak a mutation of one loadViewState() result into a later call when the stored value is malformed JSON', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, '{not valid json')
+    const first = loadViewState()
+    const originalRowScroll = first.rowScroll
+    first.rowScroll = originalRowScroll + 1
+    try {
+      const second = loadViewState()
+      expect(second.rowScroll).toBe(originalRowScroll)
+    } finally {
+      first.rowScroll = originalRowScroll
+    }
+  })
+
+  it('does not leak a mutation of one loadViewState() result into a later call when the stored value fails shape validation', () => {
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify({ foo: 'bar' }))
+    const first = loadViewState()
+    const originalRowScroll = first.rowScroll
+    first.rowScroll = originalRowScroll + 1
+    try {
+      const second = loadViewState()
+      expect(second.rowScroll).toBe(originalRowScroll)
+    } finally {
+      first.rowScroll = originalRowScroll
+    }
+  })
 })
 
 // ──────────────────────────────────────────────
