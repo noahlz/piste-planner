@@ -144,16 +144,20 @@ describe('FencerCounts + AnalysisOutput', () => {
     render(<FencerCountsAndAnalysis />)
 
     act(() => {
-      useStore.getState().setStrips(12)
+      useStore.getState().setStrips(1)
     })
 
+    // 004 T012: FencerCounts' NumberInput now carries commitOnChange
+    // (S2-contract.md §NumberInput gains commitOnChange), so this fires
+    // straight into the store — no blur needed. 1 strip is scarce enough
+    // that 18 events over 3 days stays infeasible even once every fencer
+    // count actually lands at 30, which a 12-strip budget no longer is.
     const fencerInputs = screen.getAllByRole('spinbutton', { name: /Fencer count for/ })
     fencerInputs.forEach((input) => {
       fireEvent.change(input, { target: { value: '30' } })
     })
 
-    // 18 events across 3 days on 12 strips still raises findings — and they are
-    // on screen without a validate step.
+    // Findings are on screen without a separate validate step.
     expect(screen.getByRole('heading', { name: 'Validation' })).toBeInTheDocument()
   })
 })

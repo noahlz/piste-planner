@@ -15,6 +15,9 @@ interface NumberInputProps {
    * committed value instead of clamping to min/max and committing.
    */
   rejectOutOfRange?: boolean
+  /** Commit on every keystroke as well as on blur, for inputs whose findings
+   *  must track typing (FR-008). Off by default — blur-only stays the norm. */
+  commitOnChange?: boolean
   id?: string
   className?: string
   'aria-label'?: string
@@ -27,6 +30,7 @@ export function NumberInput({
   max = Infinity,
   step = 1,
   rejectOutOfRange = false,
+  commitOnChange = false,
   id,
   className,
   'aria-label': ariaLabel,
@@ -49,6 +53,21 @@ export function NumberInput({
   function handleIncrement() {
     const clamped = clamp(value + step)
     if (clamped !== value) onChange(clamped)
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const next = e.target.value
+    setLocalValue(next)
+    if (!commitOnChange) return
+    // An unparseable or empty field commits nothing on this path — the field
+    // keeps its local text and the last committed value stands until blur
+    // (or a later keystroke) resolves it, matching handleBlur's own revert.
+    const trimmed = next.trim()
+    if (trimmed === '') return
+    const parsed = Number(trimmed)
+    if (isNaN(parsed)) return
+    const committed = clamp(Math.trunc(parsed))
+    if (committed !== value) onChange(committed)
   }
 
   function handleBlur() {
@@ -87,7 +106,7 @@ export function NumberInput({
         id={id}
         type="number"
         value={localValue}
-        onChange={(e) => setLocalValue(e.target.value)}
+        onChange={handleChange}
         onBlur={handleBlur}
         min={min}
         max={max === Infinity ? undefined : max}
