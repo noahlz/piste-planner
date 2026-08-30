@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useStore } from '../../store/store.ts'
+import { selectDerivedFindings } from '../../store/derived.ts'
 import { Button } from '@/components/ui/button'
 import { Check, ChevronLeft, ChevronRight, ChevronsDown } from 'lucide-react'
 import { WizardStep1 } from './WizardStep1.tsx'
@@ -107,7 +108,7 @@ function ScrollableStepContent({ children }: { children: React.ReactNode }) {
 export function WizardShell() {
   const wizardStep = useStore((s) => s.wizardStep)
   const setStep = useStore((s) => s.setStep)
-  const validationErrors = useStore((s) => s.validationErrors)
+  const { validationErrors } = useStore(selectDerivedFindings)
 
   const hasHardErrors = validationErrors.some((e) => e.severity === 'ERROR')
 

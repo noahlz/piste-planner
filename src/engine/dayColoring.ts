@@ -68,11 +68,19 @@ const LOAD_BALANCE_FULLNESS = 0.5
 const MAX_EXPANDED_DAYS = 4
 
 /**
- * "Target fill" used when estimating capacity-demanded days. estimateComp
- * StripHours models raw parallel work and underestimates real scheduling
- * capacity pressure (LATEST_START cutoffs, DE tails, video strip serialization),
- * so a conservative target leaves headroom. 0.3 means we aim to keep each
- * day's raw strip-hour fill at ~30% before expanding.
+ * "Target fill" used when estimating capacity-demanded days below: 0.3 means we
+ * aim to keep each day's raw strip-hour fill at ~30% before expanding.
+ *
+ * Swept 0.3 / 0.4 / 0.5 / 0.6 / 0.7 / 0.8 across B1–B8 on 2026-08-29. Every
+ * candidate produced byte-identical schedules — same scheduled counts, same
+ * ERROR counts, same drift digests. The reason is structural: on all eight
+ * scenarios `chromaticN` already equals `expansionCap`, so `effectiveDays`
+ * collapses to `chromaticN` and `capacityDays` never binds (at 0.3 it lands at
+ * 4–13 against a cap of 3–4, at 0.8 at 2–5 against the same cap). The drift
+ * ledger therefore cannot measure this constant at all, and no candidate above
+ * 0.3 has behavioral evidence behind it. 0.3 stands until a scenario exists
+ * where the cap is slack — that scenario, not a number picked here, is what
+ * would justify a change.
  */
 const CAPACITY_TARGET_FILL = 0.3
 

@@ -1,4 +1,5 @@
 import { useStore } from '../../store/store.ts'
+import { selectDerivedFindings } from '../../store/derived.ts'
 import type { ValidationError } from '../../engine/types.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -28,12 +29,12 @@ function groupBySeverity(errors: ValidationError[]): ValidationError[] {
 }
 
 export function AnalysisOutput() {
-  const validationErrors = useStore((s) => s.validationErrors)
-  const warnings = useStore((s) => s.warnings)
-  const suggestions = useStore((s) => s.suggestions)
+  const { validationErrors, analysis } = useStore(selectDerivedFindings)
   const suggestionStates = useStore((s) => s.flightingSuggestionStates)
   const acceptSuggestion = useStore((s) => s.acceptFlightingSuggestion)
   const rejectSuggestion = useStore((s) => s.rejectFlightingSuggestion)
+
+  const { warnings, suggestions } = analysis
 
   const hasContent =
     validationErrors.length > 0 || warnings.length > 0 || suggestions.length > 0
@@ -45,7 +46,9 @@ export function AnalysisOutput() {
           <CardTitle className="text-muted-foreground">Analysis Output</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">Run Validate to see results.</p>
+          <p className="text-sm text-muted-foreground">
+            Nothing to report for the current inputs.
+          </p>
         </CardContent>
       </Card>
     )

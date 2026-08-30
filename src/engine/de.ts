@@ -1,7 +1,8 @@
 import { Weapon, CutMode, EventType, Phase, Category, VetAgeGroup } from './types.ts'
 import type { DeBlockDurations } from './types.ts'
 import { computeDeFencerCount } from './pools.ts'
-import { DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA } from './constants.ts'
+import { snapToSlot } from './resources.ts'
+import { DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA, DEFAULT_DE_STRIP_FOOTPRINT } from './constants.ts'
 
 /**
  * Returns the smallest power of 2 that is ≥ n.
@@ -74,6 +75,50 @@ export function deBlockDurations(bracketSize: number, totalDeDuration: number): 
   const r16Dur = Math.round((totalDeDuration * r16Bouts) / totalBouts)
 
   return { prelims_dur: prelimsDur, r16_dur: r16Dur }
+}
+
+/**
+ * Strips one DE phase asks for.
+ *
+ * The empirical durations in de_duration_table are calibrated against a
+ * DEFAULT_DE_STRIP_FOOTPRINT-strip footprint per event, not bracketSize/2.
+ * Asking for bracketSize/2 would let one event's DE claim 64+ strips and
+ * serialize against every other event sharing the day.
+ */
+export function deStripFootprint(bracketSize: number): number {
+  return Math.max(1, Math.min(Math.floor(bracketSize / 2), DEFAULT_DE_STRIP_FOOTPRINT))
+}
+
+/**
+ * Duration of one staged DE phase (prelims or R16) that drew `strips` of the
+ * `desiredStrips` it asked for. Time stretches by the shortfall ratio, floored
+ * at 0.01 so a zero-strip grant cannot divide by zero.
+ */
+export function deStagedPhaseDuration(
+  durationAtFull: number,
+  strips: number,
+  desiredStrips: number,
+): number {
+  const ratio = strips / Math.max(desiredStrips, 1)
+  return snapToSlot(Math.ceil(durationAtFull / Math.max(ratio, 0.01)))
+}
+
+/**
+ * Duration of a single-stage DE block that drew `strips` of the `desiredStrips`
+ * it asked for. Excludes the gold-bout share — that is covered by
+ * tailEstimateMins() — and stretches by the strip shortfall ratio.
+ */
+export function deSingleStageDuration(
+  totalDeDuration: number,
+  bracketSize: number,
+  strips: number,
+  desiredStrips: number,
+): number {
+  const totalBouts = Math.floor(bracketSize / 2)
+  const adjustedTotal = totalBouts > 0 ? (totalDeDuration * (totalBouts - 1)) / totalBouts : 0
+  const ratio = Math.min(strips / Math.max(desiredStrips, 1), 1.0)
+  if (ratio >= 1.0) return Math.round(adjustedTotal)
+  return Math.ceil(adjustedTotal / ratio)
 }
 
 /**

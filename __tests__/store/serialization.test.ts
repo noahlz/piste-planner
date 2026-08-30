@@ -9,10 +9,40 @@ import {
 import type { SerializedState } from '../../src/store/serialization.ts'
 import { useStore } from '../../src/store/store.ts'
 import type { StoreState } from '../../src/store/store.ts'
+import { PlacementSource } from '../../src/engine/types.ts'
+import type { Placement } from '../../src/engine/types.ts'
+
+// ──────────────────────────────────────────────
+// P2 types not yet on StoreState/SerializedState (T008 adds the store slices,
+// T010 adds the wire shape) — local stand-ins so these tests compile against
+// the target v2 contract (specs/003-p2-derived-state/contracts/serialization-v2.md)
+// ahead of that work.
+// ──────────────────────────────────────────────
+
+/** StoreState plus the placements/dismissals slices T008 adds. */
+type StoreStateWithPlacements = StoreState & {
+  placements: Record<string, Placement>
+  dismissedFindings: Record<string, true>
+}
+
+/** The v2 wire shape T010 adds to SerializedState (schemaVersion 2 plus the new keys). */
+type SerializedStateV2 = {
+  schemaVersion: 2
+  tournament: SerializedState['tournament']
+  competitions: SerializedState['competitions']
+  placements: Record<string, Placement>
+  dismissedFindings: string[]
+}
+
+/** deserializeState's success shape once T010 adds the lenient drop-and-report notice. */
+type DeserializeSuccess = { state: Partial<StoreStateWithPlacements>; droppedPlacements: string[] }
 
 // ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
+
+/** The event id populatedState() selects — the fixture id used across placement tests. */
+const FIXTURE_EVENT_ID = 'CDT-M-FOIL-IND'
 
 /** Returns a store snapshot with some non-default data for meaningful round-trip tests. */
 function populatedState(): StoreState {
@@ -22,15 +52,38 @@ function populatedState(): StoreState {
   store.getState().setDays(2)
   store.getState().setStrips(12)
   store.getState().setVideoStrips(4)
-  store.getState().selectCompetitions(['CDT-M-FOIL-IND'])
-  store.getState().updateCompetition('CDT-M-FOIL-IND', { fencer_count: 64 })
+  store.getState().selectCompetitions([FIXTURE_EVENT_ID])
+  store.getState().updateCompetition(FIXTURE_EVENT_ID, { fencer_count: 64 })
   store.getState().setGlobalOverrides({ ADMIN_GAP_MINS: 20 })
   return store.getState()
 }
 
-function validSerializedData(): SerializedState {
+/** A structurally valid placement for FIXTURE_EVENT_ID, with optional field overrides. */
+function validPlacement(overrides: Partial<Placement> = {}): Placement {
   return {
-    schemaVersion: 1,
+    day: 0,
+    start_time: 480,
+    strip_count: 6,
+    strips: null,
+    source: PlacementSource.MANUAL,
+    pinned: true,
+    ...overrides,
+  }
+}
+
+/** populatedState() plus one placement and one dismissed finding, for round-trip coverage. */
+function populatedStateWithPlacementsAndDismissals(): StoreStateWithPlacements {
+  populatedState()
+  useStore.setState({
+    placements: { [FIXTURE_EVENT_ID]: validPlacement() },
+    dismissedFindings: { 'same-population:D1-M-EPEE-IND+JR-M-EPEE-IND': true },
+  } as unknown as Partial<StoreState>)
+  return useStore.getState() as StoreStateWithPlacements
+}
+
+function validSerializedData(): SerializedStateV2 {
+  return {
+    schemaVersion: 2,
     tournament: {
       tournament_type: 'NAC',
       days_available: 3,
@@ -44,7 +97,7 @@ function validSerializedData(): SerializedState {
     },
     competitions: {
       selectedCompetitions: {
-        'CDT-M-FOIL-IND': {
+        [FIXTURE_EVENT_ID]: {
           fencer_count: 32,
           ref_policy: 'AUTO',
           cut_mode: 'PERCENTAGE',
@@ -60,7 +113,20 @@ function validSerializedData(): SerializedState {
         THRESHOLD_MINS: 10,
       },
     },
+    // Non-empty by default so 'accepts valid v2 data' actually exercises a
+    // populated payload — the 'accepts an empty placements map' and 'accepts
+    // an empty dismissedFindings array' tests below override these to their
+    // genuinely-empty case instead of duplicating this one.
+    placements: { [FIXTURE_EVENT_ID]: validPlacement() },
+    dismissedFindings: ['same-population:D1-M-EPEE-IND+JR-M-EPEE-IND'],
   }
+}
+
+/** validSerializedData() with one placement entry for eventId (default: FIXTURE_EVENT_ID). */
+function withPlacement(overrides: Partial<Placement> = {}, eventId = FIXTURE_EVENT_ID): SerializedStateV2 {
+  const data = validSerializedData()
+  data.placements = { [eventId]: validPlacement(overrides) }
+  return data
 }
 
 /** The default table as it appears in serialized form – the engine's `Weapon` keys (research D4). */
@@ -95,12 +161,12 @@ function populatedStateWithMixedTable(): StoreState {
 // ──────────────────────────────────────────────
 
 describe('serializeState', () => {
-  it('produces JSON with schemaVersion: 1 and all serializable slice data', () => {
+  it('produces JSON with schemaVersion: 2 and all serializable slice data', () => {
     const state = populatedState()
     const json = serializeState(state)
     const parsed = JSON.parse(json)
 
-    expect(parsed.schemaVersion).toBe(1)
+    expect(parsed.schemaVersion).toBe(2)
     expect(parsed.tournament).toBeDefined()
     expect(parsed.competitions).toBeDefined()
 
@@ -110,7 +176,7 @@ describe('serializeState', () => {
     expect(parsed.tournament.video_strips_total).toBe(4)
     expect(parsed.tournament.dayConfigs).toHaveLength(2)
 
-    expect(parsed.competitions.selectedCompetitions['CDT-M-FOIL-IND'].fencer_count).toBe(64)
+    expect(parsed.competitions.selectedCompetitions[FIXTURE_EVENT_ID].fencer_count).toBe(64)
     expect(parsed.competitions.globalOverrides.ADMIN_GAP_MINS).toBe(20)
   })
 
@@ -119,9 +185,9 @@ describe('serializeState', () => {
     const json = serializeState(state)
     const parsed = JSON.parse(json)
 
-    // Only two top-level data keys + schemaVersion
+    // Five top-level keys: schemaVersion + tournament + competitions + the v2 additions
     expect(Object.keys(parsed).sort()).toEqual(
-      ['competitions', 'schemaVersion', 'tournament'].sort(),
+      ['competitions', 'dismissedFindings', 'placements', 'schemaVersion', 'tournament'].sort(),
     )
   })
 
@@ -143,6 +209,34 @@ describe('serializeState', () => {
 
     expect(parsed.tournament.pool_round_duration_table).toEqual(mixedPoolDurationTable())
   })
+
+  it('writes placements keyed by event id, matching the store map exactly', () => {
+    const state = populatedStateWithPlacementsAndDismissals()
+    const parsed = JSON.parse(serializeState(state))
+
+    expect(parsed.placements).toEqual({ [FIXTURE_EVENT_ID]: validPlacement() })
+  })
+
+  it('writes an empty placements object when the store has no placements', () => {
+    const state = populatedState()
+    const parsed = JSON.parse(serializeState(state))
+
+    expect(parsed.placements).toEqual({})
+  })
+
+  it('writes dismissedFindings as an array of finding identities', () => {
+    const state = populatedStateWithPlacementsAndDismissals()
+    const parsed = JSON.parse(serializeState(state))
+
+    expect(parsed.dismissedFindings).toEqual(['same-population:D1-M-EPEE-IND+JR-M-EPEE-IND'])
+  })
+
+  it('writes an empty dismissedFindings array when nothing is dismissed', () => {
+    const state = populatedState()
+    const parsed = JSON.parse(serializeState(state))
+
+    expect(parsed.dismissedFindings).toEqual([])
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -150,7 +244,7 @@ describe('serializeState', () => {
 // ──────────────────────────────────────────────
 
 describe('validateSchema', () => {
-  it('accepts valid data', () => {
+  it('accepts valid v2 data', () => {
     const result = validateSchema(validSerializedData())
     expect(result.valid).toBe(true)
   })
@@ -158,6 +252,13 @@ describe('validateSchema', () => {
   it('rejects missing schemaVersion', () => {
     const data = validSerializedData() as unknown as Record<string, unknown>
     delete data.schemaVersion
+    const result = validateSchema(data)
+    expect(result.valid).toBe(false)
+    if (!result.valid) expect(result.error).toMatch(/schemaVersion/i)
+  })
+
+  it('rejects schemaVersion 1 – v1 payloads are no longer accepted, no migration (research D5)', () => {
+    const data = { ...validSerializedData(), schemaVersion: 1 }
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.error).toMatch(/schemaVersion/i)
@@ -174,7 +275,14 @@ describe('validateSchema', () => {
     const data = { ...validSerializedData(), extraField: 'nope' }
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
-    if (!result.valid) expect(result.error).toMatch(/unknown/i)
+    if (!result.valid) expect(result.error).toMatch(/extraField/)
+  })
+
+  it('rejects a legacy top-level "referees" key – the v1 leniency for it does not carry over', () => {
+    const data = { ...validSerializedData(), referees: { dayRefs: [] } }
+    const result = validateSchema(data)
+    expect(result.valid).toBe(false)
+    if (!result.valid) expect(result.error).toMatch(/referees/)
   })
 
   it('rejects invalid tournament_type', () => {
@@ -185,17 +293,36 @@ describe('validateSchema', () => {
     if (!result.valid) expect(result.error).toMatch(/tournament_type/i)
   })
 
-  it('rejects days_available out of range (< 2)', () => {
+  it('rejects days_available out of range (< 1)', () => {
     const data = validSerializedData()
-    data.tournament.days_available = 1
+    data.tournament.days_available = 0
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.error).toMatch(/days_available/i)
   })
 
-  it('rejects days_available out of range (> 4)', () => {
+  it('accepts days_available at the widened v2 lower boundary (1) – rejected under v1', () => {
     const data = validSerializedData()
-    data.tournament.days_available = 5
+    data.tournament.days_available = 1
+    data.tournament.dayConfigs = [{ day_start_time: 480, day_end_time: 1320 }]
+    const result = validateSchema(data)
+    expect(result.valid).toBe(true)
+  })
+
+  it('accepts days_available at the widened v2 upper boundary (14) – rejected under v1', () => {
+    const data = validSerializedData()
+    data.tournament.days_available = 14
+    data.tournament.dayConfigs = Array.from({ length: 14 }, () => ({
+      day_start_time: 480,
+      day_end_time: 1320,
+    }))
+    const result = validateSchema(data)
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects days_available out of range (> 14)', () => {
+    const data = validSerializedData()
+    data.tournament.days_available = 15
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.error).toMatch(/days_available/i)
@@ -219,7 +346,7 @@ describe('validateSchema', () => {
 
   it('rejects negative fencer_count in a competition', () => {
     const data = validSerializedData()
-    data.competitions.selectedCompetitions['CDT-M-FOIL-IND'].fencer_count = -5
+    data.competitions.selectedCompetitions[FIXTURE_EVENT_ID].fencer_count = -5
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.error).toMatch(/fencer_count/i)
@@ -316,6 +443,119 @@ describe('validateSchema', () => {
       expect(result.error).toMatch(/EPEE/)
     }
   })
+
+  // ──────────────────────────────────────────────
+  // placements (NEW in v2)
+  // ──────────────────────────────────────────────
+
+  describe('placements', () => {
+    it('rejects a missing placements key', () => {
+      const data = validSerializedData() as unknown as Record<string, unknown>
+      delete data.placements
+      const result = validateSchema(data)
+      expect(result.valid).toBe(false)
+      if (!result.valid) expect(result.error).toMatch(/placements/i)
+    })
+
+    it('accepts an empty placements map', () => {
+      const data = { ...validSerializedData(), placements: {} }
+      const result = validateSchema(data)
+      expect(result.valid).toBe(true)
+    })
+
+    it('rejects placements that is not an object', () => {
+      for (const bad of ['nope', 42, null, []]) {
+        const data = { ...validSerializedData(), placements: bad }
+        const result = validateSchema(data)
+        expect(result.valid, `placements ${JSON.stringify(bad)}`).toBe(false)
+        if (!result.valid) expect(result.error).toMatch(/placements.*object/i)
+      }
+    })
+
+    it('accepts a day beyond days_available - 1 (stored intent, surfaces as a finding elsewhere)', () => {
+      const data = withPlacement({ day: 5 })
+      data.tournament.days_available = 2
+      const result = validateSchema(data)
+      expect(result.valid).toBe(true)
+    })
+
+    it('accepts strips: null', () => {
+      const result = validateSchema(withPlacement({ strips: null }))
+      expect(result.valid).toBe(true)
+    })
+
+    it('accepts strips: number[]', () => {
+      const result = validateSchema(withPlacement({ strips: [0, 1, 2] }))
+      expect(result.valid).toBe(true)
+    })
+
+    const invalidPlacementCases: Array<[string, Partial<Placement>, RegExp]> = [
+      ['day is negative', { day: -1 }, /day/],
+      ['day is not an integer', { day: 1.5 }, /day/],
+      ['start_time is negative', { start_time: -1 }, /start_time/],
+      ['start_time is not an integer', { start_time: 480.5 }, /start_time/],
+      ['strip_count is zero', { strip_count: 0 }, /strip_count/],
+      ['strip_count is negative', { strip_count: -2 }, /strip_count/],
+      ['strip_count is not an integer', { strip_count: 2.5 }, /strip_count/],
+      ['source is not "auto" or "manual"', { source: 'guess' as unknown as Placement['source'] }, /source/],
+      ['pinned is not a boolean', { pinned: 'yes' as unknown as boolean }, /pinned/],
+      ['strips contains a negative index', { strips: [-1] }, /strips/],
+      ['strips contains a non-integer', { strips: [1.5] }, /strips/],
+      ['strips is neither null nor an array', { strips: 'none' as unknown as number[] }, /strips/],
+    ]
+
+    it.each(invalidPlacementCases)('rejects a placement where %s', (_label, overrides, fieldPattern) => {
+      const data = withPlacement(overrides)
+      const result = validateSchema(data)
+      expect(result.valid).toBe(false)
+      if (!result.valid) expect(result.error).toMatch(fieldPattern)
+    })
+  })
+
+  // ──────────────────────────────────────────────
+  // dismissedFindings (NEW in v2)
+  // ──────────────────────────────────────────────
+
+  describe('dismissedFindings', () => {
+    it('rejects a missing dismissedFindings key', () => {
+      const data = validSerializedData() as unknown as Record<string, unknown>
+      delete data.dismissedFindings
+      const result = validateSchema(data)
+      expect(result.valid).toBe(false)
+      if (!result.valid) expect(result.error).toMatch(/dismissedFindings/i)
+    })
+
+    it('accepts an empty dismissedFindings array', () => {
+      const data = { ...validSerializedData(), dismissedFindings: [] }
+      const result = validateSchema(data)
+      expect(result.valid).toBe(true)
+    })
+
+    it('rejects dismissedFindings that is not an array', () => {
+      for (const bad of ['nope', 42, null, {}]) {
+        const data = { ...validSerializedData(), dismissedFindings: bad }
+        const result = validateSchema(data)
+        expect(result.valid, `dismissedFindings ${JSON.stringify(bad)}`).toBe(false)
+        if (!result.valid) expect(result.error).toMatch(/dismissedFindings/i)
+      }
+    })
+
+    it('rejects a dismissedFindings array containing a non-string entry', () => {
+      const data = { ...validSerializedData(), dismissedFindings: ['valid-id', 42] }
+      const result = validateSchema(data)
+      expect(result.valid).toBe(false)
+      if (!result.valid) expect(result.error).toMatch(/dismissedFindings/i)
+    })
+
+    it('accepts unknown finding identities – they are sticky records, not validated against current findings', () => {
+      const data = {
+        ...validSerializedData(),
+        dismissedFindings: ['no-such-rule:UNKNOWN-EVENT-ID'],
+      }
+      const result = validateSchema(data)
+      expect(result.valid).toBe(true)
+    })
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -330,8 +570,25 @@ describe('deserializeState', () => {
     if ('state' in result) {
       expect(result.state.tournament_type).toBe('NAC')
       expect(result.state.strips_total).toBe(10)
-      expect(result.state.selectedCompetitions?.['CDT-M-FOIL-IND']?.fencer_count).toBe(32)
+      expect(result.state.selectedCompetitions?.[FIXTURE_EVENT_ID]?.fencer_count).toBe(32)
     }
+  })
+
+  it('rejects a schemaVersion 1 payload outright – no migration (research D5)', () => {
+    const v1 = {
+      schemaVersion: 1,
+      tournament: {
+        tournament_type: 'NAC',
+        days_available: 3,
+        dayConfigs: [],
+        strips_total: 10,
+        video_strips_total: 2,
+      },
+      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 15, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+    }
+    const result = deserializeState(JSON.stringify(v1))
+    expect('error' in result).toBe(true)
+    if ('error' in result) expect(result.error).toMatch(/schemaVersion/i)
   })
 
   it('rejects missing schemaVersion', () => {
@@ -339,6 +596,7 @@ describe('deserializeState', () => {
     delete data.schemaVersion
     const result = deserializeState(JSON.stringify(data))
     expect('error' in result).toBe(true)
+    if ('error' in result) expect(result.error).toMatch(/schemaVersion/i)
   })
 
   it('rejects invalid JSON', () => {
@@ -355,32 +613,9 @@ describe('deserializeState', () => {
     if ('error' in result) expect(result.error).toMatch(/days_available/i)
   })
 
-  it('load: legacy referees key is silently ignored (backward compat)', () => {
+  it('load: legacy pod_captain_override field in tournament is silently ignored (FR-010) – nested leniency, unaffected by v2', () => {
     const legacy = JSON.stringify({
-      schemaVersion: 1,
-      tournament: {
-        tournament_type: 'NAC',
-        days_available: 2,
-        dayConfigs: [],
-        strips_total: 20,
-        video_strips_total: 4,
-      },
-      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
-      referees: { dayRefs: [{ foil_epee_refs: 5, three_weapon_refs: 3 }] },
-    })
-    const result = deserializeState(legacy)
-    expect('state' in result).toBe(true)
-    if ('state' in result) {
-      expect(result.state.tournament_type).toBe('NAC')
-      expect(result.state.strips_total).toBe(20)
-      // No ref fields in the returned state
-      expect((result.state as Record<string, unknown>)['dayRefs']).toBeUndefined()
-    }
-  })
-
-  it('load: legacy pod_captain_override field in tournament is silently ignored (FR-010)', () => {
-    const legacy = JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       tournament: {
         tournament_type: 'NAC',
         days_available: 2,
@@ -390,6 +625,8 @@ describe('deserializeState', () => {
         pod_captain_override: 'FORCE_4',
       },
       competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      placements: {},
+      dismissedFindings: [],
     })
     const result = deserializeState(legacy)
     expect('state' in result).toBe(true)
@@ -401,9 +638,9 @@ describe('deserializeState', () => {
     }
   })
 
-  it('load: legacy de_capacity_estimation field in tournament is silently ignored (FR-010)', () => {
+  it('load: legacy de_capacity_estimation field in tournament is silently ignored (FR-010) – nested leniency, unaffected by v2', () => {
     const legacy = JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       tournament: {
         tournament_type: 'NAC',
         days_available: 2,
@@ -413,6 +650,8 @@ describe('deserializeState', () => {
         de_capacity_estimation: 'pod_packed',
       },
       competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      placements: {},
+      dismissedFindings: [],
     })
     const result = deserializeState(legacy)
     expect('state' in result).toBe(true)
@@ -449,6 +688,88 @@ describe('deserializeState', () => {
       expect('pool_round_duration_table' in result.state).toBe(false)
     }
   })
+
+  // ──────────────────────────────────────────────
+  // placements – lenient drop-and-report (spec edge case, contract "Acceptance rules")
+  // ──────────────────────────────────────────────
+
+  it('load: placements for known event ids hydrate into state.placements', () => {
+    const data = withPlacement({ day: 1, pinned: false, source: PlacementSource.AUTO })
+    const result = deserializeState(JSON.stringify(data)) as DeserializeSuccess | { error: string }
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect(result.state.placements).toEqual({
+      [FIXTURE_EVENT_ID]: validPlacement({ day: 1, pinned: false, source: PlacementSource.AUTO }),
+    })
+  })
+
+  it('load: a placement day beyond days_available - 1 is accepted, not rejected (stored intent)', () => {
+    const data = withPlacement({ day: 9 })
+    data.tournament.days_available = 2
+    const result = deserializeState(JSON.stringify(data))
+    expect('state' in result).toBe(true)
+  })
+
+  it('load: a placement referencing an event id absent from selectedCompetitions is dropped and reported, not an error', () => {
+    const data = withPlacement()
+    data.placements['GHOST-EVENT'] = validPlacement()
+    const result = deserializeState(JSON.stringify(data)) as DeserializeSuccess | { error: string }
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect(Object.keys(result.state.placements ?? {})).toEqual([FIXTURE_EVENT_ID])
+    expect(result.droppedPlacements).toEqual(['GHOST-EVENT'])
+  })
+
+  it('load: reports every dropped placement id when several are unknown', () => {
+    const data = withPlacement()
+    data.placements['GHOST-ONE'] = validPlacement()
+    data.placements['GHOST-TWO'] = validPlacement()
+    const result = deserializeState(JSON.stringify(data)) as DeserializeSuccess | { error: string }
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect([...result.droppedPlacements].sort()).toEqual(['GHOST-ONE', 'GHOST-TWO'])
+  })
+
+  it('load: droppedPlacements is an empty array when every placement matches a selected competition', () => {
+    const data = withPlacement()
+    const result = deserializeState(JSON.stringify(data)) as DeserializeSuccess | { error: string }
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect(result.droppedPlacements).toEqual([])
+  })
+
+  it('load: an invalid placement field fails the whole load with a descriptive error', () => {
+    const data = withPlacement({ strip_count: -3 })
+    const result = deserializeState(JSON.stringify(data))
+    expect('error' in result).toBe(true)
+    if ('error' in result) expect(result.error).toMatch(/strip_count/i)
+  })
+
+  // ──────────────────────────────────────────────
+  // dismissedFindings – sticky, not filtered against anything (contract "Acceptance rules")
+  // ──────────────────────────────────────────────
+
+  it('load: dismissedFindings hydrates into the store as a Record keyed by identity', () => {
+    const data = { ...validSerializedData(), dismissedFindings: ['same-population:A+B'] }
+    const result = deserializeState(JSON.stringify(data))
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      expect((result.state as Partial<StoreStateWithPlacements>).dismissedFindings).toEqual({
+        'same-population:A+B': true,
+      })
+    }
+  })
+
+  it('load: an unknown dismissed-finding identity loads fine – sticky record for a future recompute', () => {
+    const data = { ...validSerializedData(), dismissedFindings: ['no-such-rule:UNKNOWN-EVENT-ID'] }
+    const result = deserializeState(JSON.stringify(data))
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      expect((result.state as Partial<StoreStateWithPlacements>).dismissedFindings).toEqual({
+        'no-such-rule:UNKNOWN-EVENT-ID': true,
+      })
+    }
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -480,6 +801,17 @@ describe('round-trip: serializeState → deserializeState', () => {
     if (!('state' in result)) return
 
     expect(result.state.pool_round_duration_table).toEqual(mixedPoolDurationTable())
+  })
+
+  it('reproduces placements and dismissedFindings exactly (SC-001)', () => {
+    const original = populatedStateWithPlacementsAndDismissals()
+    const result = deserializeState(serializeState(original)) as DeserializeSuccess | { error: string }
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+
+    expect(result.state.placements).toEqual(original.placements)
+    expect(result.state.dismissedFindings).toEqual(original.dismissedFindings)
+    expect(result.droppedPlacements).toEqual([])
   })
 })
 
@@ -525,7 +857,7 @@ describe('decodeFromUrl', () => {
 
   it('shared URL carrying legacy pod_captain_override loads successfully (FR-010)', () => {
     const legacy = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       tournament: {
         tournament_type: 'NAC',
         days_available: 2,
@@ -535,6 +867,8 @@ describe('decodeFromUrl', () => {
         pod_captain_override: 'FORCE_4',
       },
       competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      placements: {},
+      dismissedFindings: [],
     }
     const b64url = btoa(JSON.stringify(legacy)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
     const result = decodeFromUrl(`#config=${b64url}`)
@@ -547,7 +881,7 @@ describe('decodeFromUrl', () => {
 
   it('shared URL carrying legacy de_capacity_estimation loads successfully (FR-010)', () => {
     const legacy = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       tournament: {
         tournament_type: 'NAC',
         days_available: 2,
@@ -557,6 +891,8 @@ describe('decodeFromUrl', () => {
         de_capacity_estimation: 'pod_packed',
       },
       competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      placements: {},
+      dismissedFindings: [],
     }
     const b64url = btoa(JSON.stringify(legacy)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
     const result = decodeFromUrl(`#config=${b64url}`)
@@ -565,6 +901,17 @@ describe('decodeFromUrl', () => {
       expect(result.state.tournament_type).toBe('NAC')
       expect((result.state as Record<string, unknown>)['de_capacity_estimation']).toBeUndefined()
     }
+  })
+
+  it('shared URL carrying a placement for a since-removed event id loads, dropping and reporting it', () => {
+    const data = withPlacement()
+    data.placements['GHOST-EVENT'] = validPlacement()
+    const b64url = btoa(JSON.stringify(data)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const result = decodeFromUrl(`#config=${b64url}`) as DeserializeSuccess | { error: string }
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect(Object.keys(result.state.placements ?? {})).toEqual([FIXTURE_EVENT_ID])
+    expect(result.droppedPlacements).toEqual(['GHOST-EVENT'])
   })
 })
 
@@ -590,6 +937,16 @@ describe('URL round-trip: encodeToUrl → decodeFromUrl', () => {
     if (!('state' in result)) return
 
     expect(result.state.pool_round_duration_table).toEqual(mixedPoolDurationTable())
+  })
+
+  it('restores placements and dismissedFindings exactly through encode then decode', () => {
+    const original = populatedStateWithPlacementsAndDismissals()
+    const result = decodeFromUrl(encodeToUrl(original)) as DeserializeSuccess | { error: string }
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+
+    expect(result.state.placements).toEqual(original.placements)
+    expect(result.state.dismissedFindings).toEqual(original.dismissedFindings)
   })
 })
 

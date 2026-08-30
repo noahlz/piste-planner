@@ -43,7 +43,6 @@ function maybeDumpAsciiLanes(
   competitions: Competition[],
 ): void {
   if (process.env.PISTE_VISUALIZE !== '1') return
-  // eslint-disable-next-line no-console
   console.log(`\n=== ${label} ASCII LANES ===\n` + renderAsciiLanes({
     schedule, strip_allocations, bottlenecks, config, competitions,
   }))
@@ -171,8 +170,8 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B1: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 8 under serial; observed 15, floor 14 with 1-event safety margin).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(14)
+      // B1: 24 events. T024 re-baseline 2026-08-29 — floor raised from 14 to the measured count (research.md D7).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(24)
 
       // Smoke test for ref_requirements_by_day
       expect(ref_requirements_by_day).toBeDefined()
@@ -194,8 +193,8 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B2: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 8 under serial; observed 12, floor 11 with 1-event safety margin).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(11)
+      // B2: 24 events. T024 re-baseline 2026-08-29 — floor raised from 11 to the measured count (research.md D7).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(24)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -216,8 +215,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
-      // B3: 24 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 6 under serial; observed 10, floor 9 with 1-event safety margin).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(9)
+      // B3: 24 events. T024 re-baseline 2026-08-29 — floor raised from 9 to the measured count (research.md D7).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(24)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -267,8 +266,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B5: 12 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 3 under serial; observed 12, floor 11 with 1-event safety margin).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(11)
+      // B5: 12 events. T024 re-baseline 2026-08-29 — floor raised from 11 to the measured count (research.md D7).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(12)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -289,8 +288,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B6: 54 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 18 under serial; observed 29, floor 28 with 1-event safety margin).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(28)
+      // B6: 44 events. T024 re-baseline 2026-08-29 — floor raised from 28 to the measured count (research.md D7).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(44)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -311,8 +310,8 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
-      // B7: 18 events; concurrent scheduler — Phase D re-baseline 2026-04-27 (was 4 under serial; observed 6, floor 5 with 1-event safety margin).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(5)
+      // B7: 18 events. T024 re-baseline 2026-08-29 — floor raised from 5 to the measured count (research.md D7).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(18)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -335,9 +334,9 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B8: 53 events under the current strip-footprint DE model. The real tournament fit all 53 in 4 days.
-      // Conservative floor with safety margin while we tune the engine further.
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(35)
+      // B8: 52 events under the current strip-footprint DE model. T024 re-baseline 2026-08-29 —
+      // floor raised from 35 to the measured count (research.md D7).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(52)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()

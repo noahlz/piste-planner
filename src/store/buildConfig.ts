@@ -1,5 +1,6 @@
 import type {
   Competition,
+  FlightingGroup,
   Strip,
   TournamentConfig,
 } from '../engine/types.ts'
@@ -28,8 +29,15 @@ import type { StoreState } from './store.ts'
 /**
  * Bridges the Zustand store shape to the engine's TournamentConfig + Competition[] interfaces.
  * Pure function — takes store state as parameter for testability.
+ *
+ * Flighting suggestions are passed in rather than read from the store: they are
+ * derived from current inputs, and the store keeps only the user's accept/reject
+ * intent against them (positionally, via `flightingSuggestionStates`).
  */
-export function buildTournamentConfig(state: StoreState): {
+export function buildTournamentConfig(
+  state: StoreState,
+  flightingSuggestions: FlightingGroup[] = [],
+): {
   config: TournamentConfig
   competitions: Competition[]
 } {
@@ -70,7 +78,7 @@ export function buildTournamentConfig(state: StoreState): {
     max_de_strip_pct: 0.80,
   }
 
-  const competitions = buildCompetitions(state)
+  const competitions = buildCompetitions(state, flightingSuggestions)
 
   return { config, competitions }
 }
@@ -82,7 +90,10 @@ function buildStrips(total: number, videoCount: number): Strip[] {
   }))
 }
 
-function buildCompetitions(state: StoreState): Competition[] {
+function buildCompetitions(
+  state: StoreState,
+  flightingSuggestions: FlightingGroup[],
+): Competition[] {
   const competitions: Competition[] = []
 
   for (const [id, overrides] of Object.entries(state.selectedCompetitions)) {
@@ -136,10 +147,10 @@ function buildCompetitions(state: StoreState): Competition[] {
   }
 
   // Apply accepted flighting suggestions, mutating the competition objects already in the array.
-  for (let i = 0; i < state.flightingSuggestions.length; i++) {
+  for (let i = 0; i < flightingSuggestions.length; i++) {
     if (state.flightingSuggestionStates[i] !== 'accepted') continue
 
-    const group = state.flightingSuggestions[i]
+    const group = flightingSuggestions[i]
     const groupId = `${group.priority_competition_id}+${group.flighted_competition_id}`
 
     const priority = competitions.find((c) => c.id === group.priority_competition_id)

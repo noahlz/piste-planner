@@ -270,7 +270,7 @@ copies, so detail goes there and nowhere else.
 | Item | Owner phase |
 |---|---|
 | Youth-event pool duration calibration | Unassigned. P1's US2 measures the delta it needs. |
-| `CAPACITY_TARGET_FILL = 0.3` re-tune | P2, alongside the integration-floor re-baseline |
+| `CAPACITY_TARGET_FILL = 0.3` re-tune | Done – [`specs/003-p2-derived-state/`](../../specs/003-p2-derived-state/), research.md D8 |
 | Global settings – engine constants as a user-editable config file | **Unassigned.** P1 creates four of the constants it would expose, so this needs a phase or an explicit "after P5". |
 | Per-type defaults in the rail's Advanced panel | **Unassigned.** Describes P3 rail behavior but is in no roadmap row. |
 

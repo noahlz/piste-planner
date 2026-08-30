@@ -1,8 +1,8 @@
-import type { Competition, ScheduleResult, TournamentConfig, Strip } from '../../src/engine/types.ts'
+import type { Competition, Placement, ScheduleResult, TournamentConfig, Strip } from '../../src/engine/types.ts'
 import {
   Category, Gender, Weapon,
   EventType, CutMode, DeMode, VideoPolicy,
-  RefPolicy, DeStripRequirement, TournamentType,
+  RefPolicy, DeStripRequirement, TournamentType, PlacementSource,
 } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -97,6 +97,18 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
   }
 }
 
+
+export function makePlacement(overrides: Partial<Placement> = {}): Placement {
+  return {
+    day: 0,
+    start_time: DAY_START_8AM,
+    strip_count: 4,
+    strips: null,
+    source: PlacementSource.AUTO,
+    pinned: false,
+    ...overrides,
+  }
+}
 
 export function makeScheduleResult(competition_id: string, assigned_day: number): ScheduleResult {
   return {
