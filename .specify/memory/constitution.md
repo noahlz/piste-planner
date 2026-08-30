@@ -42,6 +42,20 @@ converge reports failure, never spins.
 `erasableSyntaxOnly` is on. Use `as const` objects with derived union types —
 never enums, namespaces, or parameter properties.
 
+### VI. The App Is Verified Live
+
+A green unit suite proves the engine and the components agree with themselves.
+It does not prove the app works. Every feature that changes what a user sees
+ends with `scripts/smoke.mjs` passing against the running app.
+
+The driver is a repo artifact, never a scratch file. Its selectors are the
+accumulated record of corrections against the real DOM, so a feature that
+reshapes the UI updates the driver in the task that reshapes it — the same rule
+behavior changes follow for their tests. Rewriting it from scratch discards the
+record and rediscovers the same failures.
+
+The `live-smoke` skill holds the procedure.
+
 ## Planning Artifacts
 
 Each unit of work is a Spec Kit feature in `specs/<nnn>-<short-name>/`:
@@ -93,6 +107,17 @@ preferring Sonnet, with Opus reserved for complicated tasks. The orchestrator
 uses its judgment to decide what counts as complicated and which model a
 dispatch gets.
 
+Verification that iterates is dispatched too. Live smoke repairs its locators
+in runs of four or five, each one a full round trip, and an orchestrator deep
+into a feature pays its whole context for every one. In a subagent each attempt
+pays the subagent's context and only the verdict comes back.
+
+An orchestrator session that revises `tasks.md` or `plan.md` after
+implementation has begun has re-planned, not progressed. It records what
+changed, hands back a resume prompt, and stops. Implementing a revised plan in
+the session that revised it is what makes a feature's last tasks its most
+expensive.
+
 ## Governance
 
 This constitution governs every feature under `specs/`. Evaluate `plan.md`'s
@@ -119,4 +144,11 @@ cover.
   merge (`git merge --no-ff --no-commit` completed by `commit-with-costs`), so
   branch history is preserved and cost trailers live on the merge commit.
 
-**Version**: 1.4.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-28
+- 1.5.0 (2026-08-29): principle VI added – the app is verified live by
+  `scripts/smoke.mjs`, a repo artifact updated alongside the UI it asserts on,
+  never rewritten as a scratch file. Orchestration gained two rules drawn from
+  003's cost record: iterative verification is dispatched to a subagent, and a
+  session that re-plans mid-implementation halts and hands off rather than
+  building against its own revision.
+
+**Version**: 1.5.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-29

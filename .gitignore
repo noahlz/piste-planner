@@ -150,3 +150,6 @@ tmp/
 # Git worktrees
 .worktrees/
 .claude/worktrees/
+
+# live smoke screenshots
+scripts/smoke-shots/
