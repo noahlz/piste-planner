@@ -223,7 +223,7 @@ design they all reference.
 |---|---|---|
 | **P1** | Foundations – `SLOT_MINS` 5, pod removal, double-strip removal, capacity model collapse, `perBoutDuration` helper, and the staged-DE referee correction. Specified in [`specs/001-p1-foundations/`](../../specs/001-p1-foundations/spec.md) | – |
 | **P2** | Derived state – placements as intent, store inversion, staleness removal, validation split, days cap widened, findings identity, presets moved to `src/data` | P1 |
-| **P3** | Workbench shell and canvas – visx matrix with zoom, virtualization, encoding, tooltip, rail, tray, drawer, view toggle. Deletes wizard, kitchen sink, and `layoutMode` | P2 |
+| **P3** | Workbench shell and canvas – visx matrix with zoom, virtualization, encoding, tooltip, rail, tray, drawer, view toggle, per-type defaults in the rail's Advanced panel, and the top-bar gears surface over settings the store already carries. Deletes wizard, kitchen sink, and `layoutMode`. Specified in [`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md) | P2 |
 | **P4** | Manual placement – event-level drag, unpack-to-blocks, advisory edit validation, undo/redo, `Auto-fill unplaced` via pre-colored DSatur and pre-seeded scheduler state | P3 |
 | **P5** | FLUID bout allocator – deferred. An auto-schedule strategy with no UI dependency | P1 |
 
@@ -271,8 +271,7 @@ copies, so detail goes there and nowhere else.
 |---|---|
 | Youth-event pool duration calibration | Unassigned. P1's US2 measures the delta it needs. |
 | `CAPACITY_TARGET_FILL = 0.3` re-tune | Done – [`specs/003-p2-derived-state/`](../../specs/003-p2-derived-state/), research.md D8 |
-| Global settings – engine constants as a user-editable config file | **Unassigned.** P1 creates four of the constants it would expose, so this needs a phase or an explicit "after P5". |
-| Per-type defaults in the rail's Advanced panel | **Unassigned.** Describes P3 rail behavior but is in no roadmap row. |
+| Global settings – engine constants as a user-editable config file | Split. Gears control and first panel: P3. Remainder: unassigned, after P5. |
+| Per-type defaults in the rail's Advanced panel | P3 |
 
-The two marked unassigned are open questions, not oversights left implicit. Decide
-them before P3 is planned, since both land in the rail it builds.
+Both were decided on 2026-08-29 and their detail lives in `backlog.md`.

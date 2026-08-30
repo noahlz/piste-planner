@@ -16,7 +16,10 @@ Spec Kit feature directory is created for one only when it is assigned a phase.
 
 ## Per-type defaults in the rail's Advanced panel
 
-*No owner phase. Lands in the rail P3 builds – assign it before P3 is planned.*
+*Assigned to P3 on 2026-08-29. Specified in
+[`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
+P3 builds the rail, so the Advanced panel is its deliverable rather than a
+second pass over it.*
 
 Defaults the Advanced panel should apply when the user picks a tournament type,
 shown as dim text on the collapsed panel so they are visible without expanding:
@@ -33,13 +36,27 @@ warning.
 
 ## Global settings
 
-*No owner phase. P1 creates four of the constants below, so this needs a phase or
-an explicit "after P5".*
+*Split on 2026-08-29. The gears control and a first panel are assigned to P3 –
+[`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
+The remainder, described below, stays unassigned and is revisited after P5.*
 
 All engine constants become a configuration file with defaults, reachable from
 a gears control in the top bar. Per-event and global weights, penalties, and
 earliest-start offsets are all editable. Serialization persists only the
 overrides, so unset values continue to track the defaults in `constants.ts`.
+
+**What P3 takes**: the top-bar gears control and a panel over the settings that
+already have store and serialization support – the `globalOverrides` trio
+(`ADMIN_GAP_MINS`, `FLIGHT_BUFFER_MINS`, `THRESHOLD_MINS`, live in the store and
+the share URL since before P3 but reachable from no component) plus the four P1
+constants listed below. `PoolDurationSettings` from 002 is the precedent for the
+default / override / reset / overrides-only-persistence pattern, and it moves
+behind the same gears surface.
+
+**What stays here**: promoting the rest of `constants.ts` – per-event and global
+weights, the penalty matrices, category start preferences, earliest-start
+offsets – into a user-editable configuration file. That is a feature of its own
+size and it needs a spec directory when it is picked up, after P5.
 
 Constants that P1 newly surfaces and that belong in this file:
 
