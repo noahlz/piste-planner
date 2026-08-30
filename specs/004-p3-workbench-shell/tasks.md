@@ -76,29 +76,29 @@ move without a second action.
 
 ### Tests for User Story 1 ⚠️ Write first, confirm they fail
 
-- [ ] T006 [P] [US1] Write failing tests for the shell's four regions in `__tests__/components/workbench/WorkbenchShell.test.tsx` – top bar, rail, center, drawer, and the unplaced tray each present and locatable by accessible name per [contracts/ui-contract.md](./contracts/ui-contract.md) §Regions
-- [ ] T007 [P] [US1] Write failing tests for boot behavior in `__tests__/components/workbench/boot.test.tsx` – with no URL fragment a preset is loaded and auto-scheduled, and the center shows its schedule (FR-007)
-- [ ] T008 [P] [US1] Write failing tests for the invalid-configuration rule in `__tests__/components/workbench/invalidState.test.tsx` – the center keeps the last valid content, dimmed, with blocking findings overlaid, and never blanks (FR-009)
-- [ ] T009 [P] [US1] Write failing tests for two-tier recompute in `__tests__/components/workbench/recompute.test.tsx` – findings and metrics update per keystroke while the center relayouts only on commit (FR-008)
-- [ ] T010 [P] [US1] Write failing tests for the unplaced tray in `__tests__/components/workbench/UnplacedTray.test.tsx` – lists every event without a placement and stays identifiable when empty
+- [x] T006 [P] [US1] Write failing tests for the shell's four regions in `__tests__/components/workbench/WorkbenchShell.test.tsx` – top bar, rail, center, drawer, and the unplaced tray each present and locatable by accessible name per [contracts/ui-contract.md](./contracts/ui-contract.md) §Regions
+- [x] T007 [P] [US1] Write failing tests for boot behavior in `__tests__/components/workbench/boot.test.tsx` – with no URL fragment a preset is loaded and auto-scheduled, and the center shows its schedule (FR-007)
+- [x] T008 [P] [US1] Write failing tests for the invalid-configuration rule in `__tests__/components/workbench/invalidState.test.tsx` – the center keeps the last valid content, dimmed, with blocking findings overlaid, and never blanks (FR-009)
+- [x] T009 [P] [US1] Write failing tests for two-tier recompute in `__tests__/components/workbench/recompute.test.tsx` – findings and metrics update per keystroke while the center relayouts only on commit (FR-008)
+- [x] T010 [P] [US1] Write failing tests for the unplaced tray in `__tests__/components/workbench/UnplacedTray.test.tsx` – lists every event without a placement and stays identifiable when empty
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Scaffold the shell's four regions plus the tray in `src/components/workbench/WorkbenchShell.tsx`, full-bleed, replacing the `max-w-4xl` card stack (FR-002)
-- [ ] T012 [P] [US1] Build the top bar in `src/components/workbench/TopBar.tsx` – preset picker, tournament type, days, strips, `Auto-schedule all`, save and share (FR-003). The gears control is added by US5; leave no placeholder
-- [ ] T013 [P] [US1] Build the left rail in `src/components/workbench/Rail.tsx` with collapsible panels, re-homing `StripSetup`, `FencerCounts`, `CompetitionOverrides`, and the non-top-bar half of `TournamentSetup` (FR-004)
-- [ ] T014 [P] [US1] Build the unplaced tray in `src/components/workbench/UnplacedTray.tsx` (FR-005)
-- [ ] T015 [P] [US1] Build the resizable bottom drawer in `src/components/workbench/Drawer.tsx`, re-homing `AnalysisOutput` as the findings list (FR-006). The scorecard is added by US3
-- [ ] T016 [US1] Re-point `ScheduleOutput` at derived placements and mount it as the center content, grouped by day (FR-024)
-- [ ] T017 [US1] Implement the dimmed-invalid overlay so the center never blanks (FR-009)
-- [ ] T018 [US1] Implement two-tier recompute – per-keystroke findings, on-commit center relayout (FR-008)
-- [ ] T019 [US1] Boot the app with a preset loaded and auto-scheduled in `src/App.tsx`, preserving the existing `#config=` fragment handling (FR-007)
+- [x] T011 [US1] Scaffold the shell's four regions plus the tray in `src/components/workbench/WorkbenchShell.tsx`, full-bleed, replacing the `max-w-4xl` card stack (FR-002)
+- [x] T012 [P] [US1] Build the top bar in `src/components/workbench/TopBar.tsx` – preset picker, tournament type, days, strips, `Auto-schedule all`, save and share (FR-003). The gears control is added by US5; leave no placeholder
+- [x] T013 [P] [US1] Build the left rail in `src/components/workbench/Rail.tsx` with collapsible panels, re-homing `StripSetup`, `FencerCounts`, `CompetitionOverrides`, and the non-top-bar half of `TournamentSetup` (FR-004)
+- [x] T014 [P] [US1] Build the unplaced tray in `src/components/workbench/UnplacedTray.tsx` (FR-005)
+- [x] T015 [P] [US1] Build the resizable bottom drawer in `src/components/workbench/Drawer.tsx`, re-homing `AnalysisOutput` as the findings list (FR-006). The scorecard is added by US3
+- [x] T016 [US1] Re-point `ScheduleOutput` at derived placements and mount it as the center content, grouped by day (FR-024)
+- [x] T017 [US1] Implement the dimmed-invalid overlay so the center never blanks (FR-009)
+- [x] T018 [US1] Implement two-tier recompute – per-keystroke findings, on-commit center relayout (FR-008)
+- [x] T019 [US1] Boot the app with a preset loaded and auto-scheduled in `src/App.tsx`, preserving the existing `#config=` fragment handling (FR-007)
 - [ ] T020 [US1] Delete `src/components/wizard/` (5 files), `src/components/KitchenSinkPage.tsx`, `src/components/sections/TemplateSelector.tsx`, `src/components/sections/ActionButtons.tsx`, and the `layoutMode` slice and layout toggle from `src/store/store.ts` and `src/App.tsx` (FR-001)
 - [ ] T021 [US1] Work through the 52 cases in `__tests__/components/KitchenSinkPage.test.tsx` one at a time – re-target surviving behavior at the workbench, delete what asserted kitchen-sink composition – then delete the file (research D12)
 - [ ] T022 [US1] Work through the 27 cases in `__tests__/components/WizardShell.test.tsx` the same way – wizard navigation and step sequencing are deleted, not re-targeted – then delete the file (research D12)
 - [ ] T023 [US1] Re-point the `scripts/smoke.mjs` steps that drove deleted controls at their workbench replacements – the `Single Page` and `Wizard` tabs, `Generate Schedule`, `Save / Load / Share`, `Suggest`, `Number of strips`, `Generate Link`, and the fencer-count spinbutton. Preserve the header comment's corrections where the selector they describe survives in a new form; delete the wizard walk (constitution VI)
 - [ ] T024 [US1] Dispatch `test-quality-reviewer` on T006–T010 and the re-targeted cases from T021–T022
-- [ ] T025 [US1] Dispatch `react-code-reviewer` on T011–T019
+- [x] T025 [US1] Dispatch `react-code-reviewer` on T011–T019
 
 **Checkpoint**: One screen, both layouts gone, smoke passing against it. US1 is independently shippable. *(subagent commits)*
 
