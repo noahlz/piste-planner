@@ -14,6 +14,32 @@ Spec Kit feature directory is created for one only when it is assigned a phase.
 > phase, and points back here for the detail. **This file is the record, that
 > table is the index** – do not restate detail there.
 
+## Day-axis parity
+
+*Assigned to feature 006 on 2026-08-31 (unspecced). Blocks 004's US3.*
+
+The app path (`applyPreset → buildTournamentConfig → scheduleAll`) schedules
+11 of B1's 24 events while the drift ledger's factory path schedules 24/24 —
+the store's clock-time `dayConfigs` collide on the engine's compacted day
+axis. The record, with repro, isolation numbers, and fix options, is
+[reassessment-2026-08-31.md §2](./reassessment-2026-08-31.md). The fix must
+add the app-path parity test so the ledger protects the app rather than a
+config it never builds.
+
+## Rail rebuild
+
+*Assigned to feature 007 on 2026-08-31 (unspecced), after 004 closes.*
+
+The five section components re-homed unmodified into the rail
+(`TournamentSetup`, `StripSetup`, `CompetitionMatrix`, `FencerCounts`,
+`CompetitionOverrides`) are the surviving wizard/kitchen-sink-era debris:
+`CompetitionMatrix` overflows at 320px, day-time selects truncate, and the
+top bar and rail both edit tournament type, days, and strips (the
+FR-003/FR-004 duplication S2 recorded). User directive 2026-08-31: replace
+with purpose-built workbench panels, no preservation effort — tests
+re-target to the new panels as they are built, no 005-style triage pass.
+Detail in [reassessment-2026-08-31.md §3.5](./reassessment-2026-08-31.md).
+
 ## Per-type defaults in the rail's Advanced panel
 
 *Assigned to P3 on 2026-08-29. Specified in
