@@ -36,7 +36,8 @@ const STRIPS = 30
 const TOTAL_ROWS = DAYS * STRIPS
 const VIEWPORT_WIDTH = 900
 const VIEWPORT_HEIGHT = 480
-const PLOT_WIDTH = VIEWPORT_WIDTH - 72
+const GUTTER_WIDTH = 72
+const PLOT_WIDTH = VIEWPORT_WIDTH - GUTTER_WIDTH
 const NORMAL_ROWS_VISIBLE = 20
 const TALL_ROWS_VISIBLE = 14 // ceil(480 / 36)
 const NORMAL_ROW_PX = 24
@@ -105,6 +106,18 @@ function dayGroups(): HTMLElement[] {
 
 function rowLines(): SVGLineElement[] {
   return Array.from(document.querySelectorAll<SVGLineElement>('[data-row-line]'))
+}
+
+function gridSvg(): SVGSVGElement {
+  const svg = document.querySelector<SVGSVGElement>('svg')
+  if (!svg) throw new Error('canvas grid not rendered')
+  return svg
+}
+
+function firstTickIn(group: HTMLElement): HTMLElement {
+  const tick = group.querySelector<HTMLElement>('[data-hour-tick]')
+  if (!tick) throw new Error('day group has no hour ticks')
+  return tick
 }
 
 /**
@@ -222,6 +235,44 @@ describe('MatrixCanvas row windowing (FR-021)', () => {
     render(<MatrixCanvas />)
 
     expect(stripRows()).toHaveLength(0)
+  })
+})
+
+describe('MatrixCanvas grid (FR-012, FR-017)', () => {
+  // The gutter <li>s and the band <span>s are the label layers. These cases
+  // are about the SVG under them, which is what T034 and T035 actually draw:
+  // an <svg> returning null, or emitting no <line> children at all, is
+  // invisible to every assertion that reads a label.
+  it('rules a line across the plot for every visible row', () => {
+    render(<MatrixCanvas />)
+
+    const lines = Array.from(gridSvg().querySelectorAll(':scope > line'))
+    expect(lines).toHaveLength(NORMAL_ROWS_VISIBLE)
+    expect(lines[0].getAttribute('y1')).toBe('0')
+    // The plot is the viewport less the frozen gutter, never the whole width.
+    expect(lines[0].getAttribute('x2')).toBe(String(PLOT_WIDTH))
+  })
+
+  it('rules a line down the day group for every hour the axis labels', () => {
+    seedViewState({ timeScroll: 480 })
+    render(<MatrixCanvas />)
+
+    const labels = tickLabelsIn(dayGroups()[0])
+    expect(labels.length).toBeGreaterThan(0)
+    expect(gridSvg().querySelectorAll('[data-day-grid] line')).toHaveLength(labels.length)
+  })
+
+  it('runs a day group’s lines only down the rows belonging to that day', () => {
+    seedViewState({ rowScroll: 25, timeScroll: 480 })
+    render(<MatrixCanvas />)
+
+    // Day 0 holds rows 25..29 — the first five of the twenty on screen — and
+    // day 1 takes the rest, so their lines meet at 5 * 24 = 120px.
+    const [dayZero, dayOne] = Array.from(
+      gridSvg().querySelectorAll<SVGGElement>('[data-day-grid]'),
+    )
+    expect(dayZero.querySelector('line')?.getAttribute('y2')).toBe('120')
+    expect(dayOne.querySelector('line')?.getAttribute('y1')).toBe('120')
   })
 })
 
@@ -444,6 +495,32 @@ describe('MatrixCanvas wheel deltas', () => {
     fireEvent.wheel(viewport(), { deltaY: 8 })
     fireEvent.wheel(viewport(), { deltaY: 8 })
     expect(stripRows()[0].textContent).toBe('Strip 2')
+  })
+
+  it('pans time on a horizontal wheel, scaled by the zoom', () => {
+    vi.useFakeTimers()
+    seedViewState({ timeScroll: 480, timeZoom: 2 })
+    render(<MatrixCanvas />)
+
+    fireEvent.wheel(viewport(), { deltaX: 100 })
+    vi.advanceTimersByTime(PERSIST_DEBOUNCE_MS)
+
+    // 100px of travel at 2 minutes per pixel is 200 minutes.
+    expect(loadViewState().timeScroll).toBe(680)
+  })
+
+  it('stops the time pan at midnight rather than scrolling before it', () => {
+    seedViewState({ timeScroll: 480, timeZoom: 2 })
+    render(<MatrixCanvas />)
+
+    fireEvent.wheel(viewport(), { deltaX: -10000 })
+
+    // Read off the axis rather than out of storage: a negative timeScroll is
+    // rejected wholesale on load, so loadViewState would answer 0 either way.
+    // At a window starting at midnight the 08:00 tick sits 240px into the plot.
+    const tick = firstTickIn(dayGroups()[0])
+    expect(tick.dataset.hourTick).toBe('480')
+    expect(tick.style.left).toBe(`${GUTTER_WIDTH + 240}px`)
   })
 
   it('takes back the ctrl+wheel gesture the browser would spend on page zoom', () => {

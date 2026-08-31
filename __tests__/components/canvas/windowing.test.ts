@@ -139,6 +139,17 @@ describe('visibleRowRange', () => {
     expect(range?.firstRow).toBeGreaterThan(4)
   })
 
+  it('floors a fractional scroll onto the row it sits in', () => {
+    // Nothing in the app writes a fraction, but a hand-edited localStorage
+    // can, and viewState only rejects a rowScroll that is not an integer at
+    // load — a fractional index would make resolveFlatRow return null for
+    // every row and render an empty canvas.
+    expect(visibleRowRange(5.9, 96, RowHeightStep.NORMAL, TOTAL_ROWS)).toEqual({
+      firstRow: 5,
+      lastRow: 8,
+    })
+  })
+
   it('starts a new day group cleanly when rowScroll lands on a day boundary', () => {
     const range = visibleRowRange(20, 96, RowHeightStep.NORMAL, TOTAL_ROWS)
     expect(range).toEqual({ firstRow: 20, lastRow: 23 })

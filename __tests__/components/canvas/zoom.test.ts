@@ -14,7 +14,7 @@ import {
   zoomAtCursor,
   zoomToSelection,
 } from '../../../src/components/canvas/zoom.ts'
-import { RowHeightStep } from '../../../src/store/viewState.ts'
+import { DEFAULT_VIEW_STATE, RowHeightStep } from '../../../src/store/viewState.ts'
 
 // 004 T039 — the pure zoom arithmetic behind FR-017, FR-018 and FR-020.
 //
@@ -39,11 +39,20 @@ describe('clampTimeZoom', () => {
   it('falls back to the default rather than persisting a value viewState rejects', () => {
     // viewState.isValidViewState rejects non-finite and non-positive timeZoom
     // wholesale, so a clamp that let one through would make the whole stored
-    // view state unloadable on the next boot.
-    expect(clampTimeZoom(Number.NaN)).toBe(DEFAULT_TIME_ZOOM)
-    expect(clampTimeZoom(Number.POSITIVE_INFINITY)).toBe(DEFAULT_TIME_ZOOM)
+    // view state unloadable on the next boot. Asserted as the literal 1: a
+    // comparison against DEFAULT_TIME_ZOOM holds for any value the constant
+    // takes, including one the stored state would reject.
+    expect(clampTimeZoom(Number.NaN)).toBe(1)
+    expect(clampTimeZoom(Number.POSITIVE_INFINITY)).toBe(1)
     expect(clampTimeZoom(0)).toBe(MIN_TIME_ZOOM)
     expect(clampTimeZoom(-3)).toBe(MIN_TIME_ZOOM)
+  })
+
+  it('falls back to the very zoom a fresh view state starts at', () => {
+    // zoom.ts claims DEFAULT_TIME_ZOOM matches DEFAULT_VIEW_STATE.timeZoom.
+    // Drifting apart would reset a rejected zoom to a level the app never
+    // otherwise shows.
+    expect(DEFAULT_TIME_ZOOM).toBe(DEFAULT_VIEW_STATE.timeZoom)
   })
 })
 
@@ -171,6 +180,16 @@ describe('fitToTournament', () => {
     expect(fitToTournament([], 800)).toBeNull()
   })
 
+  it('skips a span with a non-finite boundary instead of letting it poison the union', () => {
+    // Without the guard the union goes NaN, windowCovering rejects it, and
+    // fit-to-tournament silently does nothing on a canvas that has events.
+    const spans = [
+      { startMinutes: 540, endMinutes: 1000 },
+      { startMinutes: Number.NaN, endMinutes: 700 },
+    ]
+    expect(fitToTournament(spans, 800)).toEqual({ timeZoom: 0.575, timeScroll: 540 })
+  })
+
   it('declines to fit a viewport that has not been measured yet', () => {
     expect(fitToTournament([{ startMinutes: 540, endMinutes: 1000 }], 0)).toBeNull()
   })
@@ -196,10 +215,14 @@ describe('zoomToSelection', () => {
   })
 
   it('clamps the padded start at midnight and still covers the selection', () => {
-    const next = zoomToSelection({ startMinutes: 0, endMinutes: 60 }, 700)
-    expect(next).not.toBeNull()
-    expect(next?.timeScroll).toBe(0)
-    expect(minuteAtX(next!, 700)).toBeGreaterThanOrEqual(60)
+    // 0..60 pads to -5..65, 70 minutes in 700px. The zoom is solved against
+    // the *padded* span and only the scroll is floored: clamping the start
+    // first would give 0..65 and a different window that still covers the
+    // selection, which is why this pins the pair rather than the coverage.
+    expect(zoomToSelection({ startMinutes: 0, endMinutes: 60 }, 700)).toEqual({
+      timeZoom: 0.1,
+      timeScroll: 0,
+    })
   })
 
   it('declines a selection with no duration', () => {
@@ -211,6 +234,13 @@ describe('chooseTickStepMinutes', () => {
   it('ticks once an hour when an hour is wide enough to label', () => {
     expect(chooseTickStepMinutes(0.5)).toBe(60)
     expect(chooseTickStepMinutes(1)).toBe(60)
+  })
+
+  it('holds the hourly step at exactly the minimum spacing, and gives it up just past', () => {
+    // 1.25 min/px puts an hour at exactly 48px, which the >= admits; a hair
+    // wider a zoom and it does not.
+    expect(chooseTickStepMinutes(1.25)).toBe(60)
+    expect(chooseTickStepMinutes(1.2501)).toBe(120)
   })
 
   it('coarsens to two hours once an hour falls below the label spacing', () => {

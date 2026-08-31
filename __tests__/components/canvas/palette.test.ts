@@ -394,8 +394,14 @@ describe('resolveCanvasCategory', () => {
 // ──────────────────────────────────────────────
 
 describe('categoryFill', () => {
+  // Literal token names, not CATEGORY_TOKENS lookups: reading the mapping the
+  // implementation reads would hold however the mapping was rewired.
   it('returns the CSS var() expression for a category token', () => {
-    expect(categoryFill(Category.Y8)).toBe(`var(${CATEGORY_TOKENS[Category.Y8]})`)
+    expect(categoryFill(Category.Y8)).toBe('var(--cat-y8)')
+  })
+
+  it('names a vet band by its token, which its key does not spell', () => {
+    expect(categoryFill(VetAgeGroup.VET_COMBINED)).toBe('var(--cat-vet-combined)')
   })
 })
 
@@ -405,7 +411,11 @@ describe('categoryFill', () => {
 
 describe('categoryInk', () => {
   it('returns the CSS var() expression for a category ink token', () => {
-    expect(categoryInk(Category.Y8)).toBe(`var(${CATEGORY_INK_TOKENS[Category.Y8]})`)
+    expect(categoryInk(Category.Y8)).toBe('var(--cat-y8-fg)')
+  })
+
+  it('names a vet band ink by its token, which its key does not spell', () => {
+    expect(categoryInk(VetAgeGroup.VET_COMBINED)).toBe('var(--cat-vet-combined-fg)')
   })
 
   it('never returns a category its own fill', () => {
