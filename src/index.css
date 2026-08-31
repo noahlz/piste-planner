@@ -37,6 +37,27 @@
   --info: #dbeafe;
   --info-text: #1e40af;
   --accent-hover: #576d91;
+
+  /* Canvas category palette (research D4) — sixteen values in four hue
+     families (Youth, Cadet/Junior, Senior divisions, Veteran), lightness
+     stepping with age/division order inside each family. See
+     src/components/canvas/palette.ts for the category -> token mapping. */
+  --cat-y8: #648fb9;
+  --cat-y10: #84a6c8;
+  --cat-y12: #a7bfd7;
+  --cat-y14: #c7d6e6;
+  --cat-cadet: #69b58f;
+  --cat-junior: #c8e4d6;
+  --cat-div1: #9b6bb3;
+  --cat-div1a: #af89c2;
+  --cat-div2: #c6abd4;
+  --cat-div3: #dbc9e3;
+  --cat-vet40: #be9260;
+  --cat-vet50: #c7a175;
+  --cat-vet60: #cead88;
+  --cat-vet70: #d7bc9d;
+  --cat-vet80: #dec8af;
+  --cat-vet-combined: #e7d7c5;
 }
 
 body {
