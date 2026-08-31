@@ -8,16 +8,28 @@ import {
   saveViewState,
   type ViewState,
 } from '../../store/viewState.ts'
-import { ROW_HEIGHT_PX, blockX, blockY, eventTimeSegments } from './geometry.ts'
+import {
+  ROW_HEIGHT_PX,
+  blockHeight,
+  blockWidth,
+  blockX,
+  blockY,
+  eventTimeSegments,
+} from './geometry.ts'
 import {
   buildDayLayout,
   flatRowIndex,
+  intersectsTimeRange,
   maxRowScroll,
   resolveFlatRow,
   visibleRowRange,
   visibleTimeRange,
   type TimeRange,
 } from './windowing.ts'
+import { assignStripLanes, type BlockPlacement } from './lanes.ts'
+import { EventBlock } from './EventBlock.tsx'
+import { competitionLabel } from '../competitionLabels.ts'
+import type { Competition } from '../../engine/types.ts'
 import {
   clampTimeZoom,
   fitToDay,
@@ -39,14 +51,24 @@ import {
  * arithmetic imported from `geometry.ts`, `windowing.ts` and `zoom.ts`, none of
  * it re-derived here.
  *
- * ## The header is an overlay, and that is load-bearing
+ * ## The header is an overlay in row space, with one uniform offset in pixels
  *
  * `windowing.ts` fixes `rowsPerDay === stripsTotal` — the day header band gets
- * no row of its own. The hour axis FR-017 pins "at the top of each day group"
- * is therefore drawn in the *same* floating overlay as the band, not in a strip
- * of layout between day groups. Giving either one real vertical space would put
- * an offset between `blockY`'s answer and where a row actually sits, and every
- * block T037 draws would land in the wrong place.
+ * no row of its own, and the hour axis FR-017 pins "at the top of each day
+ * group" rides in the same floating overlay. What would break `blockY` is a
+ * *non-uniform* offset: a band taking real layout between day groups would put
+ * a different correction under every day, and no row-space arithmetic could
+ * express it.
+ *
+ * One offset applied everywhere is a different matter, and it is what the rows
+ * need — the band is drawn over the top `HEADER_HEIGHT_PX` of the viewport, so
+ * without it the first strip of every day group is permanently hidden and the
+ * second half-cut. The gutter, the grid and the block layer therefore all start
+ * `HEADER_HEIGHT_PX` down and are `HEADER_HEIGHT_PX` shorter, and every
+ * position measured in row space keeps its expression unchanged. The bands'
+ * own `headerTop` is unchanged too: a day's band sits `HEADER_HEIGHT_PX` above
+ * its first row, which is exactly what the existing formula produces once the
+ * rows have moved down.
  *
  * ## Two scrolls, neither of them native
  *
@@ -66,8 +88,8 @@ import {
  *
  * ## What is not here yet
  *
- * Event blocks (T037) and the tooltip (T038). This component draws the grid the
- * blocks land on, and nothing mounts it until the view toggle in T040.
+ * The tooltip (T038). Nothing mounts this component until the view toggle in
+ * T040.
  */
 
 /** Width of the frozen strip-label gutter, in pixels. */
@@ -179,6 +201,17 @@ export interface MatrixCanvasProps {
   selection?: TimeRange | null
 }
 
+/** One block and the window-relative pixels it draws at, resolved per render. */
+interface DrawnBlock {
+  readonly placement: BlockPlacement
+  readonly competition: Competition
+  readonly label: string
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
 /** One day group's visible geometry, resolved once per render. */
 interface VisibleDay {
   readonly day: number
@@ -248,15 +281,19 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
   }, [])
 
   const plotWidth = Math.max(0, size.width - GUTTER_WIDTH_PX)
+  // The rows get the viewport less the day band's own space. Every layer that
+  // is measured in row space is offset by the same amount, so `blockY`'s
+  // arithmetic is untouched — see the module docblock.
+  const plotHeight = Math.max(0, size.height - HEADER_HEIGHT_PX)
   const rowHeight = ROW_HEIGHT_PX[rowHeightStep]
 
   const layout = useMemo(
     () => buildDayLayout(config.days_available, config.strips_total),
     [config.days_available, config.strips_total],
   )
-  const rowRange = visibleRowRange(rowScroll, size.height, rowHeightStep, layout.totalRows)
+  const rowRange = visibleRowRange(rowScroll, plotHeight, rowHeightStep, layout.totalRows)
   const timeRange = visibleTimeRange(timeScroll, timeZoom, plotWidth)
-  const maxScroll = maxRowScroll(size.height, rowHeightStep, layout.totalRows)
+  const maxScroll = maxRowScroll(plotHeight, rowHeightStep, layout.totalRows)
 
   /**
    * The single origin every vertical position is measured from — `blockY`'s
@@ -313,8 +350,49 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
           nextDayTop,
         ),
         rowsTop: Math.max(0, blockY(dayFirstRow, windowStartRow, rowHeightStep)),
-        rowsBottom: Math.min(size.height, nextDayTop),
+        rowsBottom: Math.min(plotHeight, nextDayTop),
         ticks: hourTicks(axisRange, timeZoom),
+      })
+    }
+  }
+
+  const lanes = useMemo(
+    () => assignStripLanes(schedule.events, config.strips_total),
+    [schedule.events, config.strips_total],
+  )
+  const competitionsById = useMemo(
+    () => new Map(schedule.competitions.map((competition) => [competition.id, competition])),
+    [schedule.competitions],
+  )
+
+  /**
+   * The blocks the window actually shows, culled on both axes (FR-021): a block
+   * wholly outside the window is not in the DOM at all. Geometry is computed
+   * here on every render and never written back into the derived model
+   * (FR-013), so a scroll or a zoom cannot leave a stale coordinate behind.
+   */
+  const visibleBlocks: DrawnBlock[] = []
+  if (rowRange) {
+    for (const placement of lanes) {
+      if (!intersectsTimeRange(timeRange, placement.startMinutes, placement.endMinutes)) continue
+
+      const flatRow = flatRowIndex(layout, placement.day, placement.firstStrip)
+      if (flatRow === null) continue
+      // Row ranges are inclusive, and a block spans `stripCount` of them.
+      if (flatRow > rowRange.lastRow) continue
+      if (flatRow + placement.stripCount - 1 < rowRange.firstRow) continue
+
+      const competition = competitionsById.get(placement.competitionId)
+      if (!competition) continue
+
+      visibleBlocks.push({
+        placement,
+        competition,
+        label: competitionLabel(competition),
+        x: blockX(placement.startMinutes, timeScroll, timeZoom),
+        y: blockY(flatRow, windowStartRow, rowHeightStep),
+        width: blockWidth(placement.endMinutes - placement.startMinutes, timeZoom),
+        height: blockHeight(placement.stripCount, rowHeightStep),
       })
     }
   }
@@ -527,8 +605,8 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
         {/* The frozen gutter: positioned, never translated by timeScroll. */}
         <ul
           aria-label="Strip labels"
-          className="absolute inset-y-0 left-0 z-10 m-0 list-none border-r bg-background p-0"
-          style={{ width: GUTTER_WIDTH_PX }}
+          className="absolute bottom-0 left-0 z-10 m-0 list-none border-r bg-background p-0"
+          style={{ top: HEADER_HEIGHT_PX, width: GUTTER_WIDTH_PX }}
         >
           {visibleRows.map((flatIndex) => {
             const location = resolveFlatRow(layout, flatIndex)
@@ -555,9 +633,9 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
         <svg
           role="presentation"
           width={plotWidth}
-          height={size.height}
-          className="absolute inset-y-0"
-          style={{ left: GUTTER_WIDTH_PX }}
+          height={plotHeight}
+          className="absolute"
+          style={{ left: GUTTER_WIDTH_PX, top: HEADER_HEIGHT_PX }}
         >
           {visibleDays.map((visible) => (
             <g key={visible.day} data-day-grid={visible.day}>
@@ -592,6 +670,35 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
             )
           })}
         </svg>
+
+        {/* The blocks. Clipped to the plot and left below the frozen gutter
+            (z-10) and the sticky day bands (z-20), so a block scrolled off the
+            left or above the top slides under them rather than over. */}
+        <div
+          data-block-layer="true"
+          className="absolute overflow-hidden"
+          style={{
+            left: GUTTER_WIDTH_PX,
+            top: HEADER_HEIGHT_PX,
+            width: plotWidth,
+            height: plotHeight,
+          }}
+        >
+          {visibleBlocks.map((drawn) => (
+            <EventBlock
+              key={`${drawn.placement.competitionId}:${drawn.placement.phase}`}
+              competition={drawn.competition}
+              label={drawn.label}
+              day={drawn.placement.day}
+              placement={drawn.placement}
+              x={drawn.x}
+              y={drawn.y}
+              width={drawn.width}
+              height={drawn.height}
+              rowHeightStep={rowHeightStep}
+            />
+          ))}
+        </div>
 
         {/* Sticky day bands, each with its own hour axis pinned beneath it. */}
         {visibleDays.map((visible) => (

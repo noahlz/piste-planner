@@ -20,12 +20,14 @@ import {
   makeStrips,
 } from '../../helpers/factories.ts'
 
-// 004 T034/T035/T036/T039 — the matrix canvas grid.
+// 004 T034/T035/T036/T037/T039 — the matrix canvas grid and the blocks on it.
 //
-// The fixture is 3 days x 30 strips = 90 flat rows in a 900x480 viewport. At
-// the NORMAL row height of 24px that viewport holds ceil(480/24) = 20 rows, so
-// every "only the visible window renders" assertion below is 20 against 90
-// rather than "some rows exist" (FR-021).
+// The fixture is 3 days x 30 strips = 90 flat rows in a 900x480 viewport. The
+// day band is a 38px overlay pinned at the top of its day group, and the rows
+// start below it rather than underneath it (T037), so they get 480 - 38 = 442
+// vertical pixels. At the NORMAL row height of 24px that holds
+// ceil(442/24) = 19 rows, so every "only the visible window renders" assertion
+// below is 19 against 90 rather than "some rows exist" (FR-021).
 //
 // The plot is the viewport minus the frozen gutter: 900 - 72 = 828px. At the
 // default 1 minute per pixel that is a 828-minute time window, which is where
@@ -37,13 +39,16 @@ const TOTAL_ROWS = DAYS * STRIPS
 const VIEWPORT_WIDTH = 900
 const VIEWPORT_HEIGHT = 480
 const GUTTER_WIDTH = 72
+// The 20px day band and the 18px hour axis pinned under it.
+const HEADER_HEIGHT = 38
 const PLOT_WIDTH = VIEWPORT_WIDTH - GUTTER_WIDTH
-const NORMAL_ROWS_VISIBLE = 20
-const TALL_ROWS_VISIBLE = 14 // ceil(480 / 36)
+const PLOT_HEIGHT = VIEWPORT_HEIGHT - HEADER_HEIGHT // 442
+const NORMAL_ROWS_VISIBLE = 19 // ceil(442 / 24)
+const TALL_ROWS_VISIBLE = 13 // ceil(442 / 36)
 const NORMAL_ROW_PX = 24
-// The furthest scroll that still fills the viewport: 90 rows less the 20 that
+// The furthest scroll that still fills the viewport: 90 rows less the 19 that
 // fit. Scrolling past it would only add blank space below the last row.
-const MAX_ROW_SCROLL = TOTAL_ROWS - NORMAL_ROWS_VISIBLE
+const MAX_ROW_SCROLL = TOTAL_ROWS - NORMAL_ROWS_VISIBLE // 71
 
 // jsdom implements no ResizeObserver, and the canvas measures its own viewport
 // through one. A stub that reports a fixed size on observe() exercises the
@@ -157,6 +162,25 @@ function viewport(): HTMLElement {
   return el
 }
 
+function blockLayer(): HTMLElement {
+  const el = document.querySelector<HTMLElement>('[data-block-layer]')
+  if (!el) throw new Error('canvas block layer not rendered')
+  return el
+}
+
+/** Every block in the document, by `id:PHASE`. */
+function blockIds(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-event-block]'))
+    .map((el) => el.dataset.eventBlock ?? '')
+    .sort()
+}
+
+function blockFor(id: string, phase: string): HTMLElement {
+  const el = document.querySelector<HTMLElement>(`[data-event-block="${id}:${phase}"]`)
+  if (!el) throw new Error(`no ${phase} block drawn for ${id}`)
+  return el
+}
+
 describe('MatrixCanvas regions', () => {
   it('names the canvas, the frozen strip gutter and the zoom toolbar', () => {
     render(<MatrixCanvas />)
@@ -184,7 +208,7 @@ describe('MatrixCanvas regions', () => {
 })
 
 describe('MatrixCanvas row windowing (FR-021)', () => {
-  it('renders the first twenty rows the viewport holds, not an arbitrary twenty', () => {
+  it('renders the nineteen rows the viewport holds, not an arbitrary nineteen', () => {
     render(<MatrixCanvas />)
 
     const rows = stripRows()
@@ -262,11 +286,23 @@ describe('MatrixCanvas grid (FR-012, FR-017)', () => {
     expect(gridSvg().querySelectorAll('[data-day-grid] line')).toHaveLength(labels.length)
   })
 
+  it('stops a day’s lines where the rows stop, not where the viewport does', () => {
+    seedViewState({ timeScroll: 480 })
+    render(<MatrixCanvas />)
+
+    // Day 0 is 30 strips deep, past the 19 on screen, so its lines run the
+    // whole plot rather than stopping at a day boundary — and the plot is the
+    // viewport less the day band's own space.
+    const line = gridSvg().querySelector('[data-day-grid] line')
+    expect(line?.getAttribute('y1')).toBe('0')
+    expect(line?.getAttribute('y2')).toBe(String(PLOT_HEIGHT))
+  })
+
   it('runs a day group’s lines only down the rows belonging to that day', () => {
     seedViewState({ rowScroll: 25, timeScroll: 480 })
     render(<MatrixCanvas />)
 
-    // Day 0 holds rows 25..29 — the first five of the twenty on screen — and
+    // Day 0 holds rows 25..29 — the first five of the nineteen on screen — and
     // day 1 takes the rest, so their lines meet at 5 * 24 = 120px.
     const [dayZero, dayOne] = Array.from(
       gridSvg().querySelectorAll<SVGGElement>('[data-day-grid]'),
@@ -280,7 +316,7 @@ describe('MatrixCanvas day bands (FR-019)', () => {
   it('renders a band only for the days the visible rows reach', () => {
     render(<MatrixCanvas />)
 
-    // Rows 0..19 are all inside day 0, whose 30 strips run to row 29.
+    // Rows 0..18 are all inside day 0, whose 30 strips run to row 29.
     expect(dayGroups()).toHaveLength(1)
     expect(screen.getByText('Day 1')).toBeInTheDocument()
     expect(screen.queryByText('Day 2')).not.toBeInTheDocument()
@@ -314,6 +350,114 @@ describe('MatrixCanvas day bands (FR-019)', () => {
     const [dayZero, dayOne] = dayGroups()
     expect(dayOne.style.top).toBe('24px')
     expect(dayZero.style.top).toBe('-14px')
+  })
+})
+
+describe('MatrixCanvas day band layout space (FR-019)', () => {
+  // The band is a 38px overlay pinned at the top of its day group. Given no
+  // compensating offset it covers the first strip of every day group outright
+  // and cuts the second in half, on every day, at every scroll position.
+  it('starts the rows below the day band rather than underneath it', () => {
+    render(<MatrixCanvas />)
+
+    const gutter = screen.getByRole('list', { name: 'Strip labels' })
+    const firstRow = stripRows()[0]
+
+    expect(dayGroups()[0].style.top).toBe('0px')
+    expect(firstRow.dataset.stripRow).toBe('0')
+    // The row's viewport coordinate is the gutter's own offset plus its offset
+    // inside the gutter — jsdom lays nothing out, so neither can be measured.
+    expect(gutter.style.top).toBe(`${HEADER_HEIGHT}px`)
+    expect(firstRow.style.top).toBe('0px')
+    expect(
+      Number.parseFloat(gutter.style.top) + Number.parseFloat(firstRow.style.top),
+    ).toBeGreaterThanOrEqual(HEADER_HEIGHT)
+  })
+
+  it('offsets the grid and the block layer by exactly the same amount', () => {
+    // A layer left behind at the top of the viewport would shear away from the
+    // rows by 38px, which reads as blocks sitting one and a half strips high.
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    expect(gridSvg().style.top).toBe(`${HEADER_HEIGHT}px`)
+    expect(gridSvg().getAttribute('height')).toBe(String(PLOT_HEIGHT))
+    expect(blockLayer().style.top).toBe(`${HEADER_HEIGHT}px`)
+    expect(blockLayer().style.height).toBe(`${PLOT_HEIGHT}px`)
+  })
+})
+
+describe('MatrixCanvas blocks (FR-012, FR-013, FR-021)', () => {
+  it('draws each phase of a placed event at the geometry the window implies', () => {
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    expect(blockIds()).toEqual(['c1:DE', 'c1:POOLS'])
+
+    // The window opens at midnight at 1 minute per pixel, so the 600-700 pool
+    // block starts 600px into the plot and is 100px wide. It holds four
+    // strips from flat row 0, which is the top of the window: 4 * 24 = 96px.
+    const pool = blockFor('c1', 'POOLS')
+    expect(pool.style.left).toBe('600px')
+    expect(pool.style.width).toBe('100px')
+    expect(pool.style.top).toBe('0px')
+    expect(pool.style.height).toBe('96px')
+
+    // The DE runs 760-900 on the same four strips, which are free again by
+    // then, so it lands on the same rows rather than below the pool block.
+    const de = blockFor('c1', 'DE')
+    expect(de.style.left).toBe('760px')
+    expect(de.style.width).toBe('140px')
+    expect(de.style.top).toBe('0px')
+  })
+
+  it('leaves a block outside the time window out of the DOM entirely', () => {
+    seedViewState({ timeScroll: 800 })
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    // The window is [800, 1628): the pool block ended at 700, before it
+    // opened, while the DE block runs to 900 and reaches into it.
+    expect(blockIds()).toEqual(['c1:DE'])
+  })
+
+  it('leaves a block outside the row window out of the DOM entirely', () => {
+    seedViewState({ rowScroll: 30 })
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    // Both blocks sit on day 0's first four strips, flat rows 0-3. A scroll of
+    // 30 puts the window on day 1, so neither has a row on screen — while the
+    // grid still renders, which is what makes this about the blocks.
+    expect(blockIds()).toEqual([])
+    expect(stripRows()).toHaveLength(NORMAL_ROWS_VISIBLE)
+  })
+
+  it('slides a block only partly on screen under the top edge rather than clamping it', () => {
+    seedViewState({ rowScroll: 3 })
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    // The pool block spans rows 0-3 and only its last row is still on screen.
+    // Neither axis clamps, so it is drawn three rows above the window.
+    expect(blockFor('c1', 'POOLS').style.top).toBe('-72px')
+  })
+
+  it('redraws a block’s geometry from the new window rather than from a stored one', () => {
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+
+    // Centre of the 828px plot is x=414, reading minute 414 at 1 min/px, so
+    // halving the zoom leaves the scroll at 207. The 600-700 pool block is
+    // then (600 - 207) * 2 = 786px in and twice as wide (FR-013).
+    const pool = blockFor('c1', 'POOLS')
+    expect(pool.style.left).toBe('786px')
+    expect(pool.style.width).toBe('200px')
+  })
+
+  it('names a block for a screen reader with the facts it draws', () => {
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    expect(blockFor('c1', 'POOLS')).toHaveAttribute(
+      'aria-label',
+      "Div 1 Men's Foil Individual, Pools, Day 1, 10:00–11:40, Strips 1–4",
+    )
   })
 })
 
