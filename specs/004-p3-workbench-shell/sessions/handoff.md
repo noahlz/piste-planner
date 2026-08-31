@@ -348,3 +348,183 @@ started, by instruction** — the wizard, the kitchen sink, `TemplateSelector`,
 `ActionButtons`, the `layoutMode` slice, and the layout toggle are all still
 live and still rendered by `src/App.tsx`. T021–T023 and T024's second half are
 S3's. The branch is handed back green, with the closing merge unmade.
+
+## S3
+
+**Scope**: T020–T025, closing the US1 checkpoint. T026 onward was out of scope by
+instruction and was not started.
+
+### Tasks completed
+
+| Task | Commit | What landed |
+|---|---|---|
+| T020 | `0b4582ea18` | The wizard, the kitchen sink, `TemplateSelector`, `ActionButtons`, and the `layoutMode` slice, deleted |
+| T021 / T022 | – (no artifact) | Nothing to fix. See below |
+| T023 | `b7f23ba310` | `scripts/smoke.mjs` re-pointed at the workbench, `SMOKE PASS` |
+| T024 | `4f172f66bb` | `test-quality-reviewer` dispatched, all eleven accepted findings applied |
+| T025 | – | Already ticked by S2 |
+
+### Gate at end of session
+
+`tsc -b` exit 0, `lint` exit 0, full suite **875 passed (875)** across 41 files,
+run twice with identical results by the orchestrator after the last subagent
+commit. `scripts/smoke.mjs` exits 0 with `SMOKE PASS` and zero console errors.
+
+**Suite count reconciliation.** 872 → 875, entirely additive:
+
+```
+872  at S2's close
++  1  B1's WARN-only case (invalidState)
++  1  B3's Strip count case (WorkbenchShell)
++  1  B4's cold-boot-into-invalid case (invalidState)
+= 875
+```
+
+**Zero engine drift.** `git diff --stat main..HEAD -- src/engine/` is still
+empty, so B1–B8 cannot have moved. Only US4 changes engine output.
+
+### T021 and T022: none of the four files needed a mount fix
+
+The triage was feature 005's and is finished. What was left for this session was
+to check that its four destination files still pass against the shell S2 built,
+and against T020's deletion. **They do, unchanged.** No mount fix was required
+on any of the four, and no assertion was touched for re-targeting reasons.
+
+Two things confirm it rather than assume it:
+
+- All four mount section components directly – `TournamentSetup`, `StripSetup`,
+  `FencerCounts`, `CompetitionMatrix`, `AnalysisOutput`, `ScheduleOutput`,
+  `SaveLoadShare`, `ScheduleView`. None reaches for `KitchenSinkPage` or
+  `WizardShell`, so T020 had no surface to break.
+- `grep -rn "WizardShell\|KitchenSinkPage\|layoutMode"` over `__tests__/`,
+  `src/`, and `scripts/` returns nothing. Run before the deletion and again at
+  session close.
+
+No halt condition fired here – nothing required re-deciding a triaged
+assertion.
+
+### Coverage knowingly dropped
+
+Three things, all deliberate:
+
+1. **The wizard walk in `scripts/smoke.mjs`** (screenshots `06`–`08`, the
+   three-step Next loop, the `View Schedule` click, and the wizard staleness
+   scan). It has no replacement – the UI it drove is gone. The file's own
+   comment instructed this feature to delete it.
+2. **The two layout-tab drives** (`Single Page` and `Wizard`). There are no
+   tabs. `App.tsx` renders `WorkbenchShell` unconditionally.
+3. **`wizardStep` and `setStep` left `UiSlice`** alongside `layoutMode`. They
+   were read only by `WizardShell`, and no test named them. `UiSlice` now holds
+   `loadedPresetId` and `setLoadedPresetId` alone.
+
+**No test coverage was dropped by this session.** The 39 deletions in the
+re-target/delete tally belong to feature 005 and are recorded in
+`specs/005-consolidate-domain-logic/triage-record.md`. This session's test count
+only rose.
+
+### The smoke driver, locator by locator
+
+| Original step | Now |
+|---|---|
+| `tab 'Single Page'` click | **deleted** – no tabs, the workbench boots directly |
+| `getByText('Save / Load / Share')` readiness wait | `getByRole('button', { name: 'Save / Share' })` |
+| Template ToggleGroup, `ROC Div1A/Vet` | kept, preceded by a click on `Presets…` |
+| `Suggest` + `Number of strips` | unchanged – the rail's `Strips` panel is open by default |
+| `Generate Schedule` | `Auto-schedule all`, disabled-guard and `02b` screenshot kept |
+| Schedule rows, staleness scan | unchanged – `ScheduleOutput` now renders inside `CenterView` |
+| Fencer-count edit | re-pointed with a real fix, below |
+| `Generate Link` | kept, preceded by a click on `Save / Share` |
+| page2's tab click and wait | replaced with the same `Save / Share` readiness wait |
+| The whole wizard block | **deleted** |
+
+Both new clicks exist for the same reason: Radix unmounts a closed
+`Collapsible`'s content, so `Presets…` and `Save / Share` must be opened before
+anything inside them is in the DOM at all.
+
+**The correction this session added to the header comment.** The fencer-edit
+step took `.first()` over every `Fencer count for…` spinbutton, which is
+alphabetical and therefore arbitrary. `runScheduleAll` (`src/store/runActions.ts`,
+from 003, and not a regression) places no event the scheduler leaves with
+`pool_start === null`, so on the ROC Div1A/Vet template at the suggested 15
+strips only 4 of 12 selected competitions reach the schedule table and the rest
+sit in the tray. The alphabetically-first input was an unplaced competition, so
+the schedule table correctly never moved. The step now reads the `Unplaced
+events` region and picks the first input whose label is not in it. This is a bad
+test assumption that was fixed, not an app bug.
+
+### What the T024 review found, and why it mattered
+
+Eleven findings, all applied. The one worth carrying forward:
+
+**Nothing anywhere distinguished WARN from ERROR.** `CenterView.tsx`'s
+`.filter(e => e.severity === 'ERROR')` and `TopBar.tsx`'s
+`.some(e => e.severity === 'ERROR')` could both be mutated to treat *any*
+finding as blocking and the whole workbench suite stayed green – every fixture
+that reached a dim or a disable did it through `strips_total = 0`, an ERROR, and
+the valid fixtures raised no findings at all. A config with only advisory notices
+would have dimmed the center, covered it with `Configuration is invalid`, frozen
+the layout, and disabled `Auto-schedule all`, undetected. `setDays(5)` on a
+placed competition yields exactly one WARN and no ERROR, and two new cases pin
+the behavior under it.
+
+This is the same shape as the FR-009 gap S2 found by mutation. **Twice now in
+this feature a green suite has said nothing about a rule it appeared to cover.**
+Every new case for the four graded findings was proved by mutating the named
+source line, watching the case fail, and reverting – the failure messages are in
+`4f172f66bb`'s body.
+
+Three smaller ones worth knowing:
+
+- `vi.stubGlobal('URL', …)` in `saveLoadShare.test.tsx` was never unstubbed, and
+  `vi.restoreAllMocks()` does not undo it on vitest 3.2.4 with this repo's
+  config. Seven later cases in that file were running with `globalThis.URL`
+  replaced by a plain object with no constructor. They passed only because
+  nothing on those paths touched `URL` – the first refactor of `handleShare` to
+  use `new URL(...)` would have failed them for an unrelated reason.
+  `vi.unstubAllGlobals()` now sits beside it.
+- **The top bar's Strip count input was in no test anywhere.** `onChange` could
+  have been wired to `setVideoStrips` with the suite green. It has a case now.
+- FR-009's cold-boot-into-invalid branch, documented in `CenterView.tsx`'s own
+  header, had no test – every case mounted valid and then broke the config.
+
+### Departures from the review, and things it got wrong
+
+- **B5's expected count was wrong, and the test's existing comment was too.**
+  The finding asked for `toHaveLength(2)` on the overlay's `<li>`s. The fixture
+  actually renders **four**: `strips_total = 0` also trips
+  `resource_precondition`, and `days_available = 0` also trips
+  `same_population` against the placed competition. The case's pre-existing
+  comment claiming it "isolates the second ERROR" was never true – it had simply
+  never been checked. The real count is asserted, with the cascade explained.
+- **A5 was investigated and left alone.** `configEditing.test.tsx`'s `full flow`
+  case keeps its fixture-satisfied `Validation` heading assertion. At
+  `setStrips(1)` there are 19 ERROR findings before the loop runs, so the
+  heading is indeed satisfied by the fixture, and there is no better one –
+  `days-available-range` is the only WARN reachable in that config and it does
+  not depend on fencer counts. The read-back at line 181 does carry the real
+  coverage: the sorted-first RYC Weekend id seeds to 50, so `toBe(30)` is
+  loop-driven and fires with no blur, which is precisely the `commitOnChange`
+  contract. Removing `commitOnChange` from `FencerCounts.tsx` fails it. **No
+  re-triage proposal** – nothing here needs re-deciding.
+- **`commitOnChange` and `rejectOutOfRange` are distinguished, not conflated.**
+  `number-input.test.tsx` exercises one, `PoolDurationSettings.test.tsx` the
+  other. The combination is untested and no caller sets both.
+
+### Left for a later session
+
+- **The reviewer could not sweep for test-ordering dependence** beyond the one
+  mechanism it proved in `saveLoadShare.test.tsx`. If another `stubGlobal` or
+  module-level mutation exists in the suite, nothing here would have found it.
+- **`Object.keys(localStorage)` shim-versus-jsdom equivalence on Node 22 is
+  still unverified locally.** S1's guard makes the local run exercise the shim
+  and CI exercise real `Storage`. Only CI proves the second.
+- **FR-003 and FR-004's duplicated controls survive.** The top bar and the rail
+  both edit tournament type, day count, and strip count, with deliberately
+  different accessible names. S2 recorded that deleting the duplication is a
+  product decision rather than a cleanup, and that has not changed.
+
+### Not finished, and why
+
+Nothing in scope was left undone and no halt condition fired. The US1 checkpoint
+is met: **one screen, both old layouts gone, smoke passing against it.** The
+branch is handed back green, with the closing merge unmade.
