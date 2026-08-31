@@ -64,8 +64,8 @@ the branch with `git merge --no-ff --no-commit` completed by
 
 **⚠️ No user story work begins until this phase is complete.**
 
-- [ ] T003 Add an app-path harness to `__tests__/helpers/appPath.ts` that, for a given scenario id, applies the preset through the store's own actions, builds the engine config, runs `scheduleAll`, and returns the placed-event count plus the per-day referee requirements — the same route `src/store/boot.ts` takes, with no test-only shortcut around `buildTournamentConfig`
-- [ ] T004 Write failing assertions in `__tests__/store/dayAxis.test.ts` for the four scheduler-axis invariants in [contracts/day-axis.md](./contracts/day-axis.md) C1 — pairwise disjoint, strictly ordered, congruent to the store's day modulo 1440, slot-aligned — across uniform hours, per-day hours, and the single-day case. They fail today because all windows coincide
+- [X] T003 Add an app-path harness to `__tests__/helpers/appPath.ts` that, for a given scenario id, applies the preset through the store's own actions, builds the engine config, runs `scheduleAll`, and returns the placed-event count plus the per-day referee requirements — the same route `src/store/boot.ts` takes, with no test-only shortcut around `buildTournamentConfig`
+- [X] T004 Write failing assertions in `__tests__/store/dayAxis.test.ts` for the four scheduler-axis invariants in [contracts/day-axis.md](./contracts/day-axis.md) C1 — pairwise disjoint, strictly ordered, congruent to the store's day modulo 1440, slot-aligned — across uniform hours, per-day hours, and the single-day case. They fail today because all windows coincide
 
 **Checkpoint**: The app path is drivable from a test, and the contract has assertions waiting for it.
 
@@ -81,7 +81,7 @@ the branch with `git merge --no-ff --no-commit` completed by
 
 > Write these FIRST and run them. T005 must fail reporting the *real* current counts — that failure message is the before-column.
 
-- [ ] T005 [US1] Write the app-path parity test in `__tests__/store/appPathParity.test.ts`: for each of B1–B8, assert the placed-event count against a pinned table seeded from `baseline.md`'s ledger column, and assert that referee requirements are attributed across the tournament's days rather than all to day one ([research.md D1](./research.md), second symptom). Run it, record the actual failing counts, and leave it red *(subagent commits)*
+- [X] T005 [US1] Write the app-path parity test in `__tests__/store/appPathParity.test.ts`: for each of B1–B8, assert the placed-event count against a pinned table seeded from `baseline.md`'s ledger column, and assert that referee requirements are attributed across the tournament's days rather than all to day one ([research.md D1](./research.md), second symptom). Run it, record the actual failing counts, and leave it red *(subagent commits)*
 
 ### Implementation for User Story 1
 
