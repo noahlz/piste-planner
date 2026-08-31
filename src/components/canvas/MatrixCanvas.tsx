@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { flushSync } from 'react-dom'
 import { DAY_END_MINS, DAY_START_MINS } from '../../engine/constants.ts'
+import type { DayConfig } from '../../engine/types.ts'
 import { useStore } from '../../store/store.ts'
 import {
   selectDerivedFindings,
@@ -253,6 +254,16 @@ export interface MatrixCanvasProps {
    * disabled without one — there is no selection until blocks exist (T037).
    */
   selection?: TimeRange | null
+  /**
+   * Clock-time hours for each day (contracts/day-axis.md C4) — the store's
+   * `dayConfigs`, never `schedule.config.dayConfigs`, which may carry the
+   * scheduler's own axis (research.md D4, D5). Passed together with
+   * `schedule` and `findings`, sourced from the same committed snapshot, so
+   * the axis this draws never runs ahead of the blocks it bounds (RCR-T009
+   * finding 1). Omitted, it falls back to a live store subscription like
+   * `schedule`/`findings`.
+   */
+  dayConfigs?: DayConfig[]
 }
 
 /** The same model, resolved: the view never has to fall back to anything. */
@@ -260,6 +271,7 @@ interface MatrixCanvasViewProps {
   schedule: DerivedSchedule
   findings: DerivedFindings
   selection?: TimeRange | null
+  dayConfigs: DayConfig[]
 }
 
 /** One block and the window-relative pixels it draws at, resolved per render. */
@@ -409,41 +421,73 @@ function findingsForBlock(
  * `ScheduleOutput` carries the identical pattern. It is left as S2 recorded it
  * — the canvas is the center, and the canvas is where this was worth solving.
  *
- * One narrow exception: `dayHours` below reads the store's `dayConfigs`
- * directly (contracts/day-axis.md C4), because that is the authoring home for
- * day hours and the only place they are guaranteed to be clock time — a
- * `schedule.config.dayConfigs` handed in from outside may carry the
- * scheduler's own axis instead (research.md D4, D5). That subscription is
- * narrow enough not to reintroduce the reconciliation cost this component
- * otherwise avoids: `dayConfigs` changes when a day's hours or count are
- * edited, not on every placement.
+ * `dayHours` below is built from a `dayConfigs` prop, not a `useStore` read
+ * inside this view (contracts/day-axis.md C4, RCR-T009 finding 1). The store's
+ * `dayConfigs` is the authoring home for day hours and the only place they are
+ * guaranteed to be clock time — a `schedule.config.dayConfigs` handed in from
+ * outside may carry the scheduler's own axis instead (research.md D4, D5) —
+ * but reading it with a `useStore` call *inside* `MatrixCanvasView` would be a
+ * second data source independent of `schedule`/`findings`, bypassing
+ * `CenterView`'s `CENTER_SETTLE_MS` debounce entirely. That desyncs the axis
+ * from the blocks: on a day edit, `dayConfigs` and `topDayHours` would update
+ * immediately while `schedule.events`/`lanes` still drew the pre-edit
+ * schedule for the settle window, so the hour ticks (and "Fit to day") could
+ * bound a window with nothing drawn in it. `CenterView` instead reads the
+ * store's `dayConfigs` at the same place it reads `schedule` and `findings`,
+ * and commits all three together, so this component keeps taking everything
+ * it draws as props. `StoreConnectedCanvas`'s bare-mount fallback below
+ * subscribes to `dayConfigs` directly, matching the fallback it already gives
+ * `schedule` and `findings` — that subscription is narrow enough not to
+ * reintroduce the reconciliation cost this component otherwise avoids:
+ * `dayConfigs` changes when a day's hours or count are edited, not on every
+ * placement.
  */
-export function MatrixCanvas({ schedule, findings, selection }: MatrixCanvasProps = {}) {
-  if (schedule !== undefined && findings !== undefined) {
-    return <MatrixCanvasView schedule={schedule} findings={findings} selection={selection} />
+export function MatrixCanvas({
+  schedule,
+  findings,
+  selection,
+  dayConfigs,
+}: MatrixCanvasProps = {}) {
+  if (schedule !== undefined && findings !== undefined && dayConfigs !== undefined) {
+    return (
+      <MatrixCanvasView
+        schedule={schedule}
+        findings={findings}
+        selection={selection}
+        dayConfigs={dayConfigs}
+      />
+    )
   }
-  return <StoreConnectedCanvas schedule={schedule} findings={findings} selection={selection} />
+  return (
+    <StoreConnectedCanvas
+      schedule={schedule}
+      findings={findings}
+      selection={selection}
+      dayConfigs={dayConfigs}
+    />
+  )
 }
 
-/** The fallback path: whichever half was not passed comes from the store. */
-function StoreConnectedCanvas({ schedule, findings, selection }: MatrixCanvasProps) {
+/** The fallback path: whichever field was not passed comes from the store. */
+function StoreConnectedCanvas({ schedule, findings, selection, dayConfigs }: MatrixCanvasProps) {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)
+  // Clock-time day hours, read from their authoring home rather than from
+  // `config.dayConfigs` — see the module docblock and `dayHours` below.
+  const liveDayConfigs = useStore((s) => s.dayConfigs)
 
   return (
     <MatrixCanvasView
       schedule={schedule ?? live}
       findings={findings ?? liveFindings}
       selection={selection}
+      dayConfigs={dayConfigs ?? liveDayConfigs}
     />
   )
 }
 
-function MatrixCanvasView({ schedule, findings, selection }: MatrixCanvasViewProps) {
+function MatrixCanvasView({ schedule, findings, selection, dayConfigs }: MatrixCanvasViewProps) {
   const { config } = schedule
-  // Clock-time day hours, read from their authoring home rather than from
-  // `config.dayConfigs` — see the module docblock and `dayHours` below.
-  const dayConfigs = useStore((s) => s.dayConfigs)
 
   // One field per initializer, following Drawer.tsx: each read is independent
   // so a write never has to reconstruct a field this component does not own.
@@ -518,11 +562,18 @@ function MatrixCanvasView({ schedule, findings, selection }: MatrixCanvasViewPro
   /**
    * The configured hours of one day, falling back to the engine's defaults.
    *
-   * Reads the store's `dayConfigs`, never `config.dayConfigs` — contracts C4.
+   * Reads the `dayConfigs` prop, never `config.dayConfigs` — contracts C4.
    * `config` is `schedule.config`, which for a scheduled tournament may carry
    * the scheduler's own axis (day *d* at `d*1440 + hours`, research D5) rather
-   * than clock time. The store is the one place day hours are always clock
-   * time, because it is where the user authors them.
+   * than clock time. `dayConfigs` traces back to the store, the one place day
+   * hours are always clock time, because it is where the user authors them.
+   *
+   * `dayConfigs` and `config` are always sourced together — the same
+   * committed snapshot in `CenterView`, the same live store render in
+   * `StoreConnectedCanvas` — so `dayConfigs.length` and `config.days_available`
+   * cannot disagree here (RCR-T009 finding 2): a day index this function is
+   * called with is never one `dayConfigs` was sized before. The `??` below is
+   * for a day with no per-day hours configured at all, not for that.
    */
   function dayHours(day: number): TimeRange {
     const dayConfig = dayConfigs[day]

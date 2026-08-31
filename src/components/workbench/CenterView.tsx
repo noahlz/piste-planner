@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store/store.ts'
+import type { DayConfig } from '../../engine/types.ts'
 import {
   selectDerivedFindings,
   selectDerivedSchedule,
@@ -19,6 +20,12 @@ export const CENTER_SETTLE_MS = 150
 interface CommittedModel {
   schedule: DerivedSchedule
   findings: DerivedFindings
+  /**
+   * The store's clock-time day hours (contracts/day-axis.md C4), committed in
+   * the same settle as `schedule`/`findings` so the matrix's axis and "Fit to
+   * day" never run ahead of the blocks they bound (RCR-T009 finding 1).
+   */
+  dayConfigs: DayConfig[]
 }
 
 /**
@@ -40,6 +47,12 @@ interface CommittedModel {
  * `viewState.ts` to `localStorage` and never to the URL (research D10). The
  * matrix is the default (FR-023); US1 shipped with the table because the canvas
  * did not exist yet (research D11).
+ *
+ * The committed model also carries the store's `dayConfigs` (contracts/
+ * day-axis.md C4) alongside `schedule`/`findings`, for the same reason: the
+ * matrix's day axis is drawn from it, and committing it separately from the
+ * schedule would let the axis settle a render ahead of the blocks it bounds
+ * (RCR-T009 finding 1).
  *
  * ## Two rules run here at once
  *
@@ -66,6 +79,7 @@ interface CommittedModel {
 export function CenterView() {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)
+  const liveDayConfigs = useStore((s) => s.dayConfigs)
 
   const blocking = liveFindings.validationErrors.filter((e) => e.severity === 'ERROR')
   const hasBlocking = blocking.length > 0
@@ -73,6 +87,7 @@ export function CenterView() {
   const [committed, setCommitted] = useState<CommittedModel>(() => ({
     schedule: live,
     findings: liveFindings,
+    dayConfigs: liveDayConfigs,
   }))
   const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewState().viewMode)
 
@@ -82,11 +97,11 @@ export function CenterView() {
     if (hasBlocking) return
 
     const timer = setTimeout(
-      () => setCommitted({ schedule: live, findings: liveFindings }),
+      () => setCommitted({ schedule: live, findings: liveFindings, dayConfigs: liveDayConfigs }),
       CENTER_SETTLE_MS,
     )
     return () => clearTimeout(timer)
-  }, [live, liveFindings, hasBlocking])
+  }, [live, liveFindings, liveDayConfigs, hasBlocking])
 
   /** One discrete choice, so it stores at once — as the canvas's own buttons
    *  do. Merged into the stored state rather than written over it, so the
@@ -133,7 +148,11 @@ export function CenterView() {
           }`}
         >
           {showingMatrix ? (
-            <MatrixCanvas schedule={committed.schedule} findings={committed.findings} />
+            <MatrixCanvas
+              schedule={committed.schedule}
+              findings={committed.findings}
+              dayConfigs={committed.dayConfigs}
+            />
           ) : (
             <ScheduleOutput schedule={committed.schedule} />
           )}

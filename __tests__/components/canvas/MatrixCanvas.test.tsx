@@ -384,8 +384,14 @@ describe('MatrixCanvas day bands read the store, not the derived config (contrac
       competitions: [],
       events: {},
     }
+    // The store's own dayConfigs (clock time, set by setDays above) — what
+    // CenterView commits alongside `schedule`/`findings` (contracts/
+    // day-axis.md C4, RCR-T009 finding 1). Passed explicitly so this exercises
+    // the real committed path (MatrixCanvasView, no useStore) rather than
+    // MatrixCanvas's store-fallback branch.
+    const dayConfigs = useStore.getState().dayConfigs
 
-    render(<MatrixCanvas schedule={schedule} findings={emptyFindings} />)
+    render(<MatrixCanvas schedule={schedule} findings={emptyFindings} dayConfigs={dayConfigs} />)
 
     const groups = dayGroups()
     expect(groups).toHaveLength(1)
