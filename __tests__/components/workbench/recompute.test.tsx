@@ -277,8 +277,9 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
       useStore.getState().updateCompetition(id, { fencer_count: 45 })
     })
 
-    // The store already carries 45 — the drawer would show it — while the
-    // blocks are still the ones the committed model implies.
+    // The edit reached the store, so what follows is about the canvas holding
+    // its geometry rather than about the edit not having landed. (No drawer is
+    // rendered here — this case mounts CenterView alone.)
     expect(useStore.getState().selectedCompetitions[id].fencer_count).toBe(45)
     expect(blockEnd(id, 'POOLS')).toBe(poolEndBefore)
 
@@ -291,5 +292,61 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     expect(poolEndBefore).not.toBe(726)
     expect(blockEnd(id, 'POOLS')).toBe(726)
     expect(blockEnd(id, 'DE')).toBe(967)
+  })
+
+  /**
+   * jsdom 26 ships no `PointerEvent` constructor, so testing-library's
+   * `pointerMove` degrades to a bare `Event` and drops the coordinates. The
+   * event name is what React dispatches on, so a `MouseEvent` carries them.
+   */
+  function firePointerMove(el: Element, clientX: number, clientY: number): void {
+    el.dispatchEvent(
+      new MouseEvent('pointermove', { clientX, clientY, bubbles: true, cancelable: true }),
+    )
+  }
+
+  it('holds a block’s findings at the committed model too, not just its geometry', () => {
+    // The case above covers the `schedule` prop. The findings travel by a
+    // second prop and the canvas has a live subscription to fall back on when
+    // one is absent, so a CenterView handing it `liveFindings` would keep every
+    // other case green while a block's tooltip described a tournament state its
+    // own rectangle did not come from.
+    //
+    // The warning has to be one that attaches to a block: analysis.ts's
+    // day-level capacity warning carries an empty competition_id and reaches no
+    // block at all. This is the per-competition STRIP_DEFICIT_NO_FLIGHTING —
+    // 70 fencers is 10 pools against the 9-strip cap 12 strips gives, and 10 is
+    // still inside strips_total, so validateConfig raises no ERROR and the
+    // center goes on committing.
+    const id = seedPlacedCompetitions(8)
+    render(<CenterView />)
+
+    const block = document.querySelector<HTMLElement>(
+      `[data-event-id="${id}"][data-phase="POOLS"]`,
+    )
+    if (!block) throw new Error('the canvas drew no pool block to hover')
+    const centreX = 72 + parseFloat(block.style.left) + parseFloat(block.style.width) / 2
+    const centreY = 38 + parseFloat(block.style.top) + parseFloat(block.style.height) / 2
+    const viewport = document.querySelector('[data-canvas-viewport]')
+    if (!viewport) throw new Error('the canvas rendered no viewport')
+
+    act(() => {
+      firePointerMove(viewport, centreX, centreY)
+    })
+    const findings = (): string =>
+      document.querySelector('[data-tooltip-field="findings"]')?.textContent ?? ''
+    expect(findings()).toBe('No findings')
+
+    act(() => {
+      useStore.getState().updateCompetition(id, { fencer_count: 70 })
+    })
+
+    expect(findings(), 'the tooltip must not run ahead of its own geometry').toBe('No findings')
+
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS)
+    })
+
+    expect(findings()).toContain('10 pools but only 9 strips available')
   })
 })

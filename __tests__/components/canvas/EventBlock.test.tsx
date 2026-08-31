@@ -61,6 +61,7 @@ function renderBlock(overrides: Partial<EventBlockProps> = {}): HTMLElement {
     width: 200,
     height: 96,
     rowHeightStep: RowHeightStep.NORMAL,
+    findings: [],
     ...overrides,
   }
   render(<EventBlock {...props} />)

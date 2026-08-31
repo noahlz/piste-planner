@@ -42,6 +42,27 @@ describe('the center view choice survives the component (research D10)', () => {
     expect(screen.getByText('No events placed yet.')).toBeInTheDocument()
   })
 
+  it('treats a press on the already-chosen view as a no-op, not as choosing nothing', () => {
+    // Radix reports '' when the pressed item is the one already selected. Taken
+    // at face value that empty string is written to storage as the view mode,
+    // where isValidViewState rejects it — so the NEXT load throws the whole
+    // stored state away and falls back to DEFAULT_VIEW_STATE, silently
+    // resetting the window, the row scroll and the drawer height, none of which
+    // this component owns.
+    saveViewState({ ...DEFAULT_VIEW_STATE, timeScroll: 900, drawerHeight: 321 })
+    render(<CenterView />)
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Matrix' }))
+
+    expect(screen.getByRole('radio', { name: 'Matrix' })).toBeChecked()
+    expect(screen.getByRole('region', { name: 'Matrix canvas' })).toBeInTheDocument()
+
+    const stored = loadViewState()
+    expect(stored.viewMode).toBe('matrix')
+    expect(stored.timeScroll).toBe(900)
+    expect(stored.drawerHeight).toBe(321)
+  })
+
   it('leaves the view-state fields the center does not own alone', () => {
     // The canvas owns the window and the row height, the drawer owns its
     // height: a toggle that wrote its own field over a whole default state

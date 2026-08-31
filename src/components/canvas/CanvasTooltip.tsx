@@ -2,8 +2,7 @@ import type { Competition } from '../../engine/types.ts'
 import { formatMinutes } from '../../lib/time.ts'
 import { GENDER_DISPLAY, WEAPON_DISPLAY, categoryDisplay } from '../competitionLabels.ts'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx'
-import { phaseDisplay, stripRangeLabel } from './blockLabels.ts'
-import type { BlockChannels } from './EventBlock.tsx'
+import { phaseDisplay, stripAssignmentLabel } from './blockLabels.ts'
 import type { BlockPlacement } from './lanes.ts'
 
 /**
@@ -28,9 +27,9 @@ import type { BlockPlacement } from './lanes.ts'
  * `EventBlock` drops its label text, then its weapon mark, then its gender
  * prefix as a block narrows (FR-016). At 27px a block is a coloured bar with a
  * single letter, and this is the only surface that still says which event it is.
- * So every field is unconditional — `dropped` records what the block managed to
- * draw, and the tooltip repeats it regardless rather than showing only the
- * remainder. A tooltip whose contents changed with the zoom would make the
+ * So every field is **unconditional**: the tooltip is handed no width, no row
+ * height and no record of what the block drew, and therefore cannot gate a row
+ * on any of them. A tooltip whose contents changed with the zoom would make the
  * organizer zoom to read it.
  *
  * ## Neither layer takes the pointer
@@ -48,8 +47,6 @@ export interface CanvasTooltipTarget {
   /** The day group the block draws in, 0-based. */
   day: number
   placement: BlockPlacement
-  /** What the block itself managed to draw at its rendered width. */
-  dropped: BlockChannels
   /** Findings attached to this competition, already narrowed to this block. */
   findings: string[]
   /** Where the anchor sits, in viewport-relative pixels. */
@@ -73,15 +70,18 @@ export function CanvasTooltip({ target }: { target: CanvasTooltipTarget | null }
             }}
           />
         </TooltipTrigger>
-        {target !== null && (
-          <TooltipContent
-            side="top"
-            align="center"
-            className="pointer-events-none block max-w-sm items-start text-left"
-          >
-            <TooltipBody target={target} />
-          </TooltipContent>
-        )}
+        {/* `open` is the only guard. Radix renders no content while a tooltip
+            is closed, so a second `target !== null &&` around this element
+            would look like belt and braces and in fact make `open` unfalsifiable
+            — the content would stay out of the DOM even if `open` were stuck
+            true. */}
+        <TooltipContent
+          side="top"
+          align="center"
+          className="pointer-events-none block max-w-sm items-start text-left"
+        >
+          {target !== null && <TooltipBody target={target} />}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   )
@@ -114,7 +114,11 @@ function TooltipBody({ target }: { target: CanvasTooltipTarget }) {
       <Row
         label="Strips"
         field="strips"
-        value={stripRangeLabel(placement.firstStrip, placement.stripCount)}
+        value={stripAssignmentLabel(
+          placement.firstStrip,
+          placement.stripCount,
+          placement.overflow,
+        )}
       />
 
       <dt className="font-medium opacity-70">Findings</dt>

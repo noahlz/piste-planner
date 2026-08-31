@@ -41,7 +41,7 @@ import {
   type TimeRange,
 } from './windowing.ts'
 import { assignStripLanes, type BlockPlacement } from './lanes.ts'
-import { EventBlock, blockChannels } from './EventBlock.tsx'
+import { EventBlock } from './EventBlock.tsx'
 import { CanvasTooltip, type CanvasTooltipTarget } from './CanvasTooltip.tsx'
 import { competitionLabel } from '../competitionLabels.ts'
 import type { Competition, Phase } from '../../engine/types.ts'
@@ -174,15 +174,35 @@ function wheelPixels(delta: number, deltaMode: number, pagePx: number): number {
   }
 }
 
-/** Merges one patch into the stored view state, never rewriting the rest. */
-function writeNow(patch: Partial<ViewState>): void {
-  saveViewState({ ...loadViewState(), ...patch })
-}
-
 /** A trailing write in flight: its timer and the patch it will apply. */
 interface TrailingWrite {
   timer: ReturnType<typeof setTimeout> | null
   patch: Partial<ViewState>
+}
+
+/**
+ * Merges one patch into the stored view state, never rewriting the rest — and
+ * settles whatever the wheel left in flight before it does.
+ *
+ * Cancelling the pending timer is what keeps storage agreeing with the screen.
+ * A gesture's write trails the state it describes by `PERSIST_DEBOUNCE_MS`, so
+ * a discrete change landing inside that window — ctrl+wheel zoom, then "Fit to
+ * day" — would otherwise be overwritten by the older gesture a moment later,
+ * and the next load would open on the window the user had already replaced.
+ *
+ * The pending patch is merged rather than dropped, so a field the gesture set
+ * and this patch does not still reaches storage. This patch wins wherever the
+ * two name the same field, because it is the newer of the two.
+ */
+function writeNow(trailing: RefObject<TrailingWrite>, patch: Partial<ViewState>): void {
+  const pending = trailing.current
+  if (pending.timer !== null) {
+    clearTimeout(pending.timer)
+    pending.timer = null
+  }
+  const merged = { ...pending.patch, ...patch }
+  pending.patch = {}
+  saveViewState({ ...loadViewState(), ...merged })
 }
 
 /**
@@ -194,12 +214,9 @@ function writeSoon(trailing: RefObject<TrailingWrite>, patch: Partial<ViewState>
   const pending = trailing.current
   pending.patch = { ...pending.patch, ...patch }
   if (pending.timer !== null) clearTimeout(pending.timer)
-  pending.timer = setTimeout(() => {
-    pending.timer = null
-    const merged = pending.patch
-    pending.patch = {}
-    writeNow(merged)
-  }, PERSIST_DEBOUNCE_MS)
+  // `writeNow` empties the patch and clears the timer itself, so the callback
+  // is the flush and nothing else.
+  pending.timer = setTimeout(() => writeNow(trailing, {}), PERSIST_DEBOUNCE_MS)
 }
 
 /**
@@ -219,21 +236,29 @@ interface WheelState {
 
 export interface MatrixCanvasProps {
   /**
-   * The committed derived model, as `ScheduleOutput` takes it. Omitted, the
-   * canvas subscribes to the store directly.
+   * The committed derived model, as `ScheduleOutput` takes it. Passed with
+   * `findings`, the canvas never subscribes to the store at all — see
+   * `MatrixCanvas` below. Omitted, it falls back to the live model.
    */
   schedule?: DerivedSchedule
   /**
-   * The committed findings the tooltip attributes to a block. Omitted, the
-   * canvas subscribes to the store, exactly as `schedule` does — the two are
-   * passed together or not at all, so a block's findings always describe the
-   * same tournament state its geometry came from.
+   * The committed findings the tooltip and the blocks' accessible names
+   * attribute to a block. Passed together with `schedule` or not at all, so a
+   * block's findings always describe the same tournament state its geometry
+   * came from.
    */
   findings?: DerivedFindings
   /**
    * The minute range `Zoom to selection` targets (FR-020). The action is
    * disabled without one — there is no selection until blocks exist (T037).
    */
+  selection?: TimeRange | null
+}
+
+/** The same model, resolved: the view never has to fall back to anything. */
+interface MatrixCanvasViewProps {
+  schedule: DerivedSchedule
+  findings: DerivedFindings
   selection?: TimeRange | null
 }
 
@@ -245,7 +270,10 @@ interface DrawnBlock {
   readonly x: number
   readonly y: number
   readonly width: number
+  /** Clamped to the block's own day group — see `visibleBlocks`. */
   readonly height: number
+  /** This block's findings, resolved once for the name and the tooltip. */
+  readonly findings: string[]
 }
 
 /**
@@ -287,15 +315,34 @@ function stickyHeaderTop(rawTop: number, nextDayTop: number): number {
 }
 
 /**
- * The block under a plot coordinate, or `null` over empty grid. Scanned back to
- * front because the blocks are absolutely positioned in array order: where an
- * overflowing block overlaps one that legitimately holds those strips, the one
- * drawn on top is the one the pointer is actually over.
+ * The block under a plot coordinate, or `null` over empty grid.
+ *
+ * The pointer is bounded to the plot before any block is considered. The block
+ * layer is `overflow-hidden` at exactly `plotWidth` x `plotHeight` and sits
+ * below the frozen gutter and the sticky day bands, so a block with a negative
+ * x or y is clipped away and hidden under them by design. Comparing against the
+ * block rectangles alone would make those clipped pixels live hits and open a
+ * tooltip while the pointer is over a strip label or a day band, for a block
+ * that is not drawn there. The bound is the same pair of constants the layer is
+ * positioned by, so the drawn and hit-tested rectangles cannot disagree.
+ *
+ * Within the plot the scan runs back to front, because the blocks are
+ * absolutely positioned in array order: where an overflowing block overlaps one
+ * that legitimately holds those strips, the one drawn on top is the one the
+ * pointer is actually over.
  *
  * The right and bottom edges are exclusive, so two blocks abutting at a minute
  * or a strip boundary never both claim the same pixel.
  */
-function blockAt(blocks: DrawnBlock[], plotX: number, plotY: number): DrawnBlock | null {
+function blockAt(
+  blocks: DrawnBlock[],
+  plotX: number,
+  plotY: number,
+  plotWidth: number,
+  plotHeight: number,
+): DrawnBlock | null {
+  if (plotX < 0 || plotX >= plotWidth || plotY < 0 || plotY >= plotHeight) return null
+
   for (let i = blocks.length - 1; i >= 0; i--) {
     const block = blocks[i]
     if (
@@ -344,15 +391,46 @@ function findingsForBlock(
   return messages
 }
 
-export function MatrixCanvas({
-  schedule: committed,
-  findings: committedFindings,
-  selection,
-}: MatrixCanvasProps = {}) {
+/**
+ * The canvas as everything else mounts it, and the only place a store
+ * subscription can enter it.
+ *
+ * Handed both halves of a committed model it renders the view directly, with no
+ * `useStore` on the path at all. That is not a micro-optimization: the
+ * subscription's values were discarded on the next line either way, but their
+ * *identity* changes on every placement or config edit, so the whole canvas
+ * re-rendered on each keystroke — rebuilding `visibleBlocks` and reconciling
+ * every `EventBlock` — to draw output identical to the last one until
+ * `CENTER_SETTLE_MS` elapsed (FR-008). Nothing memoizes those blocks at
+ * runtime: the React Compiler is not in the build, and its lint rules only
+ * check the source. The same path amplifies the `flushSync` hover, where one
+ * block crossing synchronously reconciles every visible block.
+ *
+ * `ScheduleOutput` carries the identical pattern. It is left as S2 recorded it
+ * — the canvas is the center, and the canvas is where this was worth solving.
+ */
+export function MatrixCanvas({ schedule, findings, selection }: MatrixCanvasProps = {}) {
+  if (schedule !== undefined && findings !== undefined) {
+    return <MatrixCanvasView schedule={schedule} findings={findings} selection={selection} />
+  }
+  return <StoreConnectedCanvas schedule={schedule} findings={findings} selection={selection} />
+}
+
+/** The fallback path: whichever half was not passed comes from the store. */
+function StoreConnectedCanvas({ schedule, findings, selection }: MatrixCanvasProps) {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)
-  const schedule = committed ?? live
-  const findings = committedFindings ?? liveFindings
+
+  return (
+    <MatrixCanvasView
+      schedule={schedule ?? live}
+      findings={findings ?? liveFindings}
+      selection={selection}
+    />
+  )
+}
+
+function MatrixCanvasView({ schedule, findings, selection }: MatrixCanvasViewProps) {
   const { config } = schedule
 
   // One field per initializer, following Drawer.tsx: each read is independent
@@ -489,6 +567,12 @@ export function MatrixCanvas({
    * wholly outside the window is not in the DOM at all. Geometry is computed
    * here on every render and never written back into the derived model
    * (FR-013), so a scroll or a zoom cannot leave a stale coordinate behind.
+   *
+   * The drawn strip span is clamped to what is left of the block's own day
+   * group. `assignStripLanes` already returns `overflow` rather than a run that
+   * runs off the end of a day, so this only bites if the engine ever grants an
+   * event more strips than the tournament has — and there the unclamped height
+   * would paint straight across the next day's rows.
    */
   const visibleBlocks: DrawnBlock[] = []
   if (rowRange) {
@@ -497,9 +581,10 @@ export function MatrixCanvas({
 
       const flatRow = flatRowIndex(layout, placement.day, placement.firstStrip)
       if (flatRow === null) continue
-      // Row ranges are inclusive, and a block spans `stripCount` of them.
+      const drawnStrips = Math.min(placement.stripCount, layout.rowsPerDay - placement.firstStrip)
+      // Row ranges are inclusive, and a block spans `drawnStrips` of them.
       if (flatRow > rowRange.lastRow) continue
-      if (flatRow + placement.stripCount - 1 < rowRange.firstRow) continue
+      if (flatRow + drawnStrips - 1 < rowRange.firstRow) continue
 
       const competition = competitionsById.get(placement.competitionId)
       if (!competition) continue
@@ -511,7 +596,8 @@ export function MatrixCanvas({
         x: blockX(placement.startMinutes, timeScroll, timeZoom),
         y: blockY(flatRow, windowStartRow, rowHeightStep),
         width: blockWidth(placement.endMinutes - placement.startMinutes, timeZoom),
-        height: blockHeight(placement.stripCount, rowHeightStep),
+        height: blockHeight(drawnStrips, rowHeightStep),
+        findings: findingsForBlock(findings, placement.competitionId, placement.phase),
       })
     }
   }
@@ -548,6 +634,8 @@ export function MatrixCanvas({
       visibleBlocks,
       e.clientX - rect.left - GUTTER_WIDTH_PX,
       e.clientY - rect.top - HEADER_HEIGHT_PX,
+      plotWidth,
+      plotHeight,
     )
 
     if (drawn === null) {
@@ -598,9 +686,14 @@ export function MatrixCanvas({
 
   const trailing = useRef<TrailingWrite>({ timer: null, patch: {} })
 
+  // A pending gesture write is flushed on unmount, not discarded. T040's
+  // Matrix ⇄ Schedule toggle swaps the canvas out entirely, so a wheel scroll
+  // followed within PERSIST_DEBOUNCE_MS by a click on "Schedule" would
+  // otherwise drop the scroll: switching back would restore the pre-wheel
+  // position and the gesture would silently not have happened.
   useEffect(
     () => () => {
-      if (trailing.current.timer !== null) clearTimeout(trailing.current.timer)
+      if (trailing.current.timer !== null) writeNow(trailing, {})
     },
     [],
   )
@@ -681,28 +774,34 @@ export function MatrixCanvas({
     if (next === null) return
     setTimeZoom(next.timeZoom)
     setTimeScroll(next.timeScroll)
-    writeNow({ timeZoom: next.timeZoom, timeScroll: next.timeScroll })
+    writeNow(trailing, { timeZoom: next.timeZoom, timeScroll: next.timeScroll })
   }
 
   function applyRowHeight(delta: number): void {
     const next = stepRowHeight(rowHeightStep, delta)
     if (next === rowHeightStep) return
+    // The remainder is a fraction of the *old* row height, so it means nothing
+    // against the new one. Carried over it would tip the next notch early.
+    rowRemainderPx.current = 0
     setRowHeightStep(next)
-    writeNow({ rowHeightStep: next })
+    writeNow(trailing, { rowHeightStep: next })
   }
 
   function scrollRowsBy(delta: number): void {
     const next = Math.min(Math.max(0, rowScroll + delta), maxScroll)
     if (next === rowScroll) return
+    // A button or a key press moves whole rows, so a part-row left over from an
+    // earlier wheel gesture is no longer describing where the rows sit.
+    rowRemainderPx.current = 0
     setRowScroll(next)
-    writeNow({ rowScroll: next })
+    writeNow(trailing, { rowScroll: next })
   }
 
   function scrollTimeBy(deltaMinutes: number): void {
     const next = Math.max(0, timeScroll + deltaMinutes)
     if (next === timeScroll) return
     setTimeScroll(next)
-    writeNow({ timeScroll: next })
+    writeNow(trailing, { timeScroll: next })
   }
 
   /**
@@ -735,6 +834,14 @@ export function MatrixCanvas({
       case 'ArrowLeft':
         scrollTimeBy(-KEY_PAN_PX * timeZoom)
         break
+      case 'Escape':
+        // WCAG 1.4.13: content shown on hover must be dismissible without
+        // moving the pointer. The tooltip's `open` is `hovered !== null`, so
+        // clearing the hover is the dismissal — no `onOpenChange` needed, and
+        // nothing about the controlled tooltip is fought. This handler does not
+        // preventDefault: an Escape the canvas consumed is still an Escape.
+        setHovered(null)
+        return
       default:
         return
     }
@@ -886,6 +993,7 @@ export function MatrixCanvas({
               width={drawn.width}
               height={drawn.height}
               rowHeightStep={rowHeightStep}
+              findings={drawn.findings}
             />
           ))}
         </div>
@@ -951,8 +1059,7 @@ export function MatrixCanvas({
                 label: hoveredBlock.label,
                 day: hoveredBlock.placement.day,
                 placement: hoveredBlock.placement,
-                dropped: blockChannels(hoveredBlock.width, rowHeightStep),
-                findings: findingsForBlock(findings, hovered.competitionId, hovered.phase),
+                findings: hoveredBlock.findings,
                 anchorX:
                   hovered.originX +
                   GUTTER_WIDTH_PX +

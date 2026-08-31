@@ -38,3 +38,22 @@ export function stripRangeLabel(firstStrip: number, stripCount: number): string 
   const last = firstStrip + stripCount
   return first === last ? `Strip ${first}` : `Strips ${first}–${last}`
 }
+
+/**
+ * What a block says about its strips, overflow included.
+ *
+ * An overflowed block was granted no run at all: `assignStripLanes` reports it
+ * at `firstStrip: 0` so it has somewhere to draw, and records no occupancy for
+ * it. Reading that 0 as a placement makes both surfaces claim strips the block
+ * was never given — "Strips 1–4" over a day that had no room for it, which is
+ * fiction on exactly the over-capacity day an organizer opened the tool to
+ * find. So the count is reported without a range, and the failure is named.
+ */
+export function stripAssignmentLabel(
+  firstStrip: number,
+  stripCount: number,
+  overflow: boolean,
+): string {
+  if (!overflow) return stripRangeLabel(firstStrip, stripCount)
+  return stripCount === 1 ? 'Unplaced, needs 1 strip' : `Unplaced, needs ${stripCount} strips`
+}

@@ -4,7 +4,7 @@ import { Gender, Phase } from '../../engine/types.ts'
 import { formatMinutes } from '../../lib/time.ts'
 import { RowHeightStep } from '../../store/viewState.ts'
 import { categoryFill, categoryInk, resolveCanvasCategory, weaponMark } from './palette.ts'
-import { phaseDisplay, stripRangeLabel } from './blockLabels.ts'
+import { phaseDisplay, stripAssignmentLabel } from './blockLabels.ts'
 import type { BlockPlacement } from './lanes.ts'
 
 /**
@@ -102,6 +102,13 @@ export interface EventBlockProps {
   width: number
   height: number
   rowHeightStep: RowHeightStep
+  /**
+   * The findings this block is implicated in, already narrowed by the canvas.
+   * They belong in the accessible name because the tooltip cannot carry them:
+   * its trigger is `aria-hidden`, so a keyboard or screen-reader user can read
+   * every block on the grid and never learn that one is in trouble.
+   */
+  findings: string[]
 }
 
 export function EventBlock({
@@ -114,6 +121,7 @@ export function EventBlock({
   width,
   height,
   rowHeightStep,
+  findings,
 }: EventBlockProps) {
   const category = resolveCanvasCategory(competition.category, competition.vet_age_group)
   const kind = phaseKind(placement.phase)
@@ -124,7 +132,12 @@ export function EventBlock({
     phaseDisplay(placement.phase),
     `Day ${day + 1}`,
     `${formatMinutes(placement.startMinutes)}–${formatMinutes(placement.endMinutes)}`,
-    stripRangeLabel(placement.firstStrip, placement.stripCount),
+    stripAssignmentLabel(placement.firstStrip, placement.stripCount, placement.overflow),
+    ...(findings.length === 0
+      ? []
+      : [
+          `${findings.length} finding${findings.length === 1 ? '' : 's'}: ${findings.join('; ')}`,
+        ]),
   ].join(', ')
 
   // The fill and the ink travel as custom properties so the classes below can
@@ -155,6 +168,7 @@ export function EventBlock({
       data-end={placement.endMinutes}
       data-strips={placement.stripCount}
       data-first-strip={placement.firstStrip}
+      data-overflow={placement.overflow ? 'true' : undefined}
       className="absolute overflow-hidden rounded-[2px] bg-[var(--block-fill)] text-[var(--block-ink)]"
       style={style}
     >
@@ -165,6 +179,19 @@ export function EventBlock({
         aria-hidden="true"
         className="absolute inset-y-0 left-0 w-[3px] bg-[var(--block-ink)]"
       />
+      {/* The overflow cue. A block that found no run is drawn at strip 0 on top
+          of whatever legitimately holds those strips, and without a cue an
+          over-capacity day reads as an ordinary one — blocks quietly stacked,
+          nothing saying anything failed to place. Dashed rather than a fill or
+          an ink change, so it cannot be mistaken for the category or the phase
+          channel. */}
+      {placement.overflow && (
+        <span
+          data-overflow-cue
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-[2px] border-2 border-dashed border-[var(--block-ink)]"
+        />
+      )}
       {kind === 'de' && (
         <span
           data-hatch

@@ -237,10 +237,17 @@ describe('assignStripLanes is deterministic', () => {
     ])
   })
 
-  it('breaks a tie on day, start and id with a fixed phase order', () => {
-    // Contrived — the engine never starts a DE at the pool start — but it is
-    // the last tie the ordering has to settle, and an unsettled tie is a
-    // lane assignment that jitters between renders.
+  it('leaves an event’s phases in the order eventTimeSegments emitted them when day, start and id all tie', () => {
+    // The last tie `compareCandidates` can face, and it settles it by not
+    // deciding: the comparator returns 0 and `Array.prototype.sort` is stable,
+    // so the phases keep `eventTimeSegments`' emission order — pools before the
+    // DE, which is the order they run in. A phase rank in the comparator would
+    // be a second statement of the same order, and no real ScheduleResult can
+    // tell the two apart: a single-stage DE and a staged DE are mutually
+    // exclusive on the result, and the engine never starts a DE at the pool
+    // start. This fixture is contrived for that reason, and what it holds is
+    // that the tie is settled at all — an unsettled one is a lane assignment
+    // that jitters between renders.
     const placements = assignStripLanes(
       { same: poolAndDeEvent('same', 0, [480, 540, 2], [480, 540, 2]) },
       8,

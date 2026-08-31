@@ -27,13 +27,15 @@
  *
  * ## The order is fixed on purpose
  *
- * Day, then start minute, then competition id, then a fixed phase rank. Object
- * key order is not a guarantee to lean on, and a lane assignment that varied
- * between renders would make blocks jump under the pointer.
+ * Day, then start minute, then competition id, then — by a stable sort over
+ * `eventTimeSegments`' emission order — the phases of one event in the order
+ * they run. Object key order is not a guarantee to lean on, and a lane
+ * assignment that varied between renders would make blocks jump under the
+ * pointer.
  */
 
 import type { DerivedEventSchedule } from '../../engine/derive.ts'
-import { Phase } from '../../engine/types.ts'
+import type { Phase } from '../../engine/types.ts'
 import { eventTimeSegments } from './geometry.ts'
 import { intersectsTimeRange } from './windowing.ts'
 
@@ -49,26 +51,6 @@ export interface BlockPlacement {
   firstStrip: number
   /** No free run existed, so the block is drawn at strip 0 and overlaps. */
   overflow: boolean
-}
-
-/**
- * Tie-break rank for two blocks sharing a day, a start minute and an id.
- * Chronological within an event, so the order reads the way the day runs.
- * Anything outside this list sorts last — `eventTimeSegments` emits only these
- * six phases, so that branch is unreachable rather than lenient.
- */
-const PHASE_ORDER: readonly Phase[] = [
-  Phase.POOLS,
-  Phase.FLIGHT_A,
-  Phase.FLIGHT_B,
-  Phase.DE_PRELIMS,
-  Phase.DE_ROUND_OF_16,
-  Phase.DE,
-]
-
-function phaseRank(phase: Phase): number {
-  const index = PHASE_ORDER.indexOf(phase)
-  return index === -1 ? PHASE_ORDER.length : index
 }
 
 /** A span of minutes one strip is already spoken for. */
@@ -87,11 +69,24 @@ interface Candidate {
   stripCount: number
 }
 
+/**
+ * Day, then start minute, then competition id — and nothing after that.
+ *
+ * Two blocks reaching this last `return 0` share an event, a day and a start
+ * minute, so the only thing left to order them by is phase. `Array.prototype.sort`
+ * is stable, so they keep the order `eventTimeSegments` emitted them in, which
+ * is already chronological within an event: pools or flights first, then the DE
+ * phases. A phase rank here would be a second, independent statement of that
+ * order — one that no real `ScheduleResult` can exercise, since a single-stage
+ * DE and a staged DE are mutually exclusive on the result and neither ever
+ * starts at the pool start. Two orders that only one fixture can tell apart is
+ * one order too many, so the emission order is the whole rule.
+ */
 function compareCandidates(a: Candidate, b: Candidate): number {
   if (a.day !== b.day) return a.day - b.day
   if (a.startMinutes !== b.startMinutes) return a.startMinutes - b.startMinutes
   if (a.competitionId !== b.competitionId) return a.competitionId < b.competitionId ? -1 : 1
-  return phaseRank(a.phase) - phaseRank(b.phase)
+  return 0
 }
 
 /** Whether every strip in `[firstStrip, firstStrip + stripCount)` is free. */

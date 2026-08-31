@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { render, cleanup, fireEvent } from '@testing-library/react'
 import {
   CanvasTooltip,
   type CanvasTooltipTarget,
 } from '../../../src/components/canvas/CanvasTooltip.tsx'
-import { EventBlock, type BlockChannels } from '../../../src/components/canvas/EventBlock.tsx'
+import { EventBlock } from '../../../src/components/canvas/EventBlock.tsx'
 import type { BlockPlacement } from '../../../src/components/canvas/lanes.ts'
 import { MatrixCanvas } from '../../../src/components/canvas/MatrixCanvas.tsx'
 import type { DerivedSchedule } from '../../../src/store/derived.ts'
@@ -46,12 +46,16 @@ import {
 
 const GUTTER_WIDTH_PX = 72
 /**
- * The block layer starts this far below the viewport's top edge — the sticky
- * day band and the hour axis under it take real layout space. A block's inline
- * `top` is measured inside that layer, so a client coordinate aimed at a block
- * has to add the band back. Written as a literal rather than imported: an
- * expectation computed from the same constant as the implementation agrees with
- * it by construction and can never fail.
+ * The block layer starts this far below the viewport's top edge. The day band
+ * and the hour axis under it take no layout space at all — they are one
+ * absolutely positioned `z-20` overlay — so the offset is not the band pushing
+ * anything down: it is the block layer, the gutter and the SVG each being
+ * positioned this far down, and made this much shorter, so the band has rows to
+ * cover rather than rows to hide. A block's inline `top` is measured inside
+ * that layer, so a client coordinate aimed at a block has to add the offset
+ * back. Written as a literal rather than imported: an expectation computed from
+ * the same constant as the implementation agrees with it by construction and
+ * can never fail.
  */
 const HEADER_OFFSET_PX = 38
 const VIEWPORT_WIDTH = 900
@@ -69,12 +73,6 @@ const POOL_PLACEMENT: BlockPlacement = {
   stripCount: 4,
   firstStrip: 0,
   overflow: false,
-}
-
-const ALL_CHANNELS: BlockChannels = {
-  labelText: true,
-  weaponMark: true,
-  labelPrefix: true,
 }
 
 class StubResizeObserver {
@@ -119,7 +117,6 @@ function makeTarget(overrides: Partial<CanvasTooltipTarget> = {}): CanvasTooltip
     label: DIV1_LABEL,
     day: 0,
     placement: POOL_PLACEMENT,
-    dropped: ALL_CHANNELS,
     findings: [],
     anchorX: 200,
     anchorY: 48,
@@ -261,7 +258,14 @@ describe('CanvasTooltip findings (FR-022)', () => {
   })
 })
 
-describe('CanvasTooltip carries what the block dropped (FR-016, FR-022)', () => {
+/**
+ * The tooltip's fields are unconditional — it is handed no width, no row height
+ * and no record of what the block managed to draw, so no row can be gated on
+ * any of them. The pair below is the contrast that makes that a claim rather
+ * than a restatement: the same target, against a block that dropped two
+ * channels and a block that drew all three, says the same thing both times.
+ */
+describe('CanvasTooltip fields do not vary with what the block drew (FR-016, FR-022)', () => {
   it('names the weapon at a width where the block itself cannot draw the mark', () => {
     // 27px is one pixel under WEAPON_MARK_MIN_WIDTH_PX, so the block drops the
     // weapon mark and the label text and keeps only the gender prefix.
@@ -276,6 +280,7 @@ describe('CanvasTooltip carries what the block dropped (FR-016, FR-022)', () => 
         width={27}
         height={96}
         rowHeightStep={RowHeightStep.NORMAL}
+        findings={[]}
       />,
     )
 
@@ -283,21 +288,34 @@ describe('CanvasTooltip carries what the block dropped (FR-016, FR-022)', () => 
     expect(document.querySelector('[data-label-text]')).toBeNull()
     cleanup()
 
-    render(
-      <CanvasTooltip
-        target={makeTarget({
-          dropped: { labelText: false, weaponMark: false, labelPrefix: true },
-        })}
-      />,
-    )
+    render(<CanvasTooltip target={makeTarget()} />)
 
     // The tooltip is the only place either fact is available at that width.
     expect(field('weapon')).toBe('Foil')
     expect(field('name')).toBe(DIV1_LABEL)
   })
 
-  it('carries the same fields even when the block drew all of them', () => {
-    render(<CanvasTooltip target={makeTarget({ dropped: ALL_CHANNELS })} />)
+  it('carries the same fields at a width where the block drew all of them', () => {
+    render(
+      <EventBlock
+        competition={makeCompetition({ id: 'plain' })}
+        label={DIV1_LABEL}
+        day={0}
+        placement={POOL_PLACEMENT}
+        x={0}
+        y={0}
+        width={200}
+        height={96}
+        rowHeightStep={RowHeightStep.NORMAL}
+        findings={[]}
+      />,
+    )
+
+    expect(document.querySelector('[data-weapon-mark]')).not.toBeNull()
+    expect(document.querySelector('[data-label-text]')).not.toBeNull()
+    cleanup()
+
+    render(<CanvasTooltip target={makeTarget()} />)
 
     expect(field('weapon')).toBe('Foil')
     expect(field('name')).toBe(DIV1_LABEL)
@@ -363,8 +381,10 @@ function blockFor(key: string): HTMLElement {
 
 describe('one canvas-level pointer handler, not a trigger per block (research D3)', () => {
   beforeEach(() => {
-    useStore.getState().setDays(3)
-    useStore.getState().setStrips(24)
+    // No store seed: every case here passes `schedule={scheduleWithTwoEvents()}`,
+    // so the canvas draws from that config's own days and strips and the store
+    // reaches nothing rendered.
+    //
     // 828px of plot at 1 minute per pixel from 08:00 covers every block below.
     seedViewState({ timeScroll: 480, timeZoom: 1, rowScroll: 0 })
   })
@@ -424,6 +444,43 @@ describe('one canvas-level pointer handler, not a trigger per block (research D3
     expect(field('phase')).toBe('DE')
     expect(field('start')).toBe('12:40')
     expect(field('end')).toBe('15:00')
+  })
+
+  it('closes the tooltip when the pointer leaves the canvas without crossing empty grid', () => {
+    // The case above walks the pointer off a block and onto bare grid, which is
+    // the `blockAt() === null` path inside the viewport. A pointer that leaves
+    // the element entirely — off the edge of the canvas, or onto the drawer —
+    // fires no further move at all, so nothing but pointerleave closes it.
+    render(<MatrixCanvas schedule={scheduleWithTwoEvents()} />)
+
+    const pool = blockFor('c1:POOLS')
+    const top = parseFloat(pool.style.top)
+    const height = parseFloat(pool.style.height)
+    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + top + height / 2)
+    expect(field('phase')).toBe('Pools')
+
+    fireEvent.pointerLeave(viewport())
+
+    expect(queryField('phase')).toBeNull()
+  })
+
+  it('anchors the tooltip at the hovered block’s own top centre', () => {
+    // jsdom lays nothing out, so getBoundingClientRect() is zeros and the
+    // viewport's origin is 0,0 — which makes these exact pixels rather than a
+    // range. The pool block is plot x 120-220 in an 08:00 window, so its centre
+    // is plot x 170: 72px of gutter puts the anchor at 242, and the block's own
+    // top of 0 plus the 38px header puts it at 38.
+    render(<MatrixCanvas schedule={scheduleWithTwoEvents()} />)
+
+    const pool = blockFor('c1:POOLS')
+    expect(pool.style.left).toBe('120px')
+    expect(pool.style.top).toBe('0px')
+
+    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + 48)
+
+    const anchor = document.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]')
+    expect(anchor?.style.left).toBe('242px')
+    expect(anchor?.style.top).toBe('38px')
   })
 
   it('mounts exactly one tooltip trigger however many blocks are on screen', () => {
