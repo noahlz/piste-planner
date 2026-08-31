@@ -1,17 +1,49 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store/store.ts'
-import { selectDerivedFindings, selectDerivedSchedule } from '../../store/derived.ts'
+import {
+  selectDerivedFindings,
+  selectDerivedSchedule,
+  type DerivedFindings,
+  type DerivedSchedule,
+} from '../../store/derived.ts'
 import { ScheduleOutput } from '../sections/ScheduleOutput.tsx'
+import { MatrixCanvas } from '../canvas/MatrixCanvas.tsx'
+import { ViewMode, loadViewState, saveViewState } from '../../store/viewState.ts'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AlertCircle } from 'lucide-react'
 
 /** How long an edit must settle before the center relayouts (FR-008). */
 export const CENTER_SETTLE_MS = 150
 
+/** The derived model the center is currently drawing, whichever view is up. */
+interface CommittedModel {
+  schedule: DerivedSchedule
+  findings: DerivedFindings
+}
+
 /**
- * The center region: the committed schedule, plus the dimmed-invalid overlay.
+ * The center region: the committed schedule, in one of two views, plus the
+ * dimmed-invalid overlay.
  *
- * Two rules run here at once (S2-contract.md §Center view and the
- * dimmed-invalid rule), and they compose:
+ * ## One model, two views (FR-023)
+ *
+ * The matrix and the schedule table are handed the *same* committed
+ * `DerivedSchedule`, so they cannot disagree about when an event runs — the
+ * contract `contracts/ui-contract.md` §View equivalence states and
+ * `viewEquivalence.test.tsx` holds. Neither view is given a live store
+ * subscription of its own here: that would put one of them ahead of the other
+ * by a settle, and ahead of the dimmed-invalid rule entirely. The findings
+ * travel with the schedule for the same reason — a block's tooltip must
+ * describe the tournament state its geometry came from, not a later one.
+ *
+ * Which view is showing is a viewer preference, so it persists through
+ * `viewState.ts` to `localStorage` and never to the URL (research D10). The
+ * matrix is the default (FR-023); US1 shipped with the table because the canvas
+ * did not exist yet (research D11).
+ *
+ * ## Two rules run here at once
+ *
+ * (S2-contract.md §Center view and the dimmed-invalid rule), and they compose:
  *
  * 1. Two-tier recompute (FR-008). Findings and metrics follow the store per
  *    keystroke — the drawer reads it directly and is not debounced — while the
@@ -27,54 +59,107 @@ export const CENTER_SETTLE_MS = 150
  *    layout yet to fall back to. Dimmed, never blanked, either way, under any
  *    sequence of edits. The dim itself tracks the *live* findings, so it
  *    lands on the keystroke that broke the config rather than a settle later.
+ *
+ * Both rules apply to whichever view is up: the toggle chooses how the
+ * committed model is drawn, never which model is drawn.
  */
 export function CenterView() {
   const live = useStore(selectDerivedSchedule)
-  const { validationErrors } = useStore(selectDerivedFindings)
+  const liveFindings = useStore(selectDerivedFindings)
 
-  const blocking = validationErrors.filter((e) => e.severity === 'ERROR')
+  const blocking = liveFindings.validationErrors.filter((e) => e.severity === 'ERROR')
   const hasBlocking = blocking.length > 0
 
-  const [committed, setCommitted] = useState(live)
+  const [committed, setCommitted] = useState<CommittedModel>(() => ({
+    schedule: live,
+    findings: liveFindings,
+  }))
+  const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewState().viewMode)
 
   useEffect(() => {
     // An invalid config commits nothing at all — rule 2 above. The last valid
     // layout stays on screen until the config is valid again and settles.
     if (hasBlocking) return
 
-    const timer = setTimeout(() => setCommitted(live), CENTER_SETTLE_MS)
+    const timer = setTimeout(
+      () => setCommitted({ schedule: live, findings: liveFindings }),
+      CENTER_SETTLE_MS,
+    )
     return () => clearTimeout(timer)
-  }, [live, hasBlocking])
+  }, [live, liveFindings, hasBlocking])
+
+  /** One discrete choice, so it stores at once — as the canvas's own buttons
+   *  do. Merged into the stored state rather than written over it, so the
+   *  window and row height this component does not own survive. */
+  function chooseView(next: ViewMode): void {
+    setViewMode(next)
+    saveViewState({ ...loadViewState(), viewMode: next })
+  }
+
+  const showingMatrix = viewMode === ViewMode.MATRIX
 
   return (
-    <main aria-label="Center view" className="relative flex-1 overflow-auto p-4">
-      <div
-        data-dimmed={hasBlocking ? 'true' : 'false'}
-        className={hasBlocking ? 'opacity-40 pointer-events-none' : ''}
-      >
-        <ScheduleOutput schedule={committed} />
+    <main aria-label="Center view" className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1">
+        <ToggleGroup
+          type="single"
+          // Radix's Root is role="group"; the two items are already role="radio"
+          // in single mode, so the group they belong to is a radiogroup. The
+          // name differs from the <main> landmark's own "Center view" — one
+          // accessible name shared by two things makes both ambiguous.
+          role="radiogroup"
+          aria-label="Center view mode"
+          variant="outline"
+          size="sm"
+          value={viewMode}
+          // Radix reports '' when the pressed item is the selected one. There
+          // is no "no view" state to fall into, so that clears nothing.
+          onValueChange={(next) => next && chooseView(next as ViewMode)}
+        >
+          <ToggleGroupItem value={ViewMode.MATRIX}>Matrix</ToggleGroupItem>
+          <ToggleGroupItem value={ViewMode.SCHEDULE}>Schedule</ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
-      {hasBlocking && (
-        <section
-          aria-label="Blocking findings"
-          aria-live="assertive"
-          aria-atomic="true"
-          className="absolute inset-x-4 top-4 rounded-md border border-red-200 bg-error p-4 text-error-text shadow-lg"
+      {/* The view fills this region absolutely rather than sizing to its
+          content: the canvas measures its own viewport through a
+          ResizeObserver and needs a height that does not depend on what it
+          draws, while the table keeps its own scroll inside the same box. */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          data-dimmed={hasBlocking ? 'true' : 'false'}
+          className={`absolute inset-0 ${showingMatrix ? 'flex flex-col' : 'overflow-auto p-4'} ${
+            hasBlocking ? 'opacity-40 pointer-events-none' : ''
+          }`}
         >
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <AlertCircle className="h-4 w-4" />
-            Configuration is invalid
-          </h2>
-          <ul className="mt-2 space-y-1 text-sm">
-            {blocking.map((e, i) => (
-              <li key={`${e.field}-${i}`}>
-                {e.field}: {e.message}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {showingMatrix ? (
+            <MatrixCanvas schedule={committed.schedule} findings={committed.findings} />
+          ) : (
+            <ScheduleOutput schedule={committed.schedule} />
+          )}
+        </div>
+
+        {hasBlocking && (
+          <section
+            aria-label="Blocking findings"
+            aria-live="assertive"
+            aria-atomic="true"
+            className="absolute inset-x-4 top-4 rounded-md border border-red-200 bg-error p-4 text-error-text shadow-lg"
+          >
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <AlertCircle className="h-4 w-4" />
+              Configuration is invalid
+            </h2>
+            <ul className="mt-2 space-y-1 text-sm">
+              {blocking.map((e, i) => (
+                <li key={`${e.field}-${i}`}>
+                  {e.field}: {e.message}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
     </main>
   )
 }

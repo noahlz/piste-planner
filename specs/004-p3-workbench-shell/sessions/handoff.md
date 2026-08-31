@@ -855,3 +855,291 @@ grid exists and is unreachable; S5 fills it, mounts it, and extends the smoke
 driver in the task that mounts it. T042 and T043 close there too. The US2
 checkpoint closes at the end of S5, so **no checkpoint commit was made here**.
 The branch is handed back green, with the closing merge unmade.
+
+## S5
+
+**Scope**: T029–T031, T037, T038, T040–T043 — US2's second half, closing the
+checkpoint. T044 onward (US3, the scorecard) was out of scope by instruction and
+was not started.
+
+### Tasks completed
+
+| Task | Commit | What landed |
+|---|---|---|
+| T029 / T030 / T031 | `f78d8bdc53` | Three failing test files — the encoding contract, the tooltip, view equivalence |
+| T037 (part) | `6590df5edb` | `lanes.ts` and its tests — which strips a block draws on |
+| T037 | `a3bb5b3887` | `EventBlock.tsx`, the block layer, and the day band's layout space |
+| T038 | `e7151a949b` | `CanvasTooltip.tsx`, `blockLabels.ts`, one canvas-level pointer handler |
+| T040 | `2c875a73c6` | The Matrix ⇄ Schedule toggle, `ScheduleOutput`'s DE columns, both view-state defaults |
+| T040 (part) | `6af576178c` | `viewTogglePersistence.test.tsx` — the hole the toggle's own persistence left |
+| T041 | `2bb36517e5` | `scripts/smoke.mjs` drives the matrix |
+| T042 (part) | `db97dcb716` | `viewEquivalence.test.tsx`'s window comment and its dead teardown |
+| T042 / T043 | `4f2653f118` | The accepted findings from both reviews, 23 new cases |
+
+### Gate at end of session
+
+`tsc -b` exit 0, `lint` exit 0, full suite **1221 passed (1221)** across 51
+files, run twice with identical results by the orchestrator after every subagent
+had gone idle. `scripts/smoke.mjs` exits 0 with `SMOKE PASS` and zero console
+errors, **now driving the matrix** — the first time a browser has rendered this
+canvas.
+
+**Suite count reconciliation.** 1101 → 1221, entirely additive:
+
+```
+1101  at S4's close
++  74  T029-T031's three files, lanes.test.ts, and T037's MatrixCanvas cases
++  20  T038's tooltip file and the two holes its own mutations found
++   3  T040's matrix two-tier case and the toggle's persistence
++  23  the review findings' new cases
+=1221
+```
+
+Per file: `EventBlock` 41, `CanvasTooltip` 20, `viewEquivalence` 11, `lanes` 13,
+`viewTogglePersistence` 3, `MatrixCanvas` 24 → 74.
+
+**Zero engine drift.** `git diff --stat 2f98ee5126^1 HEAD -- src/engine/` is
+empty, so B1–B8 cannot have moved. Only US4 changes engine output.
+
+### The two letter marks, resolved
+
+S4 raised it and deliberately did not decide it: FR-014's gender prefix and the
+weapon letter risk reading as one string, `M` + `E` scanning as "ME", and merged
+into one glyph they would drop together and lose the contract's degradation
+order.
+
+**They are two elements, separated three ways at once.** The weapon mark is a
+bordered chip — `border border-current`, bold, 9px, its own padding — sitting
+first in a flex row that starts 6px in, past the edge-bar. The gender prefix is
+plain text at the label's own size and weight, inside the label's inline group,
+4px further right. A chip, then a word. Being two elements is what lets the 28px
+threshold drop the chip while 14px keeps the prefix.
+
+**The width thresholds the degradation order actually uses**, all asserted at
+literals on both sides:
+
+| Channel | Threshold | Pinned at |
+|---|---|---|
+| Gender prefix | `>= 14px` | 13 / 14 |
+| Weapon chip | `>= 28px` | 27 / 28 |
+| Label text | `>= 64px` | 63 / 64 |
+
+`RowHeightStep.COMPACT` drops all three whatever the width. Fill and the
+edge-bar are present at every width including 13, and at compact.
+
+**One assertion in the original contract was unsatisfiable and was replaced with
+a stronger one.** Between 28px and 63px a correct block renders exactly the chip
+and the prefix, so the block root's own `textContent` *is* `EM` — "no element
+whose text is the concatenation" cannot hold. What is pinned instead: two
+distinct non-nested elements, one letter each, plus a 27-vs-28 case proving they
+drop separately. A merged glyph fails whichever marker it wears.
+
+### The day band's layout space, and why
+
+S4 applied the opacity half of this finding and left the layout half, because it
+changes the canvas's vertical model. **The layout half is now applied.**
+
+One constant, `HEADER_HEIGHT_PX = 38`, offsets three layers — the gutter `<ul>`,
+the grid `<svg>` and the block layer — while `plotHeight = size.height - 38`
+feeds `visibleRowRange` and `maxRowScroll` and `rowsBottom` clamps against it.
+**Every row-space expression is byte-unchanged**: `blockY`, the gutter `<li>`
+tops, the row lines, `rowsTop`, and `stickyHeaderTop` all keep their exact
+previous form. That is the point — `MatrixCanvas.tsx`'s old docblock argued
+against giving the header space, and the argument was really against a
+*non-uniform* offset. A uniform one reserves the space and preserves the
+alignment, and the docblock now says so.
+
+Numbers that moved in `MatrixCanvas.test.tsx`'s 900×480 fixture: `PLOT_HEIGHT`
+442 (new), `NORMAL_ROWS_VISIBLE` 20 → **19**, `TALL_ROWS_VISIBLE` 14 → **13**,
+`MAX_ROW_SCROLL` 70 → **71**. Everything else follows from those and stayed
+literal. A case now asserts the first strip's row is not underneath the band, and
+mutating the gutter's offset to `0` kills it.
+
+### What the two views had to stop disagreeing about
+
+FR-023 says both views read one derived model so they cannot disagree, and a
+user toggling between them would have seen three disagreements. All three are in
+`ScheduleOutput`, and fixing them is what made T031 assertable:
+
+- **"DE End" rendered `de_total_end`**, which includes the medal tail the
+  scheduler deliberately never places, while the matrix's last block ends at
+  `de_end`. It now renders `de_end ?? de_round_of_16_end` — the last *scheduled*
+  minute.
+- **A staged event showed `—` for both DE times**, because `de_start` is null
+  there. "DE Start" now falls back through `de_prelims_start` and
+  `de_round_of_16_start`.
+- **The medal-tail estimate had nowhere else to live**, so a new final **Finish**
+  column carries `de_total_end`. `COLUMN_COUNT` is 8.
+
+Rows carry `data-schedule-row`, cells carry `data-cell`. `Pool Start`'s header
+text is untouched, because `scripts/smoke.mjs` finds the table by it.
+
+### Decisions the plan did not anticipate
+
+- **The canvas has to choose which strips a block draws on.** `Placement.strips`
+  is `number[] | null` and is **always null** in P3 (`runActions.ts:33`), so a
+  placement implies a strip *count*, never indices. Without a choice every block
+  piles onto strip 1. `lanes.ts` packs each day's blocks first-fit onto the
+  lowest free run, ordered by day, start, competition id — bounded scans, no
+  search, constitution IV. A block that finds no room is `overflow: true`, drawn
+  at strip 0, marked `data-overflow`, given a dashed cue, and **reported as
+  unplaced rather than claiming strips it never got**.
+- **The toggle's radiogroup is named `Center view mode`, not `Center view`.**
+  `CenterView` already renders `<main aria-label="Center view">`, and two things
+  with one accessible name is a defect a screen reader hears even though the
+  roles differ. One line of `viewEquivalence.test.tsx` was updated with it.
+- **`CanvasTooltipTarget.dropped` was removed.** The tooltip carries every field
+  unconditionally, which is the real contract, so the field was written by the
+  canvas and read by nobody. Its describe survives, renamed to say what it proves
+   — that no row is gated on width.
+- **`phaseRank`/`PHASE_ORDER` was deleted from `lanes.ts`.** The tie-break is
+  unreachable on a real `ScheduleResult` (single-stage and staged DE are mutually
+  exclusive), and its test passed identically with the comparator returning `0`.
+  Within-event order now falls out of `eventTimeSegments`' deterministic emission
+  plus a stable sort, and the case is renamed to what it actually proves.
+
+### What the reviews found
+
+Both were dispatched report-only against this session's whole diff, and the
+findings applied in one pass. `test-quality-reviewer` ran the review **as
+mutation testing** — 40 single-line mutations applied to a scratchpad copy of the
+worktree, each executed against the suite — so every "survived" below was run,
+not reasoned. **19 findings from it, 11 from `react-code-reviewer`, 23 applied,
+31 mutations killed by the cases that closed them.**
+
+**Two real bugs, both user-visible:**
+
+- **The hover hit test was not bounded to the plot.** The block layer is clipped,
+  so a block with a negative `x` or `y` is hidden under the frozen gutter or the
+  day band — but `blockAt` compared the pointer only against block rectangles, so
+  negative coordinates were live hits. Pan time until an event starts before the
+  window, move onto a strip label, and a tooltip opened describing a block that
+  is not drawn there. The existing case aimed `plotY = -1` at a block whose top
+  was `0`, so it passed either way.
+- **A trailing wheel write clobbered a newer discrete one.** `writeNow` neither
+  cancelled nor drained the pending debounce, so ctrl+wheel then `Fit to day`
+  within 200ms persisted the fit window and then overwrote it with the wheel-era
+  one. The screen was right and storage was wrong, and the next load opened on
+  the window the user had replaced.
+
+**One the toggle itself introduced:** unmounting the canvas discarded an
+unpersisted wheel gesture. Before T040 nothing unmounted the canvas mid-session,
+which is why a test asserted that drop as intended — it was flipped in the same
+change, with the reason in its comment.
+
+**Six holes where a green suite said nothing** — the below-window cull had no
+case at all, the above-window cull's `- 1` was one row short of mattering, the
+tooltip's anchor could have shipped pinned to the viewport's corner,
+`onPointerLeave` was untested, re-pressing the already-selected toggle item
+would have written a view state `isValidViewState` rejects (silently resetting
+`timeZoom`, `timeScroll`, `rowScroll`, `drawerHeight` and `scorecardExpanded` on
+the next load), and `findingsForBlock`'s phase fallback was untested **on the
+common path** — `analysis.ts` emits per-competition warnings on `CUT` and
+`FLIGHTING`, phases no block ever carries, so those reach a block only through
+the fallback.
+
+**Three accessibility gaps**, all closed: findings were pointer-only and are now
+in the block's accessible name, the tooltip had no Escape dismissal, and an
+overflowed block's name asserted a placement that was fiction.
+
+**`viewEquivalence.test.tsx` is not vacuous.** Deleting the matrix's blocks fails
+it, and `EXPECTED_TUPLES` catches both views breaking in the same direction.
+
+**Two things the reviews got wrong, corrected during the apply:**
+
+- Test finding 15 claimed nothing sits at flat row 39. `flighted`'s DE takes 16
+  strips from strip 0 on day 1 — flat rows 24–39. The original comment was right
+  about row 39 and wrong only about the row count (49, not 50).
+- Test finding 1's proposed killing case fails on HEAD before any mutation: the
+  fixture it names already carries a `Phase.POOLS` warning for `c1`, so `forPhase`
+  is non-empty and the fallback never runs. The case written instead uses a
+  fixture whose only warning for `c1` is on `Phase.CUT`.
+
+### Knowingly not fixed, and why
+
+- **Flighted events read differently in the two views.** `derive.ts:183-184` sets
+  `pool_end = flightBEnd` and `pool_strip_count = flightAStrips + flightBStrips`,
+  so the table shows one pool span across the inter-flight gap at the summed
+  count while the matrix draws two blocks at their own. Both read the same
+  `ScheduleResult`, so FR-023's one-model rule holds. This is a presentation
+  decision someone should make deliberately, not a defect.
+- **`Zoom to selection` is permanently disabled.** `CenterView` mounts the canvas
+  with no `selection`, and multi-block selection is out of scope for 004. FR-020
+  requires the action to be available, so it was not hidden.
+- **`latest.current` syncs in a passive effect**, so a wheel event landing between
+  a button's commit and the flush computes from the previous position. Sub-frame.
+- **`lanes.ts`'s `Math.max(0, Math.floor(stripsTotal))` is unreachable** —
+  `strips_total` is `strips.length` at every call site. No test was added for an
+  input no caller can produce.
+- **The TALL text-size branch is cosmetic** and not one of the encoding
+  contract's four channels.
+- **`ScheduleOutput` keeps its live store subscription.** S2 recorded this and
+  said US2 is where it is worth solving — it was solved for the *canvas* (the
+  subscribing wrapper is split from a pure view, so the props path never
+  subscribes) and left alone for the table, which is cheap.
+
+**One coverage claim that is honestly limited.** The `clearTimeout` inside
+`writeNow` is not independently falsifiable: removing only the cancel leaves
+behaviour identical apart from one redundant no-op write 200ms later, and that
+mutation survived. The pre-fix `writeNow`/`writeSoon` pair reverted wholesale is
+killed by three cases, and dropping only the merge is killed by one, so the pair
+is covered from both sides. The single line is not, and the cancel was kept
+anyway — a timer whose work has been drained should not fire.
+
+**React finding 4 changed no observable behaviour** and has no test of its own.
+Splitting the subscribing wrapper from a pure view removes a re-render, which no
+assertion in this repo can see. Both paths are exercised by the existing suite.
+
+### Things S6 must not be surprised by
+
+- **No store state can produce a flighted event.** `buildConfig.ts:126` sets
+  `flighted: false` on every competition, and the only path that raises it also
+  sets a non-null `flighting_group_id`, which `derive.ts:148` requires to be null
+  before it splits flights. The app cannot draw a flight pair today.
+  `viewEquivalence.test.tsx` builds one through the engine and hands the same
+  object to both views. **This is a product gap, not a test convenience.**
+- **The React Compiler is not in the build.** `vite.config.ts` is a bare
+  `react()` with no babel plugin, and `react-hooks/preserve-manual-memoization`
+  runs as *lint* only. Nothing memoizes the blocks at runtime — the
+  `CanvasTooltipTarget` object is still built in the JSX prop position, because
+  that is what keeps the lint gate green, but do not assume runtime memoization
+  from it.
+- **`flushSync` in the pointer handler is load-bearing.** React classes
+  `pointermove` as continuous, so a `useState` update from it is scheduled rather
+  than applied and a synchronous assertion reads a stale DOM.
+- **jsdom 26 ships no `PointerEvent` constructor.** `fireEvent.pointerMove(el,
+  {clientX})` degrades to a bare `Event` with `clientX` undefined. Dispatch
+  `new MouseEvent('pointermove', {clientX, clientY, bubbles: true})` instead.
+- **Radix portals two copies of tooltip content** — a positioned one and an
+  unpositioned measurement one, identical text. Every `data-tooltip-field` read
+  in the smoke driver needs `.first()`.
+- **`scripts/smoke.mjs` had a locator that was silently reading the wrong
+  table.** The old `rowCount < 5` check used an unscoped `table tbody tr`, which
+  returned 12 while the schedule table's real row count is 4. That assertion had
+  been passing on the rail's markup. Everything is now scoped to
+  `[data-schedule-row]`, including the round-trip counts.
+- **ROC Div1A/Vet at the suggested strip count places only 4 of 12
+  competitions**, explained by the strip-shortfall warning and verified
+  deterministic. Not new, and not a bug — but it means the smoke driver's
+  block-count floors are "non-empty" rather than a number, because anything
+  higher would assert that run's scroll position.
+- **`data-event-id` belongs to blocks alone.** `viewEquivalence.test.tsx` selects
+  it across the whole document.
+- **The day band, once pinned mid-canvas, still hit-tests through.** It is opaque
+  and `pointer-events-none`, so a block genuinely inside the plot but hidden
+  behind the band is still hoverable. Arguably fine — it describes what the band
+  covers — and recorded rather than fixed.
+- S1's `localStorage` guard in `src/test-setup.ts` is still not redundant, and
+  `computePoolStructure` still throws for `fencerCount <= 1`.
+
+### Not finished, and why
+
+Nothing in scope was left undone and no halt condition fired. No dependency was
+needed after D1, D2 and D3 rejected them, the matrix and the schedule table were
+made to agree without either reading its own copy of anything, and engine drift
+is zero on every scenario.
+
+**The US2 checkpoint is met**: the matrix renders, reads correctly, and agrees
+with the schedule table — proved in the suite and in a browser. T044 onward (US3,
+the scorecard) is S6's. The branch is handed back green, with the closing merge
+unmade.

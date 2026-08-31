@@ -21,7 +21,10 @@ import { useStore } from '../../src/store/store.ts'
  */
 function sampleViewState(): ViewState {
   return {
-    viewMode: ViewMode.MATRIX,
+    // SCHEDULE, because DEFAULT_VIEW_STATE.viewMode is MATRIX from T040 on: a
+    // sample sharing a field with the defaults would let a round trip that
+    // dropped it still pass.
+    viewMode: ViewMode.SCHEDULE,
     rowHeightStep: RowHeightStep.TALL,
     timeZoom: 3,
     timeScroll: 165,

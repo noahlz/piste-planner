@@ -7,6 +7,12 @@ import { SCENARIOS } from '../../../src/data/tournaments.ts'
 import { encodeToUrl } from '../../../src/store/serialization.ts'
 import { TournamentType } from '../../../src/engine/types.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
+import {
+  DEFAULT_VIEW_STATE,
+  VIEW_STATE_STORAGE_KEY,
+  ViewMode,
+  saveViewState,
+} from '../../../src/store/viewState.ts'
 
 // 004 T007 — boot behavior (FR-007, S2-contract.md §Boot): no fragment loads
 // the default preset and auto-schedules it, a `#config=` fragment loads that
@@ -14,11 +20,17 @@ import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 // back to the preset rather than leaving an empty form.
 
 beforeEach(() => {
+  localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
 })
 
 describe('bootstrap with no usable fragment', () => {
   it('loads the default preset and auto-schedules it, so mounting the shell shows a populated schedule with no user action', () => {
+    // Both DOM assertions below are the schedule table's — its rows, and its
+    // own "No events placed yet." empty state. On T040's default matrix view
+    // that empty state can never appear whatever boot did, so the assertion
+    // would hold against an empty store: the table is what makes it evidence.
+    saveViewState({ ...DEFAULT_VIEW_STATE, viewMode: ViewMode.SCHEDULE })
     bootstrap('')
     render(<WorkbenchShell />)
 

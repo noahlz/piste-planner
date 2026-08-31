@@ -31,10 +31,15 @@ export interface ViewState {
 // copy) throws immediately in strict mode rather than corrupting every
 // caller that shares this reference.
 export const DEFAULT_VIEW_STATE: ViewState = Object.freeze({
-  viewMode: ViewMode.SCHEDULE,
+  // The matrix is the center's default view from T040 on (FR-023, research
+  // D11) — US1 shipped SCHEDULE because the canvas did not exist yet.
+  viewMode: ViewMode.MATRIX,
   rowHeightStep: RowHeightStep.NORMAL,
   timeZoom: 1,
-  timeScroll: 0,
+  // 08:00, where a competition day starts. Midnight is a valid scroll but it
+  // opens the matrix on eight hours of empty grid with the schedule off the
+  // right edge, which `Fit to day` then has to undo on every first load.
+  timeScroll: 480,
   rowScroll: 0,
   drawerHeight: 240,
   scorecardExpanded: false,

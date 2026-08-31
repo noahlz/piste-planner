@@ -1,23 +1,50 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type RefObject,
+} from 'react'
+import { flushSync } from 'react-dom'
 import { DAY_END_MINS, DAY_START_MINS } from '../../engine/constants.ts'
 import { useStore } from '../../store/store.ts'
-import { selectDerivedSchedule, type DerivedSchedule } from '../../store/derived.ts'
+import {
+  selectDerivedFindings,
+  selectDerivedSchedule,
+  type DerivedFindings,
+  type DerivedSchedule,
+} from '../../store/derived.ts'
 import {
   RowHeightStep,
   loadViewState,
   saveViewState,
   type ViewState,
 } from '../../store/viewState.ts'
-import { ROW_HEIGHT_PX, blockX, blockY, eventTimeSegments } from './geometry.ts'
+import {
+  ROW_HEIGHT_PX,
+  blockHeight,
+  blockWidth,
+  blockX,
+  blockY,
+  eventTimeSegments,
+} from './geometry.ts'
 import {
   buildDayLayout,
   flatRowIndex,
+  intersectsTimeRange,
   maxRowScroll,
   resolveFlatRow,
   visibleRowRange,
   visibleTimeRange,
   type TimeRange,
 } from './windowing.ts'
+import { assignStripLanes, type BlockPlacement } from './lanes.ts'
+import { EventBlock } from './EventBlock.tsx'
+import { CanvasTooltip, type CanvasTooltipTarget } from './CanvasTooltip.tsx'
+import { competitionLabel } from '../competitionLabels.ts'
+import type { Competition, Phase } from '../../engine/types.ts'
 import {
   clampTimeZoom,
   fitToDay,
@@ -39,14 +66,24 @@ import {
  * arithmetic imported from `geometry.ts`, `windowing.ts` and `zoom.ts`, none of
  * it re-derived here.
  *
- * ## The header is an overlay, and that is load-bearing
+ * ## The header is an overlay in row space, with one uniform offset in pixels
  *
  * `windowing.ts` fixes `rowsPerDay === stripsTotal` — the day header band gets
- * no row of its own. The hour axis FR-017 pins "at the top of each day group"
- * is therefore drawn in the *same* floating overlay as the band, not in a strip
- * of layout between day groups. Giving either one real vertical space would put
- * an offset between `blockY`'s answer and where a row actually sits, and every
- * block T037 draws would land in the wrong place.
+ * no row of its own, and the hour axis FR-017 pins "at the top of each day
+ * group" rides in the same floating overlay. What would break `blockY` is a
+ * *non-uniform* offset: a band taking real layout between day groups would put
+ * a different correction under every day, and no row-space arithmetic could
+ * express it.
+ *
+ * One offset applied everywhere is a different matter, and it is what the rows
+ * need — the band is drawn over the top `HEADER_HEIGHT_PX` of the viewport, so
+ * without it the first strip of every day group is permanently hidden and the
+ * second half-cut. The gutter, the grid and the block layer therefore all start
+ * `HEADER_HEIGHT_PX` down and are `HEADER_HEIGHT_PX` shorter, and every
+ * position measured in row space keeps its expression unchanged. The bands'
+ * own `headerTop` is unchanged too: a day's band sits `HEADER_HEIGHT_PX` above
+ * its first row, which is exactly what the existing formula produces once the
+ * rows have moved down.
  *
  * ## Two scrolls, neither of them native
  *
@@ -64,10 +101,24 @@ import {
  * `overflow-hidden` and both scroll positions are view state, so there is no
  * ancestor scroller with a claim on it.
  *
- * ## What is not here yet
+ * ## Hover is resolved by arithmetic, not by the DOM
  *
- * Event blocks (T037) and the tooltip (T038). This component draws the grid the
- * blocks land on, and nothing mounts it until the view toggle in T040.
+ * One `onPointerMove` on the viewport hit-tests the pointer against the block
+ * rectangles this render already computed (research D3). It does not read
+ * layout, and it does not walk up from `event.target` — both would tie hover to
+ * there being a DOM element per block, which is the thing a later move to
+ * `<canvas>` rendering removes. The cost is one handler and one comparison per
+ * visible block, rather than a listener and a positioning context on each.
+ *
+ * A client coordinate becomes a plot coordinate by subtracting the viewport's
+ * own offset and then the two frozen layers: the gutter on x, the day band's
+ * `HEADER_HEIGHT_PX` on y. That is the same pair the block layer is positioned
+ * by, so the two cannot disagree about where a block is.
+ *
+ * ## What mounts it
+ *
+ * `CenterView`'s Matrix ⇄ Schedule toggle (T040), which hands it the committed
+ * schedule and findings the schedule table reads — one model, two views.
  */
 
 /** Width of the frozen strip-label gutter, in pixels. */
@@ -123,15 +174,35 @@ function wheelPixels(delta: number, deltaMode: number, pagePx: number): number {
   }
 }
 
-/** Merges one patch into the stored view state, never rewriting the rest. */
-function writeNow(patch: Partial<ViewState>): void {
-  saveViewState({ ...loadViewState(), ...patch })
-}
-
 /** A trailing write in flight: its timer and the patch it will apply. */
 interface TrailingWrite {
   timer: ReturnType<typeof setTimeout> | null
   patch: Partial<ViewState>
+}
+
+/**
+ * Merges one patch into the stored view state, never rewriting the rest — and
+ * settles whatever the wheel left in flight before it does.
+ *
+ * Cancelling the pending timer is what keeps storage agreeing with the screen.
+ * A gesture's write trails the state it describes by `PERSIST_DEBOUNCE_MS`, so
+ * a discrete change landing inside that window — ctrl+wheel zoom, then "Fit to
+ * day" — would otherwise be overwritten by the older gesture a moment later,
+ * and the next load would open on the window the user had already replaced.
+ *
+ * The pending patch is merged rather than dropped, so a field the gesture set
+ * and this patch does not still reaches storage. This patch wins wherever the
+ * two name the same field, because it is the newer of the two.
+ */
+function writeNow(trailing: RefObject<TrailingWrite>, patch: Partial<ViewState>): void {
+  const pending = trailing.current
+  if (pending.timer !== null) {
+    clearTimeout(pending.timer)
+    pending.timer = null
+  }
+  const merged = { ...pending.patch, ...patch }
+  pending.patch = {}
+  saveViewState({ ...loadViewState(), ...merged })
 }
 
 /**
@@ -143,12 +214,9 @@ function writeSoon(trailing: RefObject<TrailingWrite>, patch: Partial<ViewState>
   const pending = trailing.current
   pending.patch = { ...pending.patch, ...patch }
   if (pending.timer !== null) clearTimeout(pending.timer)
-  pending.timer = setTimeout(() => {
-    pending.timer = null
-    const merged = pending.patch
-    pending.patch = {}
-    writeNow(merged)
-  }, PERSIST_DEBOUNCE_MS)
+  // `writeNow` empties the patch and clears the timer itself, so the callback
+  // is the flush and nothing else.
+  pending.timer = setTimeout(() => writeNow(trailing, {}), PERSIST_DEBOUNCE_MS)
 }
 
 /**
@@ -168,15 +236,62 @@ interface WheelState {
 
 export interface MatrixCanvasProps {
   /**
-   * The committed derived model, as `ScheduleOutput` takes it. Omitted, the
-   * canvas subscribes to the store directly.
+   * The committed derived model, as `ScheduleOutput` takes it. Passed with
+   * `findings`, the canvas never subscribes to the store at all — see
+   * `MatrixCanvas` below. Omitted, it falls back to the live model.
    */
   schedule?: DerivedSchedule
+  /**
+   * The committed findings the tooltip and the blocks' accessible names
+   * attribute to a block. Passed together with `schedule` or not at all, so a
+   * block's findings always describe the same tournament state its geometry
+   * came from.
+   */
+  findings?: DerivedFindings
   /**
    * The minute range `Zoom to selection` targets (FR-020). The action is
    * disabled without one — there is no selection until blocks exist (T037).
    */
   selection?: TimeRange | null
+}
+
+/** The same model, resolved: the view never has to fall back to anything. */
+interface MatrixCanvasViewProps {
+  schedule: DerivedSchedule
+  findings: DerivedFindings
+  selection?: TimeRange | null
+}
+
+/** One block and the window-relative pixels it draws at, resolved per render. */
+interface DrawnBlock {
+  readonly placement: BlockPlacement
+  readonly competition: Competition
+  readonly label: string
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  /** Clamped to the block's own day group — see `visibleBlocks`. */
+  readonly height: number
+  /** This block's findings, resolved once for the name and the tooltip. */
+  readonly findings: string[]
+}
+
+/**
+ * Which block the pointer is over, and where the viewport sat when it crossed
+ * in. Primitives only, on purpose: everything the tooltip shows is re-derived
+ * from the current render, so a scroll or a zoom under a stationary pointer
+ * cannot leave it describing a block that has since moved, and a hovered block
+ * culled out of the window closes the tooltip instead of stranding a snapshot
+ * of it. Holding the block object here would also put a value derived from
+ * `lanes` and `competitionsById` into state, which is enough for React Compiler
+ * to stop treating either memo as safe.
+ */
+interface HoveredBlock {
+  competitionId: string
+  phase: Phase
+  /** The viewport's own origin, in viewport-relative pixels. */
+  originX: number
+  originY: number
 }
 
 /** One day group's visible geometry, resolved once per render. */
@@ -199,9 +314,123 @@ function stickyHeaderTop(rawTop: number, nextDayTop: number): number {
   return Math.min(Math.max(0, rawTop), nextDayTop - HEADER_HEIGHT_PX)
 }
 
-export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasProps = {}) {
+/**
+ * The block under a plot coordinate, or `null` over empty grid.
+ *
+ * The pointer is bounded to the plot before any block is considered. The block
+ * layer is `overflow-hidden` at exactly `plotWidth` x `plotHeight` and sits
+ * below the frozen gutter and the sticky day bands, so a block with a negative
+ * x or y is clipped away and hidden under them by design. Comparing against the
+ * block rectangles alone would make those clipped pixels live hits and open a
+ * tooltip while the pointer is over a strip label or a day band, for a block
+ * that is not drawn there. The bound is the same pair of constants the layer is
+ * positioned by, so the drawn and hit-tested rectangles cannot disagree.
+ *
+ * Within the plot the scan runs back to front, because the blocks are
+ * absolutely positioned in array order: where an overflowing block overlaps one
+ * that legitimately holds those strips, the one drawn on top is the one the
+ * pointer is actually over.
+ *
+ * The right and bottom edges are exclusive, so two blocks abutting at a minute
+ * or a strip boundary never both claim the same pixel.
+ */
+function blockAt(
+  blocks: DrawnBlock[],
+  plotX: number,
+  plotY: number,
+  plotWidth: number,
+  plotHeight: number,
+): DrawnBlock | null {
+  if (plotX < 0 || plotX >= plotWidth || plotY < 0 || plotY >= plotHeight) return null
+
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]
+    if (
+      plotX >= block.x &&
+      plotX < block.x + block.width &&
+      plotY >= block.y &&
+      plotY < block.y + block.height
+    ) {
+      return block
+    }
+  }
+  return null
+}
+
+/**
+ * The findings that belong to one block.
+ *
+ * A `ValidationError` names its competitions in `subjects`, so it attaches to
+ * every block of that event — the rules it expresses (a shared population, a
+ * day's capacity) are about the event, not about one of its phases. A
+ * `Bottleneck` does carry a `phase`, so when any of an event's bottlenecks name
+ * this block's phase the list narrows to those: a delay in the DE is not a fact
+ * about the pools that ran that morning. An event whose bottlenecks all name
+ * other phases still shows them, because the alternative is a block that
+ * reports nothing while its event is in trouble.
+ */
+function findingsForBlock(
+  findings: DerivedFindings,
+  competitionId: string,
+  phase: Phase,
+): string[] {
+  const messages: string[] = []
+
+  for (const error of findings.validationErrors) {
+    if (error.subjects?.includes(competitionId)) messages.push(error.message)
+  }
+
+  const forEvent = findings.analysis.warnings.filter(
+    (warning) => warning.competition_id === competitionId,
+  )
+  const forPhase = forEvent.filter((warning) => warning.phase === phase)
+  for (const warning of forPhase.length > 0 ? forPhase : forEvent) {
+    messages.push(warning.message)
+  }
+
+  return messages
+}
+
+/**
+ * The canvas as everything else mounts it, and the only place a store
+ * subscription can enter it.
+ *
+ * Handed both halves of a committed model it renders the view directly, with no
+ * `useStore` on the path at all. That is not a micro-optimization: the
+ * subscription's values were discarded on the next line either way, but their
+ * *identity* changes on every placement or config edit, so the whole canvas
+ * re-rendered on each keystroke — rebuilding `visibleBlocks` and reconciling
+ * every `EventBlock` — to draw output identical to the last one until
+ * `CENTER_SETTLE_MS` elapsed (FR-008). Nothing memoizes those blocks at
+ * runtime: the React Compiler is not in the build, and its lint rules only
+ * check the source. The same path amplifies the `flushSync` hover, where one
+ * block crossing synchronously reconciles every visible block.
+ *
+ * `ScheduleOutput` carries the identical pattern. It is left as S2 recorded it
+ * — the canvas is the center, and the canvas is where this was worth solving.
+ */
+export function MatrixCanvas({ schedule, findings, selection }: MatrixCanvasProps = {}) {
+  if (schedule !== undefined && findings !== undefined) {
+    return <MatrixCanvasView schedule={schedule} findings={findings} selection={selection} />
+  }
+  return <StoreConnectedCanvas schedule={schedule} findings={findings} selection={selection} />
+}
+
+/** The fallback path: whichever half was not passed comes from the store. */
+function StoreConnectedCanvas({ schedule, findings, selection }: MatrixCanvasProps) {
   const live = useStore(selectDerivedSchedule)
-  const schedule = committed ?? live
+  const liveFindings = useStore(selectDerivedFindings)
+
+  return (
+    <MatrixCanvasView
+      schedule={schedule ?? live}
+      findings={findings ?? liveFindings}
+      selection={selection}
+    />
+  )
+}
+
+function MatrixCanvasView({ schedule, findings, selection }: MatrixCanvasViewProps) {
   const { config } = schedule
 
   // One field per initializer, following Drawer.tsx: each read is independent
@@ -213,6 +442,7 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
     () => loadViewState().rowHeightStep,
   )
   const [size, setSize] = useState({ width: 0, height: 0 })
+  const [hovered, setHovered] = useState<HoveredBlock | null>(null)
 
   const viewportRef = useRef<HTMLDivElement>(null)
 
@@ -248,15 +478,19 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
   }, [])
 
   const plotWidth = Math.max(0, size.width - GUTTER_WIDTH_PX)
+  // The rows get the viewport less the day band's own space. Every layer that
+  // is measured in row space is offset by the same amount, so `blockY`'s
+  // arithmetic is untouched — see the module docblock.
+  const plotHeight = Math.max(0, size.height - HEADER_HEIGHT_PX)
   const rowHeight = ROW_HEIGHT_PX[rowHeightStep]
 
   const layout = useMemo(
     () => buildDayLayout(config.days_available, config.strips_total),
     [config.days_available, config.strips_total],
   )
-  const rowRange = visibleRowRange(rowScroll, size.height, rowHeightStep, layout.totalRows)
+  const rowRange = visibleRowRange(rowScroll, plotHeight, rowHeightStep, layout.totalRows)
   const timeRange = visibleTimeRange(timeScroll, timeZoom, plotWidth)
-  const maxScroll = maxRowScroll(size.height, rowHeightStep, layout.totalRows)
+  const maxScroll = maxRowScroll(plotHeight, rowHeightStep, layout.totalRows)
 
   /**
    * The single origin every vertical position is measured from — `blockY`'s
@@ -313,11 +547,131 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
           nextDayTop,
         ),
         rowsTop: Math.max(0, blockY(dayFirstRow, windowStartRow, rowHeightStep)),
-        rowsBottom: Math.min(size.height, nextDayTop),
+        rowsBottom: Math.min(plotHeight, nextDayTop),
         ticks: hourTicks(axisRange, timeZoom),
       })
     }
   }
+
+  const lanes = useMemo(
+    () => assignStripLanes(schedule.events, config.strips_total),
+    [schedule.events, config.strips_total],
+  )
+  const competitionsById = useMemo(
+    () => new Map(schedule.competitions.map((competition) => [competition.id, competition])),
+    [schedule.competitions],
+  )
+
+  /**
+   * The blocks the window actually shows, culled on both axes (FR-021): a block
+   * wholly outside the window is not in the DOM at all. Geometry is computed
+   * here on every render and never written back into the derived model
+   * (FR-013), so a scroll or a zoom cannot leave a stale coordinate behind.
+   *
+   * The drawn strip span is clamped to what is left of the block's own day
+   * group. `assignStripLanes` already returns `overflow` rather than a run that
+   * runs off the end of a day, so this only bites if the engine ever grants an
+   * event more strips than the tournament has — and there the unclamped height
+   * would paint straight across the next day's rows.
+   */
+  const visibleBlocks: DrawnBlock[] = []
+  if (rowRange) {
+    for (const placement of lanes) {
+      if (!intersectsTimeRange(timeRange, placement.startMinutes, placement.endMinutes)) continue
+
+      const flatRow = flatRowIndex(layout, placement.day, placement.firstStrip)
+      if (flatRow === null) continue
+      const drawnStrips = Math.min(placement.stripCount, layout.rowsPerDay - placement.firstStrip)
+      // Row ranges are inclusive, and a block spans `drawnStrips` of them.
+      if (flatRow > rowRange.lastRow) continue
+      if (flatRow + drawnStrips - 1 < rowRange.firstRow) continue
+
+      const competition = competitionsById.get(placement.competitionId)
+      if (!competition) continue
+
+      visibleBlocks.push({
+        placement,
+        competition,
+        label: competitionLabel(competition),
+        x: blockX(placement.startMinutes, timeScroll, timeZoom),
+        y: blockY(flatRow, windowStartRow, rowHeightStep),
+        width: blockWidth(placement.endMinutes - placement.startMinutes, timeZoom),
+        height: blockHeight(drawnStrips, rowHeightStep),
+        findings: findingsForBlock(findings, placement.competitionId, placement.phase),
+      })
+    }
+  }
+
+  /**
+   * The one hover handler (research D3). It reads `visibleBlocks` from this
+   * render's closure rather than from a ref, so it can never hit-test against a
+   * layout the user is no longer looking at.
+   *
+   * ## It changes state per *block*, not per pointer event
+   *
+   * The anchor is the hovered block's own top centre rather than the pointer, so
+   * moving within one block resolves to the target already showing and returns
+   * without touching state. A cursor-tracked anchor would re-render the whole
+   * canvas on each of the sixty-odd pointer events a second a slow drag over a
+   * single block produces, and would jitter the tooltip while it did.
+   *
+   * ## Why the update is flushed
+   *
+   * React classes `pointermove` as a *continuous* event, so a plain `setState`
+   * here is scheduled rather than applied — the tooltip would appear a frame or
+   * more after the pointer entered the block, and later than that under load.
+   * `flushSync` puts it on screen in the frame the crossing happened. The cost
+   * is bounded by the paragraph above: it runs once per block the pointer
+   * crosses, which is the rate a hover enter/leave runs at anyway, not once per
+   * pointer event.
+   */
+  function handlePointerMove(e: PointerEvent<HTMLDivElement>): void {
+    const el = viewportRef.current
+    if (!el) return
+
+    const rect = el.getBoundingClientRect()
+    const drawn = blockAt(
+      visibleBlocks,
+      e.clientX - rect.left - GUTTER_WIDTH_PX,
+      e.clientY - rect.top - HEADER_HEIGHT_PX,
+      plotWidth,
+      plotHeight,
+    )
+
+    if (drawn === null) {
+      if (hovered !== null) flushSync(() => setHovered(null))
+      return
+    }
+    if (
+      hovered !== null &&
+      hovered.competitionId === drawn.placement.competitionId &&
+      hovered.phase === drawn.placement.phase
+    ) {
+      return
+    }
+
+    const next: HoveredBlock = {
+      competitionId: drawn.placement.competitionId,
+      phase: drawn.placement.phase,
+      originX: rect.left,
+      originY: rect.top,
+    }
+    flushSync(() => setHovered(next))
+  }
+
+  /**
+   * The hovered block resolved against *this* render's window. A block the user
+   * has scrolled or zoomed out of view resolves to nothing and the tooltip
+   * closes, rather than describing a block that is no longer on screen.
+   */
+  const hoveredBlock =
+    hovered === null
+      ? null
+      : (visibleBlocks.find(
+          (block) =>
+            block.placement.competitionId === hovered.competitionId &&
+            block.placement.phase === hovered.phase,
+        ) ?? null)
 
   const placedSpans = useMemo<TimeRange[]>(
     () =>
@@ -332,9 +686,14 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
 
   const trailing = useRef<TrailingWrite>({ timer: null, patch: {} })
 
+  // A pending gesture write is flushed on unmount, not discarded. T040's
+  // Matrix ⇄ Schedule toggle swaps the canvas out entirely, so a wheel scroll
+  // followed within PERSIST_DEBOUNCE_MS by a click on "Schedule" would
+  // otherwise drop the scroll: switching back would restore the pre-wheel
+  // position and the gesture would silently not have happened.
   useEffect(
     () => () => {
-      if (trailing.current.timer !== null) clearTimeout(trailing.current.timer)
+      if (trailing.current.timer !== null) writeNow(trailing, {})
     },
     [],
   )
@@ -415,28 +774,34 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
     if (next === null) return
     setTimeZoom(next.timeZoom)
     setTimeScroll(next.timeScroll)
-    writeNow({ timeZoom: next.timeZoom, timeScroll: next.timeScroll })
+    writeNow(trailing, { timeZoom: next.timeZoom, timeScroll: next.timeScroll })
   }
 
   function applyRowHeight(delta: number): void {
     const next = stepRowHeight(rowHeightStep, delta)
     if (next === rowHeightStep) return
+    // The remainder is a fraction of the *old* row height, so it means nothing
+    // against the new one. Carried over it would tip the next notch early.
+    rowRemainderPx.current = 0
     setRowHeightStep(next)
-    writeNow({ rowHeightStep: next })
+    writeNow(trailing, { rowHeightStep: next })
   }
 
   function scrollRowsBy(delta: number): void {
     const next = Math.min(Math.max(0, rowScroll + delta), maxScroll)
     if (next === rowScroll) return
+    // A button or a key press moves whole rows, so a part-row left over from an
+    // earlier wheel gesture is no longer describing where the rows sit.
+    rowRemainderPx.current = 0
     setRowScroll(next)
-    writeNow({ rowScroll: next })
+    writeNow(trailing, { rowScroll: next })
   }
 
   function scrollTimeBy(deltaMinutes: number): void {
     const next = Math.max(0, timeScroll + deltaMinutes)
     if (next === timeScroll) return
     setTimeScroll(next)
-    writeNow({ timeScroll: next })
+    writeNow(trailing, { timeScroll: next })
   }
 
   /**
@@ -469,6 +834,14 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
       case 'ArrowLeft':
         scrollTimeBy(-KEY_PAN_PX * timeZoom)
         break
+      case 'Escape':
+        // WCAG 1.4.13: content shown on hover must be dismissible without
+        // moving the pointer. The tooltip's `open` is `hovered !== null`, so
+        // clearing the hover is the dismissal — no `onOpenChange` needed, and
+        // nothing about the controlled tooltip is fought. This handler does not
+        // preventDefault: an Escape the canvas consumed is still an Escape.
+        setHovered(null)
+        return
       default:
         return
     }
@@ -522,13 +895,15 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
         aria-label="Matrix grid"
         tabIndex={0}
         onKeyDown={handleKeyDown}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setHovered(null)}
         className="relative min-h-0 flex-1 overflow-hidden focus-visible:outline-2"
       >
         {/* The frozen gutter: positioned, never translated by timeScroll. */}
         <ul
           aria-label="Strip labels"
-          className="absolute inset-y-0 left-0 z-10 m-0 list-none border-r bg-background p-0"
-          style={{ width: GUTTER_WIDTH_PX }}
+          className="absolute bottom-0 left-0 z-10 m-0 list-none border-r bg-background p-0"
+          style={{ top: HEADER_HEIGHT_PX, width: GUTTER_WIDTH_PX }}
         >
           {visibleRows.map((flatIndex) => {
             const location = resolveFlatRow(layout, flatIndex)
@@ -555,9 +930,9 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
         <svg
           role="presentation"
           width={plotWidth}
-          height={size.height}
-          className="absolute inset-y-0"
-          style={{ left: GUTTER_WIDTH_PX }}
+          height={plotHeight}
+          className="absolute"
+          style={{ left: GUTTER_WIDTH_PX, top: HEADER_HEIGHT_PX }}
         >
           {visibleDays.map((visible) => (
             <g key={visible.day} data-day-grid={visible.day}>
@@ -592,6 +967,36 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
             )
           })}
         </svg>
+
+        {/* The blocks. Clipped to the plot and left below the frozen gutter
+            (z-10) and the sticky day bands (z-20), so a block scrolled off the
+            left or above the top slides under them rather than over. */}
+        <div
+          data-block-layer="true"
+          className="absolute overflow-hidden"
+          style={{
+            left: GUTTER_WIDTH_PX,
+            top: HEADER_HEIGHT_PX,
+            width: plotWidth,
+            height: plotHeight,
+          }}
+        >
+          {visibleBlocks.map((drawn) => (
+            <EventBlock
+              key={`${drawn.placement.competitionId}:${drawn.placement.phase}`}
+              competition={drawn.competition}
+              label={drawn.label}
+              day={drawn.placement.day}
+              placement={drawn.placement}
+              x={drawn.x}
+              y={drawn.y}
+              width={drawn.width}
+              height={drawn.height}
+              rowHeightStep={rowHeightStep}
+              findings={drawn.findings}
+            />
+          ))}
+        </div>
 
         {/* Sticky day bands, each with its own hour axis pinned beneath it. */}
         {visibleDays.map((visible) => (
@@ -630,6 +1035,42 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
           </div>
         ))}
       </div>
+
+      {/* Outside the viewport: the anchor is fixed-positioned, so it neither
+          takes part in the canvas layout nor gets clipped by it.
+
+          The target is built here in the prop rather than in a `const` above,
+          and that is load-bearing rather than a style choice. React Compiler
+          freezes a value at the JSX boundary, so a target assembled here is
+          provably never mutated; assembled into a local first, the block it
+          reads — and with it `lanes`, `competitionsById` and the `config` and
+          `schedule` fields they memoize on — is inferred as possibly mutated
+          later, and the compiler skips optimizing this component entirely.
+
+          The anchor is the block's own top centre, clamped into the plot so a
+          block half under the frozen gutter or the day band is still pointed at
+          somewhere it can be seen. */}
+      <CanvasTooltip
+        target={
+          hovered === null || hoveredBlock === null
+            ? null
+            : ({
+                competition: hoveredBlock.competition,
+                label: hoveredBlock.label,
+                day: hoveredBlock.placement.day,
+                placement: hoveredBlock.placement,
+                findings: hoveredBlock.findings,
+                anchorX:
+                  hovered.originX +
+                  GUTTER_WIDTH_PX +
+                  Math.min(Math.max(hoveredBlock.x + hoveredBlock.width / 2, 0), plotWidth),
+                anchorY:
+                  hovered.originY +
+                  HEADER_HEIGHT_PX +
+                  Math.min(Math.max(hoveredBlock.y, 0), plotHeight),
+              } satisfies CanvasTooltipTarget)
+        }
+      />
     </section>
   )
 }

@@ -120,9 +120,9 @@ times.
 - [x] T026 [P] [US2] Write failing tests for the category palette in `__tests__/components/canvas/palette.test.ts` – all 16 values map to a token, the four families are distinct, and lightness within a family follows the age or division ordering ([data-model.md](./data-model.md) §Category families)
 - [x] T027 [P] [US2] Write failing tests for window arithmetic in `__tests__/components/canvas/windowing.test.ts` – visible row range from scroll and viewport, visible time range from scroll and zoom, and flat-row-index to day-and-strip resolution across day groups
 - [x] T028 [P] [US2] Write failing tests for block geometry in `__tests__/components/canvas/geometry.test.ts` – x, width, y, and height derived from placement and the engine's duration math, never stored, and identical across repeated derivations (FR-013)
-- [ ] T029 [P] [US2] Write failing tests for encoding and degradation in `__tests__/components/canvas/EventBlock.test.tsx` – the four channels per [contracts/ui-contract.md](./contracts/ui-contract.md) §Encoding contract, and the degradation order label text, then icon, then label prefix, with fill and edge-bar never dropping
-- [ ] T030 [P] [US2] Write failing tests for tooltip contents in `__tests__/components/canvas/CanvasTooltip.test.tsx` – every field FR-022 lists, plus whatever the block dropped for want of width
-- [ ] T031 [P] [US2] Write failing tests for view equivalence in `__tests__/components/canvas/viewEquivalence.test.tsx` – for a given tournament state the set of (event, day, start, end, strips) tuples is identical in the matrix and the schedule table (FR-023). This is the assertion most likely to catch a silent divergence
+- [x] T029 [P] [US2] Write failing tests for encoding and degradation in `__tests__/components/canvas/EventBlock.test.tsx` – the four channels per [contracts/ui-contract.md](./contracts/ui-contract.md) §Encoding contract, and the degradation order label text, then icon, then label prefix, with fill and edge-bar never dropping
+- [x] T030 [P] [US2] Write failing tests for tooltip contents in `__tests__/components/canvas/CanvasTooltip.test.tsx` – every field FR-022 lists, plus whatever the block dropped for want of width
+- [x] T031 [P] [US2] Write failing tests for view equivalence in `__tests__/components/canvas/viewEquivalence.test.tsx` – for a given tournament state the set of (event, day, start, end, strips) tuples is identical in the matrix and the schedule table (FR-023). This is the assertion most likely to catch a silent divergence
 
 ### Implementation for User Story 2
 
@@ -131,13 +131,13 @@ times.
 - [x] T034 [US2] Implement the time scale and hour axis as arithmetic over the visible window in `src/components/canvas/MatrixCanvas.tsx`, adding no charting dependency (research D1)
 - [x] T035 [US2] Implement row and time windowing in `src/components/canvas/MatrixCanvas.tsx` – direct index arithmetic over uniform row heights, with a day-boundary lookup for day groups. No unbounded iteration (research D2, constitution IV)
 - [x] T036 [US2] Implement the frozen strip-label gutter and sticky day header bands (FR-019)
-- [ ] T037 [US2] Implement `src/components/canvas/EventBlock.tsx` – fill, left edge-bar and hatch, weapon icon, gender label prefix, and the degradation order (FR-014, FR-016)
-- [ ] T038 [US2] Implement `src/components/canvas/CanvasTooltip.tsx` as a controlled Radix tooltip on a positioned anchor, driven by one canvas-level pointer handler, not per-block listeners (research D3, FR-022)
+- [x] T037 [US2] Implement `src/components/canvas/EventBlock.tsx` – fill, left edge-bar and hatch, weapon icon, gender label prefix, and the degradation order (FR-014, FR-016)
+- [x] T038 [US2] Implement `src/components/canvas/CanvasTooltip.tsx` as a controlled Radix tooltip on a positioned anchor, driven by one canvas-level pointer handler, not per-block listeners (research D3, FR-022)
 - [x] T039 [US2] Implement continuous cursor-anchored time zoom, the stepped row-height control, and the fit-to-day, fit-to-tournament, and zoom-to-selection actions, persisting through `viewState` (FR-017, FR-018, FR-020)
-- [ ] T040 [US2] Implement the Matrix ⇄ Schedule toggle over the shared derived model, making the matrix the default view (FR-023)
-- [ ] T041 [US2] Extend `scripts/smoke.mjs` to drive the matrix – switch views, confirm blocks render, hover one and read its tooltip, and confirm the two views agree (constitution VI)
-- [ ] T042 [US2] Dispatch `test-quality-reviewer` on T026–T031
-- [ ] T043 [US2] Dispatch `react-code-reviewer` on T032–T040
+- [x] T040 [US2] Implement the Matrix ⇄ Schedule toggle over the shared derived model, making the matrix the default view (FR-023)
+- [x] T041 [US2] Extend `scripts/smoke.mjs` to drive the matrix – switch views, confirm blocks render, hover one and read its tooltip, and confirm the two views agree (constitution VI)
+- [x] T042 [US2] Dispatch `test-quality-reviewer` on T026–T031
+- [x] T043 [US2] Dispatch `react-code-reviewer` on T032–T040
 
 **Checkpoint**: The matrix renders, reads correctly, and agrees with the schedule table. *(subagent commits)*
 
