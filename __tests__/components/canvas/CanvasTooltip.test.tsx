@@ -45,6 +45,15 @@ import {
 //    against rectangles it computed itself, not against layout.
 
 const GUTTER_WIDTH_PX = 72
+/**
+ * The block layer starts this far below the viewport's top edge — the sticky
+ * day band and the hour axis under it take real layout space. A block's inline
+ * `top` is measured inside that layer, so a client coordinate aimed at a block
+ * has to add the band back. Written as a literal rather than imported: an
+ * expectation computed from the same constant as the implementation agrees with
+ * it by construction and can never fail.
+ */
+const HEADER_OFFSET_PX = 38
 const VIEWPORT_WIDTH = 900
 const VIEWPORT_HEIGHT = 480
 
@@ -374,7 +383,7 @@ describe('one canvas-level pointer handler, not a trigger per block (research D3
     // the lane assignment.
     const top = parseFloat(pool.style.top)
     const height = parseFloat(pool.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, top + height / 2)
+    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + top + height / 2)
 
     expect(field('name')).toBe(DIV1_LABEL)
     expect(field('start')).toBe('10:00')
@@ -388,11 +397,11 @@ describe('one canvas-level pointer handler, not a trigger per block (research D3
     const pool = blockFor('c1:POOLS')
     const top = parseFloat(pool.style.top)
     const height = parseFloat(pool.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, top + height / 2)
+    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + top + height / 2)
     expect(queryField('name')).not.toBeNull()
 
     // Plot x 600 reads minute 1080 — past the 900 every block here ends by.
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 600, top + height / 2)
+    firePointerMove(viewport(), GUTTER_WIDTH_PX + 600, HEADER_OFFSET_PX + top + height / 2)
 
     expect(queryField('name')).toBeNull()
   })
@@ -404,13 +413,13 @@ describe('one canvas-level pointer handler, not a trigger per block (research D3
     const de = blockFor('c1:DE')
     const poolTop = parseFloat(pool.style.top)
     const poolHeight = parseFloat(pool.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, poolTop + poolHeight / 2)
+    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + poolTop + poolHeight / 2)
     expect(field('phase')).toBe('Pools')
 
     // The DE block runs 760-900, so plot x 300 is minute 780, inside it.
     const deTop = parseFloat(de.style.top)
     const deHeight = parseFloat(de.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 300, deTop + deHeight / 2)
+    firePointerMove(viewport(), GUTTER_WIDTH_PX + 300, HEADER_OFFSET_PX + deTop + deHeight / 2)
 
     expect(field('phase')).toBe('DE')
     expect(field('start')).toBe('12:40')

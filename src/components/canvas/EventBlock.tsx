@@ -4,6 +4,7 @@ import { Gender, Phase } from '../../engine/types.ts'
 import { formatMinutes } from '../../lib/time.ts'
 import { RowHeightStep } from '../../store/viewState.ts'
 import { categoryFill, categoryInk, resolveCanvasCategory, weaponMark } from './palette.ts'
+import { phaseDisplay, stripRangeLabel } from './blockLabels.ts'
 import type { BlockPlacement } from './lanes.ts'
 
 /**
@@ -88,21 +89,6 @@ function phaseKind(phase: Phase): 'pool' | 'de' {
   return DE_PHASES.includes(phase) ? 'de' : 'pool'
 }
 
-/**
- * Phase names for the accessible name. Only the six phases
- * `eventTimeSegments` emits can reach a block, so the fallback is unreachable
- * rather than lenient — it exists because `BlockPlacement.phase` is the whole
- * `Phase` union.
- */
-const PHASE_LABELS: Partial<Record<Phase, string>> = {
-  [Phase.POOLS]: 'Pools',
-  [Phase.FLIGHT_A]: 'Flight A',
-  [Phase.FLIGHT_B]: 'Flight B',
-  [Phase.DE_PRELIMS]: 'DE prelims',
-  [Phase.DE_ROUND_OF_16]: 'DE round of 16',
-  [Phase.DE]: 'DE',
-}
-
 export interface EventBlockProps {
   competition: Competition
   /** `competitionLabel(competition)`, passed in so the canvas resolves it once. */
@@ -133,15 +119,12 @@ export function EventBlock({
   const kind = phaseKind(placement.phase)
   const channels = blockChannels(width, rowHeightStep)
 
-  const firstStrip = placement.firstStrip + 1
-  const lastStrip = placement.firstStrip + placement.stripCount
-  const stripRange = firstStrip === lastStrip ? `Strip ${firstStrip}` : `Strips ${firstStrip}–${lastStrip}`
   const name = [
     label,
-    PHASE_LABELS[placement.phase] ?? placement.phase,
+    phaseDisplay(placement.phase),
     `Day ${day + 1}`,
     `${formatMinutes(placement.startMinutes)}–${formatMinutes(placement.endMinutes)}`,
-    stripRange,
+    stripRangeLabel(placement.firstStrip, placement.stripCount),
   ].join(', ')
 
   // The fill and the ink travel as custom properties so the classes below can

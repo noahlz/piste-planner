@@ -5,7 +5,8 @@ import {
   PERSIST_DEBOUNCE_MS,
 } from '../../../src/components/canvas/MatrixCanvas.tsx'
 import { useStore } from '../../../src/store/store.ts'
-import type { DerivedSchedule } from '../../../src/store/derived.ts'
+import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
+import { BottleneckCause, BottleneckSeverity, Phase } from '../../../src/engine/types.ts'
 import {
   DEFAULT_VIEW_STATE,
   VIEW_STATE_STORAGE_KEY,
@@ -809,5 +810,123 @@ describe('MatrixCanvas fit actions (FR-020)', () => {
     const stored = loadViewState()
     expect(stored.timeScroll).toBe(570)
     expect(stored.timeZoom).toBeCloseTo(660 / PLOT_WIDTH, 10)
+  })
+})
+
+/**
+ * jsdom 26 ships no `PointerEvent` constructor, so testing-library's
+ * `pointerMove` helper degrades to a bare `Event` and drops clientX/clientY. The
+ * event *name* is what React dispatches on, so a `MouseEvent` under that name
+ * delivers the coordinates to `onPointerMove`.
+ */
+function firePointerMove(el: Element, clientX: number, clientY: number): void {
+  el.dispatchEvent(
+    new MouseEvent('pointermove', { clientX, clientY, bubbles: true, cancelable: true }),
+  )
+}
+
+function tooltipField(key: string): Element | null {
+  return document.querySelector(`[data-tooltip-field="${key}"]`)
+}
+
+/**
+ * T038 — the two facts about the hover handler that
+ * `CanvasTooltip.test.tsx`'s own hit-test cases cannot pin.
+ *
+ * Those cases aim at the vertical *centre* of a 96px block. The block layer
+ * starts 38px down, and 38 is well inside 96, so a handler that forgot the
+ * header offset entirely still lands inside the block and every one of them
+ * passes. The offset is only load-bearing within 38px of an edge, which is
+ * where the first case below aims. The second covers the attribution in
+ * `findingsForBlock`, which no test reaches through the component at all —
+ * `CanvasTooltip.test.tsx` hands the tooltip a findings array directly.
+ *
+ * The fixture is `scheduleWithPlacedEvent`: the pool block occupies plot x
+ * 600-700 and plot y 0-96, so a client coordinate is that plus the 72px gutter
+ * and the 38px header.
+ */
+describe('MatrixCanvas hover hit test (FR-022, research D3)', () => {
+  it('measures the pointer down the block layer, which starts below the day band', () => {
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    // Plot y 95 — inside the block by one pixel. Read without the header
+    // offset the same client point is plot y 133, past the block's 96px.
+    firePointerMove(viewport(), GUTTER_WIDTH + 650, HEADER_HEIGHT + 95)
+    expect(tooltipField('phase')?.textContent).toBe('Pools')
+
+    // And plot y -1, one pixel above the block. Read without the offset it
+    // would be plot y 37, well inside it.
+    firePointerMove(viewport(), GUTTER_WIDTH + 650, HEADER_HEIGHT - 1)
+    expect(tooltipField('phase')).toBeNull()
+  })
+
+  it('carries only the findings that name this competition, narrowed to this phase', () => {
+    const findings: DerivedFindings = {
+      validationErrors: [
+        {
+          field: 'competitions',
+          message: 'c1 shares a population with another event',
+          severity: BottleneckSeverity.WARN,
+          subjects: ['c1'],
+        },
+        {
+          field: 'competitions',
+          message: 'c2 is the one with the problem',
+          severity: BottleneckSeverity.WARN,
+          subjects: ['c2'],
+        },
+      ],
+      analysis: {
+        warnings: [
+          {
+            competition_id: 'c1',
+            phase: Phase.POOLS,
+            cause: BottleneckCause.STRIP_CONTENTION,
+            severity: BottleneckSeverity.WARN,
+            delay_mins: 30,
+            message: 'the pools waited for strips',
+          },
+          {
+            competition_id: 'c1',
+            phase: Phase.DE,
+            cause: BottleneckCause.REFEREE_CONTENTION,
+            severity: BottleneckSeverity.WARN,
+            delay_mins: 15,
+            message: 'the DE waited for referees',
+          },
+          // Same phase as the block hovered first, and a different event: only
+          // the competition id keeps it out.
+          {
+            competition_id: 'c2',
+            phase: Phase.POOLS,
+            cause: BottleneckCause.STRIP_CONTENTION,
+            severity: BottleneckSeverity.WARN,
+            delay_mins: 5,
+            message: 'a different event waited for strips',
+          },
+        ],
+        suggestions: [],
+      },
+    }
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} findings={findings} />)
+
+    firePointerMove(viewport(), GUTTER_WIDTH + 650, HEADER_HEIGHT + 48)
+
+    const onPools = tooltipField('findings')?.textContent ?? ''
+    expect(onPools).toContain('c1 shares a population with another event')
+    expect(onPools).toContain('the pools waited for strips')
+    // Another event's error, and this event's other phase, are both somebody
+    // else's business.
+    expect(onPools).not.toContain('c2 is the one with the problem')
+    expect(onPools).not.toContain('a different event waited for strips')
+    expect(onPools).not.toContain('the DE waited for referees')
+
+    // The DE block runs 760-900 on the same rows, so the narrowing swaps over.
+    firePointerMove(viewport(), GUTTER_WIDTH + 800, HEADER_HEIGHT + 48)
+
+    const onDe = tooltipField('findings')?.textContent ?? ''
+    expect(onDe).toContain('c1 shares a population with another event')
+    expect(onDe).toContain('the DE waited for referees')
+    expect(onDe).not.toContain('the pools waited for strips')
   })
 })

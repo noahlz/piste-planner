@@ -1,7 +1,21 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type RefObject,
+} from 'react'
+import { flushSync } from 'react-dom'
 import { DAY_END_MINS, DAY_START_MINS } from '../../engine/constants.ts'
 import { useStore } from '../../store/store.ts'
-import { selectDerivedSchedule, type DerivedSchedule } from '../../store/derived.ts'
+import {
+  selectDerivedFindings,
+  selectDerivedSchedule,
+  type DerivedFindings,
+  type DerivedSchedule,
+} from '../../store/derived.ts'
 import {
   RowHeightStep,
   loadViewState,
@@ -27,9 +41,10 @@ import {
   type TimeRange,
 } from './windowing.ts'
 import { assignStripLanes, type BlockPlacement } from './lanes.ts'
-import { EventBlock } from './EventBlock.tsx'
+import { EventBlock, blockChannels } from './EventBlock.tsx'
+import { CanvasTooltip, type CanvasTooltipTarget } from './CanvasTooltip.tsx'
 import { competitionLabel } from '../competitionLabels.ts'
-import type { Competition } from '../../engine/types.ts'
+import type { Competition, Phase } from '../../engine/types.ts'
 import {
   clampTimeZoom,
   fitToDay,
@@ -86,10 +101,23 @@ import {
  * `overflow-hidden` and both scroll positions are view state, so there is no
  * ancestor scroller with a claim on it.
  *
+ * ## Hover is resolved by arithmetic, not by the DOM
+ *
+ * One `onPointerMove` on the viewport hit-tests the pointer against the block
+ * rectangles this render already computed (research D3). It does not read
+ * layout, and it does not walk up from `event.target` — both would tie hover to
+ * there being a DOM element per block, which is the thing a later move to
+ * `<canvas>` rendering removes. The cost is one handler and one comparison per
+ * visible block, rather than a listener and a positioning context on each.
+ *
+ * A client coordinate becomes a plot coordinate by subtracting the viewport's
+ * own offset and then the two frozen layers: the gutter on x, the day band's
+ * `HEADER_HEIGHT_PX` on y. That is the same pair the block layer is positioned
+ * by, so the two cannot disagree about where a block is.
+ *
  * ## What is not here yet
  *
- * The tooltip (T038). Nothing mounts this component until the view toggle in
- * T040.
+ * Nothing mounts this component until the view toggle in T040.
  */
 
 /** Width of the frozen strip-label gutter, in pixels. */
@@ -195,6 +223,13 @@ export interface MatrixCanvasProps {
    */
   schedule?: DerivedSchedule
   /**
+   * The committed findings the tooltip attributes to a block. Omitted, the
+   * canvas subscribes to the store, exactly as `schedule` does — the two are
+   * passed together or not at all, so a block's findings always describe the
+   * same tournament state its geometry came from.
+   */
+  findings?: DerivedFindings
+  /**
    * The minute range `Zoom to selection` targets (FR-020). The action is
    * disabled without one — there is no selection until blocks exist (T037).
    */
@@ -210,6 +245,24 @@ interface DrawnBlock {
   readonly y: number
   readonly width: number
   readonly height: number
+}
+
+/**
+ * Which block the pointer is over, and where the viewport sat when it crossed
+ * in. Primitives only, on purpose: everything the tooltip shows is re-derived
+ * from the current render, so a scroll or a zoom under a stationary pointer
+ * cannot leave it describing a block that has since moved, and a hovered block
+ * culled out of the window closes the tooltip instead of stranding a snapshot
+ * of it. Holding the block object here would also put a value derived from
+ * `lanes` and `competitionsById` into state, which is enough for React Compiler
+ * to stop treating either memo as safe.
+ */
+interface HoveredBlock {
+  competitionId: string
+  phase: Phase
+  /** The viewport's own origin, in viewport-relative pixels. */
+  originX: number
+  originY: number
 }
 
 /** One day group's visible geometry, resolved once per render. */
@@ -232,9 +285,73 @@ function stickyHeaderTop(rawTop: number, nextDayTop: number): number {
   return Math.min(Math.max(0, rawTop), nextDayTop - HEADER_HEIGHT_PX)
 }
 
-export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasProps = {}) {
+/**
+ * The block under a plot coordinate, or `null` over empty grid. Scanned back to
+ * front because the blocks are absolutely positioned in array order: where an
+ * overflowing block overlaps one that legitimately holds those strips, the one
+ * drawn on top is the one the pointer is actually over.
+ *
+ * The right and bottom edges are exclusive, so two blocks abutting at a minute
+ * or a strip boundary never both claim the same pixel.
+ */
+function blockAt(blocks: DrawnBlock[], plotX: number, plotY: number): DrawnBlock | null {
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]
+    if (
+      plotX >= block.x &&
+      plotX < block.x + block.width &&
+      plotY >= block.y &&
+      plotY < block.y + block.height
+    ) {
+      return block
+    }
+  }
+  return null
+}
+
+/**
+ * The findings that belong to one block.
+ *
+ * A `ValidationError` names its competitions in `subjects`, so it attaches to
+ * every block of that event — the rules it expresses (a shared population, a
+ * day's capacity) are about the event, not about one of its phases. A
+ * `Bottleneck` does carry a `phase`, so when any of an event's bottlenecks name
+ * this block's phase the list narrows to those: a delay in the DE is not a fact
+ * about the pools that ran that morning. An event whose bottlenecks all name
+ * other phases still shows them, because the alternative is a block that
+ * reports nothing while its event is in trouble.
+ */
+function findingsForBlock(
+  findings: DerivedFindings,
+  competitionId: string,
+  phase: Phase,
+): string[] {
+  const messages: string[] = []
+
+  for (const error of findings.validationErrors) {
+    if (error.subjects?.includes(competitionId)) messages.push(error.message)
+  }
+
+  const forEvent = findings.analysis.warnings.filter(
+    (warning) => warning.competition_id === competitionId,
+  )
+  const forPhase = forEvent.filter((warning) => warning.phase === phase)
+  for (const warning of forPhase.length > 0 ? forPhase : forEvent) {
+    messages.push(warning.message)
+  }
+
+  return messages
+}
+
+export function MatrixCanvas({
+  schedule: committed,
+  findings: committedFindings,
+  selection,
+}: MatrixCanvasProps = {}) {
   const live = useStore(selectDerivedSchedule)
+  const liveFindings = useStore(selectDerivedFindings)
   const schedule = committed ?? live
+  const findings = committedFindings ?? liveFindings
   const { config } = schedule
 
   // One field per initializer, following Drawer.tsx: each read is independent
@@ -246,6 +363,7 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
     () => loadViewState().rowHeightStep,
   )
   const [size, setSize] = useState({ width: 0, height: 0 })
+  const [hovered, setHovered] = useState<HoveredBlock | null>(null)
 
   const viewportRef = useRef<HTMLDivElement>(null)
 
@@ -396,6 +514,75 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
       })
     }
   }
+
+  /**
+   * The one hover handler (research D3). It reads `visibleBlocks` from this
+   * render's closure rather than from a ref, so it can never hit-test against a
+   * layout the user is no longer looking at.
+   *
+   * ## It changes state per *block*, not per pointer event
+   *
+   * The anchor is the hovered block's own top centre rather than the pointer, so
+   * moving within one block resolves to the target already showing and returns
+   * without touching state. A cursor-tracked anchor would re-render the whole
+   * canvas on each of the sixty-odd pointer events a second a slow drag over a
+   * single block produces, and would jitter the tooltip while it did.
+   *
+   * ## Why the update is flushed
+   *
+   * React classes `pointermove` as a *continuous* event, so a plain `setState`
+   * here is scheduled rather than applied — the tooltip would appear a frame or
+   * more after the pointer entered the block, and later than that under load.
+   * `flushSync` puts it on screen in the frame the crossing happened. The cost
+   * is bounded by the paragraph above: it runs once per block the pointer
+   * crosses, which is the rate a hover enter/leave runs at anyway, not once per
+   * pointer event.
+   */
+  function handlePointerMove(e: PointerEvent<HTMLDivElement>): void {
+    const el = viewportRef.current
+    if (!el) return
+
+    const rect = el.getBoundingClientRect()
+    const drawn = blockAt(
+      visibleBlocks,
+      e.clientX - rect.left - GUTTER_WIDTH_PX,
+      e.clientY - rect.top - HEADER_HEIGHT_PX,
+    )
+
+    if (drawn === null) {
+      if (hovered !== null) flushSync(() => setHovered(null))
+      return
+    }
+    if (
+      hovered !== null &&
+      hovered.competitionId === drawn.placement.competitionId &&
+      hovered.phase === drawn.placement.phase
+    ) {
+      return
+    }
+
+    const next: HoveredBlock = {
+      competitionId: drawn.placement.competitionId,
+      phase: drawn.placement.phase,
+      originX: rect.left,
+      originY: rect.top,
+    }
+    flushSync(() => setHovered(next))
+  }
+
+  /**
+   * The hovered block resolved against *this* render's window. A block the user
+   * has scrolled or zoomed out of view resolves to nothing and the tooltip
+   * closes, rather than describing a block that is no longer on screen.
+   */
+  const hoveredBlock =
+    hovered === null
+      ? null
+      : (visibleBlocks.find(
+          (block) =>
+            block.placement.competitionId === hovered.competitionId &&
+            block.placement.phase === hovered.phase,
+        ) ?? null)
 
   const placedSpans = useMemo<TimeRange[]>(
     () =>
@@ -600,6 +787,8 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
         aria-label="Matrix grid"
         tabIndex={0}
         onKeyDown={handleKeyDown}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setHovered(null)}
         className="relative min-h-0 flex-1 overflow-hidden focus-visible:outline-2"
       >
         {/* The frozen gutter: positioned, never translated by timeScroll. */}
@@ -737,6 +926,43 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
           </div>
         ))}
       </div>
+
+      {/* Outside the viewport: the anchor is fixed-positioned, so it neither
+          takes part in the canvas layout nor gets clipped by it.
+
+          The target is built here in the prop rather than in a `const` above,
+          and that is load-bearing rather than a style choice. React Compiler
+          freezes a value at the JSX boundary, so a target assembled here is
+          provably never mutated; assembled into a local first, the block it
+          reads — and with it `lanes`, `competitionsById` and the `config` and
+          `schedule` fields they memoize on — is inferred as possibly mutated
+          later, and the compiler skips optimizing this component entirely.
+
+          The anchor is the block's own top centre, clamped into the plot so a
+          block half under the frozen gutter or the day band is still pointed at
+          somewhere it can be seen. */}
+      <CanvasTooltip
+        target={
+          hovered === null || hoveredBlock === null
+            ? null
+            : ({
+                competition: hoveredBlock.competition,
+                label: hoveredBlock.label,
+                day: hoveredBlock.placement.day,
+                placement: hoveredBlock.placement,
+                dropped: blockChannels(hoveredBlock.width, rowHeightStep),
+                findings: findingsForBlock(findings, hovered.competitionId, hovered.phase),
+                anchorX:
+                  hovered.originX +
+                  GUTTER_WIDTH_PX +
+                  Math.min(Math.max(hoveredBlock.x + hoveredBlock.width / 2, 0), plotWidth),
+                anchorY:
+                  hovered.originY +
+                  HEADER_HEIGHT_PX +
+                  Math.min(Math.max(hoveredBlock.y, 0), plotHeight),
+              } satisfies CanvasTooltipTarget)
+        }
+      />
     </section>
   )
 }
