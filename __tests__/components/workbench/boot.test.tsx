@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { bootstrap, DEFAULT_PRESET_ID } from '../../../src/store/boot.ts'
@@ -72,6 +72,8 @@ describe('bootstrap with a #config= fragment', () => {
 
 describe('bootstrap with an undecodable #config= fragment', () => {
   it('falls back to the preset rather than leaving an empty form', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     bootstrap('#config=not-a-valid-base64url-payload!!!')
 
     const preset = SCENARIOS[DEFAULT_PRESET_ID]
@@ -79,5 +81,9 @@ describe('bootstrap with an undecodable #config= fragment', () => {
     expect(state.strips_total).toBe(preset.strips)
     expect(state.tournament_type).toBe(preset.tournamentType)
     expect(Object.keys(state.placements).length).toBeGreaterThan(0)
+    // The decode failure is reported, not swallowed silently.
+    expect(consoleError).toHaveBeenCalled()
+
+    consoleError.mockRestore()
   })
 })

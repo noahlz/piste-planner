@@ -38,9 +38,10 @@ function seedPlacedCompetition(): string {
 
 describe('ScheduleOutput', () => {
   it('renders no staleness banner — placements are always current', () => {
-    seedPlacedCompetition()
+    const id = seedPlacedCompetition()
     render(<ScheduleOutput />)
 
+    expect(screen.getByText(id)).toBeInTheDocument()
     expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
     expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
   })

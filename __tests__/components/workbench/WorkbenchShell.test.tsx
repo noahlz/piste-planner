@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { useStore } from '../../../src/store/store.ts'
 
@@ -61,6 +61,20 @@ describe('WorkbenchShell rail', () => {
   })
 })
 
+describe('WorkbenchShell top bar strip count', () => {
+  it('commits a typed value to the store on change, with no blur', () => {
+    seedValidConfig()
+    render(<WorkbenchShell />)
+
+    const input = screen.getByRole('spinbutton', { name: 'Strip count' })
+    act(() => {
+      fireEvent.change(input, { target: { value: '20' } })
+    })
+
+    expect(useStore.getState().strips_total).toBe(20)
+  })
+})
+
 describe('WorkbenchShell Auto-schedule all gating', () => {
   it('is enabled with no ERROR finding, disabled once one appears, and re-enabled once it is fixed', () => {
     seedValidConfig()
@@ -79,6 +93,13 @@ describe('WorkbenchShell Auto-schedule all gating', () => {
 
     act(() => {
       useStore.getState().setStrips(12)
+    })
+    expect(button).toBeEnabled()
+
+    // days_available=5 is outside the recommended 2-4 day range: a WARN, not
+    // an ERROR, so it must never gate the button.
+    act(() => {
+      useStore.getState().setDays(5)
     })
     expect(button).toBeEnabled()
   })

@@ -54,6 +54,40 @@ describe('CenterView valid state', () => {
   })
 })
 
+describe('CenterView with only a WARN finding', () => {
+  it('stays undimmed with no blocking-findings overlay — WARN never blocks', () => {
+    seedPlacedCompetition()
+    render(<CenterView />)
+
+    // days_available=5 is outside the recommended 2-4 day range: a WARN, not
+    // an ERROR, so it must never trip the dimmed-invalid rule.
+    act(() => {
+      useStore.getState().setDays(5)
+    })
+
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
+    expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
+  })
+})
+
+describe('CenterView cold boot into an already-invalid config (FR-009)', () => {
+  it('shows the invalid derivation itself, dimmed, when first mounted into an invalid config', () => {
+    const id = TEMPLATES['RYC Weekend'][0]
+    // strips_total stays at the initial store's 0 — an ERROR — so there is no
+    // prior valid layout for the center to fall back to on mount. Mirrors a
+    // shared URL landing straight on an invalid config.
+    useStore.getState().addCompetition(id)
+    useStore.getState().updateCompetition(id, { fencer_count: 30 })
+    useStore.getState().setPlacementsFromAuto({ [id]: makePlacement({ strip_count: 5 }) })
+
+    render(<CenterView />)
+
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
+    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(screen.queryByText('No events placed yet.')).not.toBeInTheDocument()
+  })
+})
+
 describe('CenterView dimmed-invalid rule', () => {
   it('dims the center but keeps the previous rows on screen once a finding turns ERROR', () => {
     const id = seedPlacedCompetition()
@@ -95,6 +129,13 @@ describe('CenterView dimmed-invalid rule', () => {
     const overlay = screen.getByRole('region', { name: 'Blocking findings' })
     expect(overlay.textContent).toContain('strips_total: strips_total must be > 0')
     expect(overlay.textContent).toContain('days_available: days_available must be 1–14, got 0')
+    // strips_total=0 and days_available=0 don't stay isolated to their own
+    // two rules against this seeded (placed, same-population) competition —
+    // strips_total=0 also trips resource_precondition (n_pools > 0 strips)
+    // and days_available=0 also trips same_population (1 event > 0 days), so
+    // four ERRORs land at once here, not two. Distinct <li> lines for all
+    // four, not one <ul> whose textContent happens to concatenate them.
+    expect(within(overlay).getAllByRole('listitem')).toHaveLength(4)
   })
 })
 

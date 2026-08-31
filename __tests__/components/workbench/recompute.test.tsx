@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { FencerCounts } from '../../../src/components/sections/FencerCounts.tsx'
 import { AnalysisOutput } from '../../../src/components/sections/AnalysisOutput.tsx'
 import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
@@ -86,6 +86,14 @@ function fencerInput(id: string): HTMLElement {
   return screen.getByRole('spinbutton', { name: `Fencer count for ${label}` })
 }
 
+/** `id`'s row in the center's schedule table: id, day, pool start, pool end,
+ *  DE start, DE end, strips — the same cell order CenterView's own suite reads. */
+function centerRowCells(id: string): string[] {
+  const row = screen.getByText(id).closest('tr')
+  if (!row) throw new Error(`no <tr> found for ${id}`)
+  return within(row).getAllByRole('cell').map((cell) => cell.textContent ?? '')
+}
+
 describe('two-tier recompute', () => {
   it('a fencer-count keystroke moves the drawer immediately; the center follows only after CENTER_SETTLE_MS', () => {
     // 8 fencers -> 1 pool, and 9 for the companion: 10 pools on day 1, under
@@ -119,8 +127,15 @@ describe('two-tier recompute', () => {
       vi.advanceTimersByTime(CENTER_SETTLE_MS)
     })
 
-    // Only now does the center pick up the new pool/DE structure.
+    // Only now does the center pick up the new pool/DE structure — not just
+    // any change, but the 7-pool structure 45 fencers actually derives to
+    // (pool end 12:06, DE 12:40-16:37, 5 strips, up from 1 at 8 fencers).
     expect(center.textContent).not.toBe(centerBefore)
+    const cells = centerRowCells(id)
+    expect(cells[3]).toBe('12:06') // pool end
+    expect(cells[4]).toBe('12:40') // DE start
+    expect(cells[5]).toBe('16:37') // DE end
+    expect(cells[6]).toBe('5') // pool_strip_count
   })
 
   it('restarts the settle timer on a second edit rather than relayouting at the first deadline', () => {
@@ -154,6 +169,13 @@ describe('two-tier recompute', () => {
     act(() => {
       vi.advanceTimersByTime(CENTER_SETTLE_MS - 10)
     })
+    // Settles on the second edit's value (45), the same 7-pool structure the
+    // first case lands on — never the first edit's (40) intermediate one.
     expect(center.textContent).not.toBe(centerBefore)
+    const cells = centerRowCells(id)
+    expect(cells[3]).toBe('12:06') // pool end
+    expect(cells[4]).toBe('12:40') // DE start
+    expect(cells[5]).toBe('16:37') // DE end
+    expect(cells[6]).toBe('5') // pool_strip_count
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, act } from '@testing-library/react'
 import { UnplacedTray } from '../../../src/components/workbench/UnplacedTray.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES, findCompetition } from '../../../src/engine/catalogue.ts'
@@ -50,15 +50,22 @@ describe('UnplacedTray populated state', () => {
     const ids = TEMPLATES['RYC Weekend']
     useStore.getState().applyTemplate('RYC Weekend')
     const placedId = ids[0]
-    useStore.getState().setPlacementsFromAuto({ [placedId]: makePlacement({ strip_count: 5 }) })
+    const entry = findCompetition(placedId)
+    const placedLabel = entry ? competitionLabel(entry) : placedId
 
     render(<UnplacedTray />)
 
     const region = screen.getByRole('region', { name: 'Unplaced events' })
-    const entry = findCompetition(placedId)
-    const placedLabel = entry ? competitionLabel(entry) : placedId
-    expect(within(region).queryByText(placedLabel)).not.toBeInTheDocument()
+    expect(within(region).getByText(placedLabel)).toBeInTheDocument()
+    expect(within(region).getAllByRole('listitem')).toHaveLength(ids.length)
 
+    // The transition under test: a placement arriving after the tray is
+    // already mounted, not baked into the seed before render.
+    act(() => {
+      useStore.getState().setPlacementsFromAuto({ [placedId]: makePlacement({ strip_count: 5 }) })
+    })
+
+    expect(within(region).queryByText(placedLabel)).not.toBeInTheDocument()
     const items = within(region).getAllByRole('listitem')
     expect(items).toHaveLength(ids.length - 1)
   })
