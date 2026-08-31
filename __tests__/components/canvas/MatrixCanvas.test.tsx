@@ -389,6 +389,10 @@ describe('MatrixCanvas day band layout space (FR-019)', () => {
 
 describe('MatrixCanvas blocks (FR-012, FR-013, FR-021)', () => {
   it('draws each phase of a placed event at the geometry the window implies', () => {
+    // The midnight window this case's arithmetic is written against, stated
+    // rather than inherited: DEFAULT_VIEW_STATE.timeScroll is 08:00 from T040
+    // on, so a case that needs a particular window has to seed it.
+    seedViewState({ timeScroll: 0 })
     render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
 
     expect(blockIds()).toEqual(['c1:DE', 'c1:POOLS'])
@@ -440,6 +444,10 @@ describe('MatrixCanvas blocks (FR-012, FR-013, FR-021)', () => {
   })
 
   it('redraws a block’s geometry from the new window rather than from a stored one', () => {
+    // From midnight, so the zoom lands the block inside the plot: from the
+    // 08:00 default it would zoom to a scroll of 687 and put the 600-700 block
+    // 174px off the left edge, which proves the same arithmetic less legibly.
+    seedViewState({ timeScroll: 0 })
     render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
@@ -841,12 +849,15 @@ function tooltipField(key: string): Element | null {
  * `findingsForBlock`, which no test reaches through the component at all —
  * `CanvasTooltip.test.tsx` hands the tooltip a findings array directly.
  *
- * The fixture is `scheduleWithPlacedEvent`: the pool block occupies plot x
- * 600-700 and plot y 0-96, so a client coordinate is that plus the 72px gutter
- * and the 38px header.
+ * The fixture is `scheduleWithPlacedEvent`: from a midnight window the pool
+ * block occupies plot x 600-700 and plot y 0-96, so a client coordinate is
+ * that plus the 72px gutter and the 38px header. Both cases seed that window —
+ * `DEFAULT_VIEW_STATE.timeScroll` is 08:00 from T040 on, which would slide the
+ * block 480px left of where these coordinates aim.
  */
 describe('MatrixCanvas hover hit test (FR-022, research D3)', () => {
   it('measures the pointer down the block layer, which starts below the day band', () => {
+    seedViewState({ timeScroll: 0 })
     render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
 
     // Plot y 95 — inside the block by one pixel. Read without the header
@@ -908,6 +919,7 @@ describe('MatrixCanvas hover hit test (FR-022, research D3)', () => {
         suggestions: [],
       },
     }
+    seedViewState({ timeScroll: 0 })
     render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} findings={findings} />)
 
     firePointerMove(viewport(), GUTTER_WIDTH + 650, HEADER_HEIGHT + 48)

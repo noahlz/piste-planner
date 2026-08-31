@@ -115,9 +115,10 @@ import {
  * `HEADER_HEIGHT_PX` on y. That is the same pair the block layer is positioned
  * by, so the two cannot disagree about where a block is.
  *
- * ## What is not here yet
+ * ## What mounts it
  *
- * Nothing mounts this component until the view toggle in T040.
+ * `CenterView`'s Matrix ⇄ Schedule toggle (T040), which hands it the committed
+ * schedule and findings the schedule table reads — one model, two views.
  */
 
 /** Width of the frozen strip-label gutter, in pixels. */

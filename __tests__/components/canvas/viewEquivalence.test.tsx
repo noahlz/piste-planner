@@ -417,7 +417,7 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
     seedPlacedCompetitions()
     render(<CenterView />)
 
-    const group = screen.getByRole('radiogroup', { name: 'Center view' })
+    const group = screen.getByRole('radiogroup', { name: 'Center view mode' })
     expect(group).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Matrix' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Schedule' })).toBeInTheDocument()

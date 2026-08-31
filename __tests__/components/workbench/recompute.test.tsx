@@ -6,6 +6,12 @@ import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES, findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/components/competitionLabels.ts'
+import {
+  DEFAULT_VIEW_STATE,
+  VIEW_STATE_STORAGE_KEY,
+  ViewMode,
+  saveViewState,
+} from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
 
 // 004 T009 — two-tier recompute (FR-008, S2-contract.md §Center view and the
@@ -32,9 +38,21 @@ import { makePlacement } from '../../helpers/factories.ts'
 //   45 fencers -> 7 pools   (day total 16 — pass-0 WARN, no ERROR)
 
 beforeEach(() => {
+  localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
   vi.useFakeTimers()
 })
+
+/** Puts the center on the schedule table, whose cells are the two tiers'
+ *  evidence in the first two cases below. On T040's default matrix view those
+ *  cases could not tell a deferred relayout from no relayout at all: with no
+ *  ResizeObserver the canvas measures 0x0, draws nothing, and its textContent
+ *  is the toolbar's — constant across every edit, so the "has not relayouted
+ *  yet" half would pass without the debounce existing. The third case installs
+ *  an observer and asserts on the matrix instead. */
+function showScheduleTable(): void {
+  saveViewState({ ...DEFAULT_VIEW_STATE, viewMode: ViewMode.SCHEDULE })
+}
 
 afterEach(() => {
   vi.useRealTimers()
@@ -87,7 +105,8 @@ function fencerInput(id: string): HTMLElement {
 }
 
 /** `id`'s row in the center's schedule table: id, day, pool start, pool end,
- *  DE start, DE end, strips — the same cell order CenterView's own suite reads. */
+ *  DE start, DE end, strips, finish — the same cell order CenterView's own
+ *  suite reads. */
 function centerRowCells(id: string): string[] {
   const row = screen.getByText(id).closest('tr')
   if (!row) throw new Error(`no <tr> found for ${id}`)
@@ -96,6 +115,7 @@ function centerRowCells(id: string): string[] {
 
 describe('two-tier recompute', () => {
   it('a fencer-count keystroke moves the drawer immediately; the center follows only after CENTER_SETTLE_MS', () => {
+    showScheduleTable()
     // 8 fencers -> 1 pool, and 9 for the companion: 10 pools on day 1, under
     // the 12 strips seeded below, so no capacity warning yet.
     const id = seedPlacedCompetitions(8)
@@ -134,11 +154,16 @@ describe('two-tier recompute', () => {
     const cells = centerRowCells(id)
     expect(cells[3]).toBe('12:06') // pool end
     expect(cells[4]).toBe('12:40') // DE start
-    expect(cells[5]).toBe('16:37') // DE end
+    // T040 split the old single DE End column in two: de_end, the last minute
+    // the scheduler actually places, and de_total_end with the 30-minute medal
+    // tail on top of it. 16:37 was the old column's value and is now Finish's.
+    expect(cells[5]).toBe('16:07') // DE end
     expect(cells[6]).toBe('5') // pool_strip_count
+    expect(cells[7]).toBe('16:37') // finish, de_total_end
   })
 
   it('restarts the settle timer on a second edit rather than relayouting at the first deadline', () => {
+    showScheduleTable()
     const id = seedPlacedCompetitions(8)
     render(<RecomputeHost />)
 
@@ -175,7 +200,96 @@ describe('two-tier recompute', () => {
     const cells = centerRowCells(id)
     expect(cells[3]).toBe('12:06') // pool end
     expect(cells[4]).toBe('12:40') // DE start
-    expect(cells[5]).toBe('16:37') // DE end
+    expect(cells[5]).toBe('16:07') // DE end, as above
     expect(cells[6]).toBe('5') // pool_strip_count
+    expect(cells[7]).toBe('16:37') // finish, de_total_end
+  })
+})
+
+/**
+ * T040 — the same two tiers, with the matrix in the center.
+ *
+ * The cases above prove the debounce through the schedule table, which reaches
+ * `CenterView`'s committed model by `ScheduleOutput`'s own prop. The canvas
+ * reaches it by a second prop, and it has a live store subscription of its own
+ * to fall back on when that prop is absent — so a `CenterView` handing it
+ * `live` instead of `committed` would keep every case above green while the
+ * default view relayouted on every keystroke.
+ */
+describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', () => {
+  const VIEWPORT_WIDTH = 900
+  const VIEWPORT_HEIGHT = 480
+
+  class StubResizeObserver {
+    callback: ResizeObserverCallback
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback
+    }
+
+    observe(): void {
+      this.callback(
+        [
+          {
+            contentRect: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
+          } as ResizeObserverEntry,
+        ],
+        this as unknown as ResizeObserver,
+      )
+    }
+
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+
+  const originalResizeObserver = globalThis.ResizeObserver
+
+  beforeEach(() => {
+    // jsdom ships no ResizeObserver, and an unmeasured canvas draws no blocks
+    // at all — every assertion below would then read `undefined` both before
+    // and after the settle.
+    globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
+    // 828px of plot from 08:00 at 1 min/px spans [480, 1308), past every block
+    // the fixture places. The view stays MATRIX, which is the default.
+    saveViewState({ ...DEFAULT_VIEW_STATE, timeScroll: 480 })
+  })
+
+  afterEach(() => {
+    globalThis.ResizeObserver = originalResizeObserver
+  })
+
+  /** The last minute of one drawn block, or null when it is not drawn. */
+  function blockEnd(id: string, phase: string): number | null {
+    const el = document.querySelector<HTMLElement>(
+      `[data-event-id="${id}"][data-phase="${phase}"]`,
+    )
+    return el ? Number(el.dataset.end) : null
+  }
+
+  it('holds the drawn blocks at their pre-edit geometry until the settle, then moves them', () => {
+    const id = seedPlacedCompetitions(8)
+    render(<CenterView />)
+
+    const poolEndBefore = blockEnd(id, 'POOLS')
+    expect(poolEndBefore, 'the canvas drew nothing to compare').not.toBeNull()
+
+    act(() => {
+      useStore.getState().updateCompetition(id, { fencer_count: 45 })
+    })
+
+    // The store already carries 45 — the drawer would show it — while the
+    // blocks are still the ones the committed model implies.
+    expect(useStore.getState().selectedCompetitions[id].fencer_count).toBe(45)
+    expect(blockEnd(id, 'POOLS')).toBe(poolEndBefore)
+
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS)
+    })
+
+    // 726 is 12:06 and 967 is 16:07 — the same pool end and DE end the table
+    // cases above read off this fixture, so the two views agree (FR-023).
+    expect(poolEndBefore).not.toBe(726)
+    expect(blockEnd(id, 'POOLS')).toBe(726)
+    expect(blockEnd(id, 'DE')).toBe(967)
   })
 })

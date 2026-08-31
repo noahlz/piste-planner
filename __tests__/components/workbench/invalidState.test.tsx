@@ -3,6 +3,12 @@ import { render, screen, within, act } from '@testing-library/react'
 import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
+import {
+  DEFAULT_VIEW_STATE,
+  VIEW_STATE_STORAGE_KEY,
+  ViewMode,
+  saveViewState,
+} from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
 
 // 004 T008 — the dimmed-invalid rule (FR-009, S2-contract.md §Center view
@@ -15,10 +21,24 @@ import { makePlacement } from '../../helpers/factories.ts'
 // which computePoolStructure (src/engine/pools.ts) throws on below 2, and
 // deriveEventSchedule would run on the placed competition regardless of the
 // dimmed rule under test.
+//
+// T040 made the matrix the center's default view. The rule under test is the
+// same in either view — the dim marker, the overlay and the suppressed commit
+// all sit outside the view switch — but the evidence a case reads differs:
+// a case that proves content is *held* by reading schedule rows needs the
+// table, and says so by calling showScheduleTable(). The cases that read only
+// the dim marker or the overlay stay on the default matrix view, and so cover
+// both views between them.
 
 beforeEach(() => {
+  localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
 })
+
+/** Puts the center on the schedule table, for a case whose evidence is a row. */
+function showScheduleTable(): void {
+  saveViewState({ ...DEFAULT_VIEW_STATE, viewMode: ViewMode.SCHEDULE })
+}
 
 /** Config with no hard validation errors: strips set, no competitions to over-subscribe them. */
 function seedValidConfig(): void {
@@ -45,6 +65,9 @@ function dimmedWrapper(): HTMLElement {
 
 describe('CenterView valid state', () => {
   it('is not dimmed and shows no blocking-findings overlay', () => {
+    // The undimmed content is read as the row bearing the competition id, so
+    // this case wants the table.
+    showScheduleTable()
     const id = seedPlacedCompetition()
     render(<CenterView />)
 
@@ -73,6 +96,9 @@ describe('CenterView with only a WARN finding', () => {
 describe('CenterView cold boot into an already-invalid config (FR-009)', () => {
   it('shows the invalid derivation itself, dimmed, when first mounted into an invalid config', () => {
     const id = TEMPLATES['RYC Weekend'][0]
+    // The fallback content is a schedule row, and its absence would be
+    // ScheduleOutput's own empty state: both live in the table.
+    showScheduleTable()
     // strips_total stays at the initial store's 0 — an ERROR — so there is no
     // prior valid layout for the center to fall back to on mount. Mirrors a
     // shared URL landing straight on an invalid config.
@@ -90,6 +116,8 @@ describe('CenterView cold boot into an already-invalid config (FR-009)', () => {
 
 describe('CenterView dimmed-invalid rule', () => {
   it('dims the center but keeps the previous rows on screen once a finding turns ERROR', () => {
+    // "keeps the previous rows" is literally a row assertion.
+    showScheduleTable()
     const id = seedPlacedCompetition()
     render(<CenterView />)
     expect(screen.getByText(id)).toBeInTheDocument()
@@ -141,6 +169,8 @@ describe('CenterView dimmed-invalid rule', () => {
 
 describe('CenterView across an edit sequence', () => {
   it('holds content at every step of valid -> invalid -> valid, and never blanks', () => {
+    // The held content is the id's row, checked at each of the three steps.
+    showScheduleTable()
     const id = seedPlacedCompetition()
     render(<CenterView />)
 
@@ -186,6 +216,9 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
   }
 
   it('still shows the pre-edit row after the settle timer elapses, not the ERROR-state one', () => {
+    // rowCells compares the pre-edit and post-settle cell strings, which the
+    // table is the only view that renders.
+    showScheduleTable()
     const id = seedPlacedCompetition()
     render(<CenterView />)
 
@@ -218,6 +251,8 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
   })
 
   it('catches up once the config is valid again, so the freeze above is not permanent', () => {
+    // Same cell-by-cell evidence as the case above.
+    showScheduleTable()
     const id = seedPlacedCompetition()
     render(<CenterView />)
 
