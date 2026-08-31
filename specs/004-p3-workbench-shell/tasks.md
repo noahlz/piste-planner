@@ -93,11 +93,11 @@ move without a second action.
 - [x] T017 [US1] Implement the dimmed-invalid overlay so the center never blanks (FR-009)
 - [x] T018 [US1] Implement two-tier recompute – per-keystroke findings, on-commit center relayout (FR-008)
 - [x] T019 [US1] Boot the app with a preset loaded and auto-scheduled in `src/App.tsx`, preserving the existing `#config=` fragment handling (FR-007)
-- [ ] T020 [US1] Delete `src/components/wizard/` (5 files), `src/components/KitchenSinkPage.tsx`, `src/components/sections/TemplateSelector.tsx`, `src/components/sections/ActionButtons.tsx`, and the `layoutMode` slice and layout toggle from `src/store/store.ts` and `src/App.tsx` (FR-001)
-- [ ] T021 [US1] Work through the 52 cases in `__tests__/components/KitchenSinkPage.test.tsx` one at a time – re-target surviving behavior at the workbench, delete what asserted kitchen-sink composition – then delete the file (research D12)
-- [ ] T022 [US1] Work through the 27 cases in `__tests__/components/WizardShell.test.tsx` the same way – wizard navigation and step sequencing are deleted, not re-targeted – then delete the file (research D12)
-- [ ] T023 [US1] Re-point the `scripts/smoke.mjs` steps that drove deleted controls at their workbench replacements – the `Single Page` and `Wizard` tabs, `Generate Schedule`, `Save / Load / Share`, `Suggest`, `Number of strips`, `Generate Link`, and the fencer-count spinbutton. Preserve the header comment's corrections where the selector they describe survives in a new form; delete the wizard walk (constitution VI)
-- [ ] T024 [US1] Dispatch `test-quality-reviewer` on T006–T010 and the re-targeted cases from T021–T022
+- [x] T020 [US1] Delete `src/components/wizard/` (5 files), `src/components/KitchenSinkPage.tsx`, `src/components/sections/TemplateSelector.tsx`, `src/components/sections/ActionButtons.tsx`, and the `layoutMode` slice and layout toggle from `src/store/store.ts` and `src/App.tsx` (FR-001)
+- [x] T021 [US1] Work through the 52 cases in `__tests__/components/KitchenSinkPage.test.tsx` one at a time – re-target surviving behavior at the workbench, delete what asserted kitchen-sink composition – then delete the file (research D12)
+- [x] T022 [US1] Work through the 27 cases in `__tests__/components/WizardShell.test.tsx` the same way – wizard navigation and step sequencing are deleted, not re-targeted – then delete the file (research D12)
+- [x] T023 [US1] Re-point the `scripts/smoke.mjs` steps that drove deleted controls at their workbench replacements – the `Single Page` and `Wizard` tabs, `Generate Schedule`, `Save / Load / Share`, `Suggest`, `Number of strips`, `Generate Link`, and the fencer-count spinbutton. Preserve the header comment's corrections where the selector they describe survives in a new form; delete the wizard walk (constitution VI)
+- [x] T024 [US1] Dispatch `test-quality-reviewer` on T006–T010 and the re-targeted cases from T021–T022
 - [x] T025 [US1] Dispatch `react-code-reviewer` on T011–T019
 
 **Checkpoint**: One screen, both layouts gone, smoke passing against it. US1 is independently shippable. *(subagent commits)*
