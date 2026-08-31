@@ -1,38 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { KitchenSinkPage } from './components/KitchenSinkPage.tsx'
-import { WizardShell } from './components/wizard/WizardShell.tsx'
 import { WorkbenchShell } from './components/workbench/WorkbenchShell.tsx'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { LayoutDashboard, Wand2, Wrench } from 'lucide-react'
 import { bootstrap } from './store/boot.ts'
-import { useStore } from './store/store.ts'
-
-function LayoutToggle() {
-  const layoutMode = useStore((s) => s.layoutMode)
-  const setLayoutMode = useStore((s) => s.setLayoutMode)
-
-  return (
-    <Tabs value={layoutMode} onValueChange={(v) => setLayoutMode(v as typeof layoutMode)}>
-      <TabsList className="bg-slate-700">
-        <TabsTrigger value="workbench" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
-          <Wrench className="mr-1.5 h-4 w-4" />
-          Workbench
-        </TabsTrigger>
-        <TabsTrigger value="kitchen-sink" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
-          <LayoutDashboard className="mr-1.5 h-4 w-4" />
-          Single Page
-        </TabsTrigger>
-        <TabsTrigger value="wizard" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
-          <Wand2 className="mr-1.5 h-4 w-4" />
-          Wizard
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
-  )
-}
 
 function App() {
-  const layoutMode = useStore((s) => s.layoutMode)
   const booted = useRef(false)
 
   // StrictMode invokes mount effects twice in development. Booting twice would
@@ -50,15 +20,8 @@ function App() {
           <h1 className="text-2xl font-bold italic text-white">Piste Planner 🤺</h1>
           <span className="rounded-full bg-orange-500 px-3 py-0.5 text-xs font-semibold text-white">Work in Progress!</span>
         </div>
-        <LayoutToggle />
       </header>
-      {layoutMode === 'workbench' ? (
-        <WorkbenchShell />
-      ) : layoutMode === 'wizard' ? (
-        <WizardShell />
-      ) : (
-        <KitchenSinkPage />
-      )}
+      <WorkbenchShell />
     </div>
   )
 }

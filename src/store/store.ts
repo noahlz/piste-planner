@@ -34,13 +34,6 @@ import {
 const DAY_START = 480 // 8:00 AM in minutes from midnight
 const DAY_END = 1320 // 10:00 PM in minutes from midnight
 
-const LayoutMode = {
-  KITCHEN_SINK: 'kitchen-sink',
-  WIZARD: 'wizard',
-  WORKBENCH: 'workbench',
-} as const
-type LayoutMode = (typeof LayoutMode)[keyof typeof LayoutMode]
-
 // ──────────────────────────────────────────────
 // Slice types
 // ──────────────────────────────────────────────
@@ -92,13 +85,9 @@ export interface CompetitionSlice {
 }
 
 export interface UiSlice {
-  layoutMode: LayoutMode
-  wizardStep: number
   /** The preset last loaded by `applyPreset`, for the top bar's picker to read back (review finding B). Not serialized. */
   loadedPresetId: ScenarioId | null
 
-  setLayoutMode: (mode: LayoutMode) => void
-  setStep: (step: number) => void
   setLoadedPresetId: (id: ScenarioId | null) => void
 }
 
@@ -315,12 +304,8 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
 
 function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
-    layoutMode: 'workbench',
-    wizardStep: 0,
     loadedPresetId: null,
 
-    setLayoutMode: (mode) => set({ layoutMode: mode }),
-    setStep: (step) => set({ wizardStep: step }),
     setLoadedPresetId: (id) => set({ loadedPresetId: id }),
   }
 }
