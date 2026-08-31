@@ -49,6 +49,11 @@ aggregate demand on each path. This baseline only records the numbers; T012
 (FR-004a classification) or the day-axis fix itself must explain whether
 B4's gap survives as a pinned exception or closes.
 
+**Answered by T012**: it survives, pinned at 16 against the ledger's 0, traced
+to `strips_allocated: 0`. That classification and the other three live in
+[`parity-exceptions.md`](./parity-exceptions.md), the post-change record — this
+file stays the pre-change one.
+
 ## Referee attribution (research.md D1, second symptom)
 
 Measured on B1 (the boot preset) by re-running `scheduleAll` directly over

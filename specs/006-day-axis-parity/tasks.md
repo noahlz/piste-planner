@@ -90,8 +90,8 @@ the branch with `git merge --no-ff --no-commit` completed by
 - [X] T008 [US1] Convert schedule times back to clock time in `src/store/runActions.ts` per C2 — a result on day *d* loses `d*1440` before it becomes a `Placement.start_time` — and extend the store tests so a scheduled tournament's placements all fall inside their own day's clock hours
 - [X] T009 [US1] Point `dayHours` at the store's `dayConfigs` in `src/components/canvas/MatrixCanvas.tsx:507-513` per C4, so no scheduler-axis value can reach a day band, and add the test that fails if the canvas starts reading day hours from the derived config
 - [X] T010 [US1] Run the drift ledger and confirm the snapshot and floors are byte-identical to `main`; confirm `git diff --stat main -- src/engine/` is empty at this point. Record both in the commit message *(subagent commits)*
-- [ ] T011 [US1] Run the parity test and fill in its final pinned numbers from what was measured, not from expectation
-- [ ] T012 [US1] Classify any residual gap between an app-path count and its ledger count. Admissible only as an FR-004a exception traced to a per-competition default (`de_mode` staging or `strips_allocated`, [research.md D7](./research.md)); record the ledger's count, the cause, and 004's US4 as the closing feature beside the pinned number. A gap traced to the day axis is not an exception — halt and report *(subagent commits)*
+- [X] T011 [US1] Run the parity test and fill in its final pinned numbers from what was measured, not from expectation
+- [X] T012 [US1] Classify any residual gap between an app-path count and its ledger count. Admissible only as an FR-004a exception traced to a per-competition default (`de_mode` staging or `strips_allocated`, [research.md D7](./research.md)); record the ledger's count, the cause, and 004's US4 as the closing feature beside the pinned number. A gap traced to the day axis is not an exception — halt and report *(subagent commits)*
 
 **Checkpoint**: Boot shows 24 of 24. All eight tournaments are pinned and gated. Engine untouched.
 
