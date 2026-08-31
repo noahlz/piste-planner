@@ -408,6 +408,15 @@ function findingsForBlock(
  *
  * `ScheduleOutput` carries the identical pattern. It is left as S2 recorded it
  * — the canvas is the center, and the canvas is where this was worth solving.
+ *
+ * One narrow exception: `dayHours` below reads the store's `dayConfigs`
+ * directly (contracts/day-axis.md C4), because that is the authoring home for
+ * day hours and the only place they are guaranteed to be clock time — a
+ * `schedule.config.dayConfigs` handed in from outside may carry the
+ * scheduler's own axis instead (research.md D4, D5). That subscription is
+ * narrow enough not to reintroduce the reconciliation cost this component
+ * otherwise avoids: `dayConfigs` changes when a day's hours or count are
+ * edited, not on every placement.
  */
 export function MatrixCanvas({ schedule, findings, selection }: MatrixCanvasProps = {}) {
   if (schedule !== undefined && findings !== undefined) {
@@ -432,6 +441,9 @@ function StoreConnectedCanvas({ schedule, findings, selection }: MatrixCanvasPro
 
 function MatrixCanvasView({ schedule, findings, selection }: MatrixCanvasViewProps) {
   const { config } = schedule
+  // Clock-time day hours, read from their authoring home rather than from
+  // `config.dayConfigs` — see the module docblock and `dayHours` below.
+  const dayConfigs = useStore((s) => s.dayConfigs)
 
   // One field per initializer, following Drawer.tsx: each read is independent
   // so a write never has to reconstruct a field this component does not own.
@@ -503,9 +515,17 @@ function MatrixCanvasView({ schedule, findings, selection }: MatrixCanvasViewPro
    */
   const windowStartRow = rowRange?.firstRow ?? 0
 
-  /** The configured hours of one day, falling back to the engine's defaults. */
+  /**
+   * The configured hours of one day, falling back to the engine's defaults.
+   *
+   * Reads the store's `dayConfigs`, never `config.dayConfigs` — contracts C4.
+   * `config` is `schedule.config`, which for a scheduled tournament may carry
+   * the scheduler's own axis (day *d* at `d*1440 + hours`, research D5) rather
+   * than clock time. The store is the one place day hours are always clock
+   * time, because it is where the user authors them.
+   */
   function dayHours(day: number): TimeRange {
-    const dayConfig = config.dayConfigs[day]
+    const dayConfig = dayConfigs[day]
     return {
       startMinutes: dayConfig?.day_start_time ?? DAY_START_MINS,
       endMinutes: dayConfig?.day_end_time ?? DAY_END_MINS,

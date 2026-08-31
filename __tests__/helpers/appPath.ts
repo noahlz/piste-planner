@@ -53,6 +53,23 @@ export function runAppPath(id: ScenarioId): AppPathResult {
   const { config, competitions } = buildTournamentConfig(useStore.getState())
   const result = scheduleAll(competitions, config)
 
+  // Invariant, not a soft check: the two calls read identical inputs (no
+  // Date.now/Math.random in src/engine or src/store, no mutable module
+  // state, buildTournamentConfig reads no placements), so their placed
+  // counts must agree. A caller trusting placedCount while reading
+  // refRequirementsByDay off a second, silently different run would be
+  // exactly the kind of drift this feature exists to catch — throw rather
+  // than let it pass quietly into a test's expectations.
+  const secondPlacedCount = Object.values(result.schedule)
+    .filter((r) => r.pool_start !== null).length
+  if (secondPlacedCount !== placedCount) {
+    throw new Error(
+      `runAppPath(${id}): second scheduleAll run placed ${secondPlacedCount} events, `
+      + `first run (via runScheduleAll) placed ${placedCount}. The two calls should `
+      + 'read identical inputs — this means they diverged.',
+    )
+  }
+
   return {
     placedCount,
     selectedCount,

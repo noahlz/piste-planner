@@ -100,7 +100,15 @@ describe('buildTournamentConfig', () => {
   })
 
   describe('dayConfigs', () => {
-    it('passes dayConfigs through from store', () => {
+    // Before T006 this seam had no coverage at all: buildTournamentConfig
+    // passed state.dayConfigs straight through with no offset, and nothing
+    // here asserted what the engine config's dayConfigs actually contained.
+    // That absence is what let the day-axis defect (research.md D1) survive
+    // three features — see research.md D4's closing note and
+    // contracts/day-axis.md. `dayAxis.test.ts` carries the full C1 invariant
+    // suite (disjoint, ordered, congruent, slot-aligned); this test pins the
+    // specific shift buildTournamentConfig applies.
+    it('shifts each day onto the scheduler axis by day_index * 1440, leaving the store\'s own dayConfigs untouched', () => {
       const dayConfigs = [
         { day_start_time: 480, day_end_time: 1200 },
         { day_start_time: 540, day_end_time: 1320 },
@@ -108,7 +116,22 @@ describe('buildTournamentConfig', () => {
       const state = storeWith({ ...minimalState(), dayConfigs })
       const { config } = buildTournamentConfig(state)
 
-      expect(config.dayConfigs).toEqual(dayConfigs)
+      expect(config.dayConfigs).toEqual([
+        { day_start_time: 480, day_end_time: 1200 },
+        { day_start_time: 1980, day_end_time: 2760 },
+      ])
+      // The store's own state (read back independently of the config we just
+      // built) is clock axis and unshifted — buildTournamentConfig must not
+      // mutate what it was handed.
+      expect(state.dayConfigs).toEqual(dayConfigs)
+    })
+
+    it('leaves day 0 unshifted (0 * 1440 = 0, the identity case)', () => {
+      const dayConfigs = [{ day_start_time: 540, day_end_time: 1260 }]
+      const state = storeWith({ ...minimalState(), dayConfigs, days_available: 1 })
+      const { config } = buildTournamentConfig(state)
+
+      expect(config.dayConfigs).toEqual([{ day_start_time: 540, day_end_time: 1260 }])
     })
   })
 

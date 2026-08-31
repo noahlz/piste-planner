@@ -85,11 +85,11 @@ the branch with `git merge --no-ff --no-commit` completed by
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Emit scheduler-axis day windows from `buildTournamentConfig` in `src/store/buildConfig.ts` per [contracts/day-axis.md](./contracts/day-axis.md) C1 — day *d* at `[d*1440 + start_d, d*1440 + end_d)` — leaving the store's own `dayConfigs` in clock time
-- [ ] T007 [US1] Extend `__tests__/store/buildConfig.test.ts` to cover the emission, and turn T004's invariant assertions green. The seam has no existing `dayConfigs` coverage to update — that absence is itself worth a note in the test file
-- [ ] T008 [US1] Convert schedule times back to clock time in `src/store/runActions.ts` per C2 — a result on day *d* loses `d*1440` before it becomes a `Placement.start_time` — and extend the store tests so a scheduled tournament's placements all fall inside their own day's clock hours
-- [ ] T009 [US1] Point `dayHours` at the store's `dayConfigs` in `src/components/canvas/MatrixCanvas.tsx:507-513` per C4, so no scheduler-axis value can reach a day band, and add the test that fails if the canvas starts reading day hours from the derived config
-- [ ] T010 [US1] Run the drift ledger and confirm the snapshot and floors are byte-identical to `main`; confirm `git diff --stat main -- src/engine/` is empty at this point. Record both in the commit message *(subagent commits)*
+- [X] T006 [US1] Emit scheduler-axis day windows from `buildTournamentConfig` in `src/store/buildConfig.ts` per [contracts/day-axis.md](./contracts/day-axis.md) C1 — day *d* at `[d*1440 + start_d, d*1440 + end_d)` — leaving the store's own `dayConfigs` in clock time
+- [X] T007 [US1] Extend `__tests__/store/buildConfig.test.ts` to cover the emission, and turn T004's invariant assertions green. The seam has no existing `dayConfigs` coverage to update — that absence is itself worth a note in the test file
+- [X] T008 [US1] Convert schedule times back to clock time in `src/store/runActions.ts` per C2 — a result on day *d* loses `d*1440` before it becomes a `Placement.start_time` — and extend the store tests so a scheduled tournament's placements all fall inside their own day's clock hours
+- [X] T009 [US1] Point `dayHours` at the store's `dayConfigs` in `src/components/canvas/MatrixCanvas.tsx:507-513` per C4, so no scheduler-axis value can reach a day band, and add the test that fails if the canvas starts reading day hours from the derived config
+- [X] T010 [US1] Run the drift ledger and confirm the snapshot and floors are byte-identical to `main`; confirm `git diff --stat main -- src/engine/` is empty at this point. Record both in the commit message *(subagent commits)*
 - [ ] T011 [US1] Run the parity test and fill in its final pinned numbers from what was measured, not from expectation
 - [ ] T012 [US1] Classify any residual gap between an app-path count and its ledger count. Admissible only as an FR-004a exception traced to a per-competition default (`de_mode` staging or `strips_allocated`, [research.md D7](./research.md)); record the ledger's count, the cause, and 004's US4 as the closing feature beside the pinned number. A gap traced to the day axis is not an exception — halt and report *(subagent commits)*
 

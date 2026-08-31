@@ -354,6 +354,48 @@ describe('MatrixCanvas day bands (FR-019)', () => {
   })
 })
 
+describe('MatrixCanvas day bands read the store, not the derived config (contracts/day-axis.md C4)', () => {
+  it('draws day 1’s hour axis from the store’s clock-time dayConfigs, not the schedule’s engine-axis one', () => {
+    // 006-day-axis-parity hands the scheduler a config whose day windows are
+    // shifted by d*1440 (research.md D5) while the store keeps authoring clock
+    // time (C4). Constructing that exact divergence here — the store's day 1 at
+    // 480-1320, the schedule's config at 1920-2760 — is what makes this test
+    // fail at the real defect rather than merely on a missing render: a canvas
+    // reading `config.dayConfigs` finds day 1's window entirely past the
+    // visible clock-time axis (timeScroll defaults to 480, an 828px/1-min-per-px
+    // plot reaches 1308) and draws no ticks at all, where one reading the store
+    // finds it at 480, same as every other day.
+    useStore.getState().setDays(2)
+    seedViewState({ rowScroll: STRIPS }) // day 1's first row, so only it is visible
+
+    const emptyFindings: DerivedFindings = {
+      validationErrors: [],
+      analysis: { warnings: [], suggestions: [] },
+    }
+    const schedule: DerivedSchedule = {
+      config: makeConfig({
+        days_available: 2,
+        strips: makeStrips(STRIPS, 4),
+        dayConfigs: [
+          { day_start_time: 480, day_end_time: 1320 },
+          { day_start_time: 480 + 1440, day_end_time: 1320 + 1440 },
+        ],
+      }),
+      competitions: [],
+      events: {},
+    }
+
+    render(<MatrixCanvas schedule={schedule} findings={emptyFindings} />)
+
+    const groups = dayGroups()
+    expect(groups).toHaveLength(1)
+    expect(groups[0].dataset.dayGroup).toBe('1')
+
+    const tick = firstTickIn(groups[0])
+    expect(tick.getAttribute('data-hour-tick')).toBe('480')
+  })
+})
+
 describe('MatrixCanvas day band layout space (FR-019)', () => {
   // The band is a 38px overlay pinned at the top of its day group. Given no
   // compensating offset it covers the first strip of every day group outright

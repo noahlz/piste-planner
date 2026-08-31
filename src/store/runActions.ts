@@ -1,5 +1,5 @@
 import { useStore, type StoreState } from './store.ts'
-import { buildTournamentConfig } from './buildConfig.ts'
+import { buildTournamentConfig, DAY_AXIS_SPACING_MINS } from './buildConfig.ts'
 import { scheduleAll } from '../engine/scheduler.ts'
 import { PlacementSource, type Placement, type ScheduleResult } from '../engine/types.ts'
 
@@ -28,7 +28,12 @@ export function runScheduleAll(state: StoreState = useStore.getState()): void {
     if (result.pool_start === null) continue
     placements[id] = {
       day: result.assigned_day,
-      start_time: result.pool_start,
+      // result.pool_start is on the scheduler axis (contracts/day-axis.md C2)
+      // — day d's times are shifted by d*DAY_AXIS_SPACING_MINS. Subtract that
+      // shift back off before it becomes a clock-axis Placement.start_time,
+      // which is the only axis the store, the shared link, and the canvas
+      // ever see.
+      start_time: result.pool_start - result.assigned_day * DAY_AXIS_SPACING_MINS,
       strip_count: result.pool_strip_count,
       strips: null,
       source: PlacementSource.AUTO,

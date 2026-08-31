@@ -98,6 +98,23 @@ function assertSlotAligned(windows: DayConfig[]): void {
   }
 }
 
+/**
+ * Anchors day 0 to a zero offset: its emitted window equals the store's own
+ * clock-axis day-0 window exactly, not just congruent to it modulo 1440.
+ *
+ * None of C1.1-C1.4 pin the axis's absolute origin — disjointness and
+ * ordering only constrain the windows' spacing relative to each other, and
+ * congruence-mod-1440 is blind by construction to a shift by a whole number
+ * of days. An off-by-one day index (emitting (d+1)*1440 + start_d instead of
+ * d*1440 + start_d for every d) passes all four of them. This assertion is
+ * what a shift like that fails.
+ */
+function assertDayZeroUnshifted(windows: DayConfig[], storeDayConfigs: DayConfig[]): void {
+  expect(windows[0], 'day 0 must equal the store\'s own day-0 window, unshifted').toEqual(
+    storeDayConfigs[0],
+  )
+}
+
 describe('day axis invariants (contracts/day-axis.md C1)', () => {
   describe('uniform hours (three identical days)', () => {
     const storeDayConfigs: DayConfig[] = [
@@ -112,6 +129,10 @@ describe('day axis invariants (contracts/day-axis.md C1)', () => {
       return config.dayConfigs
     }
 
+    // Load-bearing: this is the only assertion in the file that pins the
+    // full array to absolute values. The property checks below it (disjoint,
+    // ordered, congruent, slot-aligned) do not — see assertDayZeroUnshifted's
+    // comment. Do not replace this with the property checks alone.
     it('emits the exact scheduler-axis windows (literal expectation)', () => {
       const windows = buildWindows()
       expect(windows).toEqual([
@@ -136,6 +157,10 @@ describe('day axis invariants (contracts/day-axis.md C1)', () => {
     it('is slot-aligned', () => {
       assertSlotAligned(buildWindows())
     })
+
+    it('anchors day 0 to a zero offset', () => {
+      assertDayZeroUnshifted(buildWindows(), storeDayConfigs)
+    })
   })
 
   describe('per-day hours (three days, different start/end times)', () => {
@@ -151,6 +176,10 @@ describe('day axis invariants (contracts/day-axis.md C1)', () => {
       return config.dayConfigs
     }
 
+    // Load-bearing: this is the only assertion in the file that pins the
+    // full array to absolute values. The property checks below it (disjoint,
+    // ordered, congruent, slot-aligned) do not — see assertDayZeroUnshifted's
+    // comment. Do not replace this with the property checks alone.
     it('emits the exact scheduler-axis windows (literal expectation)', () => {
       const windows = buildWindows()
       expect(windows).toEqual([
@@ -175,6 +204,10 @@ describe('day axis invariants (contracts/day-axis.md C1)', () => {
     it('is slot-aligned', () => {
       assertSlotAligned(buildWindows())
     })
+
+    it('anchors day 0 to a zero offset', () => {
+      assertDayZeroUnshifted(buildWindows(), storeDayConfigs)
+    })
   })
 
   describe('single-day case', () => {
@@ -192,6 +225,10 @@ describe('day axis invariants (contracts/day-axis.md C1)', () => {
       return config.dayConfigs
     }
 
+    // Load-bearing: this is the only assertion in the file that pins the
+    // full array to absolute values. The property checks below it (congruent,
+    // slot-aligned) do not — see assertDayZeroUnshifted's comment. Do not
+    // replace this with the property checks alone.
     it('emits the store\'s own window unshifted (literal expectation)', () => {
       const windows = buildWindows()
       expect(windows).toEqual([
@@ -205,6 +242,10 @@ describe('day axis invariants (contracts/day-axis.md C1)', () => {
 
     it('is slot-aligned', () => {
       assertSlotAligned(buildWindows())
+    })
+
+    it('anchors day 0 to a zero offset', () => {
+      assertDayZeroUnshifted(buildWindows(), storeDayConfigs)
     })
   })
 })
