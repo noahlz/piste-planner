@@ -1,50 +1,16 @@
-import { useEffect } from 'react'
-import { KitchenSinkPage } from './components/KitchenSinkPage.tsx'
-import { WizardShell } from './components/wizard/WizardShell.tsx'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { LayoutDashboard, Wand2 } from 'lucide-react'
-import { decodeFromUrl } from './store/serialization.ts'
-import { useStore } from './store/store.ts'
-
-function LayoutToggle() {
-  const layoutMode = useStore((s) => s.layoutMode)
-  const setLayoutMode = useStore((s) => s.setLayoutMode)
-
-  return (
-    <Tabs value={layoutMode} onValueChange={(v) => setLayoutMode(v as typeof layoutMode)}>
-      <TabsList className="bg-slate-700">
-        <TabsTrigger value="kitchen-sink" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
-          <LayoutDashboard className="mr-1.5 h-4 w-4" />
-          Single Page
-        </TabsTrigger>
-        <TabsTrigger value="wizard" className="text-slate-300 data-[state=active]:bg-slate-500 data-[state=active]:text-white">
-          <Wand2 className="mr-1.5 h-4 w-4" />
-          Wizard
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
-  )
-}
+import { useEffect, useRef } from 'react'
+import { WorkbenchShell } from './components/workbench/WorkbenchShell.tsx'
+import { bootstrap } from './store/boot.ts'
 
 function App() {
-  const layoutMode = useStore((s) => s.layoutMode)
+  const booted = useRef(false)
 
+  // StrictMode invokes mount effects twice in development. Booting twice would
+  // re-apply the preset over a shared link's state, so the ref gates it.
   useEffect(() => {
-    const hash = window.location.hash
-    if (hash.startsWith('#config=')) {
-      const result = decodeFromUrl(hash)
-      if ('error' in result) {
-        console.error('Failed to load config from URL:', result.error)
-      } else {
-        useStore.setState(result.state)
-        if (result.droppedPlacements.length > 0) {
-          console.warn(
-            'Dropped placements for events not in the shared configuration:',
-            result.droppedPlacements.join(', '),
-          )
-        }
-      }
-    }
+    if (booted.current) return
+    booted.current = true
+    bootstrap()
   }, [])
 
   return (
@@ -54,9 +20,8 @@ function App() {
           <h1 className="text-2xl font-bold italic text-white">Piste Planner 🤺</h1>
           <span className="rounded-full bg-orange-500 px-3 py-0.5 text-xs font-semibold text-white">Work in Progress!</span>
         </div>
-        <LayoutToggle />
       </header>
-      {layoutMode === 'wizard' ? <WizardShell /> : <KitchenSinkPage />}
+      <WorkbenchShell />
     </div>
   )
 }

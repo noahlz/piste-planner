@@ -49,6 +49,7 @@ export function FencerCounts() {
                       value={selectedCompetitions[id].fencer_count}
                       onChange={(v) => updateCompetition(id, { fencer_count: v })}
                       min={0}
+                      commitOnChange
                       aria-label={`Fencer count for ${label}`}
                     />
                   </TableCell>

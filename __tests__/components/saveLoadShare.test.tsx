@@ -13,6 +13,7 @@ import { makePlacement } from '../helpers/factories.ts'
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 /** Selects a file in SaveLoadShare's hidden input and fires the change event. */
@@ -97,18 +98,23 @@ describe('SaveLoadShare save tests', () => {
     expect(capturedBlob).toBeTruthy()
 
     // jsdom's Blob doesn't support .text(), so use FileReader to read the content
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => {
-        const parsed = JSON.parse(reader.result as string)
-        expect(parsed.schemaVersion).toBe(2)
-        expect(parsed.tournament).toBeDefined()
-        expect(parsed.competitions).toBeDefined()
-        expect(parsed.tournament.strips_total).toBe(12)
-        expect(parsed.placements[id].start_time).toBe(480)
-        expect(parsed.dismissedFindings).toEqual([])
-        resolve()
+        try {
+          const parsed = JSON.parse(reader.result as string)
+          expect(parsed.schemaVersion).toBe(2)
+          expect(parsed.tournament).toBeDefined()
+          expect(parsed.competitions).toBeDefined()
+          expect(parsed.tournament.strips_total).toBe(12)
+          expect(parsed.placements[id].start_time).toBe(480)
+          expect(parsed.dismissedFindings).toEqual([])
+          resolve()
+        } catch (e) {
+          reject(e)
+        }
       }
+      reader.onerror = reject
       reader.readAsText(capturedBlob!)
     })
   })

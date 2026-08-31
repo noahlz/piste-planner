@@ -71,6 +71,7 @@ describe('AnalysisOutput', () => {
 
     // No stale flag, no validate run — 18 more events change the findings on the spot
     expect(screen.queryByText('Nothing to report for the current inputs.')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Validation' })).toBeInTheDocument()
   })
 
   it('shows Validation heading when the inputs produce validation errors', () => {

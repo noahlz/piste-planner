@@ -144,16 +144,43 @@ describe('FencerCounts + AnalysisOutput', () => {
     render(<FencerCountsAndAnalysis />)
 
     act(() => {
-      useStore.getState().setStrips(12)
+      useStore.getState().setStrips(1)
     })
+
+    // 004 T012: FencerCounts' NumberInput now carries commitOnChange
+    // (S2-contract.md §NumberInput gains commitOnChange), so this fires
+    // straight into the store — no blur needed. 1 strip is scarce enough
+    // that 18 events over 3 days stays infeasible even once every fencer
+    // count actually lands at 30, which a 12-strip budget no longer is.
+    //
+    // review finding A: setStrips(1) alone already trips resource_precondition
+    // on all 18 default-seeded competitions (the smallest default is 40
+    // fencers, which is 6 pools against 1 strip), so the Validation heading
+    // is on screen before this loop runs at all — the heading assertion
+    // below cannot, by itself, prove the loop committed anything. A strip
+    // count where every seeded default is feasible but a uniform 30 is not
+    // would make it prove that, but no such count exists: every ERROR rule
+    // that depends on fencer_count in this engine (resource_precondition's
+    // n_pools, and validateFeasibility's summed strip-hours) is monotonic
+    // non-decreasing in fencer_count, and every RYC Weekend default (40-140)
+    // is already above the 30 this loop commits, so a strip count that
+    // clears the defaults necessarily clears 30 too (verified empirically
+    // by scanning strips 1-25: no strip count has zero ERRORs at the seeded
+    // defaults and a nonzero count once every event reads 30). So this stays
+    // on setStrips(1), and the loop's actual effect is proven directly
+    // instead, by reading the store back before any blur fires.
+    const competitionIds = Object.keys(useStore.getState().selectedCompetitions).sort()
+    const firstId = competitionIds[0]
 
     const fencerInputs = screen.getAllByRole('spinbutton', { name: /Fencer count for/ })
     fencerInputs.forEach((input) => {
       fireEvent.change(input, { target: { value: '30' } })
     })
 
-    // 18 events across 3 days on 12 strips still raises findings — and they are
-    // on screen without a validate step.
+    // The edit committed without a blur.
+    expect(useStore.getState().selectedCompetitions[firstId].fencer_count).toBe(30)
+
+    // Findings are on screen without a separate validate step.
     expect(screen.getByRole('heading', { name: 'Validation' })).toBeInTheDocument()
   })
 })

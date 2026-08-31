@@ -13,6 +13,7 @@ import { BottleneckSeverity, PlacementSource } from '../engine/types.ts'
 import { findingIdentity } from '../engine/validation.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { suggestStrips as computeStripSuggestion } from './stripSuggestion.ts'
+import type { ScenarioId } from '../data/tournaments.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
@@ -32,12 +33,6 @@ import {
 
 const DAY_START = 480 // 8:00 AM in minutes from midnight
 const DAY_END = 1320 // 10:00 PM in minutes from midnight
-
-const LayoutMode = {
-  KITCHEN_SINK: 'kitchen-sink',
-  WIZARD: 'wizard',
-} as const
-type LayoutMode = (typeof LayoutMode)[keyof typeof LayoutMode]
 
 // ──────────────────────────────────────────────
 // Slice types
@@ -90,11 +85,10 @@ export interface CompetitionSlice {
 }
 
 export interface UiSlice {
-  layoutMode: LayoutMode
-  wizardStep: number
+  /** The preset last loaded by `applyPreset`, for the top bar's picker to read back (review finding B). Not serialized. */
+  loadedPresetId: ScenarioId | null
 
-  setLayoutMode: (mode: LayoutMode) => void
-  setStep: (step: number) => void
+  setLoadedPresetId: (id: ScenarioId | null) => void
 }
 
 /** Where an event sits. The only schedule state — everything else derives from it. */
@@ -310,11 +304,9 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
 
 function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
-    layoutMode: 'wizard',
-    wizardStep: 0,
+    loadedPresetId: null,
 
-    setLayoutMode: (mode) => set({ layoutMode: mode }),
-    setStep: (step) => set({ wizardStep: step }),
+    setLoadedPresetId: (id) => set({ loadedPresetId: id }),
   }
 }
 

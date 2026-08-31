@@ -15,10 +15,17 @@
 // Exit 0 with "SMOKE PASS" on the last line, or exit 1 naming the failed step.
 //
 // Locators are the fragile part. Every selector here was corrected against the
-// real DOM at least once — the picker is a ToggleGroup not a select, "Number of
-// strips" matches three elements unless scoped by role, the share button reads
-// "Generate Link", and the page has several tables. Fix them here rather than
-// rediscovering them in a scratch file.
+// real DOM at least once — the template picker is a ToggleGroup not a select,
+// and now sits behind a "Presets…" collapsible trigger in the rail's Events
+// panel (Radix unmounts closed content, so the trigger must be clicked first);
+// "Number of strips" matches three elements unless scoped by role; the share
+// button reads "Generate Link" and lives behind the top bar's "Save / Share"
+// collapsible, also closed by default; and the page has several tables. The
+// auto-scheduler can also leave a competition unplaced when strips run short
+// (no pool_start → no placement, src/store/runActions.ts), so the fencer-edit
+// step must pick an input for a placed competition, not just the first one
+// alphabetically — the Unplaced tray names the ones to skip. Fix locators here
+// rather than rediscovering them in a scratch file.
 
 import { chromium } from 'playwright-core'
 import { homedir } from 'node:os'
@@ -60,13 +67,18 @@ page.on('pageerror', (e) => errors.push(String(e)))
 const shot = (n) => page.screenshot({ path: `${SHOTS}${n}.png`, fullPage: FULLPAGE })
 const log = (...a) => console.log('[smoke]', ...a)
 
-// ── Single Page layout ──
+// ── Workbench shell ──
 await page.goto(BASE)
-await page.getByRole('tab', { name: 'Single Page' }).click()
-await page.getByText('Save / Load / Share').waitFor()
+// The workbench is the only layout and boots directly — no tab to select.
+// The top bar's "Save / Share" trigger proves the shell (and its top bar)
+// mounted; the rail's panels render statically regardless of store data.
+await page.getByRole('button', { name: 'Save / Share' }).waitFor()
 await shot('01-initial')
 
-// Template picker is a ToggleGroup, not a select.
+// Template picker is a ToggleGroup, not a select, and now sits behind the
+// rail's "Presets…" collapsible trigger (CompetitionMatrix, Events panel,
+// open by default) — Radix unmounts closed content, so click it first.
+await page.getByRole('button', { name: 'Presets…' }).click()
 await page.getByText('ROC Div1A/Vet', { exact: true }).click()
 log('template applied')
 
@@ -76,10 +88,10 @@ const strips = await page.getByRole('spinbutton', { name: 'Number of strips' }).
 log('suggested strips =', strips)
 await shot('02-configured')
 
-const gen = page.getByRole('button', { name: 'Generate Schedule' })
+const gen = page.getByRole('button', { name: 'Auto-schedule all' })
 if (await gen.isDisabled()) {
   await shot('02b-generate-disabled')
-  throw new Error('Generate Schedule disabled — read smoke-shots/02b for the blocking findings')
+  throw new Error('Auto-schedule all disabled — read smoke-shots/02b for the blocking findings')
 }
 await gen.click()
 await page.waitForTimeout(300)
@@ -102,7 +114,24 @@ const schedTable = page
   .locator('table')
   .filter({ has: page.getByRole('columnheader', { name: 'Pool Start' }) })
 const before = await schedTable.textContent()
-const fencerInput = page.getByRole('spinbutton', { name: /Fencer count for/ }).first()
+
+// The auto-scheduler can leave a competition unplaced when strip capacity runs
+// out (an event with no pool_start gets no placement — src/store/runActions.ts,
+// predates this feature). The Unplaced tray names those by the same label the
+// fencer input's aria-label carries, so ".first()" alphabetically can land on
+// one that never renders in the schedule table — pick the first input NOT in
+// that tray instead, since that's what this assertion means to edit.
+const unplacedText = await page.getByRole('region', { name: 'Unplaced events' }).textContent()
+const fencerInputs = await page.getByRole('spinbutton', { name: /Fencer count for/ }).all()
+let fencerInput
+for (const input of fencerInputs) {
+  const label = await input.getAttribute('aria-label')
+  if (!unplacedText.includes(label.replace('Fencer count for ', ''))) {
+    fencerInput = input
+    break
+  }
+}
+if (!fencerInput) throw new Error('no placed competition found to edit its fencer count')
 log('editing:', await fencerInput.getAttribute('aria-label'))
 await fencerInput.fill('99')
 await fencerInput.blur()
@@ -113,6 +142,10 @@ log('derived table followed the edit')
 await shot('04-after-edit')
 
 // Share URL round-trip: a shared link must reproduce the same schedule.
+// "Save / Share" is a closed-by-default collapsible over the unmodified
+// <SaveLoadShare /> — its contents (including "Generate Link") are not in
+// the DOM until the trigger is clicked.
+await page.getByRole('button', { name: 'Save / Share' }).click()
 await page.getByRole('button', { name: 'Generate Link' }).click()
 const shareUrl = await page.locator('input[readonly]').first().inputValue()
 log('share url length =', shareUrl.length)
@@ -120,36 +153,14 @@ const rowsNow = await page.locator('table tbody tr').count()
 const page2 = await ctx.newPage()
 page2.on('pageerror', (e) => errors.push('p2: ' + e))
 await page2.goto(shareUrl)
-await page2.getByRole('tab', { name: 'Single Page' }).click()
-await page2.getByText('Save / Load / Share').waitFor()
+// No layout tab to select on page2 either — same readiness wait as the boot above.
+await page2.getByRole('button', { name: 'Save / Share' }).waitFor()
 await page2.waitForTimeout(300)
 const rows2 = await page2.locator('table tbody tr').count()
 log('round-trip rows:', rowsNow, 'vs', rows2)
 await page2.screenshot({ path: `${SHOTS}05-roundtrip.png`, fullPage: FULLPAGE })
 if (rows2 !== rowsNow) throw new Error(`share round-trip row mismatch ${rowsNow} != ${rows2}`)
 await page2.close()
-
-// ── Wizard layout ──
-// P3 deletes the wizard and the layout toggle. Delete this block in that feature
-// rather than letting it fail; the assertions above move to the new shell.
-await page.getByRole('tab', { name: 'Wizard' }).click()
-await shot('06-wizard-step1')
-for (let i = 0; i < 3; i++) {
-  const next = page.getByRole('button', { name: /Next|View Schedule/ })
-  if (await next.isDisabled()) {
-    await shot(`06b-wizard-blocked-step${i}`)
-    throw new Error(`wizard blocked at step ${i}`)
-  }
-  await next.click()
-  await page.waitForTimeout(200)
-}
-await shot('07-wizard-step4')
-const wizBody = await page.textContent('body')
-if (wizBody.toLowerCase().includes('stale')) throw new Error('staleness text in wizard')
-await page.getByRole('button', { name: 'View Schedule' }).click()
-await page.waitForTimeout(300)
-await shot('08-wizard-schedule')
-log('wizard schedule rows =', await page.locator('table tbody tr').count())
 
 await browser.close()
 log('console errors =', errors.length, errors.slice(0, 3))
