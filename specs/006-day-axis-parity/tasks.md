@@ -51,8 +51,8 @@ the branch with `git merge --no-ff --no-commit` completed by
 
 **Purpose**: Isolate the work and record the before-column.
 
-- [ ] T001 Create the worktree and branch `006-day-axis-parity` from `main` (`1040c9f7a3`), confirm a clean tree, and confirm every artifact under `specs/006-day-axis-parity/` is present
-- [ ] T002 Record the pre-change baseline in `specs/006-day-axis-parity/baseline.md`: the app-path placed-event count for each of B1–B8, each one's drift-ledger `scheduledCount`, the suite total (expected 1221 / 51 files), and `git rev-parse main` — captured before any source file is edited *(subagent commits)*
+- [X] T001 Create the worktree and branch `006-day-axis-parity` from `main` (`1040c9f7a3`), confirm a clean tree, and confirm every artifact under `specs/006-day-axis-parity/` is present
+- [X] T002 Record the pre-change baseline in `specs/006-day-axis-parity/baseline.md`: the app-path placed-event count for each of B1–B8, each one's drift-ledger `scheduledCount`, the suite total (expected 1221 / 51 files), and `git rev-parse main` — captured before any source file is edited *(subagent commits)*
 
 **Checkpoint**: Worktree ready, the 11-of-24 defect recorded as numbers rather than prose.
 
