@@ -116,12 +116,41 @@ export function flatRowIndex(layout: DayLayout, day: number, strip: number): num
 }
 
 /**
+ * Rows a viewport spans, rounded **up** so a row visible by a single pixel is
+ * still rendered — an exact multiple therefore adds no extra row.
+ */
+function rowsSpanning(viewportHeightPx: number, rowHeightStep: RowHeightStep): number {
+  return Math.ceil(viewportHeightPx / ROW_HEIGHT_PX[rowHeightStep])
+}
+
+/**
+ * The furthest `rowScroll` worth scrolling to: the position that puts the last
+ * row at the bottom of the viewport. Scrolling past it would only add blank
+ * space below the canvas, and pinning there is what keeps a *stale* stored
+ * `rowScroll` — one saved against a larger tournament, which
+ * `isValidViewState` happily accepts and nothing re-clamps when `setDays` or
+ * `setStrips` shrinks the layout — from parking the user on a single last row.
+ *
+ * Zero when the canvas is shorter than the viewport, or when there is nothing
+ * to scroll.
+ */
+export function maxRowScroll(
+  viewportHeightPx: number,
+  rowHeightStep: RowHeightStep,
+  totalRows: number,
+): number {
+  if (totalRows <= 0 || viewportHeightPx <= 0) return 0
+  return Math.max(0, totalRows - rowsSpanning(viewportHeightPx, rowHeightStep))
+}
+
+/**
  * The inclusive range of flat rows a viewport shows, from uniform row heights.
  *
- * `rowScroll` is clamped into `[0, totalRows - 1]`, so scrolling past either
- * end pins to the nearest row rather than rendering nothing. `lastRow` is
- * clamped to `totalRows - 1`, so a viewport taller than the canvas cannot run
- * past the end. Returns `null` when there is nothing to render at all.
+ * `rowScroll` is clamped into `[0, maxRowScroll(...)]`, so scrolling past
+ * either end pins to the nearest *full window* rather than rendering nothing
+ * or a single row against a blank viewport. `lastRow` is clamped to
+ * `totalRows - 1` as well, which still matters when the viewport is taller
+ * than the whole canvas. Returns `null` when there is nothing to render.
  */
 export function visibleRowRange(
   rowScroll: number,
@@ -131,12 +160,14 @@ export function visibleRowRange(
 ): RowRange | null {
   if (totalRows <= 0 || viewportHeightPx <= 0) return null
 
-  const rowHeight = ROW_HEIGHT_PX[rowHeightStep]
-  const firstRow = Math.min(Math.max(Math.floor(rowScroll), 0), totalRows - 1)
-  // Rounded up so a row visible by a single pixel is still rendered; an exact
-  // multiple therefore adds no extra row.
-  const rowsSpanned = Math.ceil(viewportHeightPx / rowHeight)
-  const lastRow = Math.min(firstRow + rowsSpanned - 1, totalRows - 1)
+  const firstRow = Math.min(
+    Math.max(Math.floor(rowScroll), 0),
+    maxRowScroll(viewportHeightPx, rowHeightStep, totalRows),
+  )
+  const lastRow = Math.min(
+    firstRow + rowsSpanning(viewportHeightPx, rowHeightStep) - 1,
+    totalRows - 1,
+  )
 
   return { firstRow, lastRow }
 }

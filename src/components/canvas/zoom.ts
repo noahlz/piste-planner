@@ -28,6 +28,7 @@
 
 import { formatMinutes } from '../../lib/time.ts'
 import { RowHeightStep } from '../../store/viewState.ts'
+import { pxPerMinute } from './geometry.ts'
 import type { TimeRange } from './windowing.ts'
 
 /**
@@ -227,9 +228,9 @@ export function chooseTickStepMinutes(timeZoom: number): number {
   const base = TICK_STEP_LADDER_MINUTES[0]
   if (!Number.isFinite(timeZoom) || timeZoom <= 0) return base
 
-  const pxPerMinute = 1 / timeZoom
+  const scale = pxPerMinute(timeZoom)
   const fitting = TICK_STEP_LADDER_MINUTES.find(
-    (step) => step * pxPerMinute >= MIN_TICK_SPACING_PX,
+    (step) => step * scale >= MIN_TICK_SPACING_PX,
   )
   return fitting ?? TICK_STEP_LADDER_MINUTES[TICK_STEP_LADDER_MINUTES.length - 1]
 }

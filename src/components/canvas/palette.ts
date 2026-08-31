@@ -46,6 +46,32 @@ export const CATEGORY_TOKENS: Record<CanvasCategory, string> = {
   [VetAgeGroup.VET_COMBINED]: '--cat-vet-combined',
 }
 
+/**
+ * Category/VetAgeGroup -> the CSS custom property holding the *ink* for a
+ * label drawn on that category's fill. Paired one-to-one with
+ * CATEGORY_TOKENS: a block's label reads against its own fill, not against
+ * --foreground, which fails 4.5:1 on the darker fills (1.85:1 on --cat-div1).
+ * The ratios themselves are asserted in the palette tests.
+ */
+export const CATEGORY_INK_TOKENS: Record<CanvasCategory, string> = {
+  [Category.Y8]: '--cat-y8-fg',
+  [Category.Y10]: '--cat-y10-fg',
+  [Category.Y12]: '--cat-y12-fg',
+  [Category.Y14]: '--cat-y14-fg',
+  [Category.CADET]: '--cat-cadet-fg',
+  [Category.JUNIOR]: '--cat-junior-fg',
+  [Category.DIV1]: '--cat-div1-fg',
+  [Category.DIV1A]: '--cat-div1a-fg',
+  [Category.DIV2]: '--cat-div2-fg',
+  [Category.DIV3]: '--cat-div3-fg',
+  [VetAgeGroup.VET40]: '--cat-vet40-fg',
+  [VetAgeGroup.VET50]: '--cat-vet50-fg',
+  [VetAgeGroup.VET60]: '--cat-vet60-fg',
+  [VetAgeGroup.VET70]: '--cat-vet70-fg',
+  [VetAgeGroup.VET80]: '--cat-vet80-fg',
+  [VetAgeGroup.VET_COMBINED]: '--cat-vet-combined-fg',
+}
+
 /** Which of the four hue families each canvas category belongs to. */
 export const CATEGORY_FAMILIES: Record<CanvasCategory, CategoryFamily> = {
   [Category.Y8]: CategoryFamily.YOUTH,
@@ -87,6 +113,16 @@ export function resolveCanvasCategory(
 /** The usable CSS fill value for a canvas category, e.g. `var(--cat-y8)`. */
 export function categoryFill(category: CanvasCategory): string {
   return `var(${CATEGORY_TOKENS[category]})`
+}
+
+/**
+ * The usable CSS colour for a label drawn on `categoryFill(category)`, e.g.
+ * `var(--cat-y8-fg)`. Always use this rather than inheriting the surrounding
+ * text colour: a block's fill is its own background, and the theme foreground
+ * does not clear 4.5:1 against most of them.
+ */
+export function categoryInk(category: CanvasCategory): string {
+  return `var(${CATEGORY_INK_TOKENS[category]})`
 }
 
 /**

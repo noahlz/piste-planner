@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type WheelEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { DAY_END_MINS, DAY_START_MINS } from '../../engine/constants.ts'
 import { useStore } from '../../store/store.ts'
 import { selectDerivedSchedule, type DerivedSchedule } from '../../store/derived.ts'
@@ -12,6 +12,7 @@ import { ROW_HEIGHT_PX, blockX, blockY, eventTimeSegments } from './geometry.ts'
 import {
   buildDayLayout,
   flatRowIndex,
+  maxRowScroll,
   resolveFlatRow,
   visibleRowRange,
   visibleTimeRange,
@@ -54,6 +55,15 @@ import {
  * the strip gutter is frozen and the day bands are sticky by construction: they
  * are positioned from the window rather than translated with it.
  *
+ * ## The wheel is ours, and it is not React's
+ *
+ * React registers `wheel` as a *passive* listener, so an `onWheel` prop can
+ * never call `preventDefault` and a ctrl+wheel zoom would zoom the browser page
+ * as well as the canvas. The listener is therefore attached by hand with
+ * `{ passive: false }`. The viewport owns the gesture outright: it is
+ * `overflow-hidden` and both scroll positions are view state, so there is no
+ * ancestor scroller with a claim on it.
+ *
  * ## What is not here yet
  *
  * Event blocks (T037) and the tooltip (T038). This component draws the grid the
@@ -74,6 +84,87 @@ const HEADER_HEIGHT_PX = DAY_BAND_HEIGHT_PX + AXIS_HEIGHT_PX
  * wherever a click lands.
  */
 const ZOOM_STEP_FACTOR = 2
+
+/**
+ * How long after the last wheel event a gesture's window reaches localStorage.
+ *
+ * A wheel fires 60-120 events a second and `writeNow` is a parse, a stringify
+ * and a synchronous `setItem`. `Drawer.tsx` answers the same problem the same
+ * way, persisting once on pointer-up rather than on every pointer-move. Only
+ * the storage write waits — the state updates stay synchronous, so the canvas
+ * still follows the gesture frame by frame.
+ */
+export const PERSIST_DEBOUNCE_MS = 200
+
+/**
+ * Pixels one `DOM_DELTA_LINE` wheel notch stands for. Firefox on Windows and
+ * Linux reports lines rather than pixels, at a `deltaY` of 3 per notch: read as
+ * pixels that is an eighth of a row, which rounds away to nothing and leaves
+ * row panning completely dead on those platforms.
+ */
+const WHEEL_LINE_HEIGHT_PX = 16
+
+/**
+ * Pixels one arrow-key press pans the time axis. A pixel step rather than a
+ * minute step, so the movement is the same size on screen at every zoom — one
+ * hour is 7.5px at `MAX_TIME_ZOOM` and 1200px at `MIN_TIME_ZOOM`.
+ */
+const KEY_PAN_PX = 48
+
+/** Wheel deltas arrive in pixels, lines or pages. This converts them to pixels. */
+function wheelPixels(delta: number, deltaMode: number, pagePx: number): number {
+  switch (deltaMode) {
+    case 1: // WheelEvent.DOM_DELTA_LINE
+      return delta * WHEEL_LINE_HEIGHT_PX
+    case 2: // WheelEvent.DOM_DELTA_PAGE
+      return delta * pagePx
+    default:
+      return delta
+  }
+}
+
+/** Merges one patch into the stored view state, never rewriting the rest. */
+function writeNow(patch: Partial<ViewState>): void {
+  saveViewState({ ...loadViewState(), ...patch })
+}
+
+/** A trailing write in flight: its timer and the patch it will apply. */
+interface TrailingWrite {
+  timer: ReturnType<typeof setTimeout> | null
+  patch: Partial<ViewState>
+}
+
+/**
+ * Coalesces a gesture's writes onto one trailing `writeNow`. Only the wheel
+ * comes through here — a button or a key press is one discrete change and
+ * stores immediately, as `Drawer.tsx`'s keyboard path does.
+ */
+function writeSoon(trailing: RefObject<TrailingWrite>, patch: Partial<ViewState>): void {
+  const pending = trailing.current
+  pending.patch = { ...pending.patch, ...patch }
+  if (pending.timer !== null) clearTimeout(pending.timer)
+  pending.timer = setTimeout(() => {
+    pending.timer = null
+    const merged = pending.patch
+    pending.patch = {}
+    writeNow(merged)
+  }, PERSIST_DEBOUNCE_MS)
+}
+
+/**
+ * What the wheel listener reads and writes. The listener is attached once and
+ * outlives every render, so it cannot read render-time state: two wheel events
+ * can land before React re-renders, and the second would then be computed from
+ * the first one's starting position. It updates this as it goes, so a burst
+ * accumulates instead of repeating one stale step.
+ */
+interface WheelState {
+  timeZoom: number
+  timeScroll: number
+  rowScroll: number
+  rowHeight: number
+  maxScroll: number
+}
 
 export interface MatrixCanvasProps {
   /**
@@ -165,6 +256,18 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
   )
   const rowRange = visibleRowRange(rowScroll, size.height, rowHeightStep, layout.totalRows)
   const timeRange = visibleTimeRange(timeScroll, timeZoom, plotWidth)
+  const maxScroll = maxRowScroll(size.height, rowHeightStep, layout.totalRows)
+
+  /**
+   * The single origin every vertical position is measured from — `blockY`'s
+   * `windowStartRow`. It is the *clamped* first row, never the raw `rowScroll`:
+   * a `rowScroll` stored against a larger tournament survives into a smaller
+   * one (`isValidViewState` accepts any non-negative integer and nothing
+   * re-clamps when `setDays` or `setStrips` shrinks the layout), and measuring
+   * one part of the canvas from the stored value and another from the clamped
+   * one puts every row thousands of pixels off screen.
+   */
+  const windowStartRow = rowRange?.firstRow ?? 0
 
   /** The configured hours of one day, falling back to the engine's defaults. */
   function dayHours(day: number): TimeRange {
@@ -191,7 +294,7 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
       const nextDayTop =
         nextDayFirstRow === null
           ? Number.POSITIVE_INFINITY
-          : blockY(nextDayFirstRow, rowRange.firstRow, rowHeightStep)
+          : blockY(nextDayFirstRow, windowStartRow, rowHeightStep)
 
       // The axis belongs to the day group, so it stops at the day's configured
       // hours. Zoomed far out the visible window can span more than a day, and
@@ -206,10 +309,10 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
       visibleDays.push({
         day,
         headerTop: stickyHeaderTop(
-          blockY(dayFirstRow, rowRange.firstRow, rowHeightStep),
+          blockY(dayFirstRow, windowStartRow, rowHeightStep),
           nextDayTop,
         ),
-        rowsTop: Math.max(0, blockY(dayFirstRow, rowRange.firstRow, rowHeightStep)),
+        rowsTop: Math.max(0, blockY(dayFirstRow, windowStartRow, rowHeightStep)),
         rowsBottom: Math.min(size.height, nextDayTop),
         ticks: hourTicks(axisRange, timeZoom),
       })
@@ -227,58 +330,153 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
     [schedule.events],
   )
 
-  /** Merges one patch into the stored view state, never rewriting the rest. */
-  function persist(patch: Partial<ViewState>): void {
-    saveViewState({ ...loadViewState(), ...patch })
-  }
+  const trailing = useRef<TrailingWrite>({ timer: null, patch: {} })
 
+  useEffect(
+    () => () => {
+      if (trailing.current.timer !== null) clearTimeout(trailing.current.timer)
+    },
+    [],
+  )
+
+  const latest = useRef<WheelState>({ timeZoom, timeScroll, rowScroll, rowHeight, maxScroll })
+  useEffect(() => {
+    latest.current = { timeZoom, timeScroll, rowScroll, rowHeight, maxScroll }
+  })
+
+  /**
+   * Wheel pixels the row scroll has not yet consumed. Without it a trackpad
+   * delta under half a row rounds to zero, the residue is discarded, and slow
+   * scrolling never moves at all however long it goes on.
+   */
+  const rowRemainderPx = useRef(0)
+
+  // Reads and writes only refs and `useState` setters, so it is attached once
+  // and never needs re-attaching. See the module docblock for why it is not an
+  // `onWheel` prop.
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+
+    // An arrow rather than a declaration so `el`'s null check narrows inside it.
+    const onWheel = (e: globalThis.WheelEvent): void => {
+      e.preventDefault()
+      const current = latest.current
+
+      // Ctrl or meta is the platform convention for zoom-on-wheel; a plain
+      // wheel pans, vertically over rows and horizontally over time.
+      if (e.ctrlKey || e.metaKey) {
+        const rect = el.getBoundingClientRect()
+        const next = zoomAtCursor(
+          { timeZoom: current.timeZoom, timeScroll: current.timeScroll },
+          current.timeZoom * (e.deltaY > 0 ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR),
+          e.clientX - rect.left - GUTTER_WIDTH_PX,
+        )
+        current.timeZoom = next.timeZoom
+        current.timeScroll = next.timeScroll
+        setTimeZoom(next.timeZoom)
+        setTimeScroll(next.timeScroll)
+        writeSoon(trailing, { timeZoom: next.timeZoom, timeScroll: next.timeScroll })
+        return
+      }
+
+      const deltaY = wheelPixels(e.deltaY, e.deltaMode, el.clientHeight)
+      if (deltaY !== 0) {
+        rowRemainderPx.current += deltaY
+        const rows = Math.trunc(rowRemainderPx.current / current.rowHeight)
+        if (rows !== 0) {
+          rowRemainderPx.current -= rows * current.rowHeight
+          const next = Math.min(Math.max(0, current.rowScroll + rows), current.maxScroll)
+          if (next !== current.rowScroll) {
+            current.rowScroll = next
+            setRowScroll(next)
+            writeSoon(trailing, { rowScroll: next })
+          }
+        }
+      }
+
+      const deltaX = wheelPixels(e.deltaX, e.deltaMode, el.clientWidth)
+      if (deltaX !== 0) {
+        const next = Math.max(0, current.timeScroll + deltaX * current.timeZoom)
+        if (next !== current.timeScroll) {
+          current.timeScroll = next
+          setTimeScroll(next)
+          writeSoon(trailing, { timeScroll: next })
+        }
+      }
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  /** A window from a toolbar button: one discrete change, stored at once. */
   function applyWindow(next: TimeWindow | null): void {
     if (next === null) return
     setTimeZoom(next.timeZoom)
     setTimeScroll(next.timeScroll)
-    persist({ timeZoom: next.timeZoom, timeScroll: next.timeScroll })
-  }
-
-  function applyRowScroll(next: number): void {
-    const clamped = Math.min(Math.max(0, next), Math.max(0, layout.totalRows - 1))
-    if (clamped === rowScroll) return
-    setRowScroll(clamped)
-    persist({ rowScroll: clamped })
+    writeNow({ timeZoom: next.timeZoom, timeScroll: next.timeScroll })
   }
 
   function applyRowHeight(delta: number): void {
     const next = stepRowHeight(rowHeightStep, delta)
     if (next === rowHeightStep) return
     setRowHeightStep(next)
-    persist({ rowHeightStep: next })
+    writeNow({ rowHeightStep: next })
   }
 
-  const currentWindow: TimeWindow = { timeZoom, timeScroll }
+  function scrollRowsBy(delta: number): void {
+    const next = Math.min(Math.max(0, rowScroll + delta), maxScroll)
+    if (next === rowScroll) return
+    setRowScroll(next)
+    writeNow({ rowScroll: next })
+  }
+
+  function scrollTimeBy(deltaMinutes: number): void {
+    const next = Math.max(0, timeScroll + deltaMinutes)
+    if (next === timeScroll) return
+    setTimeScroll(next)
+    writeNow({ timeScroll: next })
+  }
+
+  /**
+   * Keyboard panning (WCAG 2.1.1). The viewport is `overflow-hidden` and both
+   * scroll positions are view state, so there is no scrollbar and no native key
+   * handling to inherit — without this the toolbar's zoom actions are the only
+   * reachable controls and rows cannot be panned at all without a wheel. Each
+   * press is discrete, so it stores immediately, as `Drawer.tsx`'s resize
+   * handle does.
+   */
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
+    const rowsPerPage = rowRange ? rowRange.lastRow - rowRange.firstRow + 1 : 1
+
+    switch (e.key) {
+      case 'ArrowDown':
+        scrollRowsBy(1)
+        break
+      case 'ArrowUp':
+        scrollRowsBy(-1)
+        break
+      case 'PageDown':
+        scrollRowsBy(rowsPerPage)
+        break
+      case 'PageUp':
+        scrollRowsBy(-rowsPerPage)
+        break
+      case 'ArrowRight':
+        scrollTimeBy(KEY_PAN_PX * timeZoom)
+        break
+      case 'ArrowLeft':
+        scrollTimeBy(-KEY_PAN_PX * timeZoom)
+        break
+      default:
+        return
+    }
+    e.preventDefault()
+  }
 
   function zoomByFactor(factor: number, cursorX: number): void {
-    applyWindow(zoomAtCursor(currentWindow, timeZoom * factor, cursorX))
-  }
-
-  function handleWheel(e: WheelEvent<HTMLDivElement>): void {
-    // Ctrl or meta is the platform convention for zoom-on-wheel; a plain wheel
-    // pans, vertically over rows and horizontally over time.
-    if (e.ctrlKey || e.metaKey) {
-      const rect = e.currentTarget.getBoundingClientRect()
-      zoomByFactor(
-        e.deltaY > 0 ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR,
-        e.clientX - rect.left - GUTTER_WIDTH_PX,
-      )
-      return
-    }
-
-    if (e.deltaY !== 0) {
-      applyRowScroll(rowScroll + Math.round(e.deltaY / rowHeight))
-    }
-    if (e.deltaX !== 0) {
-      const next = Math.max(0, timeScroll + e.deltaX * timeZoom)
-      setTimeScroll(next)
-      persist({ timeScroll: next })
-    }
+    applyWindow(zoomAtCursor({ timeZoom, timeScroll }, timeZoom * factor, cursorX))
   }
 
   const topDay = rowRange ? (resolveFlatRow(layout, rowRange.firstRow)?.day ?? 0) : 0
@@ -320,8 +518,11 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
       <div
         ref={viewportRef}
         data-canvas-viewport="true"
-        onWheel={handleWheel}
-        className="relative min-h-0 flex-1 overflow-hidden"
+        role="group"
+        aria-label="Matrix grid"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        className="relative min-h-0 flex-1 overflow-hidden focus-visible:outline-2"
       >
         {/* The frozen gutter: positioned, never translated by timeScroll. */}
         <ul
@@ -339,7 +540,7 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
                 className="flex items-center justify-end overflow-hidden pr-2 text-[10px] text-muted-foreground"
                 style={{
                   position: 'absolute',
-                  top: blockY(flatIndex, rowScroll, rowHeightStep),
+                  top: blockY(flatIndex, windowStartRow, rowHeightStep),
                   height: rowHeight,
                   right: 0,
                   left: 0,
@@ -376,10 +577,11 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
             </g>
           ))}
           {visibleRows.map((flatIndex) => {
-            const y = blockY(flatIndex, rowScroll, rowHeightStep)
+            const y = blockY(flatIndex, windowStartRow, rowHeightStep)
             return (
               <line
                 key={flatIndex}
+                data-row-line={flatIndex}
                 x1={0}
                 x2={plotWidth}
                 y1={y}
@@ -399,14 +601,17 @@ export function MatrixCanvas({ schedule: committed, selection }: MatrixCanvasPro
             className="pointer-events-none absolute inset-x-0 z-20"
             style={{ top: visible.headerTop, height: HEADER_HEIGHT_PX }}
           >
+            {/* Opaque, both layers: the band's whole job is to hide the rows
+                scrolled past behind it, and Tailwind's /90 and /80 resolve to a
+                color-mix with transparent that lets them ghost through. */}
             <div
-              className="flex items-center bg-background/90 px-2 text-[11px] font-semibold"
+              className="flex items-center bg-background px-2 text-[11px] font-semibold"
               style={{ height: DAY_BAND_HEIGHT_PX }}
             >
               Day {visible.day + 1}
             </div>
             <div
-              className="relative bg-background/80"
+              className="relative bg-background"
               style={{ height: AXIS_HEIGHT_PX }}
             >
               {visible.ticks.map((tick) => (

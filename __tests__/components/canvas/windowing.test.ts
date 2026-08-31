@@ -3,6 +3,7 @@ import {
   buildDayLayout,
   flatRowIndex,
   intersectsTimeRange,
+  maxRowScroll,
   resolveFlatRow,
   visibleRowRange,
   visibleTimeRange,
@@ -175,17 +176,20 @@ describe('visibleRowRange', () => {
       .toEqual({ firstRow: 0, lastRow: 59 })
   })
 
-  it('clamps the last row near the bottom rather than running past the end', () => {
-    // ceil(96 / 24) = 4 rows would reach row 61 without the clamp.
+  it('pins a scroll near the bottom to the last full window, not to a stub of rows', () => {
+    // Row 58 leaves only two rows below it, so the window slides back to 56
+    // and shows four rather than leaving half the viewport blank.
     expect(visibleRowRange(58, 96, RowHeightStep.NORMAL, TOTAL_ROWS)).toEqual({
-      firstRow: 58,
+      firstRow: 56,
       lastRow: 59,
     })
   })
 
-  it('clamps a scroll past the end back onto the last row', () => {
+  it('pins a scroll far past the end to that same last window', () => {
+    // A rowScroll stored against a much larger tournament lands here. It must
+    // resolve to a full window, not to the single final row.
     expect(visibleRowRange(100, 96, RowHeightStep.NORMAL, TOTAL_ROWS)).toEqual({
-      firstRow: 59,
+      firstRow: 56,
       lastRow: 59,
     })
   })
@@ -203,6 +207,27 @@ describe('visibleRowRange', () => {
 
   it('has nothing to render when the viewport has no height', () => {
     expect(visibleRowRange(0, 0, RowHeightStep.NORMAL, TOTAL_ROWS)).toBeNull()
+  })
+})
+
+describe('maxRowScroll', () => {
+  it('leaves room for a whole viewport of rows below the scroll position', () => {
+    // 96px holds 4 rows, so the furthest useful scroll puts row 56 at the top.
+    expect(maxRowScroll(96, RowHeightStep.NORMAL, TOTAL_ROWS)).toBe(56)
+  })
+
+  it('grows as the rows get shorter, because more of them fit', () => {
+    expect(maxRowScroll(96, RowHeightStep.COMPACT, TOTAL_ROWS)).toBe(54)
+    expect(maxRowScroll(96, RowHeightStep.TALL, TOTAL_ROWS)).toBe(57)
+  })
+
+  it('is zero when the viewport is taller than the whole canvas', () => {
+    expect(maxRowScroll(TOTAL_ROWS * NORMAL_ROW_PX + 500, RowHeightStep.NORMAL, TOTAL_ROWS)).toBe(0)
+  })
+
+  it('is zero when there are no rows or the viewport is unmeasured', () => {
+    expect(maxRowScroll(96, RowHeightStep.NORMAL, 0)).toBe(0)
+    expect(maxRowScroll(0, RowHeightStep.NORMAL, TOTAL_ROWS)).toBe(0)
   })
 })
 

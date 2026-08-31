@@ -41,23 +41,48 @@
   /* Canvas category palette (research D4) — sixteen values in four hue
      families (Youth, Cadet/Junior, Senior divisions, Veteran), lightness
      stepping with age/division order inside each family. See
-     src/components/canvas/palette.ts for the category -> token mapping. */
+     src/components/canvas/palette.ts for the category -> token mapping.
+
+     Each fill is paired with a `-fg` ink for the label an event block draws
+     on it. No single ink clears 4.5:1 across a range running from #648fb9 to
+     #e7d7c5, and neither --foreground nor --card-foreground clears it on the
+     darker fills, so every fill carries its own. Each ink is a deep version
+     of its fill's own hue, aimed at 6:1 and floored by what is reachable:
+     --cat-div1 is the tightest at 4.97:1, and no ink can beat 5.44:1 on it
+     because pure black does not. __tests__/components/canvas/palette.test.ts
+     asserts every one of the sixteen ratios. */
   --cat-y8: #648fb9;
+  --cat-y8-fg: #05080b;
   --cat-y10: #84a6c8;
+  --cat-y10-fg: #182635;
   --cat-y12: #a7bfd7;
+  --cat-y12-fg: #253b51;
   --cat-y14: #c7d6e6;
+  --cat-y14-fg: #2f4c6a;
   --cat-cadet: #69b58f;
+  --cat-cadet-fg: #162c21;
   --cat-junior: #c8e4d6;
+  --cat-junior-fg: #2a5640;
   --cat-div1: #9b6bb3;
+  --cat-div1-fg: #08050a;
   --cat-div1a: #af89c2;
+  --cat-div1a-fg: #1f1325;
   --cat-div2: #c6abd4;
+  --cat-div2-fg: #432951;
   --cat-div3: #dbc9e3;
+  --cat-div3-fg: #5c386b;
   --cat-vet40: #be9260;
+  --cat-vet40-fg: #241a0f;
   --cat-vet50: #c7a175;
+  --cat-vet50-fg: #362716;
   --cat-vet60: #cead88;
+  --cat-vet60-fg: #412f1b;
   --cat-vet70: #d7bc9d;
+  --cat-vet70-fg: #4c371f;
   --cat-vet80: #dec8af;
+  --cat-vet80-fg: #573f24;
   --cat-vet-combined: #e7d7c5;
+  --cat-vet-combined-fg: #614728;
 }
 
 body {

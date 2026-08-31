@@ -4,10 +4,12 @@ import { resolve } from 'node:path'
 import { Category, VetAgeGroup, Weapon } from '../../../src/engine/types.ts'
 import {
   CATEGORY_TOKENS,
+  CATEGORY_INK_TOKENS,
   CATEGORY_FAMILIES,
   CategoryFamily,
   resolveCanvasCategory,
   categoryFill,
+  categoryInk,
   weaponMark,
 } from '../../../src/components/canvas/palette.ts'
 import type { CanvasCategory } from '../../../src/components/canvas/palette.ts'
@@ -65,12 +67,40 @@ beforeAll(() => {
   }
 })
 
-/** Reads the hex colour for a canvas category via CATEGORY_TOKENS -> index.css. */
-function hexFor(cat: CanvasCategory): string {
-  const token = CATEGORY_TOKENS[cat]
+/** Reads the hex value of one token out of index.css. */
+function hexOf(token: string, cat: CanvasCategory): string {
   const hex = cssTokens.get(token)
   if (!hex) throw new Error(`token ${token} for ${cat} not found in index.css`)
   return hex
+}
+
+/** Reads the hex fill for a canvas category via CATEGORY_TOKENS -> index.css. */
+function hexFor(cat: CanvasCategory): string {
+  return hexOf(CATEGORY_TOKENS[cat], cat)
+}
+
+/** Reads the hex label ink via CATEGORY_INK_TOKENS -> index.css. */
+function inkFor(cat: CanvasCategory): string {
+  return hexOf(CATEGORY_INK_TOKENS[cat], cat)
+}
+
+/**
+ * WCAG 2.1 relative luminance, computed here rather than taken from the
+ * palette so the assertion is independent of anything src/ believes.
+ * https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
+ */
+function relativeLuminance(hex: string): number {
+  const channel = (offset: number): number => {
+    const srgb = parseInt(hex.slice(offset, offset + 2), 16) / 255
+    return srgb <= 0.03928 ? srgb / 12.92 : Math.pow((srgb + 0.055) / 1.055, 2.4)
+  }
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5)
+}
+
+/** WCAG 2.1 contrast ratio, (lighter + 0.05) / (darker + 0.05). */
+function contrastRatio(a: string, b: string): number {
+  const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+  return (lighter + 0.05) / (darker + 0.05)
 }
 
 /** Standard hex -> HSL conversion (h in degrees [0,360), s and l in percent). */
@@ -130,8 +160,22 @@ describe('the sixteen canvas category values', () => {
     }
   })
 
-  it('claims every --cat-* token in index.css with some category (no stray tokens)', () => {
-    const claimedTokens = new Set(ALL_CANVAS_CATEGORIES.map((cat) => CATEGORY_TOKENS[cat]))
+  it('gives every value an ink defined in index.css beside its fill', () => {
+    for (const cat of ALL_CANVAS_CATEGORIES) {
+      const token = CATEGORY_INK_TOKENS[cat]
+      expect(token, `CATEGORY_INK_TOKENS missing ${cat}`).toBeDefined()
+      expect(cssTokens.has(token), `index.css missing ${token} (for ${cat})`).toBe(true)
+    }
+  })
+
+  it('claims every --cat-* token in index.css as a fill or an ink (no stray tokens)', () => {
+    // Two families under one prefix: a token is claimed only if some category
+    // names it, as its fill or as the ink that goes on that fill. Anything
+    // else in index.css is orphaned and still fails here.
+    const claimedTokens = new Set([
+      ...ALL_CANVAS_CATEGORIES.map((cat) => CATEGORY_TOKENS[cat]),
+      ...ALL_CANVAS_CATEGORIES.map((cat) => CATEGORY_INK_TOKENS[cat]),
+    ])
     for (const token of cssTokens.keys()) {
       expect(claimedTokens.has(token), `${token} in index.css is not mapped by any category`).toBe(
         true,
@@ -142,6 +186,58 @@ describe('the sixteen canvas category values', () => {
   it('assigns 16 distinct hex fills', () => {
     const hexValues = ALL_CANVAS_CATEGORIES.map(hexFor)
     expect(new Set(hexValues).size).toBe(16)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Every label is legible on the block it sits on
+// ──────────────────────────────────────────────
+
+describe('fill and ink pairs clear WCAG AA', () => {
+  // The measured ratio of each pair, recomputed from index.css on every run.
+  // --cat-div1 (#9b6bb3) is the tightest: no ink beats 5.44:1 on it, because
+  // pure black does not.
+  const EXPECTED_RATIOS: Record<string, number> = {
+    Y8: 5.9,
+    Y10: 6.05,
+    Y12: 6.08,
+    Y14: 6.01,
+    CADET: 6.08,
+    JUNIOR: 6.2,
+    DIV1: 4.97,
+    DIV1A: 6.09,
+    DIV2: 6.08,
+    DIV3: 6.03,
+    VET40: 6.07,
+    VET50: 6.02,
+    VET60: 6.05,
+    VET70: 6.18,
+    VET80: 6.06,
+    VET_COMBINED: 6.12,
+  }
+
+  it.each(ALL_CANVAS_CATEGORIES)('%s reads at 4.5:1 or better on its own fill', (cat) => {
+    const ratio = contrastRatio(hexFor(cat), inkFor(cat))
+    expect(
+      ratio,
+      `${cat}: ink ${inkFor(cat)} on fill ${hexFor(cat)} is only ${ratio.toFixed(2)}:1`,
+    ).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each(ALL_CANVAS_CATEGORIES)('%s holds the ratio index.css was tuned for', (cat) => {
+    // Pinned per pair, not as a floor: a fill or an ink edited without
+    // re-measuring moves this even when the pair still clears 4.5:1.
+    expect(contrastRatio(hexFor(cat), inkFor(cat))).toBeCloseTo(EXPECTED_RATIOS[cat], 1)
+  })
+
+  it('needs the per-category inks: neither theme foreground clears AA on every fill', () => {
+    // The reason CATEGORY_INK_TOKENS exists. --foreground manages 1.85:1 on
+    // --cat-div1 and --card-foreground, the darkest token in the file, 3.57:1.
+    const failing = ALL_CANVAS_CATEGORIES.filter(
+      (cat) => contrastRatio(hexFor(cat), '#475569') < 4.5,
+    )
+    expect(failing.length).toBeGreaterThan(0)
+    expect(contrastRatio('#9b6bb3', '#1e293b')).toBeLessThan(4.5)
   })
 })
 
@@ -300,6 +396,22 @@ describe('resolveCanvasCategory', () => {
 describe('categoryFill', () => {
   it('returns the CSS var() expression for a category token', () => {
     expect(categoryFill(Category.Y8)).toBe(`var(${CATEGORY_TOKENS[Category.Y8]})`)
+  })
+})
+
+// ──────────────────────────────────────────────
+// categoryInk
+// ──────────────────────────────────────────────
+
+describe('categoryInk', () => {
+  it('returns the CSS var() expression for a category ink token', () => {
+    expect(categoryInk(Category.Y8)).toBe(`var(${CATEGORY_INK_TOKENS[Category.Y8]})`)
+  })
+
+  it('never returns a category its own fill', () => {
+    for (const cat of ALL_CANVAS_CATEGORIES) {
+      expect(categoryInk(cat)).not.toBe(categoryFill(cat))
+    }
   })
 })
 
