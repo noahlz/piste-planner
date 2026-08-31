@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MatrixCanvas } from '../../../src/components/canvas/MatrixCanvas.tsx'
 import { ScheduleOutput } from '../../../src/components/sections/ScheduleOutput.tsx'
@@ -52,9 +52,11 @@ import {
 // "one derived model, two views" arrangement the contract is about.
 
 const VIEWPORT_WIDTH = 900
-// 50 rows at the 24px normal step. The fixture's furthest block sits on flat
-// row 39 (day 1, strip 15), so every block is inside the window and nothing is
-// culled by FR-021's windowing.
+// 1200px less the 38px day-band header is 1162px of rows, which at the 24px
+// normal step is 49 of them: flat rows 0..48. The fixture's furthest block is
+// `flighted`'s DE — day 1, 16 strips from strip 0, so flat rows 24..39 — and
+// every other block is above it. Nine rows of margin, so nothing is culled by
+// FR-021's windowing.
 const VIEWPORT_HEIGHT = 1200
 
 class StubResizeObserver {
@@ -88,7 +90,6 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.ResizeObserver = originalResizeObserver
-  vi.useRealTimers()
 })
 
 function seedViewState(overrides: Partial<ViewState>): void {
