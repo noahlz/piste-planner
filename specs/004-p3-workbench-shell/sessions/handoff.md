@@ -542,17 +542,18 @@ T037, T038, T040, T041 were out of scope by instruction and were not started.
 | T026 / T032 / T033 | `00dd12199b` | The sixteen-value palette in `index.css`, the mapping in `palette.ts`, `weaponMark` |
 | T027 / T028 | `612ccef340` | `windowing.ts` and `geometry.ts`, the arithmetic everything else builds on |
 | T034 / T035 / T036 / T039 | `f7a61b606f` | `MatrixCanvas.tsx` and `zoom.ts` — axis, windowing, gutter, day bands, zoom |
-| T042 / T043 (part) | `d62df502d1` | Both reviews dispatched; all seventeen accepted findings applied |
+| T042 / T043 (part) | `d62df502d1` | Both reviews dispatched; the first seventeen accepted findings applied |
+| T042 / T043 (part) | `dcdfd3701f` | The reviewers' second batch — M4 and W1–W8 |
 
 ### Gate at end of session
 
-`tsc -b` exit 0, `lint` exit 0, full suite **1090 passed (1090)** across 46
+`tsc -b` exit 0, `lint` exit 0, full suite **1101 passed (1101)** across 46
 files, run twice with identical results by the orchestrator after the last
 subagent commit. `scripts/smoke.mjs` exits 0 with `SMOKE PASS` and zero console
 errors, **unchanged** — nothing this session built is mounted, so that was a
 regression check, not a repair.
 
-**Suite count reconciliation.** 875 → 1090, entirely additive:
+**Suite count reconciliation.** 875 → 1101, entirely additive:
 
 ```
  875  at S3's close
@@ -560,9 +561,22 @@ regression check, not a repair.
 +  71  T027/T028 windowing.test.ts + geometry.test.ts
 +  41  T039 zoom.test.ts
 +  24  T034/T035/T036 MatrixCanvas.test.tsx
-+  55  the review findings' new and strengthened cases
-=1090
++  66  the review findings' new and strengthened cases
+=1101
 ```
+
+**A git incident, recorded because the reflog will outlive anyone's memory of
+it.** The fix subagent's `git commit --amend` raced this session's handoff
+commit `40493e31e1`, absorbed it, and a follow-up amend then dropped its files —
+erasing it from the branch. The subagent restored it with `git reset --soft`
+(soft only, the working tree was never touched) and its contents were verified
+byte-identical afterwards: `handoff.md` +306, `tasks.md` +18/−9, nine tasks
+ticked, T042 and T043 not. The review's second batch is therefore its own
+commit rather than folded into the first, since squashing would have meant
+rewriting across the handoff commit a second time.
+
+**The lesson for later sessions: do not write the handoff while a subagent is
+still working.** This session did, and only the subagent's own care caught it.
 
 **Zero engine drift.** `git diff --stat main..HEAD -- src/engine/` is empty, so
 B1–B8 cannot have moved. Only US4 changes engine output.
@@ -649,10 +663,17 @@ draws a single 480–720 block over the gap between them.
 | `intersectsTimeRange([480,1080), 400–480 / 400–481)` | `false` / `true` |
 
 **`visibleRowRange`'s clamp changed during the reviews.** It now pins
-`firstRow` to `maxRowScroll(...)` — the last *full* window — not to
-`totalRows - 1`. So `(58, 96, NORMAL, 60)` is `{56, 59}`, not `{58, 59}`, and
-`(100, 96, NORMAL, 60)` is `{56, 59}`, not `{59, 59}`. See "The blank canvas"
-below for why.
+`firstRow` to a newly exported `maxRowScroll(...)` — the last *full* window —
+not to `totalRows - 1`. So `(58, 96, NORMAL, 60)` is `{56, 59}`, not
+`{58, 59}`, and `(100, 96, NORMAL, 60)` is `{56, 59}`, not `{59, 59}`. See
+"The blank canvas" below for why.
+
+**S5 will get this wrong if it reasons from the old rule.** An over-large
+`rowScroll` pins to the last full window, *not* to the last row: on the
+90-row test layout, `rowScroll: 200` resolves to a first row of **70**, not 89.
+The orchestrator's own proposed test expectation during the review said 89 and
+was wrong, and the subagent caught it. Ask `maxRowScroll` rather than
+reaching for `totalRows - 1`.
 
 ### The reviews, and why T042/T043 stay unticked
 
