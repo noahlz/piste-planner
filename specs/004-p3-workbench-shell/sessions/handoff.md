@@ -528,3 +528,330 @@ Three smaller ones worth knowing:
 Nothing in scope was left undone and no halt condition fired. The US1 checkpoint
 is met: **one screen, both old layouts gone, smoke passing against it.** The
 branch is handed back green, with the closing merge unmade.
+
+## S4
+
+**Scope**: T026–T028, T032–T036, T039 — US2's first half, the grid. T029–T031,
+T037, T038, T040, T041 were out of scope by instruction and were not started.
+**T042 and T043 are deliberately unticked**; see "The reviews" below.
+
+### Tasks completed
+
+| Task | Commit | What landed |
+|---|---|---|
+| T026 / T032 / T033 | `00dd12199b` | The sixteen-value palette in `index.css`, the mapping in `palette.ts`, `weaponMark` |
+| T027 / T028 | `612ccef340` | `windowing.ts` and `geometry.ts`, the arithmetic everything else builds on |
+| T034 / T035 / T036 / T039 | `f7a61b606f` | `MatrixCanvas.tsx` and `zoom.ts` — axis, windowing, gutter, day bands, zoom |
+| T042 / T043 (part) | `d62df502d1` | Both reviews dispatched; the first seventeen accepted findings applied |
+| T042 / T043 (part) | `dcdfd3701f` | The reviewers' second batch — M4 and W1–W8 |
+
+### Gate at end of session
+
+`tsc -b` exit 0, `lint` exit 0, full suite **1101 passed (1101)** across 46
+files, run twice with identical results by the orchestrator after the last
+subagent commit. `scripts/smoke.mjs` exits 0 with `SMOKE PASS` and zero console
+errors, **unchanged** — nothing this session built is mounted, so that was a
+regression check, not a repair.
+
+**Suite count reconciliation.** 875 → 1101, entirely additive:
+
+```
+ 875  at S3's close
++  24  T026 palette.test.ts
++  71  T027/T028 windowing.test.ts + geometry.test.ts
++  41  T039 zoom.test.ts
++  24  T034/T035/T036 MatrixCanvas.test.tsx
++  66  the review findings' new and strengthened cases
+=1101
+```
+
+**A git incident, recorded because the reflog will outlive anyone's memory of
+it.** The fix subagent's `git commit --amend` raced this session's handoff
+commit `40493e31e1`, absorbed it, and a follow-up amend then dropped its files —
+erasing it from the branch. The subagent restored it with `git reset --soft`
+(soft only, the working tree was never touched) and its contents were verified
+byte-identical afterwards: `handoff.md` +306, `tasks.md` +18/−9, nine tasks
+ticked, T042 and T043 not. The review's second batch is therefore its own
+commit rather than folded into the first, since squashing would have meant
+rewriting across the handoff commit a second time.
+
+**The lesson for later sessions: do not write the handoff while a subagent is
+still working.** This session did, and only the subagent's own care caught it.
+
+**Zero engine drift.** `git diff --stat main..HEAD -- src/engine/` is empty, so
+B1–B8 cannot have moved. Only US4 changes engine output.
+
+### What is deliberately unreachable
+
+`MatrixCanvas` is **mounted nowhere** — not in `CenterView`, not in
+`WorkbenchShell`, not in `App.tsx`. `DEFAULT_VIEW_STATE.viewMode` is still
+`SCHEDULE`. The center still renders `ScheduleOutput`. **T040 mounts the canvas
+and flips that default**, and it is the one line of `viewState.ts` a later task
+is expected to change (S1 recorded this; it is still true).
+
+This is why the session ends green with a passing smoke run and no driver edit.
+T041 extends the driver once T040 makes the matrix reachable.
+
+### The exact arithmetic S5 must build against
+
+**Do not re-derive any of this.** `EventBlock` positions itself with the same
+functions and the same conventions, or the two disagree.
+
+**Conventions.** `timeZoom` is **minutes per pixel**; `geometry.pxPerMinute` is
+its reciprocal and is the only place the scale is inverted — never open-code it.
+Both axes return **window-relative** pixels and **neither clamps**, so a block
+scrolled off the left or above the top gets a negative coordinate and slides
+under the edge. Row ranges are **inclusive** both ends; time ranges are
+**half-open** `[start, end)`. The day header band is an **overlay, not a row**,
+so `rowsPerDay === stripsTotal` exactly and `flatRowIndex = day * stripsTotal +
+strip` with no correction term.
+
+`ROW_HEIGHT_PX`: **compact 16, normal 24, tall 36.**
+
+**Geometry**, asserted at three zooms so the inversion cannot survive:
+
+| Call | Result |
+|---|---|
+| `pxPerMinute(1 / 2 / 0.5)` | `1` / `0.5` / `2` |
+| `blockX(540, 480, 1)` — 09:00 in an 08:00 window | `60` |
+| `blockX(540, 480, 2)` — zoomed out | `30` |
+| `blockX(540, 480, 0.5)` — zoomed in | `120` |
+| `blockX(420, 480, 1)` — starts before the window | `-60`, never clamped |
+| `blockX(1320, 480, 1)` — starts after the window end | `840`, uncapped |
+| `blockWidth(105, 1 / 2 / 0.5)` | `105` / `52.5` / `210` |
+| `blockY(5, 0, NORMAL / COMPACT / TALL)` | `120` / `80` / `180` |
+| `blockY(5, 3, NORMAL)` / `blockY(3, 5, NORMAL)` | `48` / `-48` |
+| `blockHeight(4, COMPACT / NORMAL / TALL)` | `64` / `96` / `144` |
+
+**Segments**, from the engine's own output for the factory defaults (24 foil
+fencers, 4 pools of 6, 4 strips, 08:00 start, 30-minute admin gap). These are
+**read** from `ScheduleResult`, never recomputed, so the canvas cannot disagree
+with `ScheduleOutput` about when a phase runs:
+
+| Shape | Segments |
+|---|---|
+| Plain | `POOLS 480–585 ×4`, `DE 615–699 ×16` |
+| Flighted | `FLIGHT_A 480–585 ×2`, `FLIGHT_B 615–720 ×2`, `DE 750–834 ×16` |
+| Staged, 64 fencers | `POOLS 480–846 ×4`, `DE_PRELIMS 880–885 ×16`, `DE_ROUND_OF_16 915–1030 ×4` |
+
+**The medal tail gets no block.** `de_total_end` is `729` on the plain event
+while the last segment ends at `699` — the difference is `tailEstimateMins()`
+covering bouts the scheduler deliberately does not schedule. Reading
+`de_total_end` to draw a block is wrong and a test catches it.
+
+**Flights are checked before pools.** `derive.ts` leaves `pool_start`/`pool_end`
+spanning *both* flights, so an implementation that checks `pool_start` first
+draws a single 480–720 block over the gap between them.
+
+**Windowing**, against `buildDayLayout(3, 20)` — 60 rows, day boundaries at
+0, 20, 40:
+
+| Call | Result |
+|---|---|
+| `resolveFlatRow` `0` / `19` / `20` / `59` / `60` / `-1` | `{0,0}` / `{0,19}` / `{1,0}` / `{2,19}` / `null` / `null` |
+| `flatRowIndex` `(0,0)` / `(0,19)` / `(1,0)` / `(2,19)` | `0` / `19` / `20` / `59` |
+| `flatRowIndex` `(3,0)` / `(0,20)` / `(-1,0)` / `(0,-1)` | `null` (all four) |
+| `visibleRowRange(0, 96, NORMAL, 60)` | `{0, 3}` — 96/24 = 4 exact; row 4 starts at the first pixel outside |
+| `visibleRowRange(0, 97, NORMAL, 60)` | `{0, 4}` — visible by one pixel, included |
+| `visibleRowRange(5, 96, NORMAL, 60)` | `{5, 8}` — starts at exactly `rowScroll` |
+| `visibleRowRange(19 / 20 / 21, 96, NORMAL, 60)` | `{19,22}` / `{20,23}` / `{21,24}` — across the day boundary |
+| `visibleRowRange(0, 96, COMPACT / TALL, 60)` | `{0, 5}` / `{0, 2}` |
+| `visibleRowRange(0, 1940, NORMAL, 60)` | `{0, 59}` — viewport taller than the canvas |
+| `visibleRowRange(5.9, 96, NORMAL, 60)` | `{5, 8}` — the `Math.floor` on a fractional scroll |
+| `visibleTimeRange(480, 1 / 2 / 0.5, 600)` | `{480,1080}` / `{480,1680}` / `{480,780}` |
+| `intersectsTimeRange([480,1080), 1079–1090 / 1080–1090)` | `true` / `false` |
+| `intersectsTimeRange([480,1080), 400–480 / 400–481)` | `false` / `true` |
+
+**`visibleRowRange`'s clamp changed during the reviews.** It now pins
+`firstRow` to a newly exported `maxRowScroll(...)` — the last *full* window —
+not to `totalRows - 1`. So `(58, 96, NORMAL, 60)` is `{56, 59}`, not
+`{58, 59}`, and `(100, 96, NORMAL, 60)` is `{56, 59}`, not `{59, 59}`. See
+"The blank canvas" below for why.
+
+**S5 will get this wrong if it reasons from the old rule.** An over-large
+`rowScroll` pins to the last full window, *not* to the last row: on the
+90-row test layout, `rowScroll: 200` resolves to a first row of **70**, not 89.
+The orchestrator's own proposed test expectation during the review said 89 and
+was wrong, and the subagent caught it. Ask `maxRowScroll` rather than
+reaching for `totalRows - 1`.
+
+### The reviews, and why T042/T043 stay unticked
+
+Both were dispatched against **this session's own work** — `test-quality-reviewer`
+on T026–T028 (and on `zoom.test.ts` and `MatrixCanvas.test.tsx`, which T039 and
+T034–T036 brought with them), `react-code-reviewer` on T032–T036 and T039. The
+checkboxes name T026–T031 and T032–T040, and T029–T031, T037, T038 and T040 do
+not exist yet, so **the boxes belong to S5**. S2 and S3 handled T024 the same
+way. Seventeen findings were accepted and applied in `d62df502d1`, with 24
+mutations run and 24 killed.
+
+**Everything below was found by mutation, not by a red test.**
+
+#### The blank canvas — the one real bug
+
+**Both reviewers found it independently**, which is the strongest signal in this
+session. `MatrixCanvas` positioned gutter rows and grid lines against
+`rowScroll` while positioning day bands against `rowRange.firstRow`.
+`visibleRowRange` clamps, so those diverge whenever the stored `rowScroll`
+exceeds the layout — and it can, because `rowScroll` persists across
+tournaments, `isValidViewState` accepts any non-negative integer, and nothing
+re-clamps it when `setDays` or `setStrips` shrinks the layout underneath.
+
+Scroll a large tournament to row 500, load a 3×30 one: one row renders at
+`-9864px` under a floating day band, and the canvas reads as empty. The fix
+puts a single named `windowStartRow` behind all three, and pins `firstRow` to
+the last full window via a new exported `maxRowScroll`. The pin lives in the
+pure function rather than the state initializer because the stale value arrives
+by two routes — a load, and a live layout shrink under a mounted canvas — and
+only the pure function covers both without a state-syncing effect.
+
+`geometry.blockY`'s own docstring had named the correct value the whole time.
+**A docstring is not a test.**
+
+#### Three ways the wheel was broken
+
+- **Ctrl+wheel zoomed the page as well as the canvas.** React registers `wheel`
+  as a **passive** listener — verified in this repo's installed react-dom 19.2.4
+  at `react-dom-client.development.js:19251-19255`, which sets `passive: true`
+  for exactly `touchstart`, `touchmove`, `wheel` — so `onWheel` *cannot*
+  `preventDefault`. Now a native listener attached in an effect with
+  `{ passive: false }`.
+- **`deltaMode` was ignored.** Firefox on Windows and Linux fires
+  `DOM_DELTA_LINE` with `deltaY: ±3`, and `Math.round(3/24)` is `0`, so row
+  panning never moved at all on those platforms.
+- **Sub-row deltas were discarded**, so slow trackpad scrolling did nothing and
+  the residue never accumulated. Now normalized by `deltaMode` with the
+  fractional remainder carried in a ref.
+
+With no keyboard path and no scrollbar, those three together left **no way to
+scroll rows**. `tabIndex={0}` with arrow keys, PageUp and PageDown now sits on
+the viewport (`role="group"`, `aria-label="Matrix grid"`), following
+`Drawer.tsx`'s precedent.
+
+#### A fourth "green suite proved nothing", and it is a new shape
+
+This feature had three recorded cases before this session — S2's rule that only
+manifested after a timer, S3's fixture-satisfied assertion, and S3's
+WARN-versus-ERROR gap. This session adds a fourth: **an expectation computed
+from the same formula as the implementation**, which by construction cannot
+detect that formula being wrong.
+
+`zoom.test.ts`'s clamp case asserted `timeScroll` against
+`Math.max(0, 580 - 100 * MAX_TIME_ZOOM)`, whose midnight floor returned `0`
+under both the correct and the mutated code. Anchoring against an unclamped
+zoom drifted the cursor at exactly the end of the range a user pushes against,
+suite green. Replaced with two literal windows, `{timeZoom: 8, timeScroll: 930}`
+and `{timeZoom: 0.05, timeScroll: 1095}`, one per clamp end, at a scroll and
+cursor where the floor cannot fire.
+
+**Four times now.** The pattern across all four: an assertion that describes the
+*shape* of an answer, or re-derives it, rather than pinning a literal.
+
+#### Coverage that existed only in appearance
+
+- **The SVG grid — the actual deliverable of T034 and T035 — had no assertion at
+  all.** Returning `null` in its place left all 24 cases green, because they
+  read the gutter `<li>`s and the band `<span>`s, which are the label layers.
+- **`dayHours` could be replaced by the engine constants** and nothing failed:
+  `store.ts` seeds every `dayConfig` with the same numbers as `DAY_START_MINS`
+  and `DAY_END_MINS`, and **no test ever shortened a day**. The same fixture
+  also failed to kill `const topDay = 0`. Now covered by a case that shortens
+  day 1 and fits from inside it.
+- **`placedSpans` could return `[]` unconditionally**, since every case rendered
+  with nothing placed and the only assertion was that `Fit to tournament` is
+  disabled — which `disabled={true}` also satisfies. The `schedule` prop was
+  never passed a value either. Now covered with a committed schedule whose event
+  has both a pool and a DE segment, so the union is what gets asserted.
+- **Horizontal time panning had zero coverage** — deleting the whole
+  `if (e.deltaX !== 0)` block left the suite green, and it is the only way to
+  scroll time.
+- `expect(NORMAL_ROWS_VISIBLE).toBeLessThan(TOTAL_ROWS)` compared two test-file
+  constants, `20 < 90`. No mutation of `src/` could reach it.
+
+#### The palette had no readable foreground
+
+FR-014 puts a gender label prefix on every block, and T037 draws it. Measured
+against `--foreground: #475569`, `--cat-div1` gave **1.85:1** and `--cat-y8`
+**2.23:1**. Even the file's darkest existing token reached only 3.57:1 on
+`--cat-div1`. Sixteen `--cat-*-fg` tokens and a `categoryInk()` helper now sit
+beside the fills, each pair asserted twice — a ≥4.5:1 floor and its tuned value —
+from a WCAG relative-luminance formula computed in the test.
+
+**`--cat-div1` is the binding constraint at 4.97:1**, and that is the ceiling:
+no ink beats 5.44:1 on `#9b6bb3` because pure black does not. Every other pair
+clears 6:1. If S5 wants headroom there, the fill has to darken, which is a
+palette change and not a T037 change.
+
+### Departures from what the reviewers asked
+
+- **Finding 5's functional-setter form was rejected with reasoning, and I accept
+  the reasoning.** The ctrl-zoom branch needs `timeZoom` and `timeScroll`
+  together, which two independent functional updaters cannot do atomically, and
+  a functional updater cannot hand its computed value to the persist timer
+  without a side effect inside the updater. A `latest` ref fixes all three sites
+  uniformly and additionally survives a burst where two wheel events land before
+  a re-render, which the functional form does not.
+- **The day band's opacity was fixed; its layout space was not.** The reviewer
+  correctly observed that the band covers the plot's top 38px with no
+  compensating offset, so the first ~1.6 strips of every window sit underneath
+  it. Making the two layers opaque is a bug fix. Reserving space changes the
+  canvas's whole vertical model, and `MatrixCanvas.tsx`'s own docblock argues
+  deliberately for the current arrangement. **This is S5's to decide** — it is
+  where obscured blocks start reading as a bug rather than as empty grid, once
+  T037 draws them.
+
+### Knowingly not fixed, and why
+
+All from the test reviewer's low-value list, recorded rather than applied:
+
+- **`geometry.ts`'s flighted branch keys on `flight_a_start`**, and mutating it
+  to `flight_b_start` survives, because the fixture fills both. A fixture with
+  only one flight populated would kill it, but `derive.ts` never produces that.
+- **`zoom.ts`'s `Math.sign(delta)` is never distinguished from raw `delta`** —
+  no case and no caller passes a magnitude above 1.
+- **`MatrixCanvas`'s `- rect.left` is untestable as written**: jsdom's
+  `getBoundingClientRect()` returns zeros. The `- GUTTER_WIDTH_PX` half of the
+  same expression is pinned.
+- `MAX_AXIS_TICKS` is pinned only to `(89, ∞)`; `palette.test.ts`'s
+  "same direction" case is implied by the four monotonicity cases above it; a
+  `liveObservers` array in the ResizeObserver stub is written and never read.
+
+**No test coverage was dropped this session**, and no assertion was weakened.
+The "no stray tokens" check was rewritten to claim fills and inks as two
+families and still fails on a genuine orphan, proved by mutation.
+
+### Things S5 must not be surprised by
+
+- **`weaponMark` returns a letter, and `tasks.md`, `spec.md`, `data-model.md`
+  and `ui-contract.md` all still say "icon" or "glyph".** They are stale on
+  purpose — S4.md carries the user's 2026-08-30 decision and is the authority.
+  There is no `WeaponGlyphs.tsx` and there should not be one.
+- **The block will carry two letter marks.** FR-014's gender prefix and the new
+  weapon letter risk reading as one two-letter string — `M` + `E` scanning as
+  "ME" — which blurs two channels the encoding contract keeps separate. Keep
+  them visually distinct in T037.
+- **The degradation order needs them separately droppable.** The contract drops
+  label text, then the weapon mark, then the label prefix. That still works with
+  a letter, but only while the two marks are two elements. Merged into one glyph
+  they drop together and the contract's order is lost.
+- **`ROW_HEIGHT_PX` and the palette are the only two places a visual constant
+  lives.** Blocks read `categoryFill` and `categoryInk`; nothing in T037 should
+  introduce a third.
+- **The tests exercise the `localStorage` shim on this machine, not jsdom's real
+  `Storage`.** S1's guard in `src/test-setup.ts` installs an in-memory
+  replacement only when the ambient `localStorage` lacks working methods — a
+  Node ≥24 workaround that is a no-op on CI's Node 22. Still do not delete it.
+- **`hourTicks` throws past `MAX_AXIS_TICKS`** rather than truncating silently,
+  per constitution IV. A pathological zoom surfaces as a loud failure.
+
+### Not finished, and why
+
+Nothing in scope was left undone and no halt condition fired — the arithmetic
+satisfies constitution IV with no search and no unbounded loop, no charting or
+virtualization dependency was needed, and engine drift is zero.
+
+**T029, T030, T031, T037, T038, T040 and T041 are S5's**, by instruction. The
+grid exists and is unreachable; S5 fills it, mounts it, and extends the smoke
+driver in the task that mounts it. T042 and T043 close there too. The US2
+checkpoint closes at the end of S5, so **no checkpoint commit was made here**.
+The branch is handed back green, with the closing merge unmade.
