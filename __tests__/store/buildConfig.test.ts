@@ -100,7 +100,15 @@ describe('buildTournamentConfig', () => {
   })
 
   describe('dayConfigs', () => {
-    it('passes dayConfigs through from store', () => {
+    // Before T006 this seam had no coverage at all: buildTournamentConfig
+    // passed state.dayConfigs straight through with no offset, and nothing
+    // here asserted what the engine config's dayConfigs actually contained.
+    // That absence is what let the day-axis defect (research.md D1) survive
+    // three features — see research.md D4's closing note and
+    // contracts/day-axis.md. `dayAxis.test.ts` carries the full C1 invariant
+    // suite (disjoint, ordered, congruent, slot-aligned); this test pins the
+    // specific shift buildTournamentConfig applies.
+    it('shifts each day onto the scheduler axis by day_index * 1440, leaving the store\'s own dayConfigs untouched', () => {
       const dayConfigs = [
         { day_start_time: 480, day_end_time: 1200 },
         { day_start_time: 540, day_end_time: 1320 },
@@ -108,7 +116,22 @@ describe('buildTournamentConfig', () => {
       const state = storeWith({ ...minimalState(), dayConfigs })
       const { config } = buildTournamentConfig(state)
 
-      expect(config.dayConfigs).toEqual(dayConfigs)
+      expect(config.dayConfigs).toEqual([
+        { day_start_time: 480, day_end_time: 1200 },
+        { day_start_time: 1980, day_end_time: 2760 },
+      ])
+      // The store's own state (read back independently of the config we just
+      // built) is clock axis and unshifted — buildTournamentConfig must not
+      // mutate what it was handed.
+      expect(state.dayConfigs).toEqual(dayConfigs)
+    })
+
+    it('leaves day 0 unshifted (0 * 1440 = 0, the identity case)', () => {
+      const dayConfigs = [{ day_start_time: 540, day_end_time: 1260 }]
+      const state = storeWith({ ...minimalState(), dayConfigs, days_available: 1 })
+      const { config } = buildTournamentConfig(state)
+
+      expect(config.dayConfigs).toEqual([{ day_start_time: 540, day_end_time: 1260 }])
     })
   })
 
@@ -142,7 +165,7 @@ describe('buildTournamentConfig', () => {
       const comp = competitions[0]
 
       expect(comp.earliest_start).toBe(0)
-      expect(comp.latest_end).toBe(9999)
+      expect(comp.latest_end).toBe(Infinity)
       expect(comp.optional).toBe(false)
       expect(comp.de_round_of_16_strips).toBe(4)
       expect(comp.de_round_of_16_requirement).toBe(DeStripRequirement.HARD)
@@ -150,6 +173,22 @@ describe('buildTournamentConfig', () => {
       expect(comp.flighting_group_id).toBeNull()
       expect(comp.is_priority).toBe(false)
       expect(comp.strips_allocated).toBe(0)
+    })
+
+    it('leaves latest_end unbinding at a day count beyond the UI\'s current maximum of 4 (research.md D6)', () => {
+      // The old 9999 sentinel started truncating at day 7: 7 * 1440 + 1320 =
+      // 11400 > 9999. Use an 8-day tournament (day indices 0-7) so day 7's
+      // scheduler-axis end actually exceeds that old bound.
+      const dayConfigs = Array.from({ length: 8 }, () => ({ day_start_time: 480, day_end_time: 1320 }))
+      const state = storeWith({ ...minimalState(), days_available: 8, dayConfigs })
+      const { config, competitions } = buildTournamentConfig(state)
+      const comp = competitions[0]
+
+      const day7End = config.dayConfigs![7].day_end_time
+      expect(day7End).toBe(11400)
+      // This is concurrentScheduler.ts's own clamp expression: it must return
+      // dayEnd unchanged, never the latest_end sentinel.
+      expect(Math.min(day7End, comp.latest_end)).toBe(day7End)
     })
 
     it('skips unknown catalogue IDs without throwing', () => {

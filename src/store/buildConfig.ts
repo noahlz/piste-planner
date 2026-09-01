@@ -27,6 +27,14 @@ import {
 import type { StoreState } from './store.ts'
 
 /**
+ * Calendar-day spacing between scheduler-axis day windows (research.md D5).
+ * Day d's window is [d*DAY_AXIS_SPACING_MINS + start_d, d*DAY_AXIS_SPACING_MINS + end_d) —
+ * see contracts/day-axis.md C1. `runActions.ts` imports this to reverse the
+ * conversion when a schedule result becomes a Placement (C2).
+ */
+export const DAY_AXIS_SPACING_MINS = 1440
+
+/**
  * Bridges the Zustand store shape to the engine's TournamentConfig + Competition[] interfaces.
  * Pure function — takes store state as parameter for testability.
  *
@@ -49,7 +57,16 @@ export function buildTournamentConfig(
     strips,
     strips_total: state.strips_total,
     video_strips_total: state.video_strips_total,
-    dayConfigs: state.dayConfigs,
+    // Store's dayConfigs are clock axis (0-1439 within each day). scheduleAll
+    // requires the scheduler axis instead — day d's window shifted by
+    // d*DAY_AXIS_SPACING_MINS so no two days' windows overlap on the absolute
+    // minute axis strip_allocations uses (contracts/day-axis.md C1). The
+    // store's own state.dayConfigs is left untouched — only this config copy
+    // carries the shift.
+    dayConfigs: state.dayConfigs.map((day, d) => ({
+      day_start_time: d * DAY_AXIS_SPACING_MINS + day.day_start_time,
+      day_end_time: d * DAY_AXIS_SPACING_MINS + day.day_end_time,
+    })),
 
     // Global overrides from store
     ADMIN_GAP_MINS: state.globalOverrides.ADMIN_GAP_MINS,
@@ -119,7 +136,12 @@ function buildCompetitions(
 
       // Sensible defaults
       earliest_start: 0,
-      latest_end: 9999,
+      // Genuinely unconstrained (research.md D6) — a finite sentinel like the
+      // old 9999 binds once a day's scheduler-axis end (d*DAY_AXIS_SPACING_MINS
+      // + day_end_time) passes it, which under 1440-minute spacing starts at
+      // day 7. Infinity can never be the minimum in
+      // Math.min(dayEnd(day, config), latest_end), for any day count.
+      latest_end: Infinity,
       optional: false,
       de_round_of_16_strips: 4,
       de_round_of_16_requirement: DeStripRequirement.HARD,

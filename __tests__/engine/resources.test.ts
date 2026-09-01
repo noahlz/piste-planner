@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   createGlobalState,
   findAvailableStripsInWindow,
@@ -8,8 +10,11 @@ import {
   nextFreeTime,
   snapToSlot,
 } from '../../src/engine/resources.ts'
+import * as resourcesModule from '../../src/engine/resources.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { Phase } from '../../src/engine/types.ts'
 import { makeConfig, makeStrips } from '../helpers/factories.ts'
+import { SCENARIOS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 
 // ──────────────────────────────────────────────
 // Constants & Helpers
@@ -395,6 +400,149 @@ describe('findAvailableStripsInWindow', () => {
     }
   })
 })
+
+// ──────────────────────────────────────────────
+// findAvailableStripsInWindow — day-inference precondition (T015)
+//
+// The day-end clamp's inference fallback (`floor(startTime / DAY_LENGTH_MINS)`,
+// used only when `day` is omitted) assumes a compacted axis and is wrong under
+// the store's 1440-spaced axis (research.md D3). Both call sites in
+// concurrentScheduler.ts's `tryAllocate` always pass `day` explicitly, so the
+// fallback is unreachable from a real scheduling run.
+//
+// Two guards, each doing what it is good at:
+//
+// - The spy below runs a real multi-day scheduleAll and asserts every call
+//   that actually reaches findAvailableStripsInWindow carries a defined
+//   `day`. It is robust to formatting and renaming, and it is the only
+//   mechanism that would catch an actual `undefined` reaching the function at
+//   runtime. Known coverage limit: the STAGED-DE precheck site (:902) only
+//   fires when a DE_PRELIMS/DE_R16 node doesn't fit before dayHardEnd, so an
+//   ordinary scenario run exercises only the general strip-claim site
+//   (:914-916). Not worth an elaborate scenario to force the precheck path —
+//   that's exactly why the backstop below doesn't depend on either site
+//   being hit at runtime.
+// - The backstop is a hardened static check with two parts. First, there are
+//   exactly two findAvailableStripsInWindow call sites in the file, so a
+//   third one added elsewhere is caught even if the spy never reaches it.
+//   Second, each call site's argument list is split at paren/bracket/brace
+//   depth 0 and its arity checked against the function's 7-parameter
+//   signature (`state, config, count, startTime, duration, videoRequired,
+//   day` — `day` is index 6). Dropping the `day` argument at either site,
+//   including the STAGED-DE precheck (:902) the spy cannot reach, now drops
+//   arity to 6 and fails here. Both parts strip comments and do a
+//   balanced-paren scan rather than a lazy `)` match, so a trailing comment,
+//   a variable rename, or a nested call in an earlier argument (e.g.
+//   `Math.max(0, x)`) does not fool them. Arity checks structure, not
+//   identifier text, so renaming `day` to `dayIndex` still passes.
+//
+//   Residual gap: an explicit `undefined` passed in the `day` position keeps
+//   arity at 7 and slips past the backstop. The spy would catch that at the
+//   reachable site (:914-916) but not at the STAGED-DE precheck (:902) — the
+//   same reachability limit noted above. No static check distinguishes
+//   `undefined` from any other value in an argument position.
+// ──────────────────────────────────────────────
+
+describe('findAvailableStripsInWindow — day-inference precondition (T015)', () => {
+  const SCHEDULER_PATH = resolve(process.cwd(), 'src/engine/concurrentScheduler.ts')
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('every call recorded during a real multi-day scheduleAll run passes a defined day', () => {
+    const spy = vi.spyOn(resourcesModule, 'findAvailableStripsInWindow')
+    const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B1
+    const competitions = buildCompetitions(fencerCounts)
+    const config = tournamentConfig(days, strips, videoStrips, tournamentType)
+
+    scheduleAll(competitions, config)
+
+    // A spy that recorded zero calls proves nothing about the call sites —
+    // confirm it actually intercepted the by-name import concurrentScheduler.ts
+    // uses (the same live-binding mechanism placements.test.ts's scheduleAll
+    // spy relies on).
+    expect(spy.mock.calls.length).toBeGreaterThan(0)
+
+    for (const call of spy.mock.calls) {
+      const day = call[6]
+      expect(day, `findAvailableStripsInWindow called with day=${String(day)}`).toBeDefined()
+    }
+  })
+
+  it('backstop: exactly two findAvailableStripsInWindow call sites exist in concurrentScheduler.ts, each passing all 7 arguments (day is index 6)', () => {
+    const source = readFileSync(SCHEDULER_PATH, 'utf-8')
+    const stripped = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '')
+
+    const callSites = findBalancedCallSites(stripped, 'findAvailableStripsInWindow')
+
+    // tryAllocate has exactly two call sites: the STAGED-DE pre-check probe
+    // and the strip-claim call every phase kind uses. A third call site added
+    // anywhere in the file — reachable by the spy above or not — should fail
+    // this count.
+    expect(callSites).toHaveLength(2)
+
+    // Arity check: each site must pass all 7 parameters of
+    // findAvailableStripsInWindow(state, config, count, startTime, duration,
+    // videoRequired, day). This catches a dropped `day` argument at the
+    // STAGED-DE precheck site (:902), which the spy above cannot reach — see
+    // the "residual gap" note in the block comment above this describe.
+    for (const site of callSites) {
+      const argsText = site.slice('findAvailableStripsInWindow('.length, -1)
+      const argCount = countTopLevelArgs(argsText)
+      expect(argCount, `expected 7 arguments (day at index 6) in call site: ${site}`).toBe(7)
+    }
+  })
+})
+
+/**
+ * Counts comma-separated arguments in a call's argument text at paren/
+ * bracket/brace depth 0, so a nested call in one argument (e.g.
+ * `Math.max(0, node.ready_time)`) is not mistaken for two arguments. A single
+ * trailing comma before the closing paren does not count as an extra,
+ * absent argument.
+ */
+function countTopLevelArgs(argsText: string): number {
+  const trimmed = argsText.trim()
+  if (trimmed === '') return 0
+  let depth = 0
+  let count = 1
+  for (const ch of trimmed) {
+    if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') depth--
+    else if (ch === ',' && depth === 0) count++
+  }
+  if (/,\s*$/.test(trimmed)) count--
+  return count
+}
+
+/**
+ * Finds every call site of `fnName(...)` in `source` with a balanced-paren
+ * scan, so a nested call in an earlier argument (e.g. `Math.max(0, x)`)
+ * doesn't truncate the match the way a lazy `\)` regex would. Callers are
+ * expected to strip comments first — this scan has no notion of them.
+ */
+function findBalancedCallSites(source: string, fnName: string): string[] {
+  const marker = `${fnName}(`
+  const sites: string[] = []
+  let searchFrom = 0
+  while (true) {
+    const start = source.indexOf(marker, searchFrom)
+    if (start === -1) break
+    let depth = 1
+    let i = start + marker.length
+    while (i < source.length && depth > 0) {
+      if (source[i] === '(') depth++
+      else if (source[i] === ')') depth--
+      i++
+    }
+    sites.push(source.slice(start, i))
+    searchFrom = i
+  }
+  return sites
+}
 
 // ──────────────────────────────────────────────
 // peakConcurrentStrips

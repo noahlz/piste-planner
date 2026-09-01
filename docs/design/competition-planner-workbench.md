@@ -241,7 +241,7 @@ index.
 
 | | Work | Status |
 |---|---|---|
-| **006** | Day-axis parity – reconcile the store's clock-time `dayConfigs` with the engine's compacted axis, add the app-path parity test (per preset, `applyPreset → buildTournamentConfig → scheduleAll` matches the ledger's scheduled count), restore the smoke boot floor to a real number | Next, unspecced. **Blocks 004 US3** – the scorecard freezes baselines at preset load, and a baseline over 11 of 24 events is meaningless |
+| **006** | Day-axis parity – reconcile the store's clock-time `dayConfigs` with the engine's compacted axis, add the app-path parity test (per preset, `applyPreset → buildTournamentConfig → scheduleAll` matches the ledger's scheduled count), restore the smoke boot floor to a real number | Done. Boot went from 11 of 24 to 24 of 24; full record in [`specs/006-day-axis-parity/`](../../specs/006-day-axis-parity/), handoff in [`handoff.md`](../../specs/006-day-axis-parity/handoff.md). **Unblocks 004 US3** |
 | **004 US3–US5** | Scorecard, per-type defaults (the drift gate), gears – sessions S6–S8 as planned | S6 drafted, gated on 006 |
 | **007** | Rail rebuild – replace the five re-homed section components with purpose-built rail panels, resolve the FR-003/FR-004 top-bar/rail duplication. User directive 2026-08-31: tear up and redo, no preservation effort for the wizard/kitchen-sink-era components | After 004 closes, unspecced |
 | **P4** | Manual placement, as above – additionally absorbs the parked decisions: advisory-vs-binding validation wiring, placement states (unplaced / day-known-time-unknown / placed / pinned), flighting as user intent or removal, zoom-to-selection enablement | After 007 |

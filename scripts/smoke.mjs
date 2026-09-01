@@ -53,11 +53,13 @@
 // actually reading the schedule table: `table tbody tr` unscoped counts rows
 // across every table on the page (day-header rows included), and happened to
 // clear 5 by coincidence. Scoped to `[data-schedule-row]`, ROC Div1A/Vet at
-// the Suggested strip count places 4 of its 12 competitions — a real,
-// deterministic yield for this template (the strip warning banner names the
-// shortfall), not a bug. Both the block-count and row-count floors below were
-// lowered to "non-empty" to check what they can actually guarantee rather
-// than a number sized for a different, unscoped locator.
+// the Suggested strip count placed only 4 of its 12 competitions at the
+// time — attributed then to a genuine strip shortfall. That attribution was
+// made while 006's day-axis defect was live (all four day windows sharing
+// one day's strip capacity), and it was wrong: re-measured against the
+// running app after 006's fix, the same template places all 12 of 12, strip
+// count unchanged. The block-count and row-count floors below (T018) are set
+// to the numbers actually measured now, not to "non-empty".
 
 import { chromium } from 'playwright-core'
 import { homedir } from 'node:os'
@@ -147,6 +149,22 @@ if (scheduleRowsAtBoot !== 0) {
 }
 log('opens on the matrix, no schedule table mounted')
 
+// T017/FR-008: the boot-count assertion. B1 (the default preset) places 24
+// of its 24 selected events after 006's day-axis fix — measured against the
+// running app by switching to Schedule (a real table, not windowed) and back;
+// before the fix this same boot placed only 11 of 24
+// (specs/006-day-axis-parity/baseline.md). The matrix view itself is windowed
+// by viewport (see "Blocks render" below), so it is not read here.
+await page.getByRole('radio', { name: 'Schedule' }).click()
+await page.waitForTimeout(200)
+const bootPlacedCount = await page.locator('[data-schedule-row]').count()
+if (bootPlacedCount !== 24) {
+  throw new Error(`boot placed-event count regressed: expected 24, got ${bootPlacedCount}`)
+}
+log('boot places 24 of 24 events')
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(200)
+
 // Template picker is a ToggleGroup, not a select, and now sits behind the
 // rail's "Presets…" collapsible trigger (CompetitionMatrix, Events panel,
 // open by default) — Radix unmounts closed content, so click it first.
@@ -173,17 +191,17 @@ await shot('03-matrix')
 // Still on the default view: everything below through "Fit to day" reads the
 // matrix, not the schedule table.
 
-// Blocks render. An empty canvas after a successful auto-schedule is the
-// failure worth catching, not a locator problem. Non-empty is the whole bar:
-// ROC Div1A/Vet at the Suggested strip count places only 4 of its 12
-// competitions (the rest sit in the Unplaced tray — expected for this
-// template, see below), and the canvas windows by viewport, not by placement
-// count, so most of what did place is scrolled below the fold at rowScroll 0.
-// A higher floor here would be asserting this run's scroll position, not
-// whether blocks render.
+// Blocks render. ROC Div1A/Vet at the Suggested strip count now places all
+// 12 of its 12 competitions (re-measured after 006's day-axis fix — see the
+// header comment; the Unplaced tray is empty). The canvas still windows by
+// viewport, not by placement count, so not all 12 placed events have a block
+// in the DOM at the default scroll position: measured against the running
+// app, 11 render and the twelfth sits below the fold at rowScroll 0. The
+// schedule table below is the locator that reads the true placed count; this
+// floor only guards against the canvas windowing away everything.
 const blockCount = await page.locator('[data-event-block]').count()
 log('matrix event blocks =', blockCount)
-if (blockCount < 1) throw new Error('matrix canvas did not render blocks after auto-schedule')
+if (blockCount < 11) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
 
 // Captured now, before "Fit to day" below can scroll a block out of the
 // window and drop its DOM node (windowing culls what is off-window rather
@@ -251,10 +269,10 @@ await page.waitForTimeout(200)
 
 const rowCount = await page.locator('[data-schedule-row]').count()
 log('schedule table rows =', rowCount)
-// 4 of ROC Div1A/Vet's 12 competitions place at the Suggested strip count —
-// see the "Blocks render" comment above. A higher floor here would assert
-// this template's specific yield rather than that the table renders at all.
-if (rowCount < 1) throw new Error('schedule table did not render rows')
+// All 12 of ROC Div1A/Vet's 12 competitions place at the Suggested strip
+// count — see the "Blocks render" comment above. This is the true count, not
+// windowed like the matrix's block count.
+if (rowCount !== 12) throw new Error(`schedule table rendered ${rowCount} rows, expected 12`)
 
 for (const b of poolBlocks) {
   const row = page.locator(`[data-schedule-row="${b.id}"]`)

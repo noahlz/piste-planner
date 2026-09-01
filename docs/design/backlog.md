@@ -16,15 +16,52 @@ Spec Kit feature directory is created for one only when it is assigned a phase.
 
 ## Day-axis parity
 
-*Assigned to feature 006 on 2026-08-31 (unspecced). Blocks 004's US3.*
+*Assigned to feature 006 on 2026-08-31, done 2026-08-31. Unblocked 004's US3.*
 
-The app path (`applyPreset → buildTournamentConfig → scheduleAll`) schedules
-11 of B1's 24 events while the drift ledger's factory path schedules 24/24 —
-the store's clock-time `dayConfigs` collide on the engine's compacted day
+The app path (`applyPreset → buildTournamentConfig → scheduleAll`) scheduled
+11 of B1's 24 events while the drift ledger's factory path scheduled 24/24 —
+the store's clock-time `dayConfigs` collided on the engine's compacted day
 axis. The record, with repro, isolation numbers, and fix options, is
-[reassessment-2026-08-31.md §2](./reassessment-2026-08-31.md). The fix must
-add the app-path parity test so the ledger protects the app rather than a
-config it never builds.
+[reassessment-2026-08-31.md §2](./reassessment-2026-08-31.md). The full
+feature record, including the app-path parity test that now protects the app
+rather than a config it never builds, is
+[`specs/006-day-axis-parity/`](../../specs/006-day-axis-parity/); the
+store↔engine axis invariants it enforces are
+[`contracts/day-axis.md`](../../specs/006-day-axis-parity/contracts/day-axis.md).
+
+**What 006 deliberately did not fix**, so a later session does not have to
+rediscover these:
+
+- **Per-day capacity math still uses the `DAY_LENGTH_MINS` constant**, not the
+  per-day windows 006 introduced — `dayRemainingCapacity`
+  (`src/engine/capacity.ts:211`) and the DSATUR day-assignment loop
+  (`src/engine/dayColoring.ts:612`) both compute a day's strip-hour budget as
+  `strips_total × DAY_LENGTH_MINS / 60`, a fixed per-day length rather than
+  that day's own configured hours. 006's axis fix reconciled where events
+  land; it did not touch how much capacity a day is credited with. A
+  tournament whose days have unequal lengths (spec.md's own edge case) is
+  scheduled correctly today only because no reference tournament yet
+  discriminates the two — this is a latent gap, not a verified-safe one.
+- **Placement states for partial knowledge** — unplaced /
+  day-known-time-unknown / placed / pinned — stay parked at P4, per the
+  §Revised sequence table in
+  [`competition-planner-workbench.md`](./competition-planner-workbench.md).
+- **`findAvailableStripsInWindow`'s `day` argument guard has one residual
+  gap.** T015 states the day-inference precondition (`src/engine/resources.ts`
+  comments, no behavior change) and `__tests__/engine/resources.test.ts`
+  backstops it two ways: a `vi.spyOn` over a real multi-day `scheduleAll` run,
+  and a static arity check per call site in `concurrentScheduler.ts`. An
+  explicit `undefined` passed in the `day` position keeps the call's arity at
+  7 and slips past the static backstop at the STAGED-DE precheck call site
+  (`concurrentScheduler.ts:902`), which the spy cannot reach (it only fires
+  when a DE node doesn't fit before `dayHardEnd`, which no ordinary scenario
+  run triggers). The consequence is bounded — an unreached `day` value feeds
+  only the `reason` ternary in `findAvailableStripsInWindow`, so no scheduling
+  outcome moves — but a `TIME` shortfall could be relabeled `STRIPS` there,
+  manufacturing a spurious `STRIP_CONTENTION` bottleneck
+  (`concurrentScheduler.ts:727`) that tells an organizer to add strips when
+  the day was the real constraint. Documented in the test file's own comment
+  block above the guard's `describe`.
 
 ## Rail rebuild
 

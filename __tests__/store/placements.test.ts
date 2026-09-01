@@ -214,7 +214,7 @@ describe('analysisSlice shrink', () => {
 })
 
 describe('runScheduleAll (store inversion)', () => {
-  it('writes an auto placement per scheduled event, extracted from scheduleAll output', () => {
+  it('writes an auto placement per scheduled event, extracted from scheduleAll output, with the day offset removed (contracts/day-axis.md C2)', () => {
     setupB5()
     const { config, competitions } = buildTournamentConfig(useStore.getState())
     const expected = scheduleAll(competitions, config)
@@ -227,14 +227,42 @@ describe('runScheduleAll (store inversion)', () => {
     expect(Object.keys(state.placements).sort()).toEqual(scheduledIds.sort())
     for (const id of scheduledIds) {
       const result = expected.schedule[id]
+      // result.pool_start is on the scheduler axis (day * 1440 + clock time).
+      // The stored Placement.start_time must be clock time — the day offset
+      // subtracted off — never the raw scheduler-axis value (C2).
       expect(state.placements[id]).toEqual({
         day: result.assigned_day,
-        start_time: result.pool_start,
+        start_time: (result.pool_start as number) - result.assigned_day * 1440,
         strip_count: result.pool_strip_count,
         strips: null,
         source: 'auto',
         pinned: false,
       })
+    }
+  })
+
+  it('places every scheduled event inside its own day\'s clock hours, not some other day\'s (contracts/day-axis.md C2 round trip)', () => {
+    // B5 is 3 days with uniform hours DAY_START-DAY_END (store.ts setDays
+    // default) — a start_time outside that per-day window, or a day index
+    // that does not match where the scheduler actually placed the event,
+    // would mean the wrong day's offset was subtracted (e.g. subtracting
+    // day 0's 0 offset from a day-2 result rather than 2*1440).
+    setupB5()
+    const dayConfigsAtScheduling = useStore.getState().dayConfigs
+
+    runScheduleAll(useStore.getState())
+
+    const state = futureState()
+    const placements = Object.values(state.placements)
+    expect(placements.length).toBeGreaterThan(0)
+    for (const placement of placements) {
+      const window = dayConfigsAtScheduling[placement.day]
+      expect(window, `placement day ${placement.day} has no matching dayConfigs entry`).toBeDefined()
+      expect(
+        placement.start_time,
+        `placement on day ${placement.day} has start_time ${placement.start_time}, outside that day's clock window [${window.day_start_time}, ${window.day_end_time})`,
+      ).toBeGreaterThanOrEqual(window.day_start_time)
+      expect(placement.start_time).toBeLessThan(window.day_end_time)
     }
   })
 
