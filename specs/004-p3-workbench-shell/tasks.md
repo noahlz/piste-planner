@@ -211,9 +211,9 @@ the hand-set value survives.
 ### Implementation for User Story 4
 
 - [X] T059 [US4] Create the per-type default table in `src/store/typeDefaults.ts` ([data-model.md](./data-model.md) §Per-type default table)
-- [ ] T060 [US4] Widen the store's `CompetitionConfig.de_mode` to `DeModeSetting` with `AUTO` as the default for a new event, and make `video_strips_total` nullable defaulting to `null`, in `src/store/store.ts`. The engine's `DeMode` and `Competition` are not touched (research D6, D7, constitution I)
-- [ ] T061 [US4] Resolve all three defaults in `src/store/buildConfig.ts`, alongside the regional cut override already at line 139. `src/engine/pools.ts` is not modified – `resolveRefsPerPool` never learns about tournaments (research D5, constitution I)
-- [ ] T061a [US4] Resolve `strips_allocated` in `src/store/buildConfig.ts`, which
+- [X] T060 [US4] Widen the store's `CompetitionConfig.de_mode` to `DeModeSetting` with `AUTO` as the default for a new event, and make `video_strips_total` nullable defaulting to `null`, in `src/store/store.ts`. The engine's `DeMode` and `Competition` are not touched (research D6, D7, constitution I)
+- [X] T061 [US4] Resolve all three defaults in `src/store/buildConfig.ts`, alongside the regional cut override already at line 139. `src/engine/pools.ts` is not modified – `resolveRefsPerPool` never learns about tournaments (research D5, constitution I)
+- [X] T061a [US4] Resolve `strips_allocated` in `src/store/buildConfig.ts`, which
   sends a hardcoded `0` at line 151 where the ledger's factory pre-allocates
   `max(2, ceil(fencer_count / 7))` (`__tests__/helpers/scenarios.ts:69`). This is
   the fourth seam of the four `specs/006-day-axis-parity/parity-exceptions.md`
@@ -222,9 +222,9 @@ the hand-set value survives.
   diffs against is untouched. Expect the app-path B4 pin to move 16 → 0 as the
   feasibility gate starts firing: an explained drop, recorded in
   `parity-exceptions.md` §B4, not a regression. Added 2026-08-31
-- [ ] T062 [US4] **Run the drift gate.** Execute B1–B8 and diff against `specs/004-p3-workbench-shell/drift-baseline.md` from T002. Scheduled event counts MUST be identical – any drop halts the task until the cause is identified and recorded. Explain every referee movement: B6's pool demand roughly halving from D5, and B1/B2/B3/B7/B8's DE demand rising from D6. Record before-and-after figures per scenario in the commit message (constitution III) *(subagent commits)*
-- [ ] T063 [US4] Re-baseline the B1–B8 integration referee assertions in `__tests__/engine/integration.test.ts` to the explained figures from T062, and record in `specs/004-p3-workbench-shell/research.md` that the drift was reviewed rather than accepted
-- [ ] T063a [US4] Re-measure the three app-path parity pins in
+- [X] T062 [US4] **Run the drift gate.** Execute B1–B8 and diff against `specs/004-p3-workbench-shell/drift-baseline.md` from T002. Scheduled event counts MUST be identical – any drop halts the task until the cause is identified and recorded. Explain every referee movement: B6's pool demand roughly halving from D5, and B1/B2/B3/B7/B8's DE demand rising from D6. Record before-and-after figures per scenario in the commit message (constitution III) *(subagent commits)*
+- [X] T063 [US4] Re-baseline the B1–B8 integration referee assertions in `__tests__/engine/integration.test.ts` to the explained figures from T062, and record in `specs/004-p3-workbench-shell/research.md` that the drift was reviewed rather than accepted
+- [X] T063a [US4] Re-measure the three app-path parity pins in
   `__tests__/store/appPathParity.test.ts` – B4 (16), B6 (43), B8 (53) – against
   the post-D5/D6/D7/T061a code, and record whatever they measure rather than
   adjusting anything to reach a hoped-for number. Then reconcile
@@ -238,11 +238,11 @@ the hand-set value survives.
   issue #255 (008 T010) already anticipated. A pin off the ledger's count with no
   matching `parity-exceptions.md` entry fails the suite, so a stale entry fails
   loudly. Added 2026-08-31 *(subagent commits)*
-- [ ] T064 [US4] Update `src/store/serialization.ts` for the nullable video strip count and the widened DE mode, keeping `schemaVersion` at `2` with new fields optional on read and always written on save (research D8)
-- [ ] T065 [US4] Build `src/components/workbench/AdvancedPanel.tsx` in the rail – the three defaults, dim on the collapsed panel, with following-default distinguishable from explicit (FR-031, FR-035, FR-039). Hard policies are absent (FR-040)
-- [ ] T066 [US4] Extend `scripts/smoke.mjs` to change the tournament type and confirm a hand-set value survives it – the behavior the spec's clarification settled (constitution VI)
-- [ ] T067 [US4] Dispatch `test-quality-reviewer` on T055–T058 and the re-baselined assertions in T063
-- [ ] T068 [US4] Dispatch `react-code-reviewer` on T065
+- [X] T064 [US4] Update `src/store/serialization.ts` for the nullable video strip count and the widened DE mode, keeping `schemaVersion` at `2` with new fields optional on read and always written on save (research D8)
+- [X] T065 [US4] Build `src/components/workbench/AdvancedPanel.tsx` in the rail – the three defaults, dim on the collapsed panel, with following-default distinguishable from explicit (FR-031, FR-035, FR-039). Hard policies are absent (FR-040)
+- [X] T066 [US4] Extend `scripts/smoke.mjs` to change the tournament type and confirm a hand-set value survives it – the behavior the spec's clarification settled (constitution VI)
+- [X] T067 [US4] Dispatch `test-quality-reviewer` on T055–T058 and the re-baselined assertions in T063
+- [X] T068 [US4] Dispatch `react-code-reviewer` on T065
 
 **Checkpoint**: Per-type defaults apply, explicit values survive type changes, and the drift is explained and recorded. *(subagent commits)*
 

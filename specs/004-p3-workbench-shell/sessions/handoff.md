@@ -1558,3 +1558,168 @@ verified baseline, green tree, amended constitution, completed task list — and
 then hit the re-plan rule, which exists precisely so the session that discovers a
 plan is wrong does not also build against its own revision. The record is
 written and the branch is green. S8 starts at T055 with the gate in front of it.
+
+## S8
+
+**Scope**: US4 (T059–T068), resuming from S7's verified zero point. T055–T058 were
+already committed. **All of US4 is complete.** The drift gate ran, passed, and is
+explained. What remains is the merge, which is the user's.
+
+### Final gate
+
+`tsc -b` exit 0 · `lint` exit 0 · **65 files, 1754 tests, 0 failures** ·
+**live smoke PASS**, three consecutive green runs, zero console errors.
+
+The suite grew 1660 → 1754. S7's reconciliation figure of 1660 was the correct
+starting point and was never contradicted.
+
+### What landed
+
+| Task | Commit | What landed |
+|---|---|---|
+| T059 | `effa7c908e` | `src/store/typeDefaults.ts`, the six-row table |
+| T060 | `85025b7aa8` | `DeModeSetting`; `video_strips_total` nullable |
+| T060 follow-up | `4bf42eb776` | the two store-default assertions T060's dispatch fenced off |
+| T061 | `9f53379b70` | the three per-type resolutions in `buildConfig.ts` |
+| T061a | `29aabc9031` | `strips_allocated` pre-allocation, the fourth app-path seam |
+| T061a follow-up | `aaaa409a1c` | the two `strips_allocated` assertions re-baselined |
+| T062 | `6fc25a3b4a` | **the drift gate**, run and explained |
+| T063 | `a70844c8c5` | the app-path assertions the measured drift moved |
+| T063a | `aa13bbce7b` | parity pins re-measured, exceptions reconciled |
+| T064 | `b5a10d5254` | serialization: optional on read, `de_mode` validated |
+| T065 | `332817d283` | `AdvancedPanel.tsx`; DE mode's AUTO marker |
+| T065 hardening | `94c1fef200` | T067's four contract hardenings |
+| T067 fixes | `b25e1e16c8` | the assertions the re-baseline weakened |
+| T068 fixes | `b48eb7ad95` | video strips' follow-default path |
+| T068 finding 7 | `e11b72ef10` | `RailPanel` gains a summary slot |
+| T066 | `940480e198` | the type-change smoke assertion |
+
+### The gate was flat, and that is the finding
+
+**All 48 ledger cells unchanged. No `scheduledCount` dropped. The halt condition
+never fired.**
+
+The flatness is not a rubber stamp — it is the measurement that refuted
+`drift-baseline.md` §"What research D5 and D6 predict will move". That section
+predicted B6's pool demand halving and the five NAC scenarios' DE demand rising
+fourfold **on the ledger**. It was written believing resolution would reach the
+ledger path. It does not: D5, D6, D7 and T061a all live in `src/store/`, and the
+ledger harness builds from `__tests__/helpers/scenarios.ts` straight into
+`scheduleAll`, never traversing `buildConfig.ts`. `integration.test.ts` staying
+green untouched through T059–T061a was the first corroboration, before T062 ran.
+
+So the drift was measured where it actually is — the app path — and recorded in
+`drift-baseline.md` §T062. D5 isolated cleanly there: holding the schedule fixed
+and resolving only the policy gives Δ 0 on seven scenarios and **−100 on B6
+alone** (200 → 100), the exact halving research predicted, one path over.
+
+**D6's "roughly fourfold" claim is untestable on this instrument and remains
+untested.** `peakDeRefDemand` reduces to `DE_REFS × de_round_of_16_strips` = 1 × 4
+(`src/engine/refs.ts:31-42`) and never reads `de_mode`. Staging did land — 24/24/24/18/53
+events `STAGED` on B1/B2/B3/B7/B8 — but every DE-column movement is re-packing.
+Testing the claim needs `de_prelims_strip_count` / `de_round_of_16_strip_count`.
+
+### The drop nobody predicted: B6, 43 → 39
+
+T061a was dispatched expecting one movement (B4, 16 → 0). It found two. **B6's
+app-path count fell 43 → 39**, and the measurement is why we know:
+
+- `validateFeasibility` is clean on both sides — a re-pack inside the budget, not
+  a refusal.
+- Not a clean loss of four: **8 events out, 4 in**. Three of the four gained are
+  events `parity-exceptions.md` §B6 lists as *ledger-only*, so the app moved
+  toward the ledger there while shedding eight youth/vet events.
+- B6 is an ROC, so `REGIONAL_CUT_OVERRIDES` forces all-advance brackets, and those
+  brackets now cost real strip-hours that `strips_allocated: 0` had masked.
+- Both movements were isolated by zeroing `strips_allocated` back and re-running,
+  so neither belongs to T061.
+
+Identified and recorded before the commit, which is what constitution III requires.
+
+### The seam flipped sides, and the old attributions are now wrong
+
+T063a re-measured field-by-field across all 54 of B6's and all 53 of B8's
+competitions rather than inheriting 006's and 008's causes:
+
+- **B6** — `strips_allocated` now differs on **zero** competitions. Ledger
+  `de_mode` alone reaches exactly 44; `cut_mode` alone **overshoots to 54**. 006's
+  "either default alone is worth one event" no longer holds.
+- **B8** — `de_mode` is now **sole and sufficient** (52 on its own), where
+  `b8-residual.md` had it necessary-but-insufficient in conjunction with
+  `strips_allocated`. T061a closed the other half.
+
+**B4 closed** at 0, the ledger's exact count; its entry was deleted, forced by the
+existing companion assertion rather than chosen. B6 and B8 re-assign to one
+unnumbered follow-up in `docs/design/backlog.md`: *"The drift ledger's factory
+does not apply the store's per-type resolutions."* B8 was never going to reach 52
+this way — `b8-residual.md` P1 measured 52 under the ledger's **per-event**
+staging rule, and US4 shipped the **per-type** rule per `data-model.md`. A rule
+difference, not a shortfall.
+
+`appPathParity.test.ts:216`'s `closedBy` assertion was relaxed from
+`toContain('004 US4')` to requiring a non-empty named owner **that names a
+locatable artifact** (`/backlog\.md|specs\//`) — the placeholder-list version
+alone would have let `closedBy: 'later'` pass.
+
+### Two requirement gaps the reviews found, which the tasks did not
+
+Both were invisible to a green suite, and neither was in any task's text.
+
+1. **FR-038 was unasserted anywhere in the repo**, and `tasks.md:242` scoped T065
+   to FR-031/035/039 only. The panel could have shipped `AUTO` as **write-once
+   through the UI** — the whole per-type mechanism intact, unreachable, suite
+   green. T065 had in fact built the follow-default option already; nothing pinned
+   it.
+2. **`video_strips_total` had no follow-default path at all.** Referees and DE mode
+   each got their `Auto (…)` option; video did not. `number-input.tsx:9` types
+   `onChange: (value: number) => void`, so the only UI writer of the field could
+   never write `null`, and `boot.ts:40` applies a preset on every non-`#config=`
+   boot. In the running app the field was a number from first paint and stayed
+   one. A prior session had recorded the consequence at `appPath.test.ts:70`
+   without connecting it to FR-038.
+
+Also closed: `ref_policy` and `de_mode` were both **unvalidated on
+deserialization**. A link carrying an unrecognized value dropped the control into
+the no-selection state T065's DE-mode repair had just fixed — the same hole, one
+field over.
+
+### One discovery worth carrying beyond this feature
+
+`src/test-setup.ts` needed a `scrollIntoView` no-op. jsdom does not implement it,
+and Radix's `Select` calls it on the active item the instant its listbox opens,
+throwing out of a commit effect. **Before this, no test in this repo could open a
+Select.** Verified load-bearing by reverting it: both Select-driving cases fail at
+`@radix-ui/react-select select.tsx:590`.
+
+### Recorded in `docs/design/backlog.md`, deliberately not fixed
+
+- The ledger factory not applying the store's per-type resolutions (B6, B8).
+- `AdvancedPanel.tsx`'s `refereesPerPool` re-implements `refs.ts:22`'s factor in
+  the UI, invisible to the B1–B8 ledger. The fix edits `src/engine/`, so it is a
+  gated change with its own snapshot review, not a follow-up patch.
+- `RefRequirementsByDay` carries no sabre-specific peak time
+  (`refs.ts:97-99` sweeps the total for `peak_time`), so a metric row can report
+  64 referees and highlight nothing. FR-029 says hovering MUST highlight the
+  driving blocks. B1 is the first fixture where the documented approximation
+  visibly fails, and it is now pinned as an expected string.
+- RYC is absent from `REGIONAL_CUT_TOURNAMENT_TYPES` while `data-model.md` groups
+  it with the regionals at 1 ref/pool — regional for referee defaults,
+  non-regional for handbook cut policy. Pre-existing.
+
+The "220 peak refs on day 0" backlog figure was **stale** — it was S6's pre-US4
+reading. B1 day 0 now reads **160 on both paths**, and the store/engine divergence
+has moved off day 0 entirely: days 0, 1 and 3 agree exactly (160, 182, 194) and
+only day 2 differs (store 164, engine 156). It is not comparable to a published
+headcount in any case — `peak_total_refs` is a sweep-line maximum of simultaneous
+referee *assignments* at one minute, carrying no rotation, rest, or bout-committee
+overhead, over one competition day.
+
+### What is left, and it is the user's
+
+The merge. Under constitution 1.6.0 §"The merge is gated, not just the branch",
+the **merged** tree runs `tsc -b`, `lint`, and the full suite before the pending
+merge commit is written. Both halves of the 004×008 collision that produced that
+amendment are already resolved on this branch.
+
+`git merge --no-ff --no-commit 004-us4-drift-gate`, gate the merged tree, then
+`commit-with-costs` completes it.
