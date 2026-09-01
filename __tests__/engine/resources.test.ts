@@ -422,12 +422,25 @@ describe('findAvailableStripsInWindow', () => {
 //   (:914-916). Not worth an elaborate scenario to force the precheck path —
 //   that's exactly why the backstop below doesn't depend on either site
 //   being hit at runtime.
-// - The backstop is a hardened static check: there are exactly two
-//   findAvailableStripsInWindow call sites in the file, so a third one added
-//   elsewhere is caught even if the spy never reaches it. It strips comments
-//   and does a balanced-paren scan rather than a lazy `)` match, so a
-//   trailing comment, a variable rename, or a nested call in an earlier
-//   argument does not fool it.
+// - The backstop is a hardened static check with two parts. First, there are
+//   exactly two findAvailableStripsInWindow call sites in the file, so a
+//   third one added elsewhere is caught even if the spy never reaches it.
+//   Second, each call site's argument list is split at paren/bracket/brace
+//   depth 0 and its arity checked against the function's 7-parameter
+//   signature (`state, config, count, startTime, duration, videoRequired,
+//   day` — `day` is index 6). Dropping the `day` argument at either site,
+//   including the STAGED-DE precheck (:902) the spy cannot reach, now drops
+//   arity to 6 and fails here. Both parts strip comments and do a
+//   balanced-paren scan rather than a lazy `)` match, so a trailing comment,
+//   a variable rename, or a nested call in an earlier argument (e.g.
+//   `Math.max(0, x)`) does not fool them. Arity checks structure, not
+//   identifier text, so renaming `day` to `dayIndex` still passes.
+//
+//   Residual gap: an explicit `undefined` passed in the `day` position keeps
+//   arity at 7 and slips past the backstop. The spy would catch that at the
+//   reachable site (:914-916) but not at the STAGED-DE precheck (:902) — the
+//   same reachability limit noted above. No static check distinguishes
+//   `undefined` from any other value in an argument position.
 // ──────────────────────────────────────────────
 
 describe('findAvailableStripsInWindow — day-inference precondition (T015)', () => {
@@ -457,7 +470,7 @@ describe('findAvailableStripsInWindow — day-inference precondition (T015)', ()
     }
   })
 
-  it('backstop: exactly two findAvailableStripsInWindow call sites exist in concurrentScheduler.ts', () => {
+  it('backstop: exactly two findAvailableStripsInWindow call sites exist in concurrentScheduler.ts, each passing all 7 arguments (day is index 6)', () => {
     const source = readFileSync(SCHEDULER_PATH, 'utf-8')
     const stripped = source
       .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -470,8 +483,40 @@ describe('findAvailableStripsInWindow — day-inference precondition (T015)', ()
     // anywhere in the file — reachable by the spy above or not — should fail
     // this count.
     expect(callSites).toHaveLength(2)
+
+    // Arity check: each site must pass all 7 parameters of
+    // findAvailableStripsInWindow(state, config, count, startTime, duration,
+    // videoRequired, day). This catches a dropped `day` argument at the
+    // STAGED-DE precheck site (:902), which the spy above cannot reach — see
+    // the "residual gap" note in the block comment above this describe.
+    for (const site of callSites) {
+      const argsText = site.slice('findAvailableStripsInWindow('.length, -1)
+      const argCount = countTopLevelArgs(argsText)
+      expect(argCount, `expected 7 arguments (day at index 6) in call site: ${site}`).toBe(7)
+    }
   })
 })
+
+/**
+ * Counts comma-separated arguments in a call's argument text at paren/
+ * bracket/brace depth 0, so a nested call in one argument (e.g.
+ * `Math.max(0, node.ready_time)`) is not mistaken for two arguments. A single
+ * trailing comma before the closing paren does not count as an extra,
+ * absent argument.
+ */
+function countTopLevelArgs(argsText: string): number {
+  const trimmed = argsText.trim()
+  if (trimmed === '') return 0
+  let depth = 0
+  let count = 1
+  for (const ch of trimmed) {
+    if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') depth--
+    else if (ch === ',' && depth === 0) count++
+  }
+  if (/,\s*$/.test(trimmed)) count--
+  return count
+}
 
 /**
  * Finds every call site of `fnName(...)` in `source` with a balanced-paren
