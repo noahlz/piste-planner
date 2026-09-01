@@ -47,7 +47,7 @@ converges the ledger's factory (D2).
 ## D2 — Should the drift ledger's factory read the store's helper?
 
 **Decision**: **No.** `__tests__/helpers/scenarios.ts` keeps its own copy of
-the team branch (`scenarios.ts:34-37`). The only change made to that file is a
+the team branch (`scenarios.ts:49-52`). The only change made to that file is a
 comment saying the duplication is deliberate and pointing here, so the next
 reader does not "clean it up".
 
@@ -93,7 +93,7 @@ catalogue rather than against the ledger's copy.
 ## D3 — What value a team event's cut takes
 
 **Decision**: the all-advance setting — cut mode `DISABLED`, cut value `100` —
-matching what the ledger's factory has always sent (`scenarios.ts:35-36`).
+matching what the ledger's factory has always sent (`scenarios.ts:50-51`).
 
 **Rationale**: the engine's rule (`src/engine/validation.ts:157-159`) tests
 the mode only, so the value is free. Choosing `100` rather than leaving the
@@ -119,7 +119,7 @@ returns. Then attribute the gap by the same isolation method
 `parity-exceptions.md` used for B4 and B6: hold the config fixed, swap one
 per-competition default at a time, and record which one closes the distance.
 
-The result decides one line of the suite. `appPathParity.test.ts:219` asserts
+The result decides one line of the suite. `appPathParity.test.ts:216` asserts
 that every exception's `closedBy` contains the literal `004 US4`. That
 assertion was written when all four exceptions were US4's. If B8's residual
 is attributable to the staging or `strips_allocated` defaults, it stays US4's

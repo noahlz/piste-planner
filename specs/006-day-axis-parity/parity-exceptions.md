@@ -81,7 +81,7 @@ Two files build a `Competition` from the same catalogue entry and disagree:
 | | Store (`src/store/store.ts:217-235`, `src/store/buildConfig.ts:110-151`) | Ledger factory (`__tests__/helpers/scenarios.ts:44-72`) |
 |---|---|---|
 | `cut_mode` for a TEAM event — **closed by 008** | `event_type === TEAM` branch in `defaultCutForEntry` (`src/store/competitionDefaults.ts`) | `CutMode.DISABLED` / 100 when `isTeam` (`scenarios.ts:49-52`) |
-| `cut_mode` at a regional type | `REGIONAL_CUT_OVERRIDES` applied (`buildConfig.ts:161-168`) | not applied |
+| `cut_mode` at a regional type | `REGIONAL_CUT_OVERRIDES` applied (`buildConfig.ts:161-169`) | not applied |
 | `de_mode` | hardcoded `SINGLE_STAGE` (`store.ts:231`) | `STAGED` when individual and video REQUIRED (`scenarios.ts:66-68`) |
 | `strips_allocated` | `0` (`buildConfig.ts:151`) | `max(2, ceil(fencer_count / 7))` (`scenarios.ts:69`) |
 | `latest_end` | `Infinity` (`buildConfig.ts:144`) | `9999` (`scenarios.ts` `makeCompetition` default) |
@@ -173,7 +173,7 @@ its own:
 
 1. **The regional cut override.** B6 is an ROC, one of
    `REGIONAL_CUT_TOURNAMENT_TYPES` (`src/engine/constants.ts:577-582`).
-   `buildConfig.ts:161-168` forces all-advance for Y14/Cadet/Junior/Div1, which
+   `buildConfig.ts:161-169` forces all-advance for Y14/Cadet/Junior/Div1, which
    the engine's own rule requires — `regional-cut-override`,
    `src/engine/validation.ts:256-267`, "regional tournament requires all-advance
    … cut_mode will be overridden to DISABLED". The ledger's factory does not

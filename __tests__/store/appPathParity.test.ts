@@ -59,8 +59,8 @@ interface ParityException {
  *
  * All three trace to the same seam: `defaultConfigForId`
  * (`src/store/store.ts:217-235`) and `buildConfig.ts`'s `strips_allocated: 0`
- * (`src/store/buildConfig.ts:145`) build a competition differently from the
- * ledger's factory (`__tests__/helpers/scenarios.ts:34-54`). Converging them
+ * (`src/store/buildConfig.ts:151`) build a competition differently from the
+ * ledger's factory (`__tests__/helpers/scenarios.ts:49-69`). Converging them
  * is 004's US4 (per-type competition defaults), deliberately out of 006's
  * scope (spec.md "Out of Scope").
  */
@@ -70,11 +70,11 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
    * not "stricter" — its feasibility gate simply sees demand the app's does
    * not. `estimateCompetitionStripHours` computes a SINGLE_STAGE event's DE
    * strip-hours as `strips_allocated × de_duration / 60`
-   * (`src/engine/capacity.ts:146`), so `buildConfig.ts:145`'s
+   * (`src/engine/capacity.ts:146`), so `buildConfig.ts:151`'s
    * `strips_allocated: 0` zeroes the DE term for every individual event and
    * the upfront check at `src/engine/validation.ts:405` never fires. The
    * ledger pre-allocates `max(2, ceil(n/7))` strips
-   * (`__tests__/helpers/scenarios.ts:54`) and reports
+   * (`__tests__/helpers/scenarios.ts:69`) and reports
    * `feasibility-strip-hours`: 2161 strip-hours needed against 1680
    * available (3d × 40s × 14h), a ~29% shortfall.
    *
@@ -102,14 +102,14 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
    *
    * Two per-competition defaults each account for it independently:
    *
-   * - **cut_mode.** B6 is an ROC. `buildConfig.ts:156-164` applies
+   * - **cut_mode.** B6 is an ROC. `buildConfig.ts:161-169` applies
    *   `REGIONAL_CUT_OVERRIDES` — all-advance for Y14/Cadet/Junior/Div1 at a
    *   regional event — which the engine's own rule requires
    *   (`src/engine/validation.ts:256-267`). The ledger's factory does not
    *   apply it and cuts at 20%. Here the app is the correct side and the
    *   ledger's 44 is measured on a config the engine flags.
    * - **de_mode.** The ledger derives STAGED from a REQUIRED video policy
-   *   (`__tests__/helpers/scenarios.ts:51-53`); the store hardcodes
+   *   (`__tests__/helpers/scenarios.ts:66-68`); the store hardcodes
    *   SINGLE_STAGE (`src/store/store.ts:231`). Here the ledger is the
    *   correct side — this is D7's named staging default.
    *
@@ -132,9 +132,9 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
    * Two of 004 US4's per-competition defaults are jointly responsible, and
    * neither is sufficient alone — the opposite of B6, where either sufficed
    * on its own. The ledger derives STAGED de_mode from a REQUIRED video
-   * policy (`__tests__/helpers/scenarios.ts:51-53`) against the store's
+   * policy (`__tests__/helpers/scenarios.ts:66-68`) against the store's
    * hardcoded SINGLE_STAGE (`src/store/store.ts:231`), and pre-allocates
-   * `max(2, ceil(n/7))` strips (`scenarios.ts:54`) against
+   * `max(2, ceil(n/7))` strips (`scenarios.ts:69`) against
    * `buildConfig.ts:151`'s `strips_allocated: 0`. Swapping either default
    * alone leaves the app path at 53; swapping both together reaches 52,
    * matching the ledger exactly. `cut_mode` is closed on B8 — B8 is a NAC,

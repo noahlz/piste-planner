@@ -36,7 +36,7 @@ adjusted toward either number.
 
 Both metrics agree on every run below: `Object.keys(schedule).length` (the drift
 ledger's `scheduledCount`) equals the count of entries with a non-null
-`pool_start` (the app path's `placedCount`, via `runActions.ts:28`). On B8 the
+`pool_start` (the app path's `placedCount`, via `appPath.ts:46`). On B8 the
 scheduler emits no key for an event it cannot place, so the two paths' different
 counting rules are not a source of the gap. This was checked rather than
 assumed — it is a divergence the four tabulated ones do not cover.
@@ -167,8 +167,8 @@ gate, here it buys one event.
    checked before that was said.
 4. **Does the residual belong to 004's US4?** **Yes.** Both causes are US4's
    named per-type competition defaults — the staging derivation
-   (`scenarios.ts:51-53` against `store.ts:231`) and the pre-allocated strips
-   (`scenarios.ts:54` against `buildConfig.ts:151`). `appPathParity.test.ts`'s
+   (`scenarios.ts:66-68` against `store.ts:231`) and the pre-allocated strips
+   (`scenarios.ts:69` against `buildConfig.ts:151`). `appPathParity.test.ts`'s
    assertion that every exception's `closedBy` contains `004 US4` stands for
    B8, and T010 does not need to weaken it on B8's account.
 
