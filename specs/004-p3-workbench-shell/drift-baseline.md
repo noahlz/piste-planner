@@ -59,6 +59,50 @@ B4 trips the upfront `validateFeasibility` gate before any per-day packing
 runs (Ruling 11, `__tests__/engine/driftLedger.test.ts`) — 0 scheduled, 0
 peak demand on either arm, by design, not a capture error.
 
+## Re-verification before US4
+
+**Date**: 2026-08-31. **Verified against**: `e67fa9cdd0` (`main`, with features
+006 and 008 both merged since the original capture). **Original capture SHA**:
+`f9a74ca58d949ee63988b806a71c774bd2180ecd`.
+
+Two features landed in `main` between the capture and this check. The ledger
+path's inputs were diffed across the two SHAs rather than assumed unmoved:
+
+- `git diff f9a74ca58d..e67fa9cdd0 -- src/engine/` touches only
+  `src/engine/resources.ts`, and only its comments — no code line differs.
+- `git diff f9a74ca58d..e67fa9cdd0 -- src/data/` is empty — `tournaments.ts`
+  and its `SCENARIOS` fixture data are untouched.
+- `git diff f9a74ca58d..e67fa9cdd0 -- __tests__/helpers/scenarios.ts` adds
+  only a 15-line doc comment (the D2/appPathParity note above) — the
+  `buildCompetitions`/`tournamentConfig` bodies are unchanged.
+
+That is comments-only movement on every file the harness touches, not an
+assertion that nothing changed — the diffs were read, not skipped.
+
+The harness in §Harness was rebuilt at `tmp/baseline.capture.test.ts` and run
+against `e67fa9cdd0`:
+
+| Scenario | Type | Scheduled | Total comps | Peak pool | Peak DE |
+|---|---|---:|---:|---:|---:|
+| B1 | NAC  | 24 | 24 | 248 | 24 |
+| B2 | NAC  | 24 | 24 | 332 | 28 |
+| B3 | NAC  | 24 | 24 | 304 | 24 |
+| B4 | SYC  | 0  | 30 | 0   | 0  |
+| B5 | SJCC | 12 | 12 | 116 | 16 |
+| B6 | ROC  | 44 | 54 | 234 | 64 |
+| B7 | NAC  | 18 | 18 | 340 | 20 |
+| B8 | NAC  | 52 | 53 | 316 | 64 |
+
+Every cell matches the §Baseline table exactly. No harness correction was
+needed to reach this table — the first run reproduced the document's shape
+and numbers together. The harness was run twice in the same process
+(`expect(run2).toEqual(run1)`); both runs produced identical values on every
+column for every scenario, ruling out non-determinism as a source of
+agreement or disagreement.
+
+**Verdict**: the §Baseline table is still the correct zero point for the US4
+drift gate.
+
 ## What research D5 and D6 predict will move
 
 Both are documented in `specs/004-p3-workbench-shell/research.md` and are the
