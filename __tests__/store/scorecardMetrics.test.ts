@@ -145,6 +145,21 @@ function zeroStrips(): void {
   })
 }
 
+/**
+ * B5, then CDT-W-FOIL-IND's placement moved to day 3. `days_available` is 3,
+ * so days 0-2 are the only valid range and day 3 sets
+ * `derived.day_out_of_range` (`src/engine/derive.ts:247`). The event still
+ * derives a `ScheduleResult` — the flag only marks the placement, it does not
+ * stop derivation — but `assignStripLanes` draws it no row
+ * (`src/components/canvas/lanes.ts:138-144`), and the selector's own two
+ * `day_out_of_range` skips (`scorecardBlocks`, `src/store/derived.ts:277`,
+ * and `latestFinish`, `src/store/derived.ts:341`) are built to agree with it.
+ */
+function b5OneOutOfRange(): void {
+  b5()
+  useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 3 })
+}
+
 // ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
@@ -565,6 +580,79 @@ describe('selectScorecardMetrics — every key names a block the canvas draws', 
     for (const m of metrics()) {
       expect(new Set(m.blockKeys).size, `metric "${m.id}" repeated a block key`).toBe(m.blockKeys.length)
     }
+  })
+})
+
+// ──────────────────────────────────────────────
+// day_out_of_range: an event pushed off the canvas
+// ──────────────────────────────────────────────
+
+describe('selectScorecardMetrics — a placement pushed out of range', () => {
+  it('names no block for the out-of-range event, in any metric', () => {
+    b5OneOutOfRange()
+    for (const m of metrics()) {
+      expect(m.blockKeys.includes('CDT-W-FOIL-IND:DE'), `metric "${m.id}" named CDT-W-FOIL-IND:DE`)
+        .toBe(false)
+      expect(m.blockKeys.includes('CDT-W-FOIL-IND:POOLS'), `metric "${m.id}" named CDT-W-FOIL-IND:POOLS`)
+        .toBe(false)
+    }
+  })
+
+  /**
+   * `strips:utilization` moves from 34.62169312169312 (B5 in full, measured
+   * in the table above) to 31.776455026455025 once CDT-W-FOIL-IND's own
+   * strip-minutes drop out of the sum — both read straight off
+   * `selectScorecardMetrics`, before and after the placement update, on
+   * 2026-08-31. The 22 remaining keys are B5's 24 (`B5_ALL_KEYS`) minus
+   * CDT-W-FOIL-IND's two.
+   */
+  it('drops strips:utilization\'s value and that event\'s two keys once it is out of range', () => {
+    b5()
+    const before = metric('strips:utilization').value
+    expect(before).toBeCloseTo(34.62169312169312, 10)
+
+    useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 3 })
+    const after = metric('strips:utilization').value
+
+    expect(after).toBeCloseTo(31.776455026455025, 10)
+    expect(after).not.toBe(before)
+    expect(keys('strips:utilization')).toEqual(
+      B5_ALL_KEYS.filter((k) => !k.startsWith('CDT-W-FOIL-IND:')),
+    )
+  })
+
+  /**
+   * `finish:tournament` moves from 972 — CDT-W-FOIL-IND's own `de_total_end`,
+   * the B5 argmax pinned in the table above — to 872, the next-highest
+   * in-range finish, once CDT-W-FOIL-IND is out of range. `finish:day:0` (the
+   * day it left) falls to 872 too, both measured the same way as
+   * strips:utilization above, on 2026-08-31.
+   *
+   * `latestFinish` (`src/store/derived.ts:337-354`) carries its own
+   * `day_out_of_range` skip, separate from `scorecardBlocks`'s: it reads
+   * `de_total_end` straight off `schedule.events` rather than walking
+   * `blocks`, so a mutation of that skip is invisible to the
+   * strips:utilization case above and needs its own proof. Without the skip,
+   * `latestFinish(null)` would still find CDT-W-FOIL-IND's 972 the max (its
+   * `assigned_day` filter only applies to the per-day calls, not the
+   * tournament-wide one), while its `blockKeys` lookup goes through
+   * `keysByCompetition`, which `scorecardBlocks`'s own (intact) skip has
+   * already emptied of CDT-W-FOIL-IND — so the failure surfaces as a wrong
+   * value (972) paired with an empty key list, not as CDT-W-FOIL-IND's own
+   * keys appearing.
+   */
+  it('drops finish:tournament and the day it left to the next in-range finish', () => {
+    b5()
+    expect(metric('finish:tournament').value).toBe(972)
+    expect(metric('finish:day:0').value).toBe(972)
+
+    useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 3 })
+
+    expect(metric('finish:tournament').value).toBe(872)
+    expect(keys('finish:tournament')).toEqual(['JR-M-EPEE-IND:DE', 'JR-M-EPEE-IND:POOLS'])
+
+    expect(metric('finish:day:0').value).toBe(872)
+    expect(keys('finish:day:0')).toEqual(['JR-M-EPEE-IND:DE', 'JR-M-EPEE-IND:POOLS'])
   })
 })
 
