@@ -192,26 +192,34 @@ describe('scorecardBaseline — frozen against edits', () => {
   })
 
   /**
-   * Cutting CDT-W-FOIL-IND from 70 fencers to 20 shortens its pools and DE,
-   * and `strips:utilization` falls 34.6216…% to 32.9292…%.
+   * Cutting CDT-M-EPEE-IND from 70 fencers to 20 shortens its pools and DE, so
+   * day 2's finish falls and `strips:utilization` goes 34.6216…% to 32.1296…%.
    *
-   * 004 US4 T063 — no live number here moved, but the case's evidence did.
-   * CDT-W-FOIL-IND used to be B5's unique latest-finishing event at 972, and
-   * the two finish assertions below were the movement: 972 down to the 872
-   * shared by the next three. T061a's re-pack ended that — CDT-W-FOIL-IND now
-   * finishes at 867 on day 2 and the tournament finish is already 872 before
-   * the edit, so **both finish assertions now hold vacuously**. They are kept
-   * because they are still true and still guard the baseline's independence,
-   * but `strips:utilization` is the only one of the three that actually
-   * demonstrates "moves the live metrics" on this fixture now.
+   * 004 US4 T067 — the edit was CDT-W-FOIL-IND until T063's re-pack made this
+   * case prove nothing. CDT-W-FOIL-IND used to be B5's unique latest-finishing
+   * event at 972, so cutting it was what moved the tournament finish, 972 down
+   * to the 872 shared by the next three. After T061a it finishes at 867 on day
+   * 2 and 872 is already the finish before the edit, which left both finish
+   * assertions vacuously true while the case's **name** went on promising a
+   * movement — and the name is what the next reader greps for.
+   *
+   * The edit now targets day 2's argmax, CDT-M-EPEE-IND at 872. Cutting it
+   * drops `finish:day:2` to CDT-W-FOIL-IND's 867, a real movement against the
+   * 872 the frozen baseline still holds. `finish:tournament` and
+   * `finish:day:0` are kept at 872 deliberately: days 0 and 1 still finish
+   * there, so together the three show a day-level movement that does not reach
+   * the tournament row — and all four assertions still guard the baseline's
+   * independence from the live metrics.
    */
   it('updateCompetition moves the live finish and leaves the baseline where it was', () => {
     loadPreset('B5')
-    useStore.getState().updateCompetition('CDT-W-FOIL-IND', { fencer_count: 20 })
+    useStore.getState().updateCompetition('CDT-M-EPEE-IND', { fencer_count: 20 })
 
+    // The movement: B5_BASELINE holds 872 for this same id.
+    expect(liveValue('finish:day:2')).toBe(867)
     expect(liveValue('finish:tournament')).toBe(872)
     expect(liveValue('finish:day:0')).toBe(872)
-    expect(liveValue('strips:utilization')).toBeCloseTo(32.929232804232804, 10)
+    expect(liveValue('strips:utilization')).toBeCloseTo(32.12962962962963, 10)
     expectBaseline(useStore.getState().scorecardBaseline, B5_BASELINE)
   })
 

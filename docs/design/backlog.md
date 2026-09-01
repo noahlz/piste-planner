@@ -211,6 +211,34 @@ the schedule's own requirement. Worth reconciling when the referee model is next
 opened; until then the divergence is bounded, one-directional, and confined to
 saturated days.
 
+## The sabre referee row can light no blocks at all
+
+*Surfaced by 004's US4 T067 on 2026-09-01, restoring the singular branch of the
+scorecard's highlight announcement. Recorded, not fixed — the repair is a
+referee-model change, and US4 does not open one.*
+
+On B1, hovering `refs:peak-sabre` announces **"Peak sabre referees: 0 blocks
+highlighted"** while the row itself reads 64. FR-029 says hovering a metric MUST
+highlight the blocks driving it, and here it highlights nothing.
+
+The cause is documented at `src/store/derived.ts:409-414` and is a missing
+field, not a bug in the selector. `RefRequirementsByDay` carries no
+sabre-specific peak time: `src/engine/refs.ts:97-99` sweeps the **total** demand
+for `peak_time` and sweeps sabre separately for the value, so the sabre row's
+day and its instant come from two different sweeps. `selectScorecardMetrics`
+uses that row's own `peak_time` as the closest instant available — the
+alternative, the total peak day's time, would light blocks on a day whose sabre
+peak is not the number being reported. On B1 after T061a's re-pack the sabre
+maximum of 64 is reached on days 0, 1 and 3, the first is day 0, and day 0's
+total `peak_time` is 480, a minute at which no sabre block on that day is open.
+
+The approximation has been in place since the metric was written. B1 is the
+first fixture where it visibly fails, and
+`__tests__/components/workbench/Scorecard.test.tsx` now pins the 0 as an
+expected string — which is the moment it stops being noticed. Closing it means
+`refs.ts` recording a per-weapon peak instant alongside the per-weapon value, so
+the row can name the blocks that actually produce its number.
+
 ## The drift ledger's factory does not apply the store's per-type resolutions
 
 *Measured by 004's US4 T063a on 2026-09-01, when the app-path parity pins were

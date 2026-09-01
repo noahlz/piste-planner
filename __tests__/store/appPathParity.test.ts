@@ -238,6 +238,18 @@ describe('app-path parity with the drift ledger (contracts/day-axis.md C5)', () 
       closedBy,
       `${id}: "${closedBy}" is a placeholder, not a closing feature`,
     ).not.toMatch(/^(tbd|todo|none|n\/a|unassigned|unknown|\?+|-+)$/i)
+    // 004 US4 T067 — the placeholder list above rejects a fixed set of words,
+    // so `closedBy: 'later'` or 'a future feature' passed it, and "the named
+    // owner actually exists somewhere a reader can find it" rested entirely on
+    // this comment. The owner has to be locatable, which in this repo means a
+    // backlog entry or a spec directory. Both current values name
+    // docs/design/backlog.md's "The drift ledger's factory does not apply the
+    // store's per-type resolutions".
+    expect(
+      closedBy,
+      `${id}: "${closedBy}" names no locatable artifact. An owner a reader cannot open is `
+        + 'the same parked exception FR-004a forbids — point at a docs/design/backlog.md entry or a specs/ directory.',
+    ).toMatch(/backlog\.md|specs\//)
   })
 
   /**

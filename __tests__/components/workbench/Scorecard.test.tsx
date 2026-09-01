@@ -105,6 +105,35 @@ function loadWithoutPreset(): void {
   runScheduleAll()
 }
 
+/**
+ * One sabre individual event on one day, placed at the day's start — the
+ * fixture shape `__tests__/store/scorecardMetrics.test.ts`'s `singleDay`
+ * establishes, with the weapon changed so `refs:peak-sabre` has something to
+ * report.
+ *
+ * 004 US4 T067 — it exists for the singular half of Scorecard.tsx:144's
+ * `length === 1 ? '' : 's'`, which T063's re-baseline left unasserted
+ * everywhere in the repo. On a single-event day the sabre sweep's peak falls
+ * while POOLS is open and before any DE block starts, so
+ * `blocksOpenAt(blocks, sabrePeak.day, sabrePeak.peak_time)` filtered to sabre
+ * ids (src/store/derived.ts:415-420) is exactly that one POOLS block. A finish
+ * metric cannot be used instead: under the resolved STAGED `de_mode` a NAC
+ * event draws POOLS and DE_ROUND_OF_16 at minimum, so a finish driving set is
+ * never 1.
+ */
+function loadOneSabreEvent(): void {
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(1)
+  s.setStrips(20)
+  s.setVideoStrips(4)
+  s.selectCompetitions(['JR-M-SABRE-IND'])
+  useStore.getState().updateCompetition('JR-M-SABRE-IND', { fencer_count: 40 })
+  useStore.getState().setPlacementsFromAuto({
+    'JR-M-SABRE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 4 }),
+  })
+}
+
 function scorecard(): HTMLElement {
   return screen.getByRole('region', { name: 'Scorecard' })
 }
@@ -443,25 +472,38 @@ describe('Scorecard deltas (research D9)', () => {
     fireEvent.click(disclosure())
     const dayEnd = useStore.getState().dayConfigs[0].day_end_time
 
-    // 004 US4 T063 — both rendered values moved, 41.4%/41.3% to 35.4%/35.4%,
-    // for B1's re-baselined utilization (see B1_UTILIZATION). The deltas are
-    // what this case is about and neither moved: the baseline is frozen at
-    // 35.456845, so +1 minute is still under a tenth of a point and +6 is
-    // still over one. The two value assertions now read the same string, so
-    // they no longer show the value moving — the deltas below are the only
-    // thing distinguishing the two halves.
+    // 004 US4 T067 — T063's re-baseline landed this case on a rounding
+    // boundary, where it pinned the opposite of its own premise. B1's baseline
+    // utilization is 35.456845, only 0.0068 above the .45 cut `toFixed(1)`
+    // rounds on (Scorecard.tsx:29), so *lengthening* day 0 by a minute
+    // (−0.0105 points) pushed the rendered value across it: the row read
+    // 35.4% against a baseline row of 35.5% while the delta read 0.0%, and the
+    // reader could plainly see the movement the case says is invisible.
+    //
+    // The repair is the nudge's sign, not the fixture. −1 minute moves
+    // utilization the same 0.0105 points the other way, to 35.4673, which
+    // renders as the same 35.5% the baseline does — so every measured constant
+    // stands and the property is whole again. A smaller positive nudge cannot
+    // do it: one minute is already the finest step and 0.0105 exceeds the
+    // 0.0068 of headroom, so every +k lands below the cut.
+    //
+    // The pre-edit assertion is what makes "the value does not change" visible
+    // in the test rather than only in this comment.
+    expect(valueOf(scorecard(), 'strips:utilization')).toBe(B1_UTILIZATION)
 
-    // +1 minute of day 0 moves the utilization by 0.0105 points, less than the
-    // one decimal the row shows. So a sign taken from the raw delta would
-    // announce a direction the reader cannot see.
+    // −1 minute of day 0 moves the utilization by 0.0105 points, less than the
+    // one decimal the row shows, so the rendered value is unchanged. A sign
+    // taken from the raw delta would announce a direction the reader cannot
+    // see.
     act(() => {
-      useStore.getState().updateDayConfig(0, { day_end_time: dayEnd + 1 })
+      useStore.getState().updateDayConfig(0, { day_end_time: dayEnd - 1 })
     })
-    expect(valueOf(scorecard(), 'strips:utilization')).toBe('35.4%')
+    expect(valueOf(scorecard(), 'strips:utilization')).toBe(B1_UTILIZATION)
     expect(deltaOf(scorecard(), 'strips:utilization')).toBe('0.0%')
 
-    // +6 minutes moves it 0.0632 points, which does round to a tenth — and a
-    // movement that shows keeps its sign.
+    // +6 minutes moves it 0.0632 points the other way, which does round to a
+    // tenth — the value visibly moves, and a movement that shows keeps its
+    // sign.
     act(() => {
       useStore.getState().updateDayConfig(0, { day_end_time: dayEnd + 6 })
     })
@@ -601,6 +643,24 @@ describe('Scorecard hover names the driving blocks (FR-029)', () => {
 
     pointerLeave(row(scorecard(), 'refs:peak-sabre'))
     expect(status()?.textContent).toBe('')
+  })
+
+  /**
+   * 004 US4 T067 — the singular half of the same rule, on the only fixture in
+   * this file that can produce a driving set of one. Both counts above are
+   * plural, and grep confirms they were the whole of the repo's coverage for
+   * Scorecard.tsx:144, so `'block'` and `'blocks'` were interchangeable
+   * without a red test.
+   */
+  it('says "1 block" without the plural s when exactly one block drives the metric', () => {
+    loadOneSabreEvent()
+    render(<Scorecard />)
+    fireEvent.click(disclosure())
+
+    const status = () => scorecard().querySelector('[data-highlight-status]')
+
+    pointerEnter(row(scorecard(), 'refs:peak-sabre'))
+    expect(status()?.textContent).toBe('Peak sabre referees: 1 block highlighted')
   })
 })
 
