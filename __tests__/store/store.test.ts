@@ -21,7 +21,9 @@ describe('tournamentSlice', () => {
       expect(state.days_available).toBe(3)
       expect(state.dayConfigs).toEqual([])
       expect(state.strips_total).toBe(0)
-      expect(state.video_strips_total).toBe(0)
+      // null, not 0 — "follow the tournament type's default" (research D7).
+      // 0 stays available as the real value it is: a tournament with no video strips.
+      expect(state.video_strips_total).toBeNull()
     })
 
     it('seeds pool_round_duration_table from the engine defaults', () => {
@@ -169,7 +171,9 @@ describe('competitionSlice', () => {
       expect(cadetConfig.ref_policy).toBe('AUTO')
       expect(cadetConfig.cut_mode).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].mode)
       expect(cadetConfig.cut_value).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].value)
-      expect(cadetConfig.de_mode).toBe('SINGLE_STAGE')
+      // 'AUTO', not 'SINGLE_STAGE' — a new event follows its tournament type's
+      // DE mode until an organizer picks one (research D6). buildConfig resolves it.
+      expect(cadetConfig.de_mode).toBe('AUTO')
       expect(cadetConfig.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[cadetEntry.category])
       expect(cadetConfig.use_single_pool_override).toBe(false)
 

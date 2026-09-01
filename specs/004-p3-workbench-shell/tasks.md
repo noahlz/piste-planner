@@ -192,7 +192,7 @@ the hand-set value survives.
 
 ### Pre-task: the merged tree must be green before the gate runs
 
-- [ ] T054a [US4] Re-vehicle the two US3 scorecard tests that the 008 merge
+- [X] T054a [US4] Re-vehicle the two US3 scorecard tests that the 008 merge
   invalidated – both used "preset B2 schedules nothing" as their fixture and 008
   made B2 schedule 24. The behavior each pins survives unchanged in strength: the
   capture rule firing over an empty placement map, and a null *baseline entry*
@@ -203,14 +203,14 @@ the hand-set value survives.
 
 ### Tests for User Story 4 ⚠️ Write first, confirm they fail
 
-- [ ] T055 [P] [US4] Write failing tests for the default table in `__tests__/store/typeDefaults.test.ts` – every tournament type maps to the row in [data-model.md](./data-model.md) §Per-type default table
-- [ ] T056 [P] [US4] Write failing tests for resolution in `__tests__/store/buildConfig.typeDefaults.test.ts` – `AUTO`, `AUTO`, and `null` resolve to the type's values; `ONE`, `TWO`, `SINGLE_STAGE`, `STAGED`, and any number including `0` resolve to themselves; nothing is written back to the store ([data-model.md](./data-model.md) §Resolution rules)
-- [ ] T057 [P] [US4] Write failing tests for precedence in `__tests__/store/typeDefaultPrecedence.test.ts` – an explicit value survives any number of type changes (FR-037, SC-012), while the regional cut override still beats an explicit cut setting, which is the opposite direction (FR-040)
-- [ ] T058 [P] [US4] Write failing tests for the Advanced panel in `__tests__/components/workbench/AdvancedPanel.test.tsx` – defaults readable as dim text when collapsed, and following-default distinguishable from explicitly-set (FR-035, FR-039)
+- [X] T055 [P] [US4] Write failing tests for the default table in `__tests__/store/typeDefaults.test.ts` – every tournament type maps to the row in [data-model.md](./data-model.md) §Per-type default table
+- [X] T056 [P] [US4] Write failing tests for resolution in `__tests__/store/buildConfig.typeDefaults.test.ts` – `AUTO`, `AUTO`, and `null` resolve to the type's values; `ONE`, `TWO`, `SINGLE_STAGE`, `STAGED`, and any number including `0` resolve to themselves; nothing is written back to the store ([data-model.md](./data-model.md) §Resolution rules)
+- [X] T057 [P] [US4] Write failing tests for precedence in `__tests__/store/typeDefaultPrecedence.test.ts` – an explicit value survives any number of type changes (FR-037, SC-012), while the regional cut override still beats an explicit cut setting, which is the opposite direction (FR-040)
+- [X] T058 [P] [US4] Write failing tests for the Advanced panel in `__tests__/components/workbench/AdvancedPanel.test.tsx` – defaults readable as dim text when collapsed, and following-default distinguishable from explicitly-set (FR-035, FR-039)
 
 ### Implementation for User Story 4
 
-- [ ] T059 [US4] Create the per-type default table in `src/store/typeDefaults.ts` ([data-model.md](./data-model.md) §Per-type default table)
+- [X] T059 [US4] Create the per-type default table in `src/store/typeDefaults.ts` ([data-model.md](./data-model.md) §Per-type default table)
 - [ ] T060 [US4] Widen the store's `CompetitionConfig.de_mode` to `DeModeSetting` with `AUTO` as the default for a new event, and make `video_strips_total` nullable defaulting to `null`, in `src/store/store.ts`. The engine's `DeMode` and `Competition` are not touched (research D6, D7, constitution I)
 - [ ] T061 [US4] Resolve all three defaults in `src/store/buildConfig.ts`, alongside the regional cut override already at line 139. `src/engine/pools.ts` is not modified – `resolveRefsPerPool` never learns about tournaments (research D5, constitution I)
 - [ ] T061a [US4] Resolve `strips_allocated` in `src/store/buildConfig.ts`, which
