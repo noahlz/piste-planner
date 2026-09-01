@@ -1398,3 +1398,163 @@ baseline, in the suite and in a browser. T055 onward (US4, per-type defaults) is
 the next session's – and it is the **drift gate**, the only story that changes
 engine output, so it starts fresh with constitution III in front of it. The
 branch is handed back green, with the closing merge unmade.
+
+## S7
+
+**Scope**: US4 (T055–T068) was the assignment. **No US4 task was started.** The
+session halted on the constitution's re-plan rule after establishing that the
+task list could not be executed as written. What it produced instead is a
+verified zero point, a green tree, a constitution amendment, and three added
+tasks. T055 onward is S8's.
+
+### What landed
+
+| Task | Commit | What landed |
+|---|---|---|
+| baseline re-verification | `e08636b0c6` | `drift-baseline.md` §Re-verification before US4 |
+| constitution 1.6.0 + scope | `af5ec4eb7c` | Post-merge gate, T054a/T061a/T063a added |
+| T054a | `4c99905673` | The two merge-invalidated US3 tests re-vehicled |
+
+**Gate at end of session**: `tsc -b` exit 0, `lint` exit 0, full suite **1660
+passed across 60 files**, zero failures.
+
+**A count correction worth carrying.** `4c99905673`'s message records the suite
+as 1659 → 1661 across 61 files. That is one file and one test too many: the
+baseline re-verification's scratch harness, `tmp/baseline.capture.test.ts`, is
+gitignored but still **collected by vitest**, so it inflated every count measured
+while it existed. It has been deleted, as `drift-baseline.md` §Harness always
+specified. The true figures are 1658 passed + 2 failed → **1660 passed**. S8
+reconciles against 1660, and any scratch harness it recreates for T062 must be
+deleted before the suite is counted.
+
+The branch is `004-us4-drift-gate`, cut from `main` at `e67fa9cdd0`. It is **not**
+`004-p3-workbench-shell` — that branch was 27 commits behind and already merged,
+so continuing on it would have re-landed US1–US3.
+
+### The baseline survived 006 and 008, and this was measured
+
+`drift-baseline.md` was captured at T002 against `f9a74ca58d`, before features
+006 and 008 both landed. A drift gate run against a stale baseline is worse than
+no gate, so it was re-measured rather than argued from.
+
+All 48 cells match, two consecutive runs agreeing. The inputs moved only by
+comments: `src/engine/` touches `resources.ts`'s docblock alone, `src/data/` is
+empty, `__tests__/helpers/scenarios.ts` gained only 008's 15-line note. **The
+zero point holds. S8 does not need to re-verify it again** unless something lands
+in `src/engine/`, `src/data/`, or the ledger factory first.
+
+### `main` was red, and neither feature's gate could have caught it
+
+004 US3 closed green at 1368 passed. 008 closed green. Their merge is red:
+
+- `scorecardBaseline.test.ts` — *captures a baseline over zero placements when
+  the preset schedules nothing*: expected length 0, got 24
+- `Scorecard.test.tsx` — *renders no delta when the baseline entry itself was
+  null*: expected null, got 1198
+
+Both used **"preset B2 schedules nothing"** as their fixture. 008's team
+`cut_mode` fix made B2 schedule 24, and no preset schedules nothing any more —
+`appPathParity.test.ts` now pins all eight at non-zero.
+
+Every feature's final gate runs on its own branch. The merge is the first moment
+both halves exist, so neither gate could see it. S6's handoff *predicted* the
+collision in prose — "B2 and B8 still place zero events — being fixed as its own
+feature" — and the prediction never became a check.
+
+**This is why the constitution is now 1.6.0.** §Git Ownership gained "The merge
+is gated, not just the branch": the merged tree runs `tsc -b`, `lint`, and the
+full suite before the pending merge commit is written, a red merge belongs to the
+session making it, and a predicted collision is written as a task in the
+receiving feature's `tasks.md` rather than only as prose.
+
+### Why US4's task list could not be executed as written
+
+T055–T068 covers three settings — `ref_policy` (D5), `de_mode` (D6),
+`video_strips_total` (D7). The three parity exceptions that name US4 as their
+closer need two things no task listed:
+
+- **`strips_allocated`.** `buildConfig.ts:151` sends a hardcoded `0` where the
+  ledger's factory pre-allocates `max(2, ceil(fencer_count / 7))`. It is the
+  fourth seam of the four `parity-exceptions.md` names, required to close B4 and,
+  jointly with `de_mode`, B8. Now **T061a**.
+- **The ledger factory adopting `REGIONAL_CUT_OVERRIDES`.** The only way B6
+  closes. It moves the drift ledger's own B4 and B6 numbers — the baseline T062
+  diffs against — mid-gate. **Deliberately out of scope**, see below.
+
+006 and 008 both wrote "closes in 004 US4" into `parity-exceptions.md` and into
+an *asserted* `closedBy` field, while 004's `tasks.md` predates both. The naming
+was enforceable in one direction and unbuildable in the other.
+
+### The two scope decisions, and who made them
+
+Both were put to the user and answered:
+
+1. **`strips_allocated` is in, the `scenarios.ts` regional-cut change is out.**
+   `strips_allocated` is store-side, so T062's ledger table stays a clean zero
+   point. Changing `scenarios.ts` would move the very table T062 measures
+   against, and `drift-baseline.md` states D5 and D6 are the only changes T062 is
+   permitted to see. B6 is therefore **re-assigned to a future feature** rather
+   than closed here — a constitution III change to the ledger's own recorded
+   behavior, with its own snapshot review.
+2. **`de_mode` resolves per tournament type**, as `data-model.md`'s §Per-type
+   default table specifies — `AUTO` → `STAGED` at NAC, `SINGLE_STAGE` elsewhere —
+   **not** per event as the ledger factory derives it (`STAGED` when individual
+   and video REQUIRED).
+
+### The de_mode rule is not the ledger's rule, and B8 will show it
+
+This is the single most likely thing to be misread as a regression.
+
+`b8-residual.md`'s P1 reached 52 by adopting the **ledger's** per-event rule. The
+approved design is the **per-type** rule. They are different assignments: at
+B8/NAC the per-type rule stages team events and individual events whose video
+policy is not REQUIRED, which the ledger leaves `SINGLE_STAGE`. At B6/ROC the
+per-type rule resolves to `SINGLE_STAGE`, so `de_mode` stays divergent there
+entirely and B6 cannot converge on it.
+
+**So B8's pin is re-measured, never adjusted toward 52.** `parity-exceptions.md`
+§B8 already says exactly this: "The pin is re-measured then, not assumed to
+become 52." Whatever it measures is the pin.
+
+### What T063a has to reconcile, and the assertion that will fight it
+
+`appPathParity.test.ts:216` asserts `exception?.closedBy` `.toContain('004 US4')`.
+Re-assigning B6 to a future feature **fails that assertion**, by design — it must
+be relaxed to requiring a non-empty named closing feature. Issue #255 (008 T010)
+already anticipated this exact change and says so.
+
+The companion assertion is the one that keeps everyone honest: a pin off the
+ledger's count cannot exist without a matching `parity-exceptions.md` entry, and
+a stale entry left behind after a pin closes fails too. Neither can be quietly
+skipped.
+
+### Things S8 must not be surprised by
+
+- **The branch is `004-us4-drift-gate`, not `004-p3-workbench-shell`.**
+- **T061a's B4 movement is a scheduled-count *drop*, 16 → 0, and it is correct.**
+  `strips_allocated: 0` zeroes the DE term of the feasibility estimate, so the
+  app never trips the gate the ledger trips. Fixing it makes
+  RESOURCE_INSUFFICIENT start firing. Constitution III halts on an *unexplained*
+  drop — this one is explained in `parity-exceptions.md` §B4 and must be recorded
+  in the commit anyway, not waved through on this paragraph.
+- **T062 measures the ledger path** (`scenarios.ts` → `scheduleAll`); the parity
+  pins measure the **app path** (store → `buildConfig` → `scheduleAll`). D5/D6
+  move the first, `strips_allocated` moves only the second. Do not diff one
+  against the other's table.
+- **T059–T063 are strictly sequential**, with T061a inside that run and T063a
+  after T063.
+- **The GitHub mirror is #215–#228 for T055–T068**, label
+  `004-p3-workbench-shell`, all open. T054a, T061a and T063a have **no issues
+  yet** — the user opens them. Nothing was renumbered, so the existing mapping
+  still holds.
+- **`selectScorecardMetrics` can still throw** by the `computePoolStructure` path,
+  and a fencer count of 0 or 1 still unmounts the app. Both pre-existing, both in
+  the backlog, neither this session's.
+
+### Not finished, and why
+
+Every US4 implementation task. The session established the preconditions —
+verified baseline, green tree, amended constitution, completed task list — and
+then hit the re-plan rule, which exists precisely so the session that discovers a
+plan is wrong does not also build against its own revision. The record is
+written and the branch is green. S8 starts at T055 with the gate in front of it.
