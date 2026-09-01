@@ -150,6 +150,10 @@ describe('per-day hours are honored (spec.md User Story 2)', () => {
     // slot in its ten-minute day gets no entry at all, rather than an entry
     // with a start time past the day's close.
     const { config, competitions } = buildTournamentConfig(useStore.getState())
+    // Guard against a false pass: if selectCompetitions silently no-op'd on a
+    // bad id, competitions would be empty, nothing would schedule, and the
+    // schedule-is-undefined assertion below would pass for the wrong reason.
+    expect(competitions.some(c => c.id === 'CDT-M-FOIL-IND')).toBe(true)
     let result
     expect(() => { result = scheduleAll(competitions, config) }).not.toThrow()
     expect(result!.schedule['CDT-M-FOIL-IND']).toBeUndefined()

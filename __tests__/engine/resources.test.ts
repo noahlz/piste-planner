@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
@@ -10,8 +10,11 @@ import {
   nextFreeTime,
   snapToSlot,
 } from '../../src/engine/resources.ts'
+import * as resourcesModule from '../../src/engine/resources.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { Phase } from '../../src/engine/types.ts'
 import { makeConfig, makeStrips } from '../helpers/factories.ts'
+import { SCENARIOS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 
 // ──────────────────────────────────────────────
 // Constants & Helpers
@@ -403,36 +406,98 @@ describe('findAvailableStripsInWindow', () => {
 //
 // The day-end clamp's inference fallback (`floor(startTime / DAY_LENGTH_MINS)`,
 // used only when `day` is omitted) assumes a compacted axis and is wrong under
-// the store's 1440-spaced axis (research.md D3). It is unreachable from a real
-// scheduling run because both call sites in concurrentScheduler.ts's
-// `tryAllocate` always pass `day` explicitly. A test that only exercises
-// findAvailableStripsInWindow directly — with hand-picked `day` values — would
-// prove the function *can* behave differently with and without `day`, but
-// would not notice if a real call site stopped supplying it: that call is
-// never made. So this asserts directly against the call sites' source text,
-// which is the one thing that changes when a call site drops the argument.
+// the store's 1440-spaced axis (research.md D3). Both call sites in
+// concurrentScheduler.ts's `tryAllocate` always pass `day` explicitly, so the
+// fallback is unreachable from a real scheduling run.
+//
+// Two guards, each doing what it is good at:
+//
+// - The spy below runs a real multi-day scheduleAll and asserts every call
+//   that actually reaches findAvailableStripsInWindow carries a defined
+//   `day`. It is robust to formatting and renaming, and it is the only
+//   mechanism that would catch an actual `undefined` reaching the function at
+//   runtime. Known coverage limit: the STAGED-DE precheck site (:902) only
+//   fires when a DE_PRELIMS/DE_R16 node doesn't fit before dayHardEnd, so an
+//   ordinary scenario run exercises only the general strip-claim site
+//   (:914-916). Not worth an elaborate scenario to force the precheck path —
+//   that's exactly why the backstop below doesn't depend on either site
+//   being hit at runtime.
+// - The backstop is a hardened static check: there are exactly two
+//   findAvailableStripsInWindow call sites in the file, so a third one added
+//   elsewhere is caught even if the spy never reaches it. It strips comments
+//   and does a balanced-paren scan rather than a lazy `)` match, so a
+//   trailing comment, a variable rename, or a nested call in an earlier
+//   argument does not fool it.
 // ──────────────────────────────────────────────
 
 describe('findAvailableStripsInWindow — day-inference precondition (T015)', () => {
   const SCHEDULER_PATH = resolve(process.cwd(), 'src/engine/concurrentScheduler.ts')
 
-  it('both tryAllocate call sites pass the day argument explicitly', () => {
-    const source = readFileSync(SCHEDULER_PATH, 'utf-8')
-    const callSites = [...source.matchAll(/findAvailableStripsInWindow\(([\s\S]*?)\)/g)]
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
-    // tryAllocate has exactly two call sites: the STAGED-DE pre-check probe
-    // and the strip-claim call every phase kind uses.
-    expect(callSites).toHaveLength(2)
+  it('every call recorded during a real multi-day scheduleAll run passes a defined day', () => {
+    const spy = vi.spyOn(resourcesModule, 'findAvailableStripsInWindow')
+    const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B1
+    const competitions = buildCompetitions(fencerCounts)
+    const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
-    for (const [, args] of callSites) {
-      const positional = args.split(',').map(s => s.trim()).filter(Boolean)
-      // The day-inference fallback only activates when `day` is omitted
-      // entirely (undefined), so the regression this guards against is the
-      // trailing `day` argument being dropped from the call.
-      expect(positional.at(-1)).toBe('day')
+    scheduleAll(competitions, config)
+
+    // A spy that recorded zero calls proves nothing about the call sites —
+    // confirm it actually intercepted the by-name import concurrentScheduler.ts
+    // uses (the same live-binding mechanism placements.test.ts's scheduleAll
+    // spy relies on).
+    expect(spy.mock.calls.length).toBeGreaterThan(0)
+
+    for (const call of spy.mock.calls) {
+      const day = call[6]
+      expect(day, `findAvailableStripsInWindow called with day=${String(day)}`).toBeDefined()
     }
   })
+
+  it('backstop: exactly two findAvailableStripsInWindow call sites exist in concurrentScheduler.ts', () => {
+    const source = readFileSync(SCHEDULER_PATH, 'utf-8')
+    const stripped = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '')
+
+    const callSites = findBalancedCallSites(stripped, 'findAvailableStripsInWindow')
+
+    // tryAllocate has exactly two call sites: the STAGED-DE pre-check probe
+    // and the strip-claim call every phase kind uses. A third call site added
+    // anywhere in the file — reachable by the spy above or not — should fail
+    // this count.
+    expect(callSites).toHaveLength(2)
+  })
 })
+
+/**
+ * Finds every call site of `fnName(...)` in `source` with a balanced-paren
+ * scan, so a nested call in an earlier argument (e.g. `Math.max(0, x)`)
+ * doesn't truncate the match the way a lazy `\)` regex would. Callers are
+ * expected to strip comments first — this scan has no notion of them.
+ */
+function findBalancedCallSites(source: string, fnName: string): string[] {
+  const marker = `${fnName}(`
+  const sites: string[] = []
+  let searchFrom = 0
+  while (true) {
+    const start = source.indexOf(marker, searchFrom)
+    if (start === -1) break
+    let depth = 1
+    let i = start + marker.length
+    while (i < source.length && depth > 0) {
+      if (source[i] === '(') depth++
+      else if (source[i] === ')') depth--
+      i++
+    }
+    sites.push(source.slice(start, i))
+    searchFrom = i
+  }
+  return sites
+}
 
 // ──────────────────────────────────────────────
 // peakConcurrentStrips
