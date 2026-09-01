@@ -138,10 +138,10 @@ the branch with `git merge --no-ff --no-commit` completed by
 ## Phase 6: Polish & Handoff
 
 - [X] T020 [P] Run the full suite, `tsc -b`, and lint; confirm the suite total is above the 1221 baseline with nothing deleted or floored down to get there
-- [ ] T021 [P] Walk [quickstart.md](./quickstart.md) end to end and correct anything it gets wrong about the finished feature
-- [ ] T022 Record in `specs/004-p3-workbench-shell/sessions/S6.md` that its gate is satisfied — the scorecard now baselines over a fully scheduled tournament (FR-010) — and update the 006 row in `docs/design/competition-planner-workbench.md` §Revised sequence from "Next, unspecced" to done
-- [ ] T023 Add the day-axis contract to the project's standing record: a pointer from `docs/design/backlog.md` to [contracts/day-axis.md](./contracts/day-axis.md), plus the two items this feature deliberately did not fix — per-day capacity math still using the `DAY_LENGTH_MINS` constant (`capacity.ts:211`, `dayColoring.ts:612`), and placement states for partial knowledge (P4)
-- [ ] T024 Write the handoff in `specs/006-day-axis-parity/handoff.md`: the before-and-after counts, the FR-004a exceptions and what closes them, and a paste-ready prompt to resume 004's S6 in a new session
+- [X] T021 [P] Walk [quickstart.md](./quickstart.md) end to end and correct anything it gets wrong about the finished feature
+- [X] T022 Record in `specs/004-p3-workbench-shell/sessions/S6.md` that its gate is satisfied — the scorecard now baselines over a fully scheduled tournament (FR-010) — and update the 006 row in `docs/design/competition-planner-workbench.md` §Revised sequence from "Next, unspecced" to done
+- [X] T023 Add the day-axis contract to the project's standing record: a pointer from `docs/design/backlog.md` to [contracts/day-axis.md](./contracts/day-axis.md), plus the two items this feature deliberately did not fix — per-day capacity math still using the `DAY_LENGTH_MINS` constant (`capacity.ts:211`, `dayColoring.ts:612`), and placement states for partial knowledge (P4)
+- [X] T024 Write the handoff in `specs/006-day-axis-parity/handoff.md`: the before-and-after counts, the FR-004a exceptions and what closes them, and a paste-ready prompt to resume 004's S6 in a new session
 
 **Checkpoint**: Branch ready. The user lands it with `git merge --no-ff --no-commit 006-day-axis-parity` completed by `commit-with-costs`.
 
