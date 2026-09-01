@@ -190,6 +190,17 @@ strips, and DE mode take that type's values, are legible on the collapsed panel,
 and can be overridden. Then set a value by hand, change the type, and confirm
 the hand-set value survives.
 
+### Pre-task: the merged tree must be green before the gate runs
+
+- [ ] T054a [US4] Re-vehicle the two US3 scorecard tests that the 008 merge
+  invalidated – both used "preset B2 schedules nothing" as their fixture and 008
+  made B2 schedule 24. The behavior each pins survives unchanged in strength: the
+  capture rule firing over an empty placement map, and a null *baseline entry*
+  rendering no delta rather than a delta against nothing (S6 mutation M09). Added
+  2026-08-31 under constitution 1.6.0, whose post-merge gate exists because of
+  this exact collision. The drift gate cannot re-baseline against a red suite
+  *(subagent commits)*
+
 ### Tests for User Story 4 ⚠️ Write first, confirm they fail
 
 - [ ] T055 [P] [US4] Write failing tests for the default table in `__tests__/store/typeDefaults.test.ts` – every tournament type maps to the row in [data-model.md](./data-model.md) §Per-type default table
@@ -202,8 +213,31 @@ the hand-set value survives.
 - [ ] T059 [US4] Create the per-type default table in `src/store/typeDefaults.ts` ([data-model.md](./data-model.md) §Per-type default table)
 - [ ] T060 [US4] Widen the store's `CompetitionConfig.de_mode` to `DeModeSetting` with `AUTO` as the default for a new event, and make `video_strips_total` nullable defaulting to `null`, in `src/store/store.ts`. The engine's `DeMode` and `Competition` are not touched (research D6, D7, constitution I)
 - [ ] T061 [US4] Resolve all three defaults in `src/store/buildConfig.ts`, alongside the regional cut override already at line 139. `src/engine/pools.ts` is not modified – `resolveRefsPerPool` never learns about tournaments (research D5, constitution I)
+- [ ] T061a [US4] Resolve `strips_allocated` in `src/store/buildConfig.ts`, which
+  sends a hardcoded `0` at line 151 where the ledger's factory pre-allocates
+  `max(2, ceil(fencer_count / 7))` (`__tests__/helpers/scenarios.ts:69`). This is
+  the fourth seam of the four `specs/006-day-axis-parity/parity-exceptions.md`
+  names, and the one no D5/D6/D7 task covers – it is required to close B4 and,
+  jointly with `de_mode`, B8. **Store-side only**, so the B1–B8 ledger table T062
+  diffs against is untouched. Expect the app-path B4 pin to move 16 → 0 as the
+  feasibility gate starts firing: an explained drop, recorded in
+  `parity-exceptions.md` §B4, not a regression. Added 2026-08-31
 - [ ] T062 [US4] **Run the drift gate.** Execute B1–B8 and diff against `specs/004-p3-workbench-shell/drift-baseline.md` from T002. Scheduled event counts MUST be identical – any drop halts the task until the cause is identified and recorded. Explain every referee movement: B6's pool demand roughly halving from D5, and B1/B2/B3/B7/B8's DE demand rising from D6. Record before-and-after figures per scenario in the commit message (constitution III) *(subagent commits)*
 - [ ] T063 [US4] Re-baseline the B1–B8 integration referee assertions in `__tests__/engine/integration.test.ts` to the explained figures from T062, and record in `specs/004-p3-workbench-shell/research.md` that the drift was reviewed rather than accepted
+- [ ] T063a [US4] Re-measure the three app-path parity pins in
+  `__tests__/store/appPathParity.test.ts` – B4 (16), B6 (43), B8 (53) – against
+  the post-D5/D6/D7/T061a code, and record whatever they measure rather than
+  adjusting anything to reach a hoped-for number. Then reconcile
+  `specs/006-day-axis-parity/parity-exceptions.md`: close B4 and B8 if they reach
+  their ledger counts, and **re-assign B6's `closedBy` to its own future
+  feature** – B6 closes only by the ledger's factory adopting
+  `REGIONAL_CUT_OVERRIDES`, a constitution III change to the ledger's own
+  recorded behavior, deliberately out of this story's scope. That re-assignment
+  requires relaxing the `closedBy` assertion at `appPathParity.test.ts:216` from
+  `toContain('004 US4')` to requiring a non-empty named closing feature, which
+  issue #255 (008 T010) already anticipated. A pin off the ledger's count with no
+  matching `parity-exceptions.md` entry fails the suite, so a stale entry fails
+  loudly. Added 2026-08-31 *(subagent commits)*
 - [ ] T064 [US4] Update `src/store/serialization.ts` for the nullable video strip count and the widened DE mode, keeping `schemaVersion` at `2` with new fields optional on read and always written on save (research D8)
 - [ ] T065 [US4] Build `src/components/workbench/AdvancedPanel.tsx` in the rail – the three defaults, dim on the collapsed panel, with following-default distinguishable from explicit (FR-031, FR-035, FR-039). Hard policies are absent (FR-040)
 - [ ] T066 [US4] Extend `scripts/smoke.mjs` to change the tournament type and confirm a hand-set value survives it – the behavior the spec's clarification settled (constitution VI)
@@ -254,7 +288,7 @@ user's.
 - [ ] T082 Make the two human judgments [quickstart.md](./quickstart.md) §What a human has to confirm names – SC-004 encoding legibility at normal row height, and SC-002 pan and zoom responsiveness on the largest preset. A failure here is a finding against the palette or the windowing, not a matter of taste
 - [ ] T083 [P] Update `docs/design/backlog.md` – close the per-type defaults entry, and narrow the global settings entry to what remains for after P5, per the split recorded on 2026-08-29
 - [ ] T084 [P] Update `docs/design/competition-planner-workbench.md` – mark the P3 roadmap row delivered, and record in the design's own text that the canvas is plain SVG rather than visx, pointing at [research D1](./research.md) for the reasoning
-- [ ] T085 Confirm the branch is ready and hand the user a resume prompt naming the merge command. Agents do not push, do not merge, and do not make the closing commit (constitution §Git Ownership)
+- [ ] T085 Confirm the branch is ready and hand the user a resume prompt naming the merge command. **The resume prompt names the post-merge gate** – constitution 1.6.0 requires `tsc -b`, `lint`, and the full suite to run on the merged tree after `git merge --no-ff --no-commit` and before `commit-with-costs` writes the merge commit. Agents do not push, do not merge, and do not make the closing commit (constitution §Git Ownership)
 
 ---
 
