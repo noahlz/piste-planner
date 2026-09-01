@@ -389,6 +389,18 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
 
     expect(poolBlock().dataset.highlighted).toBeUndefined()
 
+    // Start a settle the center has NOT committed yet. Without this the
+    // committed model already equals the live one at the moment of the hover,
+    // and a highlight routed *through* the committed model would be
+    // indistinguishable from one that bypasses it — the case would pass
+    // against exactly the behaviour it exists to forbid. The edit is this
+    // file's own documented WARN-not-ERROR one (8 -> 40 fencers on a 12-strip
+    // day), so the center is not dimmed and the frozen-invalid rule stays out
+    // of the way.
+    act(() => {
+      useStore.getState().updateCompetition(id, { fencer_count: 40 })
+    })
+
     const row = document.querySelector<HTMLElement>('[data-metric="strips:utilization"]')
     if (!row) throw new Error('the scorecard rendered no strip-utilization row')
 

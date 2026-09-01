@@ -366,6 +366,23 @@ describe('EventBlock highlight cue (FR-029)', () => {
     expect(has(lit, '[data-highlight-cue]')).toBe(true)
   })
 
+  it('actually paints the ring, rather than drawing an empty overlay', () => {
+    // Everything else this describe asserts about the cue — that it exists, is
+    // aria-hidden, does not hit-test, survives every width and the compact row
+    // — is satisfied by a span that paints nothing at all, and neither this
+    // suite nor scripts/smoke.mjs would notice: FR-029 would be dead with a
+    // green suite. The two-layer ring *is* the cue, and the module docblock
+    // argues at length that it is the deliberate exception to "paint comes from
+    // the palette" — chrome tokens, so one of the two reads on every one of the
+    // sixteen category fills. jsdom reads the inline value back verbatim.
+    const cue = renderBlock({ highlighted: true }).querySelector<HTMLElement>('[data-highlight-cue]')
+    if (!cue) throw new Error('a highlighted block must draw a cue')
+
+    expect(cue.style.boxShadow).toBe(
+      'inset 0 0 0 2px var(--background), inset 0 0 0 3px var(--foreground)',
+    )
+  })
+
   it('keeps the cue out of the accessible tree and out of the hit test', () => {
     const el = renderBlock({ highlighted: true })
     const cue = el.querySelector<HTMLElement>('[data-highlight-cue]')
@@ -442,6 +459,27 @@ describe('EventBlock highlight cue (FR-029)', () => {
       genderPrefix: 'W',
     })
     expect(channelReadout(lit)).toEqual(before)
+  })
+
+  it('lets the overflow border paint over the highlight, so both cues read at once', () => {
+    // Both cues fill the border box, so paint order decides which survives. The
+    // overflow cue is the *persistent* fact — this block found no run and is
+    // drawn on top of strips something else legitimately holds — while the
+    // highlight is gone the moment the pointer moves. Drawing the highlight
+    // last would hide an over-capacity day for as long as a metric is hovered;
+    // drawn first, the dashed --block-ink border paints over the white ring
+    // with its own gaps showing through, and both read.
+    // A DE block, so all three overlays are present and the whole order is
+    // pinned in one shot: the hatch first — which is why it cannot tint the
+    // ring — then the highlight, then the overflow border.
+    const el = renderBlock({
+      placement: { ...DE_PLACEMENT, overflow: true },
+      highlighted: true,
+    })
+
+    const marker = ['data-hatch', 'data-highlight-cue', 'data-overflow-cue']
+    const overlays = [...el.querySelectorAll(marker.map((m) => `[${m}]`).join(', '))]
+    expect(overlays.map((el) => marker.find((m) => el.hasAttribute(m)))).toEqual(marker)
   })
 
   it('does not dim or otherwise touch a block that is not highlighted', () => {

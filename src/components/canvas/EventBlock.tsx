@@ -205,19 +205,6 @@ export function EventBlock({
         aria-hidden="true"
         className="absolute inset-y-0 left-0 w-[3px] bg-[var(--block-ink)]"
       />
-      {/* The overflow cue. A block that found no run is drawn at strip 0 on top
-          of whatever legitimately holds those strips, and without a cue an
-          over-capacity day reads as an ordinary one — blocks quietly stacked,
-          nothing saying anything failed to place. Dashed rather than a fill or
-          an ink change, so it cannot be mistaken for the category or the phase
-          channel. */}
-      {placement.overflow && (
-        <span
-          data-overflow-cue
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-[2px] border-2 border-dashed border-[var(--block-ink)]"
-        />
-      )}
       {kind === 'de' && (
         <span
           data-hatch
@@ -231,18 +218,21 @@ export function EventBlock({
       )}
 
       {/* The scorecard's hover cue (FR-029). Solid, so it cannot be read as
-          the dashed overflow border above; a ring rather than a wash, since a
+          the dashed overflow border below; a ring rather than a wash, since a
           wash would change how the fill beneath it reads and the fill is the
-          age-category channel. Drawn last of the overlays so the DE hatch does
-          not tint it — while the pointer rests on a metric row it covers the
-          overflow border on a block that is also overflowing, which is a
-          transient state whose persistent record is `data-overflow` and the
-          block's own accessible name.
+          age-category channel. Drawn after the DE hatch so the hatch does not
+          tint it, and before the overflow cue so both read at once on a block
+          that is highlighted *and* overflowing: the dashed --block-ink border
+          paints over the white ring with its own gaps showing through.
 
           `inset-0` rather than an inset ring on purpose: a block one or two
           pixels wide still paints its border box, where an inset one would
           collapse to nothing on exactly the blocks a person most needs the
-          scorecard to point at. Nothing here consults `blockChannels`. */}
+          scorecard to point at. The cost of that choice, stated rather than
+          left to be rediscovered: on a block under about 4px the 2px
+          --background ring covers the whole border box, so a sub-4px block
+          loses its category fill for as long as it is highlighted. Nothing
+          here consults `blockChannels`. */}
       {highlighted && (
         <span
           data-highlight-cue
@@ -251,6 +241,19 @@ export function EventBlock({
           style={{
             boxShadow: 'inset 0 0 0 2px var(--background), inset 0 0 0 3px var(--foreground)',
           }}
+        />
+      )}
+      {/* The overflow cue. A block that found no run is drawn at strip 0 on top
+          of whatever legitimately holds those strips, and without a cue an
+          over-capacity day reads as an ordinary one — blocks quietly stacked,
+          nothing saying anything failed to place. Dashed rather than a fill or
+          an ink change, so it cannot be mistaken for the category or the phase
+          channel. Last of the overlays, so a highlight cannot hide it. */}
+      {placement.overflow && (
+        <span
+          data-overflow-cue
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-[2px] border-2 border-dashed border-[var(--block-ink)]"
         />
       )}
 

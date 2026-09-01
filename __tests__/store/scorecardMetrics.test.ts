@@ -146,6 +146,33 @@ function zeroStrips(): void {
 }
 
 /**
+ * Two events on day 0, the second starting the minute the first's pools end.
+ * `sweepLine` takes a start before an end at a shared minute, so 575 is both
+ * day 0's peak minute and the end of JR-M-SABRE-IND's pools — the state
+ * `blocksOpenAt`'s half-open `[start, end)` exists to get right and that B5
+ * never reaches.
+ *
+ * Found by grid search over `(strips, fencerCount, startB)` and measured
+ * 2026-08-31: `peak_total_refs` 8 at `peak_time` 575, with
+ * JR-M-SABRE-IND:POOLS at 480-575 and JR-W-EPEE-IND:POOLS at 575-799.
+ */
+function peakAtABlockBoundary(): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(2)
+  s.setStrips(6)
+  s.setVideoStrips(0)
+  s.selectCompetitions(['JR-M-SABRE-IND', 'JR-W-EPEE-IND'])
+  useStore.getState().updateCompetition('JR-M-SABRE-IND', { fencer_count: 20 })
+  useStore.getState().updateCompetition('JR-W-EPEE-IND', { fencer_count: 8 })
+  useStore.getState().setPlacementsFromAuto({
+    'JR-M-SABRE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 3 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 575, strip_count: 3 }),
+  })
+}
+
+/**
  * B5, then CDT-W-FOIL-IND's placement moved to day 3. `days_available` is 3,
  * so days 0-2 are the only valid range and day 3 sets
  * `derived.day_out_of_range` (`src/engine/derive.ts:247`). The event still
@@ -347,6 +374,36 @@ describe('selectScorecardMetrics — the metric table on B5', () => {
   })
 
   /**
+   * The half-open end bound, which B5 cannot reach: none of its peak minutes
+   * coincides with a block's end, so `[start, end)` and `[start, end]` name the
+   * same blocks there.
+   *
+   * This is not a hypothetical boundary. `sweepLine` processes starts before
+   * ends at the same minute — "matching the OR model where handoff is instant"
+   * (`src/engine/refs.ts:48-51`) — so the peak instant it reports routinely
+   * coincides with some other block's end. A closed interval would light a
+   * block that has already finished, on the metric whose whole job is to say
+   * which blocks are being refereed at the peak.
+   *
+   * Measured 2026-08-31 by driving this fixture through selectScorecardMetrics:
+   * day 0's peak is 8 refs at minute 575, and 575 is exactly where
+   * JR-M-SABRE-IND's pools end and JR-W-EPEE-IND's begin.
+   */
+  it('excludes a block that ends exactly at the peak minute', () => {
+    peakAtABlockBoundary()
+
+    expect(metric('refs:peak-total').value).toBe(8)
+    expect(keys('refs:peak-total')).toEqual(['JR-W-EPEE-IND:POOLS'])
+    // The sabre row reports 6 and names nothing, for the same reason: the only
+    // sabre block on its day had already ended at that minute. A metric
+    // reporting a non-zero number while lighting nothing is a real product
+    // state here, not a bug — the number is the day's sabre peak, the keys are
+    // what is open at the instant the row reports.
+    expect(metric('refs:peak-sabre').value).toBe(6)
+    expect(keys('refs:peak-sabre')).toEqual([])
+  })
+
+  /**
    * 52348 strip-minutes used against 151200 available (3 days x 60 strips x
    * 840-minute window), which is 34.6216931…%. The used figure is the sum
    * over B5's 24 drawn blocks of `(end - start) x stripCount`; it is not
@@ -530,6 +587,35 @@ describe('selectScorecardMetrics — null values', () => {
     expect(metric('days:balance-spread').value).toBeNull()
     expect(metric('strips:utilization').value).toBeCloseTo(15.238095238095239, 10)
     expect(metric('finish:day:1').value).toBeNull()
+  })
+
+  /**
+   * `twoDaysOneUsable` pins the `window > 0` guard only at `window === 0`,
+   * where both branches give the same 0 — the fixture already satisfies the
+   * branch it exists to test. A window that *ends before it starts* is the
+   * branch that differs: without the guard day 1 contributes −1200
+   * strip-minutes, the denominator shrinks from 16800 to 15600, and
+   * utilization reads 16.410% instead of 15.238% — higher than reality rather
+   * than lower, which is the direction that misleads. The brief's wording
+   * ("missing or **non-positive** day windows contribute 0") is only half held
+   * without this.
+   */
+  it('contributes zero for a day whose window ends before it starts', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    const s = useStore.getState()
+    s.setTournamentType('NAC')
+    s.setDays(2)
+    s.setStrips(20)
+    s.setVideoStrips(4)
+    s.selectCompetitions(['JR-M-EPEE-IND'])
+    useStore.getState().updateCompetition('JR-M-EPEE-IND', { fencer_count: 40 })
+    useStore.getState().updateDayConfig(1, { day_start_time: 600, day_end_time: 540 })
+    useStore.getState().setPlacementsFromAuto({
+      'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 4 }),
+    })
+
+    expect(metric('strips:utilization').value).toBeCloseTo(15.238095238095239, 10)
+    expect(metric('days:balance-spread').value).toBeNull()
   })
 
   /** Zero strips: no strip-minutes available at all, and so no usable day. */

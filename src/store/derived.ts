@@ -421,14 +421,18 @@ function computeScorecardMetrics(
 
   // ── Findings: validation errors and analysis warnings, counted together ──
 
-  const findingCounts = new Map<string, number>()
-  const findingSubjects = new Map<string, Set<string>>()
+  const findingCounts = new Map<BottleneckSeverity, number>()
+  const findingSubjects = new Map<BottleneckSeverity, Set<string>>()
   for (const severity of SEVERITY_ORDER) {
     findingCounts.set(severity, 0)
     findingSubjects.set(severity, new Set<string>())
   }
 
-  function noteFinding(severity: string, subjects: readonly string[]): void {
+  // `BottleneckSeverity`, not `string`: a severity outside SEVERITY_ORDER would
+  // otherwise mint its own map key and be silently dropped from every rendered
+  // row — under-counting with a green suite. Typed this way, widening the union
+  // breaks `tsc` here instead.
+  function noteFinding(severity: BottleneckSeverity, subjects: readonly string[]): void {
     findingCounts.set(severity, (findingCounts.get(severity) ?? 0) + 1)
     const named = findingSubjects.get(severity)
     if (!named) return
@@ -446,7 +450,7 @@ function computeScorecardMetrics(
     noteFinding(warning.severity, warning.competition_id ? [warning.competition_id] : [])
   }
 
-  function findingKeys(severity: string): string[] {
+  function findingKeys(severity: BottleneckSeverity): string[] {
     const keys: string[] = []
     for (const subject of findingSubjects.get(severity) ?? []) {
       const blockKeys = keysByCompetition.get(subject)

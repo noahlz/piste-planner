@@ -214,8 +214,14 @@ describe('scorecardBaseline — frozen against edits', () => {
     useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 2, start_time: 480 })
 
     // CDT-W-FOIL-IND leaves day 0, so day 0's finish drops to the 872 its
-    // remaining events reach, while the tournament finish falls to 872 too.
+    // remaining events reach. `start_time: 480` is load-bearing and asserted
+    // rather than left implicit: CDT-W-FOIL-IND's scheduled pool_start is 585,
+    // the one B5 event the scheduler starts late, so moving it *without* the
+    // earlier start leaves the tournament finish at 972 rather than 872. An
+    // unrequested input field that shifts a value the case only reasons about
+    // is the vacuity shape this feature has already been bitten by.
     expect(liveValue('finish:day:0')).toBe(872)
+    expect(liveValue('finish:tournament')).toBe(872)
     expectBaseline(useStore.getState().scorecardBaseline, B5_BASELINE)
   })
 })

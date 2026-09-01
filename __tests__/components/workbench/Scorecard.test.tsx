@@ -12,6 +12,7 @@ import {
   loadViewState,
   saveViewState,
 } from '../../../src/store/viewState.ts'
+import { makePlacement } from '../../helpers/factories.ts'
 
 // 004 T046 — the scorecard (US3, FR-025/FR-029, ui-contract.md §Scorecard,
 // research D9). The rules this file exists to hold:
@@ -165,6 +166,14 @@ describe('Scorecard collapsed and expanded sets (ui-contract §Scorecard)', () =
     // "Collapse scorecard".
     expect(disclosure()).toHaveAttribute('aria-expanded', 'true')
     expect(metricIds(scorecard())).toEqual(B1_EXPANDED_IDS)
+
+    // The disclosure names the list it controls, so what aria-expanded refers
+    // to is not left to proximity. Asserted through the attribute rather than
+    // against a literal id, which pins the pairing instead of the string.
+    const controls = disclosure().getAttribute('aria-controls')
+    expect(controls).toBeTruthy()
+    const list = scorecard().querySelector(`#${controls}`)
+    expect(list?.querySelectorAll('[data-metric]')).toHaveLength(B1_EXPANDED_IDS.length)
   })
 
   it('renders no aggregate score in either state (FR-025)', () => {
@@ -201,6 +210,26 @@ describe('Scorecard values against the B1 preset', () => {
     expect(valueOf(card, 'findings:ERROR')).toBe(B1_FINDINGS.ERROR)
     expect(valueOf(card, 'findings:WARN')).toBe(B1_FINDINGS.WARN)
     expect(valueOf(card, 'findings:INFO')).toBe(B1_FINDINGS.INFO)
+  })
+
+  it('renders each row its own label, with the day rows numbered from 1', () => {
+    // The rows are located by data-metric everywhere else in this file, so the
+    // strings a person actually reads are otherwise unasserted — the selector
+    // suite only checks that a label is truthy, which cannot see two rows
+    // sharing one label or a day row numbered from 0.
+    loadB1()
+    render(<Scorecard />)
+    fireEvent.click(disclosure())
+
+    const label = (id: string) =>
+      scorecard().querySelector(`[data-metric="${id}"] [data-metric-label]`)?.textContent
+
+    expect(label('finish:tournament')).toBe('Tournament finish')
+    expect(label('refs:peak-total')).toBe('Peak referees')
+    expect(label('refs:peak-sabre')).toBe('Peak sabre referees')
+    // 1-based, matching the day numbering in EventBlock's accessible name.
+    expect(label('finish:day:0')).toBe('Day 1 finish')
+    expect(label('finish:day:3')).toBe('Day 4 finish')
   })
 })
 
@@ -270,6 +299,114 @@ describe('Scorecard deltas (research D9)', () => {
       'findings:INFO',
     ])
   })
+
+  /**
+   * B1's latest finish is VET-M-EPEE-IND-VCMB at 1037 on day 1. Pushing it out
+   * of range drops the tournament finish to VET-W-EPEE-IND-VCMB's 977, a delta
+   * of −60 minutes. formatMinutes floors, so a delta handed to it *signed*
+   * renders "-1:00" and the row reads "−-1:00"; the magnitude goes through
+   * Math.abs and the prefix carries the sign. No other case in this file
+   * asserts a negative delta at all, let alone a negative time one.
+   */
+  it('renders a negative time delta as a signed clock time', () => {
+    loadB1()
+    act(() => {
+      useStore.getState().updatePlacement('VET-M-EPEE-IND-VCMB', { day: 9 })
+    })
+    render(<Scorecard />)
+    fireEvent.click(disclosure())
+
+    expect(valueOf(scorecard(), 'finish:tournament')).toBe('16:17')
+    expect(deltaOf(scorecard(), 'finish:tournament')).toBe('−1:00')
+  })
+
+  /**
+   * A preset that later places nothing: the baseline still holds B1's 1037
+   * while the live finish has no event to read at all. A delta needs both
+   * sides, and `null - 1037` is −1037 rather than an error, so the guard is the
+   * only thing between that and a row reading "—  −17:17".
+   */
+  it('renders no delta once a metric\'s live value has gone null', () => {
+    loadB1()
+    act(() => {
+      useStore.getState().setPlacementsFromAuto({})
+    })
+    render(<Scorecard />)
+
+    expect(useStore.getState().scorecardBaseline!['finish:tournament']).toBe(1037)
+    expect(valueOf(scorecard(), 'finish:tournament')).toBe('—')
+    expect(row(scorecard(), 'finish:tournament').querySelector('[data-metric-delta]')).toBeNull()
+  })
+
+  /**
+   * The mirror: B2 places nothing (validateConfig reports its team events as a
+   * BINDING error), so its baseline is captured over zero placements and
+   * finish:tournament freezes as null — the case scorecardBaseline.test.ts
+   * pins. A later hand placement gives the metric a value with nothing to
+   * compare it to, and `2738 - null` is 2738, not an error.
+   */
+  it('renders no delta when the baseline entry itself was null', () => {
+    applyPreset('B2')
+    runScheduleAll()
+    expect(useStore.getState().scorecardBaseline!['finish:tournament']).toBeNull()
+
+    act(() => {
+      useStore.getState().setPlacementsFromAuto({
+        'D1-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 4 }),
+      })
+    })
+    render(<Scorecard />)
+
+    expect(valueOf(scorecard(), 'finish:tournament')).toBe('45:38')
+    expect(row(scorecard(), 'finish:tournament').querySelector('[data-metric-delta]')).toBeNull()
+    // refs:peak-total's baseline was 0, not null — that one does compare.
+    expect(deltaOf(scorecard(), 'refs:peak-total')).toBe('+90')
+  })
+
+  /**
+   * The metric set grows with days_available, so a day added after the capture
+   * mints an id the frozen baseline cannot hold. D9's no-baseline rule applies
+   * per metric, not only per tournament: no baseline entry means no delta
+   * element, which is not the same DOM as a delta of zero.
+   */
+  it('renders no delta for a metric id the baseline never held', () => {
+    loadB1()
+    act(() => {
+      useStore.getState().setDays(5)
+    })
+    render(<Scorecard />)
+    fireEvent.click(disclosure())
+
+    expect(useStore.getState().scorecardBaseline).not.toHaveProperty('finish:day:4')
+    expect(valueOf(scorecard(), 'finish:day:4')).toBe('—')
+    expect(row(scorecard(), 'finish:day:4').querySelector('[data-metric-delta]')).toBeNull()
+    // The four days it does hold still carry one.
+    expect(row(scorecard(), 'finish:day:3').querySelector('[data-metric-delta]')).not.toBeNull()
+  })
+
+  it('drops the sign when the rendered magnitude rounds the movement away', () => {
+    loadB1()
+    render(<Scorecard />)
+    fireEvent.click(disclosure())
+    const dayEnd = useStore.getState().dayConfigs[0].day_end_time
+
+    // +1 minute of day 0 moves the utilization by 0.0123 points, less than the
+    // one decimal the row shows. The value does not change, so a sign taken
+    // from the raw delta would announce a direction the reader cannot see.
+    act(() => {
+      useStore.getState().updateDayConfig(0, { day_end_time: dayEnd + 1 })
+    })
+    expect(valueOf(scorecard(), 'strips:utilization')).toBe('41.4%')
+    expect(deltaOf(scorecard(), 'strips:utilization')).toBe('0.0%')
+
+    // +6 minutes moves it 0.0737 points, which does round to a tenth — and a
+    // movement that shows keeps its sign.
+    act(() => {
+      useStore.getState().updateDayConfig(0, { day_end_time: dayEnd + 6 })
+    })
+    expect(valueOf(scorecard(), 'strips:utilization')).toBe('41.3%')
+    expect(deltaOf(scorecard(), 'strips:utilization')).toBe('−0.1%')
+  })
 })
 
 describe('Scorecard hover names the driving blocks (FR-029)', () => {
@@ -319,6 +456,76 @@ describe('Scorecard hover names the driving blocks (FR-029)', () => {
       finish.focus()
     })
     expect(useStore.getState().hoveredMetricId).toBe('finish:tournament')
+  })
+
+  /**
+   * The two modalities are held apart, so neither clears the other.
+   *
+   * Both cases above drive one modality at a time, and both pass against a
+   * component that writes `null` on every leave and blur. Interleaved, that
+   * component desynchronizes: the pointer visits a second row and leaves,
+   * writing null, while focus has never moved — the focused row still carries
+   * its ring and the canvas lights nothing. Worse in the middle, where two rows
+   * look active and one drives.
+   */
+  it('hands the highlight back to the focused row when the pointer leaves another', () => {
+    loadB1()
+    render(<Scorecard />)
+
+    const finish = row(scorecard(), 'finish:tournament')
+    const refs = row(scorecard(), 'refs:peak-total')
+
+    act(() => {
+      finish.focus()
+    })
+    expect(useStore.getState().hoveredMetricId).toBe('finish:tournament')
+
+    // The pointer takes over while it rests on a row: the more recent intent.
+    pointerEnter(refs)
+    expect(useStore.getState().hoveredMetricId).toBe('refs:peak-total')
+
+    // And hands back rather than clearing. Focus never moved.
+    pointerLeave(refs)
+    expect(document.activeElement).toBe(finish)
+    expect(useStore.getState().hoveredMetricId).toBe('finish:tournament')
+
+    // The focused row is still the one that can clear it.
+    act(() => {
+      finish.blur()
+    })
+    expect(useStore.getState().hoveredMetricId).toBeNull()
+  })
+
+  /**
+   * FR-029 for a screen-reader user, which the highlight alone does not reach:
+   * the blocks it lights are `role="img"` with a static accessible name, and
+   * role="img" is not a live region, so changing those names would announce
+   * nothing. Without this node a keyboard user tabs the rows, lights the canvas
+   * on each one, and is told nothing at all.
+   *
+   * The counts are B1's measured driving-set sizes (2 for the argmax event's
+   * two segments, 1 for the sabre peak's single open block), so the plural rule
+   * is exercised both ways rather than assumed.
+   */
+  it('announces which metric is driving and how many blocks it lights', () => {
+    loadB1()
+    render(<Scorecard />)
+    fireEvent.click(disclosure())
+
+    const status = () => scorecard().querySelector('[data-highlight-status]')
+    expect(status()?.getAttribute('aria-live')).toBe('polite')
+    // Present from the first frame and empty: a live region inserted at the
+    // moment of the change is not reliably announced.
+    expect(status()?.textContent).toBe('')
+
+    pointerEnter(row(scorecard(), 'finish:tournament'))
+    expect(status()?.textContent).toBe('Tournament finish: 2 blocks highlighted')
+
+    pointerEnter(row(scorecard(), 'refs:peak-sabre'))
+    expect(status()?.textContent).toBe('Peak sabre referees: 1 block highlighted')
+
+    pointerLeave(row(scorecard(), 'refs:peak-sabre'))
+    expect(status()?.textContent).toBe('')
   })
 })
 

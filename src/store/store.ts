@@ -341,21 +341,33 @@ function createPlacementsSlice(set: SetState, get: GetState): PlacementsSlice {
       for (const [id, placement] of Object.entries(placements)) {
         normalised[id] = { ...placement, source: PlacementSource.AUTO, pinned: false }
       }
-      set({ placements: normalised })
-
       // The scorecard baseline is captured here, on the first placement after a
       // preset was recorded — boot and the picker both go `applyPreset(id)`
       // then `runScheduleAll()`, so neither needs special-casing, and a
       // shared-URL boot calls neither and so never captures one. The
       // `scorecardBaseline === null` arm is what stops a later `Auto-schedule
-      // all` from re-baselining, which research D9 rejects. Read back through
-      // `get()` so the metrics include the placements just set.
-      const state = get()
-      if (state.loadedPresetId !== null && state.scorecardBaseline === null) {
-        const baseline: ScorecardBaseline = {}
-        for (const metric of selectScorecardMetrics(state)) baseline[metric.id] = metric.value
-        set({ scorecardBaseline: baseline })
+      // all` from re-baselining, which research D9 rejects.
+      //
+      // Computed from a **projection** of the state with the new placements,
+      // before anything is written, and committed in one `set` with them. The
+      // selector reaches `initialAnalysis` → `computePoolStructure`, which
+      // throws for `fencer_count <= 1`, and the only caller
+      // (`runActions.ts`) invokes this outside its own try — so a capture run
+      // after the write would unwind `bootstrap()` with `placements` already
+      // replaced and no baseline beside them. `dismissFinding` already holds
+      // this invariant the same way: select first, then set once. The
+      // projection is complete because `computeScorecardMetrics` reads only
+      // data fields, and memoization stays warm because `normalised` is the
+      // same reference the store ends up holding.
+      const prior = get()
+      let baseline: ScorecardBaseline | null = null
+      if (prior.loadedPresetId !== null && prior.scorecardBaseline === null) {
+        const projected: StoreState = { ...prior, placements: normalised }
+        baseline = {}
+        for (const metric of selectScorecardMetrics(projected)) baseline[metric.id] = metric.value
       }
+
+      set(baseline === null ? { placements: normalised } : { placements: normalised, scorecardBaseline: baseline })
     },
 
     updatePlacement: (id, partial) => {

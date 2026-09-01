@@ -268,6 +268,18 @@ if (litCount !== blocksAtBoot) {
     `hovering Strip utilization lit ${litCount} of the ${blocksAtBoot} blocks on screen; every one drives it (FR-029)`,
   )
 }
+// The cue has to *paint*, not merely exist. jsdom reads the inline value back
+// verbatim, so the unit suite can pin the declaration but not that it resolves
+// — the two chrome tokens are the one paint on the canvas that does not come
+// from palette.ts, and an unresolved var() would leave FR-029's cue invisible
+// with everything above still green.
+const cueShadow = await page
+  .locator('[data-event-block][data-highlighted="true"] [data-highlight-cue]')
+  .first()
+  .evaluate((el) => getComputedStyle(el).boxShadow)
+if (!cueShadow.includes('inset') || !cueShadow.includes('rgb')) {
+  throw new Error(`the highlight cue resolved to no ring at all: box-shadow "${cueShadow}"`)
+}
 await shot('01c-highlight')
 // And it clears when the pointer leaves — the cue is a hover state, not a
 // latch. Same corner the tooltip step below moves to.

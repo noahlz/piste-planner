@@ -1,10 +1,17 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useStore } from '../../store/store.ts'
 import { selectScorecardMetrics, type ScorecardMetric, type ScorecardBaseline } from '../../store/derived.ts'
 import { loadViewState, saveViewState } from '../../store/viewState.ts'
 import { formatMinutes } from '../../lib/time.ts'
 import { Button } from '@/components/ui/button'
+
+/**
+ * The metric list's id, so the disclosure button can name what it controls.
+ * A constant rather than `useId`: the scorecard is mounted once, and a stable
+ * id is what lets a test or the smoke driver assert the pairing.
+ */
+const METRIC_LIST_ID = 'scorecard-metrics'
 
 /**
  * Renders one metric's value in its own units. `null` is a metric with no
@@ -44,10 +51,17 @@ function computeDelta(metric: ScorecardMetric, baseline: ScorecardBaseline | nul
  * same units as the value above it. A time delta goes through formatMinutes on
  * its absolute value — formatMinutes floors, so handing it a negative would
  * render `-2:-15` for −75 minutes; the sign is carried by the prefix instead.
+ *
+ * The sign is decided from the **rendered magnitude**, never from the raw
+ * delta. `strips:utilization` and `days:balance-spread` are continuous and show
+ * one decimal, so a small edit moves them by 0.03 points and a sign taken from
+ * the raw number would render `+0.0%` — a direction the reader cannot see, and
+ * a contradiction of research D9's "a zero delta renders as such".
  */
 function formatDelta(kind: ScorecardMetric['kind'], delta: number): string {
-  const sign = delta > 0 ? '+' : delta < 0 ? '−' : ''
-  return `${sign}${formatValue(kind, Math.abs(delta))}`
+  const magnitude = formatValue(kind, Math.abs(delta))
+  const sign = magnitude === formatValue(kind, 0) ? '' : delta > 0 ? '+' : '−'
+  return `${sign}${magnitude}`
 }
 
 /**
@@ -66,6 +80,20 @@ export function Scorecard() {
   const metrics = useStore(selectScorecardMetrics)
   const baseline = useStore((s) => s.scorecardBaseline)
   const setHoveredMetricId = useStore((s) => s.setHoveredMetricId)
+  const hoveredMetricId = useStore((s) => s.hoveredMetricId)
+
+  // The pointer and the keyboard are two independent sources for one scalar,
+  // and neither may clear the other's highlight. Writing `null` unconditionally
+  // on leave/blur desynchronizes them: with a row focused, moving the pointer
+  // across a second row and off it would leave the focused row still looking
+  // active while the canvas lit nothing at all. Each source holds its own value
+  // and the resolved one is pushed — the pointer wins while it is on a row,
+  // because that is the more recent intent.
+  const pointerId = useRef<string | null>(null)
+  const focusId = useRef<string | null>(null)
+  function pushHover(): void {
+    setHoveredMetricId(pointerId.current ?? focusId.current)
+  }
 
   // T051: the expansion is a viewer preference, not tournament state. It seeds
   // from the persisted view state and never reaches serializeState.
@@ -81,6 +109,14 @@ export function Scorecard() {
 
   const rows = expanded ? metrics : metrics.filter((metric) => metric.tier === 'collapsed')
 
+  // FR-029's only channel to a screen-reader user. The blocks the highlight
+  // lights are `role="img"` with a static accessible name (EventBlock.tsx), and
+  // role="img" is not a live region — so a keyboard user could focus every row
+  // in turn, light the canvas each time, and be told nothing. The count of
+  // driven blocks is announced here instead of on the blocks themselves.
+  const hovered =
+    hoveredMetricId === null ? undefined : metrics.find((metric) => metric.id === hoveredMetricId)
+
   return (
     <section aria-label="Scorecard" className="mb-3 rounded-lg border bg-card p-2">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -93,6 +129,7 @@ export function Scorecard() {
           // what changes. scripts/smoke.mjs locates the button by this name.
           aria-label="Scorecard details"
           aria-expanded={expanded}
+          aria-controls={METRIC_LIST_ID}
           onClick={toggle}
         >
           {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
@@ -100,7 +137,15 @@ export function Scorecard() {
         </Button>
       </div>
 
-      <ul className="space-y-0.5">
+      <span data-highlight-status aria-live="polite" className="sr-only">
+        {hovered === undefined
+          ? ''
+          : `${hovered.label}: ${hovered.blockKeys.length} block${
+              hovered.blockKeys.length === 1 ? '' : 's'
+            } highlighted`}
+      </span>
+
+      <ul id={METRIC_LIST_ID} className="space-y-0.5">
         {rows.map((metric) => {
           const delta = computeDelta(metric, baseline)
           return (
@@ -110,11 +155,29 @@ export function Scorecard() {
               // tabIndex is the contract, not styling: without it the row is
               // unfocusable and FR-029's highlight has no keyboard path at all.
               tabIndex={0}
-              className="flex items-baseline gap-2 rounded px-1 py-0.5 text-xs hover:bg-muted focus:bg-muted focus:outline-none"
-              onPointerEnter={() => setHoveredMetricId(metric.id)}
-              onPointerLeave={() => setHoveredMetricId(null)}
-              onFocus={() => setHoveredMetricId(metric.id)}
-              onBlur={() => setHoveredMetricId(null)}
+              // focus-visible, and a ring rather than a background: --muted on
+              // --card is about 1.08:1, where WCAG 2.4.11 asks 3:1 of a focus
+              // indicator, and `outline-none` had removed the browser default
+              // that would have supplied one. --ring on --card is ~3.6:1. The
+              // `focus-visible` prefix also keeps a mouse click from leaving a
+              // row looking selected after the pointer has gone.
+              className="flex items-baseline gap-2 rounded px-1 py-0.5 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onPointerEnter={() => {
+                pointerId.current = metric.id
+                pushHover()
+              }}
+              onPointerLeave={() => {
+                pointerId.current = null
+                pushHover()
+              }}
+              onFocus={() => {
+                focusId.current = metric.id
+                pushHover()
+              }}
+              onBlur={() => {
+                focusId.current = null
+                pushHover()
+              }}
             >
               <span data-metric-label className="flex-1 truncate text-muted-foreground">
                 {metric.label}
