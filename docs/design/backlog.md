@@ -211,6 +211,122 @@ the schedule's own requirement. Worth reconciling when the referee model is next
 opened; until then the divergence is bounded, one-directional, and confined to
 saturated days.
 
+## Day-end overrun is a hard failure the methodology calls a warning
+
+*Found by the 2026-08-31 methodology review (web research + code cross-check).
+Recorded, not fixed.*
+
+`METHODOLOGY.md` calls the 10 PM day end a soft boundary and says a late finish
+"produces a warning with estimated finish time, not a scheduling failure"
+(Inputs, Warning-Level Rules, Appendix A timing table). The runtime disagrees –
+a phase that would end past `dayHardEnd` fails with `SAME_DAY_VIOLATION` at
+ERROR severity (`src/engine/concurrentScheduler.ts:920-928`), and two failed
+attempts permanently unschedule the event. Reality sides with the doc's warning
+model: AFM documents a tournament that ["ended at
+1am"](https://academyoffencingmasters.com/blog/passing-time-during-long-fencing-tournaments-with-intention/),
+and a USA Fencing referee-POV piece has a referee working "until about
+midnight." A real bout committee runs late rather than dropping the event, so
+every overrun the engine converts to an unscheduled event is a false
+infeasibility. Candidate fix: let terminal phases place past `dayHardEnd` with
+a WARN-severity bottleneck carrying the estimated finish, reserving failure
+for events that cannot start at all.
+
+## Runtime failure is terminal – day assignment never re-colors
+
+*Found by the 2026-08-31 methodology review. Recorded, not fixed.*
+
+Phase 4 (day coloring) picks days with capacity heuristics, Phase 5 (concurrent
+scheduler) discovers infeasibility, and the only recourse is one retry from
+8 AM on the *same* day, then `DEADLINE_BREACH_UNRESOLVABLE` and a permanent
+drop (`src/engine/concurrentScheduler.ts`, Two-Attempt Retry). There is no path
+that returns a failed event to day assignment for re-coloring onto another day
+– the move a human scheduler makes first. This is the amplifier under several
+recorded empty-board defects (see "Team events block their whole tournament"
+above for the BINDING variant of the same all-or-nothing shape). A bounded
+repair loop – re-color the failed event with its failed day excluded, capped at
+one pass – would convert permanent drops into placements at the cost of a
+second coloring round.
+
+## Vet co-day serialization is unsourced and never fit-checked
+
+*Found by the 2026-08-31 methodology review. Recorded, not fixed.*
+
+Two stacked problems with the Veteran Age-Group Co-Day Rule:
+
+- **The strict end-to-end serialization has no policy source.** Web research
+  found no USA Fencing rule requiring it – the one reference found describes
+  2026 NAC vet events "scheduled on the same day with different start times,"
+  which is a staggered-start model, not `younger.pools.ready =
+  older.last_phase.end + ADMIN_GAP_MINS` (`applyCrossEventEdges`,
+  `src/engine/concurrentScheduler.ts`). The methodology's own rationale – a
+  VET80 fencer finishes their primary event before a nested event starts –
+  requires only a start offset for the younger event, not full serialization
+  behind the older event's DE tail.
+- **Nothing validates the serialized chain fits a day.** Single-Day Fit
+  (`src/engine/validation.ts:71-301`) checks single events and ind/team pairs
+  only. Five age-banded vet events serialized end-to-end with admin gaps can
+  exceed the day, and day assignment will still emit that co-day – the runtime
+  then fails events with no repair path (see previous entry).
+
+Relaxing the edge to a staggered-start offset shrinks the chain enough that
+the missing fit check may become moot – measure against the vet-bearing
+templates (`NAC Vet/Div1/Junior`) before adding a chain validator.
+
+## Policy tables are stale against USA Fencing 2025-26 changes
+
+*Found by the 2026-08-31 methodology review (policy research against
+usafencing.org). Recorded, not applied.*
+
+USA Fencing is mid-restructure and several encoded policies no longer match
+published rules:
+
+- **Div 1 cut**: the doc and `DEFAULT_CUT_BY_CATEGORY` say 20% cut (80%
+  advance). The 2025-26 published standard is **75% advance (25% cut)** with a
+  single round of pools everywhere
+  ([Division I Format Update for 2025-26](https://www.usafencing.org/news)).
+  The 20% figure belongs to a different mechanism – the new 315-entrant NAC
+  cap for Div1/Junior/Cadet, sized so 315 entries produce a 256 DE tableau
+  ([Event Restructure Update, June 2025](https://www.usafencing.org/news)).
+- **Flighting trigger**: the old entries-based two-pool-round rule was
+  eliminated for 2025-26. The engine's strip-budget trigger is closer to real
+  practice (flighting as the release valve when strips/refs are short), but
+  the "max two flights" cap and fixed `FLIGHT_BUFFER_MINS` cadence conflict
+  with observed practice – uneven 1.5-2 hour flight gaps
+  ([AFM on double-flighted events](https://academyoffencingmasters.com/blog/how-to-make-double-flighted-events-work-for-you/)).
+- **Tiered video replay is uncorroborated**: USA Fencing's public pages
+  describe a flat "R16 onward" rule at NACs. The doc's R16/R8/R4-by-category
+  table has no source found in either direction, and the per-category video
+  logic built on it should be treated as provisional.
+- **2 refs/pool default is unverified**: no source states a per-pool referee
+  count, and the default doubles reported staffing versus 1/pool. One usable
+  sanity bound exists: the Referee Commission Chair estimated **150-180
+  refs/day** at a NAC
+  ([FencingParents, 2020](https://www.fencingparents.org/suggestions-for-us-fencing/2020/2/23/fencing-parents-need-to-up-their-game-according-to-referee-commission-chair)).
+- **A 2026-27 overhaul is announced** (single national points list, Elite vs
+  National split at 168 entries), so these tables will go stale again.
+
+The durable fix is the one already on this backlog – promote policy tables
+(cuts, video rounds, flighting caps) into the per-season configuration file
+described under "Global settings," rather than chasing each season in
+`constants.ts`.
+
+## METHODOLOGY.md internal contradictions
+
+*Found by the 2026-08-31 methodology review. Doc-only fixes.*
+
+- **DIV1↔CADET is listed as both hard and soft.** The hard-constraint section
+  lists it under "always different days at NACs" while Soft Preferences gives
+  it penalty 5.0. The code says soft (`src/engine/constants.ts:453,472`) –
+  the hard-constraint bullet should move.
+- **Flighting text conflicts with itself.** The Flighting section says Flight
+  A/B start/end times are not tracked, while Runtime Decomposition says the
+  concurrent scheduler decomposes them into two timed phase nodes. The former
+  predates Phase D and should be rewritten.
+- **Day-end severity wording** ("soft boundary", warning-level Same-Day
+  Completion) contradicts the runtime's ERROR-severity `SAME_DAY_VIOLATION` –
+  resolve whichever way the day-end overrun entry above lands, but the doc and
+  engine should say the same thing.
+
 ## Rail rebuild
 
 *Assigned to feature 007 on 2026-08-31 (unspecced), after 004 closes.*
