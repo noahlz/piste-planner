@@ -16,8 +16,10 @@ On `main`, before this feature, B2 and B8 were pinned at `0` — two of the eigh
 reference tournaments placed nothing. On this branch the pins are `24` and
 `53`, so the command above passes rather than reproducing the defect. The
 pre-fix numbers are `main`'s and are recorded in
-[006's parity-exceptions.md](../006-day-axis-parity/parity-exceptions.md) and
-[006's baseline.md](../006-day-axis-parity/baseline.md).
+[baseline.md](./baseline.md), this feature's own pre-change capture, and
+earlier in 006's
+[parity-exceptions.md](../006-day-axis-parity/parity-exceptions.md) and
+[baseline.md](../006-day-axis-parity/baseline.md).
 
 ## 2. The parity gate
 
