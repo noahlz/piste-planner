@@ -69,6 +69,19 @@
 // delta's text, changes the top bar's strip count, and requires the text to
 // have changed to a non-zero magnitude. It varies strips and never a fencer
 // count: `computePoolStructure` throws for `fencerCount <= 1`.
+//
+// T066: the last block drives US4's clarification — a tournament type change
+// re-resolves what follows a default and leaves a hand-set value alone. Every
+// locator it needed matched the real DOM first try; the corrections it does
+// encode are two name-matching ones, since Playwright's `name` is a
+// case-insensitive *substring* by default. The top bar's "Tournament type"
+// needs `exact` because the rail's Tournament panel holds a second control
+// over the same store field whose accessible name is its <Label>, "Type", and
+// a competition's name is a prefix of its siblings', so `Referees for …`
+// needs it too. The summary element is reached through the trigger's
+// `aria-describedby` id rather than by text, and that id comes from React's
+// `useId` — ":r7:" and the like — so it is quoted into an attribute selector
+// rather than written as `#id`, which those colons are not valid in.
 
 import { chromium } from 'playwright-core'
 import { homedir } from 'node:os'
@@ -555,23 +568,157 @@ await page.getByRole('radio', { name: 'Schedule' }).click()
 await page.waitForTimeout(200)
 const teamRowCount = await page.locator('[data-schedule-row]').count()
 log('NAC Cadet/Junior schedule table rows =', teamRowCount)
-// Measured against the running app 2026-08-31 by running this file's exact
-// sequence (Presets… → NAC Cadet/Junior → Suggest → Auto-schedule all →
-// Schedule radio → count [data-schedule-row]) twice in a row; both runs
-// reported 15 of the template's 24 events placed at 39 suggested strips (the
-// shortfall is a strip-capacity limit on this template, not a regression —
-// baseline.md's fresh-store measurement of Suggest for this template also
-// recorded 39). This count is measured at this point in the driver's
-// accumulated session state — after the ROC template, the fencer-count edit
-// to 99, and the share round-trip — not from a fresh boot, so it need not
-// match a fresh-store after-column measured elsewhere (e.g. T019's handoff).
-// Before this feature's fix this count was 0: TEAM entries carried a
-// percentage cut, cut-on-team fired BINDING, and scheduleAllConcurrent
-// returned an empty schedule.
-if (teamRowCount !== 15) {
-  throw new Error(`NAC Cadet/Junior schedule table rendered ${teamRowCount} rows, expected 15`)
+// Measured against the running app by running this file's exact sequence
+// (Presets… → NAC Cadet/Junior → Suggest → Auto-schedule all → Schedule radio
+// → count [data-schedule-row]) twice in a row. The strip count is 39 either
+// way (baseline.md's fresh-store measurement of Suggest for this template
+// recorded 39 too), and the shortfall against 24 is a strip-capacity limit on
+// this template, not a regression. This count is measured at this point in the
+// driver's accumulated session state — after the ROC template, the
+// fencer-count edit to 99, and the share round-trip — not from a fresh boot,
+// so it need not match a fresh-store after-column measured elsewhere (e.g.
+// T019's handoff).
+//
+// 2026-08-31 (008): 0 → 15. TEAM entries had carried a percentage cut,
+// cut-on-team fired BINDING, and scheduleAllConcurrent returned an empty
+// schedule until they were pinned to DISABLED/100.
+// 2026-09-01 (004 US4, T066): 15 → 20, re-measured twice. US4 moved the app
+// path itself, not this template: research D6 makes an unset `de_mode` resolve
+// to the tournament type's mode, so all 24 of these NAC events now schedule
+// STAGED where the store used to hardcode SINGLE_STAGE, and T061a gives every
+// event `strips_allocated: max(2, ceil(n/7))` where buildConfig used to send 0.
+// drift-baseline.md §Part 2 measured both against B1–B8 and attributes exactly
+// this kind of movement to them ("re-packing under D6 … and T061a"); five more
+// events fitting is that re-pack landing in this template's favour. An
+// increase, so constitution III's halt — which is a *drop* in scheduled event
+// count — does not apply.
+if (teamRowCount !== 20) {
+  throw new Error(`NAC Cadet/Junior schedule table rendered ${teamRowCount} rows, expected 20`)
 }
 await shot('07-team-schedule')
+
+// ── Per-type defaults, and what survives a type change (T066, US4/FR-036) ──
+// The clarification US4 exists to settle: changing the tournament type
+// re-resolves every setting that is following a default and touches nothing an
+// organizer set by hand. Both halves are asserted, because either alone is
+// satisfied by a broken app — a survival check passes on an app that resolves
+// nothing at all, and a re-resolution check passes on one that overwrites the
+// store on every type change.
+//
+// Runs last, on the 24 events NAC Cadet/Junior just selected, with the type
+// still at the NAC that B1's boot preset set. NAC → ROC is the pair that moves
+// all three defaults at once (src/store/typeDefaults.ts): referees 2 → 1, video
+// strips 8 → 0, DE mode "Staged DE Blocks" → "Single Block".
+const advanced = page.getByRole('button', { name: 'Advanced' })
+await advanced.click()
+
+// FR-035's summary sits outside CollapsibleContent (Radix unmounts the content
+// on close) and the trigger points at it with aria-describedby. Read it through
+// that id rather than by its text: the assertion then also fails if the tie
+// between trigger and summary is ever dropped, which is the half of FR-035 a
+// text locator cannot see. The id comes from React's useId (":r7:" and the
+// like), so it is quoted into an attribute selector — those colons are not
+// valid in a bare `#id` selector.
+const summaryId = await advanced.getAttribute('aria-describedby')
+if (!summaryId) throw new Error('the Advanced trigger describes no summary element (FR-035)')
+const summaryText = async () => ((await page.locator(`[id="${summaryId}"]`).textContent()) ?? '').trim()
+
+const nacSummary = await summaryText()
+if (!nacSummary.includes('Referees per pool: 2') || !nacSummary.includes('DE mode: Staged DE Blocks')) {
+  throw new Error(`Advanced summary at a NAC did not read the NAC row of TYPE_DEFAULTS: "${nacSummary}"`)
+}
+
+// B1's preset wrote an explicit 12 video strips (applyPreset → setVideoStrips),
+// so the count is *not* following the type default yet and the type change
+// below would correctly leave it alone. Revert it first (FR-038's control, the
+// only way back to the stored null) so it becomes a value that has to move.
+await page.getByRole('button', { name: 'Revert video strips to default' }).click()
+await page.waitForTimeout(200)
+const revertedSummary = await summaryText()
+if (!revertedSummary.includes('Video strips: 8')) {
+  throw new Error(`reverting video strips did not fall back to the NAC default of 8: "${revertedSummary}"`)
+}
+log('advanced summary at a NAC:', revertedSummary.replace(/\s+/g, ' '))
+
+// Two events: the first gets a hand-set referee count, the second is left
+// following the default. Both start at the store's AUTO marker, which the
+// option list names by the count it resolves to.
+const refSelects = await page.getByRole('combobox', { name: /^Referees for / }).all()
+if (refSelects.length < 2) {
+  throw new Error(`the Advanced table offered ${refSelects.length} referee controls; two are needed`)
+}
+const [handSet, following] = refSelects
+const handSetName = await handSet.getAttribute('aria-label')
+const followingName = await following.getAttribute('aria-label')
+const refText = async (sel) => ((await sel.textContent()) ?? '').trim()
+if ((await refText(handSet)) !== 'Auto (2)' || (await refText(following)) !== 'Auto (2)') {
+  throw new Error(
+    `a fresh event did not start on the type default: "${await refText(handSet)}" / "${await refText(following)}"`,
+  )
+}
+
+// Exact names throughout: a competition label is a prefix of its Team sibling's
+// ("… Épée" vs "… Épée Team"), so the default substring match makes both the
+// combobox and the cell lookups below strict-mode violations.
+await handSet.click()
+await page.getByRole('option', { name: '1 referee', exact: true }).click()
+await page.waitForTimeout(200)
+if ((await refText(handSet)) !== '1 referee') {
+  throw new Error(`setting an explicit referee count did not stick: "${await refText(handSet)}"`)
+}
+
+// FR-039's marker is the stored AUTO, never a comparison against the resolved
+// count — the cell's `Default` badge is where that shows.
+const refCell = (name) => page.locator('td').filter({ has: page.getByRole('combobox', { name, exact: true }) })
+const defaultBadges = (name) => refCell(name).getByText('Default', { exact: true }).count()
+if ((await defaultBadges(handSetName)) !== 0) {
+  throw new Error(`${handSetName} still reads Default after being set by hand`)
+}
+if ((await defaultBadges(followingName)) !== 1) {
+  throw new Error(`${followingName} lost its Default badge without being touched`)
+}
+log('hand-set:', handSetName, '→ 1 referee; following the default:', followingName)
+await shot('08-advanced-nac')
+
+// The type change. The top bar's control, named "Tournament type" — the rail's
+// Tournament panel has a second control over the same store field whose
+// accessible name is just "Type" (its <Label>), and only an exact match keeps
+// "Type" from also matching this one.
+await page.getByRole('combobox', { name: 'Tournament type', exact: true }).click()
+await page.getByRole('option', { name: 'ROC', exact: true }).click()
+await page.waitForTimeout(400)
+
+// Half one — everything that was following a default moved to the ROC row.
+const rocSummary = await summaryText()
+for (const expected of ['Referees per pool: 1', 'Video strips: 0', 'DE mode: Single Block']) {
+  if (!rocSummary.includes(expected)) {
+    throw new Error(`NAC → ROC did not re-resolve a default: expected "${expected}" in "${rocSummary}"`)
+  }
+}
+if ((await refText(following)) !== 'Auto (1)') {
+  throw new Error(
+    `${followingName} was following the NAC default and did not follow ROC's: "${await refText(following)}"`,
+  )
+}
+
+// Half two — the hand-set count survived (FR-036). And it still reads as *not*
+// default: ROC's own default is 1 referee, so an implementation that derived
+// the badge by comparing the resolved counts would call this event's explicit
+// ONE a default here, which is the exact trap data-model.md §Settings override
+// state describes.
+if ((await refText(handSet)) !== '1 referee') {
+  throw new Error(
+    `FR-036 violated: the tournament type change destroyed ${handSetName}'s hand-set referee count ("${await refText(handSet)}")`,
+  )
+}
+if ((await defaultBadges(handSetName)) !== 0) {
+  throw new Error(`${handSetName} reads Default at a ROC — the badge is comparing values, not reading the stored marker`)
+}
+if ((await defaultBadges(followingName)) !== 1) {
+  throw new Error(`${followingName} lost its Default badge across the type change`)
+}
+log('type NAC → ROC: defaults re-resolved,', handSetName, 'kept its hand-set 1 referee')
+await shot('08b-advanced-roc')
 
 await browser.close()
 log('console errors =', errors.length, errors.slice(0, 3))
