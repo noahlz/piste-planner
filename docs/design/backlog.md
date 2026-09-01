@@ -211,6 +211,51 @@ the schedule's own requirement. Worth reconciling when the referee model is next
 opened; until then the divergence is bounded, one-directional, and confined to
 saturated days.
 
+## The drift ledger's factory does not apply the store's per-type resolutions
+
+*Measured by 004's US4 T063a on 2026-09-01, when the app-path parity pins were
+re-measured. Unassigned and unnumbered — it needs a spec directory when it is
+picked up. It is the sole remaining owner of the last two FR-004a parity
+exceptions, so it is not optional cleanup: `appPathParity.test.ts` names it in
+B6's and B8's `closedBy`.*
+
+`__tests__/helpers/scenarios.ts`'s `buildCompetitions` derives `cut_mode` and
+`de_mode` **per event**, from the catalogue's category and video policy. Since
+004's US4 the store derives them **per tournament type** — `REGIONAL_CUT_OVERRIDES`
+in `buildConfig.ts`, and the per-type table in
+[`specs/004-p3-workbench-shell/data-model.md`](../../specs/004-p3-workbench-shell/data-model.md)
+(`AUTO` → `STAGED` at NAC, `SINGLE_STAGE` elsewhere; two referees per pool at
+NAC/SJCC/SYC, one elsewhere). The two paths now apply different rules, not the
+same rule at different stages, which is why no number can be tuned to close the
+gap. Measured field by field:
+
+| Field | Store, after US4 | Ledger factory | Events differing (B6 / B8) |
+|---|---|---|---:|
+| `cut_mode` / `cut_value` | regional all-advance override at ROC/RYC/RJCC | 20% cut by category | 18 / 0 |
+| `de_mode` | per-type table | `STAGED` when individual and video REQUIRED | 12 / 41 |
+| `ref_policy` | resolved `ONE` / `TWO` | unresolved `AUTO` | 54 / 53 |
+
+Adopting the store's rules in the factory would move the drift ledger's own
+recorded counts — B6 44 → 39 and B8 52 → 53 on the evidence of T063a's swap
+runs — so it is a **constitution III change to the ledger's own baseline**, and
+it needs its own snapshot review rather than a fixture edit. That is exactly
+why 004 US4 did not do it: `scenarios.ts` is the comparison point its own drift
+gate (T062) diffs against, and moving the baseline inside the story measuring
+against it would have destroyed the measurement.
+
+Two cautions for whoever picks it up:
+
+- **`ref_policy` is inert on placement but not on referee demand.** `AUTO` and
+  `TWO` both score two refs per pool (`src/engine/pools.ts:170-175`), so
+  swapping it moves no scheduled count — but it is why B6's referee columns
+  stay apart from the ledger's after US4
+  ([`drift-baseline.md` §T062](../../specs/004-p3-workbench-shell/drift-baseline.md)).
+- **The factory's independence from the store is deliberate.** 008's
+  [research.md D2](../../specs/008-team-event-cut/research.md) argues it, and it
+  is what let the parity check find the team-event bug at all. Converging the
+  *rules* is not the same as having the factory call the store's helpers, and
+  the argument against the latter still stands.
+
 ## Rail rebuild
 
 *Assigned to feature 007 on 2026-08-31 (unspecced), after 004 closes.*

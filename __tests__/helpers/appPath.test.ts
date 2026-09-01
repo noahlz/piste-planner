@@ -17,21 +17,32 @@ import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
  * 008-team-event-cut gave team events the all-advance `cut_mode` the engine
  * requires, closing the last BINDING error that zeroed both
  * (specs/008-team-event-cut/).
+ *
+ * 004 US4's T061a then moved two of them again — see `BASELINE` below.
  */
 describe('runAppPath', () => {
   // Measured post-fix on 2026-08-31 via
   // `timeout 120 pnpm --silent vitest run __tests__/helpers/appPath.test.ts`.
   // Pre-fix numbers (baseline.md "Raw output from the measurement run",
   // captured at the commit this feature branched from) in comments.
+  //
+  // B4's and B6's placed counts are a **second copy** of the pins in
+  // `__tests__/store/appPathParity.test.ts`, held here on purpose: this file
+  // proves the harness reproduces the app path's real numbers, and it has to
+  // be able to fail on its own rather than inherit the parity file's table.
+  // The cost of that is that the two copies must be re-measured together —
+  // they were, at T063a on 2026-09-01, against the post-D5/D6/D7/T061a tree.
+  // The parity file carries the FR-004a classification; this one carries only
+  // the numbers.
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
-    B4: { selected: 30, placed: 16 }, // pre-fix: 8
+    B4: { selected: 30, placed: 0 }, // pre-fix: 8; 16 until T061a, when pre-allocated strips restored the DE term of the feasibility estimate and the upfront gate finally fired — the ledger's own count
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
-    B6: { selected: 54, placed: 43 }, // pre-fix: 19
+    B6: { selected: 54, placed: 39 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031)
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
-    B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
+    B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4
   }
 
   it.each(SCENARIO_IDS)('reproduces baseline.md\'s app-path numbers for %s', (id) => {

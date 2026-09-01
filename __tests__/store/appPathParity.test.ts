@@ -21,6 +21,14 @@ import type { ScenarioId } from '../../src/data/tournaments.ts'
  * classification is `specs/008-team-event-cut/b8-residual.md`, alongside
  * this file's existing pointer to `parity-exceptions.md`.
  *
+ * **All eight were re-measured on 2026-09-01 by 004 US4 (T063a)**, against the
+ * post-D5/D6/D7/T061a tree, and every number below is what that run reported
+ * rather than what it was hoped to report. Two moved: B4 16 → **0**, which is
+ * the ledger's own count, so its FR-004a exception is gone; and B6 43 → **39**,
+ * which is one further from the ledger, not nearer. B8 did not move off 53.
+ * The account of both movements is `specs/004-p3-workbench-shell/drift-baseline.md`
+ * §T062 and commit `29aabc9031`.
+ *
  * **No exception below is attributable to the day axis** (FR-004a's hard
  * limit, SC-002). That was established per row by isolation, not by argument:
  * holding the competitions fixed and swapping only the config — the app's
@@ -57,119 +65,117 @@ interface ParityException {
  * paths have not converged on; a day-axis difference is a contract violation,
  * not an exception (contracts/day-axis.md C5).
  *
- * All three trace to the same seam: `defaultConfigForId`
- * (`src/store/store.ts:217-235`) and `buildConfig.ts`'s `strips_allocated: 0`
- * (`src/store/buildConfig.ts:151`) build a competition differently from the
- * ledger's factory (`__tests__/helpers/scenarios.ts:49-69`). Converging them
- * is 004's US4 (per-type competition defaults), deliberately out of 006's
- * scope (spec.md "Out of Scope").
+ * 006 recorded three, all at the same seam: `defaultConfigForId`
+ * (`src/store/store.ts`) and `buildConfig.ts` build a competition differently
+ * from the ledger's factory (`__tests__/helpers/scenarios.ts:44-72`).
+ *
+ * **Two remain after 004 US4 (T063a), and the seam has flipped sides.** US4
+ * closed the divergence that had the store *understating* demand — T061a gave
+ * `buildConfig.ts` the ledger's own `max(2, ceil(n/7))` pre-allocation, and
+ * `strips_allocated` now differs on zero events of B6 and zero of B8. What is
+ * left is the reverse: the store resolves `cut_mode` and `de_mode` **per
+ * tournament type** (`REGIONAL_CUT_OVERRIDES`, and `data-model.md`'s per-type
+ * table — `AUTO` → `STAGED` at NAC, `SINGLE_STAGE` elsewhere) while the
+ * ledger's factory derives them **per event** from the catalogue's category
+ * and video policy. Neither remaining exception closes by another change to
+ * `src/`: each closes by the ledger's factory adopting the store's per-type
+ * resolutions, which moves the drift ledger's own recorded counts and is
+ * therefore a constitution III change with its own snapshot review — see each
+ * entry's `closedBy`.
  */
 const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
   /**
-   * B4 inverts: the app places 16 where the ledger places 0. The ledger is
-   * not "stricter" — its feasibility gate simply sees demand the app's does
-   * not. `estimateCompetitionStripHours` computes a SINGLE_STAGE event's DE
-   * strip-hours as `strips_allocated × de_duration / 60`
-   * (`src/engine/capacity.ts:146`), so `buildConfig.ts:151`'s
-   * `strips_allocated: 0` zeroes the DE term for every individual event and
-   * the upfront check at `src/engine/validation.ts:405` never fires. The
-   * ledger pre-allocates `max(2, ceil(n/7))` strips
-   * (`__tests__/helpers/scenarios.ts:69`) and reports
-   * `feasibility-strip-hours`: 2161 strip-hours needed against 1680
-   * available (3d × 40s × 14h), a ~29% shortfall.
+   * B6 moved **away** from the ledger under US4: 43 → 39 against the ledger's
+   * unchanged 44. That is not a regression to hunt. T061a's pre-allocated
+   * strips made all-advance regional brackets cost the real strip-hours that
+   * `strips_allocated: 0` had been hiding, and B6 re-packed at its capacity
+   * margin — 8 events out, 4 in, `validateFeasibility` clean on both sides.
+   * Isolated and recorded in commit `29aabc9031` and in
+   * `specs/004-p3-workbench-shell/drift-baseline.md` §T062.
    *
-   * The 16 is a real scheduler result — 16 events placed, 14 left unplaced,
-   * which is the scheduler reporting the same shortfall the ledger's gate
-   * refuses upfront. What the app loses today is the warning, not the
-   * schedule. When US4 adopts pre-allocated strips this pin flips to 0.
-   */
-  B4: {
-    appPath: 16,
-    ledger: 0,
-    cause: 'strips_allocated: 0 zeroes the DE term of the feasibility estimate, so the app never trips the gate the ledger trips',
-    evidence: 'adopting the ledger\'s strips_allocated alone, changing nothing else, takes the app path from 16 to 0 — the ledger\'s exact count; no other single default moves it',
-    closedBy: '004 US4 (per-type competition defaults) — after which this pin becomes 0',
-  },
-
-  /**
-   * B6 is one event short of the ledger, and the one event is not a single
-   * identifiable event: the two paths place different sets of the same size
-   * ±1 (the ledger places D2-W-EPEE-IND, JR-M-EPEE-IND, JR-M-SABRE-IND,
-   * JR-W-SABRE-IND and VET-M-EPEE-IND-VCMB that the app does not; the app
-   * places D1A-W-FOIL-IND, D2-W-FOIL-IND, Y12-M-EPEE-IND and Y14-W-EPEE-IND
-   * that the ledger does not). It is a re-packing at the capacity margin,
-   * not a dropped event.
+   * Two per-competition defaults still differ, both of them the store
+   * resolving per tournament type where the ledger's factory resolves per
+   * event:
    *
-   * Two per-competition defaults each account for it independently:
-   *
-   * - **cut_mode.** B6 is an ROC. `buildConfig.ts:161-169` applies
-   *   `REGIONAL_CUT_OVERRIDES` — all-advance for Y14/Cadet/Junior/Div1 at a
-   *   regional event — which the engine's own rule requires
+   * - **cut_mode / cut_value, on 18 of 54 events.** B6 is an ROC, so
+   *   `buildConfig.ts` applies `REGIONAL_CUT_OVERRIDES` — all-advance for
+   *   Y14/Cadet/Junior/Div1 — which the engine's own rule requires
    *   (`src/engine/validation.ts:256-267`). The ledger's factory does not
-   *   apply it and cuts at 20%. Here the app is the correct side and the
-   *   ledger's 44 is measured on a config the engine flags.
-   * - **de_mode.** The ledger derives STAGED from a REQUIRED video policy
-   *   (`__tests__/helpers/scenarios.ts:66-68`); the store hardcodes
-   *   SINGLE_STAGE (`src/store/store.ts:231`). Here the ledger is the
-   *   correct side — this is D7's named staging default.
+   *   apply it and cuts at 20% (`scenarios.ts:50-52`). **The app is the
+   *   correct side**, and the ledger's 44 is measured on a config the engine
+   *   itself flags.
+   * - **de_mode, on 12 of 54 events.** US4 resolves `de_mode` from the
+   *   per-type table (`data-model.md` §Per-type default table): ROC →
+   *   `SINGLE_STAGE`. The ledger derives `STAGED` per event from a REQUIRED
+   *   video policy (`scenarios.ts:66-68`). The two rules disagree wherever a
+   *   REQUIRED-video individual event sits at a non-NAC type.
    *
-   * Both change DE bracket sizes and durations, and B6 sits close enough to
-   * its strip-hour ceiling that either one is worth an event.
+   * `strips_allocated` is **no longer among them** — T061a adopted the
+   * ledger's `max(2, ceil(n/7))` and it now differs on zero of the 54.
+   * `ref_policy` differs on all 54 (the app's resolved `ONE` against the
+   * ledger's unresolved `AUTO`, which is D5 working) but is inert on
+   * placement — swapping it alone leaves 39.
    */
   B6: {
-    appPath: 43,
+    appPath: 39,
     ledger: 44,
-    cause: 'DE bracket sizes differ — the app applies the regional all-advance cut override the ledger\'s factory omits, and the ledger stages DEs the store leaves SINGLE_STAGE',
-    evidence: 'either swap alone — the ledger\'s cut_mode/cut_value, or its de_mode — takes the app path from 43 to 44, each reaching a different set of 44; swapping the config instead of the competitions moves nothing',
-    closedBy: '004 US4 (per-type competition defaults) — which must converge the regional cut override on the ledger\'s side, a constitution III change to the ledger\'s own recorded behavior',
+    cause: 'the ledger\'s factory applies neither per-type resolution the store now ships: it cuts B6\'s Y14/Cadet/Junior/Div1 events at 20% where buildConfig.ts forces the regional all-advance override (18 of 54 events), and it stages DEs per event from a REQUIRED video policy where US4 resolves de_mode per tournament type, ROC to SINGLE_STAGE (12 of 54). T061a moved this pin 43 → 39 by a capacity re-pack, so the gap is wider than 006 recorded, not narrower',
+    evidence: 'measured at T063a: 39 on the app\'s config and 39 on the ledger\'s, against the ledger\'s 44 on either config — the axis stays uninvolved. Of the fields still differing, swapping in the ledger\'s de_mode alone reaches exactly 44, its cut_mode alone overshoots to 54, cut_value alone stays 39, and swapping every differing field reaches 44. strips_allocated and de_video_policy differ on zero events',
+    closedBy: 'a follow-up feature, unnumbered and named in docs/design/backlog.md as "The drift ledger\'s factory does not apply the store\'s per-type resolutions": the ledger\'s factory (__tests__/helpers/scenarios.ts) adopts REGIONAL_CUT_OVERRIDES and the per-type de_mode table. It cannot close in 004 US4 — scenarios.ts is the comparison point T062 diffs against, and changing it moves the drift ledger\'s own recorded counts, a constitution III change owing its own snapshot review',
   },
 
   /**
-   * B8 is one event over the ledger, not short like B4 or B6: the app places
-   * 53 where the ledger places 52. Full isolation record:
-   * `specs/008-team-event-cut/b8-residual.md`; this is the short form.
+   * B8 held at 53 against the ledger's 52 — re-measured at T063a, not
+   * assumed. The 006/008 record (`specs/008-team-event-cut/b8-residual.md`)
+   * attributed the +1 jointly to `de_mode` **and** `strips_allocated`, each
+   * necessary and neither sufficient. **US4 closed one half and inverted the
+   * other**, and the two changes cancel at the count while changing the
+   * cause underneath it:
    *
-   * Two of 004 US4's per-competition defaults are jointly responsible, and
-   * neither is sufficient alone — the opposite of B6, where either sufficed
-   * on its own. The ledger derives STAGED de_mode from a REQUIRED video
-   * policy (`__tests__/helpers/scenarios.ts:66-68`) against the store's
-   * hardcoded SINGLE_STAGE (`src/store/store.ts:231`), and pre-allocates
-   * `max(2, ceil(n/7))` strips (`scenarios.ts:69`) against
-   * `buildConfig.ts:151`'s `strips_allocated: 0`. Swapping either default
-   * alone leaves the app path at 53; swapping both together reaches 52,
-   * matching the ledger exactly. `cut_mode` is closed on B8 — B8 is a NAC,
-   * so `REGIONAL_CUT_OVERRIDES` never applies on either side, and zero
-   * events differ on it after T005's `defaultCutForEntry`.
+   * - `strips_allocated` now differs on **zero** of the 53 events. T061a
+   *   adopted the ledger's `max(2, ceil(n/7))`, so half of b8-residual.md's
+   *   conjunction is gone.
+   * - `de_mode` now differs on **41**, and in the opposite direction. B8 is a
+   *   NAC, so US4's per-type table (`data-model.md`) resolves all 53 to
+   *   `STAGED`; the ledger's per-event rule stages only the 12 Div1 and
+   *   Junior individuals whose video policy is REQUIRED. 53 − 12 = 41. The
+   *   app was the `SINGLE_STAGE` side before and is the `STAGED` side now.
    *
-   * Both defaults understate DE strip-hour demand
-   * (`src/engine/capacity.ts:146`), so the app fits one more event than the
-   * ledger does — the same understatement that inverts B4's 16-against-0,
-   * here buying a single event instead of suppressing a feasibility gate.
-   * The event is `JR-W-EPEE-IND`, placed by the app and by no run that
-   * reaches 52.
+   * So B8 was never going to reach 52 through US4: 52 is what
+   * `b8-residual.md` P1 measured under the **ledger's** per-event staging
+   * rule, and US4 shipped the per-type rule instead — a different assignment
+   * of `de_mode` to events, not a failed attempt at the same one. That is a
+   * decided difference in rules, not a shortfall against a target.
    *
-   * Both causes are US4's named defaults, so this pin is re-measured when
-   * US4 lands rather than assumed to become 52 — which side each default
-   * converges toward is US4's decision (parity-exceptions.md §B6 already
-   * flags that the regional cut override must converge the other way).
+   * `cut_mode` remains closed at zero differing events (008's
+   * `defaultCutForEntry`, and `REGIONAL_CUT_OVERRIDES` never applies at a
+   * NAC on either side). `ref_policy` differs on all 53 — resolved `TWO`
+   * against unresolved `AUTO` — but both score two refs per pool
+   * (`src/engine/pools.ts:170-175`), and swapping it alone leaves 53.
    */
   B8: {
     appPath: 53,
     ledger: 52,
-    cause: 'DE bracket sizes and pre-allocated strips both understate demand — the store leaves de_mode at SINGLE_STAGE where the ledger stages REQUIRED-video events, and buildConfig.ts zeroes strips_allocated where the ledger pre-allocates them',
-    evidence: 'neither swap alone — the ledger\'s de_mode, or its strips_allocated — moves the app path off 53; swapping both together takes it to 52, the ledger\'s exact count, and the difference is the single event JR-W-EPEE-IND; swapping the config instead of the competitions moves nothing',
-    closedBy: '004 US4 (per-type competition defaults) — the pin is re-measured then, not assumed to be 52',
+    cause: 'de_mode is now the whole gap, and it is the two paths applying different rules rather than one lagging the other: US4 resolves de_mode from the per-type table (NAC → STAGED, all 53 events) while the ledger derives it per event from a REQUIRED video policy (12 events staged), so 41 of 53 differ. b8-residual.md\'s second cause, strips_allocated, closed in T061a and now differs on zero events',
+    evidence: 'measured at T063a: 53 on the app\'s config and 53 on the ledger\'s, against the ledger\'s 52 on either config. Swapping in the ledger\'s de_mode alone now takes the app path to 52 — sole and sufficient, where b8-residual.md R2/R3/P1 measured it as necessary-but-not-sufficient alongside strips_allocated. cut_mode, cut_value, strips_allocated and de_video_policy differ on zero of the 53',
+    closedBy: 'the same follow-up as B6 — "The drift ledger\'s factory does not apply the store\'s per-type resolutions" in docs/design/backlog.md, unnumbered: the ledger\'s factory (__tests__/helpers/scenarios.ts:66-68) adopts the per-type de_mode table in place of its per-event video derivation. Not 004 US4: that would edit the comparison point T062 diffs against, moving the drift ledger\'s own recorded counts under constitution III',
   },
 }
 
 /**
- * What the app path places today, measured (T011), one number per scenario.
- * Five equal their ledger count; three are the FR-004a exceptions above and
- * are gated exactly as the other five are — a different pinned number, never
- * an unasserted one.
+ * What the app path places today, measured (T011, re-measured T063a), one
+ * number per scenario. **Six** now equal their ledger count — B4 joined them
+ * at 0 — and two are the FR-004a exceptions above, gated exactly as the six
+ * are: a different pinned number, never an unasserted one.
+ *
+ * A second copy of B4's and B6's pins lives in
+ * `__tests__/helpers/appPath.test.ts`'s `BASELINE`, which proves the harness
+ * rather than the parity contract. The duplication is deliberate — that file
+ * must be able to fail on its own — but the two move together, so a task that
+ * re-measures one re-measures both.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 16, B5: 12, B6: 43, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 39, B7: 18, B8: 53,
 }
 
 describe('app-path parity with the drift ledger (contracts/day-axis.md C5)', () => {
@@ -213,7 +219,25 @@ describe('app-path parity with the drift ledger (contracts/day-axis.md C5)', () 
     expect(exception?.ledger, `${id}: the exception's ledger count must be the ledger's`).toBe(ledger)
     expect(exception?.cause.length, `${id}: the exception must state its cause`).toBeGreaterThan(0)
     expect(exception?.evidence.length, `${id}: the exception must state the isolation run behind its cause`).toBeGreaterThan(0)
-    expect(exception?.closedBy, `${id}: the exception must name the feature that closes it`).toContain('004 US4')
+
+    // Until T063a this read `.toContain('004 US4')`, because every exception
+    // 006 recorded was expected to close there. Two do not: B6 and B8 both
+    // close by the ledger's factory adopting the store's per-type
+    // resolutions, which 004 US4 deliberately does not touch. Naming one
+    // feature forever would have forced the choice between a false `closedBy`
+    // and deleting the check — so the check keeps what it was actually for,
+    // which is that no exception is parked without an owner, and drops the
+    // part that named which owner. A blank or placeholder `closedBy` still
+    // fails (008 T010 / issue #255 anticipated exactly this relaxation).
+    const closedBy = exception?.closedBy?.trim() ?? ''
+    expect(
+      closedBy.length,
+      `${id}: the exception must name the feature that closes it — FR-004a admits a gap only with an owner beside it`,
+    ).toBeGreaterThan(0)
+    expect(
+      closedBy,
+      `${id}: "${closedBy}" is a placeholder, not a closing feature`,
+    ).not.toMatch(/^(tbd|todo|none|n\/a|unassigned|unknown|\?+|-+)$/i)
   })
 
   /**

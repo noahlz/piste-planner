@@ -21,6 +21,14 @@ re-verified against the tree on 2026-08-31, after 008's T014 inserted a
 15-line comment above `buildCompetitions` (`62be896692`) and shifted every
 line number below it — checked line by line, not carried forward on trust.
 
+**Amended 2026-09-01** by 004-p3-workbench-shell (US4 T063a), which re-measured
+all eight app-path counts against the post-D5/D6/D7/T061a tree and reconciled
+this document against what it measured. **§B4 closed at 0.** §B6 and §B8
+survive, both re-caused and both re-assigned away from 004 US4 — see
+"The verdict, amended" below. As with the 008 amendment, this stays 006's
+record and the amendment is marked where it applies rather than the document
+rewritten as if 006 had known.
+
 ## The verdict first
 
 **No gap traces to the day axis.** Three of the eight reference tournaments
@@ -38,6 +46,47 @@ three close in 004's US4.
 | B6 | **43** | 44 | DE bracket sizes: regional cut override + DE staging | 004 US4 |
 | B7 | 18 | 18 | — matches | — |
 | B8 | **53** | 52 | DE bracket sizes and strip demand: `de_mode` + `strips_allocated`, jointly | 004 US4 |
+
+### The verdict, amended — 2026-09-01, after 004 US4
+
+The day-axis verdict is unchanged and was re-confirmed on both surviving rows:
+each is invariant to the config in both directions (below). What changed is how
+many rows survive, and who closes them.
+
+| | Pinned (app path) | Ledger | Movement under US4 | Traced cause | Closes in |
+|---|---:|---:|---|---|---|
+| B1 | 24 | 24 | — | matches | — |
+| B2 | 24 | 24 | — | matches | closed by 008 |
+| B3 | 24 | 24 | — | matches | — |
+| B4 | **0** | 0 | 16 → **0** | **closed** — T061a's pre-allocated strips fire the gate | closed by 004 US4 |
+| B5 | 12 | 12 | — | matches | — |
+| B6 | **39** | 44 | 43 → **39** | per-type `cut_mode` (18 events) and per-type `de_mode` (12), neither applied by the ledger's factory | the ledger-factory follow-up |
+| B7 | 18 | 18 | — | matches | — |
+| B8 | **53** | 52 | unmoved | per-type `de_mode` alone (41 events); `strips_allocated` closed in T061a | the ledger-factory follow-up |
+
+Three things in that table are worth stating rather than leaving to be inferred:
+
+- **B6 moved away from the ledger, not toward it.** 43 → 39 against an
+  unchanged 44. T061a is the cause: pre-allocated strips made all-advance
+  regional brackets cost the strip-hours `strips_allocated: 0` had masked, and
+  B6 re-packed at its capacity margin — 8 events out, 4 in, with
+  `validateFeasibility` clean on both sides. Recorded in commit `29aabc9031`
+  and `specs/004-p3-workbench-shell/drift-baseline.md` §T062. It is a widening
+  of a known gap, not a new one.
+- **The seam has flipped sides.** Every 006-era exception had the store
+  *understating* DE demand against the ledger. US4 closed that half — the store
+  now pre-allocates the ledger's own `max(2, ceil(n/7))`. What is left is the
+  store resolving `cut_mode` and `de_mode` **per tournament type** where the
+  ledger's factory resolves them **per event**.
+- **Neither survivor closes by another change to `src/`.** Both close by the
+  ledger's factory adopting the store's per-type resolutions — a constitution
+  III change to the drift ledger's own recorded behavior, owing its own
+  snapshot review. It is deliberately outside 004 US4, because
+  `__tests__/helpers/scenarios.ts` is the comparison point T062 diffs against
+  and moving it would move the baseline. Backlogged as **"The drift ledger's
+  factory does not apply the store's per-type resolutions"** in
+  [`docs/design/backlog.md`](../../docs/design/backlog.md); no spec number is
+  allocated.
 
 ## How the day axis was ruled out
 
@@ -86,6 +135,24 @@ Two files build a `Competition` from the same catalogue entry and disagree:
 | `strips_allocated` | `0` (`buildConfig.ts:151`) | `max(2, ceil(fencer_count / 7))` (`scenarios.ts:69`) |
 | `latest_end` | `Infinity` (`buildConfig.ts:144`) | `9999` (`scenarios.ts` `makeCompetition` default) |
 
+**Amended 2026-09-01 (004 US4 T063a).** Two of those rows are no longer as
+written, measured field by field across all 54 of B6's and all 53 of B8's
+competitions:
+
+| | Store, after US4 | Ledger factory | Events differing (B6 / B8) |
+|---|---|---|---:|
+| `de_mode` | resolved from the per-type table — `STAGED` at NAC, `SINGLE_STAGE` elsewhere (`data-model.md` §Per-type default table) | unchanged: `STAGED` when individual and video REQUIRED | 12 / 41 |
+| `strips_allocated` | `max(2, ceil(fencer_count / 7))` — T061a adopted the ledger's own formula | unchanged | **0 / 0** |
+| `ref_policy` | resolved from the per-type table — `ONE` at ROC, `TWO` at NAC/SJCC/SYC (D5) | unresolved `AUTO` | 54 / 53 |
+
+`strips_allocated` is closed. `de_mode` is now a **rule** difference rather
+than a lag: the store assigns it per tournament type, the ledger per event, and
+on B8 the store is the `STAGED` side where it used to be the `SINGLE_STAGE`
+one. `ref_policy` is a new divergence US4 introduced and it is inert on
+placement — swapping it alone moves neither scenario (`AUTO` and `TWO` both
+score two refs per pool, `src/engine/pools.ts:170-175`), though it does hold
+B6's referee columns apart, which `drift-baseline.md` §T062 records.
+
 research.md D7 names `de_mode` and `strips_allocated`. The `cut_mode` for a
 TEAM event row closed in 008 (`defaultCutForEntry`,
 `src/store/competitionDefaults.ts`): the store now branches on `event_type`
@@ -119,7 +186,19 @@ de_mode") is **not** what gates it. That finding is a `notice`
 (`src/engine/validation.ts:215`) — WARN in both modes, never escalating. The
 only gating errors on B2 and B8 are `cut-on-team`.
 
-## B4 — pinned 16, ledger 0
+## B4 — closed at 0
+
+**Closed by 004 US4 on 2026-09-01.** The app path placed 16 when 006 measured
+it and places **0** now, the ledger's exact count, so its `PARITY_EXCEPTIONS`
+entry was deleted from `appPathParity.test.ts` — a pin equal to the ledger's
+count may not carry an FR-004a exception. The fix itself is not restated here:
+see [`specs/004-p3-workbench-shell/`](../004-p3-workbench-shell/) and
+`drift-baseline.md` §T062.
+
+The 006-era classification below is left as written. It predicted this closure
+and named the default that would produce it, and both held.
+
+### The 006-era classification
 
 The only row where the app exceeds the ledger, and the only one where "the
 ledger is stricter" would have been the wrong conclusion.
@@ -152,7 +231,43 @@ RESOURCE_INSUFFICIENT.
 **Confidence**: high on the cause (one default flips the number, exactly, and
 the code path from `strips_allocated` to the gate is three lines long).
 
-## B6 — pinned 43, ledger 44
+## B6 — pinned 39, ledger 44
+
+**Amended 2026-09-01 (004 US4 T063a): re-measured at 39, not 43, and
+re-assigned.** The 006 classification follows below, left as written. Three
+things it could not know:
+
+1. **The pin moved away from the ledger.** 43 → 39, against an unchanged 44.
+   T061a's pre-allocated strips made B6's all-advance regional brackets cost
+   real strip-hours that `strips_allocated: 0` had masked, and the scenario
+   re-packed at its capacity margin: 8 events out, 4 in, `validateFeasibility`
+   clean on both sides (`29aabc9031`, `drift-baseline.md` §T062). The gap is
+   wider, and the cause of the widening is not the cause of the gap.
+2. **The apportionment below no longer holds.** Measured at T063a, of the
+   fields still differing: swapping in the ledger's `de_mode` alone reaches
+   exactly 44; its `cut_mode` alone **overshoots to 54**, the whole field
+   placed; `cut_value` alone stays 39; swapping every differing field reaches
+   44. `strips_allocated` and `de_video_policy` differ on zero of the 54.
+   006's "either default alone is worth one event" was true of the tree it was
+   measured on and is not true of this one — only `de_mode` still lands on 44.
+   The two remaining defaults differ on 18 events (`cut_mode`/`cut_value`) and
+   12 (`de_mode`).
+3. **The axis is still uninvolved.** Re-confirmed, not carried forward: 39 on
+   the app's config and 39 on the ledger's, against 44 on either config from
+   the ledger's competitions.
+
+**Closes in — re-assigned.** Not 004 US4. B6 closes by the ledger's factory
+(`__tests__/helpers/scenarios.ts`) adopting the store's per-type resolutions —
+`REGIONAL_CUT_OVERRIDES` and the per-type `de_mode` table. §"Closes in" below
+already argued the first half of this; T063a adds `de_mode` to it and makes the
+re-assignment explicit. That work moves the drift ledger's own recorded counts
+and is a constitution III change with its own snapshot review, deliberately out
+of 004 US4's scope because `scenarios.ts` is the comparison point T062 diffs
+against. Backlogged, unnumbered, as **"The drift ledger's factory does not apply
+the store's per-type resolutions"** in
+[`docs/design/backlog.md`](../../docs/design/backlog.md).
+
+### The 006-era classification
 
 The row that reads as plausible and would have been waved through.
 
@@ -209,6 +324,42 @@ apportioning it between the two defaults — the effect is over-determined, and 
 this capacity margin the packing is sensitive to either.
 
 ## B8 — pinned 53, ledger 52
+
+**Amended 2026-09-01 (004 US4 T063a): re-measured at 53 — unmoved — with one
+of its two causes closed and the other inverted.** The 008 classification
+follows below, left as written.
+
+`b8-residual.md` attributed the +1 to `de_mode` **and** `strips_allocated`
+jointly, each necessary and neither sufficient. US4 changed both halves, and
+they cancel at the count:
+
+- **`strips_allocated` is closed.** T061a gave `buildConfig.ts` the ledger's
+  own `max(2, ceil(n/7))`. It differs on **zero** of the 53 events.
+- **`de_mode` inverted and widened.** US4 resolves it from the per-type table
+  (`data-model.md` §Per-type default table): B8 is a NAC, so all 53 resolve to
+  `STAGED`. The ledger's per-event rule stages only the 12 Div1 and Junior
+  individuals whose video policy is REQUIRED. 53 − 12 = **41** differ, and the
+  app is now the `STAGED` side where it was the `SINGLE_STAGE` one.
+- **`de_mode` alone is now sufficient.** Swapping in the ledger's `de_mode`
+  and nothing else takes the app path to 52 — where R2/R3/P1 measured it as
+  necessary-but-not-sufficient. `cut_mode`, `cut_value`, `strips_allocated`
+  and `de_video_policy` differ on zero events.
+
+**B8 was never going to reach 52 through US4, and that is not a shortfall.**
+`b8-residual.md`'s P1 reached 52 under the *ledger's* per-event staging rule.
+US4 shipped the **per-type** rule instead, per `data-model.md` — a different
+assignment of `de_mode` to events, decided on its own merits, not a failed
+attempt at the same assignment. The two paths now apply two different rules,
+which is why one number cannot be tuned into the other.
+
+**Closes in — re-assigned.** Not 004 US4. B8 closes the same way B6 does: the
+ledger's factory (`scenarios.ts:66-68`) adopts the per-type `de_mode` table in
+place of its per-event video derivation. Same backlog entry, same constitution
+III snapshot review, same reason it is out of this story's scope. The axis was
+re-confirmed uninvolved: 53 on either config, against the ledger's 52 on either
+config.
+
+### The 008-era classification
 
 Full isolation record:
 [`specs/008-team-event-cut/b8-residual.md`](../008-team-event-cut/b8-residual.md);
