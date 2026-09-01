@@ -1,19 +1,17 @@
 import { useStore } from '../../store/store.ts'
+import type { DeModeSetting } from '../../store/store.ts'
+import { TYPE_DEFAULTS } from '../../store/typeDefaults.ts'
 import { findCompetition } from '../../engine/catalogue.ts'
 import { DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../engine/constants.ts'
 import { defaultCutForEntry } from '../../store/competitionDefaults.ts'
 import { CutMode, DeMode, VideoPolicy } from '../../engine/types.ts'
 import { competitionLabel } from '../competitionLabels.ts'
+import { DE_MODE_LABELS } from '../deModeLabels.ts'
 import { DefaultLabel } from '../common/DefaultLabel.tsx'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-
-const DE_MODE_OPTIONS: { value: DeMode; label: string }[] = [
-  { value: DeMode.SINGLE_STAGE, label: 'Single Block' },
-  { value: DeMode.STAGED, label: 'Staged DE Blocks' },
-]
 
 const VIDEO_POLICY_OPTIONS: { value: VideoPolicy; label: string }[] = [
   { value: VideoPolicy.REQUIRED, label: 'Required' },
@@ -27,11 +25,20 @@ const CUT_MODE_OPTIONS: { value: CutMode; label: string }[] = [
   { value: CutMode.COUNT, label: 'Count' },
 ]
 
-const DEFAULT_DE_MODE: DeMode = DeMode.SINGLE_STAGE
-
 export function CompetitionOverrides() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
   const updateCompetition = useStore((s) => s.updateCompetition)
+  const tournamentType = useStore((s) => s.tournament_type)
+
+  // The AUTO option names the mode it resolves to under the current type, so
+  // the organizer can see what following the default buys them (FR-038, 004
+  // T065). It has to be offered: without it a new event's stored `'AUTO'`
+  // matched no option and the Select rendered no selection at all.
+  const deModeOptions: { value: DeModeSetting; label: string }[] = [
+    { value: 'AUTO', label: `Auto (${DE_MODE_LABELS[TYPE_DEFAULTS[tournamentType].de_mode]})` },
+    { value: DeMode.SINGLE_STAGE, label: DE_MODE_LABELS[DeMode.SINGLE_STAGE] },
+    { value: DeMode.STAGED, label: DE_MODE_LABELS[DeMode.STAGED] },
+  ]
 
   const sortedIds = Object.keys(selectedCompetitions).sort()
 
@@ -80,21 +87,26 @@ export function CompetitionOverrides() {
                     <Select
                       value={config.de_mode}
                       onValueChange={(value) =>
-                        updateCompetition(id, { de_mode: value as DeMode })
+                        updateCompetition(id, { de_mode: value as DeModeSetting })
                       }
                     >
-                      <SelectTrigger className="h-8 w-[140px]" aria-label={`DE mode for ${label}`}>
+                      <SelectTrigger className="h-8 w-[170px]" aria-label={`DE mode for ${label}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {DE_MODE_OPTIONS.map((opt) => (
+                        {deModeOptions.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <DefaultLabel isDefault={config.de_mode === DEFAULT_DE_MODE} />
+                    {/* Stored AUTO is the marker, not a comparison against the
+                        type's mode: an event explicitly set to STAGED at a NAC
+                        resolves to the same mode an unset one does and must not
+                        read as default (data-model.md §Settings override
+                        state). */}
+                    <DefaultLabel isDefault={config.de_mode === 'AUTO'} />
                   </TableCell>
                   <TableCell>
                     <Select

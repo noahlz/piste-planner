@@ -8,6 +8,7 @@ import { CompetitionMatrix } from '../sections/CompetitionMatrix.tsx'
 import { FencerCounts } from '../sections/FencerCounts.tsx'
 import { CompetitionOverrides } from '../sections/CompetitionOverrides.tsx'
 import { PoolDurationSettings } from '../sections/PoolDurationSettings.tsx'
+import { AdvancedPanel } from './AdvancedPanel.tsx'
 
 interface RailPanelProps {
   heading: string
@@ -40,8 +41,12 @@ function RailPanel({ heading, defaultOpen = false, children }: RailPanelProps) {
 
 /**
  * The left rail: five collapsible panels over existing section components,
- * mounted unmodified (FR-004, S2-contract.md §Rail panels). Scrolls
- * independently of the center.
+ * mounted unmodified (FR-004, S2-contract.md §Rail panels), plus the Advanced
+ * panel. Scrolls independently of the center.
+ *
+ * `AdvancedPanel` is a sibling rather than a `RailPanel` child: FR-035 needs its
+ * summary readable while collapsed, and `RailPanel` unmounts its content on
+ * close, so it brings its own `Collapsible`.
  */
 export function Rail() {
   return (
@@ -64,6 +69,7 @@ export function Rail() {
       <RailPanel heading="Pool durations">
         <PoolDurationSettings />
       </RailPanel>
+      <AdvancedPanel />
     </aside>
   )
 }
