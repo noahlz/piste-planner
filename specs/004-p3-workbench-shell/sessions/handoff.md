@@ -1143,3 +1143,258 @@ is zero on every scenario.
 with the schedule table — proved in the suite and in a browser. T044 onward (US3,
 the scorecard) is S6's. The branch is handed back green, with the closing merge
 unmade.
+
+---
+
+## S6
+
+**Scope**: T044–T054, closing US3. All eleven done. Ran after feature 006 landed,
+so the scorecard baselines over a fully scheduled B1 (24 of 24) rather than the
+11 of 24 the day-axis defect used to produce.
+
+### Tasks completed
+
+| Task | Commit | What landed |
+|---|---|---|
+| T044 / T045 / T046 | `2fdcfaecc9` | Three failing test files – 60 cases, nothing under `src/` |
+| T047 / T048 | `ab34bb9f6c` | The baseline slice and the metric selectors |
+| T049 / T051 | `bebb17ec97` | `Scorecard.tsx`, deltas, expansion persisted through `viewState` |
+| T050 | `922df9fd4f` | Metric hover lights the driving blocks |
+| T045 follow-up | `57c8ac00cb` | The two `day_out_of_range` skips nothing covered |
+| T052 | `9db6c94370` | `scripts/smoke.mjs` drives the scorecard |
+| T053 / T054 | `b5d241dab7` | Both reviews' accepted findings, 12 new cases |
+| — | `46fae80050` | Two backlog entries |
+
+### Gate at end of session
+
+`tsc -b` exit 0, `lint` exit 0, full suite **1368 passed across 58 files**, run
+twice with identical results by the orchestrator after every subagent had gone
+idle. `scripts/smoke.mjs` exits 0 with `SMOKE PASS` and zero console errors,
+re-run after the review-apply pass because that pass changed the components it
+drives.
+
+**Suite reconciliation.** 1274 → 1368, entirely additive:
+
+```
+1274  post-006 baseline at 396a305545
++  60  T044-T046's three files (20 + 27 + 13)
++   3  the day_out_of_range coverage gap
++  19  T050's highlight cases
++  12  the review findings' new cases
+=1368
+```
+
+**Zero engine drift.** `git diff --stat 396a305545 -- src/engine/` is empty.
+Only US4 changes engine output, and it is not this session's.
+
+### Where the highlight state lives, and why
+
+**A store field for the hover, a prop for the canvas.** `UiSlice.hoveredMetricId`
+holds which metric is hovered; the `Scorecard` is the only writer.
+`CenterView` reads it, resolves the metric's `blockKeys` into a `Set`, and hands
+that to `MatrixCanvas` as a new `highlight?: ReadonlySet<string>` prop.
+
+The driving set has exactly one definition: every metric produced by
+`selectScorecardMetrics` carries its own `blockKeys`, built from
+`eventTimeSegments` with the same `day_out_of_range` skip `assignStripLanes`
+uses. The scorecard names the blocks and the canvas draws them – neither
+computes its own set, which is FR-023's rule applied to a highlight.
+
+Rejected: lifting React state into `WorkbenchShell`. It would re-render the whole
+shell on every pointer move across the scorecard and force new props onto
+`Drawer` and `CenterView`, both of which existing tests mount bare. Rejected
+also: giving `MatrixCanvasView` a `useStore` call, which would undo S5's
+separation of the subscribing wrapper from the pure view.
+
+### The live-versus-committed boundary
+
+The scorecard is drawer-side and reads the live store per keystroke (FR-008)
+while the canvas draws a model committed behind `CENTER_SETTLE_MS`. The
+highlight crosses that boundary, and the resolution is:
+
+> The block-key set is computed from the **live** model and passed **undebounced**.
+> The canvas matches keys against the blocks it has actually committed. A key with
+> no committed block simply does not highlight.
+
+A `${competitionId}:${phase}` key identifies the same block wherever it currently
+sits, so the worst case during a settle is *fewer* blocks lit, never a wrong one.
+A hover cue that arrives 150ms after the hover is not a hover cue.
+
+**This rule was very nearly unenforced.** The case written to hold it seeded the
+store *before* `render`, so `committed === live` at the moment it hovered and a
+debounced highlight was indistinguishable from an undebounced one. The mutation
+review found it (M59) and it is now pinned by an edit that starts a settle the
+centre has not committed.
+
+### The baseline's capture point, and why it is not `applyPreset`
+
+S6.md said `applyPreset` is the only capture point. **Taken literally that is
+wrong, and it was not built that way.** `applyPreset` places nothing – both of
+its call sites (`boot.ts:40`, `TopBar.tsx:39`) are `applyPreset(id)` immediately
+followed by `runScheduleAll()`. Capturing inside it would freeze a baseline over
+zero placements, so the app's first frame would show every metric as an enormous
+delta against an empty tournament.
+
+The rule instead: `setLoadedPresetId` clears the baseline, and
+`setPlacementsFromAuto` captures it when `loadedPresetId !== null &&
+scorecardBaseline === null`. One arm, one fulfil, no extra flag. Boot and the
+picker behave identically, so boot is not special-cased – which is what S6.md
+actually asked for. A later `Auto-schedule all` does not re-baseline (D9 rejects
+that explicitly), and a shared-URL boot never captures at all, which is D9's
+no-preset case.
+
+Two claims in the session's own design brief were wrong and were corrected by
+measurement mid-session, both recorded here so they are not re-derived:
+
+- **`scheduleAll` does not throw** for a tournament it cannot schedule.
+  `scheduleAllConcurrent` returns an empty schedule after its BINDING validation
+  pass, as `appPathParity.test.ts`'s B2 note already recorded. So a preset that
+  schedules nothing still gets a baseline, over zero placements, rather than
+  `null`.
+- **`refs:peak-sabre`'s driving day was ambiguous.** "The total peak day's
+  `peak_time`" reads two ways and on B5 they disagree. The binding reading: the
+  day is the `peak_saber_refs` argmax row and the time is that same row's
+  `peak_time`. The other reading lights blocks on a day whose sabre peak is not
+  the number being reported.
+
+### What the reviews found
+
+Both dispatched report-only against the whole session diff, findings applied in
+one pass. `test-quality-reviewer` ran **76 single-line mutations against a
+scratchpad copy**, each executed against the full suite – 59 killed, 17 survived,
+of which 11 were real holes and 6 correctly diagnosed as equivalent or
+unreachable. `react-code-reviewer` returned 8 findings plus 2 promoted items.
+**All 19 applied, and all 11 surviving mutations are now killed**, plus 5 more
+written for the new fixes.
+
+**The largest cluster was `computeDelta`** – 5 of the 11 holes. Research D9's
+rule that no-preset means *no delta element*, not a zero delta, was enforced by
+code and asserted nowhere:
+
+- an id the baseline never held rendered `0:00` (M07)
+- a live value going null rendered `−17:17`, because `null - 1037` coerces (M08)
+- a null *baseline entry* rendered `+45:38`, a delta against nothing (M09)
+- no negative time delta was asserted anywhere, leaving the `Math.abs` trick
+  unpinned (M12) – `formatMinutes` floors, so the naive form renders `−-2:-40`
+
+**The second cluster was rendered strings and paint the tests locate but never
+read.** Deleting the highlight cue's entire `boxShadow` left the unit suite *and*
+`scripts/smoke.mjs` green (M77): the 13 block cases assert the cue exists, is
+`aria-hidden`, and does not hit-test, all satisfied by a span that paints
+nothing. FR-029 would have been dead on screen with everything passing. The
+per-day label's 1-based numbering (M71) and label distinctness (M78) were
+unpinned the same way.
+
+**Two accessibility defects, both closed.** The metric rows' focus indicator was
+`focus:bg-muted` at about 1.08:1 against the card with `focus:outline-none`
+removing the browser default – invisible, on the rows that are the entire
+keyboard path to FR-029. And FR-029 announced nothing at all: blocks are
+`role="img"` with a static label, and `role="img"` is not a live region. A
+visually-hidden `aria-live` node now reports what the hovered metric drives.
+
+**One defect in the design brief, not in anyone's implementation.** The capture
+rule put `selectScorecardMetrics` inside `setPlacementsFromAuto` *after* its
+`set`, and that selector can throw – it reaches `computePoolStructure`, which
+throws for `fencerCount <= 1`. `runActions.ts:44` calls the action outside its
+own `try`, so a throw would unwind `bootstrap()` with placements written and no
+baseline. `dismissFinding` in the same file has the identical shape and gets it
+right by calling its selector before any `set`. Fixed by mirroring that: the
+baseline is computed from `{ ...get(), placements: normalised }` before a single
+`set` carrying both. No `try`/`catch` – the point is that a throw unwinds with
+nothing mutated.
+
+### Vacuity, which is now this feature's signature failure
+
+S5 recorded six places a green suite said nothing. **S6 found four more**, and
+the count of distinct shapes is now seven:
+
+- the not-debounced case whose fixture made both paths identical (M59)
+- two `undefined toEqual undefined` comparisons an author caught in their own
+  file, taking it from 45 failed / 2 passed to 47/47
+- an over-specified fixture: `{ day: 3, start_time: 480 }` where the real start
+  was 585, so the override moved the very value under test and the case passed
+  with or without the rule it existed to pin
+
+That last one is worth its own note, because the same literal is **load-bearing**
+in `scorecardBaseline.test.ts:212` and a **confound** in `scorecardMetrics.test.ts`.
+It was correctly distinguished in both places rather than pattern-matched.
+
+The lesson that keeps paying: a mutation coming back green is a reason to suspect
+your own fixture, not to explain the mutation away.
+
+### Knowingly not fixed, and why
+
+- **A fencer count of 0 or 1 unmounts the whole app.** `FencerCounts.tsx` renders
+  `min={0}` with `commitOnChange`, `analysis.ts:26` calls `computePoolStructure`
+  unguarded, and there is **no `ErrorBoundary` anywhere in `src/`** – so the
+  throw escapes to the root and React unmounts the tree. Blank page, no recovery
+  short of a reload. Pre-existing and US2's territory, not introduced here.
+  Recorded in `docs/design/backlog.md` with the detail that makes it cheap:
+  `MIN_FENCERS` is already `2`, exactly the throw threshold, so raising the
+  input's `min` is a one-character fix.
+- **The scorecard's peak-referee row reads higher than the scheduler's own.** 220
+  against 212 on B1 day 0. `buildRefDemandByDay` sums each placed event's
+  requested refs while `computePostScheduleRefDemand` clamps each event by
+  `peakConcurrentStrips`, which only exists inside a live scheduler run. A clamp
+  can only lower a count, so the store path is ≥ the scheduler path and diverges
+  only where concurrency saturates – days 1–3 agree exactly. 220 is the honest
+  number for a metric specified over `selectDerivedRefRequirements`. Also in the
+  backlog. **If US4 ever unifies the two paths, re-pin the literal rather than
+  hunting a regression.**
+- **`day_out_of_range` is checked at three traversals of `schedule.events`**
+  (`derived.ts:170`, `:277`, `:341`). Two are now pinned; the third is an
+  equivalent mutant, proven twice independently – `computeRefRequirements` reads
+  only `demandByDay[d]` for `d` in `[0, daysAvailable)`, so an out-of-range
+  bucket is never addressed whether or not the skip wrote to it. The risk is not
+  the three drifting in meaning, it is a fourth call site being added without the
+  guard. **The recommended fix, deferred rather than done: filter
+  `schedule.events` to in-range entries once and have all three consume it.**
+  Refactoring `derived.ts` while another agent was mid-flight in the canvas is
+  how two green branches make one broken merge.
+- **The highlight covers the dashed overflow border on a block that is both.**
+  Mitigated by drawing the overflow cue after the highlight cue, so its gaps show
+  through. An inset ring was rejected because it collapses to nothing on the
+  1–2px blocks a person is reaching for the scorecard to find.
+- **Sub-4px blocks lose their category fill while highlighted**, a consequence of
+  the settled `inset-0` choice. Recorded in the cue's docblock rather than
+  changed.
+- **Eight style preferences from the React review were declined**, listed in
+  `scratchpad/S6-react-review.md`. One was adopted: `aria-controls` on the
+  disclosure, since the focus-ring fix already edited that element.
+
+### Coverage knowingly dropped
+
+None. The one case deliberately not written – `buildRefDemandByDay`'s skip – is
+an equivalent mutant with no observable difference to assert against, verified by
+two independent agents, and inventing a case to pin it would have pinned nothing.
+
+### Things S7 must not be surprised by
+
+- **The scorecard reads the live store; the canvas reads a committed model.** A
+  metric moves before the blocks relayout. That is FR-008, not a bug.
+- **Every delta is zero on the first frame**, because the baseline is captured
+  from the same auto-schedule the app boots into. A test or a driver asserting
+  "a delta exists" proves nothing – assert that one *moved*.
+- **Only about 5 blocks are in the canvas window at boot on B1**, because 80
+  strips makes a tall grid. Windowing, not placement: the schedule table still
+  reads 24 of 24.
+- **`selectScorecardMetrics` can throw**, by the same `computePoolStructure` path
+  everything else in the drawer can. It was deliberately not wrapped in a
+  `try`/`catch`, which would hide a real defect behind a component silently
+  rendering nothing.
+- **B2 and B8 still place zero events** – the team-event cut defect, being fixed
+  as its own feature in a separate session. Do not drive them in a smoke run.
+- S1's `localStorage` guard in `src/test-setup.ts` is still not redundant.
+
+### Not finished, and why
+
+Nothing in scope was left undone and no halt condition fired. No metric needed
+arithmetic that belongs in `src/engine/`, no dependency was needed after D1, D2
+and D3 rejected them, the highlight was built without either side reading its own
+copy of the driving set, and engine drift is zero.
+
+**The US3 checkpoint is met**: the scorecard reports deltas against a frozen
+baseline, in the suite and in a browser. T055 onward (US4, per-type defaults) is
+the next session's – and it is the **drift gate**, the only story that changes
+engine output, so it starts fresh with constitution III in front of it. The
+branch is handed back green, with the closing merge unmade.

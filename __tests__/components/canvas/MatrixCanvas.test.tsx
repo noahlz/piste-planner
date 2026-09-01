@@ -176,6 +176,13 @@ function blockIds(): string[] {
     .sort()
 }
 
+/** Every *highlighted* block in the document, by `id:PHASE`. */
+function highlightedIds(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-event-block][data-highlighted]'))
+    .map((el) => el.dataset.eventBlock ?? '')
+    .sort()
+}
+
 function blockFor(id: string, phase: string): HTMLElement {
   const el = document.querySelector<HTMLElement>(`[data-event-block="${id}:${phase}"]`)
   if (!el) throw new Error(`no ${phase} block drawn for ${id}`)
@@ -540,6 +547,71 @@ describe('MatrixCanvas blocks (FR-012, FR-013, FR-021)', () => {
       'aria-label',
       "Div 1 Men's Foil Individual, Pools, Day 1, 10:00–11:40, Strips 1–4",
     )
+  })
+})
+
+/**
+ * 004 T050 — the scorecard's hover highlight reaching the canvas (FR-029,
+ * S6 design brief §2 and §5).
+ *
+ * The canvas is handed a set of `${competitionId}:${phase}` keys and draws what
+ * it matches. It computes no driving set of its own: the metric that owns the
+ * number owns the list of blocks behind it, and a second definition here is how
+ * the two would come to disagree about which blocks a metric is made of.
+ */
+describe('MatrixCanvas highlight (FR-029)', () => {
+  it('lights the blocks the set names and leaves the others alone', () => {
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} highlight={new Set(['c1:POOLS'])} />)
+
+    // Both blocks are drawn — the highlight selects among them rather than
+    // filtering them, which is what makes the second assertion meaningful.
+    expect(blockIds()).toEqual(['c1:DE', 'c1:POOLS'])
+    expect(blockFor('c1', 'POOLS').dataset.highlighted).toBe('true')
+    expect(blockFor('c1', 'DE').dataset.highlighted).toBeUndefined()
+  })
+
+  it('lights nothing when no set is passed at all', () => {
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} />)
+
+    expect(blockIds()).toEqual(['c1:DE', 'c1:POOLS'])
+    expect(highlightedIds()).toEqual([])
+  })
+
+  it('ignores a key no drawn block carries, and still lights the ones that match', () => {
+    // The live-versus-committed boundary, in the canvas's own terms. The
+    // scorecard names blocks from the *live* model while the canvas draws the
+    // model it last committed, so during a settle it can be handed a key for a
+    // block that is not on screen. That must cost the matching keys nothing and
+    // must not throw — fewer blocks lit, never a wrong one.
+    render(
+      <MatrixCanvas
+        schedule={scheduleWithPlacedEvent()}
+        highlight={new Set(['ghost:POOLS', 'c1:DE'])}
+      />,
+    )
+
+    expect(blockIds()).toEqual(['c1:DE', 'c1:POOLS'])
+    expect(highlightedIds()).toEqual(['c1:DE'])
+  })
+
+  it('lights nothing when every key names a block that is not drawn', () => {
+    render(
+      <MatrixCanvas
+        schedule={scheduleWithPlacedEvent()}
+        highlight={new Set(['ghost:POOLS', 'ghost:DE'])}
+      />,
+    )
+
+    expect(blockIds()).toEqual(['c1:DE', 'c1:POOLS'])
+    expect(highlightedIds()).toEqual([])
+  })
+
+  it('matches on the phase as well as on the competition', () => {
+    // A bare competition id is not a key. Matching on `data-event-id` instead
+    // would light every phase of an event whenever a metric named one of them.
+    render(<MatrixCanvas schedule={scheduleWithPlacedEvent()} highlight={new Set(['c1'])} />)
+
+    expect(highlightedIds()).toEqual([])
   })
 })
 

@@ -60,6 +60,15 @@
 // running app after 006's fix, the same template places all 12 of 12, strip
 // count unchanged. The block-count and row-count floors below (T018) are set
 // to the numbers actually measured now, not to "non-empty".
+//
+// T052: the scorecard block runs at boot, on B1, before the template picker
+// touches anything. The trap it is built around is that the baseline is frozen
+// from the very auto-schedule that boot performs, so on the first frame every
+// `[data-metric-delta]` reads zero — an assertion that a delta *element* is
+// present passes on an app whose deltas never move. So the driver captures a
+// delta's text, changes the top bar's strip count, and requires the text to
+// have changed to a non-zero magnitude. It varies strips and never a fencer
+// count: `computePoolStructure` throws for `fencerCount <= 1`.
 
 import { chromium } from 'playwright-core'
 import { homedir } from 'node:os'
@@ -164,6 +173,156 @@ if (bootPlacedCount !== 24) {
 log('boot places 24 of 24 events')
 await page.getByRole('radio', { name: 'Matrix' }).click()
 await page.waitForTimeout(200)
+
+// ── Scorecard (T052, US3) ──
+// Read here, at boot on B1, before the template picker below changes the
+// tournament. The baseline is frozen from the same auto-schedule the boot
+// count above asserts (research D9), so on this frame every delta is zero —
+// which is exactly why "a [data-metric-delta] element exists" proves nothing,
+// and why the strip-count step below is the one that has to make a delta
+// actually move.
+const scorecard = page.getByRole('region', { name: 'Scorecard' })
+await scorecard.waitFor()
+
+/** Every metric row id currently in the scorecard's DOM, in render order. */
+const metricIds = () =>
+  scorecard
+    .locator('li[data-metric]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-metric')))
+
+// Collapsed shows the two collapsed-tier rows and nothing else. The list is
+// compared whole and in order, not as a subset: that is what makes this an
+// assertion that the expanded rows are *absent from the DOM* rather than
+// merely invisible — a hidden row would still satisfy a subset check, and
+// jsdom's inability to tell those apart is precisely the gap this driver
+// exists to cover.
+const details = page.getByRole('button', { name: 'Scorecard details' })
+if ((await details.getAttribute('aria-expanded')) !== 'false') {
+  throw new Error('scorecard did not boot collapsed (viewState default scorecardExpanded=false)')
+}
+const collapsedIds = await metricIds()
+if (collapsedIds.join(',') !== 'finish:tournament,refs:peak-total') {
+  throw new Error(
+    `collapsed scorecard rows: expected finish:tournament,refs:peak-total, got ${collapsedIds.join(',')}`,
+  )
+}
+for (const id of collapsedIds) {
+  const value = (await scorecard.locator(`li[data-metric="${id}"] [data-metric-value]`).textContent())?.trim()
+  if (!value) throw new Error(`collapsed metric ${id} rendered no value`)
+}
+log('scorecard collapsed:', collapsedIds.join(', '))
+
+// Expanded renders the full set selectScorecardMetrics assembles, in its
+// order, with one `finish:day:<d>` row per day. The day count is read off the
+// top bar rather than typed here, so the drawer and the top bar are checked
+// against each other — the same app-against-app rule the matrix/schedule
+// comparison below follows, not a literal that would need editing whenever
+// the default preset changes.
+await details.click()
+if ((await details.getAttribute('aria-expanded')) !== 'true') {
+  throw new Error('Scorecard details did not report aria-expanded=true after the click')
+}
+const dayCountText = (await page.getByRole('combobox', { name: 'Day count' }).textContent()) ?? ''
+const dayCount = Number(dayCountText.match(/\d+/)?.[0])
+if (!dayCount) throw new Error(`could not read the top bar day count (got "${dayCountText}")`)
+const expectedMetricIds = [
+  'finish:tournament',
+  'refs:peak-total',
+  ...Array.from({ length: dayCount }, (_, d) => `finish:day:${d}`),
+  'refs:peak-sabre',
+  'strips:utilization',
+  'days:balance-spread',
+  'findings:ERROR',
+  'findings:WARN',
+  'findings:INFO',
+]
+const expandedIds = await metricIds()
+if (expandedIds.join(',') !== expectedMetricIds.join(',')) {
+  throw new Error(
+    `expanded scorecard rows:\n  expected ${expectedMetricIds.join(',')}\n  got      ${expandedIds.join(',')}`,
+  )
+}
+log('scorecard expanded:', expandedIds.length, 'rows over', dayCount, 'days')
+await shot('01b-scorecard')
+
+// FR-029: hovering a metric lights the blocks that drive it. "Strip
+// utilization" is the metric to hover — its driving set is every in-range
+// placed block, so whatever the canvas has in its window is in it. A metric
+// with a narrower set (a day finish, a findings count) can legitimately name
+// only blocks that are scrolled out of the window, and would make this
+// assertion flaky rather than strict.
+const blocksAtBoot = await page.locator('[data-event-block]').count()
+if (blocksAtBoot === 0) throw new Error('no matrix blocks at boot to check the metric highlight against')
+if ((await page.locator('[data-event-block][data-highlighted="true"]').count()) !== 0) {
+  throw new Error('a block was already highlighted before any metric was hovered')
+}
+await scorecard.locator('li[data-metric="strips:utilization"]').hover()
+await page.waitForTimeout(150)
+// Equality, not "at least one": the canvas draws a block only for an in-range
+// placed segment (lanes.ts) and this metric's driving set is exactly those, so
+// every block on screen has to light. "At least one" would still pass on a
+// selector that named only an event's first segment.
+const litCount = await page.locator('[data-event-block][data-highlighted="true"]').count()
+if (litCount !== blocksAtBoot) {
+  throw new Error(
+    `hovering Strip utilization lit ${litCount} of the ${blocksAtBoot} blocks on screen; every one drives it (FR-029)`,
+  )
+}
+// The cue has to *paint*, not merely exist. jsdom reads the inline value back
+// verbatim, so the unit suite can pin the declaration but not that it resolves
+// — the two chrome tokens are the one paint on the canvas that does not come
+// from palette.ts, and an unresolved var() would leave FR-029's cue invisible
+// with everything above still green.
+const cueShadow = await page
+  .locator('[data-event-block][data-highlighted="true"] [data-highlight-cue]')
+  .first()
+  .evaluate((el) => getComputedStyle(el).boxShadow)
+if (!cueShadow.includes('inset') || !cueShadow.includes('rgb')) {
+  throw new Error(`the highlight cue resolved to no ring at all: box-shadow "${cueShadow}"`)
+}
+await shot('01c-highlight')
+// And it clears when the pointer leaves — the cue is a hover state, not a
+// latch. Same corner the tooltip step below moves to.
+await page.mouse.move(5, 5)
+await page.waitForTimeout(150)
+const litAfterLeave = await page.locator('[data-event-block][data-highlighted="true"]').count()
+if (litAfterLeave !== 0) {
+  throw new Error(`${litAfterLeave} blocks stayed highlighted after the pointer left the metric row`)
+}
+log('metric hover lit', litCount, 'of', blocksAtBoot, 'blocks, and cleared')
+
+// A delta has to *move*, not merely exist. Strip utilization's denominator is
+// strips_total × the day windows, so the top bar's strip count moves it for
+// certain. It is a strip count and never a fencer count: computePoolStructure
+// (src/engine/pools.ts) throws for fencerCount <= 1 and initialAnalysis calls
+// it for every selected competition, so shrinking a fencer count breaks the
+// app rather than testing it.
+const utilDelta = scorecard.locator('li[data-metric="strips:utilization"] [data-metric-delta]')
+if ((await utilDelta.count()) === 0) {
+  throw new Error('strip utilization carries no delta at boot — the preset baseline was never captured')
+}
+const deltaBefore = (await utilDelta.textContent())?.trim()
+const stripInput = page.getByRole('spinbutton', { name: 'Strip count' })
+const stripsAtBoot = await stripInput.inputValue()
+const stripsBumped = Number(stripsAtBoot) + 4
+await stripInput.fill(String(stripsBumped))
+await stripInput.blur()
+await page.waitForTimeout(400)
+const deltaAfter = (await utilDelta.textContent())?.trim()
+// The minus is U+2212, not a hyphen — formatDelta signs with '+' / '−'.
+const deltaMagnitude = Number((deltaAfter ?? '').replace(/[+−\-%]/g, ''))
+if (deltaAfter === deltaBefore || !(deltaMagnitude > 0)) {
+  throw new Error(
+    `strip utilization delta did not move off zero: "${deltaBefore}" -> "${deltaAfter}" (strips ${stripsAtBoot} -> ${stripsBumped})`,
+  )
+}
+log('strips', stripsAtBoot, '->', stripsBumped, 'moved the utilization delta', deltaBefore, '->', deltaAfter)
+
+// Put the strip count back so the template steps below start from the state
+// the boot left them, exactly as they did before this block existed.
+await stripInput.fill(stripsAtBoot)
+await stripInput.blur()
+await page.waitForTimeout(400)
 
 // Template picker is a ToggleGroup, not a select, and now sits behind the
 // rail's "Presets…" collapsible trigger (CompetitionMatrix, Events panel,

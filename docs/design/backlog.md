@@ -153,6 +153,64 @@ rediscover these:
   found this bug. The reasoning is
   [research.md D2](../../specs/008-team-event-cut/research.md).
 
+## A fencer count of 0 or 1 unmounts the whole app
+
+*Found by 004's T054 React review on 2026-09-01 while reviewing US3. Not fixed
+there — it is pre-existing and belongs to US2's territory, not US3's scope.
+Highest user-facing defect in the area reviewed.*
+
+`FencerCounts` (`src/components/sections/FencerCounts.tsx:51`) renders its
+`NumberInput` with `min={0}` and `commitOnChange`, so typing `0` or `1` commits
+on the keystroke. `computePoolStructure` (`src/engine/pools.ts:25`) throws for
+`fencerCount <= 1`, and `initialAnalysis` (`src/engine/analysis.ts:26`) calls it
+unguarded for every *selected* competition regardless of whether it is placed —
+so `AnalysisOutput` and `CenterView` both reach it on the next render. There is
+no `ErrorBoundary` and no `componentDidCatch` anywhere in `src/`, so the throw
+escapes to the root and React unmounts the tree: blank page, no recovery short
+of a reload, and the typed value is not even persisted.
+
+Two independent cheap fixes, either sufficient on its own:
+
+- Raise the input's `min` to `MIN_FENCERS`, which is already **2**
+  (`src/engine/constants.ts:92`) and so coincides exactly with the throw
+  threshold — the guard the component needs already exists as a named constant
+  and is simply not used here.
+- Guard `analysis.ts:26` the way `validation.ts:240-241` already guards its own
+  call to the same function.
+
+An `ErrorBoundary` at the shell is worth having regardless, but it is the weaker
+fix on its own: it converts a crash into a dead panel rather than keeping the
+app usable.
+
+## The scorecard's peak-referee row reads higher than the scheduler's own
+
+*Measured by 004's S6 on 2026-09-01. Recorded, not fixed — US4 is the only 004
+story that may move engine output, and the store-side path is the one the UI
+shows.*
+
+For B1, `refs:peak-total` reads **220** on day 0 while the scheduler's own
+`ref_requirements_by_day` for the same run says **212**. Days 1–3 agree exactly
+(200, 204, 142 both ways). Only the saturated day diverges, and the store path
+is always the higher of the two.
+
+The two numbers come from two different demand models:
+
+- `buildRefDemandByDay` (`src/store/derived.ts:160`) sums referee demand **per
+  placed event**, so two events overlapping in time add their strips together
+  whether or not the day has the strips to run them concurrently.
+- `computePostScheduleRefDemand` (`src/engine/concurrentScheduler.ts:1200`)
+  measures each window with `peakConcurrentStrips`, which **clamps** to the
+  strips actually concurrent in that window.
+
+On a day that is not saturated the two agree by construction, which is why only
+day 0 moves. Neither is wrong for its own purpose — the store's is an upper
+bound on referees a day could need, the engine's is what the schedule it
+produced actually demands — but the app shows one number and the scheduler
+reasons with the other, so an organizer staffing from the drawer staffs above
+the schedule's own requirement. Worth reconciling when the referee model is next
+opened; until then the divergence is bounded, one-directional, and confined to
+saturated days.
+
 ## Rail rebuild
 
 *Assigned to feature 007 on 2026-08-31 (unspecced), after 004 closes.*
