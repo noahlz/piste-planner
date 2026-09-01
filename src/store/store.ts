@@ -19,13 +19,13 @@ import type { ScenarioId } from '../data/tournaments.ts'
 // — no runtime cycle, only a type-level one that TS resolves fine.
 import { selectDerivedFindings } from './derived.ts'
 import {
-  DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   ADMIN_GAP_MINS,
   FLIGHT_BUFFER_MINS,
   THRESHOLD_MINS,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../engine/constants.ts'
+import { defaultCutForEntry } from './competitionDefaults.ts'
 
 // ──────────────────────────────────────────────
 // Constants
@@ -217,7 +217,7 @@ type FencerDefaultTable = Partial<Record<string, number>>
 function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): CompetitionConfig | null {
   const entry = findCompetition(id)
   if (!entry) return null
-  const cut = DEFAULT_CUT_BY_CATEGORY[entry.category]
+  const cut = defaultCutForEntry(entry)
   const defaultKey =
     entry.event_type === 'TEAM'
       ? `${entry.category}:TEAM`
