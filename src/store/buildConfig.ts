@@ -170,7 +170,16 @@ function buildCompetitions(
       flighted: false,
       flighting_group_id: null,
       is_priority: false,
-      strips_allocated: 0,
+      // The fourth seam parity-exceptions.md names. A `0` here zeroes the DE
+      // term of `estimateCompetitionStripHours`
+      // (`strips_allocated × de_duration / 60`, src/engine/capacity.ts:146),
+      // so every individual event contributed nothing to the upfront
+      // feasibility estimate and the gate at src/engine/validation.ts:405
+      // never fired on the app path. This is the ledger factory's own
+      // pre-allocation (`__tests__/helpers/scenarios.ts:69`) — a default, not
+      // a decision: the accepted-flighting loop below overwrites it with the
+      // organizer's explicit allocation.
+      strips_allocated: Math.max(2, Math.ceil(overrides.fencer_count / 7)),
 
       // Per-event strip budget overrides — always null until UI exposes them
       max_pool_strip_pct_override: null,
