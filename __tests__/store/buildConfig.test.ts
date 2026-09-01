@@ -178,7 +178,12 @@ describe('buildTournamentConfig', () => {
       expect(comp.flighted).toBe(false)
       expect(comp.flighting_group_id).toBeNull()
       expect(comp.is_priority).toBe(false)
-      expect(comp.strips_allocated).toBe(0)
+      // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
+      // the ledger factory (`__tests__/helpers/scenarios.ts:69`). 64 fencers
+      // gives 10. The old `0` here was the fourth app-path seam
+      // `specs/006-day-axis-parity/parity-exceptions.md` names — it zeroed the
+      // DE term of the feasibility estimate for every individual event.
+      expect(comp.strips_allocated).toBe(10)
     })
 
     it('leaves latest_end unbinding at a day count beyond the UI\'s current maximum of 4 (research.md D6)', () => {
@@ -390,8 +395,23 @@ describe('buildTournamentConfig', () => {
         expect(comp.flighted).toBe(false)
         expect(comp.flighting_group_id).toBeNull()
         expect(comp.is_priority).toBe(false)
-        expect(comp.strips_allocated).toBe(0)
       }
+
+      // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
+      // the ledger factory (`__tests__/helpers/scenarios.ts:69`), where it used
+      // to send `0` — the fourth app-path seam
+      // `specs/006-day-axis-parity/parity-exceptions.md` names.
+      //
+      // Asserted per competition and outside the loop, because the value now
+      // differs between the two fixtures (64 fencers -> 10, 32 -> 5) where the
+      // old `0` was uniform. The literals are deliberate: re-deriving
+      // `Math.max(2, Math.ceil(comp.fencer_count / 7))` inside the assertion
+      // would pass against any implementation of that shape, including a wrong
+      // one, which restates the code instead of pinning its output.
+      const sixtyFour = competitions.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
+      const thirtyTwo = competitions.find((c: Competition) => c.id === 'CDT-W-EPEE-IND')
+      expect(sixtyFour!.strips_allocated).toBe(10)
+      expect(thirtyTwo!.strips_allocated).toBe(5)
     })
 
     it('leaves competitions unflighted when suggestion state is pending', () => {
@@ -447,6 +467,12 @@ describe('buildTournamentConfig', () => {
       const priority = competitions.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
       const flighted = competitions.find((c: Competition) => c.id === 'CDT-W-EPEE-IND')
 
+      // The two strips_allocated assertions below pin the override, and since
+      // T061a they do real work: the accepted suggestion's 6 and 4 must beat
+      // the pre-allocated defaults these same fixtures would otherwise carry
+      // (10 for 64 fencers, 5 for 32). Both differ from their default, so
+      // either would fail if the flighting loop stopped winning — under the
+      // old uniform `0` default only the fact of a non-zero value was pinned.
       expect(priority).toBeDefined()
       expect(priority!.flighted).toBe(true)
       expect(priority!.is_priority).toBe(true)
