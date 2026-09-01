@@ -154,20 +154,20 @@ Reload and the expansion state persists but did not travel in a shared URL.
 
 ### Tests for User Story 3 ⚠️ Write first, confirm they fail
 
-- [ ] T044 [P] [US3] Write failing tests for baseline capture in `__tests__/store/scorecardBaseline.test.ts` – captured once at preset load, unmoved by subsequent edits, absent from `serializeState`, and absent entirely when no preset is loaded (research D9)
-- [ ] T045 [P] [US3] Write failing tests for the metric selectors in `__tests__/store/scorecardMetrics.test.ts` – every metric in [contracts/ui-contract.md](./contracts/ui-contract.md) §Scorecard contract, derived purely from store inputs
-- [ ] T046 [P] [US3] Write failing tests for the scorecard's states in `__tests__/components/workbench/Scorecard.test.tsx` – collapsed set, expanded set, deltas with a preset, no deltas without one, and no aggregate score in any state (FR-025)
+- [x] T044 [P] [US3] Write failing tests for baseline capture in `__tests__/store/scorecardBaseline.test.ts` – captured once at preset load, unmoved by subsequent edits, absent from `serializeState`, and absent entirely when no preset is loaded (research D9)
+- [x] T045 [P] [US3] Write failing tests for the metric selectors in `__tests__/store/scorecardMetrics.test.ts` – every metric in [contracts/ui-contract.md](./contracts/ui-contract.md) §Scorecard contract, derived purely from store inputs
+- [x] T046 [P] [US3] Write failing tests for the scorecard's states in `__tests__/components/workbench/Scorecard.test.tsx` – collapsed set, expanded set, deltas with a preset, no deltas without one, and no aggregate score in any state (FR-025)
 
 ### Implementation for User Story 3
 
-- [ ] T047 [US3] Add the non-serialized baseline slice to `src/store/store.ts`, captured on preset load (research D9)
-- [ ] T048 [US3] Add the scorecard metric selectors to `src/store/derived.ts`, reading referee requirements, strip allocations, finish times, and findings the engine already produces – adding no engine calculation
-- [ ] T049 [US3] Build `src/components/workbench/Scorecard.tsx` – collapsed by default with finish time and peak referee demand, expanding to the full set, every metric carrying its delta (FR-026 to FR-028)
-- [ ] T050 [US3] Wire metric hover to highlight the driving blocks on the canvas (FR-029)
-- [ ] T051 [US3] Persist expansion state through `viewState`, confirming it stays out of the share URL (FR-030)
-- [ ] T052 [US3] Extend `scripts/smoke.mjs` to read the collapsed scorecard, change an input, and confirm a delta appears (constitution VI)
-- [ ] T053 [US3] Dispatch `test-quality-reviewer` on T044–T046
-- [ ] T054 [US3] Dispatch `react-code-reviewer` on T049–T051
+- [x] T047 [US3] Add the non-serialized baseline slice to `src/store/store.ts`, captured on preset load (research D9)
+- [x] T048 [US3] Add the scorecard metric selectors to `src/store/derived.ts`, reading referee requirements, strip allocations, finish times, and findings the engine already produces – adding no engine calculation
+- [x] T049 [US3] Build `src/components/workbench/Scorecard.tsx` – collapsed by default with finish time and peak referee demand, expanding to the full set, every metric carrying its delta (FR-026 to FR-028)
+- [x] T050 [US3] Wire metric hover to highlight the driving blocks on the canvas (FR-029)
+- [x] T051 [US3] Persist expansion state through `viewState`, confirming it stays out of the share URL (FR-030)
+- [x] T052 [US3] Extend `scripts/smoke.mjs` to read the collapsed scorecard, change an input, and confirm a delta appears (constitution VI)
+- [x] T053 [US3] Dispatch `test-quality-reviewer` on T044–T046
+- [x] T054 [US3] Dispatch `react-code-reviewer` on T049–T051
 
 **Checkpoint**: The scorecard reports deltas against a frozen baseline. *(subagent commits)*
 
