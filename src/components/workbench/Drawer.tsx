@@ -1,6 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { loadViewState, saveViewState } from '../../store/viewState.ts'
 import { AnalysisOutput } from '../sections/AnalysisOutput.tsx'
+import { Scorecard } from './Scorecard.tsx'
 
 const MIN_HEIGHT = 96
 const MAX_HEIGHT = 640
@@ -11,8 +12,9 @@ function clampHeight(height: number): number {
 }
 
 /**
- * The resizable bottom drawer, holding the findings list (FR-006,
- * S2-contract.md §Drawer). The scorecard is US3's — omitted here.
+ * The resizable bottom drawer, holding the scorecard and the findings list
+ * (FR-006, S2-contract.md §Drawer). Both are present at every drawer height —
+ * the body scrolls rather than dropping either one.
  *
  * Height starts from the persisted view state and is bounded to
  * [MIN_HEIGHT, MAX_HEIGHT] on every change, keyboard or pointer, so the
@@ -80,6 +82,7 @@ export function Drawer() {
         onPointerUp={handlePointerUp}
       />
       <div className="flex-1 overflow-y-auto p-3">
+        <Scorecard />
         <AnalysisOutput />
       </div>
     </section>
