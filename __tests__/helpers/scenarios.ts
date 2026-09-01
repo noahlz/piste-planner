@@ -26,6 +26,21 @@ import { makeStrips, makeConfig, makeCompetition } from './factories.ts'
 export { SCENARIO_IDS, SCENARIOS } from '../../src/data/tournaments.ts'
 export type { ScenarioId, ScenarioFixture } from '../../src/data/tournaments.ts'
 
+/**
+ * The `isTeam` branch below is a deliberate second copy of the team-event
+ * cut default that `src/store/competitionDefaults.ts` now derives (feature
+ * 008) — this factory does not import it, and it should not start to.
+ *
+ * `appPathParity.test.ts` catches a store/engine divergence by deriving a
+ * tournament's competitions down both paths independently and comparing the
+ * results; that check only has power because the two derivations do not
+ * share a source. Point this branch at the store's helper and the paths
+ * would agree by construction — the parity test would stop being able to
+ * fail on this default, and a bug in the shared helper would move this
+ * file's own drift-ledger snapshot instead of surfacing as a parity gap.
+ *
+ * See research.md D2 for the full argument and the alternatives rejected.
+ */
 export function buildCompetitions(fencerCounts: Record<string, number>): Competition[] {
   return Object.entries(fencerCounts).map(([id, fencerCount]) => {
     const entry = findCompetition(id)

@@ -1,4 +1,4 @@
-# Parity Exceptions: the four rows the app path does not match the ledger on
+# Parity Exceptions: the three rows the app path does not match the ledger on
 
 **Feature**: 006-day-axis-parity | **Task**: T012 (FR-004a classification) |
 **Measured**: 2026-08-31, on `b20f351347` (the axis fix, T006/T008)
@@ -9,23 +9,35 @@ This is the classification T012 owes FR-004a. It lives beside
 The pinned numbers themselves are in `__tests__/store/appPathParity.test.ts`,
 each with the short form of its entry here.
 
+**Amended 2026-08-31** by 008-team-event-cut (T011): B2 closed at 24, the
+ledger's exact count, and B8 re-measured from 0 to 53, one above the ledger's
+52 — both after 008's team-`cut_mode` fix
+(`src/store/competitionDefaults.ts`). This stays 006's record and the
+amendment is marked where it applies rather than the document rewritten as if
+006 had known. Full isolation record:
+[`specs/008-team-event-cut/b8-residual.md`](../008-team-event-cut/b8-residual.md).
+Every `scenarios.ts` and `buildConfig.ts` citation in this document was
+re-verified against the tree on 2026-08-31, after 008's T014 inserted a
+15-line comment above `buildCompetitions` (`62be896692`) and shifted every
+line number below it — checked line by line, not carried forward on trust.
+
 ## The verdict first
 
-**No gap traces to the day axis.** Four of the eight reference tournaments still
-differ from the ledger, and all four differences are FR-004a exceptions traced to
-per-competition defaults the two paths have not converged on. All four close in
-004's US4.
+**No gap traces to the day axis.** Three of the eight reference tournaments
+still differ from the ledger, and all three differences are FR-004a exceptions
+traced to per-competition defaults the two paths have not converged on. All
+three close in 004's US4.
 
 | | Pinned (app path) | Ledger | Traced cause | Closes in |
 |---|---:|---:|---|---|
 | B1 | 24 | 24 | — matches | — |
-| B2 | **0** | 24 | team `cut_mode` — a BINDING validation ERROR | 004 US4 |
+| B2 | 24 | 24 | — matches | closed by 008 |
 | B3 | 24 | 24 | — matches | — |
 | B4 | **16** | 0 | `strips_allocated: 0` hides demand from the feasibility gate | 004 US4 |
 | B5 | 12 | 12 | — matches | — |
 | B6 | **43** | 44 | DE bracket sizes: regional cut override + DE staging | 004 US4 |
 | B7 | 18 | 18 | — matches | — |
-| B8 | **0** | 52 | team `cut_mode` — same as B2 | 004 US4 |
+| B8 | **53** | 52 | DE bracket sizes and strip demand: `de_mode` + `strips_allocated`, jointly | 004 US4 |
 
 ## How the day axis was ruled out
 
@@ -44,53 +56,68 @@ half of the input fixed:
 | B6 | 43 | **43** | 44 | **44** |
 
 Swapping the axis moves nothing. Swapping the per-competition defaults
-reproduces the other path's count exactly, in both directions. The same holds
-for B2 and B8: once their team `cut_mode` is corrected, the app path returns 24
-and 53 on the app's config and 24 and 53 on the ledger's config — identical.
+reproduces the other path's count exactly, in both directions. The same was
+predicted of B2 and B8 once their team `cut_mode` was corrected, and 008
+turned the prediction into a measurement rather than leaving it one. B2 now
+matches the ledger outright at 24, on either config. B8 does not converge that
+far: the app's competitions place 53 on the app's config and 53 on the
+ledger's config, and the ledger's competitions place 52 on the ledger's config
+and 52 on the app's config too (`b8-residual.md` R1, R8, R9, R10) — each path
+is invariant to the axis, but correcting `cut_mode` alone does not bring the
+two paths together. Correcting `de_mode` and `strips_allocated` as well
+reaches 52 on both configs (`b8-residual.md` P1, P4), so the axis stays
+uninvolved at every stage of the fix, the same result 006 recorded for B4 and
+B6.
 
 A third run confirms it from the other side: `app comps + app config with
 dayConfigs: []` — the app's own competitions on the ledger's compacted 840-minute
 axis — returns 43 for B6 and 16 for B4, the same numbers the 1440-spaced axis
 returns.
 
-## The seam all four share
+## The seam all three share
 
 Two files build a `Competition` from the same catalogue entry and disagree:
 
-| | Store (`src/store/store.ts:217-235`, `src/store/buildConfig.ts:110-151`) | Ledger factory (`__tests__/helpers/scenarios.ts:29-57`) |
+| | Store (`src/store/store.ts:217-235`, `src/store/buildConfig.ts:110-151`) | Ledger factory (`__tests__/helpers/scenarios.ts:44-72`) |
 |---|---|---|
-| `cut_mode` for a TEAM event | `DEFAULT_CUT_BY_CATEGORY[category]` — no team branch (`store.ts:220,229`) | `CutMode.DISABLED` / 100 when `isTeam` (`scenarios.ts:35-37`) |
-| `cut_mode` at a regional type | `REGIONAL_CUT_OVERRIDES` applied (`buildConfig.ts:156-164`) | not applied |
-| `de_mode` | hardcoded `SINGLE_STAGE` (`store.ts:231`) | `STAGED` when individual and video REQUIRED (`scenarios.ts:51-53`) |
-| `strips_allocated` | `0` (`buildConfig.ts:145`) | `max(2, ceil(fencer_count / 7))` (`scenarios.ts:54`) |
+| `cut_mode` for a TEAM event — **closed by 008** | `event_type === TEAM` branch in `defaultCutForEntry` (`src/store/competitionDefaults.ts`) | `CutMode.DISABLED` / 100 when `isTeam` (`scenarios.ts:49-52`) |
+| `cut_mode` at a regional type | `REGIONAL_CUT_OVERRIDES` applied (`buildConfig.ts:161-169`) | not applied |
+| `de_mode` | hardcoded `SINGLE_STAGE` (`store.ts:231`) | `STAGED` when individual and video REQUIRED (`scenarios.ts:66-68`) |
+| `strips_allocated` | `0` (`buildConfig.ts:151`) | `max(2, ceil(fencer_count / 7))` (`scenarios.ts:69`) |
+| `latest_end` | `Infinity` (`buildConfig.ts:144`) | `9999` (`scenarios.ts` `makeCompetition` default) |
 
-research.md D7 names the last two. The `cut_mode` rows are the same class — a
-per-competition default derived from the catalogue entry, diverging because one
-side branches on event type or tournament type and the other does not — and they
-are closed by the same feature. They are recorded here because D7 did not
-anticipate them.
+research.md D7 names `de_mode` and `strips_allocated`. The `cut_mode` for a
+TEAM event row closed in 008 (`defaultCutForEntry`,
+`src/store/competitionDefaults.ts`): the store now branches on `event_type`
+the way the ledger's factory always has, and zero of B8's events differ on
+`cut_mode` after the fix. The `cut_mode` at a regional type row stays open —
+§B6 below records that it closes the other way, by the ledger's factory
+adopting `REGIONAL_CUT_OVERRIDES`, not by a store change, so the two `cut_mode`
+rows no longer close by the same feature.
 
-## B2 — pinned 0, ledger 24
+`latest_end` is a fourth divergence D7 did not anticipate and this document
+did not record until 008 found it while isolating B8's residual
+(`b8-residual.md`): `buildConfig.ts:144` sends `Infinity` where the ledger's
+`makeCompetition` factory defaults to `9999`, on every one of B8's 53
+competitions. It is real but inert — every isolation run that includes it
+(`b8-residual.md` R6, P2, P3) stays at 53, and the run that reaches 52 without
+it (P1) shows it is neither necessary nor sufficient for any gap measured so
+far. Recorded here so the next reader does not rediscover it or mistake it for
+a cause.
 
-**Cause**: six `cut-on-team` findings, one per Cadet team event
-(`src/engine/validation.ts:158`). The rule is a `policy` finding, so it is
-ERROR-severity under BINDING mode, and `scheduleAllConcurrent` returns an empty
-schedule when any BINDING error is present
-(`src/engine/concurrentScheduler.ts:186-204`).
+## B2 — closed at 24
+
+**Closed by feature 008 on 2026-08-31.** The app path now places 24, the
+ledger's exact count, and its `PARITY_EXCEPTIONS` entry was deleted from
+`appPathParity.test.ts` — a pin equal to the ledger's count may not carry an
+FR-004a exception. The fix itself is not restated here: see
+[`specs/008-team-event-cut/`](../008-team-event-cut/).
 
 **Correction to the record**: the run does **not** throw, and
 `video-dead-config` ("REQUIRED video policy has no effect with SINGLE_STAGE
 de_mode") is **not** what gates it. That finding is a `notice`
 (`src/engine/validation.ts:215`) — WARN in both modes, never escalating. The
 only gating errors on B2 and B8 are `cut-on-team`.
-
-**Evidence**: forcing `cut_mode = DISABLED` on B2's six team events alone,
-changing nothing else, takes the app path from 0 to 24 — the ledger's exact
-count.
-
-**Closes in**: 004 US4. The pin becomes 24.
-
-**Confidence**: high. Single cause, exact reproduction of the ledger's number.
 
 ## B4 — pinned 16, ledger 0
 
@@ -100,7 +127,7 @@ ledger is stricter" would have been the wrong conclusion.
 **Cause**: `estimateCompetitionStripHours` computes a SINGLE_STAGE event's DE
 strip-hours as `strips_allocated × de_duration / 60`
 (`src/engine/capacity.ts:146`). The store sends `strips_allocated: 0`
-(`src/store/buildConfig.ts:145`), so **every individual event contributes zero
+(`src/store/buildConfig.ts:151`), so **every individual event contributes zero
 DE strip-hours** to the upfront feasibility estimate, and the gate at
 `src/engine/validation.ts:405` never fires. The ledger pre-allocates strips and
 the gate reports `feasibility-strip-hours`: 2161 strip-hours needed over 30
@@ -146,14 +173,14 @@ its own:
 
 1. **The regional cut override.** B6 is an ROC, one of
    `REGIONAL_CUT_TOURNAMENT_TYPES` (`src/engine/constants.ts:577-582`).
-   `buildConfig.ts:156-164` forces all-advance for Y14/Cadet/Junior/Div1, which
+   `buildConfig.ts:161-169` forces all-advance for Y14/Cadet/Junior/Div1, which
    the engine's own rule requires — `regional-cut-override`,
    `src/engine/validation.ts:256-267`, "regional tournament requires all-advance
    … cut_mode will be overridden to DISABLED". The ledger's factory does not
    apply it and cuts at 20%. **Here the app is the correct side**, and the
    ledger's 44 is measured on a config the engine itself flags.
 2. **DE staging.** The ledger derives `STAGED` from a REQUIRED video policy
-   (`scenarios.ts:51-53`); the store hardcodes `SINGLE_STAGE`
+   (`scenarios.ts:66-68`); the store hardcodes `SINGLE_STAGE`
    (`store.ts:231`). **Here the ledger is the correct side** — this is D7's
    named staging default.
 
@@ -181,32 +208,58 @@ comparison point and stays untouched here.
 apportioning it between the two defaults — the effect is over-determined, and at
 this capacity margin the packing is sensitive to either.
 
-## B8 — pinned 0, ledger 52
+## B8 — pinned 53, ledger 52
 
-**Cause**: identical to B2 — five `cut-on-team` BINDING errors on the Div1 team
-events, from the same missing team branch in `defaultConfigForId`.
+Full isolation record:
+[`specs/008-team-event-cut/b8-residual.md`](../008-team-event-cut/b8-residual.md);
+this is the short form.
 
-**Is `cut_mode=DISABLED` on team events really the same class of default as
-`de_mode` staging?** Yes, in origin: both are catalogue-derived per-competition
-defaults where the ledger's factory branches on `event_type` and the store does
-not, and both are `defaultConfigForId`'s to fix. But it is more serious in
-consequence than the defaults D7 names. `de_mode` and `strips_allocated` produce
-a *different* schedule; this one produces *no* schedule, because the app hands
-the engine a configuration the engine rejects outright. Two of the eight
-reference tournaments — including every tournament with team events — schedule
-nothing in the app today. It is admissible under FR-004a, and it should be the
-first of US4's defaults to land.
+**`cut_mode` is closed.** B8's five team events no longer gate under BINDING —
+008's `defaultCutForEntry` closed the same seam it closed on B2, and zero of
+B8's 53 events differ on `cut_mode` after the fix.
 
-**Evidence**: forcing `cut_mode = DISABLED` on B8's five team events alone takes
-the app path from 0 to 53.
+**The +1 is jointly caused by two of 004 US4's named defaults, and neither
+alone is enough — the inverse of B6, where either sufficed on its own.** The
+ledger derives `STAGED` `de_mode` from a REQUIRED video policy on an
+individual event (`__tests__/helpers/scenarios.ts:66-68`) where the store
+hardcodes `SINGLE_STAGE` (`src/store/store.ts:231`). The ledger pre-allocates
+`max(2, ceil(fencer_count / 7))` strips (`scenarios.ts:69`) where
+`buildConfig.ts:151` sends `0`. Swapping either default alone leaves the app
+path at 53 (`b8-residual.md` R2, R3). Swapping both together reaches 52, the
+ledger's exact count, and swapping every field that still differs — including
+the inert `latest_end` above — reaches the same 52 and the same set (R7), so
+the pair is minimal and exactly sufficient. B6's gap closed on either default
+independently. B8's closes only on their conjunction, and the contrast is
+legible here because both scenarios sit in the same document.
 
-**Closes in**: 004 US4. Note the pin does **not** simply become 52: with the
-team cut corrected the app reaches 53, one above the ledger, because B8's
-remaining defaults then favor the app. It is re-measured then, like every number
-here.
+**The set difference is exactly one event.** `JR-W-EPEE-IND` (182 fencers,
+video policy REQUIRED) is placed by the app and by no run that reaches 52 —
+the app's placed set is a strict superset of the ledger's, and nothing moves
+the other way. This was checked as a set, not inferred from the count, because
+B6 concealed offsetting churn of the same size. Two further runs isolate why
+the event falls out only at the margin: swapping both defaults on
+`JR-W-EPEE-IND` alone stays at 53, and swapping them on all 52 *other* events
+stays at 53 too (`b8-residual.md` N1, N2) — the event drops out only under a
+tournament-wide capacity re-pack, not from its own defaults or the rest of the
+field's alone.
 
-**Confidence**: high on the cause. The 53-versus-52 residual is unexplained and
-deliberately left so — it is US4's to measure, not 006's to predict.
+**The app is the *higher* count** because `strips_allocated: 0` and
+`SINGLE_STAGE` both understate DE strip-hour demand
+(`estimateCompetitionStripHours`, `src/engine/capacity.ts:146`), the same
+understatement B4 traces above. There it suppresses a feasibility gate. Here
+it buys one extra event.
+
+**Closes in**: 004 US4. The pin is **re-measured** then, not assumed to become
+52 — 52 is what `b8-residual.md`'s P1 gets when both defaults converge toward
+the ledger, and which side each default converges toward is US4's own
+decision. §B6 above already flags that the regional cut override must
+converge the *other* way, on the ledger's side, a constitution III change to
+the ledger's own recorded behavior.
+
+**Confidence**: high, and the residual is no longer unattributed. 008's
+isolation (`b8-residual.md`) accounts for the full 53-versus-52 gap as the
+conjunction of two named defaults, checked by field, by scope, and by set —
+see that file for the complete isolation table rather than a copy of it here.
 
 ## What would make any of this wrong
 
