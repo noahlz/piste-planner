@@ -326,6 +326,78 @@ described under "Global settings," rather than chasing each season in
   Completion) contradicts the runtime's ERROR-severity `SAME_DAY_VIOLATION` –
   resolve whichever way the day-end overrun entry above lands, but the doc and
   engine should say the same thing.
+## The sabre referee row can light no blocks at all
+
+*Surfaced by 004's US4 T067 on 2026-09-01, restoring the singular branch of the
+scorecard's highlight announcement. Recorded, not fixed — the repair is a
+referee-model change, and US4 does not open one.*
+
+On B1, hovering `refs:peak-sabre` announces **"Peak sabre referees: 0 blocks
+highlighted"** while the row itself reads 64. FR-029 says hovering a metric MUST
+highlight the blocks driving it, and here it highlights nothing.
+
+The cause is documented at `src/store/derived.ts:409-414` and is a missing
+field, not a bug in the selector. `RefRequirementsByDay` carries no
+sabre-specific peak time: `src/engine/refs.ts:97-99` sweeps the **total** demand
+for `peak_time` and sweeps sabre separately for the value, so the sabre row's
+day and its instant come from two different sweeps. `selectScorecardMetrics`
+uses that row's own `peak_time` as the closest instant available — the
+alternative, the total peak day's time, would light blocks on a day whose sabre
+peak is not the number being reported. On B1 after T061a's re-pack the sabre
+maximum of 64 is reached on days 0, 1 and 3, the first is day 0, and day 0's
+total `peak_time` is 480, a minute at which no sabre block on that day is open.
+
+The approximation has been in place since the metric was written. B1 is the
+first fixture where it visibly fails, and
+`__tests__/components/workbench/Scorecard.test.tsx` now pins the 0 as an
+expected string — which is the moment it stops being noticed. Closing it means
+`refs.ts` recording a per-weapon peak instant alongside the per-weapon value, so
+the row can name the blocks that actually produce its number.
+
+## The drift ledger's factory does not apply the store's per-type resolutions
+
+*Measured by 004's US4 T063a on 2026-09-01, when the app-path parity pins were
+re-measured. Unassigned and unnumbered — it needs a spec directory when it is
+picked up. It is the sole remaining owner of the last two FR-004a parity
+exceptions, so it is not optional cleanup: `appPathParity.test.ts` names it in
+B6's and B8's `closedBy`.*
+
+`__tests__/helpers/scenarios.ts`'s `buildCompetitions` derives `cut_mode` and
+`de_mode` **per event**, from the catalogue's category and video policy. Since
+004's US4 the store derives them **per tournament type** — `REGIONAL_CUT_OVERRIDES`
+in `buildConfig.ts`, and the per-type table in
+[`specs/004-p3-workbench-shell/data-model.md`](../../specs/004-p3-workbench-shell/data-model.md)
+(`AUTO` → `STAGED` at NAC, `SINGLE_STAGE` elsewhere; two referees per pool at
+NAC/SJCC/SYC, one elsewhere). The two paths now apply different rules, not the
+same rule at different stages, which is why no number can be tuned to close the
+gap. Measured field by field:
+
+| Field | Store, after US4 | Ledger factory | Events differing (B6 / B8) |
+|---|---|---|---:|
+| `cut_mode` / `cut_value` | regional all-advance override at ROC/RYC/RJCC | 20% cut by category | 18 / 0 |
+| `de_mode` | per-type table | `STAGED` when individual and video REQUIRED | 12 / 41 |
+| `ref_policy` | resolved `ONE` / `TWO` | unresolved `AUTO` | 54 / 53 |
+
+Adopting the store's rules in the factory would move the drift ledger's own
+recorded counts — B6 44 → 39 and B8 52 → 53 on the evidence of T063a's swap
+runs — so it is a **constitution III change to the ledger's own baseline**, and
+it needs its own snapshot review rather than a fixture edit. That is exactly
+why 004 US4 did not do it: `scenarios.ts` is the comparison point its own drift
+gate (T062) diffs against, and moving the baseline inside the story measuring
+against it would have destroyed the measurement.
+
+Two cautions for whoever picks it up:
+
+- **`ref_policy` is inert on placement but not on referee demand.** `AUTO` and
+  `TWO` both score two refs per pool (`src/engine/pools.ts:170-175`), so
+  swapping it moves no scheduled count — but it is why B6's referee columns
+  stay apart from the ledger's after US4
+  ([`drift-baseline.md` §T062](../../specs/004-p3-workbench-shell/drift-baseline.md)).
+- **The factory's independence from the store is deliberate.** 008's
+  [research.md D2](../../specs/008-team-event-cut/research.md) argues it, and it
+  is what let the parity check find the team-event bug at all. Converging the
+  *rules* is not the same as having the factory call the store's helpers, and
+  the argument against the latter still stands.
 
 ## Rail rebuild
 
@@ -360,6 +432,27 @@ Separate from the "gears" global-settings surface below. Hard policies (for
 example, no Vet Team and Vet Individual on the same day) are not adjustable
 here – the user overrides those by placing events manually and accepting the
 warning.
+
+## The Advanced panel re-implements the engine's referees-per-pool factor
+
+*Raised by 004's US4 T068 React review on 2026-09-01. Unassigned and
+unnumbered — it needs a spec directory when it is picked up, because the fix
+edits `src/engine/`.*
+
+`AdvancedPanel.tsx`'s `refereesPerPool` returns `policy === RefPolicy.ONE ? 1 :
+2`, a second copy of the factor `peakPoolRefDemand` scales its demand by
+(`src/engine/refs.ts:22`). The number the panel states as the type's applied
+default and the number the engine schedules against are therefore two
+independent answers, and the copy in the UI is invisible to the B1–B8 drift
+ledger — a change to the engine's factor moves every scenario's referee columns
+and leaves the panel stating the old value with a green suite.
+
+The fix is to export the factor from `src/engine/refs.ts` and have the panel
+read it. That edits the engine, so constitution III makes it a gated change with
+its own snapshot review, which is why T068 recorded it here rather than making
+it. Note that swapping it changes no *scheduled* count today — both `AUTO` and
+`TWO` already score two refs per pool — so the review is over the referee
+columns, not the placement counts.
 
 ## Global settings
 

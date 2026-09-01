@@ -1,4 +1,5 @@
 import { useStore } from '../../store/store.ts'
+import { resolveVideoStrips } from '../../store/typeDefaults.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -9,6 +10,7 @@ import { Lightbulb } from 'lucide-react'
 export function StripSetup() {
   const stripsTotal = useStore((s) => s.strips_total)
   const setStrips = useStore((s) => s.setStrips)
+  const tournamentType = useStore((s) => s.tournament_type)
   const videoStripsTotal = useStore((s) => s.video_strips_total)
   const setVideoStrips = useStore((s) => s.setVideoStrips)
   const suggestStripsFn = useStore((s) => s.suggestStrips)
@@ -46,7 +48,15 @@ export function StripSetup() {
           <div className="space-y-1">
             <Label className="text-xs"># with Video</Label>
             <NumberInput
-              value={videoStripsTotal}
+              // `NumberInput` has no unset state, so an unresolved `null` shows
+              // as the count the type resolves to and the first edit commits it
+              // as the organizer's own. This field does not distinguish unset
+              // from explicit — the `Default` marker and the way back to `null`
+              // are the Advanced panel's (T065, T068). What it must not do is
+              // show a different number from the one the panel a few rows up
+              // states and the engine schedules, which is why the resolution is
+              // `resolveVideoStrips` and not a local `?? 0`.
+              value={resolveVideoStrips(videoStripsTotal, tournamentType)}
               onChange={setVideoStrips}
               min={0}
               max={stripsTotal}

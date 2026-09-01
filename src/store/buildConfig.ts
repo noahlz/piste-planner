@@ -4,7 +4,7 @@ import type {
   Strip,
   TournamentConfig,
 } from '../engine/types.ts'
-import { DeStripRequirement } from '../engine/types.ts'
+import { DeStripRequirement, RefPolicy } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import {
   DAY_START_MINS,
@@ -25,6 +25,7 @@ import {
   REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
+import { TYPE_DEFAULTS, resolveVideoStrips } from './typeDefaults.ts'
 
 /**
  * Calendar-day spacing between scheduler-axis day windows (research.md D5).
@@ -49,14 +50,19 @@ export function buildTournamentConfig(
   config: TournamentConfig
   competitions: Competition[]
 } {
-  const strips = buildStrips(state.strips_total, state.video_strips_total)
+  // Resolved once into a local because two sites downstream need the resolved
+  // number, the strip list and `config.video_strips_total`. The rule itself
+  // lives in `resolveVideoStrips` (typeDefaults.ts), shared with the rail's two
+  // panels so the app cannot state one count and schedule another.
+  const videoStrips = resolveVideoStrips(state.video_strips_total, state.tournament_type)
+  const strips = buildStrips(state.strips_total, videoStrips)
 
   const config: TournamentConfig = {
     tournament_type: state.tournament_type,
     days_available: state.days_available,
     strips,
     strips_total: state.strips_total,
-    video_strips_total: state.video_strips_total,
+    video_strips_total: videoStrips,
     // Store's dayConfigs are clock axis (0-1439 within each day). scheduleAll
     // requires the scheduler axis instead — day d's window shifted by
     // d*DAY_AXIS_SPACING_MINS so no two days' windows overlap on the absolute
@@ -113,6 +119,12 @@ function buildCompetitions(
 ): Competition[] {
   const competitions: Competition[] = []
 
+  // The two per-event settings whose "unset" markers resolve against the
+  // tournament type (research D5, D6). Resolution happens here, on the copy
+  // travelling to the engine — `src/engine/pools.ts` never learns about
+  // tournaments (constitution I) and the store keeps its `AUTO`s (FR-036).
+  const typeDefaults = TYPE_DEFAULTS[state.tournament_type]
+
   for (const [id, overrides] of Object.entries(state.selectedCompetitions)) {
     const entry = findCompetition(id)
     if (!entry) continue
@@ -127,10 +139,17 @@ function buildCompetitions(
 
       // Store overrides
       fencer_count: overrides.fencer_count,
-      ref_policy: overrides.ref_policy,
+      // `AUTO` is the only value that follows the type; `ONE` and `TWO` are the
+      // organizer's own and beat the default (FR-037).
+      ref_policy:
+        overrides.ref_policy === RefPolicy.AUTO ? typeDefaults.ref_policy : overrides.ref_policy,
       cut_mode: overrides.cut_mode,
       cut_value: overrides.cut_value,
-      de_mode: overrides.de_mode,
+      // Same rule for DE mode (research D6): the store's setting carries an
+      // `'AUTO'` the engine's `DeMode` has no member for, and resolving it here
+      // is what narrows the union — an explicit SINGLE_STAGE or STAGED passes
+      // through as itself.
+      de_mode: overrides.de_mode === 'AUTO' ? typeDefaults.de_mode : overrides.de_mode,
       de_video_policy: overrides.de_video_policy,
       use_single_pool_override: overrides.use_single_pool_override,
 
@@ -148,7 +167,16 @@ function buildCompetitions(
       flighted: false,
       flighting_group_id: null,
       is_priority: false,
-      strips_allocated: 0,
+      // The fourth seam parity-exceptions.md names. A `0` here zeroes the DE
+      // term of `estimateCompetitionStripHours`
+      // (`strips_allocated × de_duration / 60`, src/engine/capacity.ts:146),
+      // so every individual event contributed nothing to the upfront
+      // feasibility estimate and the gate at src/engine/validation.ts:405
+      // never fired on the app path. This is the ledger factory's own
+      // pre-allocation (`__tests__/helpers/scenarios.ts:69`) — a default, not
+      // a decision: the accepted-flighting loop below overwrites it with the
+      // organizer's explicit allocation.
+      strips_allocated: Math.max(2, Math.ceil(overrides.fencer_count / 7)),
 
       // Per-event strip budget overrides — always null until UI exposes them
       max_pool_strip_pct_override: null,

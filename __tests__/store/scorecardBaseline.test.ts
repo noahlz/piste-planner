@@ -30,37 +30,61 @@ import type { ScenarioId } from '../../src/data/tournaments.ts'
  * `RefRequirementsByDay.peak_total_refs` / `peak_saber_refs` maxima across
  * B5's three days; `strips:utilization` is 52348 used strip-minutes over
  * 151200 available (3 days x 60 strips x 840 minutes); `days:balance-spread`
- * is day 0's 44.5595…% less day 1's 26.0436…%; the 13 WARN findings are 12
- * `video-dead-config` validation errors plus one day-level `STRIP_CONTENTION`
- * analysis warning.
+ * is day 0's 36.0238…% less day 2's 32.5595…%; the 12 WARN findings are 12
+ * `video-dead-config` validation errors, with `analysis.warnings` empty.
+ *
+ * 004 US4 T063 — five entries moved: finish:tournament 972 to 872, day 0 972
+ * to 872, day 1 867 to 872, days:balance-spread 18.5158… to 3.4642… and
+ * findings:WARN 13 to 12. T061a's cause, alone. B5 is SJCC: its D6 de_mode
+ * default is SINGLE_STAGE, the value the store hardcoded before; its D5
+ * ref_policy resolves to TWO, which is what AUTO already scored; and
+ * applyPreset sets its 12 video strips explicitly, so D7 has no null to fill.
+ * Pre-allocated strips_allocated re-packed B5 from an uneven day spread onto
+ * four events per day, which moved which events sit where, removed the one
+ * late pool start that produced 972, flattened the balance spread and cleared
+ * the day-level contention warning. `__tests__/store/scorecardMetrics.test.ts`
+ * carries the per-metric account; the per-scenario one is in
+ * `specs/004-p3-workbench-shell/drift-baseline.md` §T062.
  */
 const B5_BASELINE: ScorecardBaseline = {
-  'finish:tournament': 972,
+  'finish:tournament': 872,
   'refs:peak-total': 116,
-  'finish:day:0': 972,
-  'finish:day:1': 867,
+  'finish:day:0': 872,
+  'finish:day:1': 872,
   'finish:day:2': 872,
   'refs:peak-sabre': 56,
   'strips:utilization': 34.62169312169312,
-  'days:balance-spread': 18.51587301587302,
+  'days:balance-spread': 3.4642857142857153,
   'findings:ERROR': 0,
-  'findings:WARN': 13,
+  'findings:WARN': 12,
   'findings:INFO': 0,
 }
 
-/** B1 (the boot preset): 4 days, 80 strips, 24 events, all placed. */
+/**
+ * B1 (the boot preset): 4 days, 80 strips, 24 events, all placed.
+ *
+ * 004 US4 T063 — every entry but `findings:ERROR` and `findings:INFO` moved.
+ * B1 is NAC, so two of US4's four changes reach it. D6 resolves all 24
+ * competitions to STAGED, which splits each DE into a prelims and a
+ * round-of-16 block and retires the twelve `video-dead-config` WARN that only
+ * fire on REQUIRED + SINGLE_STAGE — findings:WARN 16 to 4, the four remaining
+ * being day-level `STRIP_CONTENTION`. T061a's pre-allocated strips re-pack the
+ * four days, moving every finish and both ref peaks. D5 does not reach it: NAC
+ * resolves ref_policy to TWO, which `resolveRefsPerPool` already scored the
+ * same as AUTO. Neither does D7: applyPreset sets B1's video strips.
+ */
 const B1_BASELINE: ScorecardBaseline = {
-  'finish:tournament': 1037,
-  'refs:peak-total': 220,
-  'finish:day:0': 962,
-  'finish:day:1': 1037,
-  'finish:day:2': 977,
-  'finish:day:3': 943,
-  'refs:peak-sabre': 76,
-  'strips:utilization': 41.36755952380952,
-  'days:balance-spread': 9.836309523809533,
+  'finish:tournament': 1050,
+  'refs:peak-total': 194,
+  'finish:day:0': 1050,
+  'finish:day:1': 1025,
+  'finish:day:2': 980,
+  'finish:day:3': 995,
+  'refs:peak-sabre': 64,
+  'strips:utilization': 35.456845238095234,
+  'days:balance-spread': 10.59672619047619,
   'findings:ERROR': 0,
-  'findings:WARN': 16,
+  'findings:WARN': 4,
   'findings:INFO': 12,
 }
 
@@ -149,32 +173,53 @@ describe('scorecardBaseline — capture', () => {
 describe('scorecardBaseline — frozen against edits', () => {
   /**
    * Halving the strips halves the strip-minute denominator, so utilization
-   * goes 34.6216…% to 69.2433…% and the spread 18.5158 to 37.0317. The
+   * goes 34.6216…% to 69.2433…% and the spread 3.4642 to 6.9285. The
    * baseline reads the pre-edit numbers. Without the live assertion this test
    * would pass against an implementation that never captured anything and
    * against one that recaptured an unchanged value.
+   *
+   * 004 US4 T063 — only the spread moved, 37.0317… to 6.9285…, and it is the
+   * B5 baseline spread's own halving carried through. T061a's cause, by way of
+   * the flatter day spread recorded on B5_BASELINE above.
    */
   it('setStrips moves the live metrics and leaves the baseline where it was', () => {
     loadPreset('B5')
     useStore.getState().setStrips(30)
 
     expect(liveValue('strips:utilization')).toBeCloseTo(69.24338624338624, 10)
-    expect(liveValue('days:balance-spread')).toBeCloseTo(37.03174603174604, 10)
+    expect(liveValue('days:balance-spread')).toBeCloseTo(6.928571428571431, 10)
     expectBaseline(useStore.getState().scorecardBaseline, B5_BASELINE)
   })
 
   /**
-   * CDT-W-FOIL-IND is B5's latest-finishing event at 972. Cutting it from 70
-   * fencers to 20 shortens its pools and DE, and the tournament finish falls
-   * back to the 872 shared by the next three events.
+   * Cutting CDT-M-EPEE-IND from 70 fencers to 20 shortens its pools and DE, so
+   * day 2's finish falls and `strips:utilization` goes 34.6216…% to 32.1296…%.
+   *
+   * 004 US4 T067 — the edit was CDT-W-FOIL-IND until T063's re-pack made this
+   * case prove nothing. CDT-W-FOIL-IND used to be B5's unique latest-finishing
+   * event at 972, so cutting it was what moved the tournament finish, 972 down
+   * to the 872 shared by the next three. After T061a it finishes at 867 on day
+   * 2 and 872 is already the finish before the edit, which left both finish
+   * assertions vacuously true while the case's **name** went on promising a
+   * movement — and the name is what the next reader greps for.
+   *
+   * The edit now targets day 2's argmax, CDT-M-EPEE-IND at 872. Cutting it
+   * drops `finish:day:2` to CDT-W-FOIL-IND's 867, a real movement against the
+   * 872 the frozen baseline still holds. `finish:tournament` and
+   * `finish:day:0` are kept at 872 deliberately: days 0 and 1 still finish
+   * there, so together the three show a day-level movement that does not reach
+   * the tournament row — and all four assertions still guard the baseline's
+   * independence from the live metrics.
    */
   it('updateCompetition moves the live finish and leaves the baseline where it was', () => {
     loadPreset('B5')
-    useStore.getState().updateCompetition('CDT-W-FOIL-IND', { fencer_count: 20 })
+    useStore.getState().updateCompetition('CDT-M-EPEE-IND', { fencer_count: 20 })
 
+    // The movement: B5_BASELINE holds 872 for this same id.
+    expect(liveValue('finish:day:2')).toBe(867)
     expect(liveValue('finish:tournament')).toBe(872)
     expect(liveValue('finish:day:0')).toBe(872)
-    expect(liveValue('strips:utilization')).toBeCloseTo(32.929232804232804, 10)
+    expect(liveValue('strips:utilization')).toBeCloseTo(32.12962962962963, 10)
     expectBaseline(useStore.getState().scorecardBaseline, B5_BASELINE)
   })
 
@@ -193,8 +238,10 @@ describe('scorecardBaseline — frozen against edits', () => {
     useStore.getState().setStrips(30)
     runScheduleAll()
 
+    // 004 US4 T063 — finish:tournament 1157 to 1007, T061a's re-pack of the
+    // 9 events this 30-strip run places. The other three numbers did not move.
     expect(Object.keys(useStore.getState().placements)).toHaveLength(9)
-    expect(liveValue('finish:tournament')).toBe(1157)
+    expect(liveValue('finish:tournament')).toBe(1007)
     expect(liveValue('refs:peak-total')).toBe(68)
     expect(liveValue('findings:WARN')).toBe(21)
     expectBaseline(useStore.getState().scorecardBaseline, B5_BASELINE)
@@ -209,17 +256,30 @@ describe('scorecardBaseline — frozen against edits', () => {
     expectBaseline(useStore.getState().scorecardBaseline, B5_BASELINE)
   })
 
+  /**
+   * 004 US4 T063 — this case needed a new vehicle. It used to move
+   * CDT-W-FOIL-IND to `{ day: 2, start_time: 480 }` and read day 0's finish
+   * dropping 972 to 872, with the explicit `start_time` load-bearing because
+   * CDT-W-FOIL-IND was the one B5 event the scheduler started late at 585.
+   * T061a's re-pack put CDT-W-FOIL-IND on **day 2 at 480 already**, so that
+   * exact update became a no-op and every assertion under it passed against a
+   * store nothing had changed — the vacuity shape the old comment was written
+   * to avoid, arriving by a different route.
+   *
+   * The replacement is still one hand placement and still moves a live metric:
+   * day 3 is outside `days_available`, so `scorecardBlocks` drops the event's
+   * two segments and `strips:utilization` falls 34.6216…% to 31.7764…%. That
+   * figure is cross-pinned by `__tests__/store/scorecardMetrics.test.ts`,
+   * which measures the same move. The finishes are asserted unmoved rather
+   * than dropped: B5's finish column ties four ways at 872 now, so no single
+   * placement can move it, and saying so is what keeps the next reader from
+   * mistaking a tie for a broken skip.
+   */
   it('is not moved by a hand placement either', () => {
     loadPreset('B5')
-    useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 2, start_time: 480 })
+    useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 3 })
 
-    // CDT-W-FOIL-IND leaves day 0, so day 0's finish drops to the 872 its
-    // remaining events reach. `start_time: 480` is load-bearing and asserted
-    // rather than left implicit: CDT-W-FOIL-IND's scheduled pool_start is 585,
-    // the one B5 event the scheduler starts late, so moving it *without* the
-    // earlier start leaves the tournament finish at 972 rather than 872. An
-    // unrequested input field that shifts a value the case only reasons about
-    // is the vacuity shape this feature has already been bitten by.
+    expect(liveValue('strips:utilization')).toBeCloseTo(31.776455026455025, 10)
     expect(liveValue('finish:day:0')).toBe(872)
     expect(liveValue('finish:tournament')).toBe(872)
     expectBaseline(useStore.getState().scorecardBaseline, B5_BASELINE)
@@ -249,7 +309,7 @@ describe('scorecardBaseline — loading another preset re-arms it', () => {
     // B5's ids for days it has and B1 does not would linger in a merged
     // baseline; B1 has four days, so it carries a finish:day:3 B5 never had.
     const baseline = useStore.getState().scorecardBaseline as ScorecardBaseline
-    expect(baseline['finish:day:3']).toBe(943)
+    expect(baseline['finish:day:3']).toBe(995) // 004 US4 T063: was 943, see B1_BASELINE
     expect(baseline['finish:tournament']).not.toBe(B5_BASELINE['finish:tournament'])
   })
 
@@ -377,31 +437,34 @@ describe('scorecardBaseline — never serialized', () => {
 // The failure case D9 accepts
 // ──────────────────────────────────────────────
 
-describe('scorecardBaseline — a preset that cannot schedule', () => {
+describe('scorecardBaseline — a schedule with nothing placed', () => {
   /**
-   * B2 places nothing: its team events reach the engine with a PERCENTAGE
-   * cut, which `validateConfig` reports as a BINDING error
-   * (`__tests__/store/appPathParity.test.ts` pins B2 at 0).
+   * The capture rule's edge case: a tournament that places nothing still
+   * gets a baseline, over an empty placement map, rather than staying null.
    *
-   * **Design brief §1 gets the mechanism wrong here.** It says `scheduleAll`
-   * *throws* for B2 and B8, so `runScheduleAll` returns early
-   * (`src/store/runActions.ts:20`), `setPlacementsFromAuto` is never called
-   * and the baseline stays null. Measured: `scheduleAll` does not throw for
-   * either — `scheduleAllConcurrent` returns an **empty schedule** after its
-   * BINDING validation pass (`src/engine/concurrentScheduler.ts:186-204`),
-   * exactly as `appPathParity.test.ts`'s B2 note records. `runScheduleAll`
-   * therefore reaches `setPlacementsFromAuto({})`, and the brief's own
+   * Until 008 landed, B2 was a live vehicle for this: its team events
+   * reached the engine with a PERCENTAGE cut, which `validateConfig`
+   * reported as a BINDING error, and `scheduleAllConcurrent` returned an
+   * **empty schedule** after that validation pass rather than throwing
+   * (`src/engine/concurrentScheduler.ts:186-204` — the design brief's §1 says
+   * `scheduleAll` throws for B2 and B8 and `runScheduleAll` returns early at
+   * `src/store/runActions.ts:20`; measured, it does not, for either preset).
+   * `runScheduleAll` reached `setPlacementsFromAuto({})` on its own, and the
    * capture rule — `loadedPresetId !== null && scorecardBaseline === null` —
-   * fires on an empty placement map.
+   * fired on that empty map.
    *
-   * So the baseline for B2 is the metrics of a tournament with nothing on
-   * it. That is what the rule produces and what this test pins; the brief's
-   * "keeps `scorecardBaseline === null`" prose does not describe it. Backlog
-   * item 008 is where B2/B8's zero placements get fixed, and this test is
-   * what a later fix has to move.
+   * 008's team `cut_mode` fix means B2 now schedules 24 events
+   * (`__tests__/store/appPathParity.test.ts` pins it there), so the preset
+   * that used to demonstrate this edge case no longer does. This case builds
+   * the empty state directly instead: `loadPreset('B2')` still loads B2's
+   * competitions and fencer counts, but `setPlacementsFromAuto({})` is
+   * called by hand in place of `runScheduleAll()`'s own scheduling pass,
+   * landing the store in the same state a failed-to-schedule preset used to
+   * reach unassisted.
    */
   it('captures a baseline over zero placements when the preset schedules nothing', () => {
-    loadPreset('B2')
+    applyPreset('B2')
+    useStore.getState().setPlacementsFromAuto({})
 
     expect(Object.keys(useStore.getState().placements)).toHaveLength(0)
     const baseline = useStore.getState().scorecardBaseline

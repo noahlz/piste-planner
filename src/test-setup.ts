@@ -19,6 +19,15 @@ globalThis.IntersectionObserver = class {
   get thresholds() { return [] as number[] }
 } as unknown as typeof IntersectionObserver
 
+// jsdom does not implement Element.prototype.scrollIntoView. Radix's Select
+// calls it on the active item the moment its listbox opens
+// (@radix-ui/react-select select.tsx:590), so any test that opens a Select
+// throws a TypeError out of a commit effect without this. A no-op is enough —
+// nothing asserts on scroll position.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function scrollIntoView() {}
+}
+
 // Node ≥24 ships a built-in global localStorage/sessionStorage. Under vitest's
 // jsdom environment globalThis === window, and Node's accessor is already on
 // globalThis before jsdom installs its own — so jsdom's real Storage never

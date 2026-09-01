@@ -1,47 +1,20 @@
-import { useState, type ReactNode } from 'react'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { TournamentSetup } from '../sections/TournamentSetup.tsx'
 import { StripSetup } from '../sections/StripSetup.tsx'
 import { CompetitionMatrix } from '../sections/CompetitionMatrix.tsx'
 import { FencerCounts } from '../sections/FencerCounts.tsx'
 import { CompetitionOverrides } from '../sections/CompetitionOverrides.tsx'
 import { PoolDurationSettings } from '../sections/PoolDurationSettings.tsx'
-
-interface RailPanelProps {
-  heading: string
-  defaultOpen?: boolean
-  children: ReactNode
-}
-
-/** One collapsible panel. The trigger's accessible name is the heading,
- *  present in the DOM whether the panel is open or closed — Radix only
- *  unmounts the content (S2-contract.md §Rail panels). */
-function RailPanel({ heading, defaultOpen = false, children }: RailPanelProps) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <Collapsible open={open} onOpenChange={setOpen} className="border-b">
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm font-semibold text-foreground hover:bg-foreground/5"
-        >
-          <ChevronRight
-            className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')}
-          />
-          {heading}
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="px-3 pb-3">{children}</CollapsibleContent>
-    </Collapsible>
-  )
-}
+import { RailPanel } from './RailPanel.tsx'
+import { AdvancedPanel } from './AdvancedPanel.tsx'
 
 /**
  * The left rail: five collapsible panels over existing section components,
- * mounted unmodified (FR-004, S2-contract.md §Rail panels). Scrolls
- * independently of the center.
+ * mounted unmodified (FR-004, S2-contract.md §Rail panels), plus the Advanced
+ * panel. Scrolls independently of the center.
+ *
+ * `AdvancedPanel` renders its own `RailPanel` rather than being wrapped here,
+ * because it supplies that panel's `summary` as well as its content. It stays
+ * last, so tab order matches the visual order it has always had.
  */
 export function Rail() {
   return (
@@ -64,6 +37,7 @@ export function Rail() {
       <RailPanel heading="Pool durations">
         <PoolDurationSettings />
       </RailPanel>
+      <AdvancedPanel />
     </aside>
   )
 }
