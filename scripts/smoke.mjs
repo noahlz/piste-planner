@@ -381,6 +381,8 @@ log('NAC Cadet/Junior template applied')
 
 await page.getByRole('button', { name: 'Suggest' }).first().click()
 await page.waitForTimeout(100)
+const teamStrips = await page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
+log('NAC Cadet/Junior suggested strips =', teamStrips)
 
 const teamGen = page.getByRole('button', { name: 'Auto-schedule all' })
 if (await teamGen.isDisabled()) {
@@ -397,11 +399,16 @@ log('NAC Cadet/Junior schedule table rows =', teamRowCount)
 // Measured against the running app 2026-08-31 by running this file's exact
 // sequence (Presets… → NAC Cadet/Junior → Suggest → Auto-schedule all →
 // Schedule radio → count [data-schedule-row]) twice in a row; both runs
-// reported 15 of the template's 24 events placed (Suggest set 15 strips —
-// the shortfall is a strip-capacity limit on this template, not a
-// regression). Before this feature's fix this count was 0: TEAM entries
-// carried a percentage cut, cut-on-team fired BINDING, and
-// scheduleAllConcurrent returned an empty schedule.
+// reported 15 of the template's 24 events placed at 39 suggested strips (the
+// shortfall is a strip-capacity limit on this template, not a regression —
+// baseline.md's fresh-store measurement of Suggest for this template also
+// recorded 39). This count is measured at this point in the driver's
+// accumulated session state — after the ROC template, the fencer-count edit
+// to 99, and the share round-trip — not from a fresh boot, so it need not
+// match a fresh-store after-column measured elsewhere (e.g. T019's handoff).
+// Before this feature's fix this count was 0: TEAM entries carried a
+// percentage cut, cut-on-team fired BINDING, and scheduleAllConcurrent
+// returned an empty schedule.
 if (teamRowCount !== 15) {
   throw new Error(`NAC Cadet/Junior schedule table rendered ${teamRowCount} rows, expected 15`)
 }
