@@ -1,6 +1,7 @@
 import { useStore } from '../../store/store.ts'
 import { findCompetition } from '../../engine/catalogue.ts'
-import { DEFAULT_CUT_BY_CATEGORY, DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../engine/constants.ts'
+import { DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../engine/constants.ts'
+import { defaultCutForEntry } from '../../store/competitionDefaults.ts'
 import { CutMode, DeMode, VideoPolicy } from '../../engine/types.ts'
 import { competitionLabel } from '../competitionLabels.ts'
 import { DefaultLabel } from '../common/DefaultLabel.tsx'
@@ -138,7 +139,7 @@ export function CompetitionOverrides() {
                     <DefaultLabel
                       isDefault={
                         entry
-                          ? config.cut_mode === DEFAULT_CUT_BY_CATEGORY[entry.category].mode
+                          ? config.cut_mode === defaultCutForEntry(entry).mode
                           : false
                       }
                     />
@@ -165,8 +166,8 @@ export function CompetitionOverrides() {
                         <DefaultLabel
                           isDefault={
                             entry
-                              ? config.cut_mode === DEFAULT_CUT_BY_CATEGORY[entry.category].mode &&
-                                config.cut_value === DEFAULT_CUT_BY_CATEGORY[entry.category].value
+                              ? config.cut_mode === defaultCutForEntry(entry).mode &&
+                                config.cut_value === defaultCutForEntry(entry).value
                               : false
                           }
                         />
