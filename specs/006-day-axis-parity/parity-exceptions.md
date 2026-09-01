@@ -16,6 +16,10 @@ ledger's exact count, and B8 re-measured from 0 to 53, one above the ledger's
 amendment is marked where it applies rather than the document rewritten as if
 006 had known. Full isolation record:
 [`specs/008-team-event-cut/b8-residual.md`](../008-team-event-cut/b8-residual.md).
+Every `scenarios.ts` and `buildConfig.ts` citation in this document was
+re-verified against the tree on 2026-08-31, after 008's T014 inserted a
+15-line comment above `buildCompetitions` (`62be896692`) and shifted every
+line number below it — checked line by line, not carried forward on trust.
 
 ## The verdict first
 
@@ -74,12 +78,12 @@ returns.
 
 Two files build a `Competition` from the same catalogue entry and disagree:
 
-| | Store (`src/store/store.ts:217-235`, `src/store/buildConfig.ts:110-151`) | Ledger factory (`__tests__/helpers/scenarios.ts:29-57`) |
+| | Store (`src/store/store.ts:217-235`, `src/store/buildConfig.ts:110-151`) | Ledger factory (`__tests__/helpers/scenarios.ts:44-72`) |
 |---|---|---|
-| `cut_mode` for a TEAM event — **closed by 008** | `event_type === TEAM` branch in `defaultCutForEntry` (`src/store/competitionDefaults.ts`) | `CutMode.DISABLED` / 100 when `isTeam` (`scenarios.ts:35-37`) |
-| `cut_mode` at a regional type | `REGIONAL_CUT_OVERRIDES` applied (`buildConfig.ts:156-164`) | not applied |
-| `de_mode` | hardcoded `SINGLE_STAGE` (`store.ts:231`) | `STAGED` when individual and video REQUIRED (`scenarios.ts:51-53`) |
-| `strips_allocated` | `0` (`buildConfig.ts:145`) | `max(2, ceil(fencer_count / 7))` (`scenarios.ts:54`) |
+| `cut_mode` for a TEAM event — **closed by 008** | `event_type === TEAM` branch in `defaultCutForEntry` (`src/store/competitionDefaults.ts`) | `CutMode.DISABLED` / 100 when `isTeam` (`scenarios.ts:49-52`) |
+| `cut_mode` at a regional type | `REGIONAL_CUT_OVERRIDES` applied (`buildConfig.ts:161-168`) | not applied |
+| `de_mode` | hardcoded `SINGLE_STAGE` (`store.ts:231`) | `STAGED` when individual and video REQUIRED (`scenarios.ts:66-68`) |
+| `strips_allocated` | `0` (`buildConfig.ts:151`) | `max(2, ceil(fencer_count / 7))` (`scenarios.ts:69`) |
 | `latest_end` | `Infinity` (`buildConfig.ts:144`) | `9999` (`scenarios.ts` `makeCompetition` default) |
 
 research.md D7 names `de_mode` and `strips_allocated`. The `cut_mode` for a
@@ -123,7 +127,7 @@ ledger is stricter" would have been the wrong conclusion.
 **Cause**: `estimateCompetitionStripHours` computes a SINGLE_STAGE event's DE
 strip-hours as `strips_allocated × de_duration / 60`
 (`src/engine/capacity.ts:146`). The store sends `strips_allocated: 0`
-(`src/store/buildConfig.ts:145`), so **every individual event contributes zero
+(`src/store/buildConfig.ts:151`), so **every individual event contributes zero
 DE strip-hours** to the upfront feasibility estimate, and the gate at
 `src/engine/validation.ts:405` never fires. The ledger pre-allocates strips and
 the gate reports `feasibility-strip-hours`: 2161 strip-hours needed over 30
@@ -169,14 +173,14 @@ its own:
 
 1. **The regional cut override.** B6 is an ROC, one of
    `REGIONAL_CUT_TOURNAMENT_TYPES` (`src/engine/constants.ts:577-582`).
-   `buildConfig.ts:156-164` forces all-advance for Y14/Cadet/Junior/Div1, which
+   `buildConfig.ts:161-168` forces all-advance for Y14/Cadet/Junior/Div1, which
    the engine's own rule requires — `regional-cut-override`,
    `src/engine/validation.ts:256-267`, "regional tournament requires all-advance
    … cut_mode will be overridden to DISABLED". The ledger's factory does not
    apply it and cuts at 20%. **Here the app is the correct side**, and the
    ledger's 44 is measured on a config the engine itself flags.
 2. **DE staging.** The ledger derives `STAGED` from a REQUIRED video policy
-   (`scenarios.ts:51-53`); the store hardcodes `SINGLE_STAGE`
+   (`scenarios.ts:66-68`); the store hardcodes `SINGLE_STAGE`
    (`store.ts:231`). **Here the ledger is the correct side** — this is D7's
    named staging default.
 
@@ -217,9 +221,9 @@ B8's 53 events differ on `cut_mode` after the fix.
 **The +1 is jointly caused by two of 004 US4's named defaults, and neither
 alone is enough — the inverse of B6, where either sufficed on its own.** The
 ledger derives `STAGED` `de_mode` from a REQUIRED video policy on an
-individual event (`__tests__/helpers/scenarios.ts:51-53`) where the store
+individual event (`__tests__/helpers/scenarios.ts:66-68`) where the store
 hardcodes `SINGLE_STAGE` (`src/store/store.ts:231`). The ledger pre-allocates
-`max(2, ceil(fencer_count / 7))` strips (`scenarios.ts:54`) where
+`max(2, ceil(fencer_count / 7))` strips (`scenarios.ts:69`) where
 `buildConfig.ts:151` sends `0`. Swapping either default alone leaves the app
 path at 53 (`b8-residual.md` R2, R3). Swapping both together reaches 52, the
 ledger's exact count, and swapping every field that still differs — including
