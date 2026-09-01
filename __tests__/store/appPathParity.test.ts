@@ -52,7 +52,7 @@ interface ParityException {
  * paths have not converged on; a day-axis difference is a contract violation,
  * not an exception (contracts/day-axis.md C5).
  *
- * All four trace to the same seam: `defaultConfigForId`
+ * All three trace to the same seam: `defaultConfigForId`
  * (`src/store/store.ts:217-235`) and `buildConfig.ts`'s `strips_allocated: 0`
  * (`src/store/buildConfig.ts:145`) build a competition differently from the
  * ledger's factory (`__tests__/helpers/scenarios.ts:34-54`). Converging them
@@ -60,26 +60,6 @@ interface ParityException {
  * scope (spec.md "Out of Scope").
  */
 const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
-  /**
-   * The app places NOTHING for B2. `scheduleAllConcurrent` does not throw —
-   * it returns an empty schedule after its BINDING validation pass finds
-   * ERROR-severity findings (`src/engine/concurrentScheduler.ts:186-204`).
-   *
-   * Six errors, one per Cadet team event, all `cut-on-team`
-   * (`src/engine/validation.ts:158`): the store's `defaultConfigForId` reads
-   * `DEFAULT_CUT_BY_CATEGORY[category]` with no `event_type === TEAM` branch
-   * (`src/store/store.ts:220,229-230`), so a team event arrives carrying the
-   * category's PERCENTAGE/20 cut. The ledger's factory has that branch
-   * (`__tests__/helpers/scenarios.ts:35-37`) and sends DISABLED/100.
-   */
-  B2: {
-    appPath: 0,
-    ledger: 24,
-    cause: 'team events reach the engine with a PERCENTAGE cut, which is a BINDING validation ERROR (cut-on-team)',
-    evidence: 'forcing cut_mode=DISABLED on B2\'s six team events alone, changing nothing else, takes the app path from 0 to 24 — the ledger\'s exact count',
-    closedBy: '004 US4 (per-type competition defaults)',
-  },
-
   /**
    * B4 inverts: the app places 16 where the ledger places 0. The ledger is
    * not "stricter" — its feasibility gate simply sees demand the app's does
@@ -157,7 +137,12 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
    * is re-measured then, like every other number here.
    */
   B8: {
-    appPath: 0,
+    // 53 is 008's own measurement (T004), matching 006's forcing-run below.
+    // The cause/evidence/closedBy prose beneath this line still describes
+    // that forcing run, not this feature's code — T009 measures what
+    // accounts for the +1 under 008's fix and T010 rewrites this entry with
+    // that evidence.
+    appPath: 53,
     ledger: 52,
     cause: 'team events reach the engine with a PERCENTAGE cut, which is a BINDING validation ERROR (cut-on-team) — the same default B2 fails on',
     evidence: 'forcing cut_mode=DISABLED on B8\'s five team events alone takes the app path from 0 to 53, one above the ledger\'s 52',
@@ -167,12 +152,12 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
 
 /**
  * What the app path places today, measured (T011), one number per scenario.
- * Four equal their ledger count; four are the FR-004a exceptions above and
- * are gated exactly as the other four are — a different pinned number, never
+ * Five equal their ledger count; three are the FR-004a exceptions above and
+ * are gated exactly as the other five are — a different pinned number, never
  * an unasserted one.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 0, B3: 24, B4: 16, B5: 12, B6: 43, B7: 18, B8: 0,
+  B1: 24, B2: 24, B3: 24, B4: 16, B5: 12, B6: 43, B7: 18, B8: 53,
 }
 
 describe('app-path parity with the drift ledger (contracts/day-axis.md C5)', () => {
