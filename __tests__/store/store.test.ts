@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import { TournamentType, Weapon } from '../../src/engine/types.ts'
+import { Category, TournamentType, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
@@ -131,6 +131,12 @@ describe('competitionSlice', () => {
   // Known catalogue IDs for testing — Cadet Men's Foil and Junior Women's Epee
   const CADET_MF = 'CDT-M-FOIL-IND'
   const JUNIOR_WE = 'JR-W-EPEE-IND'
+  // Cadet Men's Foil TEAM — deliberately not a Veteran team entry. Veteran's
+  // category default is already DISABLED/100, so it would pass this
+  // assertion whether or not the store special-cased team events at all.
+  // Cadet's category default is PERCENTAGE/20, so this only passes if
+  // defaultConfigForId actually applies the team override (008).
+  const CADET_MF_TEAM = 'CDT-M-FOIL-TEAM'
 
   describe('initial state', () => {
     it('selectedCompetitions is an empty object', () => {
@@ -171,6 +177,20 @@ describe('competitionSlice', () => {
       const juniorConfig = state.selectedCompetitions[JUNIOR_WE]
       expect(juniorConfig).toBeDefined()
       expect(juniorConfig.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[juniorEntry.category])
+    })
+
+    it('defaults a team competition to all-advance regardless of its category default', () => {
+      useStore.getState().selectCompetitions([CADET_MF_TEAM])
+
+      const state = useStore.getState()
+      const teamConfig = state.selectedCompetitions[CADET_MF_TEAM]
+
+      expect(teamConfig).toBeDefined()
+      // Cadet's own category default is PERCENTAGE/20 (asserted above for the
+      // individual entry) — the team override must win over it.
+      expect(DEFAULT_CUT_BY_CATEGORY[Category.CADET].mode).toBe('PERCENTAGE')
+      expect(teamConfig.cut_mode).toBe('DISABLED')
+      expect(teamConfig.cut_value).toBe(100)
     })
 
     it('skips unknown catalogue IDs without error', () => {

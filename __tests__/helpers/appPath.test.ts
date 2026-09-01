@@ -12,11 +12,11 @@ import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
  * clock-axis conversion back) moved these numbers off the baseline.md
  * pre-fix column. Each entry below carries the pre-fix number in a comment
  * so the before/after stays legible — per baseline.md's own count, that was
- * the whole defect this feature exists to fix. B2 and B8 are unchanged at 0:
- * both hit an upfront validation gate over a `de_mode`/video-policy default
- * mismatch unrelated to the day axis (research.md D7), the same gate that
- * already produced 0 before this feature. T012 is where that gets a formal
- * FR-004a classification.
+ * the whole defect this feature exists to fix. B2 and B8 now place their
+ * ledger counts too, but not from this feature's axis fix — feature
+ * 008-team-event-cut gave team events the all-advance `cut_mode` the engine
+ * requires, closing the last BINDING error that zeroed both
+ * (specs/008-team-event-cut/).
  */
 describe('runAppPath', () => {
   // Measured post-fix on 2026-08-31 via
@@ -25,13 +25,13 @@ describe('runAppPath', () => {
   // captured at the commit this feature branched from) in comments.
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
-    B2: { selected: 24, placed: 0 }, // pre-fix: 0 (unchanged — D7 exception, not the day axis)
+    B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
     B4: { selected: 30, placed: 16 }, // pre-fix: 8
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
     B6: { selected: 54, placed: 43 }, // pre-fix: 19
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
-    B8: { selected: 53, placed: 0 }, // pre-fix: 0 (unchanged — D7 exception, not the day axis)
+    B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
   }
 
   it.each(SCENARIO_IDS)('reproduces baseline.md\'s app-path numbers for %s', (id) => {
@@ -63,7 +63,7 @@ describe('runAppPath', () => {
   })
 
   it('does not let one scenario contaminate the next', () => {
-    // B8 (53 selected, 0 placed) run before B1 must not shift B1's own numbers.
+    // B8 (53 selected, 53 placed) run before B1 must not shift B1's own numbers.
     runAppPath('B8')
     const b1 = runAppPath('B1')
     expect(b1.selectedCount).toBe(BASELINE.B1.selected)
