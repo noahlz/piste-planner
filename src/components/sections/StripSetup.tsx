@@ -46,7 +46,11 @@ export function StripSetup() {
           <div className="space-y-1">
             <Label className="text-xs"># with Video</Label>
             <NumberInput
-              value={videoStripsTotal}
+              // `NumberInput` has no unset state, so an unresolved `null` shows
+              // as 0 here and the first edit commits a real number. This wizard
+              // field does not distinguish unset from zero — the per-type
+              // default and its AUTO marker are the Advanced panel's (T065).
+              value={videoStripsTotal ?? 0}
               onChange={setVideoStrips}
               min={0}
               max={stripsTotal}

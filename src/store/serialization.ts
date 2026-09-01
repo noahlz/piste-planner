@@ -14,7 +14,10 @@ export interface SerializedState {
     days_available: number
     dayConfigs: DayConfig[]
     strips_total: number
-    video_strips_total: number
+    // `null` is the unset marker – "follow the tournament type's default"
+    // (research D7). T064 owns the rest of this key's schema story: optional on
+    // read, always written on save, `schemaVersion` staying 2.
+    video_strips_total: number | null
     // Always written on save – optional only because reads tolerate its absence (schema leniency, research D3).
     pool_round_duration_table?: Record<WeaponType, number>
   }
@@ -107,12 +110,16 @@ export function validateSchema(
     return { valid: false, error: 'strips_total must be >= 0' }
   }
 
+  // `null` is now a legitimate stored value, and the store's own default, so a
+  // freshly built tournament has to survive its own round-trip. Absent is still
+  // rejected — making the key optional on read is T064's.
   if (
-    typeof t.video_strips_total !== 'number' ||
-    t.video_strips_total < 0 ||
-    t.video_strips_total > (t.strips_total as number)
+    t.video_strips_total !== null &&
+    (typeof t.video_strips_total !== 'number' ||
+      t.video_strips_total < 0 ||
+      t.video_strips_total > (t.strips_total as number))
   ) {
-    return { valid: false, error: 'video_strips_total must be >= 0 and <= strips_total' }
+    return { valid: false, error: 'video_strips_total must be null, or >= 0 and <= strips_total' }
   }
 
   // pool_round_duration_table – absent is valid (schema leniency), present must be complete and in range

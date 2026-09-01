@@ -1,5 +1,6 @@
 import type {
   Competition,
+  DeMode,
   FlightingGroup,
   Strip,
   TournamentConfig,
@@ -49,14 +50,21 @@ export function buildTournamentConfig(
   config: TournamentConfig
   competitions: Competition[]
 } {
-  const strips = buildStrips(state.strips_total, state.video_strips_total)
+  // Unresolved passthrough, not a default. The store's `video_strips_total` can
+  // now be `null` ("follow the type default", research D7) but the engine's
+  // `TournamentConfig` takes a number, so the cast is the seam where T061 puts
+  // `TYPE_DEFAULTS[state.tournament_type]` behind the `??`. Coalescing to a
+  // number here instead would bake in a resolution — and `0` is the wrong one
+  // for a NAC, which defaults to 8.
+  const videoStrips = state.video_strips_total as number
+  const strips = buildStrips(state.strips_total, videoStrips)
 
   const config: TournamentConfig = {
     tournament_type: state.tournament_type,
     days_available: state.days_available,
     strips,
     strips_total: state.strips_total,
-    video_strips_total: state.video_strips_total,
+    video_strips_total: videoStrips,
     // Store's dayConfigs are clock axis (0-1439 within each day). scheduleAll
     // requires the scheduler axis instead — day d's window shifted by
     // d*DAY_AXIS_SPACING_MINS so no two days' windows overlap on the absolute
@@ -130,7 +138,10 @@ function buildCompetitions(
       ref_policy: overrides.ref_policy,
       cut_mode: overrides.cut_mode,
       cut_value: overrides.cut_value,
-      de_mode: overrides.de_mode,
+      // Same unresolved passthrough as `videoStrips` above: the store's setting
+      // can be `'AUTO'` (research D6) and the engine's `DeMode` cannot, so T061
+      // replaces this cast with the per-type lookup.
+      de_mode: overrides.de_mode as DeMode,
       de_video_policy: overrides.de_video_policy,
       use_single_pool_override: overrides.use_single_pool_override,
 

@@ -44,25 +44,41 @@ export interface TournamentSlice {
   days_available: number
   dayConfigs: DayConfig[]
   strips_total: number
-  video_strips_total: number
+  /** `null` means "follow the tournament type's default" (research D7). `0` stays
+   *  the real value it is — a tournament with no video strips. Resolved in
+   *  `buildConfig.ts`, never written back to the store. */
+  video_strips_total: number | null
   pool_round_duration_table: Record<Weapon, number>
 
   setTournamentType: (type: TournamentType) => void
   setDays: (days: number) => void
   updateDayConfig: (dayIndex: number, partial: Partial<DayConfig>) => void
   setStrips: (total: number) => void
-  setVideoStrips: (total: number) => void
+  setVideoStrips: (total: number | null) => void
   suggestStrips: () => void
   setPoolRoundDuration: (weapon: Weapon, minutes: number) => void
   resetPoolRoundDuration: (weapon: Weapon) => void
 }
+
+/**
+ * The store's DE mode *setting*: the engine's two modes plus `AUTO`, meaning
+ * "follow the tournament type's default" (research D6). It lives here and not in
+ * `src/engine/types.ts` because the engine cannot resolve `AUTO` — that needs
+ * tournament-level context it never receives (constitution I). `buildConfig.ts`
+ * resolves it, so the engine's `DeMode` keeps its two values.
+ *
+ * A union alias rather than an `as const` object: this file already spells these
+ * settings as bare literals (`ref_policy: 'AUTO'` below), and no caller needs a
+ * runtime member list. Constitution V — never an enum.
+ */
+export type DeModeSetting = DeMode | 'AUTO'
 
 export interface CompetitionConfig {
   fencer_count: number
   ref_policy: RefPolicy
   cut_mode: CutMode
   cut_value: number
-  de_mode: DeMode
+  de_mode: DeModeSetting
   de_video_policy: VideoPolicy
   use_single_pool_override: boolean
 }
@@ -163,7 +179,7 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
     days_available: 3,
     dayConfigs: [],
     strips_total: 0,
-    video_strips_total: 0,
+    video_strips_total: null,
     // Copied so store mutations never alias the engine constant
     pool_round_duration_table: { ...DEFAULT_POOL_ROUND_DURATION_TABLE },
 
@@ -242,7 +258,7 @@ function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): Co
     ref_policy: 'AUTO',
     cut_mode: cut.mode,
     cut_value: cut.value,
-    de_mode: 'SINGLE_STAGE',
+    de_mode: 'AUTO',
     de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
     use_single_pool_override: false,
   }
