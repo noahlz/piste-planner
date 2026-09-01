@@ -82,10 +82,13 @@ B8's residual gap against the drift ledger is
 
 Measured: B2 went from 0 to 24, the drift ledger's exact count, removing its
 FR-004a exception. B8 went from 0 to 53, one above the ledger's 52, so its
-exception was rewritten around the +1 rather than deleted. Four of the ten
+exception was rewritten around the +1 rather than deleted. Two of the ten
 shipped templates went from an empty board to a real schedule –
-`NAC Cadet/Junior`, `NAC Div1/Junior`, `NAC Vet/Div1/Junior`,
-`Junior Olympics`. No `src/engine/` change, and the drift ledger snapshot is
+`NAC Cadet/Junior` (24 selected, 10 placed) and `Junior Olympics` (18
+selected, 9 placed). The other two team-bearing templates, `NAC Div1/Junior`
+(24 selected) and `NAC Vet/Div1/Junior` (66 selected), stay at 0 – blocked by
+a different, unrelated BINDING rule detailed below, not by the defect this
+feature fixes. No `src/engine/` change, and the drift ledger snapshot is
 byte-identical to `main`.
 
 **What 008 deliberately did not fix**, so a later session does not have to
@@ -98,6 +101,43 @@ rediscover these:
   discards the whole schedule" architecture. `ROC Mega` staying at 0 after this
   feature is expected and correct, not a regression. Measured in
   [`baseline.md`](../../specs/008-team-event-cut/baseline.md).
+- **`NAC Div1/Junior` and `NAC Vet/Div1/Junior` stay at 0, and this feature's
+  fix is not implicated.** Isolation found zero `cut-on-team` findings on
+  either template – every TEAM competition on both carries `DISABLED`/`100`.
+  Both are gated instead by two BINDING errors from a different rule,
+  `indiv-team-same-day` (`src/engine/validation.ts:272-310`): `Individual
+  D1-M-EPEE-IND + team D1-M-EPEE-TEAM worst-case same-day duration 855 min
+  exceeds DAY_LENGTH_MINS 840 min` and `Individual D1-W-EPEE-IND + team
+  D1-W-EPEE-TEAM worst-case same-day duration 860 min exceeds
+  DAY_LENGTH_MINS 840 min` – 15- and 20-minute overruns on the same two Div1
+  épée pairs in both templates (`NAC Vet/Div1/Junior` is a superset
+  containing Div1; its 42 Veteran competitions contribute nothing).
+  `NAC Cadet/Junior` has zero ERRORs here because its Cadet and Junior épée
+  pairs stay under 840. Read from source, not measured: the rule computes a
+  hypothetical worst case – individual total + `INDIV_TEAM_MIN_GAP_MINS` +
+  team total, assuming both land on the same day – and `days_available`
+  appears nowhere in `validateTimingConstraints`, so it fires identically on
+  a 1-day and a 5-day tournament even though the scheduler is free to
+  separate the pair across days. It reaches an empty board through the same
+  "one BINDING error discards the whole schedule" amplifier as `ROC Mega`
+  (`src/engine/concurrentScheduler.ts:186-204`). A fix would touch, weakest
+  option last: the rule's severity – it is emitted via `policy()`
+  (`validation.ts:299-305`), which maps to ERROR under BINDING
+  (`validation.ts:25-29`), and demoting it to `notice()` would let the
+  scheduler place what it can and separate the pair across days, verified at
+  the source; the all-or-nothing gate itself
+  (`concurrentScheduler.ts:186-204`) – the finding carries its two
+  implicated competitions as `subjects`, so dropping or deferring only those
+  would fix the class rather than the instance and would cover `ROC Mega`
+  too, though this is reasoning inherited from `baseline.md` and the
+  dispatch, since the isolation run never opened `concurrentScheduler.ts` to
+  verify the mechanism; or the Div1 épée default fencer counts
+  (`D1-M-EPEE-IND` 310, `D1-W-EPEE-IND` 210) against `DAY_LENGTH_MINS` 840 –
+  weakest, since it tunes a number to dodge a rule rather than fixing it, and
+  the counts are user-editable so a user raising them re-breaks it. The
+  diagnosis is verified; the outcome of any fix is untested, since nothing
+  was changed and re-measured. Out of `src/engine/`, which this feature's
+  hard constraint puts out of scope.
 - **`src/engine/catalogue.ts:217`'s comment is wrong about its own count.** It
   claims `NAC Vet/Div1/Junior` selects 36 events; the measured count is 66,
   because Veteran individual events expand to six age groups. Left alone

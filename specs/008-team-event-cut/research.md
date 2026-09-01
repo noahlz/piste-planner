@@ -160,6 +160,15 @@ not move it, and the existing assertion is a regression guard on exactly that.
 Rejected — the ROC numbers were re-measured by 006 against the running app and
 are the record of that work. Adding a step keeps both.
 
+**Amendment (2026-08-31, T022)**: the rationale's four-template prediction
+measured at two — `NAC Cadet/Junior` and `Junior Olympics`. `NAC Div1/Junior`
+and `NAC Vet/Div1/Junior` stay at 0, blocked by an unrelated BINDING rule.
+`NAC Cadet/Junior`, the template chosen above for the driver, is one of the
+two that recovered, so the decision stands unaffected. See
+[`docs/design/backlog.md`](../../docs/design/backlog.md) §Team events block
+their whole tournament for the measured counts and why the other two did not
+recover.
+
 ---
 
 ## D6 — The backlog section this feature closes is not on `main`
