@@ -127,9 +127,9 @@ the branch with `git merge --no-ff --no-commit` completed by
 
 **Depends on**: US1 — the number to assert does not exist until the fix lands.
 
-- [ ] T017 [US3] Add a boot-count assertion to `scripts/smoke.mjs` after the initial canvas wait (near line 143): the number of placed events at boot on the default preset, measured against the running app, replacing the absence of any boot floor today
-- [ ] T018 [US3] Re-measure the block and row floors lowered to "non-empty" (`scripts/smoke.mjs:52-60`, `:184-186`, `:252-257`) against the fixed axis and set them to the measured numbers. The ROC Div1A/Vet template's 4-of-12 yield was attributed to a strip shortfall while the day axis was broken — re-read it now and rewrite the comment to say what the number is and why, per constitution VI
-- [ ] T019 [US3] Run `scripts/smoke.mjs` against the running app via the `live-smoke` skill, dispatched to a subagent; capture `scripts/smoke-shots/01-initial.png` showing the boot tray holding only genuinely unplaceable events, against the 13 chips it shows today *(subagent commits)*
+- [X] T017 [US3] Add a boot-count assertion to `scripts/smoke.mjs` after the initial canvas wait (near line 143): the number of placed events at boot on the default preset, measured against the running app, replacing the absence of any boot floor today
+- [X] T018 [US3] Re-measure the block and row floors lowered to "non-empty" (`scripts/smoke.mjs:52-60`, `:184-186`, `:252-257`) against the fixed axis and set them to the measured numbers. The ROC Div1A/Vet template's 4-of-12 yield was attributed to a strip shortfall while the day axis was broken — re-read it now and rewrite the comment to say what the number is and why, per constitution VI
+- [X] T019 [US3] Run `scripts/smoke.mjs` against the running app via the `live-smoke` skill, dispatched to a subagent; capture `scripts/smoke-shots/01-initial.png` showing the boot tray holding only genuinely unplaceable events, against the 13 chips it shows today *(subagent commits)*
 
 **Checkpoint**: The live gate asserts a real number. All three stories complete.
 
