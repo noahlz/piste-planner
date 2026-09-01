@@ -1,6 +1,6 @@
-import type { StoreState, CompetitionConfig, GlobalOverrides } from './store.ts'
+import type { StoreState, CompetitionConfig, GlobalOverrides, DeModeSetting } from './store.ts'
 import type { DayConfig, TournamentType, Weapon as WeaponType, Placement } from '../engine/types.ts'
-import { TournamentType as TT, Weapon, PlacementSource } from '../engine/types.ts'
+import { TournamentType as TT, Weapon, PlacementSource, DeMode } from '../engine/types.ts'
 import { POOL_DURATION_MIN, POOL_DURATION_MAX } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
@@ -15,9 +15,11 @@ export interface SerializedState {
     dayConfigs: DayConfig[]
     strips_total: number
     // `null` is the unset marker – "follow the tournament type's default"
-    // (research D7). T064 owns the rest of this key's schema story: optional on
-    // read, always written on save, `schemaVersion` staying 2.
-    video_strips_total: number | null
+    // (research D7). Always written on save – optional only because reads tolerate
+    // its absence, the same leniency pool_round_duration_table below already has
+    // (research D8): a URL saved before this feature lacks the key and opens
+    // with the store's own `null` default.
+    video_strips_total?: number | null
     // Always written on save – optional only because reads tolerate its absence (schema leniency, research D3).
     pool_round_duration_table?: Record<WeaponType, number>
   }
@@ -37,6 +39,10 @@ const VALID_TOP_LEVEL_KEYS = [
   'dismissedFindings',
 ] as const
 const VALID_TOURNAMENT_TYPES = new Set(Object.values(TT))
+// The engine's two DE modes plus the store's 'AUTO' setting (research D6) – de_mode
+// reaches buildConfig.ts and then the engine's de_mode branch, so an unvalidated
+// string in this position is a real hole, not a cosmetic gap.
+const VALID_DE_MODES = new Set<string>([...Object.values(DeMode), 'AUTO'])
 
 // ──────────────────────────────────────────────
 // Serialize
@@ -110,11 +116,13 @@ export function validateSchema(
     return { valid: false, error: 'strips_total must be >= 0' }
   }
 
-  // `null` is now a legitimate stored value, and the store's own default, so a
-  // freshly built tournament has to survive its own round-trip. Absent is still
-  // rejected — making the key optional on read is T064's.
+  // `null` is a legitimate stored value, and the store's own default, so a
+  // freshly built tournament has to survive its own round-trip. Absent is also
+  // valid – schema leniency (research D8) – and left for deserializeState to
+  // skip assigning, so the store's `null` default fills in instead of `undefined`.
   if (
     t.video_strips_total !== null &&
+    t.video_strips_total !== undefined &&
     (typeof t.video_strips_total !== 'number' ||
       t.video_strips_total < 0 ||
       t.video_strips_total > (t.strips_total as number))
@@ -165,6 +173,12 @@ export function validateSchema(
     for (const [id, config] of Object.entries(comps)) {
       if (typeof config.fencer_count !== 'number' || config.fencer_count < 0) {
         return { valid: false, error: `fencer_count must be >= 0 for competition "${id}"` }
+      }
+      if (!VALID_DE_MODES.has(config.de_mode as DeModeSetting)) {
+        return {
+          valid: false,
+          error: `de_mode must be one of SINGLE_STAGE, STAGED, AUTO for competition "${id}"`,
+        }
       }
     }
   }
@@ -258,12 +272,17 @@ export function deserializeState(
     days_available: data.tournament.days_available,
     dayConfigs: data.tournament.dayConfigs,
     strips_total: data.tournament.strips_total,
-    video_strips_total: data.tournament.video_strips_total,
     selectedCompetitions: data.competitions.selectedCompetitions,
     globalOverrides: data.competitions.globalOverrides,
   }
   // Only assign when present – a key set to undefined would clobber the store's
-  // seeded defaults through the useStore.setState merge (research D3).
+  // seeded defaults through the useStore.setState merge (research D3). This
+  // matters more for video_strips_total than for pool_round_duration_table below:
+  // an unconditional assignment here would overwrite the store's `null` default
+  // with `undefined`, which is not a member of `number | null`.
+  if (data.tournament.video_strips_total !== undefined) {
+    state.video_strips_total = data.tournament.video_strips_total
+  }
   if (data.tournament.pool_round_duration_table !== undefined) {
     state.pool_round_duration_table = data.tournament.pool_round_duration_table
   }

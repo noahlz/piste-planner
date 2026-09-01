@@ -344,12 +344,35 @@ describe('validateSchema', () => {
     if (!result.valid) expect(result.error).toMatch(/video_strips_total/i)
   })
 
+  it('accepts video_strips_total absent from the payload (schema leniency, research D8)', () => {
+    const data = validSerializedData() as unknown as Record<string, unknown>
+    delete (data.tournament as Record<string, unknown>).video_strips_total
+    const result = validateSchema(data)
+    expect(result.valid).toBe(true)
+  })
+
   it('rejects negative fencer_count in a competition', () => {
     const data = validSerializedData()
     data.competitions.selectedCompetitions[FIXTURE_EVENT_ID].fencer_count = -5
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.error).toMatch(/fencer_count/i)
+  })
+
+  it('rejects an invalid de_mode value in a competition', () => {
+    const data = validSerializedData()
+    ;(data.competitions.selectedCompetitions[FIXTURE_EVENT_ID] as unknown as Record<string, unknown>).de_mode =
+      'BOGUS'
+    const result = validateSchema(data)
+    expect(result.valid).toBe(false)
+    if (!result.valid) expect(result.error).toMatch(/de_mode/i)
+  })
+
+  it('accepts de_mode: AUTO in a competition', () => {
+    const data = validSerializedData()
+    data.competitions.selectedCompetitions[FIXTURE_EVENT_ID].de_mode = 'AUTO'
+    const result = validateSchema(data)
+    expect(result.valid).toBe(true)
   })
 
   it('rejects missing required fields', () => {
@@ -686,6 +709,18 @@ describe('deserializeState', () => {
       // The key must be absent, not present-as-undefined – a present-but-undefined key
       // would clobber the store's seeded defaults through useStore.setState merge.
       expect('pool_round_duration_table' in result.state).toBe(false)
+    }
+  })
+
+  it('load: JSON without video_strips_total omits the key from the returned state entirely, letting the store default (null) fill in (research D8)', () => {
+    const data = validSerializedData() as unknown as Record<string, unknown>
+    delete (data.tournament as Record<string, unknown>).video_strips_total
+    const result = deserializeState(JSON.stringify(data))
+    expect('state' in result).toBe(true)
+    if ('state' in result) {
+      // The key must be absent, not present-as-undefined – a present-but-undefined key
+      // would clobber the store's seeded `null` default through useStore.setState merge.
+      expect('video_strips_total' in result.state).toBe(false)
     }
   })
 
