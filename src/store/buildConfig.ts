@@ -1,11 +1,10 @@
 import type {
   Competition,
-  DeMode,
   FlightingGroup,
   Strip,
   TournamentConfig,
 } from '../engine/types.ts'
-import { DeStripRequirement } from '../engine/types.ts'
+import { DeStripRequirement, RefPolicy } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import {
   DAY_START_MINS,
@@ -26,6 +25,7 @@ import {
   REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
+import { TYPE_DEFAULTS } from './typeDefaults.ts'
 
 /**
  * Calendar-day spacing between scheduler-axis day windows (research.md D5).
@@ -50,13 +50,14 @@ export function buildTournamentConfig(
   config: TournamentConfig
   competitions: Competition[]
 } {
-  // Unresolved passthrough, not a default. The store's `video_strips_total` can
-  // now be `null` ("follow the type default", research D7) but the engine's
-  // `TournamentConfig` takes a number, so the cast is the seam where T061 puts
-  // `TYPE_DEFAULTS[state.tournament_type]` behind the `??`. Coalescing to a
-  // number here instead would bake in a resolution — and `0` is the wrong one
-  // for a NAC, which defaults to 8.
-  const videoStrips = state.video_strips_total as number
+  // `null` alone means "follow the tournament type's default" (research D7).
+  // `??` and not `||`: `0` is a legitimate explicit value — a tournament with
+  // no video strips — and must survive rather than resolve to a NAC's 8.
+  // Resolved once into a local because two sites downstream need the resolved
+  // number, the strip list and `config.video_strips_total`. Nothing is written
+  // back to `state` (FR-036), so a later tournament type change still sees
+  // `null` and re-resolves against the new type.
+  const videoStrips = state.video_strips_total ?? TYPE_DEFAULTS[state.tournament_type].video_strips_total
   const strips = buildStrips(state.strips_total, videoStrips)
 
   const config: TournamentConfig = {
@@ -121,6 +122,12 @@ function buildCompetitions(
 ): Competition[] {
   const competitions: Competition[] = []
 
+  // The two per-event settings whose "unset" markers resolve against the
+  // tournament type (research D5, D6). Resolution happens here, on the copy
+  // travelling to the engine — `src/engine/pools.ts` never learns about
+  // tournaments (constitution I) and the store keeps its `AUTO`s (FR-036).
+  const typeDefaults = TYPE_DEFAULTS[state.tournament_type]
+
   for (const [id, overrides] of Object.entries(state.selectedCompetitions)) {
     const entry = findCompetition(id)
     if (!entry) continue
@@ -135,13 +142,17 @@ function buildCompetitions(
 
       // Store overrides
       fencer_count: overrides.fencer_count,
-      ref_policy: overrides.ref_policy,
+      // `AUTO` is the only value that follows the type; `ONE` and `TWO` are the
+      // organizer's own and beat the default (FR-037).
+      ref_policy:
+        overrides.ref_policy === RefPolicy.AUTO ? typeDefaults.ref_policy : overrides.ref_policy,
       cut_mode: overrides.cut_mode,
       cut_value: overrides.cut_value,
-      // Same unresolved passthrough as `videoStrips` above: the store's setting
-      // can be `'AUTO'` (research D6) and the engine's `DeMode` cannot, so T061
-      // replaces this cast with the per-type lookup.
-      de_mode: overrides.de_mode as DeMode,
+      // Same rule for DE mode (research D6): the store's setting carries an
+      // `'AUTO'` the engine's `DeMode` has no member for, and resolving it here
+      // is what narrows the union — an explicit SINGLE_STAGE or STAGED passes
+      // through as itself.
+      de_mode: overrides.de_mode === 'AUTO' ? typeDefaults.de_mode : overrides.de_mode,
       de_video_policy: overrides.de_video_policy,
       use_single_pool_override: overrides.use_single_pool_override,
 

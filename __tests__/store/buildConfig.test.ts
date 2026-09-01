@@ -151,7 +151,13 @@ describe('buildTournamentConfig', () => {
 
       // From store overrides
       expect(comp.fencer_count).toBe(64)
-      expect(comp.ref_policy).toBe(RefPolicy.AUTO)
+      // Stored as AUTO (line 43), resolved on the way out: after T061 the
+      // engine never receives `AUTO`, and this fixture's type is NAC, whose
+      // default is TWO. The resolution contract itself — every type's default,
+      // explicit values beating it, and nothing written back to the store —
+      // belongs to buildConfig.typeDefaults.test.ts; this line only records
+      // that the pass-through is gone.
+      expect(comp.ref_policy).toBe(RefPolicy.TWO)
       expect(comp.cut_mode).toBe(CutMode.PERCENTAGE)
       expect(comp.cut_value).toBe(20)
       expect(comp.de_mode).toBe(DeMode.SINGLE_STAGE)
