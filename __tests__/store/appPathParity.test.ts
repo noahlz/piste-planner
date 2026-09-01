@@ -16,6 +16,11 @@ import type { ScenarioId } from '../../src/data/tournaments.ts'
  * short form lives beside the number here so a reader who only opens this
  * file still learns why it is what it is.
  *
+ * B2's `24` and B8's `53` were re-measured on 2026-08-31 by feature 008
+ * (T004, T008/T009), against 008's own code rather than 006's axis fix. B8's
+ * classification is `specs/008-team-event-cut/b8-residual.md`, alongside
+ * this file's existing pointer to `parity-exceptions.md`.
+ *
  * **No exception below is attributable to the day axis** (FR-004a's hard
  * limit, SC-002). That was established per row by isolation, not by argument:
  * holding the competitions fixed and swapping only the config — the app's
@@ -120,32 +125,39 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
   },
 
   /**
-   * B8 places nothing, for B2's reason exactly: five `cut-on-team` BINDING
-   * errors on the Div1 team events (`src/engine/validation.ts:158`), from
-   * the same missing `event_type === TEAM` branch in `defaultConfigForId`
-   * (`src/store/store.ts:220,229-230`).
+   * B8 is one event over the ledger, not short like B4 or B6: the app places
+   * 53 where the ledger places 52. Full isolation record:
+   * `specs/008-team-event-cut/b8-residual.md`; this is the short form.
    *
-   * The dispatch that opened this task also expected
-   * `video-dead-config` ("REQUIRED video policy has no effect with
-   * SINGLE_STAGE de_mode") to be gating B2 and B8. It is not: that finding
-   * is a `notice` (`src/engine/validation.ts:215`), WARN in both validation
-   * modes, and never escalates. Only `cut-on-team` gates.
+   * Two of 004 US4's per-competition defaults are jointly responsible, and
+   * neither is sufficient alone — the opposite of B6, where either sufficed
+   * on its own. The ledger derives STAGED de_mode from a REQUIRED video
+   * policy (`__tests__/helpers/scenarios.ts:51-53`) against the store's
+   * hardcoded SINGLE_STAGE (`src/store/store.ts:231`), and pre-allocates
+   * `max(2, ceil(n/7))` strips (`scenarios.ts:54`) against
+   * `buildConfig.ts:151`'s `strips_allocated: 0`. Swapping either default
+   * alone leaves the app path at 53; swapping both together reaches 52,
+   * matching the ledger exactly. `cut_mode` is closed on B8 — B8 is a NAC,
+   * so `REGIONAL_CUT_OVERRIDES` never applies on either side, and zero
+   * events differ on it after T005's `defaultCutForEntry`.
    *
-   * Fixing the team cut alone takes B8 to 53 — one MORE than the ledger's
-   * 52, because B8's remaining defaults (staging, pre-allocated strips) then
-   * favor the app. So this pin does not simply become 52 when US4 lands; it
-   * is re-measured then, like every other number here.
+   * Both defaults understate DE strip-hour demand
+   * (`src/engine/capacity.ts:146`), so the app fits one more event than the
+   * ledger does — the same understatement that inverts B4's 16-against-0,
+   * here buying a single event instead of suppressing a feasibility gate.
+   * The event is `JR-W-EPEE-IND`, placed by the app and by no run that
+   * reaches 52.
+   *
+   * Both causes are US4's named defaults, so this pin is re-measured when
+   * US4 lands rather than assumed to become 52 — which side each default
+   * converges toward is US4's decision (parity-exceptions.md §B6 already
+   * flags that the regional cut override must converge the other way).
    */
   B8: {
-    // 53 is 008's own measurement (T004), matching 006's forcing-run below.
-    // The cause/evidence/closedBy prose beneath this line still describes
-    // that forcing run, not this feature's code — T009 measures what
-    // accounts for the +1 under 008's fix and T010 rewrites this entry with
-    // that evidence.
     appPath: 53,
     ledger: 52,
-    cause: 'team events reach the engine with a PERCENTAGE cut, which is a BINDING validation ERROR (cut-on-team) — the same default B2 fails on',
-    evidence: 'forcing cut_mode=DISABLED on B8\'s five team events alone takes the app path from 0 to 53, one above the ledger\'s 52',
+    cause: 'DE bracket sizes and pre-allocated strips both understate demand — the store leaves de_mode at SINGLE_STAGE where the ledger stages REQUIRED-video events, and buildConfig.ts zeroes strips_allocated where the ledger pre-allocates them',
+    evidence: 'neither swap alone — the ledger\'s de_mode, or its strips_allocated — moves the app path off 53; swapping both together takes it to 52, the ledger\'s exact count, and the difference is the single event JR-W-EPEE-IND; swapping the config instead of the competitions moves nothing',
     closedBy: '004 US4 (per-type competition defaults) — the pin is re-measured then, not assumed to be 52',
   },
 }
