@@ -436,3 +436,68 @@ describe survives in a new form.
   surviving coverage and the corrections behind it.
 - **A single cleanup task at the end of the feature.** Rejected on the argument
   above, and it would leave the suite red or misleading for most of the feature.
+
+---
+
+## The US4 drift gate was reviewed, not accepted (T062, T063)
+
+Not a decision — the record constitution III asks for, that the drift D5, D6,
+D7 and T061a caused was measured and explained before any assertion was moved
+to meet it.
+
+**The gate ran.** T062 re-ran the B1–B8 harness `drift-baseline.md` §Harness
+specifies and diffed it against that document's §Baseline table. **The ledger
+path was flat on all 48 cells**, and the reason is mechanical rather than
+reassuring: all four changes live in `src/store/`, and the ledger harness
+builds its competitions through `__tests__/helpers/factories.ts` and
+`__tests__/helpers/scenarios.ts` without ever calling `buildConfig.ts`. Nothing
+US4 changed is on the path the ledger measures. No scenario's scheduled count
+dropped, so constitution III's halt condition did not fire there.
+
+**The app path is where the drift is, and it was measured per scenario.** T062
+drove `applyPreset` → store → `buildTournamentConfig` → `scheduleAll` on both
+sides of the change, the before column extracted whole from `e67fa9cdd0` rather
+than reconstructed, and decomposed each scenario's movement into the change
+that caused it. Every table, every per-scenario account, and the isolation of
+D5's policy effect from the packing effect live in
+`specs/004-p3-workbench-shell/drift-baseline.md` §T062 — that section is their
+only home and is not restated here.
+
+**T063 re-baselined against those explanations, not against the actuals.** Five
+app-path test files carried 27 failures. Each moved assertion was attributed to
+one of the four changes before its number was touched, and two attributions were
+isolated by control rather than inferred: forcing `de_mode` back to
+`SINGLE_STAGE` on `recompute.test.tsx`'s fixture, with T061a's pre-allocated
+strips left in place, reproduced the pre-US4 DE window exactly, so D6 owns that
+file's movement alone. `__tests__/engine/integration.test.ts`, the file T063's
+task names, needed no change at all — it runs the same builders as the ledger
+and stayed green through T059–T061a with no assertion touched, which is the
+same fact the flat ledger reports from a second direction.
+
+**What the gate cost in coverage, recorded rather than absorbed.** Three cases
+survive as assertions but no longer discriminate what they were written for, and
+each says so at its own site: B5's `findings:WARN` (13 against 12 competitions
+was the proof that `analysis.warnings` were counted; the day-level warning it
+relied on no longer fires, and `contendedTwoPlaced` now carries that property),
+`scorecardBaseline.test.ts`'s `updateCompetition` case (its two finish
+assertions are now vacuous, and `strips:utilization` is the live movement), and
+`Scorecard.test.tsx`'s highlight-status case (no B1 metric drives exactly one
+block any more, so the singular branch of its plural rule is unasserted).
+
+**§"What research D5 and D6 predict will move" was refuted on the instrument.**
+That section was written believing resolution would reach the ledger path. It
+does not. D5's prediction was right about the effect — B6's pool demand halved,
+200 to 100, isolated from every other cause — and wrong about where it would
+show. **D6's "DE referee demand rises steeply… roughly fourfold" remains
+untested.** `peakDeRefDemand` is `DE_REFS × de_round_of_16_strips` and reads
+neither `de_mode` nor anything staging changes (`src/engine/refs.ts:31-42`), so
+that claim cannot be true or false on this instrument; staging did land on 143
+competitions across B1, B2, B3, B7 and B8, and moved DE demand only through
+re-packing. Testing it needs an instrument reading `de_prelims_strip_count` and
+`de_round_of_16_strip_count` directly. The prediction section is left standing
+in `drift-baseline.md` so it can be read against its refutation.
+
+The lasting correction, which §T062 states and this points at rather than
+repeats: a change confined to `src/store/` is invisible to the drift ledger by
+construction, so a US-level change to resolution defaults should name which of
+the two paths it expects to move before it is measured.

@@ -150,17 +150,27 @@ describe('two-tier recompute', () => {
 
     // Only now does the center pick up the new pool/DE structure — not just
     // any change, but the 7-pool structure 45 fencers actually derives to
-    // (pool end 12:06, DE 12:40-16:37, 5 strips, up from 1 at 8 fencers).
+    // (pool end 12:06, DE 12:40-15:15, 5 strips, up from 1 at 8 fencers).
     expect(center.textContent).not.toBe(centerBefore)
     const cells = centerRowCells(id)
     expect(cells[3]).toBe('12:06') // pool end
-    expect(cells[4]).toBe('12:40') // DE start
+    expect(cells[4]).toBe('12:40') // DE start, now de_prelims_start
     // T040 split the old single DE End column in two: de_end, the last minute
     // the scheduler actually places, and de_total_end with the 30-minute medal
-    // tail on top of it. 16:37 was the old column's value and is now Finish's.
-    expect(cells[5]).toBe('16:07') // DE end
+    // tail on top of it.
+    //
+    // 004 US4 T063 — the DE columns moved from 16:07/16:37 to 15:15/15:45.
+    // Cause: research D6. This fixture never sets a tournament type, so it
+    // runs on getInitialState()'s NAC, whose de_mode default resolves AUTO to
+    // STAGED (src/store/typeDefaults.ts:18). The single 760-967 DE block
+    // becomes DE_PRELIMS 760-770 plus DE_ROUND_OF_16 800-915, and 915 is
+    // 15:15. Isolated by control, not inferred: forcing de_mode back to
+    // SINGLE_STAGE on this same fixture — with T061a's pre-allocated
+    // strips_allocated left in place — reproduces DE 760-967 and de_total_end
+    // 997 exactly, the pre-US4 16:07/16:37. T061a moves nothing here.
+    expect(cells[5]).toBe('15:15') // DE end, now de_round_of_16_end
     expect(cells[6]).toBe('5') // pool_strip_count
-    expect(cells[7]).toBe('16:37') // finish, de_total_end
+    expect(cells[7]).toBe('15:45') // finish, de_total_end
   })
 
   it('restarts the settle timer on a second edit rather than relayouting at the first deadline', () => {
@@ -201,9 +211,9 @@ describe('two-tier recompute', () => {
     const cells = centerRowCells(id)
     expect(cells[3]).toBe('12:06') // pool end
     expect(cells[4]).toBe('12:40') // DE start
-    expect(cells[5]).toBe('16:07') // DE end, as above
+    expect(cells[5]).toBe('15:15') // DE end, as above
     expect(cells[6]).toBe('5') // pool_strip_count
-    expect(cells[7]).toBe('16:37') // finish, de_total_end
+    expect(cells[7]).toBe('15:45') // finish, de_total_end
   })
 })
 
@@ -288,11 +298,17 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
       vi.advanceTimersByTime(CENTER_SETTLE_MS)
     })
 
-    // 726 is 12:06 and 967 is 16:07 — the same pool end and DE end the table
+    // 726 is 12:06 and 915 is 15:15 — the same pool end and DE end the table
     // cases above read off this fixture, so the two views agree (FR-023).
+    //
+    // 004 US4 T063 — the phase queried moved from DE to DE_ROUND_OF_16 and its
+    // end from 967 to 915, both for D6's reason above: under NAC's resolved
+    // STAGED de_mode this fixture draws no `DE` block at all, so the old query
+    // returned null rather than a wrong number. DE_ROUND_OF_16 is the terminal
+    // drawn DE phase and 915 is the value the table cases read.
     expect(poolEndBefore).not.toBe(726)
     expect(blockEnd(id, 'POOLS')).toBe(726)
-    expect(blockEnd(id, 'DE')).toBe(967)
+    expect(blockEnd(id, 'DE_ROUND_OF_16')).toBe(915)
   })
 
   /**

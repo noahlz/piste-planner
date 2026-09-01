@@ -45,12 +45,29 @@ describe('runAppPath', () => {
     // zero — findDayForTime resolved every coincident window to day 0
     // (research.md D1, second symptom). Post-fix the four day windows are
     // disjoint, so each day carries its own peak.
+    //
+    // 004 US4 T063 — all twelve numbers moved (was 212/64/585, 200/52/2060,
+    // 204/76/3465, 142/62/4880). B1 is NAC, so of US4's four changes two reach
+    // it: D6 resolves all 24 competitions' de_mode to STAGED, which replaces
+    // each single DE allocation window with a DE_PRELIMS and a DE_ROUND_OF_16
+    // one, and T061a pre-allocates strips_allocated, which re-packs which
+    // events land on which day. `computePostScheduleRefDemand` sweeps those
+    // windows, so both a different window shape and a different day membership
+    // move the per-day peak and the minute it falls on. D5 cannot: NAC resolves
+    // ref_policy AUTO to TWO, and resolveRefsPerPool scores both at 2 refs per
+    // pool (src/engine/pools.ts:170-175). D7 cannot either: applyPreset always
+    // calls setVideoStrips, so video_strips_total is never the null that
+    // buildConfig.ts:60 fills in. The per-scenario account is in
+    // specs/004-p3-workbench-shell/drift-baseline.md §T062.
+    //
+    // What this case asserts is unchanged: four days, four disjoint peak times
+    // in four different day windows, none of them zero.
     const result = runAppPath('B1')
     expect(result.refRequirementsByDay).toEqual([
-      { day: 0, peak_total_refs: 212, peak_saber_refs: 64, peak_time: 585 },
-      { day: 1, peak_total_refs: 200, peak_saber_refs: 52, peak_time: 2060 },
-      { day: 2, peak_total_refs: 204, peak_saber_refs: 76, peak_time: 3465 },
-      { day: 3, peak_total_refs: 142, peak_saber_refs: 62, peak_time: 4880 },
+      { day: 0, peak_total_refs: 160, peak_saber_refs: 64, peak_time: 480 },
+      { day: 1, peak_total_refs: 182, peak_saber_refs: 64, peak_time: 2025 },
+      { day: 2, peak_total_refs: 156, peak_saber_refs: 46, peak_time: 3360 },
+      { day: 3, peak_total_refs: 194, peak_saber_refs: 64, peak_time: 4905 },
     ])
   })
 

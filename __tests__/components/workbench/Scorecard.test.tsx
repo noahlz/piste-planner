@@ -32,20 +32,33 @@ import { makePlacement } from '../../helpers/factories.ts'
 // Where each came from is recorded beside it.
 
 // ── B1, auto-scheduled: 4 days, 80 strips, 24 events, all 24 placed in range.
-const B1_FINISH_TOURNAMENT = '17:17' // max de_total_end = 1037 → formatMinutes
-const B1_FINISH_BY_DAY = ['16:02', '17:17', '16:17', '15:43'] // 962 / 1037 / 977 / 943
-const B1_PEAK_TOTAL = '220' // max peak_total_refs over the four ref rows
-const B1_PEAK_SABRE = '76' // max peak_saber_refs (day 2), from the same rows
-const B1_UTILIZATION = '41.4%' // 111196 strip-min used ÷ 268800 available
-const B1_BALANCE_SPREAD = '9.8%' // day utilizations 46.857 (max) − 37.021 (min)
-const B1_FINDINGS = { ERROR: '0', WARN: '16', INFO: '12' }
-// 0 validation errors; 12 WARN de_video_policy + 4 WARN STRIP_CONTENTION;
-// 12 INFO CUT_SUMMARY.
+//
+// 004 US4 T063 — every constant in this block but B1_FINDINGS.INFO moved. B1
+// is NAC, so two of US4's four changes reach it: D6 resolves all 24
+// competitions' de_mode to STAGED, and T061a pre-allocates strips_allocated,
+// which re-packs the four days. D5 does not — NAC resolves ref_policy to TWO,
+// which resolveRefsPerPool already scored the same as AUTO — and neither does
+// D7, since applyPreset always sets the video strip count. The per-metric
+// account is in __tests__/store/scorecardBaseline.test.ts's B1_BASELINE, which
+// pins the same numbers unformatted; the per-scenario one is in
+// specs/004-p3-workbench-shell/drift-baseline.md §T062.
+const B1_FINISH_TOURNAMENT = '17:30' // max de_total_end = 1050 → formatMinutes (was 17:17 / 1037)
+const B1_FINISH_BY_DAY = ['17:30', '17:05', '16:20', '16:35'] // 1050 / 1025 / 980 / 995
+const B1_PEAK_TOTAL = '194' // max peak_total_refs over the four ref rows (was 220)
+const B1_PEAK_SABRE = '64' // max peak_saber_refs, reached on days 0, 1 and 3 (was 76)
+const B1_UTILIZATION = '35.5%' // 95308 strip-min used ÷ 268800 available (was 41.4%)
+const B1_BALANCE_SPREAD = '10.6%' // day utilizations 42.379 (max) − 31.783 (min)
+const B1_FINDINGS = { ERROR: '0', WARN: '4', INFO: '12' }
+// 0 validation errors and 4 WARN STRIP_CONTENTION; 12 INFO CUT_SUMMARY. The 12
+// WARN de_video_policy are D6's: `video-dead-config` fires only on REQUIRED +
+// SINGLE_STAGE (src/engine/validation.ts:212-215), which no NAC event is now.
 
 // ── B1 with strips cut to 20, placements unchanged: the findings move.
-const B1_STRIPS20_FINDINGS = { ERROR: '10', WARN: '29', INFO: '12' }
-// +10 ERROR resource_precondition, +13 WARN (STRIP_DEFICIT_NO_FLIGHTING),
-// INFO unchanged — so the deltas are +10, +13 and zero respectively.
+const B1_STRIPS20_FINDINGS = { ERROR: '11', WARN: '17', INFO: '12' }
+// +11 ERROR (10 resource_precondition and, new under T061a, 1
+// feasibility-strip-hours — pre-allocated strips raise the estimate past the
+// gate), +13 WARN (STRIP_DEFICIT_NO_FLIGHTING), INFO unchanged — so the deltas
+// are +11, +13 and zero respectively.
 
 const COLLAPSED_IDS = ['finish:tournament', 'refs:peak-total']
 
@@ -72,11 +85,21 @@ function loadB1(): void {
 }
 
 /** A placed tournament reached without applyPreset — the shared-link case
- *  D9 calls "no preset". 2 days, so the per-day rows cannot be 4 by accident. */
+ *  D9 calls "no preset". 2 days, so the per-day rows cannot be 4 by accident.
+ *
+ *  004 US4 T063 — the strip count went 24 to 32 to keep this fixture placing
+ *  anything at all. T061a's cause: `strips_allocated` used to be 0, which
+ *  zeroed the DE term of `estimateCompetitionStripHours`, so the upfront
+ *  feasibility gate never fired here. Pre-allocated it does fire — measured,
+ *  the run reported "883 strip-hours needed over 18 events; 672 available
+ *  (2d × 24s × 14h) … Add 1 more day(s) OR 8 more strip(s)" and placed zero,
+ *  which would have made the assertions below hold over an empty schedule.
+ *  32 is the engine's own suggested repair and keeps the day count at 2, which
+ *  the id list at the bottom of this case depends on; measured, it places 12. */
 function loadWithoutPreset(): void {
   const state = useStore.getState()
   state.setDays(2)
-  state.setStrips(24)
+  state.setStrips(32)
   state.setVideoStrips(4)
   state.applyTemplate('RYC Weekend')
   runScheduleAll()
@@ -247,8 +270,8 @@ describe('Scorecard deltas (research D9)', () => {
     }
 
     // Cutting strips leaves the placements alone (no re-schedule) and moves
-    // the findings: 10 resource_precondition errors and 13 more warnings
-    // appear, while the 12 CUT_SUMMARY infos do not move.
+    // the findings: 11 errors and 13 more warnings appear, while the 12
+    // CUT_SUMMARY infos do not move.
     act(() => {
       useStore.getState().setStrips(20)
     })
@@ -258,9 +281,11 @@ describe('Scorecard deltas (research D9)', () => {
     expect(valueOf(card, 'findings:WARN')).toBe(B1_STRIPS20_FINDINGS.WARN)
     expect(valueOf(card, 'findings:INFO')).toBe(B1_STRIPS20_FINDINGS.INFO)
 
-    // The baseline is frozen at load, so these are deltas against 0 and 16,
-    // not against the previous render.
-    expect(deltaOf(card, 'findings:ERROR')).toBe('+10')
+    // The baseline is frozen at load, so these are deltas against 0 and 4,
+    // not against the previous render. 004 US4 T063: the ERROR delta went +10
+    // to +11 with the eleventh error described on B1_STRIPS20_FINDINGS; the
+    // WARN delta is unchanged at +13 because both ends fell by the same 12.
+    expect(deltaOf(card, 'findings:ERROR')).toBe('+11')
     expect(deltaOf(card, 'findings:WARN')).toBe('+13')
     // A metric that did not move still shows a delta, and it reads zero. The
     // sign a zero carries is not fixed by the contract, so only the magnitude
@@ -301,30 +326,40 @@ describe('Scorecard deltas (research D9)', () => {
   })
 
   /**
-   * B1's latest finish is VET-M-EPEE-IND-VCMB at 1037 on day 1. Pushing it out
-   * of range drops the tournament finish to VET-W-EPEE-IND-VCMB's 977, a delta
-   * of −60 minutes. formatMinutes floors, so a delta handed to it *signed*
-   * renders "-1:00" and the row reads "−-1:00"; the magnitude goes through
+   * B1's latest finish is VET-M-FOIL-IND-VCMB at 1050 on day 0. Pushing it out
+   * of range drops the tournament finish to VET-M-EPEE-IND-VCMB's 1025, a delta
+   * of −25 minutes. formatMinutes floors, so a delta handed to it *signed*
+   * renders "-0:25" and the row reads "−-0:25"; the magnitude goes through
    * Math.abs and the prefix carries the sign. No other case in this file
    * asserts a negative delta at all, let alone a negative time one.
+   *
+   * 004 US4 T063 — this case needed a new vehicle, not just new numbers.
+   * B1's argmax event changed: VET-M-EPEE-IND-VCMB, which used to hold the
+   * unique 1037, now finishes at 1025 behind VET-M-FOIL-IND-VCMB's 1050, so
+   * moving it out of range left the tournament finish at 1050 and the case
+   * would have asserted a delta that no longer existed. The event moved is now
+   * the argmax; the delta is smaller (−0:25 rather than −1:00) but still
+   * negative, still a time, and still the only one in this file.
    */
   it('renders a negative time delta as a signed clock time', () => {
     loadB1()
     act(() => {
-      useStore.getState().updatePlacement('VET-M-EPEE-IND-VCMB', { day: 9 })
+      useStore.getState().updatePlacement('VET-M-FOIL-IND-VCMB', { day: 9 })
     })
     render(<Scorecard />)
     fireEvent.click(disclosure())
 
-    expect(valueOf(scorecard(), 'finish:tournament')).toBe('16:17')
-    expect(deltaOf(scorecard(), 'finish:tournament')).toBe('−1:00')
+    expect(valueOf(scorecard(), 'finish:tournament')).toBe('17:05')
+    expect(deltaOf(scorecard(), 'finish:tournament')).toBe('−0:25')
   })
 
   /**
-   * A preset that later places nothing: the baseline still holds B1's 1037
+   * A preset that later places nothing: the baseline still holds B1's 1050
    * while the live finish has no event to read at all. A delta needs both
-   * sides, and `null - 1037` is −1037 rather than an error, so the guard is the
-   * only thing between that and a row reading "—  −17:17".
+   * sides, and `null - 1050` is −1050 rather than an error, so the guard is the
+   * only thing between that and a row reading "—  −17:30".
+   *
+   * 004 US4 T063 — 1037 to 1050, B1's re-baselined finish; see B1_FINISH_*.
    */
   it('renders no delta once a metric\'s live value has gone null', () => {
     loadB1()
@@ -333,7 +368,7 @@ describe('Scorecard deltas (research D9)', () => {
     })
     render(<Scorecard />)
 
-    expect(useStore.getState().scorecardBaseline!['finish:tournament']).toBe(1037)
+    expect(useStore.getState().scorecardBaseline!['finish:tournament']).toBe(1050)
     expect(valueOf(scorecard(), 'finish:tournament')).toBe('—')
     expect(row(scorecard(), 'finish:tournament').querySelector('[data-metric-delta]')).toBeNull()
   })
@@ -354,7 +389,12 @@ describe('Scorecard deltas (research D9)', () => {
    * regardless of what B2 itself would now schedule.
    *
    * A later hand placement gives the metric a value with nothing to compare
-   * it to, and `2738 - null` is 2738, not an error.
+   * it to, and `2775 - null` is 2775, not an error.
+   *
+   * 004 US4 T063 — 45:38 (2738) to 46:15 (2775). D6's cause: B2 is NAC, so
+   * D1-M-EPEE-IND's de_mode resolves to STAGED and it runs DE_PRELIMS
+   * 2470-2655 then DE_ROUND_OF_16 2685-2745 in place of the single DE block,
+   * carrying `de_total_end` with it. `refs:peak-total` did not move.
    */
   it('renders no delta when the baseline entry itself was null', () => {
     applyPreset('B2')
@@ -370,7 +410,7 @@ describe('Scorecard deltas (research D9)', () => {
     })
     render(<Scorecard />)
 
-    expect(valueOf(scorecard(), 'finish:tournament')).toBe('45:38')
+    expect(valueOf(scorecard(), 'finish:tournament')).toBe('46:15')
     expect(row(scorecard(), 'finish:tournament').querySelector('[data-metric-delta]')).toBeNull()
     // refs:peak-total's baseline was 0, not null — that one does compare.
     expect(deltaOf(scorecard(), 'refs:peak-total')).toBe('+90')
@@ -403,21 +443,29 @@ describe('Scorecard deltas (research D9)', () => {
     fireEvent.click(disclosure())
     const dayEnd = useStore.getState().dayConfigs[0].day_end_time
 
-    // +1 minute of day 0 moves the utilization by 0.0123 points, less than the
-    // one decimal the row shows. The value does not change, so a sign taken
-    // from the raw delta would announce a direction the reader cannot see.
+    // 004 US4 T063 — both rendered values moved, 41.4%/41.3% to 35.4%/35.4%,
+    // for B1's re-baselined utilization (see B1_UTILIZATION). The deltas are
+    // what this case is about and neither moved: the baseline is frozen at
+    // 35.456845, so +1 minute is still under a tenth of a point and +6 is
+    // still over one. The two value assertions now read the same string, so
+    // they no longer show the value moving — the deltas below are the only
+    // thing distinguishing the two halves.
+
+    // +1 minute of day 0 moves the utilization by 0.0105 points, less than the
+    // one decimal the row shows. So a sign taken from the raw delta would
+    // announce a direction the reader cannot see.
     act(() => {
       useStore.getState().updateDayConfig(0, { day_end_time: dayEnd + 1 })
     })
-    expect(valueOf(scorecard(), 'strips:utilization')).toBe('41.4%')
+    expect(valueOf(scorecard(), 'strips:utilization')).toBe('35.4%')
     expect(deltaOf(scorecard(), 'strips:utilization')).toBe('0.0%')
 
-    // +6 minutes moves it 0.0737 points, which does round to a tenth — and a
+    // +6 minutes moves it 0.0632 points, which does round to a tenth — and a
     // movement that shows keeps its sign.
     act(() => {
       useStore.getState().updateDayConfig(0, { day_end_time: dayEnd + 6 })
     })
-    expect(valueOf(scorecard(), 'strips:utilization')).toBe('41.3%')
+    expect(valueOf(scorecard(), 'strips:utilization')).toBe('35.4%')
     expect(deltaOf(scorecard(), 'strips:utilization')).toBe('−0.1%')
   })
 })
@@ -516,9 +564,23 @@ describe('Scorecard hover names the driving blocks (FR-029)', () => {
    * nothing. Without this node a keyboard user tabs the rows, lights the canvas
    * on each one, and is told nothing at all.
    *
-   * The counts are B1's measured driving-set sizes (2 for the argmax event's
-   * two segments, 1 for the sabre peak's single open block), so the plural rule
-   * is exercised both ways rather than assumed.
+   * The counts are B1's measured driving-set sizes.
+   *
+   * 004 US4 T063 — 2 blocks became 3 and 1 became 0, and with them this case
+   * **lost the singular half of the plural rule it was written to exercise
+   * both ways.** Both causes are measured. The argmax event's segment count is
+   * D6's: under the resolved STAGED de_mode VET-M-FOIL-IND-VCMB draws POOLS,
+   * DE_PRELIMS and DE_ROUND_OF_16 rather than POOLS and DE. The sabre row's
+   * zero is T061a's re-pack: `peak_saber_refs` now reaches its maximum of 64
+   * on days 0, 1 and 3, the first of those is day 0, and day 0's total
+   * `peak_time` is 480 — a minute at which no sabre block on that day is open.
+   * A metric reporting a non-zero number while lighting nothing is a real
+   * product state, documented on the same footing in
+   * `__tests__/store/scorecardMetrics.test.ts`, so 0 is correct here rather
+   * than a defect. No B1 metric has a driving set of exactly 1 any more, so
+   * the singular branch of the `length === 1 ? '' : 's'` ternary is
+   * **unasserted anywhere in this file**. Restoring it needs a new fixture,
+   * which is test design rather than re-baselining and was left undone.
    */
   it('announces which metric is driving and how many blocks it lights', () => {
     loadB1()
@@ -532,10 +594,10 @@ describe('Scorecard hover names the driving blocks (FR-029)', () => {
     expect(status()?.textContent).toBe('')
 
     pointerEnter(row(scorecard(), 'finish:tournament'))
-    expect(status()?.textContent).toBe('Tournament finish: 2 blocks highlighted')
+    expect(status()?.textContent).toBe('Tournament finish: 3 blocks highlighted')
 
     pointerEnter(row(scorecard(), 'refs:peak-sabre'))
-    expect(status()?.textContent).toBe('Peak sabre referees: 1 block highlighted')
+    expect(status()?.textContent).toBe('Peak sabre referees: 0 blocks highlighted')
 
     pointerLeave(row(scorecard(), 'refs:peak-sabre'))
     expect(status()?.textContent).toBe('')
