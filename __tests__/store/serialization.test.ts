@@ -375,6 +375,31 @@ describe('validateSchema', () => {
     expect(result.valid).toBe(true)
   })
 
+  // 004 T068 finding 4. The same hole T064 closed for de_mode, one field over:
+  // an unrecognized ref_policy reaches buildConfig.ts's AUTO branch — where it
+  // is neither AUTO nor a resolved policy — and then the engine's referee
+  // demand scaling. In the UI it drops the `Referees for …` Select into the
+  // no-selection state T065 had to repair.
+  it('rejects an invalid ref_policy value in a competition', () => {
+    const data = validSerializedData()
+    ;(data.competitions.selectedCompetitions[FIXTURE_EVENT_ID] as unknown as Record<string, unknown>).ref_policy =
+      'BOGUS'
+    const result = validateSchema(data)
+    expect(result.valid).toBe(false)
+    if (!result.valid) expect(result.error).toMatch(/ref_policy/i)
+  })
+
+  it.each(['ONE', 'TWO', 'AUTO'])('accepts ref_policy: %s in a competition', (policy) => {
+    // AUTO is the unset marker and belongs on the wire alongside the two
+    // resolved policies (research D5) — a validator that admitted only ONE and
+    // TWO would reject every link an unset event is saved into.
+    const data = validSerializedData()
+    ;(data.competitions.selectedCompetitions[FIXTURE_EVENT_ID] as unknown as Record<string, unknown>).ref_policy =
+      policy
+    const result = validateSchema(data)
+    expect(result.valid, `ref_policy "${policy}" rejected`).toBe(true)
+  })
+
   it('rejects missing required fields', () => {
     const data = validSerializedData() as unknown as Record<string, unknown>
     delete data.tournament

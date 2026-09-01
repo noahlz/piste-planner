@@ -318,6 +318,27 @@ example, no Vet Team and Vet Individual on the same day) are not adjustable
 here – the user overrides those by placing events manually and accepting the
 warning.
 
+## The Advanced panel re-implements the engine's referees-per-pool factor
+
+*Raised by 004's US4 T068 React review on 2026-09-01. Unassigned and
+unnumbered — it needs a spec directory when it is picked up, because the fix
+edits `src/engine/`.*
+
+`AdvancedPanel.tsx`'s `refereesPerPool` returns `policy === RefPolicy.ONE ? 1 :
+2`, a second copy of the factor `peakPoolRefDemand` scales its demand by
+(`src/engine/refs.ts:22`). The number the panel states as the type's applied
+default and the number the engine schedules against are therefore two
+independent answers, and the copy in the UI is invisible to the B1–B8 drift
+ledger — a change to the engine's factor moves every scenario's referee columns
+and leaves the panel stating the old value with a green suite.
+
+The fix is to export the factor from `src/engine/refs.ts` and have the panel
+read it. That edits the engine, so constitution III makes it a gated change with
+its own snapshot review, which is why T068 recorded it here rather than making
+it. Note that swapping it changes no *scheduled* count today — both `AUTO` and
+`TWO` already score two refs per pool — so the review is over the referee
+columns, not the placement counts.
+
 ## Global settings
 
 *Split on 2026-08-29. The gears control and a first panel are assigned to P3 –

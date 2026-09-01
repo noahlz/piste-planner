@@ -25,7 +25,7 @@ import {
   REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
-import { TYPE_DEFAULTS } from './typeDefaults.ts'
+import { TYPE_DEFAULTS, resolveVideoStrips } from './typeDefaults.ts'
 
 /**
  * Calendar-day spacing between scheduler-axis day windows (research.md D5).
@@ -50,14 +50,11 @@ export function buildTournamentConfig(
   config: TournamentConfig
   competitions: Competition[]
 } {
-  // `null` alone means "follow the tournament type's default" (research D7).
-  // `??` and not `||`: `0` is a legitimate explicit value — a tournament with
-  // no video strips — and must survive rather than resolve to a NAC's 8.
   // Resolved once into a local because two sites downstream need the resolved
-  // number, the strip list and `config.video_strips_total`. Nothing is written
-  // back to `state` (FR-036), so a later tournament type change still sees
-  // `null` and re-resolves against the new type.
-  const videoStrips = state.video_strips_total ?? TYPE_DEFAULTS[state.tournament_type].video_strips_total
+  // number, the strip list and `config.video_strips_total`. The rule itself
+  // lives in `resolveVideoStrips` (typeDefaults.ts), shared with the rail's two
+  // panels so the app cannot state one count and schedule another.
+  const videoStrips = resolveVideoStrips(state.video_strips_total, state.tournament_type)
   const strips = buildStrips(state.strips_total, videoStrips)
 
   const config: TournamentConfig = {

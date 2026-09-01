@@ -22,3 +22,23 @@ export const TYPE_DEFAULTS: Record<TournamentTypeValue, TypeDefaults> = {
   [TournamentType.RYC]: { ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
   [TournamentType.RJCC]: { ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
 }
+
+/**
+ * The video strip count a store field resolves to. `null` alone means "follow
+ * the tournament type's default" (research D7); `??` and not `||` because `0`
+ * is a legitimate explicit value — a tournament with no video strips — and must
+ * survive rather than resolve to a NAC's 8.
+ *
+ * The rule's only home. `buildConfig.ts` resolves it for the engine, and the
+ * rail's two panels — `StripSetup`'s count field and `AdvancedPanel`'s summary
+ * — both display it, so a second copy anywhere is a second answer to one
+ * question (constitution §Planning Artifacts). Nothing here writes back to the
+ * store (FR-036): a later tournament type change re-resolves the same `null`
+ * against the new type.
+ */
+export function resolveVideoStrips(
+  videoStripsTotal: number | null,
+  tournamentType: TournamentTypeValue,
+): number {
+  return videoStripsTotal ?? TYPE_DEFAULTS[tournamentType].video_strips_total
+}

@@ -1,6 +1,6 @@
 import type { StoreState, CompetitionConfig, GlobalOverrides, DeModeSetting } from './store.ts'
 import type { DayConfig, TournamentType, Weapon as WeaponType, Placement } from '../engine/types.ts'
-import { TournamentType as TT, Weapon, PlacementSource, DeMode } from '../engine/types.ts'
+import { TournamentType as TT, Weapon, PlacementSource, DeMode, RefPolicy } from '../engine/types.ts'
 import { POOL_DURATION_MIN, POOL_DURATION_MAX } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
@@ -43,6 +43,11 @@ const VALID_TOURNAMENT_TYPES = new Set(Object.values(TT))
 // reaches buildConfig.ts and then the engine's de_mode branch, so an unvalidated
 // string in this position is a real hole, not a cosmetic gap.
 const VALID_DE_MODES = new Set<string>([...Object.values(DeMode), 'AUTO'])
+// Same reasoning one field over: ref_policy reaches buildConfig.ts's AUTO branch
+// and then the engine's referee demand scaling, so an unrecognized string here
+// is a real hole too. No spread-plus-literal — `RefPolicy` already carries AUTO
+// as the unset marker (research D5) alongside the two resolved policies.
+const VALID_REF_POLICIES = new Set<string>(Object.values(RefPolicy))
 
 // ──────────────────────────────────────────────
 // Serialize
@@ -178,6 +183,12 @@ export function validateSchema(
         return {
           valid: false,
           error: `de_mode must be one of SINGLE_STAGE, STAGED, AUTO for competition "${id}"`,
+        }
+      }
+      if (!VALID_REF_POLICIES.has(config.ref_policy as RefPolicy)) {
+        return {
+          valid: false,
+          error: `ref_policy must be one of ONE, TWO, AUTO for competition "${id}"`,
         }
       }
     }

@@ -1,16 +1,21 @@
 import { useState } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, RotateCcw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { useStore } from '../../store/store.ts'
-import { TYPE_DEFAULTS } from '../../store/typeDefaults.ts'
+import { TYPE_DEFAULTS, resolveVideoStrips } from '../../store/typeDefaults.ts'
 import { findCompetition } from '../../engine/catalogue.ts'
 import { RefPolicy } from '../../engine/types.ts'
 import { competitionLabel } from '../competitionLabels.ts'
 import { DE_MODE_LABELS } from '../deModeLabels.ts'
 import { DefaultLabel } from '../common/DefaultLabel.tsx'
+
+/** The collapsed summary's id, so the trigger can point `aria-describedby` at
+ *  it. The panel mounts once in the rail, so a constant is enough. */
+const SUMMARY_ID = 'advanced-panel-summary'
 
 /** Referees per pool for a resolved policy — the same single branch the engine
  *  scales its demand by (`peakPoolRefDemand`, src/engine/refs.ts:22). */
@@ -31,7 +36,12 @@ function refereesPerPool(policy: RefPolicy): number {
  * Only referees are editable here. DE mode's control already lives in
  * `CompetitionOverrides` and the video strip count in `StripSetup` — a second
  * control for either would give two elements the same accessible name whenever
- * both panels mount. FR-040 keeps handbook policy out entirely: the regional cut
+ * both panels mount. The video strips *revert* is the exception and belongs
+ * here: `NumberInput.onChange` is typed `(value: number) => void`, so
+ * `StripSetup`'s field cannot write the `null` FR-038 requires, and this is the
+ * panel that distinguishes following a default from setting one (FR-039). Its
+ * accessible name differs from that field's, so nothing is ambiguous.
+ * FR-040 keeps handbook policy out entirely: the regional cut
  * override wins over the organizer rather than losing to them, so it is not a
  * default and has no control in this panel.
  */
@@ -39,14 +49,21 @@ export function AdvancedPanel() {
   const [open, setOpen] = useState(false)
   const tournamentType = useStore((s) => s.tournament_type)
   const videoStripsTotal = useStore((s) => s.video_strips_total)
+  const setVideoStrips = useStore((s) => s.setVideoStrips)
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
   const updateCompetition = useStore((s) => s.updateCompetition)
 
   const typeDefaults = TYPE_DEFAULTS[tournamentType]
   const defaultReferees = refereesPerPool(typeDefaults.ref_policy)
-  // The resolution `buildConfig.ts:60` performs: a null count follows the type,
-  // and any number, 0 included, is the organizer's own.
-  const videoStrips = videoStripsTotal ?? typeDefaults.video_strips_total
+  // The same resolution `buildConfig.ts` schedules against — one home, in
+  // typeDefaults.ts, so the summary can never state a count the engine does not
+  // use.
+  const videoStrips = resolveVideoStrips(videoStripsTotal, tournamentType)
+  // FR-039 — the stored `null` is the marker, never a comparison of the
+  // resolved count against the type's row. An explicit 8 at a NAC resolves to
+  // the same 8 an unset field does, and only the stored value tells them apart
+  // (the same rule `followsTypeDefault` applies to `ref_policy` below).
+  const videoFollowsTypeDefault = videoStripsTotal === null
 
   const refPolicyOptions: { value: RefPolicy; label: string }[] = [
     { value: RefPolicy.AUTO, label: `Auto (${defaultReferees})` },
@@ -63,6 +80,12 @@ export function AdvancedPanel() {
             this panel cannot be a RailPanel child (see above). */}
         <button
           type="button"
+          // The summary below is in the DOM whether the panel is open or shut,
+          // but nothing tied it to this button, so a screen reader announced
+          // "Advanced, collapsed" and none of the three applied defaults FR-035
+          // puts there. `aria-describedby` is the tie — it feeds the
+          // description, leaving the accessible name "Advanced".
+          aria-describedby={SUMMARY_ID}
           className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm font-semibold text-foreground hover:bg-foreground/5"
         >
           <ChevronRight
@@ -74,9 +97,30 @@ export function AdvancedPanel() {
 
       {/* FR-035 — dim, and outside CollapsibleContent so closing the panel does
           not unmount it. */}
-      <div className="flex flex-col gap-0.5 pb-2 pl-8 pr-3 text-xs text-muted-foreground">
+      <div
+        id={SUMMARY_ID}
+        className="flex flex-col gap-0.5 pb-2 pl-8 pr-3 text-xs text-muted-foreground"
+      >
         <span>Referees per pool: {defaultReferees}</span>
-        <span>Video strips: {videoStrips}</span>
+        {/* The count's text stays this element's own direct children so it
+            reads as one line — the badge and revert control are sibling
+            elements, not part of the sentence. */}
+        <span className="flex items-center gap-1">
+          Video strips: {videoStrips}
+          <DefaultLabel isDefault={videoFollowsTypeDefault} />
+          {!videoFollowsTypeDefault && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1"
+              onClick={() => setVideoStrips(null)}
+              aria-label="Revert video strips to default"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </span>
         <span>DE mode: {DE_MODE_LABELS[typeDefaults.de_mode]}</span>
       </div>
 
