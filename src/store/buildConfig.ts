@@ -136,7 +136,12 @@ function buildCompetitions(
 
       // Sensible defaults
       earliest_start: 0,
-      latest_end: 9999,
+      // Genuinely unconstrained (research.md D6) — a finite sentinel like the
+      // old 9999 binds once a day's scheduler-axis end (d*DAY_AXIS_SPACING_MINS
+      // + day_end_time) passes it, which under 1440-minute spacing starts at
+      // day 7. Infinity can never be the minimum in
+      // Math.min(dayEnd(day, config), latest_end), for any day count.
+      latest_end: Infinity,
       optional: false,
       de_round_of_16_strips: 4,
       de_round_of_16_requirement: DeStripRequirement.HARD,

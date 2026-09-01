@@ -165,7 +165,7 @@ describe('buildTournamentConfig', () => {
       const comp = competitions[0]
 
       expect(comp.earliest_start).toBe(0)
-      expect(comp.latest_end).toBe(9999)
+      expect(comp.latest_end).toBe(Infinity)
       expect(comp.optional).toBe(false)
       expect(comp.de_round_of_16_strips).toBe(4)
       expect(comp.de_round_of_16_requirement).toBe(DeStripRequirement.HARD)
@@ -173,6 +173,22 @@ describe('buildTournamentConfig', () => {
       expect(comp.flighting_group_id).toBeNull()
       expect(comp.is_priority).toBe(false)
       expect(comp.strips_allocated).toBe(0)
+    })
+
+    it('leaves latest_end unbinding at a day count beyond the UI\'s current maximum of 4 (research.md D6)', () => {
+      // The old 9999 sentinel started truncating at day 7: 7 * 1440 + 1320 =
+      // 11400 > 9999. Use an 8-day tournament (day indices 0-7) so day 7's
+      // scheduler-axis end actually exceeds that old bound.
+      const dayConfigs = Array.from({ length: 8 }, () => ({ day_start_time: 480, day_end_time: 1320 }))
+      const state = storeWith({ ...minimalState(), days_available: 8, dayConfigs })
+      const { config, competitions } = buildTournamentConfig(state)
+      const comp = competitions[0]
+
+      const day7End = config.dayConfigs![7].day_end_time
+      expect(day7End).toBe(11400)
+      // This is concurrentScheduler.ts's own clamp expression: it must return
+      // dayEnd unchanged, never the latest_end sentinel.
+      expect(Math.min(day7End, comp.latest_end)).toBe(day7End)
     })
 
     it('skips unknown catalogue IDs without throwing', () => {

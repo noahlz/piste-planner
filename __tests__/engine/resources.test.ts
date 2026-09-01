@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   createGlobalState,
   findAvailableStripsInWindow,
@@ -392,6 +394,42 @@ describe('findAvailableStripsInWindow', () => {
     if (result.fit === 'none') {
       expect(result.reason).toBe('TIME')
       expect(result.earliest_next_start).toBe(400)
+    }
+  })
+})
+
+// ──────────────────────────────────────────────
+// findAvailableStripsInWindow — day-inference precondition (T015)
+//
+// The day-end clamp's inference fallback (`floor(startTime / DAY_LENGTH_MINS)`,
+// used only when `day` is omitted) assumes a compacted axis and is wrong under
+// the store's 1440-spaced axis (research.md D3). It is unreachable from a real
+// scheduling run because both call sites in concurrentScheduler.ts's
+// `tryAllocate` always pass `day` explicitly. A test that only exercises
+// findAvailableStripsInWindow directly — with hand-picked `day` values — would
+// prove the function *can* behave differently with and without `day`, but
+// would not notice if a real call site stopped supplying it: that call is
+// never made. So this asserts directly against the call sites' source text,
+// which is the one thing that changes when a call site drops the argument.
+// ──────────────────────────────────────────────
+
+describe('findAvailableStripsInWindow — day-inference precondition (T015)', () => {
+  const SCHEDULER_PATH = resolve(process.cwd(), 'src/engine/concurrentScheduler.ts')
+
+  it('both tryAllocate call sites pass the day argument explicitly', () => {
+    const source = readFileSync(SCHEDULER_PATH, 'utf-8')
+    const callSites = [...source.matchAll(/findAvailableStripsInWindow\(([\s\S]*?)\)/g)]
+
+    // tryAllocate has exactly two call sites: the STAGED-DE pre-check probe
+    // and the strip-claim call every phase kind uses.
+    expect(callSites).toHaveLength(2)
+
+    for (const [, args] of callSites) {
+      const positional = args.split(',').map(s => s.trim()).filter(Boolean)
+      // The day-inference fallback only activates when `day` is omitted
+      // entirely (undefined), so the regression this guards against is the
+      // trailing `day` argument being dropped from the call.
+      expect(positional.at(-1)).toBe('day')
     }
   })
 })

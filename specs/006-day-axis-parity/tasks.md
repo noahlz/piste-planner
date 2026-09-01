@@ -107,12 +107,12 @@ the branch with `git merge --no-ff --no-commit` completed by
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T013 [P] [US2] Write failing tests in `__tests__/store/dayHours.test.ts`: days with different start and end times place events inside their own windows only; narrowing one day moves that day's overflow without shifting another day's events; a day too short for an event leaves it unplaced rather than spilling past the close
+- [X] T013 [P] [US2] Write failing tests in `__tests__/store/dayHours.test.ts`: days with different start and end times place events inside their own windows only; narrowing one day moves that day's overflow without shifting another day's events; a day too short for an event leaves it unplaced rather than spilling past the close
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Replace the `latest_end: 9999` sentinel in `src/store/buildConfig.ts:122` with a genuinely unconstrained value ([research.md D6](./research.md)) — under 1440 spacing it starts truncating at day 7, where the compacted axis never reached it — and add a test at a day count beyond the UI's current maximum of 4. This is the only permitted `src/engine/`-adjacent change; run the ledger before and after and record both *(subagent commits)*
-- [ ] T015 [P] [US2] State the day-inference precondition where it lives in `src/engine/resources.ts:186-192,246-251` and add a test in `__tests__/engine/resources.test.ts` that fails if a scheduler call site ever stops passing `day` ([research.md D3](./research.md)). Behavior is unchanged — both real call sites already pass it (`concurrentScheduler.ts:903`, `:915`)
+- [X] T014 [US2] Replace the `latest_end: 9999` sentinel in `src/store/buildConfig.ts:122` with a genuinely unconstrained value ([research.md D6](./research.md)) — under 1440 spacing it starts truncating at day 7, where the compacted axis never reached it — and add a test at a day count beyond the UI's current maximum of 4. This is the only permitted `src/engine/`-adjacent change; run the ledger before and after and record both *(subagent commits)*
+- [X] T015 [P] [US2] State the day-inference precondition where it lives in `src/engine/resources.ts:186-192,246-251` and add a test in `__tests__/engine/resources.test.ts` that fails if a scheduler call site ever stops passing `day` ([research.md D3](./research.md)). Behavior is unchanged — both real call sites already pass it (`concurrentScheduler.ts:903`, `:915`)
 - [ ] T016 [US2] Run the full suite and the drift ledger; confirm the snapshot is still byte-identical and that `src/engine/` carries only T014's and T015's named changes *(subagent commits)*
 
 **Checkpoint**: Per-day hours are honored and tested, and neither hazard can resurface silently.
