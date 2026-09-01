@@ -356,6 +356,57 @@ await page2.screenshot({ path: `${SHOTS}06-roundtrip.png`, fullPage: FULLPAGE })
 if (rows2 !== rowsNow) throw new Error(`share round-trip row mismatch ${rowsNow} != ${rows2}`)
 await page2.close()
 
+// ── Team event cut (008) ──
+// Before this feature, defaultCutForEntry gave every TEAM catalogue entry a
+// percentage cut inherited from its category, which the engine's cut-on-team
+// rule (src/engine/validation.ts) flags BINDING — and scheduleAllConcurrent
+// returns an empty schedule whenever any BINDING error is present. NAC
+// Cadet/Junior (24 events: CADET+JUNIOR × 3 weapons × 2 genders × IND+TEAM)
+// went from an empty board to a real schedule once TEAM entries were pinned
+// to DISABLED/100 (src/store/competitionDefaults.ts). Nothing above this
+// point touches a team event, so a SMOKE PASS without this step proves
+// nothing about that fix.
+// The "Presets…" panel the ROC step opened above stays open (nothing closes
+// it on selection), so click the trigger only if the template list is not
+// already showing.
+const teamTemplateVisible = await page
+  .getByText('NAC Cadet/Junior', { exact: true })
+  .isVisible()
+  .catch(() => false)
+if (!teamTemplateVisible) {
+  await page.getByRole('button', { name: 'Presets…' }).click()
+}
+await page.getByText('NAC Cadet/Junior', { exact: true }).click()
+log('NAC Cadet/Junior template applied')
+
+await page.getByRole('button', { name: 'Suggest' }).first().click()
+await page.waitForTimeout(100)
+
+const teamGen = page.getByRole('button', { name: 'Auto-schedule all' })
+if (await teamGen.isDisabled()) {
+  await shot('07b-team-generate-disabled')
+  throw new Error('Auto-schedule all disabled for NAC Cadet/Junior — read smoke-shots/07b for the blocking findings')
+}
+await teamGen.click()
+await page.waitForTimeout(300)
+
+await page.getByRole('radio', { name: 'Schedule' }).click()
+await page.waitForTimeout(200)
+const teamRowCount = await page.locator('[data-schedule-row]').count()
+log('NAC Cadet/Junior schedule table rows =', teamRowCount)
+// Measured against the running app 2026-08-31 by running this file's exact
+// sequence (Presets… → NAC Cadet/Junior → Suggest → Auto-schedule all →
+// Schedule radio → count [data-schedule-row]) twice in a row; both runs
+// reported 15 of the template's 24 events placed (Suggest set 15 strips —
+// the shortfall is a strip-capacity limit on this template, not a
+// regression). Before this feature's fix this count was 0: TEAM entries
+// carried a percentage cut, cut-on-team fired BINDING, and
+// scheduleAllConcurrent returned an empty schedule.
+if (teamRowCount !== 15) {
+  throw new Error(`NAC Cadet/Junior schedule table rendered ${teamRowCount} rows, expected 15`)
+}
+await shot('07-team-schedule')
+
 await browser.close()
 log('console errors =', errors.length, errors.slice(0, 3))
 if (errors.length) throw new Error('console errors: ' + errors.join(' | '))
