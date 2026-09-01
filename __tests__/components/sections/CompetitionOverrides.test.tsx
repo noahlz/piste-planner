@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { CompetitionOverrides } from '../../../src/components/sections/CompetitionOverrides.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { CATALOGUE, findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/components/competitionLabels.ts'
-import { Category, CutMode, EventType } from '../../../src/engine/types.ts'
+import { Category, CutMode, DeMode, EventType } from '../../../src/engine/types.ts'
 
 // 008 T013 — TDD red tests for spec 008 US3's three acceptance scenarios
 // (spec.md US3; contracts/competition-defaults.md C4). T005 made the store
@@ -108,6 +108,66 @@ describe('CompetitionOverrides cut default marker (spec 008 US3)', () => {
     expect(
       within(cutValueCell(label)).queryByText('Default'),
       `${label}: cut value 20 is the CADET individual default but reads as user-modified`,
+    ).not.toBeNull()
+  })
+})
+
+// 004 T065/T067 — DE mode's per-type default lives here, where its control
+// already lives, rather than in the Advanced panel: a second control named
+// `DE mode for ${label}` would collide with this one wherever both panels mount.
+// A new event stores `'AUTO'` (data-model.md §Settings override state), so the
+// option list has to offer it — without an AUTO entry the Select matched no
+// option and rendered no selection at all.
+describe('CompetitionOverrides DE mode follow-default marker (spec 004 FR-038, FR-039)', () => {
+  function deModeControl(label: string): HTMLElement {
+    return screen.getByRole('combobox', { name: `DE mode for ${label}` })
+  }
+
+  function deModeCell(label: string): HTMLElement {
+    const cell = deModeControl(label).closest('td')
+    if (!cell) throw new Error(`DE mode select for "${label}" is not inside a table cell`)
+    return cell
+  }
+
+  it('marks a stored AUTO as default, an explicit STAGED as not, and returns the explicit one to AUTO', () => {
+    useStore.getState().addCompetition(CADET_INDIVIDUAL_ID) // de_mode starts 'AUTO'
+    const label = labelFor(CADET_INDIVIDUAL_ID)
+
+    render(<CompetitionOverrides />)
+
+    expect(
+      within(deModeCell(label)).queryByText('Default'),
+      `${label}: de_mode AUTO follows the type default but does not read as default`,
+    ).not.toBeNull()
+    expect(
+      deModeControl(label),
+      `${label}: de_mode AUTO shows no selection — the option list is missing its AUTO entry`,
+    ).toHaveTextContent('Staged DE Blocks')
+
+    // Explicit STAGED resolves to the same mode AUTO does at a NAC, so only the
+    // stored value tells them apart — the marker cannot be a comparison.
+    act(() => {
+      useStore.getState().updateCompetition(CADET_INDIVIDUAL_ID, { de_mode: DeMode.STAGED })
+    })
+    expect(
+      within(deModeCell(label)).queryByText('Default'),
+      `${label}: de_mode is explicitly STAGED but still reads as default because NAC's default is also STAGED`,
+    ).toBeNull()
+
+    // FR-038: an explicit value must be returnable to following the type
+    // default, or AUTO is write-once through the UI.
+    fireEvent.keyDown(deModeControl(label), { key: 'ArrowDown' })
+    fireEvent.keyDown(screen.getByRole('option', { name: 'Auto (Staged DE Blocks)' }), {
+      key: 'Enter',
+    })
+
+    expect(
+      useStore.getState().selectedCompetitions[CADET_INDIVIDUAL_ID].de_mode,
+      `${label}: the follow-default option did not write AUTO back to the store`,
+    ).toBe('AUTO')
+    expect(
+      within(deModeCell(label)).queryByText('Default'),
+      `${label}: returned to AUTO but no longer reads as default`,
     ).not.toBeNull()
   })
 })
