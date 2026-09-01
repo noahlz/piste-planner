@@ -63,6 +63,56 @@ rediscover these:
   the day was the real constraint. Documented in the test file's own comment
   block above the guard's `describe`.
 
+## Team events block their whole tournament
+
+*Found by feature 006 on 2026-08-31 while classifying its parity exceptions,
+assigned to feature 008, done 2026-08-31.*
+
+Two of the eight reference tournaments, B2 and B8, scheduled **nothing** – not
+a partial schedule, an empty one. Every tournament containing team events was
+affected, so this was a live product defect rather than a calibration gap:
+`defaultConfigForId` derived a competition's cut from `DEFAULT_CUT_BY_CATEGORY`
+with no `event_type === TEAM` branch, so a team event reached the engine
+carrying a percentage cut, tripped the `cut-on-team` BINDING error, and one
+BINDING error discarded the entire tournament's schedule. The full record,
+including the isolation method and the store-side helper that now derives the
+default, is [`specs/008-team-event-cut/`](../../specs/008-team-event-cut/);
+B8's residual gap against the drift ledger is
+[`b8-residual.md`](../../specs/008-team-event-cut/b8-residual.md).
+
+Measured: B2 went from 0 to 24, the drift ledger's exact count, removing its
+FR-004a exception. B8 went from 0 to 53, one above the ledger's 52, so its
+exception was rewritten around the +1 rather than deleted. Four of the ten
+shipped templates went from an empty board to a real schedule –
+`NAC Cadet/Junior`, `NAC Div1/Junior`, `NAC Vet/Div1/Junior`,
+`Junior Olympics`. No `src/engine/` change, and the drift ledger snapshot is
+byte-identical to `main`.
+
+**What 008 deliberately did not fix**, so a later session does not have to
+rediscover these:
+
+- **`ROC Mega` also placed nothing, and has no team event.** Its cause is a
+  strip-hour capacity shortfall reported by `validateConfig` in BINDING mode,
+  triggered by `suggestStrips()` under-recommending strips for 42 events – a
+  different defect that reaches an empty board by the same "one BINDING error
+  discards the whole schedule" architecture. `ROC Mega` staying at 0 after this
+  feature is expected and correct, not a regression. Measured in
+  [`baseline.md`](../../specs/008-team-event-cut/baseline.md).
+- **`src/engine/catalogue.ts:217`'s comment is wrong about its own count.** It
+  claims `NAC Vet/Div1/Junior` selects 36 events; the measured count is 66,
+  because Veteran individual events expand to six age groups. Left alone
+  because `src/engine/` was outside this feature's hard constraint, not
+  because it is right.
+- **B8's +1 over the ledger stays open**, attributed by isolation to the
+  ledger's `de_mode` and `strips_allocated` acting together – neither alone
+  moves the count. It is 004 US4's, along with **B4 and B6**, which remain
+  FR-004a exceptions, untouched.
+- **`__tests__/helpers/scenarios.ts`'s copy of the team-event branch is
+  deliberate, not debt.** Converging it on the store's helper would make the
+  app-path parity check true by construction and destroy the instrument that
+  found this bug. The reasoning is
+  [research.md D2](../../specs/008-team-event-cut/research.md).
+
 ## Rail rebuild
 
 *Assigned to feature 007 on 2026-08-31 (unspecced), after 004 closes.*
