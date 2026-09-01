@@ -255,6 +255,21 @@ export interface MatrixCanvasProps {
    */
   selection?: TimeRange | null
   /**
+   * The `${competitionId}:${phase}` keys of the blocks driving the scorecard
+   * metric under the pointer (FR-029) — the same string `data-event-block`
+   * carries. The canvas draws what it matches and derives nothing: the metric
+   * that owns the number owns the list of blocks behind it (S6 design §2), and
+   * a second definition here is how the two would come to disagree.
+   *
+   * Passed **undebounced**, unlike `schedule`/`findings`/`dayConfigs`. The
+   * scorecard follows the live store per keystroke while these draw a model
+   * committed `CENTER_SETTLE_MS` behind it, and a hover cue that arrived a
+   * settle after the hover would not be one. Keys are matched against the
+   * blocks actually committed, so a key with no block on screen simply does not
+   * light — fewer blocks lit during a settle, never a wrong one.
+   */
+  highlight?: ReadonlySet<string>
+  /**
    * Clock-time hours for each day (contracts/day-axis.md C4) — the store's
    * `dayConfigs`, never `schedule.config.dayConfigs`, which may carry the
    * scheduler's own axis (research.md D4, D5). Passed together with
@@ -271,6 +286,8 @@ interface MatrixCanvasViewProps {
   schedule: DerivedSchedule
   findings: DerivedFindings
   selection?: TimeRange | null
+  /** Never resolved from anything: absent means nothing is hovered. */
+  highlight?: ReadonlySet<string>
   dayConfigs: DayConfig[]
 }
 
@@ -446,6 +463,7 @@ export function MatrixCanvas({
   schedule,
   findings,
   selection,
+  highlight,
   dayConfigs,
 }: MatrixCanvasProps = {}) {
   if (schedule !== undefined && findings !== undefined && dayConfigs !== undefined) {
@@ -454,6 +472,7 @@ export function MatrixCanvas({
         schedule={schedule}
         findings={findings}
         selection={selection}
+        highlight={highlight}
         dayConfigs={dayConfigs}
       />
     )
@@ -463,13 +482,22 @@ export function MatrixCanvas({
       schedule={schedule}
       findings={findings}
       selection={selection}
+      highlight={highlight}
       dayConfigs={dayConfigs}
     />
   )
 }
 
-/** The fallback path: whichever field was not passed comes from the store. */
-function StoreConnectedCanvas({ schedule, findings, selection, dayConfigs }: MatrixCanvasProps) {
+/** The fallback path: whichever field was not passed comes from the store.
+ *  `highlight` has no fallback — the canvas never resolves a driving set of its
+ *  own, so a bare mount simply highlights nothing. */
+function StoreConnectedCanvas({
+  schedule,
+  findings,
+  selection,
+  highlight,
+  dayConfigs,
+}: MatrixCanvasProps) {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)
   // Clock-time day hours, read from their authoring home rather than from
@@ -481,12 +509,19 @@ function StoreConnectedCanvas({ schedule, findings, selection, dayConfigs }: Mat
       schedule={schedule ?? live}
       findings={findings ?? liveFindings}
       selection={selection}
+      highlight={highlight}
       dayConfigs={dayConfigs ?? liveDayConfigs}
     />
   )
 }
 
-function MatrixCanvasView({ schedule, findings, selection, dayConfigs }: MatrixCanvasViewProps) {
+function MatrixCanvasView({
+  schedule,
+  findings,
+  selection,
+  highlight,
+  dayConfigs,
+}: MatrixCanvasViewProps) {
   const { config } = schedule
 
   // One field per initializer, following Drawer.tsx: each read is independent
@@ -1052,21 +1087,29 @@ function MatrixCanvasView({ schedule, findings, selection, dayConfigs }: MatrixC
             height: plotHeight,
           }}
         >
-          {visibleBlocks.map((drawn) => (
-            <EventBlock
-              key={`${drawn.placement.competitionId}:${drawn.placement.phase}`}
-              competition={drawn.competition}
-              label={drawn.label}
-              day={drawn.placement.day}
-              placement={drawn.placement}
-              x={drawn.x}
-              y={drawn.y}
-              width={drawn.width}
-              height={drawn.height}
-              rowHeightStep={rowHeightStep}
-              findings={drawn.findings}
-            />
-          ))}
+          {visibleBlocks.map((drawn) => {
+            // One expression for the key React reconciles on, the key
+            // `data-event-block` carries and the key a metric's `blockKeys`
+            // names — written twice they would drift, and the highlight would
+            // quietly stop matching anything.
+            const key = `${drawn.placement.competitionId}:${drawn.placement.phase}`
+            return (
+              <EventBlock
+                key={key}
+                competition={drawn.competition}
+                label={drawn.label}
+                day={drawn.placement.day}
+                placement={drawn.placement}
+                x={drawn.x}
+                y={drawn.y}
+                width={drawn.width}
+                height={drawn.height}
+                rowHeightStep={rowHeightStep}
+                findings={drawn.findings}
+                highlighted={highlight?.has(key)}
+              />
+            )
+          })}
         </div>
 
         {/* Sticky day bands, each with its own hour axis pinned beneath it. */}

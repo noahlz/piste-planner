@@ -323,6 +323,143 @@ describe('EventBlock degradation order in the DOM', () => {
   })
 })
 
+/**
+ * 004 T050 — the scorecard's hover highlight (FR-029, S6 design brief §5).
+ *
+ * The highlight is deliberately **not** a fifth encoding channel. The four
+ * channels say what an event *is*; the highlight says only "this block drives
+ * the metric currently under the pointer", which belongs to the scorecard and
+ * is gone the moment the pointer leaves. So it has to sit outside the channels
+ * and outside their degradation order both ways: visible at the widths and the
+ * row height where every text channel is already gone, and changing nothing a
+ * block encodes.
+ *
+ * The two halves are asserted separately on purpose. A cue drawn out of
+ * `blockChannels` would pass the "changes nothing" half and fail the narrow
+ * cases; a cue that repainted the fill would pass the narrow cases and fail the
+ * readout below.
+ */
+describe('EventBlock highlight cue (FR-029)', () => {
+  /** The four encoding channels, read off a rendered block in one shot. */
+  function channelReadout(el: HTMLElement): Record<string, unknown> {
+    return {
+      fill: fillOf(el),
+      ink: inkOf(el),
+      edgeBar: has(el, '[data-edge-bar]'),
+      hatch: has(el, '[data-hatch]'),
+      weaponMark: el.querySelector('[data-weapon-mark]')?.textContent ?? null,
+      genderPrefix: el.querySelector('[data-gender-prefix]')?.textContent ?? null,
+    }
+  }
+
+  it('stamps the marker and draws the cue only when highlighted', () => {
+    const plain = renderBlock()
+    const plainMarker = plain.dataset.highlighted
+    const plainCue = has(plain, '[data-highlight-cue]')
+    cleanup()
+
+    const lit = renderBlock({ highlighted: true })
+
+    expect(plainMarker).toBeUndefined()
+    expect(plainCue).toBe(false)
+    expect(lit.dataset.highlighted).toBe('true')
+    expect(has(lit, '[data-highlight-cue]')).toBe(true)
+  })
+
+  it('keeps the cue out of the accessible tree and out of the hit test', () => {
+    const el = renderBlock({ highlighted: true })
+    const cue = el.querySelector<HTMLElement>('[data-highlight-cue]')
+    if (!cue) throw new Error('a highlighted block must draw a cue')
+
+    // The block already names itself for a screen reader and the canvas
+    // hit-tests the pointer against block geometry — a cue that answered
+    // either would be a second voice for one rectangle.
+    expect(cue.getAttribute('aria-hidden')).toBe('true')
+    expect(cue.className).toContain('pointer-events-none')
+    expect(cue.className).toContain('absolute')
+  })
+
+  it.each([13, 14, 27, 28, 63, 64, 200])(
+    'draws the cue at %ipx, whatever the degradation order has already dropped',
+    (width) => {
+      const el = renderBlock({ width, highlighted: true })
+
+      expect(has(el, '[data-highlight-cue]')).toBe(true)
+    },
+  )
+
+  it('draws the cue at 13px, where not one text channel survives', () => {
+    const el = renderBlock({ width: 13, highlighted: true })
+
+    // The state this case is about, asserted rather than assumed: below the
+    // 14px gender-prefix threshold every text channel is already gone.
+    expect(has(el, '[data-label-text]')).toBe(false)
+    expect(has(el, '[data-weapon-mark]')).toBe(false)
+    expect(has(el, '[data-gender-prefix]')).toBe(false)
+
+    expect(has(el, '[data-highlight-cue]')).toBe(true)
+    expect(el.dataset.highlighted).toBe('true')
+  })
+
+  it('draws the cue at the compact row height, where not one text channel survives either', () => {
+    const el = renderBlock({
+      width: 200,
+      height: 64,
+      rowHeightStep: RowHeightStep.COMPACT,
+      highlighted: true,
+    })
+
+    expect(has(el, '[data-label-text]')).toBe(false)
+    expect(has(el, '[data-weapon-mark]')).toBe(false)
+    expect(has(el, '[data-gender-prefix]')).toBe(false)
+
+    expect(has(el, '[data-highlight-cue]')).toBe(true)
+    expect(el.dataset.highlighted).toBe('true')
+  })
+
+  it('leaves all four encoding channels exactly as they were', () => {
+    // A DE block, so the phase channel is in play whole — the edge-bar and the
+    // hatch — rather than half of it.
+    const shared: Partial<EventBlockProps> = {
+      competition: makeCompetition({ id: 'plain', weapon: Weapon.EPEE, gender: Gender.WOMEN }),
+      placement: DE_PLACEMENT,
+      width: 200,
+    }
+    const plain = renderBlock(shared)
+    const before = channelReadout(plain)
+    cleanup()
+
+    const lit = renderBlock({ ...shared, highlighted: true })
+
+    // Literals, so a highlight that repainted a channel to some *other*
+    // constant could not satisfy both sides of the comparison.
+    expect(before).toEqual({
+      fill: 'var(--cat-div1)',
+      ink: 'var(--cat-div1-fg)',
+      edgeBar: true,
+      hatch: true,
+      weaponMark: 'E',
+      genderPrefix: 'W',
+    })
+    expect(channelReadout(lit)).toEqual(before)
+  })
+
+  it('does not dim or otherwise touch a block that is not highlighted', () => {
+    // Additive only: lighting one block must not restyle its neighbours, which
+    // is the difference between a highlight and a filter.
+    const before = renderBlock()
+    const beforeClass = before.className
+    const beforeOpacity = before.style.opacity
+    cleanup()
+
+    const after = renderBlock({ highlighted: false })
+
+    expect(after.className).toBe(beforeClass)
+    expect(after.style.opacity).toBe(beforeOpacity)
+    expect(after.dataset.highlighted).toBeUndefined()
+  })
+})
+
 describe('EventBlock identity and geometry markers', () => {
   it('positions itself from its props rather than from a layout', () => {
     const el = renderBlock({ x: 120, y: 48, width: 105, height: 96 })

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../../store/store.ts'
 import type { DayConfig } from '../../engine/types.ts'
 import {
   selectDerivedFindings,
   selectDerivedSchedule,
+  selectScorecardMetrics,
   type DerivedFindings,
   type DerivedSchedule,
 } from '../../store/derived.ts'
@@ -75,6 +76,19 @@ interface CommittedModel {
  *
  * Both rules apply to whichever view is up: the toggle chooses how the
  * committed model is drawn, never which model is drawn.
+ *
+ * ## The one thing that crosses the settle without waiting for it
+ *
+ * The scorecard's hover highlight (FR-029). The scorecard is drawer-side and
+ * follows the live store per keystroke; the canvas draws the committed model.
+ * A highlight routed through `committed` would leave the pointer resting on a
+ * metric row with nothing lit for `CENTER_SETTLE_MS`, which is not a hover cue.
+ * So the block-key set is resolved live here and handed to the canvas
+ * undebounced (S6 design §2). The canvas matches the keys against the blocks it
+ * has actually committed, and a `${competitionId}:${phase}` key names the same
+ * block wherever it currently sits — so mid-settle the worst case is *fewer*
+ * blocks lit, never a wrong one. Rule 2 is untouched by this: an invalid config
+ * still commits nothing and the highlight lands on the last valid layout.
  */
 export function CenterView() {
   const live = useStore(selectDerivedSchedule)
@@ -90,6 +104,19 @@ export function CenterView() {
     dayConfigs: liveDayConfigs,
   }))
   const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewState().viewMode)
+
+  // FR-029. The scorecard names the blocks; this only resolves the hovered id
+  // against them and hands the result on. Memoized so a keystroke that leaves
+  // both inputs alone cannot reconcile every block on the canvas with a fresh
+  // Set — and returning the same `undefined` while nothing is hovered, which is
+  // the case the canvas is in almost all of the time.
+  const hoveredMetricId = useStore((s) => s.hoveredMetricId)
+  const metrics = useStore(selectScorecardMetrics)
+  const highlight = useMemo<ReadonlySet<string> | undefined>(() => {
+    if (hoveredMetricId === null) return undefined
+    const hovered = metrics.find((metric) => metric.id === hoveredMetricId)
+    return hovered && new Set(hovered.blockKeys)
+  }, [hoveredMetricId, metrics])
 
   useEffect(() => {
     // An invalid config commits nothing at all — rule 2 above. The last valid
@@ -152,6 +179,8 @@ export function CenterView() {
               schedule={committed.schedule}
               findings={committed.findings}
               dayConfigs={committed.dayConfigs}
+              // Live, deliberately — the one prop here that is not committed.
+              highlight={highlight}
             />
           ) : (
             <ScheduleOutput schedule={committed.schedule} />

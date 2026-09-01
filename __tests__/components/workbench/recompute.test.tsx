@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { FencerCounts } from '../../../src/components/sections/FencerCounts.tsx'
 import { AnalysisOutput } from '../../../src/components/sections/AnalysisOutput.tsx'
 import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
+import { Scorecard } from '../../../src/components/workbench/Scorecard.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES, findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/components/competitionLabels.ts'
@@ -348,5 +349,65 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     })
 
     expect(findings()).toContain('10 pools but only 9 strips available')
+  })
+
+  /**
+   * T050 — the scorecard's hover highlight crosses the same two tiers, and is
+   * the one thing here that must *not* wait for the second one (FR-029,
+   * S6 design brief §2).
+   *
+   * The scorecard is drawer-side and follows the live store per keystroke,
+   * while the canvas draws a model committed CENTER_SETTLE_MS behind it. A
+   * highlight routed through that committed model would leave the pointer
+   * resting on a metric row with nothing lit for a settle — a hover cue that
+   * arrives 150ms after the hover is not a hover cue. The resolution is that
+   * the key set travels undebounced and is matched against whatever blocks the
+   * canvas has actually committed, so the worst a settle can cost is *fewer*
+   * blocks lit, never a wrong one.
+   */
+  it('lights a hovered metric’s blocks at once, without waiting for the settle (FR-029)', () => {
+    // `strips:utilization` lives in the expanded tier and its driving set is
+    // every in-range placed block, so this case turns on the wiring rather than
+    // on which of the two seeded competitions happens to be some argmax.
+    saveViewState({ ...DEFAULT_VIEW_STATE, timeScroll: 480, scorecardExpanded: true })
+    const id = seedPlacedCompetitions(8)
+    render(
+      <>
+        <Scorecard />
+        <CenterView />
+      </>,
+    )
+
+    /** Re-queried every time: React may swap the node out across a render. */
+    function poolBlock(): HTMLElement {
+      const el = document.querySelector<HTMLElement>(
+        `[data-event-id="${id}"][data-phase="POOLS"]`,
+      )
+      if (!el) throw new Error('the canvas drew no pool block to highlight')
+      return el
+    }
+
+    expect(poolBlock().dataset.highlighted).toBeUndefined()
+
+    const row = document.querySelector<HTMLElement>('[data-metric="strips:utilization"]')
+    if (!row) throw new Error('the scorecard rendered no strip-utilization row')
+
+    act(() => {
+      // React 19 synthesises onPointerEnter/onPointerLeave from delegated
+      // pointerover/pointerout, and jsdom 26 ships no PointerEvent constructor
+      // — a dispatched `pointerenter` would fire nothing at all here.
+      row.dispatchEvent(new MouseEvent('pointerover', { bubbles: true, relatedTarget: null }))
+    })
+
+    // Not one timer advanced between the hover and this assertion.
+    expect(useStore.getState().hoveredMetricId).toBe('strips:utilization')
+    expect(poolBlock().dataset.highlighted).toBe('true')
+
+    act(() => {
+      row.dispatchEvent(new MouseEvent('pointerout', { bubbles: true, relatedTarget: null }))
+    })
+
+    expect(useStore.getState().hoveredMetricId).toBeNull()
+    expect(poolBlock().dataset.highlighted).toBeUndefined()
   })
 })
