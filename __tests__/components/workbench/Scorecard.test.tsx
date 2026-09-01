@@ -339,15 +339,28 @@ describe('Scorecard deltas (research D9)', () => {
   })
 
   /**
-   * The mirror: B2 places nothing (validateConfig reports its team events as a
-   * BINDING error), so its baseline is captured over zero placements and
-   * finish:tournament freezes as null — the case scorecardBaseline.test.ts
-   * pins. A later hand placement gives the metric a value with nothing to
-   * compare it to, and `2738 - null` is 2738, not an error.
+   * The mirror: a baseline captured over zero placements freezes
+   * finish:tournament as null — the capture-rule edge case
+   * scorecardBaseline.test.ts pins.
+   *
+   * Until 008 landed, B2 was a live vehicle for that (its team events reached
+   * the engine with a PERCENTAGE cut, `validateConfig` reported it as a
+   * BINDING error, and the scheduler returned an empty schedule), but 008's
+   * team `cut_mode` fix means `applyPreset('B2')` + `runScheduleAll()` now
+   * places 24 events. This case loads B2 for its competitions and fencer
+   * counts, then forces the empty schedule by hand —
+   * `setPlacementsFromAuto({})` in place of `runScheduleAll()` — the same
+   * idiom the case above uses, so the baseline still captures over nothing
+   * regardless of what B2 itself would now schedule.
+   *
+   * A later hand placement gives the metric a value with nothing to compare
+   * it to, and `2738 - null` is 2738, not an error.
    */
   it('renders no delta when the baseline entry itself was null', () => {
     applyPreset('B2')
-    runScheduleAll()
+    act(() => {
+      useStore.getState().setPlacementsFromAuto({})
+    })
     expect(useStore.getState().scorecardBaseline!['finish:tournament']).toBeNull()
 
     act(() => {

@@ -377,31 +377,34 @@ describe('scorecardBaseline — never serialized', () => {
 // The failure case D9 accepts
 // ──────────────────────────────────────────────
 
-describe('scorecardBaseline — a preset that cannot schedule', () => {
+describe('scorecardBaseline — a schedule with nothing placed', () => {
   /**
-   * B2 places nothing: its team events reach the engine with a PERCENTAGE
-   * cut, which `validateConfig` reports as a BINDING error
-   * (`__tests__/store/appPathParity.test.ts` pins B2 at 0).
+   * The capture rule's edge case: a tournament that places nothing still
+   * gets a baseline, over an empty placement map, rather than staying null.
    *
-   * **Design brief §1 gets the mechanism wrong here.** It says `scheduleAll`
-   * *throws* for B2 and B8, so `runScheduleAll` returns early
-   * (`src/store/runActions.ts:20`), `setPlacementsFromAuto` is never called
-   * and the baseline stays null. Measured: `scheduleAll` does not throw for
-   * either — `scheduleAllConcurrent` returns an **empty schedule** after its
-   * BINDING validation pass (`src/engine/concurrentScheduler.ts:186-204`),
-   * exactly as `appPathParity.test.ts`'s B2 note records. `runScheduleAll`
-   * therefore reaches `setPlacementsFromAuto({})`, and the brief's own
+   * Until 008 landed, B2 was a live vehicle for this: its team events
+   * reached the engine with a PERCENTAGE cut, which `validateConfig`
+   * reported as a BINDING error, and `scheduleAllConcurrent` returned an
+   * **empty schedule** after that validation pass rather than throwing
+   * (`src/engine/concurrentScheduler.ts:186-204` — the design brief's §1 says
+   * `scheduleAll` throws for B2 and B8 and `runScheduleAll` returns early at
+   * `src/store/runActions.ts:20`; measured, it does not, for either preset).
+   * `runScheduleAll` reached `setPlacementsFromAuto({})` on its own, and the
    * capture rule — `loadedPresetId !== null && scorecardBaseline === null` —
-   * fires on an empty placement map.
+   * fired on that empty map.
    *
-   * So the baseline for B2 is the metrics of a tournament with nothing on
-   * it. That is what the rule produces and what this test pins; the brief's
-   * "keeps `scorecardBaseline === null`" prose does not describe it. Backlog
-   * item 008 is where B2/B8's zero placements get fixed, and this test is
-   * what a later fix has to move.
+   * 008's team `cut_mode` fix means B2 now schedules 24 events
+   * (`__tests__/store/appPathParity.test.ts` pins it there), so the preset
+   * that used to demonstrate this edge case no longer does. This case builds
+   * the empty state directly instead: `loadPreset('B2')` still loads B2's
+   * competitions and fencer counts, but `setPlacementsFromAuto({})` is
+   * called by hand in place of `runScheduleAll()`'s own scheduling pass,
+   * landing the store in the same state a failed-to-schedule preset used to
+   * reach unassisted.
    */
   it('captures a baseline over zero placements when the preset schedules nothing', () => {
-    loadPreset('B2')
+    applyPreset('B2')
+    useStore.getState().setPlacementsFromAuto({})
 
     expect(Object.keys(useStore.getState().placements)).toHaveLength(0)
     const baseline = useStore.getState().scorecardBaseline
