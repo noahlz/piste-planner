@@ -69,7 +69,7 @@ this branch, per the project's issue-close policy. T001 is already closed.
 **Purpose**: Isolate the work and record the before-column.
 
 - [X] T001 Create the worktree `.claude/worktrees/008-team-event-cut` and branch `008-team-event-cut` from `main` (`e56a491acb`), install dependencies, and confirm every artifact under `specs/008-team-event-cut/` is present
-- [ ] T002 Record the pre-change baseline in `specs/008-team-event-cut/baseline.md`, captured before any source file is edited: the app-path placed count for each of B1–B8 (via `__tests__/helpers/appPath.ts`'s `runAppPath`), each one's drift-ledger `scheduledCount`, the placed count today for each of the ten templates in `TEMPLATES` (`src/engine/catalogue.ts`) driven through the app's own route with that template's fencer defaults, the suite total (expected 1274 passed / 55 files), and `git rev-parse main` *(subagent commits)*
+- [X] T002 Record the pre-change baseline in `specs/008-team-event-cut/baseline.md`, captured before any source file is edited: the app-path placed count for each of B1–B8 (via `__tests__/helpers/appPath.ts`'s `runAppPath`), each one's drift-ledger `scheduledCount`, the placed count today for each of the ten templates in `TEMPLATES` (`src/engine/catalogue.ts`) driven through the app's own route with that template's fencer defaults, the suite total (expected 1274 passed / 55 files), and `git rev-parse main` *(subagent commits)*
 
 **Checkpoint**: the defect recorded as numbers — two reference tournaments and four templates at zero.
 
