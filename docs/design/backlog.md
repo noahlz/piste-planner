@@ -63,6 +63,46 @@ rediscover these:
   the day was the real constraint. Documented in the test file's own comment
   block above the guard's `describe`.
 
+## Team events block their whole tournament
+
+*Found by feature 006 on 2026-08-31 while classifying its parity exceptions.
+Not fixed there — 006 was scoped to the day axis. User directive 2026-08-31:
+fix after 004's S6.*
+
+Two of the eight reference tournaments, B2 and B8, schedule **nothing** — not
+a partial schedule, an empty one. Every tournament containing team events is
+affected, so this is a live product defect rather than a calibration gap.
+
+`defaultConfigForId` (`src/store/store.ts:220,229`) derives a competition's
+cut from `DEFAULT_CUT_BY_CATEGORY` with no `event_type === TEAM` branch, so a
+team event reaches the engine carrying a percentage cut. `cut-on-team`
+(`src/engine/validation.ts:158`) is a BINDING error, and
+`scheduleAllConcurrent` returns an empty schedule when any BINDING error is
+present (`src/engine/concurrentScheduler.ts:186-204`) — so one misconfigured
+team event discards the entire tournament's schedule. The drift ledger's own
+factory has the branch (`__tests__/helpers/scenarios.ts:35-37`), which is why
+the ledger path never saw this.
+
+Measured, not inferred: forcing `cut_mode = DISABLED` on B2's six team events
+alone takes it from 0 to 24, the ledger's exact count; B8's five take it from
+0 to 53, one *above* the ledger's 52. Evidence and per-scenario detail are in
+[`parity-exceptions.md`](../../specs/006-day-axis-parity/parity-exceptions.md);
+B2's and B8's rows in `__tests__/store/appPathParity.test.ts` are pinned at 0
+with this as their recorded FR-004a cause.
+
+**This is not a per-tournament-type default, and does not belong in 004's
+US4.** US4 fills in what a *tournament type* implies — `RefPolicy.AUTO`,
+`de_mode` at NAC, video strips — and its task list (T055–T068) has no
+`cut_mode` work in it. A Cadet team event needs `DISABLED` whether it is at a
+NAC or an ROC, so this is a per-`event_type` default on a different axis.
+Filing it under US4 would put it in a table where it does not fit; it wants
+its own small feature.
+
+Scope when it is picked up: the `event_type === TEAM` branch, then re-pin
+`appPathParity` — B2 to 24, which *removes* an exception since it then matches
+the ledger exactly, and B8 to 53, which keeps one for the +1. No engine change,
+so the drift ledger is not at risk.
+
 ## Rail rebuild
 
 *Assigned to feature 007 on 2026-08-31 (unspecced), after 004 closes.*
