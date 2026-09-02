@@ -2,32 +2,34 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import { SettingsPanel } from '../../../src/components/workbench/SettingsPanel.tsx'
 import { useStore } from '../../../src/store/store.ts'
-import { Weapon } from '../../../src/engine/types.ts'
 import {
   ADMIN_GAP_MINS,
   FLIGHT_BUFFER_MINS,
-  THRESHOLD_MINS,
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
   DEFAULT_DE_STRIP_FOOTPRINT,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../../../src/engine/constants.ts'
 
-// 004 T070 – TDD red tests for the gears panel (US5, contract §5). The panel
-// does not exist yet; this file is its specification. Every label and
-// aria-label string below is fixed by the orchestrator-issued US5 contract
-// (scratchpad/us5-contract.md §5) so T073's implementation and this file
-// agree without discovering each other's choices.
+// 004 T070 – the gears panel's specification (US5, contract §5). Every label
+// and aria-label string below is fixed by the orchestrator-issued US5 contract
+// so the implementation and this file agree without discovering each other's
+// choices.
 //
-// Nine rows, each following the settled `PoolDurationSettings` pattern
+// Three rows, each following the settled `PoolDurationSettings` pattern
 // (src/components/sections/PoolDurationSettings.tsx:34-73): a Label +
 // NumberInput pair, override state derived by comparison against the
 // imported constant (no stored flag – research D8), a `DefaultLabel` badge
 // while at default, and a `default: N` hint plus a `Revert <label> to
 // default` ghost button while not. `ROWS` below is that table, driving every
-// generic assertion so no case is copy-pasted nine times; `DE_BOUT_DURATION`
-// rows additionally prove they don't disturb their sibling weapons (item 6).
+// generic assertion so no case is copy-pasted three times.
+//
+// T078/T079 finding 1 cut this table from nine rows to three. `THRESHOLD_MINS`,
+// `SLOT_MINS`, `YOUTH_VET_BOUT_DELTA` and the three `DE_BOUT_DURATION` weapons
+// were each measured to produce a byte-identical `ScheduleResult` when changed,
+// which FR-046 forbids a control from doing. Item 9 below is the assertion that
+// holds that decision. Two cases went with them: the per-weapon independence
+// case (item 6), whose subject – `DE_BOUT_DURATION` – no longer has rows here,
+// and the 'Epee DE bout duration' half of item 5, replaced by a second
+// surviving row so that case keeps testing two rows rather than one.
 //
 // Last in the panel, `PoolDurationSettings` itself is mounted (FR-043) –
 // item 8 below proves it by locating one of its own rows from inside this
@@ -45,11 +47,8 @@ function overrideRecord<K extends string>(key: K) {
   return (value: number) => useStore.getState().setGlobalOverrides({ [key]: value } as never)
 }
 
-function overrideWeapon(weapon: Weapon) {
-  return (value: number) => {
-    const current = useStore.getState().globalOverrides.DE_BOUT_DURATION
-    useStore.getState().setGlobalOverrides({ DE_BOUT_DURATION: { ...current, [weapon]: value } } as never)
-  }
+function storedNumber(key: string) {
+  return () => (useStore.getState().globalOverrides as never as Record<string, number>)[key]
 }
 
 const ROWS: Row[] = [
@@ -57,55 +56,19 @@ const ROWS: Row[] = [
     label: 'Admin gap',
     default: ADMIN_GAP_MINS,
     setOverride: overrideRecord('ADMIN_GAP_MINS'),
-    storedValue: () => (useStore.getState().globalOverrides as never as Record<string, number>)['ADMIN_GAP_MINS'],
+    storedValue: storedNumber('ADMIN_GAP_MINS'),
   },
   {
     label: 'Flight buffer',
     default: FLIGHT_BUFFER_MINS,
     setOverride: overrideRecord('FLIGHT_BUFFER_MINS'),
-    storedValue: () => (useStore.getState().globalOverrides as never as Record<string, number>)['FLIGHT_BUFFER_MINS'],
-  },
-  {
-    label: 'Flighting threshold',
-    default: THRESHOLD_MINS,
-    setOverride: overrideRecord('THRESHOLD_MINS'),
-    storedValue: () => (useStore.getState().globalOverrides as never as Record<string, number>)['THRESHOLD_MINS'],
-  },
-  {
-    label: 'Scheduling grid resolution',
-    default: SLOT_MINS,
-    setOverride: overrideRecord('SLOT_MINS'),
-    storedValue: () => (useStore.getState().globalOverrides as never as Record<string, number>)['SLOT_MINS'],
-  },
-  {
-    label: 'Epee DE bout duration',
-    default: DE_BOUT_DURATION[Weapon.EPEE],
-    setOverride: overrideWeapon(Weapon.EPEE),
-    storedValue: () => useStore.getState().globalOverrides.DE_BOUT_DURATION[Weapon.EPEE],
-  },
-  {
-    label: 'Foil DE bout duration',
-    default: DE_BOUT_DURATION[Weapon.FOIL],
-    setOverride: overrideWeapon(Weapon.FOIL),
-    storedValue: () => useStore.getState().globalOverrides.DE_BOUT_DURATION[Weapon.FOIL],
-  },
-  {
-    label: 'Sabre DE bout duration',
-    default: DE_BOUT_DURATION[Weapon.SABRE],
-    setOverride: overrideWeapon(Weapon.SABRE),
-    storedValue: () => useStore.getState().globalOverrides.DE_BOUT_DURATION[Weapon.SABRE],
-  },
-  {
-    label: 'Youth and veteran bout adjustment',
-    default: YOUTH_VET_BOUT_DELTA,
-    setOverride: overrideRecord('YOUTH_VET_BOUT_DELTA'),
-    storedValue: () => (useStore.getState().globalOverrides as never as Record<string, number>)['YOUTH_VET_BOUT_DELTA'],
+    storedValue: storedNumber('FLIGHT_BUFFER_MINS'),
   },
   {
     label: 'DE strip footprint',
     default: DEFAULT_DE_STRIP_FOOTPRINT,
     setOverride: overrideRecord('DEFAULT_DE_STRIP_FOOTPRINT'),
-    storedValue: () => (useStore.getState().globalOverrides as never as Record<string, number>)['DEFAULT_DE_STRIP_FOOTPRINT'],
+    storedValue: storedNumber('DEFAULT_DE_STRIP_FOOTPRINT'),
   },
 ]
 
@@ -206,7 +169,7 @@ describe('SettingsPanel revert', () => {
 
 describe('SettingsPanel override state is derived, not stored (research D8)', () => {
   const casesToCheck = ROWS.filter(
-    (row) => row.label === 'Admin gap' || row.label === 'Epee DE bout duration',
+    (row) => row.label === 'Admin gap' || row.label === 'DE strip footprint',
   )
 
   it.each(casesToCheck)(
@@ -223,29 +186,11 @@ describe('SettingsPanel override state is derived, not stored (research D8)', ()
 })
 
 // ──────────────────────────────────────────────
-// Item 6: DE_BOUT_DURATION is per weapon – overriding one leaves its
-// siblings at their own defaults.
-// ──────────────────────────────────────────────
-
-describe('SettingsPanel DE bout duration is per weapon', () => {
-  it('changing epee leaves foil and sabre at their defaults, still marked Default', () => {
-    const epee = ROWS.find((row) => row.label === 'Epee DE bout duration')!
-    epee.setOverride(epee.default + 1)
-    render(<SettingsPanel />)
-    const panel = settingsPanel()
-
-    expect(numberInput('Foil DE bout duration').value).toBe(String(DE_BOUT_DURATION[Weapon.FOIL]))
-    expect(numberInput('Sabre DE bout duration').value).toBe(String(DE_BOUT_DURATION[Weapon.SABRE]))
-    expect(within(panel).queryByRole('button', { name: 'Revert Foil DE bout duration to default' })).toBeNull()
-    expect(within(panel).queryByRole('button', { name: 'Revert Sabre DE bout duration to default' })).toBeNull()
-  })
-})
-
-// ──────────────────────────────────────────────
-// Item 7 (FR-047): the panel exposes nothing beyond its nine rows. Terms
-// chosen are ones a scheduling-weight, penalty, category-start-preference,
-// or earliest-start-offset control would actually surface by, not a
-// made-up id – so a future accidental addition would be caught here.
+// Item 7 (FR-047): the panel exposes nothing beyond its three rows and
+// PoolDurationSettings. Terms chosen are ones a scheduling-weight, penalty,
+// category-start-preference, or earliest-start-offset control would actually
+// surface by, not a made-up id – so a future accidental addition would be
+// caught here.
 // ──────────────────────────────────────────────
 
 describe('SettingsPanel exposes nothing it must not (FR-047)', () => {
@@ -273,5 +218,31 @@ describe('SettingsPanel composition', () => {
     expect(
       within(settingsPanel()).getByRole('spinbutton', { name: 'Epee pool round duration' }),
     ).toBeInTheDocument()
+  })
+})
+
+// ──────────────────────────────────────────────
+// Item 9 (FR-046, T078/T079 finding 1): the settings measured to leave the
+// derived schedule byte-identical get no control. Their values still travel
+// through the store, buildConfig and the share URL – only the editing surface
+// is withdrawn – so nothing but this test and the `NOT_SURFACED` table in
+// SettingsPanel.tsx stops a row from drifting back in ahead of the engine
+// work that would make it act.
+// ──────────────────────────────────────────────
+
+describe('SettingsPanel offers no control that cannot move the schedule (FR-046)', () => {
+  it.each([
+    'Flighting threshold',
+    'Scheduling grid resolution',
+    'Youth and veteran bout adjustment',
+    'Epee DE bout duration',
+    'Foil DE bout duration',
+    'Sabre DE bout duration',
+  ])('has no %s control', (label) => {
+    render(<SettingsPanel />)
+    const panel = settingsPanel()
+
+    expect(within(panel).queryByRole('spinbutton', { name: label })).toBeNull()
+    expect(within(panel).queryByText(label)).toBeNull()
   })
 })

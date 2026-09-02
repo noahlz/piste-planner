@@ -465,29 +465,65 @@ a gears control in the top bar. Per-event and global weights, penalties, and
 earliest-start offsets are all editable. Serialization persists only the
 overrides, so unset values continue to track the defaults in `constants.ts`.
 
-**What P3 takes**: the top-bar gears control and a panel over the settings that
-already have store and serialization support – the `globalOverrides` trio
-(`ADMIN_GAP_MINS`, `FLIGHT_BUFFER_MINS`, `THRESHOLD_MINS`, live in the store and
-the share URL since before P3 but reachable from no component) plus the four P1
-constants listed below. `PoolDurationSettings` from 002 is the precedent for the
-default / override / reset / overrides-only-persistence pattern, and it moves
-behind the same gears surface.
+**What P3 took**: the top-bar gears control and a panel over three settings –
+`ADMIN_GAP_MINS`, `FLIGHT_BUFFER_MINS` and `DEFAULT_DE_STRIP_FOOTPRINT` – plus
+`PoolDurationSettings` from 002, which is the precedent for the default /
+override / reset / overrides-only-persistence pattern and moved behind the same
+gears surface. It intended to take seven, and the four it did not are now the
+entry below. All seven still travel through the store, `buildConfig` and the
+share URL; only three have an editing surface.
 
 **What stays here**: promoting the rest of `constants.ts` – per-event and global
 weights, the penalty matrices, category start preferences, earliest-start
 offsets – into a user-editable configuration file. That is a feature of its own
 size and it needs a spec directory when it is picked up, after P5.
 
-Constants that P1 newly surfaces and that belong in this file:
-
-- `SLOT_MINS` (default 5) – scheduling grid resolution.
-- `DE_BOUT_DURATION` per weapon – foil 20, épée 20, sabre 15.
-- `YOUTH_VET_BOUT_DELTA` (default -5) – applied to Y10, Y8, and Vet for
-  10-touch bouts.
-- `DEFAULT_DE_STRIP_FOOTPRINT` (default 16) – strips a single event's DE phase
-  claims, the footprint `de_duration_table` is calibrated against.
-
 `video_stage_mode` arrives with P5, not P1.
+
+## Four settings the engine cannot yet act on
+
+*Unassigned and unnumbered. Blocks the return of four gears rows, and needs its
+own spec directory: the fix edits `src/engine/`, so constitution III puts it
+behind the B1–B8 drift ledger.*
+
+004's US5 built nine gears rows and shipped three. T078 measured each candidate
+by changing it and re-deriving: `SLOT_MINS` 5→30, `YOUTH_VET_BOUT_DELTA` −5→−60,
+`DE_BOUT_DURATION.FOIL` 20→60 and `THRESHOLD_MINS` 10→600 each produced a
+**byte-identical `ScheduleResult`**. FR-046 requires a setting to move the
+schedule, and an organizer must not be shown a control that silently does
+nothing, so the rows were cut rather than shipped with a caveat. The keys keep
+their store, `buildConfig`, serialization and engine-threading support – that
+work is the seam this entry builds on, and it is tested and behaviour-preserving.
+
+`SettingsPanel.tsx`'s `NotSurfacedKey` union is the list, and the compile-time
+exhaustiveness check beside it means a new `GlobalOverrides` key cannot reach
+the store without either a row or a reasoned entry here.
+
+What each key would take, smallest first:
+
+- **`SLOT_MINS` – mechanical.** `config.SLOT_MINS` is read nowhere; the only
+  slot consumer is `snapToSlot` (`src/engine/resources.ts`), which takes one
+  argument and closes over the module constant. Give it a slot parameter and
+  thread `config.SLOT_MINS` through its 10 call sites – `de.ts` ×1,
+  `concurrentScheduler.ts` ×4, `derive.ts` ×5, counted 2026-09-01;
+  `resources.ts` only defines it. No design decision, but every scheduled time
+  is snapped, so the drift review is the real work.
+- **`DE_BOUT_DURATION` and `YOUTH_VET_BOUT_DELTA` for individual events – design
+  work.** `DE_BOUT_DURATION` is read once, at `capacity.ts:132`, inside the
+  `EventType.TEAM` branch, and it genuinely drives team day-assignment
+  estimates today – it is only inert on an individual-only tournament.
+  Individual DE duration instead comes from the table-driven
+  `config.de_duration_table`, and per-bout duration is not in that path at all.
+  `YOUTH_VET_BOUT_DELTA`'s only reader, `perBoutDuration` (`de.ts:148`), has no
+  caller in `src/`. Making either act on individual events means deciding how a
+  per-bout duration and a per-round duration table compose – whether the table
+  derives from bout duration, or the delta adjusts the table – which is a
+  modelling decision before it is a code change.
+- **`THRESHOLD_MINS` – no smallest change exists.** Nothing in `src/engine/`
+  reads it. `flighting.ts` decides by pool count against `strips_total`, never
+  by minutes. The open question is not how to wire it up but whether a
+  minutes-based flighting threshold should exist at all; if the answer is no,
+  the key leaves `GlobalOverrides` instead of gaining a row.
 
 ## Save / load / share browser plumbing
 

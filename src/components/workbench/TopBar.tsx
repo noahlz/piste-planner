@@ -24,8 +24,13 @@ const DAY_COUNTS = [2, 3, 4]
  * way Save / Share discloses `SaveLoadShare`.
  */
 export function TopBar() {
-  const [saveShareOpen, setSaveShareOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // One slot, not two booleans (T079 finding 2). The gears and Save / Share
+  // panels are sibling `absolute right-0 z-50` overlays in the same `ml-auto`
+  // group, so they occupy the same space and the later one in DOM order paints
+  // over — and swallows the pointer events of — the earlier. Making them
+  // mutually exclusive is the fix; a Radix `Popover` is the thorough one and
+  // belongs to whichever feature next reshapes this bar.
+  const [openPanel, setOpenPanel] = useState<'settings' | 'saveShare' | null>(null)
 
   const loadedPresetId = useStore((s) => s.loadedPresetId)
   const tournamentType = useStore((s) => s.tournament_type)
@@ -101,7 +106,10 @@ export function TopBar() {
       </Button>
 
       <div className="relative ml-auto">
-        <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <Collapsible
+          open={openPanel === 'settings'}
+          onOpenChange={(open) => setOpenPanel(open ? 'settings' : null)}
+        >
           <CollapsibleTrigger asChild>
             <Button type="button" variant="outline" size="icon" aria-label="Settings">
               <Settings className="h-4 w-4" />
@@ -114,7 +122,10 @@ export function TopBar() {
       </div>
 
       <div className="relative">
-        <Collapsible open={saveShareOpen} onOpenChange={setSaveShareOpen}>
+        <Collapsible
+          open={openPanel === 'saveShare'}
+          onOpenChange={(open) => setOpenPanel(open ? 'saveShare' : null)}
+        >
           <CollapsibleTrigger asChild>
             <Button type="button" variant="outline">
               <Share2 className="mr-2 h-4 w-4" />

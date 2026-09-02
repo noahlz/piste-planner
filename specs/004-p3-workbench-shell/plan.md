@@ -213,6 +213,10 @@ does not close until the B1–B8 diff is explained.
 
 ## Complexity Tracking
 
-No constitution violations require justification. The one judgment call that
-departs from an approved artifact – rejecting visx – is recorded in the Design
-departure table above and in research D1, with the reversal cost stated.
+The one judgment call that departs from an approved artifact – rejecting visx –
+is recorded in the Design departure table above and in research D1, with the
+reversal cost stated.
+
+| Violation | Why it stands | Simpler alternative rejected, and why |
+|---|---|---|
+| **US5 ships three of FR-042's eight settings.** FR-042 names the admin gap, the flight buffer, the flighting threshold, the scheduling grid resolution, the per-weapon DE bout durations, the youth and veteran bout adjustment, the DE strip footprint and the pool round durations. The panel exposes the admin gap, the flight buffer, the DE strip footprint and the pool round durations. | FR-046 requires a setting change to move the derived schedule. T078 measured each of the other four by changing it and re-deriving – `SLOT_MINS` 5→30, `YOUTH_VET_BOUT_DELTA` −5→−60, `DE_BOUT_DURATION.FOIL` 20→60, `THRESHOLD_MINS` 10→600 – and each produced a byte-identical `ScheduleResult`. They cannot satisfy FR-046 without engine work that constitution III puts behind the B1–B8 drift ledger, which is outside this feature. The store, `buildConfig`, serialization and engine threading for all seven keys stay in place, so only the editing surface is withheld. The engine work is [`docs/design/backlog.md`](../../docs/design/backlog.md) § "Four settings the engine cannot yet act on", and `SettingsPanel.tsx`'s compile-time exhaustiveness check makes a future `GlobalOverrides` key declare a row or a reason. | **Ship all nine rows and record the gap.** Rejected: a control that silently does nothing is worse than an absent one. The organizer gets no signal that four of the nine spinbuttons are inert, so the panel teaches them that settings do not work rather than that these four do not. An absent row is honest and reversible; a dead row is a defect the user discovers by losing an afternoon to it. |

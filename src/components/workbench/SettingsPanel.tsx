@@ -1,15 +1,6 @@
 import { useStore } from '../../store/store.ts'
-import { Weapon } from '../../engine/types.ts'
 import type { GlobalOverrides } from '../../store/store.ts'
-import {
-  ADMIN_GAP_MINS,
-  FLIGHT_BUFFER_MINS,
-  THRESHOLD_MINS,
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
-} from '../../engine/constants.ts'
+import { ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS, DEFAULT_DE_STRIP_FOOTPRINT } from '../../engine/constants.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -18,71 +9,67 @@ import { DefaultLabel } from '@/components/common/DefaultLabel'
 import { PoolDurationSettings } from '../sections/PoolDurationSettings.tsx'
 import { RotateCcw } from 'lucide-react'
 
-// Every direct numeric override except DE_BOUT_DURATION, which is keyed by
-// weapon and rendered by its own row kind below.
+/** Every `GlobalOverrides` key that holds a plain number – all of them but the per-weapon `DE_BOUT_DURATION`. */
 type ScalarKey = Exclude<keyof GlobalOverrides, 'DE_BOUT_DURATION'>
 
-type SettingRowSpec =
-  | { kind: 'scalar'; key: ScalarKey; label: string; default: number; unit: string; min?: number }
-  | { kind: 'weapon'; weapon: Weapon; label: string; default: number; unit: string }
+type SettingRowSpec = { key: ScalarKey; label: string; default: number; unit: string }
 
-// Order and strings are fixed by the US5 contract (§5, FR-042) – T077's smoke
-// driver and T070's tests both locate rows by this label/aria-label text.
-const ROWS: SettingRowSpec[] = [
-  { kind: 'scalar', key: 'ADMIN_GAP_MINS', label: 'Admin gap', default: ADMIN_GAP_MINS, unit: 'min' },
-  { kind: 'scalar', key: 'FLIGHT_BUFFER_MINS', label: 'Flight buffer', default: FLIGHT_BUFFER_MINS, unit: 'min' },
-  { kind: 'scalar', key: 'THRESHOLD_MINS', label: 'Flighting threshold', default: THRESHOLD_MINS, unit: 'min' },
+// Order and strings are fixed by the US5 contract (§5, FR-042) – the smoke
+// driver and this panel's tests both locate rows by this label/aria-label text.
+const ROWS = [
+  { key: 'ADMIN_GAP_MINS', label: 'Admin gap', default: ADMIN_GAP_MINS, unit: 'min' },
+  { key: 'FLIGHT_BUFFER_MINS', label: 'Flight buffer', default: FLIGHT_BUFFER_MINS, unit: 'min' },
   {
-    kind: 'scalar',
-    key: 'SLOT_MINS',
-    label: 'Scheduling grid resolution',
-    default: SLOT_MINS,
-    unit: 'min',
-  },
-  {
-    kind: 'weapon',
-    weapon: Weapon.EPEE,
-    label: 'Epee DE bout duration',
-    default: DE_BOUT_DURATION[Weapon.EPEE],
-    unit: 'min',
-  },
-  {
-    kind: 'weapon',
-    weapon: Weapon.FOIL,
-    label: 'Foil DE bout duration',
-    default: DE_BOUT_DURATION[Weapon.FOIL],
-    unit: 'min',
-  },
-  {
-    kind: 'weapon',
-    weapon: Weapon.SABRE,
-    label: 'Sabre DE bout duration',
-    default: DE_BOUT_DURATION[Weapon.SABRE],
-    unit: 'min',
-  },
-  {
-    kind: 'scalar',
-    key: 'YOUTH_VET_BOUT_DELTA',
-    label: 'Youth and veteran bout adjustment',
-    default: YOUTH_VET_BOUT_DELTA,
-    unit: 'min',
-    // Sabre is the shortest DE bout at 15 min – a delta past -15 would zero it
-    // out or invert it, so the floor sits there rather than at NumberInput's
-    // default of 0, which would block typing back the -5 default.
-    min: -15,
-  },
-  {
-    kind: 'scalar',
     key: 'DEFAULT_DE_STRIP_FOOTPRINT',
     label: 'DE strip footprint',
     default: DEFAULT_DE_STRIP_FOOTPRINT,
     unit: 'strips',
   },
-]
+] as const satisfies readonly SettingRowSpec[]
 
 /**
- * The gears panel (US5, FR-041/042/043/047): every engine setting the
- * organizer can retune, one row per `GlobalOverrides` key, followed by
+ * Keys deliberately given no row, each with the reason it cannot act on the
+ * derived schedule today (T078 measured each one: changing it produces a
+ * byte-identical `ScheduleResult`). FR-046 requires a setting to move the
+ * schedule, and a control that silently does nothing is worse than an absent
+ * one, so the editing surface is withdrawn while the store, `buildConfig` and
+ * serialization keep carrying the value. The engine work that would earn these
+ * rows back is in `docs/design/backlog.md` under "Global settings".
+ */
+type NotSurfacedKey =
+  // No reader anywhere in `src/engine/`. `flighting.ts` decides by pool count
+  // against `strips_total`, never by minutes – nothing consumes this.
+  | 'THRESHOLD_MINS'
+  // `config.SLOT_MINS` is read nowhere. The only slot consumer is `snapToSlot`
+  // (`src/engine/resources.ts`), which closes over the module constant.
+  | 'SLOT_MINS'
+  // Only read by `perBoutDuration` (`src/engine/de.ts`), which has no caller.
+  | 'YOUTH_VET_BOUT_DELTA'
+  // Read once, in `capacity.ts`'s `EventType.TEAM` branch. Individual DE
+  // duration comes from `config.de_duration_table`, so on an individual-only
+  // tournament these do nothing – the value still travels for team estimates.
+  | 'DE_BOUT_DURATION'
+
+/** Fails to satisfy its constraint – and so fails `tsc` – for any type but `never`. */
+type AssertNever<T extends never> = T
+
+/**
+ * Compile-time exhaustiveness (T079 finding 3). A new `GlobalOverrides` key
+ * gets either a row in `ROWS` or an explicit, reasoned member of
+ * `NotSurfacedKey`; with neither, `Exclude` leaves it behind and this alias
+ * stops typechecking, naming the key. Without it the next key becomes the next
+ * `video_strips_total` – serialized and shared, with no UI and a green suite.
+ *
+ * Exported only so `noUnusedLocals` cannot strip the check as an unused local.
+ * Nothing imports it and nothing should.
+ */
+export type EveryOverrideKeyIsAccountedFor = AssertNever<
+  Exclude<keyof GlobalOverrides, (typeof ROWS)[number]['key'] | NotSurfacedKey>
+>
+
+/**
+ * The gears panel (US5, FR-041/042/043/047): the engine settings the organizer
+ * can retune and that actually reach the schedule, followed by
  * `PoolDurationSettings` moved out of the rail. Rendered inside the top bar's
  * gears `CollapsibleContent` (`TopBar.tsx`).
  *
@@ -103,19 +90,12 @@ export function SettingsPanel() {
         </CardHeader>
         <CardContent className="pt-3 pb-3 space-y-2">
           {ROWS.map((row) => {
-            const value =
-              row.kind === 'scalar' ? globalOverrides[row.key] : globalOverrides.DE_BOUT_DURATION[row.weapon]
+            const value = globalOverrides[row.key]
             const isDefault = value === row.default
-            const inputId = row.kind === 'scalar' ? `gear-${row.key}` : `gear-de-bout-${row.weapon}`
+            const inputId = `gear-${row.key}`
 
             function commit(next: number) {
-              if (row.kind === 'scalar') {
-                setGlobalOverrides({ [row.key]: next } as Partial<GlobalOverrides>)
-              } else {
-                setGlobalOverrides({
-                  DE_BOUT_DURATION: { ...globalOverrides.DE_BOUT_DURATION, [row.weapon]: next },
-                })
-              }
+              setGlobalOverrides({ [row.key]: next } as Partial<GlobalOverrides>)
             }
 
             return (
@@ -123,13 +103,7 @@ export function SettingsPanel() {
                 <Label htmlFor={inputId} className="w-60 shrink-0 text-xs">
                   {row.label}
                 </Label>
-                <NumberInput
-                  id={inputId}
-                  value={value}
-                  onChange={commit}
-                  min={row.kind === 'scalar' ? row.min : undefined}
-                  aria-label={row.label}
-                />
+                <NumberInput id={inputId} value={value} onChange={commit} aria-label={row.label} />
                 <span className="text-xs text-muted-foreground">{row.unit}</span>
                 <DefaultLabel isDefault={isDefault} />
                 {!isDefault && (

@@ -539,27 +539,40 @@ await page2.close()
 // change here would do, so "the schedule follows" cannot be asserted once
 // past that point. `schedTable` above is still in scope and still valid.
 //
-// Save / Share is still open from the round-trip above (its own trigger sits
-// right next to the gears trigger, both `absolute right-0` in the same
-// header), and its panel overlaps and intercepts pointer events meant for
-// Settings underneath it — close it first.
-await page.getByRole('button', { name: 'Save / Share' }).click()
+// Save / Share is still open from the round-trip above. Its trigger sits right
+// next to the gears trigger and the two panels are sibling `absolute right-0
+// z-50` overlays in the same header, so they occupy the same space. The top
+// bar holds one open-panel slot rather than two booleans (T079 finding 2), and
+// opening either closes the other — asserted immediately below. Until that
+// fix this step clicked Save / Share shut first, which was the driver
+// absorbing the overlap defect rather than recording a DOM correction: a real
+// user got no such note and simply could not click the gears panel.
 await page.getByRole('button', { name: 'Settings' }).click()
 const settingsRegion = page.getByRole('region', { name: 'Settings' })
 await settingsRegion.waitFor()
+const saveShareStillOpen = await page
+  .getByRole('button', { name: 'Generate Link' })
+  .isVisible()
+  .catch(() => false)
+if (saveShareStillOpen) {
+  throw new Error('opening Settings left Save / Share open — the top bar panels are not mutually exclusive')
+}
+log('opening Settings closed Save / Share — top bar panels are mutually exclusive')
 
 // FR-041/SC-009: the panel is reachable, and every row reads its default on
 // first open — nothing above this point in the driver touches an engine
 // constant (the fencer-count edit above is a per-competition field, not one
-// of these). 12 rows total: the 9 in SettingsPanel.ROWS plus
-// PoolDurationSettings' own 3, moved in behind this same trigger.
+// of these). 6 rows total: the 3 in SettingsPanel.ROWS plus
+// PoolDurationSettings' own 3, moved in behind this same trigger. It was 12
+// until T078 measured that six of the nine gears rows leave the derived
+// schedule byte-identical, and T079 finding 1 cut them.
 const settingsDefaultCount = () => settingsRegion.getByText('Default', { exact: true }).count()
-if ((await settingsDefaultCount()) !== 12) {
+if ((await settingsDefaultCount()) !== 6) {
   throw new Error(
-    `gears panel: expected 12 rows reading Default on first open, got ${await settingsDefaultCount()}`,
+    `gears panel: expected 6 rows reading Default on first open, got ${await settingsDefaultCount()}`,
   )
 }
-log('gears panel opened, all 12 settings read Default')
+log('gears panel opened, all 6 settings read Default')
 await shot('09-gears-default')
 
 // FR-046: a setting change must move the schedule with no explicit re-run.
@@ -605,7 +618,7 @@ await page.waitForTimeout(400)
 if (Number(await adminGapInput.inputValue()) !== adminGapDefault) {
   throw new Error('Revert Admin gap to default did not restore the default value (FR-044)')
 }
-if ((await settingsDefaultCount()) !== 12) {
+if ((await settingsDefaultCount()) !== 6) {
   throw new Error('Revert Admin gap to default did not restore its Default badge (FR-044)')
 }
 if ((await schedTable.textContent()) !== scheduleBeforeGap) {
@@ -616,10 +629,12 @@ log('Revert Admin gap to default restored the default value, badge, and schedule
 // FR-045/SC-007: the override round-trips through a share link, and reads as
 // an override on the far side — not merely equal to the default by
 // coincidence. Re-apply the change just reverted so there is an override to
-// carry. Save / Share was opened once already, above, and nothing has closed
-// it since, so click its trigger only if "Generate Link" is not already
-// showing — the same defensive check the NAC Cadet/Junior template step
-// below uses for its own already-open collapsible.
+// carry. Opening Settings closed Save / Share (the mutual exclusion asserted
+// above), so its trigger has to be clicked again — which in turn closes
+// Settings, after the fill below has already used it. The visibility check is
+// kept rather than an unconditional click so the step survives either state,
+// the same defensive shape the NAC Cadet/Junior template step below uses for
+// its own already-open collapsible.
 await adminGapInput.fill(String(adminGapChanged))
 await adminGapInput.blur()
 await page.waitForTimeout(400)
