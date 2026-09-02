@@ -415,12 +415,12 @@ Detail in [reassessment-2026-08-31.md §3.5](./reassessment-2026-08-31.md).
 
 ## Per-type defaults in the rail's Advanced panel
 
-*Assigned to P3 on 2026-08-29. Specified in
-[`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
-P3 builds the rail, so the Advanced panel is its deliverable rather than a
-second pass over it.*
+*Delivered by 004 US4 – [`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
+The six-row table lives in `src/store/typeDefaults.ts` (`effa7c908e`), the
+three per-type resolutions are in `buildConfig.ts` (`9f53379b70`), and
+`AdvancedPanel.tsx` shipped with the AUTO marker (`332817d283`).*
 
-Defaults the Advanced panel should apply when the user picks a tournament type,
+Defaults the Advanced panel applies when the user picks a tournament type,
 shown as dim text on the collapsed panel so they are visible without expanding:
 
 - Referee count: 2 for NAC, SJCC, SYC. 1 for all others.
