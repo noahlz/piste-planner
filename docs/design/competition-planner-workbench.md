@@ -236,12 +236,20 @@ change: `createGlobalState` starts empty at `concurrentScheduler.ts:183` and
 `assignDaysByColoring` colors every vertex, so pinned events need pre-seeded
 strip intervals, pre-colored days, and exclusion from `buildEventStates`.
 
-### Revised sequence (2026-08-31)
+### Revised sequence (2026-08-31, re-ordered 2026-09-01)
 
-The [2026-08-31 reassessment](./reassessment-2026-08-31.md) found the app
-path schedules 11 of B1's 24 events at boot (day-axis mismatch, its §2) and
-re-ordered the remaining work. Its §2–§4 are the record; this table is the
+The [2026-08-31 reassessment](./reassessment-2026-08-31.md) found the app path
+schedules 11 of B1's 24 events at boot (day-axis mismatch, its §2) and
+re-ordered the remaining work. The
+[2026-09-01 reassessment](./reassessment-2026-09-01.md) re-ordered what came
+after, once 004 closed. Both files' analysis is the record; this table is the
 index.
+
+Everything above the 007 row is done. **The forward sequence is 009 → 010 →
+P4.** The METHODOLOGY ↔ engine reconciliation was pulled out of that sequence
+and deferred on 2026-09-01 – it is unassigned work in
+[`backlog.md`](./backlog.md), not a numbered row here, because one blocking
+decision has to be answered before it can be sized.
 
 | | Work | Status |
 |---|---|---|
@@ -249,7 +257,9 @@ index.
 | **004 US3–US5** | Scorecard, per-type defaults (the drift gate), gears – sessions S6–S9 | **Done 2026-09-01.** All five stories merged, US5 as `1fc119ae00`. T082's two human judgments went against the build – SC-004 fails, SC-002 mixed – and are carried in [`backlog.md`](./backlog.md) §The workbench canvas is not yet a finished surface |
 | **008** | Team-event cut default – team events reach the engine with a percentage cut, a BINDING error that empties the whole tournament's schedule; B2 and B8 place nothing today. A per-`event_type` default, **not** one of US4's per-tournament-type defaults. Found by 006, recorded in [`backlog.md`](./backlog.md) and [`parity-exceptions.md`](../../specs/006-day-axis-parity/parity-exceptions.md) | **Done 2026-08-31.** B2 went 0 → 24, B8 0 → 53; full record in [`specs/008-team-event-cut/`](../../specs/008-team-event-cut/) |
 | **007** | Rail rebuild – replace the five re-homed section components with purpose-built rail panels, resolve the FR-003/FR-004 top-bar/rail duplication | **Superseded 2026-09-01** by 009 simple workbench, [reassessment-2026-09-01.md §7](./reassessment-2026-09-01.md). 007 preserved the five-panel structure and so preserved the duplication; the product goal is now *fewer, larger* panels. 009 keeps the same tear-up directive with a narrower target, and absorbs the three canvas defects |
-| **P4** | Manual placement, as above – additionally absorbs the parked decisions: advisory-vs-binding validation wiring, placement states (unplaced / day-known-time-unknown / placed / pinned), flighting as user intent or removal, zoom-to-selection enablement | After 009, and re-specced against the simpler rail. [reassessment-2026-09-01.md §10](./reassessment-2026-09-01.md) holds the full sequence – 009, then 010 empty-board fixes, then P4 |
+| **009** | Simple workbench – one header, one home per setting, the rail rebuilt as two panels, one preset picker, dead controls removed, larger elements, and the three canvas defects fixed. Replaces 007 | **Next. Unspecced.** Scope in [reassessment-2026-09-01.md §7](./reassessment-2026-09-01.md). Nothing under `src/engine/` is in scope |
+| **010** | Empty-board fixes – the `indiv-team-same-day` BINDING rule that empties two templates on a 4-day tournament, and the strip under-suggestion that empties `ROC Mega`. Both reach an empty board through the same all-or-nothing gate | After 009. Unspecced. Detail in [`backlog.md`](./backlog.md); edits `src/engine/`, so constitution III applies |
+| **P4** | Manual placement, as above – additionally absorbs the parked decisions: advisory-vs-binding validation wiring, placement states (unplaced / day-known-time-unknown / placed / pinned), flighting as user intent or removal, zoom-to-selection enablement | After 010, and re-specced against the simpler rail |
 
 P1 carries one item this design did not originally scope: DE referee demand
 becomes one referee per strip on every path, which raises staged-DE figures
@@ -290,7 +300,14 @@ copies, so detail goes there and nowhere else.
 |---|---|
 | Youth-event pool duration calibration | Unassigned. P1's US2 measures the delta it needs. |
 | `CAPACITY_TARGET_FILL = 0.3` re-tune | Done – [`specs/003-p2-derived-state/`](../../specs/003-p2-derived-state/), research.md D8 |
-| Global settings – engine constants as a user-editable config file | Split. Gears control and first panel: P3. Remainder: unassigned, after P5. |
+| Global settings – engine constants as a user-editable config file | Split. Gears control and first panel: delivered by 004 US5. Remainder: **unassigned, needs a spec** – it is not queued behind any phase. |
+| A what-if scenario mode | **Unassigned, needs a spec.** The five settings US5 withdrew are hypotheses, not organizer preferences – reframed 2026-09-01. |
+| METHODOLOGY ↔ engine reconciliation | **Unassigned, deferred 2026-09-01.** The doc is the spec and the engine has diverged from it. One blocking decision first – see `backlog.md`. |
 | Per-type defaults in the rail's Advanced panel | Done – [`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md) |
 
-Both were decided on 2026-08-29 and their detail lives in `backlog.md`.
+Detail for every row lives in `backlog.md`, which is the record.
+
+**"After P5" is not a schedule.** Two of these rows were parked "after P5" when
+they were split out, and P5 is itself deferred with no owner, so the phrase
+meant never. They are re-homed above as unassigned work needing a spec, which
+is what they always were.

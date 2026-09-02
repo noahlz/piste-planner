@@ -283,22 +283,145 @@ The durable fix is the one already on this backlog – promote policy tables
 described under "Global settings," rather than chasing each season in
 `constants.ts`.
 
-## METHODOLOGY.md internal contradictions
+## METHODOLOGY.md and the engine have diverged, and the doc is the spec
 
-*Found by the 2026-08-31 methodology review. Doc-only fixes.*
+*Assessed 2026-09-01 against `main` at `1c75548cc6`. **Deferred by the product
+owner the same day** – recorded here, fixed later. Needs its own spec directory
+when picked up, and most of its fixes edit `src/engine/`, so constitution III's
+B1–B8 drift review applies.*
+
+**The framing that matters**: `METHODOLOGY.md` was hand-written as the
+*specification* for the engine. Where the two disagree, the default is that the
+engine is wrong — not that the doc is stale. Any earlier note proposing to
+"rewrite the doc to describe what the engine does" (including
+[reassessment-2026-09-01.md §5](./reassessment-2026-09-01.md)) predates that
+correction and should not be followed as written.
+
+### The pattern: the spec is implemented in code nothing calls
+
+Five places carry a faithful encoding of the documented rule beside a divergent
+implementation that actually runs. The doc is not describing a system that never
+existed — these rules were built, then bypassed rather than removed.
+
+| Documented rule | Faithful encoding (no reader) | What runs |
+|---|---|---|
+| Proximity: 1 day bonus, 2 neutral, 3+ penalty | `crossover.ts:176` `proximityPenalty` – all three rows, clamped | `dayColoring.ts:286` `if (dayGap !== 1) continue` – bonus row only |
+| Capacity curve: 0 below 0.60, 3.0 at 0.80, 10.0 at 0.95 | `constants.ts:633` `CAPACITY_PENALTY_CURVE` – every documented threshold | `dayColoring.ts:96` hardcodes 0.85 / 3.0 / 10.0, reads only `OVERFLOW_PENALTY` |
+| Soft separation DIV1↔CADET 5.0, ↔DIV2 3.0, ↔DIV3 3.0 | `constants.ts:471` `SOFT_SEPARATION_PAIRS` | `crossover.ts:150` returns the crossover-graph weight – 0.8 for DIV1↔CADET, 6× under spec |
+| Youth/vet −5 min DE bout delta | `de.ts:148` `perBoutDuration` + `YOUTH_VET_BOUT_DELTA` | no caller |
+| Strip count suggestion | `analysis.ts:22` `suggestStripCount` | the store's own `src/store/stripSuggestion.ts`, which under-recommends and empties `ROC Mega` |
+
+This is why the B1–B8 drift ledger never caught any of it: replacing a live
+hardcode with the constant it shadows *moves* numbers, so the divergence is
+invisible precisely because nobody attempted the fix. Expect a real snapshot
+diff on each, and review it rather than accepting it.
+
+### Penalty weights: 5 of 19 are read
+
+Audited by grepping `PENALTY_WEIGHTS.<KEY>` per key on 2026-09-01. Read:
+`REST_DAY_VIOLATION`, `PROXIMITY_1_DAY`, `TEAM_BEFORE_INDIVIDUAL`,
+`INDIV_TEAM_DAY_AFTER`, `INDIV_TEAM_2_PLUS_DAYS`. The other fourteen split
+three ways, and the split is what decides the size of the work:
+
+- **Three are cheap engine fixes with no architectural blocker.**
+  `PROXIMITY_3_PLUS_DAYS`, `WEAPON_BALANCE`,
+  `CROSS_WEAPON_SAME_DEMOGRAPHIC_VET` are all pure day-level properties that day
+  coloring has every input to compute. `PROXIMITY_3_PLUS_DAYS` is the starkest –
+  `PROXIMITY_1_DAY` is applied three lines above the guard that skips it.
+- **Eight need a decision, and it is the one blocking question.**
+  `SAME_TIME_HIGH_CROSSOVER`, `SAME_TIME_LOW_CROSSOVER`,
+  `INDIV_TEAM_SAME_TIME_OR_WRONG_ORDER`, `INDIV_TEAM_GAP_UNDER_MIN`, the three
+  `EARLY_START_*`, and `Y10_NON_FIRST_SLOT` are all phrased in the doc as
+  time-of-day rules ("both starting at 8:00 AM", "within 30 minutes"). Day
+  assignment picks days before any time exists, and the concurrent scheduler
+  that picks times allocates greedily rather than minimising penalties. **They
+  fell into the seam when Phase D split one scheduler into two.** Options,
+  ascending cost: score them in the concurrent scheduler where times are known;
+  add a bounded re-color pass against realised times (which would share
+  machinery with §Runtime failure is terminal); or retire them from the doc as
+  Phase D casualties. **Nothing should be specced until this is answered** – it
+  decides whether this is a doc feature with three engine fixes or a scheduler
+  change with a full drift review.
+- **Three need referee demand earlier than it is computed.** The
+  `LAST_DAY_REF_SHORTAGE_*` trio. Referee demand is a post-schedule output
+  today.
+
+### Where the doc is likely the wrong one
+
+Three cases argue against "conform the engine", and each has evidence:
+
+- **Capacity penalty curve.** `dayColoring.ts:90-94` records that the
+  documented 0.60-start curve "over-steered events in mid-loaded days and caused
+  regressions in large multi-day tournaments". That is a tried-and-rejected
+  experiment, not drift, and the doc should record the rejection.
+- **Constraint relaxation levels 1–2.** The doc specifies four levels over a
+  penalty-minimising assigner. DSatur guarantees hard constraints structurally,
+  so dropping a *soft* penalty cannot unblock anything – soft edges never block
+  a color. Levels 1–2 are not unimplemented, they are inapplicable to a coloring
+  algorithm. Only level 3 exists (`dayColoring.ts:560`). Either the doc changes,
+  or DSatur was the wrong architecture, and that question sits underneath it.
+- **Tiered video replay table (R16/R8/R4 by category).** §Policy tables are
+  stale below already records that USA Fencing publishes a flat "R16 onward"
+  and that no source was found in either direction. Conforming the engine to an
+  uncorroborated table would encode a guess. Every staged event splits at
+  `DE_ROUND_OF_16` today.
+
+### The doc also contradicts itself
+
+*Found by the 2026-08-31 methodology review, folded in here on 2026-09-01 so
+methodology divergences have one home. Doc-only fixes — no engine change, and
+no blocking decision.*
 
 - **DIV1↔CADET is listed as both hard and soft.** The hard-constraint section
   lists it under "always different days at NACs" while Soft Preferences gives
-  it penalty 5.0. The code says soft (`src/engine/constants.ts:453,472`) –
-  the hard-constraint bullet should move.
+  it penalty 5.0. The code says soft (`constants.ts:453,472`) – the
+  hard-constraint bullet should move. Note this is entangled with the soft
+  separation row in the table above: the doc's own soft value (5.0) is not the
+  one applied (0.8), so fixing the hard/soft listing does not settle the number.
 - **Flighting text conflicts with itself.** The Flighting section says Flight
   A/B start/end times are not tracked, while Runtime Decomposition says the
   concurrent scheduler decomposes them into two timed phase nodes. The former
   predates Phase D and should be rewritten.
 - **Day-end severity wording** ("soft boundary", warning-level Same-Day
   Completion) contradicts the runtime's ERROR-severity `SAME_DAY_VIOLATION` –
-  resolve whichever way the day-end overrun entry above lands, but the doc and
-  engine should say the same thing.
+  resolve whichever way §Day-end overrun lands, but the doc and engine should
+  say the same thing.
+
+### Also outstanding, unverdicted
+
+`MORNING_WAVE_WINDOW_MINS` and §Video Strip Preservation (`resources.ts:217-222`
+implements two rules, not the documented window and single-event-day
+exception); `validateSameDayCompletion`, whose WARN the runtime emits as an
+`SAME_DAY_VIOLATION` ERROR (§Day-end overrun below is the same finding from the
+other side); §Within-Day Age-Descending Order, which names `sequenceEventsForDay`
+and `vetAgeOrderingKey` in the unreachable `daySequencing.ts` while the live rule
+is `applyCrossEventEdges` – **that file is deliberately still in the tree**, see
+§Dead code held back below; the Inputs section's stale day-count, video-strip and
+refs-per-pool claims; and the intro, which describes P4 drag-and-drop in the
+present tense.
+
+## Dead code held back from the 2026-09-01 sweep
+
+*The sweep deleted `ScheduleView.tsx`, `RefRequirementsReport.tsx`,
+`ui/checkbox.tsx` and `ui/tabs.tsx` with their tests. Two things were left in
+the tree on purpose.*
+
+- **`src/engine/daySequencing.ts`** is unreachable — nothing imports it and
+  `concurrentScheduler.ts:1119` names it only in a comment — but deleting it
+  means editing `METHODOLOGY.md` §Within-Day Age-Descending Order, which names
+  its `sequenceEventsForDay` and `vetAgeOrderingKey` as the implementation. That
+  is methodology work, and it is deferred. It also is not yet confirmed that the
+  *rule* survived Phase D rather than only its implementation, so deleting the
+  file now would discard the evidence for answering that. `saberPileupPenalty`
+  in the sibling `dayAssignment.ts` is live (`dayColoring.ts:40`) and documented
+  (§Saber Pileup) – that file stays regardless.
+- **Every unused *export*** flagged by `fallow dead-code --production` stays.
+  The list is mostly the faithful-but-dead implementations tabulated above, and
+  deleting them would destroy the evidence that the engine once matched its
+  spec. `src/tools/asciiLaneRenderer.ts` also stays – it is test-only by design
+  (`integration.test.ts` renders lanes with it), so `--production` is right to
+  flag it and wrong to delete it.
+
 ## The sabre referee row can light no blocks at all
 
 *Surfaced by 004's US4 T067 on 2026-09-01, restoring the singular branch of the
@@ -414,9 +537,13 @@ columns, not the placement counts.
 
 ## Global settings
 
-*Split on 2026-08-29. The gears control and a first panel are assigned to P3 –
-[`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
-The remainder, described below, stays unassigned and is revisited after P5.*
+*Split on 2026-08-29. The gears control and a first panel were delivered by 004
+US5 – [`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
+The remainder, described below, is **unassigned and needs a spec**. It was
+parked "after P5" at the split; that was re-homed on 2026-09-01, since P5 is
+itself deferred with no owner and "after P5" therefore meant never. Nothing is
+queued behind it and nothing blocks it — it needs a spec directory and a
+decision to start.*
 
 All engine constants become a configuration file with defaults, reachable from
 a gears control in the top bar. Per-event and global weights, penalties, and
@@ -436,9 +563,16 @@ for why moving the schedule was not enough to keep it.
 **What stays here**: promoting the rest of `constants.ts` – per-event and global
 weights, the penalty matrices, category start preferences, earliest-start
 offsets – into a user-editable configuration file. That is a feature of its own
-size and it needs a spec directory when it is picked up, after P5.
+size and it needs a spec directory when it is picked up.
 
-`video_stage_mode` arrives with P5, not P1.
+**One dependency worth naming**: several of those weights are the subject of
+§METHODOLOGY.md and the engine have diverged, which found fourteen of nineteen
+`PENALTY_WEIGHTS` unread. Promoting a constant to a user-editable setting before
+deciding whether the engine should read it at all would ship a control that
+silently does nothing – the exact defect US5 withdrew five rows to avoid. That
+reconciliation comes first.
+
+`video_stage_mode` is P5's, and P5 is deferred with no owner.
 
 ## A what-if scenario mode, not more settings rows
 
