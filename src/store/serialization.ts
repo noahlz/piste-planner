@@ -1,7 +1,17 @@
 import type { StoreState, CompetitionConfig, GlobalOverrides, DeModeSetting } from './store.ts'
 import type { DayConfig, TournamentType, Weapon as WeaponType, Placement } from '../engine/types.ts'
 import { TournamentType as TT, Weapon, PlacementSource, DeMode, RefPolicy } from '../engine/types.ts'
-import { POOL_DURATION_MIN, POOL_DURATION_MAX } from '../engine/constants.ts'
+import {
+  POOL_DURATION_MIN,
+  POOL_DURATION_MAX,
+  ADMIN_GAP_MINS,
+  FLIGHT_BUFFER_MINS,
+  THRESHOLD_MINS,
+  SLOT_MINS,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
+  DEFAULT_DE_STRIP_FOOTPRINT,
+} from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
 // Types
@@ -25,11 +35,24 @@ export interface SerializedState {
   }
   competitions: {
     selectedCompetitions: Record<string, CompetitionConfig>
-    globalOverrides: GlobalOverrides
+    // Overrides-only (FR-045): a key travels only when its value departs from
+    // its `constants.ts` default. A fully default store still writes `{}` –
+    // the key itself is required, just empty.
+    globalOverrides: Partial<GlobalOverrides>
   }
   placements: Record<string, Placement>
   dismissedFindings: string[]
 }
+
+/** The seven weapon-agnostic numeric keys of `GlobalOverrides` – every key but `DE_BOUT_DURATION`. */
+const NUMERIC_OVERRIDE_KEYS = [
+  'ADMIN_GAP_MINS',
+  'FLIGHT_BUFFER_MINS',
+  'THRESHOLD_MINS',
+  'SLOT_MINS',
+  'YOUTH_VET_BOUT_DELTA',
+  'DEFAULT_DE_STRIP_FOOTPRINT',
+] as const satisfies readonly (keyof Omit<GlobalOverrides, 'DE_BOUT_DURATION'>)[]
 
 const VALID_TOP_LEVEL_KEYS = [
   'schemaVersion',
@@ -49,6 +72,33 @@ const VALID_DE_MODES = new Set<string>([...Object.values(DeMode), 'AUTO'])
 // as the unset marker (research D5) alongside the two resolved policies.
 const VALID_REF_POLICIES = new Set<string>(Object.values(RefPolicy))
 
+/**
+ * Only the settings that depart from their `constants.ts` default travel
+ * (FR-045). `DE_BOUT_DURATION` departs as a whole record – if any weapon
+ * differs from its default the whole record is written, never a per-weapon
+ * partial, because the panel's revert-to-default acts on the whole row.
+ */
+function overridesOnly(overrides: GlobalOverrides): Partial<GlobalOverrides> {
+  const written: Partial<GlobalOverrides> = {}
+  const defaults: Record<(typeof NUMERIC_OVERRIDE_KEYS)[number], number> = {
+    ADMIN_GAP_MINS,
+    FLIGHT_BUFFER_MINS,
+    THRESHOLD_MINS,
+    SLOT_MINS,
+    YOUTH_VET_BOUT_DELTA,
+    DEFAULT_DE_STRIP_FOOTPRINT,
+  }
+  for (const key of NUMERIC_OVERRIDE_KEYS) {
+    if (overrides[key] !== defaults[key]) {
+      written[key] = overrides[key]
+    }
+  }
+  if (Object.values(Weapon).some((weapon) => overrides.DE_BOUT_DURATION[weapon] !== DE_BOUT_DURATION[weapon])) {
+    written.DE_BOUT_DURATION = overrides.DE_BOUT_DURATION
+  }
+  return written
+}
+
 // ──────────────────────────────────────────────
 // Serialize
 // ──────────────────────────────────────────────
@@ -67,7 +117,7 @@ export function serializeState(state: StoreState): string {
     },
     competitions: {
       selectedCompetitions: state.selectedCompetitions,
-      globalOverrides: state.globalOverrides,
+      globalOverrides: overridesOnly(state.globalOverrides),
     },
     placements: state.placements,
     dismissedFindings: Object.keys(state.dismissedFindings),
@@ -194,6 +244,33 @@ export function validateSchema(
     }
   }
 
+  // globalOverrides – overrides-only (FR-045), so every key is optional; a
+  // present key still reaches buildConfig.ts and then the engine, so it is
+  // validated the same way de_mode/ref_policy are above.
+  if (c.globalOverrides != null && typeof c.globalOverrides === 'object') {
+    const go = c.globalOverrides as Record<string, unknown>
+    for (const key of NUMERIC_OVERRIDE_KEYS) {
+      if (key in go && typeof go[key] !== 'number') {
+        return { valid: false, error: `${key} must be a number` }
+      }
+    }
+    if ('DE_BOUT_DURATION' in go) {
+      const table = go.DE_BOUT_DURATION
+      if (table == null || typeof table !== 'object') {
+        return { valid: false, error: 'DE_BOUT_DURATION must be an object' }
+      }
+      const tableObj = table as Record<string, unknown>
+      for (const [weapon, v] of Object.entries(tableObj)) {
+        if (!Object.values(Weapon).includes(weapon as WeaponType)) {
+          return { valid: false, error: `Unknown weapon "${weapon}" in DE_BOUT_DURATION` }
+        }
+        if (typeof v !== 'number') {
+          return { valid: false, error: `DE_BOUT_DURATION.${weapon} must be a number` }
+        }
+      }
+    }
+  }
+
   // placements – required key, keyed by event id. A day beyond days_available - 1 is
   // accepted here (stored intent); it surfaces as a finding elsewhere, not a load error.
   if (obj.placements == null || typeof obj.placements !== 'object' || Array.isArray(obj.placements)) {
@@ -250,6 +327,23 @@ export function validateSchema(
   return { valid: true, data: obj as unknown as SerializedState }
 }
 
+/**
+ * Merge the overrides-only payload onto the `constants.ts` defaults, read
+ * live at load time – an omitted key tracks whatever the constant currently
+ * exports, not a value frozen at save time (FR-045).
+ */
+function mergeOntoDefaults(partial: Partial<GlobalOverrides>): GlobalOverrides {
+  return {
+    ADMIN_GAP_MINS: partial.ADMIN_GAP_MINS ?? ADMIN_GAP_MINS,
+    FLIGHT_BUFFER_MINS: partial.FLIGHT_BUFFER_MINS ?? FLIGHT_BUFFER_MINS,
+    THRESHOLD_MINS: partial.THRESHOLD_MINS ?? THRESHOLD_MINS,
+    SLOT_MINS: partial.SLOT_MINS ?? SLOT_MINS,
+    DE_BOUT_DURATION: partial.DE_BOUT_DURATION ? { ...partial.DE_BOUT_DURATION } : { ...DE_BOUT_DURATION },
+    YOUTH_VET_BOUT_DELTA: partial.YOUTH_VET_BOUT_DELTA ?? YOUTH_VET_BOUT_DELTA,
+    DEFAULT_DE_STRIP_FOOTPRINT: partial.DEFAULT_DE_STRIP_FOOTPRINT ?? DEFAULT_DE_STRIP_FOOTPRINT,
+  }
+}
+
 // ──────────────────────────────────────────────
 // Deserialize
 // ──────────────────────────────────────────────
@@ -284,7 +378,7 @@ export function deserializeState(
     dayConfigs: data.tournament.dayConfigs,
     strips_total: data.tournament.strips_total,
     selectedCompetitions: data.competitions.selectedCompetitions,
-    globalOverrides: data.competitions.globalOverrides,
+    globalOverrides: mergeOntoDefaults(data.competitions.globalOverrides ?? {}),
   }
   // Only assign when present – a key set to undefined would clobber the store's
   // seeded defaults through the useStore.setState merge (research D3). This
