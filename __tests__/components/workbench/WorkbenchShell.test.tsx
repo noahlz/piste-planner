@@ -50,6 +50,22 @@ describe('WorkbenchShell top bar', () => {
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save / Share' })).toBeInTheDocument()
   })
+
+  // FR-041's "opens" half (T078 finding 3). The control's existence is pinned
+  // above and SettingsPanel's own suite renders the panel directly, so nothing
+  // joined the two: a trigger that lost `asChild`, a panel dropped out of
+  // `CollapsibleContent`, or an `open`/`onOpenChange` pair on the wrong state
+  // left both files green with an unreachable panel — US4's FR-038 shape.
+  it('opens the settings panel from the gears control, and starts closed', () => {
+    seedValidConfig()
+    render(<WorkbenchShell />)
+
+    expect(screen.queryByRole('region', { name: 'Settings' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+
+    expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument()
+  })
 })
 
 describe('WorkbenchShell rail', () => {

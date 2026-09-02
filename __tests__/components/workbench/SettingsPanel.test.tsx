@@ -161,6 +161,49 @@ describe('SettingsPanel revert', () => {
 })
 
 // ──────────────────────────────────────────────
+// Item 10 (SC-009 "editable", T078 finding 2): a row commits what is typed
+// into it. Every other case in this file reaches the store either through
+// `setGlobalOverrides` directly or through the revert button, which is its own
+// call site (`onClick={() => commit(row.default)}`) — so deleting
+// `onChange={commit}` from the row's NumberInput left the whole file green
+// with a panel that was readable and resettable but not typeable.
+//
+// Change *then blur*: the gears rows do not pass `commitOnChange`, so
+// NumberInput keeps the typed text local and commits on blur.
+// ──────────────────────────────────────────────
+
+describe('SettingsPanel is editable (SC-009)', () => {
+  it.each(ROWS)('typing into $label commits to the store and drops its Default badge', (row) => {
+    render(<SettingsPanel />)
+    const input = numberInput(row.label)
+
+    fireEvent.change(input, { target: { value: String(row.default + 1) } })
+    fireEvent.blur(input)
+
+    expect(row.storedValue()).toBe(row.default + 1)
+    expect(within(settingsPanel()).getAllByText('Default')).toHaveLength(
+      ROWS.length - 1 + POOL_DURATION_ROW_COUNT,
+    )
+  })
+
+  // T079 finding 6: the gears rows used to clamp an out-of-range entry and
+  // commit the clamped number, while PoolDurationSettings' rows — three rows
+  // further down the same panel — rejected it. They now share the pool rows'
+  // answer, and this is what stops `rejectOutOfRange` from being dropped again
+  // without a failure.
+  it.each(ROWS)('rejects an out-of-range entry in $label rather than clamping it', (row) => {
+    render(<SettingsPanel />)
+    const input = numberInput(row.label)
+
+    fireEvent.change(input, { target: { value: '9999' } })
+    fireEvent.blur(input)
+
+    expect(row.storedValue()).toBe(row.default)
+    expect(input.value).toBe(String(row.default))
+  })
+})
+
+// ──────────────────────────────────────────────
 // Item 5: override state is derived by comparison, never a stored flag
 // (research D8). Writing a value that happens to equal the default must
 // still read as Default – a stored boolean flipped by any setGlobalOverrides

@@ -11,6 +11,7 @@ import {
   DE_BOUT_DURATION,
   YOUTH_VET_BOUT_DELTA,
   DEFAULT_DE_STRIP_FOOTPRINT,
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
@@ -30,7 +31,10 @@ export interface SerializedState {
     // (research D8): a URL saved before this feature lacks the key and opens
     // with the store's own `null` default.
     video_strips_total?: number | null
-    // Always written on save – optional only because reads tolerate its absence (schema leniency, research D3).
+    // Overrides-only (FR-045), and so genuinely absent from a default
+    // tournament's payload – not merely tolerated on read (schema leniency,
+    // research D3). Present means at least one weapon departs, and a present
+    // table is always complete.
     pool_round_duration_table?: Record<WeaponType, number>
   }
   competitions: {
@@ -113,7 +117,15 @@ export function serializeState(state: StoreState): string {
       dayConfigs: state.dayConfigs,
       strips_total: state.strips_total,
       video_strips_total: state.video_strips_total,
-      pool_round_duration_table: state.pool_round_duration_table,
+      // Overrides-only, like globalOverrides one line below (FR-045): the table
+      // travels only when a weapon departs from DEFAULT_POOL_ROUND_DURATION_TABLE.
+      // Whole-table-or-absent, never a per-weapon partial – validateSchema
+      // rejects a present table that is missing a weapon.
+      ...(Object.values(Weapon).every(
+        (weapon) => state.pool_round_duration_table[weapon] === DEFAULT_POOL_ROUND_DURATION_TABLE[weapon],
+      )
+        ? {}
+        : { pool_round_duration_table: state.pool_round_duration_table }),
     },
     competitions: {
       selectedCompetitions: state.selectedCompetitions,
@@ -338,7 +350,12 @@ function mergeOntoDefaults(partial: Partial<GlobalOverrides>): GlobalOverrides {
     FLIGHT_BUFFER_MINS: partial.FLIGHT_BUFFER_MINS ?? FLIGHT_BUFFER_MINS,
     THRESHOLD_MINS: partial.THRESHOLD_MINS ?? THRESHOLD_MINS,
     SLOT_MINS: partial.SLOT_MINS ?? SLOT_MINS,
-    DE_BOUT_DURATION: partial.DE_BOUT_DURATION ? { ...partial.DE_BOUT_DURATION } : { ...DE_BOUT_DURATION },
+    // Merged onto the defaults per weapon, not replaced wholesale: no UI writes
+    // a partial record, but validateSchema does not require this one to be
+    // complete (unlike pool_round_duration_table), so a hand-edited URL naming
+    // one weapon must not load the other two as `undefined` – that reaches
+    // capacity.ts's `boutDurations[weapon]` and yields NaN strip-hours.
+    DE_BOUT_DURATION: { ...DE_BOUT_DURATION, ...partial.DE_BOUT_DURATION },
     YOUTH_VET_BOUT_DELTA: partial.YOUTH_VET_BOUT_DELTA ?? YOUTH_VET_BOUT_DELTA,
     DEFAULT_DE_STRIP_FOOTPRINT: partial.DEFAULT_DE_STRIP_FOOTPRINT ?? DEFAULT_DE_STRIP_FOOTPRINT,
   }

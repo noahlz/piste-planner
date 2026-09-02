@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { serializeState, deserializeState, validateSchema } from '../../src/store/serialization.ts'
 import { useStore } from '../../src/store/store.ts'
 import type { StoreState } from '../../src/store/store.ts'
-import type { Weapon as WeaponType } from '../../src/engine/types.ts'
+import { Weapon } from '../../src/engine/types.ts'
 import {
   ADMIN_GAP_MINS,
   THRESHOLD_MINS,
@@ -10,37 +10,31 @@ import {
   DE_BOUT_DURATION,
   YOUTH_VET_BOUT_DELTA,
   DEFAULT_DE_STRIP_FOOTPRINT,
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../../src/engine/constants.ts'
 
 // ──────────────────────────────────────────────
 // US5 T071 – overrides-only settings serialization (specs/004-p3-workbench-shell,
-// US5 contract §4). T069 (store slice widening to 7 keys) and T076
-// (serialization implementation) have not landed yet, so this file compiles
-// against the target v2 shape ahead of that work — the same stand-in pattern
-// __tests__/store/serialization.test.ts already uses for P2 fields.
+// US5 contract §4). Written against stand-in `GlobalOverridesV2`/`StoreStateV2`
+// shapes while the store still carried three keys; T072 landed the real
+// seven-key `GlobalOverrides`, so those copies are gone and this file
+// typechecks against `src/store/store.ts` itself (T078 finding 5). Reached
+// through `as unknown as`, they would have kept compiling after a rename or an
+// added key over there, with `tsc -b` silent.
 // ──────────────────────────────────────────────
 
-/** The widened GlobalOverrides shape T069 adds to the store (7 keys, not 3). */
-type GlobalOverridesV2 = {
-  ADMIN_GAP_MINS: number
-  FLIGHT_BUFFER_MINS: number
-  THRESHOLD_MINS: number
-  SLOT_MINS: number
-  DE_BOUT_DURATION: Record<WeaponType, number>
-  YOUTH_VET_BOUT_DELTA: number
-  DEFAULT_DE_STRIP_FOOTPRINT: number
-}
+// Every case here reads or writes the shared store, so the reset is enforced
+// rather than left to each case remembering to call freshStore() first
+// (T078 finding 9). `true` replaces rather than merges, matching
+// __tests__/store/globalOverrides.test.ts.
+beforeEach(() => {
+  useStore.setState(useStore.getInitialState(), true)
+})
 
-/** StoreState with setGlobalOverrides widened to accept the 7-key partial. */
-type StoreStateV2 = Omit<StoreState, 'globalOverrides' | 'setGlobalOverrides'> & {
-  globalOverrides: GlobalOverridesV2
-  setGlobalOverrides: (partial: Partial<GlobalOverridesV2>) => void
-}
-
-/** Resets the store and returns it typed against the target v2 shape. */
-function freshStore(): StoreStateV2 {
-  useStore.setState(useStore.getInitialState())
-  return useStore.getState() as unknown as StoreStateV2
+/** Resets the store and returns the fresh snapshot. */
+function freshStore(): StoreState {
+  useStore.setState(useStore.getInitialState(), true)
+  return useStore.getState()
 }
 
 /**
@@ -96,8 +90,7 @@ describe('serializeState — overrides-only globalOverrides (FR-045)', () => {
   // `globalOverrides` as a required field, it is just empty. T076 implements
   // against this choice.
   it('writes an empty globalOverrides object when every setting is at its default', () => {
-    const store = freshStore()
-    void store // fully default — no overrides applied
+    freshStore() // fully default — no overrides applied
 
     const parsed = JSON.parse(serializeState(useStore.getState()))
 
@@ -118,7 +111,7 @@ describe('round-trip: overridden settings keep their values, unset settings load
     expect('state' in result).toBe(true)
     if (!('state' in result)) return
 
-    const loaded = result.state.globalOverrides as unknown as GlobalOverridesV2
+    const loaded = result.state.globalOverrides!
     expect(loaded.FLIGHT_BUFFER_MINS).toBe(25)
     expect(loaded.SLOT_MINS).toBe(10)
     expect(loaded.ADMIN_GAP_MINS).toBe(ADMIN_GAP_MINS)
@@ -151,7 +144,7 @@ describe('loading a payload saved before US5 (original three keys only)', () => 
     expect('state' in result).toBe(true)
     if (!('state' in result)) return
 
-    const loaded = result.state.globalOverrides as unknown as GlobalOverridesV2
+    const loaded = result.state.globalOverrides!
     expect(loaded.ADMIN_GAP_MINS).toBe(45)
     expect(loaded.SLOT_MINS).toBe(SLOT_MINS)
     expect(loaded.DE_BOUT_DURATION).toEqual(DE_BOUT_DURATION)
@@ -191,7 +184,7 @@ describe('unset settings track a default that moves', () => {
       expect('state' in result).toBe(true)
       if (!('state' in result)) return
 
-      const loaded = result.state.globalOverrides as unknown as GlobalOverridesV2
+      const loaded = result.state.globalOverrides!
       expect(loaded.THRESHOLD_MINS).toBe(777)
     } finally {
       vi.doUnmock('../../src/engine/constants.ts')
@@ -256,5 +249,80 @@ describe('validateSchema — globalOverrides', () => {
     const result = validateSchema(payload)
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.error).toMatch(/DE_BOUT_DURATION/i)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Case 8 (T078 finding 4) – a DE_BOUT_DURATION record naming only some weapons
+// ──────────────────────────────────────────────
+
+describe('a truncated DE_BOUT_DURATION on the wire', () => {
+  // Unlike pool_round_duration_table, validateSchema does not require this
+  // record to be complete – it only rejects unknown weapons and non-numbers.
+  // No UI writes a partial record, but a hand-edited share URL can, and an
+  // absent weapon must fill from constants.ts rather than reach buildConfig
+  // (and then capacity.ts's boutDurations[weapon]) as `undefined`. FR-045's
+  // "unset settings continue to track their defaults", applied per weapon.
+  it('fills the weapons it omits from constants.ts, never undefined', () => {
+    const payload = baseValidPayload({
+      competitions: {
+        selectedCompetitions: {},
+        globalOverrides: { DE_BOUT_DURATION: { EPEE: 25 } },
+      },
+    })
+
+    expect(validateSchema(payload).valid).toBe(true)
+
+    const result = deserializeState(JSON.stringify(payload))
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+
+    const loaded = result.state.globalOverrides!
+    expect(loaded.DE_BOUT_DURATION).toEqual({ ...DE_BOUT_DURATION, EPEE: 25 })
+  })
+})
+
+// ──────────────────────────────────────────────
+// Case 9 (T078 finding 7) – the pool round durations get FR-045's treatment too
+// ──────────────────────────────────────────────
+
+describe('serializeState — overrides-only pool_round_duration_table (FR-045)', () => {
+  // FR-042 names the pool round durations as one of the gears panel's
+  // settings, so FR-045 governs them: only a departed setting travels. The
+  // read side already tolerates absence (schema leniency), and an absent key
+  // leaves the store's own constants-seeded default in place – so a table
+  // saved today follows a retuned DEFAULT_POOL_ROUND_DURATION_TABLE instead of
+  // pinning the numbers that were current when the URL was made.
+  it('omits the table entirely when every weapon is at its default', () => {
+    freshStore()
+
+    const parsed = JSON.parse(serializeState(useStore.getState()))
+
+    expect(parsed.tournament).not.toHaveProperty('pool_round_duration_table')
+  })
+
+  // Whole-table-or-absent, never a per-weapon partial: validateSchema rejects
+  // a present table that is missing a weapon, so a departure has to carry the
+  // untouched weapons with it.
+  it('writes the whole table and round-trips it when one weapon is retuned', () => {
+    const store = freshStore()
+    store.setPoolRoundDuration(Weapon.EPEE, 111)
+
+    const json = serializeState(useStore.getState())
+    const parsed = JSON.parse(json)
+
+    expect(parsed.tournament.pool_round_duration_table).toEqual({
+      ...DEFAULT_POOL_ROUND_DURATION_TABLE,
+      [Weapon.EPEE]: 111,
+    })
+
+    const result = deserializeState(json)
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+
+    expect(result.state.pool_round_duration_table).toEqual({
+      ...DEFAULT_POOL_ROUND_DURATION_TABLE,
+      [Weapon.EPEE]: 111,
+    })
   })
 })

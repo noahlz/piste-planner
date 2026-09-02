@@ -9,21 +9,57 @@ import { DefaultLabel } from '@/components/common/DefaultLabel'
 import { PoolDurationSettings } from '../sections/PoolDurationSettings.tsx'
 import { RotateCcw } from 'lucide-react'
 
-/** Every `GlobalOverrides` key that holds a plain number – all of them but the per-weapon `DE_BOUT_DURATION`. */
-type ScalarKey = Exclude<keyof GlobalOverrides, 'DE_BOUT_DURATION'>
+/**
+ * Every `GlobalOverrides` key that holds a plain number. Derived from the value
+ * types rather than by excluding `DE_BOUT_DURATION` by name (T079 finding 4):
+ * an exclusion admits a future non-number key – `SOME_FLAG: boolean` – into a
+ * row that writes a number into it, and typechecks.
+ */
+type ScalarKey = {
+  [K in keyof GlobalOverrides]: GlobalOverrides[K] extends number ? K : never
+}[keyof GlobalOverrides]
 
-type SettingRowSpec = { key: ScalarKey; label: string; default: number; unit: string }
+/**
+ * `min`/`max` are per-row and required, matching `PoolDurationSettings`'
+ * bounded rows (T079 finding 6). Every row is rendered `rejectOutOfRange`, so
+ * one panel has one answer to an out-of-range entry – restore the last
+ * committed value – rather than rejecting in the pool half and silently
+ * committing a clamped number the organizer never typed in the gears half.
+ */
+type SettingRowSpec = {
+  key: ScalarKey
+  label: string
+  default: number
+  unit: string
+  min: number
+  max: number
+}
 
 // Order and strings are fixed by the US5 contract (§5, FR-042) – the smoke
 // driver and this panel's tests both locate rows by this label/aria-label text.
 const ROWS = [
-  { key: 'ADMIN_GAP_MINS', label: 'Admin gap', default: ADMIN_GAP_MINS, unit: 'min' },
-  { key: 'FLIGHT_BUFFER_MINS', label: 'Flight buffer', default: FLIGHT_BUFFER_MINS, unit: 'min' },
+  // Both gaps are minutes inserted at a phase boundary, so the ceiling is a
+  // fraction of a competition day rather than an engine limit – 240 leaves a
+  // fat-fingered 500 rejected at the input instead of pushing DE phases off
+  // the day window with no feedback.
+  { key: 'ADMIN_GAP_MINS', label: 'Admin gap', default: ADMIN_GAP_MINS, unit: 'min', min: 0, max: 240 },
+  {
+    key: 'FLIGHT_BUFFER_MINS',
+    label: 'Flight buffer',
+    default: FLIGHT_BUFFER_MINS,
+    unit: 'min',
+    min: 0,
+    max: 240,
+  },
   {
     key: 'DEFAULT_DE_STRIP_FOOTPRINT',
     label: 'DE strip footprint',
     default: DEFAULT_DE_STRIP_FOOTPRINT,
     unit: 'strips',
+    // A DE phase always asks for at least one strip (`deStripFootprint` floors
+    // at 1), and 64 is bracketSize/2 for the largest bracket the engine builds.
+    min: 1,
+    max: 64,
   },
 ] as const satisfies readonly SettingRowSpec[]
 
@@ -95,7 +131,13 @@ export function SettingsPanel() {
             const inputId = `gear-${row.key}`
 
             function commit(next: number) {
-              setGlobalOverrides({ [row.key]: next } as Partial<GlobalOverrides>)
+              // Written through an indexed assignment rather than a computed-key
+              // literal plus a cast (T079 finding 4): a computed key widens to
+              // `{ [k: string]: number }` and the cast that repairs it also
+              // discards the check that `row.key` holds a number at all.
+              const patch: Partial<GlobalOverrides> = {}
+              patch[row.key] = next
+              setGlobalOverrides(patch)
             }
 
             return (
@@ -103,7 +145,15 @@ export function SettingsPanel() {
                 <Label htmlFor={inputId} className="w-60 shrink-0 text-xs">
                   {row.label}
                 </Label>
-                <NumberInput id={inputId} value={value} onChange={commit} aria-label={row.label} />
+                <NumberInput
+                  id={inputId}
+                  value={value}
+                  onChange={commit}
+                  min={row.min}
+                  max={row.max}
+                  rejectOutOfRange
+                  aria-label={row.label}
+                />
                 <span className="text-xs text-muted-foreground">{row.unit}</span>
                 <DefaultLabel isDefault={isDefault} />
                 {!isDefault && (

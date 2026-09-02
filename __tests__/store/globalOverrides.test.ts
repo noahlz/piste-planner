@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useStore, type StoreState, type GlobalOverrides } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
@@ -92,7 +92,12 @@ beforeEach(() => {
 })
 
 describe('GlobalOverrides — widened to seven keys (contract §1)', () => {
-  it('initializes all seven keys on a fresh store from the engine constants, not repeated literals', () => {
+  // Retitled (T078 finding 6): this compares the store against the very
+  // constants it imports, so it pins the seven keys and their values and
+  // cannot tell a seeded value from a hardcoded literal — `ADMIN_GAP_MINS: 30`
+  // written straight into the slice passes it. The sourcing half is the case
+  // below.
+  it('initializes all seven keys on a fresh store at their constants.ts values', () => {
     const { globalOverrides } = useStore.getState()
 
     expect(globalOverrides.ADMIN_GAP_MINS).toBe(ADMIN_GAP_MINS)
@@ -102,6 +107,31 @@ describe('GlobalOverrides — widened to seven keys (contract §1)', () => {
     expect(globalOverrides.DE_BOUT_DURATION).toEqual(DE_BOUT_DURATION)
     expect(globalOverrides.YOUTH_VET_BOUT_DELTA).toBe(YOUTH_VET_BOUT_DELTA)
     expect(globalOverrides.DEFAULT_DE_STRIP_FOOTPRINT).toBe(DEFAULT_DE_STRIP_FOOTPRINT)
+  })
+
+  // The property the slice's own comment claims — "a default that moves in
+  // constants.ts moves here with it" — and the one FR-045's merge-onto-defaults
+  // depends on. Only a moved default can distinguish seeding from a literal:
+  // swap ADMIN_GAP_MINS for one dynamically re-imported copy of the store and
+  // see whether the fresh slice followed. Every other export passes through via
+  // importOriginal, and resetModules() on both sides keeps this file's
+  // top-level static imports — bound once at file load — out of it. Same idiom
+  // __tests__/store/settingsSerialization.test.ts uses for the load side.
+  it('seeds from the constants themselves — a moved default moves the fresh store with it', async () => {
+    vi.resetModules()
+    vi.doMock('../../src/engine/constants.ts', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../../src/engine/constants.ts')>()
+      return { ...actual, ADMIN_GAP_MINS: 777 }
+    })
+
+    try {
+      const { useStore: storeWithMovedDefault } = await import('../../src/store/store.ts')
+
+      expect(storeWithMovedDefault.getState().globalOverrides.ADMIN_GAP_MINS).toBe(777)
+    } finally {
+      vi.doUnmock('../../src/engine/constants.ts')
+      vi.resetModules()
+    }
   })
 })
 
