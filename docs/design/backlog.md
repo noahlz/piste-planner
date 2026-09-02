@@ -290,6 +290,12 @@ owner the same day** – recorded here, fixed later. Needs its own spec director
 when picked up, and most of its fixes edit `src/engine/`, so constitution III's
 B1–B8 drift review applies.*
 
+**To pick this up**, point a fresh session at
+[`methodology-reconciliation-prompt.md`](./methodology-reconciliation-prompt.md).
+It is the dispatch brief: it expands this entry, adds a feasibility audit of the
+specification itself, and ends at the blocking decision below rather than past
+it. Its output lands at `methodology-reconciliation.md`.
+
 **The framing that matters**: `METHODOLOGY.md` was hand-written as the
 *specification* for the engine. Where the two disagree, the default is that the
 engine is wrong — not that the doc is stale. Any earlier note proposing to

@@ -6,6 +6,27 @@ Supersedes the status table in
 §2–§4 remain the record of the day-axis finding and the sequence it produced.
 Facts below were verified against `main` at `1fc119ae00` on 2026-09-01.
 
+> **Partially superseded 2026-09-02. Read this before acting on §5 or §10.**
+>
+> - **§5's "Proposed fix" is retracted.** It proposes rewriting `METHODOLOGY.md`
+>   to describe the engine as built. The product owner has since established
+>   that the document was hand-written as the **specification** for the engine,
+>   so where the two disagree the engine is presumptively wrong, and each
+>   divergence needs its own verdict. §5's *findings* are still useful as a map
+>   of where to look; its direction of travel is not. The current record is
+>   [`backlog.md`](./backlog.md) § "METHODOLOGY.md and the engine have diverged,
+>   and the doc is the spec", and the dispatch brief is
+>   [`methodology-reconciliation-prompt.md`](./methodology-reconciliation-prompt.md).
+> - **§3's B1–B13 are all done**, in `1c75548cc6` and `2a18984b8d`.
+> - **§4's file deletions are done except `daySequencing.ts`**, which is held
+>   back on purpose — see `backlog.md` § "Dead code held back from the
+>   2026-09-01 sweep". No unused *export* was deleted.
+> - **§10's sequence is re-ordered** — see §10 itself.
+> - **§11's counts are stale**: the suite now reads 1799 tests across 67 files
+>   after the dead-code sweep removed ten cases with the components they covered.
+>
+> §1, §2, §6–§9 stand as written.
+
 The product owner's stated goal for the next phase: **a basic, working
 application with a simple, minimal, easy-to-scan UI – larger elements, less
 density.** Every proposal below is judged against that goal, not against the
@@ -170,14 +191,30 @@ Order names `vetAgeOrderingKey`, `VET_AGE_ORDER`, and "comparator key 3.5 in
 `sequenceEventsForDay`" in `daySequencing.ts`. That file is unreachable (§4).
 The live rule is `applyCrossEventEdges`.
 
-**Proposed fix, one task:** rewrite METHODOLOGY §Soft Preferences, §Constraint
-Relaxation, §Capacity Penalty Curve, §Video Strip Preservation, §Video Replay
-Policy, Appendix A, and the intro to describe the DSatur + concurrent scheduler
-that exists, and delete the fourteen dead weights and the five dead constants
-from `constants.ts` in the same change. Deleting unread constants cannot move
-B1–B8, so the drift review is a formality, but constitution III still requires
-running it. Do this **before** any engine feature, or the next feature is
-specced against a doc that lies.
+**Proposed fix — RETRACTED 2026-09-02.** ~~Rewrite METHODOLOGY §Soft
+Preferences, §Constraint Relaxation, §Capacity Penalty Curve, §Video Strip
+Preservation, §Video Replay Policy, Appendix A, and the intro to describe the
+DSatur + concurrent scheduler that exists, and delete the fourteen dead weights
+and the five dead constants from `constants.ts` in the same change.~~
+
+That proposal assumed the document describes the engine. It does not — it
+**specifies** it, hand-written by the product owner before the code. Rewriting
+the spec to match the implementation would have deleted the requirements instead
+of meeting them, and deleting the "dead" constants would have destroyed the
+evidence that the engine once matched its spec: five of them are faithful
+encodings of documented rules, sitting beside divergent implementations that
+run.
+
+The replacement framing, the five-rule table, the 19-weight audit, and the one
+blocking decision are in [`backlog.md`](./backlog.md) § "METHODOLOGY.md and the
+engine have diverged, and the doc is the spec". The brief for the analysis is
+[`methodology-reconciliation-prompt.md`](./methodology-reconciliation-prompt.md),
+which also adds what this section never asked for: a feasibility audit of the
+specification itself, since parts of it may not be satisfiable on realistic
+inputs.
+
+The timing advice below survives the retraction. Do this **before** any engine
+feature, or the next feature is specced against a doc the engine does not honor.
 
 ## 6. The UI, against "simple, minimal, easy to scan"
 
@@ -339,17 +376,34 @@ they belong in the sequence right after 009, as one small engine feature
 
 ## 10. Recommended sequence
 
-1. **Bookkeeping session** – §3 B1–B13. Half a session. User commits.
-2. **METHODOLOGY + dead-code feature** – §4 file deletions, §5's rewrite, the
-   fourteen dead weights and five dead constants removed. Drift ledger run
-   (expected flat). Small, one spec directory.
-3. **009 simple workbench** – §7. The product goal.
+*Re-ordered 2026-09-02. Steps 1 and 2 as originally written are done or split;
+the live sequence is below.*
+
+1. ~~**Bookkeeping session** – §3 B1–B13.~~ **Done**, `1c75548cc6`.
+2. ~~**METHODOLOGY + dead-code feature**~~ — **split, and the two halves went
+   different ways.** The dead-code half is **done** (`2a18984b8d`): four
+   unreachable components deleted with their tests. `daySequencing.ts` and every
+   unused export were held back on purpose, and no constant was deleted. The
+   METHODOLOGY half is **deferred by the product owner**, is no longer a
+   rewrite, and is unassigned work in [`backlog.md`](./backlog.md) rather than a
+   numbered step here — it cannot be sized until the time-of-day question is
+   answered. Brief:
+   [`methodology-reconciliation-prompt.md`](./methodology-reconciliation-prompt.md).
+3. **009 simple workbench** – §7. The product goal, and **the next feature.**
 4. **010 empty-board fixes** – §8's first two rows at minimum.
 5. **P4 manual placement** – re-specced against the simpler rail.
 
+The METHODOLOGY work is not numbered above because its size is unknown until the
+blocking decision lands. If it turns out to be a scheduler change rather than a
+documentation job, it displaces 010 and possibly precedes 009 — §8's empty-board
+defects are themselves severity and feasibility questions the reconciliation
+touches.
+
 ## 11. Verification snapshot
 
-- Suite: `timeout 300 pnpm --silent test` → 1809/1809, 68 files.
+- Suite: `timeout 300 pnpm --silent test` → 1809/1809, 68 files **as measured on
+  2026-09-01**. After the 2026-09-02 dead-code sweep it reads **1799/1799, 67
+  files** — ten cases left with the four components they covered.
 - `tsc -b` exit 0. `lint` exit 0 with 3 warnings from `coverage/`.
 - Dead code: `fallow dead-code --format json --quiet --production`.
 - Penalty readers: `grep -rn "PENALTY_WEIGHTS\.<KEY>" src/engine` per key.

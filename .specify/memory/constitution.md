@@ -139,6 +139,16 @@ changed, hands back a resume prompt, and stops. Implementing a revised plan in
 the session that revised it is what makes a feature's last tasks its most
 expensive.
 
+**Record-keeping is not re-planning.** Ticking a checkbox, annotating a task
+with its measured outcome, marking a `spec.md` Delivered, or folding in a
+correction that a session file already carries — none of these revise a plan,
+and none of them trigger the rule above. A feature whose `spec.md` reads
+Delivered has no plan left to revise. The distinction is whether the edit
+changes what will be built or records what was: the first halts the session,
+the second is the bookkeeping that closes it. 004 shipped with T069–T085
+unticked for two sessions because this was not stated, and the close-out ran a
+session later against a halting hook.
+
 ## Governance
 
 This constitution governs every feature under `specs/`. Evaluate `plan.md`'s
@@ -181,4 +191,13 @@ cover.
   collision in prose, which is why the amendment also requires such a prediction
   to be written as a task in the receiving feature's `tasks.md`.
 
-**Version**: 1.6.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-08-31
+- 1.7.0 (2026-09-02): record-keeping is not re-planning. §Orchestration's
+  re-plan rule gains an explicit carve-out for ticking checkboxes, annotating a
+  task's measured outcome, marking a `spec.md` Delivered, and folding in a
+  correction a session file already carries. Drawn from 004: the re-plan hook
+  halted S9's close-out, T069–T085 stayed unticked across two sessions, and the
+  bookkeeping session that finally ran them tripped the same hook three more
+  times on a feature whose `spec.md` reads Delivered. The rule was always about
+  building against your own revision, never about the record.
+
+**Version**: 1.7.0 | **Ratified**: 2026-08-27 | **Last Amended**: 2026-09-02
