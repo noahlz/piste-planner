@@ -36,3 +36,13 @@ ts-morph MCP `tsconfigPath`: use `./tsconfig.app.json`, not `tsconfig.json`.
 ## Methodology
 
 Execute `tasks.md` with `/speckit-implement`, one subagent per task.
+
+## Closing a session
+
+End every session with a brief plain-English summary, no jargon, before any
+resume prompt:
+
+1. **What was done** — in product terms, not task IDs.
+2. **What was uncovered** — problems found that still need addressing, and
+   what each costs if ignored.
+3. **What's next** — the immediate next step or phase.
