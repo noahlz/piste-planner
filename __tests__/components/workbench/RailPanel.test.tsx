@@ -109,16 +109,11 @@ describe('RailPanel summary slot', () => {
 })
 
 describe('Rail panel order', () => {
-  const HEADINGS = [
-    'Tournament',
-    'Strips',
-    'Events',
-    'Per-event overrides',
-    'Pool durations',
-    'Advanced',
-  ]
+  // Pool durations moved out to the gears panel (US5, FR-043) and is no
+  // longer one of the rail's triggers.
+  const HEADINGS = ['Tournament', 'Strips', 'Events', 'Per-event overrides', 'Advanced']
 
-  it('keeps the six triggers in visual order with Advanced last', () => {
+  it('keeps the five triggers in visual order with Advanced last', () => {
     render(<Rail />)
 
     const rail = screen.getByRole('complementary', { name: 'Left rail' })

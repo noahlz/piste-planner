@@ -3,12 +3,15 @@ import { render, screen, act, fireEvent } from '@testing-library/react'
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { useStore } from '../../../src/store/store.ts'
 
-// 004 T006 — the shell's four regions plus the tray, the top bar's six
-// controls, and the rail's five panel triggers, each locatable by the
+// 004 T006 — the shell's four regions plus the tray, the top bar's seven
+// controls, and the rail's four panel triggers, each locatable by the
 // accessible name contracts/ui-contract.md §Regions fixes (S2-contract.md).
 // The last describe covers the Auto-schedule all gate that restores
 // ActionButtons' hard-error scheduling block (S2-contract.md §Top bar
 // controls).
+//
+// US5 (T075) added the gears control beside Save / Share, and moved Pool
+// durations out of the rail behind it (T074, FR-043).
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
@@ -35,7 +38,7 @@ describe('WorkbenchShell regions', () => {
 })
 
 describe('WorkbenchShell top bar', () => {
-  it('exposes each of the six controls by role and accessible name', () => {
+  it('exposes each of the seven controls by role and accessible name', () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
@@ -44,12 +47,13 @@ describe('WorkbenchShell top bar', () => {
     expect(screen.getByRole('combobox', { name: 'Day count' })).toBeInTheDocument()
     expect(screen.getByRole('spinbutton', { name: 'Strip count' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Auto-schedule all' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save / Share' })).toBeInTheDocument()
   })
 })
 
 describe('WorkbenchShell rail', () => {
-  it('exposes each of the five panel triggers by its heading, whether open or collapsed', () => {
+  it('exposes each of the four panel triggers by its heading, whether open or collapsed', () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
@@ -57,7 +61,6 @@ describe('WorkbenchShell rail', () => {
     expect(screen.getByRole('button', { name: 'Strips' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Events' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Per-event overrides' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Pool durations' })).toBeInTheDocument()
   })
 })
 
