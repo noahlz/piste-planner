@@ -268,6 +268,50 @@ and `youthVetDelta` as parameters into `deStripFootprint` and
 `perBoutDuration` — `deBlockDurations` is untouched by that commit, which is
 documented BEHAVIOUR-PRESERVING.
 
+## The workbench canvas is not yet a finished surface
+
+*Found by the product owner on 2026-09-02 driving the running app (B1 preset,
+80 strips × 4 days). Recorded, not fixed — the product owner's framing is that
+the workbench UI itself is not done, not that any one of these three is an
+isolated bug.*
+
+### Block encoding is not readable at a glance (SC-004 fails)
+
+`specs/004-p3-workbench-shell/quickstart.md` §What a human has to confirm asks
+whether a person can name a block's weapon, gender, age category, and phase
+(pools vs DE) without hovering. Verdict: no. Which of the four is
+indistinguishable was not narrowed down in this pass — recorded as open rather
+than guessed at. The quickstart already predicts the cause it did not confirm:
+"sixteen fills across four families is exactly where that fails quietly."
+
+### No affordance that the canvas can be scrolled, and no drag-to-pan
+
+`MatrixCanvas.tsx` keeps the viewport `overflow-hidden` with both scroll
+offsets held as view state, so there are no scrollbars. Movement today is
+two-finger/wheel scroll (vertical pans rows, horizontal pans time), Cmd/Ctrl+
+scroll to zoom, and arrow keys once the canvas has focus. There is no
+pointer-drag handler — `onPointerMove` serves tooltip hit-testing only. The
+product owner's first instinct was to drag, got no response, and had no
+on-screen cue that any other gesture would work.
+
+SC-002 only ever specified "scrolling and zooming" — dragging was never in
+scope — so this is a missing affordance, not a regression against a criterion.
+
+### Zooming in destroys the view
+
+The most severe of the three. Reproduction, confirmed twice in the running
+app on B1: click the toolbar's **Zoom in** button roughly six times. The
+canvas becomes a single flat colour field — the time-axis header (8:00,
+9:00, …) disappears, along with gridlines, block boundaries, and every event
+label. Nothing on screen indicates position or scale, and there is no way
+back except **Fit to day**, which restores the view fully. The cause is not
+speculated on here — that is the fixing session's job.
+
+One line that matters for anyone tempted to treat this as already covered:
+the live smoke driver passes three consecutive green runs with zero console
+errors against this same build, so `scripts/smoke.mjs` has no assertion
+covering what the canvas renders after a zoom.
+
 ## Day-end overrun is a hard failure the methodology calls a warning
 
 *Found by the 2026-08-31 methodology review (web research + code cross-check).
