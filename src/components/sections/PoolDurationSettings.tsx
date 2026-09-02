@@ -26,52 +26,58 @@ export function PoolDurationSettings() {
   const resetPoolRoundDuration = useStore((s) => s.resetPoolRoundDuration)
 
   return (
-    <Card className="pt-0 gap-0">
-      <CardHeader className="flex flex-row items-center bg-foreground/10 rounded-t-xl py-2">
-        <CardTitle>Pool Round Durations</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-3 pb-3 space-y-2">
-        {WEAPON_ROWS.map(({ weapon, label }) => {
-          const defaultMinutes = DEFAULT_POOL_ROUND_DURATION_TABLE[weapon]
-          // Override state is derived by comparison against the default –
-          // there is no stored flag (data-model.md).
-          const isDefault = durations[weapon] === defaultMinutes
-          return (
-            <div key={weapon} className="flex items-center gap-2">
-              <Label htmlFor={`pool-duration-${weapon}`} className="w-12 text-xs">
-                {label}
-              </Label>
-              <NumberInput
-                id={`pool-duration-${weapon}`}
-                value={durations[weapon]}
-                onChange={(minutes) => setPoolRoundDuration(weapon, minutes)}
-                min={POOL_DURATION_MIN}
-                max={POOL_DURATION_MAX}
-                rejectOutOfRange
-                aria-label={`${label} pool round duration`}
-              />
-              <span className="text-xs text-muted-foreground">min</span>
-              <DefaultLabel isDefault={isDefault} />
-              {!isDefault && (
-                <>
-                  <span className="text-xs text-muted-foreground">
-                    default: {defaultMinutes} min
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => resetPoolRoundDuration(weapon)}
-                    aria-label={`Revert ${label} to default`}
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-            </div>
-          )
-        })}
-      </CardContent>
-    </Card>
+    // `CardTitle` renders a `<div>`, so "Pool Round Durations" carries no
+    // heading semantics (T079 finding 7). Inside the gears panel that leaves a
+    // screen-reader user meeting six spinbuttons in one region with no boundary
+    // between the gears rows and these; the named section is that boundary.
+    <section aria-label="Pool round durations">
+      <Card className="pt-0 gap-0">
+        <CardHeader className="flex flex-row items-center bg-foreground/10 rounded-t-xl py-2">
+          <CardTitle>Pool Round Durations</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-3 pb-3 space-y-2">
+          {WEAPON_ROWS.map(({ weapon, label }) => {
+            const defaultMinutes = DEFAULT_POOL_ROUND_DURATION_TABLE[weapon]
+            // Override state is derived by comparison against the default –
+            // there is no stored flag (data-model.md).
+            const isDefault = durations[weapon] === defaultMinutes
+            return (
+              <div key={weapon} className="flex items-center gap-2">
+                <Label htmlFor={`pool-duration-${weapon}`} className="w-12 text-xs">
+                  {label}
+                </Label>
+                <NumberInput
+                  id={`pool-duration-${weapon}`}
+                  value={durations[weapon]}
+                  onChange={(minutes) => setPoolRoundDuration(weapon, minutes)}
+                  min={POOL_DURATION_MIN}
+                  max={POOL_DURATION_MAX}
+                  rejectOutOfRange
+                  aria-label={`${label} pool round duration`}
+                />
+                <span className="text-xs text-muted-foreground">min</span>
+                <DefaultLabel isDefault={isDefault} />
+                {!isDefault && (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      default: {defaultMinutes} min
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => resetPoolRoundDuration(weapon)}
+                      aria-label={`Revert ${label} to default`}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </CardContent>
+      </Card>
+    </section>
   )
 }

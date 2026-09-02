@@ -453,7 +453,7 @@ function buildPhaseNodes(
 
   // DE phases. See deStripFootprint for why the ask is capped rather than
   // bracketSize/2 — a 3-5 event day has to share the strip pool concurrently.
-  const deDesired = deStripFootprint(bracketSize)
+  const deDesired = deStripFootprint(bracketSize, config.DEFAULT_DE_STRIP_FOOTPRINT)
   if (comp.de_mode === DeMode.SINGLE_STAGE) {
     nodes.push({
       event_id: comp.id,

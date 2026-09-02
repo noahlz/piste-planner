@@ -109,16 +109,11 @@ describe('RailPanel summary slot', () => {
 })
 
 describe('Rail panel order', () => {
-  const HEADINGS = [
-    'Tournament',
-    'Strips',
-    'Events',
-    'Per-event overrides',
-    'Pool durations',
-    'Advanced',
-  ]
+  // Pool durations moved out to the gears panel (US5, FR-043) and is no
+  // longer one of the rail's triggers.
+  const HEADINGS = ['Tournament', 'Strips', 'Events', 'Per-event overrides', 'Advanced']
 
-  it('keeps the six triggers in visual order with Advanced last', () => {
+  it('keeps the five triggers in visual order with Advanced last', () => {
     render(<Rail />)
 
     const rail = screen.getByRole('complementary', { name: 'Left rail' })
@@ -132,6 +127,18 @@ describe('Rail panel order', () => {
         `"${HEADINGS[i]}" does not follow "${HEADINGS[i - 1]}" in the DOM`,
       ).toBeTruthy()
     }
+  })
+
+  // FR-043's "out of the rail" half (T078 finding 8). The ordered check above
+  // is positive and non-exhaustive, so a sixth "Pool durations" trigger left
+  // in the rail passes it untouched — and the product would then edit one
+  // store field from two surfaces. Named after what the requirement removed,
+  // so a failure points at FR-043 rather than at an arity mismatch.
+  it('has no Pool durations trigger — it lives behind the gears panel now (FR-043)', () => {
+    render(<Rail />)
+
+    const rail = screen.getByRole('complementary', { name: 'Left rail' })
+    expect(within(rail).queryByRole('button', { name: /pool duration/i })).toBeNull()
   })
 
   it('leaves tab order equal to visual order — no panel trigger takes a positive tabindex', () => {

@@ -9,6 +9,7 @@ import {
   EARLY_START_THRESHOLD, MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS, MIN_FENCERS,
   DEFAULT_POOL_ROUND_DURATION_TABLE, DEFAULT_DE_DURATION_TABLE,
+  DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA, DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
 import {
   Category, Gender, Weapon, EventType,
@@ -52,6 +53,15 @@ function minimalState(): Partial<StoreState> {
       ADMIN_GAP_MINS: 20,
       FLIGHT_BUFFER_MINS: 10,
       THRESHOLD_MINS: 5,
+      // T072 (004 US5) widened the slice to seven keys. These four carry the
+      // constants' own values because this fixture exercises the three above,
+      // not them — and `SLOT_MINS` especially: buildConfig now reads it from
+      // the slice rather than importing it, so seeding it from the constant is
+      // what keeps every config this file builds identical to its pre-T072 self.
+      SLOT_MINS,
+      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
+      YOUTH_VET_BOUT_DELTA,
+      DEFAULT_DE_STRIP_FOOTPRINT,
     },
     flightingSuggestionStates: [],
   }

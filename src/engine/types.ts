@@ -234,6 +234,12 @@ export interface TournamentConfig {
   MIN_FENCERS: number
   pool_round_duration_table: Record<Weapon, number>
   de_duration_table: Record<Weapon, Record<number, number>>
+  // Formerly read straight off `constants.ts` by de.ts and capacity.ts. They
+  // travel on the config so the gears panel can retune them (FR-042) without
+  // the engine reaching for module state — constitution I.
+  DE_BOUT_DURATION: Record<Weapon, number>
+  YOUTH_VET_BOUT_DELTA: number
+  DEFAULT_DE_STRIP_FOOTPRINT: number
   dayConfigs: DayConfig[]
   max_pool_strip_pct: number
   max_de_strip_pct: number

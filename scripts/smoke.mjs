@@ -528,6 +528,157 @@ await page2.screenshot({ path: `${SHOTS}06-roundtrip.png`, fullPage: FULLPAGE })
 if (rows2 !== rowsNow) throw new Error(`share round-trip row mismatch ${rowsNow} != ${rows2}`)
 await page2.close()
 
+// ── Gears panel (US5, T077) ──
+// Same closed-by-default Collapsible as Save / Share (see the header
+// comment) — SettingsPanel's contents are not in the DOM until "Settings" is
+// clicked. Placed here, on ROC Div1A/Vet's just-verified schedule, and not
+// later in the file: the NAC Cadet/Junior + tournament-type-change block
+// below ends with the center dimmed-invalid (confirmed by reading
+// `[data-dimmed]` there) — a blocking validation finding from that block's
+// own edits freezes the committed schedule regardless of what a setting
+// change here would do, so "the schedule follows" cannot be asserted once
+// past that point. `schedTable` above is still in scope and still valid.
+//
+// Save / Share is still open from the round-trip above. Its trigger sits right
+// next to the gears trigger and the two panels are sibling `absolute right-0
+// z-50` overlays in the same header, so they occupy the same space. The top
+// bar holds one open-panel slot rather than two booleans (T079 finding 2), and
+// opening either closes the other — asserted immediately below. Until that
+// fix this step clicked Save / Share shut first, which was the driver
+// absorbing the overlap defect rather than recording a DOM correction: a real
+// user got no such note and simply could not click the gears panel.
+await page.getByRole('button', { name: 'Settings' }).click()
+const settingsRegion = page.getByRole('region', { name: 'Settings' })
+await settingsRegion.waitFor()
+const saveShareStillOpen = await page
+  .getByRole('button', { name: 'Generate Link' })
+  .isVisible()
+  .catch(() => false)
+if (saveShareStillOpen) {
+  throw new Error('opening Settings left Save / Share open — the top bar panels are not mutually exclusive')
+}
+log('opening Settings closed Save / Share — top bar panels are mutually exclusive')
+
+// FR-041/SC-009: the panel is reachable, and every row reads its default on
+// first open — nothing above this point in the driver touches an engine
+// constant (the fencer-count edit above is a per-competition field, not one
+// of these). 5 rows total: the 2 in SettingsPanel.ROWS plus
+// PoolDurationSettings' own 3, moved in behind this same trigger. It was 12
+// until T078 measured that six of the nine gears rows leave the derived
+// schedule byte-identical, and T079 finding 1 cut them to three; a seventh,
+// `DE strip footprint`, was cut afterward for a different reason — it moves
+// the schedule, but off `de_duration_table` durations calibrated against it,
+// so an override desyncs the two rather than doing nothing.
+const settingsDefaultCount = () => settingsRegion.getByText('Default', { exact: true }).count()
+if ((await settingsDefaultCount()) !== 5) {
+  throw new Error(
+    `gears panel: expected 5 rows reading Default on first open, got ${await settingsDefaultCount()}`,
+  )
+}
+log('gears panel opened, all 5 settings read Default')
+await shot('09-gears-default')
+
+// FR-046: a setting change must move the schedule with no explicit re-run.
+// Two settings were tried and rejected before this one, both measured at
+// this exact point in the driver (ROC Div1A/Vet, NAC type, Suggested strips,
+// fencer count of 99 on the edited competition):
+//   - DEFAULT_DE_STRIP_FOOTPRINT: T069 measured that an override only moves
+//     anything once it drops below the DE strip grant max_de_strip_pct
+//     computes for the fixture; here it stayed at or above that cap, so it
+//     changed nothing.
+//   - ADMIN_GAP_MINS *increased* by 30 (30 -> 60): every deStart in
+//     derive.ts is `poolEnd + ADMIN_GAP_MINS`, so times do move — but
+//     validation.ts sums poolDuration + ADMIN_GAP_MINS + deDuration against
+//     DAY_LENGTH_MINS, and on a strip-tight template the wider gap pushed a
+//     competition over that ceiling. That is a blocking ERROR finding, and
+//     CenterView's dimmed-invalid rule (see its own comment) then freezes
+//     the committed schedule at its last valid state — confirmed by reading
+//     `[data-dimmed]`, which flipped to "true" while the table never moved
+//     even though the store had genuinely changed.
+// A *decrease* only relaxes that sum, so it can never trigger the same
+// freeze — kept here for that reason.
+const adminGapInput = settingsRegion.getByRole('spinbutton', { name: 'Admin gap' })
+const adminGapDefault = Number(await adminGapInput.inputValue())
+const adminGapChanged = adminGapDefault - 15
+const scheduleBeforeGap = await schedTable.textContent()
+await adminGapInput.fill(String(adminGapChanged))
+await adminGapInput.blur()
+await page.waitForTimeout(400)
+const scheduleAfterGap = await schedTable.textContent()
+if (scheduleBeforeGap === scheduleAfterGap) {
+  throw new Error('changing Admin gap did not move the schedule table (FR-046)')
+}
+if ((await page.locator('[data-dimmed]').getAttribute('data-dimmed')) === 'true') {
+  throw new Error('Admin gap change left the center dimmed-invalid — the "after" read was not a real committed schedule')
+}
+log('Admin gap', adminGapDefault, '->', adminGapChanged, 'moved the schedule')
+await shot('10-gears-changed')
+
+// FR-044: the revert control actually resets, not just relabels. Cheap once
+// the panel is open — nothing else in this driver exercises one.
+await settingsRegion.getByRole('button', { name: 'Revert Admin gap to default' }).click()
+await page.waitForTimeout(400)
+if (Number(await adminGapInput.inputValue()) !== adminGapDefault) {
+  throw new Error('Revert Admin gap to default did not restore the default value (FR-044)')
+}
+if ((await settingsDefaultCount()) !== 5) {
+  throw new Error('Revert Admin gap to default did not restore its Default badge (FR-044)')
+}
+if ((await schedTable.textContent()) !== scheduleBeforeGap) {
+  throw new Error('Revert Admin gap to default did not restore the schedule table (FR-044)')
+}
+log('Revert Admin gap to default restored the default value, badge, and schedule')
+
+// FR-045/SC-007: the override round-trips through a share link, and reads as
+// an override on the far side — not merely equal to the default by
+// coincidence. Re-apply the change just reverted so there is an override to
+// carry. Opening Settings closed Save / Share (the mutual exclusion asserted
+// above), so its trigger has to be clicked again — which in turn closes
+// Settings, after the fill below has already used it. The visibility check is
+// kept rather than an unconditional click so the step survives either state,
+// the same defensive shape the NAC Cadet/Junior template step below uses for
+// its own already-open collapsible.
+await adminGapInput.fill(String(adminGapChanged))
+await adminGapInput.blur()
+await page.waitForTimeout(400)
+const generateLinkVisible = await page
+  .getByRole('button', { name: 'Generate Link' })
+  .isVisible()
+  .catch(() => false)
+if (!generateLinkVisible) {
+  await page.getByRole('button', { name: 'Save / Share' }).click()
+}
+await page.getByRole('button', { name: 'Generate Link' }).click()
+const gearShareUrl = await page.locator('input[readonly]').first().inputValue()
+const page3 = await ctx.newPage()
+page3.on('pageerror', (e) => errors.push('p3: ' + e))
+await page3.goto(gearShareUrl)
+await page3.getByRole('button', { name: 'Save / Share' }).waitFor()
+await page3.getByRole('button', { name: 'Settings' }).click()
+const settingsRegion3 = page3.getByRole('region', { name: 'Settings' })
+await settingsRegion3.waitFor()
+const adminGapInput3 = settingsRegion3.getByRole('spinbutton', { name: 'Admin gap' })
+const adminGapOnLoad = Number(await adminGapInput3.inputValue())
+if (adminGapOnLoad !== adminGapChanged) {
+  throw new Error(
+    `share round-trip lost the Admin gap override: expected ${adminGapChanged}, got ${adminGapOnLoad}`,
+  )
+}
+// The marker, not the value — an implementation that round-tripped the
+// number but forgot to mark it non-default would still pass the check above.
+const revertVisibleOnLoad = await settingsRegion3
+  .getByRole('button', { name: 'Revert Admin gap to default' })
+  .isVisible()
+  .catch(() => false)
+if (!revertVisibleOnLoad) {
+  throw new Error(
+    'Admin gap round-tripped its value but not its override marker — the far side reads it as Default (FR-045)',
+  )
+}
+log('share round-trip: Admin gap', adminGapChanged, 'arrived marked as an override, not a default')
+await page3.screenshot({ path: `${SHOTS}11-gears-roundtrip.png`, fullPage: FULLPAGE })
+await page3.close()
+
 // ── Team event cut (008) ──
 // Before this feature, defaultCutForEntry gave every TEAM catalogue entry a
 // percentage cut inherited from its category, which the engine's cut-on-team

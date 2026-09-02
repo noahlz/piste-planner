@@ -8,7 +8,11 @@ import {
   perBoutDuration,
 } from '../../src/engine/de.ts'
 import { CutMode, EventType, Weapon, Phase, Category, VetAgeGroup, tailEstimateMins } from '../../src/engine/types.ts'
-import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
+import {
+  DEFAULT_DE_DURATION_TABLE,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
+} from '../../src/engine/constants.ts'
 
 describe('nextPowerOf2', () => {
   // n<=0 returns 1: bracket size must be at least 1 (degenerate input → smallest valid bracket)
@@ -170,6 +174,10 @@ describe('calculateDeDuration', () => {
 })
 
 describe('perBoutDuration', () => {
+  // T072 (004 US5) made the bout table and the delta parameters instead of
+  // module imports, so the engine reads them off TournamentConfig. Passing the
+  // same constants the function used to import keeps every expectation below
+  // unchanged — the route changed, the numbers did not.
   // base = DE_BOUT_DURATION[weapon] (foil/epee 20, sabre 15 after strip-changeover overhead)
   // YOUTH_VET_BOUT_DELTA (-5) applies when category is Y8 or Y10, or vet_age_group is non-null.
   // Y12, Y14, and senior (DIV1) categories take the plain weapon duration.
@@ -211,6 +219,8 @@ describe('perBoutDuration', () => {
   ]
 
   it.each(cases)('%s', (_description, weapon, category, vetAgeGroup, expected) => {
-    expect(perBoutDuration(weapon, category, vetAgeGroup)).toBe(expected)
+    expect(
+      perBoutDuration(weapon, category, vetAgeGroup, DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA),
+    ).toBe(expected)
   })
 })

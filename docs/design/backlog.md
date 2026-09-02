@@ -211,6 +211,107 @@ the schedule's own requirement. Worth reconciling when the referee model is next
 opened; until then the divergence is bounded, one-directional, and confined to
 saturated days.
 
+## DE prelims gets a sliver of its bracket's time, not its bout share
+
+*Found by the product owner on 2026-09-02 in the live app. Recorded, not
+fixed — the fix edits `src/engine/`, so it sits behind constitution III's
+B1–B8 drift-ledger review, and needs its own spec directory when picked up.*
+
+A Veteran Combined Men's Saber Individual event with a bracket of 64 showed a
+**DE prelims** block of **5 minutes** across 16 strips.
+
+`deBlockDurations` (`src/engine/de.ts:63-77`) splits `totalDeDuration` between
+the DE_PRELIMS and DE_ROUND_OF_16 phases — the only two `dePhasesForBracket`
+returns once `bracketSize >= 64` (`de.ts:44-49`) — by bout count:
+
+```
+totalBouts   = bracketSize / 2
+r16Bouts     = min(30, totalBouts - 1)
+prelimsBouts = max(totalBouts - 30 - 1, 0)
+```
+
+`totalBouts` is meant to stand for every scheduled bout in the bracket, but
+`bracketSize / 2` only counts the bracket's first round. The literal `30` is a
+cumulative count — bouts from the round of 32 down through the semifinals,
+stop-at-semis — measured against that first-round-only total. The subtraction
+that produces `prelimsBouts` compares two different units.
+
+- **Bracket 64**: `totalBouts = 32`, `r16Bouts = min(30, 31) = 30`,
+  `prelimsBouts = max(32-30-1, 0) = 1`. Prelims gets `round(total × 1/32)`,
+  about 3% of DE time, which `deStagedPhaseDuration`'s slot-snap floors to one
+  5-minute slot — the reported defect. The round of 64 is 32 bouts, the
+  largest single round in the event, and it receives one bout's worth of time.
+- **Bracket 128**: `totalBouts = 64`, `r16Bouts = min(30, 63) = 30`,
+  `prelimsBouts = max(64-30-1, 0) = 33`. Prelims gets 33/64 ≈ 52% of DE time.
+  The bracket's true bout share above the round of 32 is 96 of the 126
+  stop-at-semis bouts ≈ 76%. Less severe than bracket 64, but wrong in the
+  same direction.
+
+Root cause: `totalBouts = bracketSize / 2` counts only the bracket's first
+round, while the `30` it is measured against counts a cumulative total from
+the round of 32 to the semifinals, so the formula subtracts a running total
+from a single round's count.
+
+**Invisible to the B1–B8 drift ledger by construction.** `totalDeDuration` is
+conserved across the split — the misallocated share moves from prelims to r16
+rather than disappearing — so no scenario's `scheduledCount` drops and no
+ledger snapshot cell moves. The damage is confined to where the
+prelims/r16 boundary falls inside an event's own DE block: phase durations,
+the strip demand each staged block reports, and the referee-peak window it
+lands in are all wrong, but nothing the ledger measures notices. This is why
+the defect survived all eight 004 drift-ledger scenarios untouched.
+
+Pre-existing, not introduced by 004: `git log --oneline main..HEAD -L
+'63,77:src/engine/de.ts'` on `004-us5-gears` is empty. US5's only touch to
+`de.ts` was `c7035a6b28`, which threaded `defaultFootprint`, `boutDurations`,
+and `youthVetDelta` as parameters into `deStripFootprint` and
+`perBoutDuration` — `deBlockDurations` is untouched by that commit, which is
+documented BEHAVIOUR-PRESERVING.
+
+## The workbench canvas is not yet a finished surface
+
+*Found by the product owner on 2026-09-02 driving the running app (B1 preset,
+80 strips × 4 days). Recorded, not fixed — the product owner's framing is that
+the workbench UI itself is not done, not that any one of these three is an
+isolated bug.*
+
+### Block encoding is not readable at a glance (SC-004 fails)
+
+`specs/004-p3-workbench-shell/quickstart.md` §What a human has to confirm asks
+whether a person can name a block's weapon, gender, age category, and phase
+(pools vs DE) without hovering. Verdict: no. Which of the four is
+indistinguishable was not narrowed down in this pass — recorded as open rather
+than guessed at. The quickstart already predicts the cause it did not confirm:
+"sixteen fills across four families is exactly where that fails quietly."
+
+### No affordance that the canvas can be scrolled, and no drag-to-pan
+
+`MatrixCanvas.tsx` keeps the viewport `overflow-hidden` with both scroll
+offsets held as view state, so there are no scrollbars. Movement today is
+two-finger/wheel scroll (vertical pans rows, horizontal pans time), Cmd/Ctrl+
+scroll to zoom, and arrow keys once the canvas has focus. There is no
+pointer-drag handler — `onPointerMove` serves tooltip hit-testing only. The
+product owner's first instinct was to drag, got no response, and had no
+on-screen cue that any other gesture would work.
+
+SC-002 only ever specified "scrolling and zooming" — dragging was never in
+scope — so this is a missing affordance, not a regression against a criterion.
+
+### Zooming in destroys the view
+
+The most severe of the three. Reproduction, confirmed twice in the running
+app on B1: click the toolbar's **Zoom in** button roughly six times. The
+canvas becomes a single flat colour field — the time-axis header (8:00,
+9:00, …) disappears, along with gridlines, block boundaries, and every event
+label. Nothing on screen indicates position or scale, and there is no way
+back except **Fit to day**, which restores the view fully. The cause is not
+speculated on here — that is the fixing session's job.
+
+One line that matters for anyone tempted to treat this as already covered:
+the live smoke driver passes three consecutive green runs with zero console
+errors against this same build, so `scripts/smoke.mjs` has no assertion
+covering what the canvas renders after a zoom.
+
 ## Day-end overrun is a hard failure the methodology calls a warning
 
 *Found by the 2026-08-31 methodology review (web research + code cross-check).
@@ -415,12 +516,12 @@ Detail in [reassessment-2026-08-31.md §3.5](./reassessment-2026-08-31.md).
 
 ## Per-type defaults in the rail's Advanced panel
 
-*Assigned to P3 on 2026-08-29. Specified in
-[`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
-P3 builds the rail, so the Advanced panel is its deliverable rather than a
-second pass over it.*
+*Delivered by 004 US4 – [`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
+The six-row table lives in `src/store/typeDefaults.ts` (`effa7c908e`), the
+three per-type resolutions are in `buildConfig.ts` (`9f53379b70`), and
+`AdvancedPanel.tsx` shipped with the AUTO marker (`332817d283`).*
 
-Defaults the Advanced panel should apply when the user picks a tournament type,
+Defaults the Advanced panel applies when the user picks a tournament type,
 shown as dim text on the collapsed panel so they are visible without expanding:
 
 - Referee count: 2 for NAC, SJCC, SYC. 1 for all others.
@@ -465,29 +566,111 @@ a gears control in the top bar. Per-event and global weights, penalties, and
 earliest-start offsets are all editable. Serialization persists only the
 overrides, so unset values continue to track the defaults in `constants.ts`.
 
-**What P3 takes**: the top-bar gears control and a panel over the settings that
-already have store and serialization support – the `globalOverrides` trio
-(`ADMIN_GAP_MINS`, `FLIGHT_BUFFER_MINS`, `THRESHOLD_MINS`, live in the store and
-the share URL since before P3 but reachable from no component) plus the four P1
-constants listed below. `PoolDurationSettings` from 002 is the precedent for the
-default / override / reset / overrides-only-persistence pattern, and it moves
-behind the same gears surface.
+**What P3 took**: the top-bar gears control and a panel over two settings –
+`ADMIN_GAP_MINS` and `FLIGHT_BUFFER_MINS` – plus `PoolDurationSettings` from
+002, which is the precedent for the default / override / reset /
+overrides-only-persistence pattern and moved behind the same gears surface. It
+intended to take seven, and the five it did not are now the entry below. All
+seven still travel through the store, `buildConfig` and the share URL; only two
+have an editing surface. `DEFAULT_DE_STRIP_FOOTPRINT` shipped a row briefly and
+was withdrawn in the same commit that cut the other four – see the entry below
+for why moving the schedule was not enough to keep it.
 
 **What stays here**: promoting the rest of `constants.ts` – per-event and global
 weights, the penalty matrices, category start preferences, earliest-start
 offsets – into a user-editable configuration file. That is a feature of its own
 size and it needs a spec directory when it is picked up, after P5.
 
-Constants that P1 newly surfaces and that belong in this file:
-
-- `SLOT_MINS` (default 5) – scheduling grid resolution.
-- `DE_BOUT_DURATION` per weapon – foil 20, épée 20, sabre 15.
-- `YOUTH_VET_BOUT_DELTA` (default -5) – applied to Y10, Y8, and Vet for
-  10-touch bouts.
-- `DEFAULT_DE_STRIP_FOOTPRINT` (default 16) – strips a single event's DE phase
-  claims, the footprint `de_duration_table` is calibrated against.
-
 `video_stage_mode` arrives with P5, not P1.
+
+## A what-if scenario mode, not more settings rows
+
+*Reframed 2026-09-01 by the product owner, rejecting this entry's earlier
+"teach the engine to read these five settings" framing. Unassigned and
+unnumbered – needs its own spec directory, and sits behind the B1–B8 drift
+ledger because it edits `src/engine/` (constitution III).*
+
+004's US5 built nine gears rows and shipped three, then withdrew one of those
+three – `DEFAULT_DE_STRIP_FOOTPRINT` – in the same commit, leaving two. The
+five withdrawn keys are not organizer settings with an incomplete engine
+reader. They are **hypotheses about how the tournament would run differently**,
+and the settings panel is the wrong shape for that regardless of whether the
+engine is wired up to read them:
+
+- **`SLOT_MINS` (scheduling grid resolution)** is an implementation artifact,
+  not a domain parameter – it controls how finely the scheduler rounds times,
+  not anything about the tournament. It arguably belongs in no user-facing
+  panel under any design, settings or otherwise.
+- **`YOUTH_VET_BOUT_DELTA` (youth/vet bout adjustment)** is not an organizer's
+  choice to make. USA Fencing's rules give Y8/Y10 and veteran categories fewer
+  touches per bout (`constants.ts:79-80`), so this delta is a rule the engine
+  should apply correctly, not a knob to turn. A what-if tool can still ask "what
+  if this rule were different" as a hypothesis, but a settings panel implies an
+  organizer is allowed to opt out of the rule as it stands today, and they are not.
+- **`DE_BOUT_DURATION` (per-weapon DE bout duration)** is a measured average,
+  not a policy – it includes the 5-minute strip-changeover overhead, which is
+  why sabre is 15 minutes rather than the pure fencing time (`constants.ts:72-73`).
+  Retuning it is a calibration exercise against real data, not a per-tournament
+  organizer preference.
+- **`THRESHOLD_MINS` (flighting threshold)** has zero readers anywhere in
+  `src/engine/` and looks vestigial – `flighting.ts` decides whether to flight
+  an event by counting pools against `strips_total`, never by minutes. This
+  reads as a parameter left over from a design flighting no longer uses, not a
+  hypothesis worth modelling. The open question is whether it should exist in
+  `GlobalOverrides` at all, not how to wire it up.
+- **`DEFAULT_DE_STRIP_FOOTPRINT` (DE strip footprint)** is the hardest case and
+  the reason this whole entry is a what-if feature rather than a settings
+  feature. See below – it is not merely inert like the other four, and any
+  scenario tool inherits its constraint.
+
+**The calibration coupling is a hard constraint, not a detail.**
+`DEFAULT_DE_STRIP_FOOTPRINT` (`constants.ts:68-70`) and
+`DEFAULT_DE_DURATION_TABLE` (`config.de_duration_table`) are calibrated
+against each other – the table's empirical per-round durations were measured
+at the footprint's default value, and the comment at the constant says so.
+Moving the footprint without re-deriving the table does not fail loudly and
+does not do nothing: it produces a **confidently wrong number** on a model
+that was never validated at the new value. T069 measured this directly – an
+override from 16 to 4 moved a fixture's `de_duration_actual` from 233 to 116,
+a schedule roughly half as long, computed entirely from durations only ever
+valid at 16. This is exactly why the footprint's row was cut in this same
+commit rather than kept as "at least it moves the schedule" (FR-046's literal
+bar) – a control that silently does nothing costs an afternoon of a confused
+organizer; one that silently produces a plausible wrong schedule costs a
+tournament day. Any what-if tool that lets an organizer move the footprint
+must re-derive or interpolate the duration table alongside it, or it inherits
+this exact defect with a friendlier UI around it.
+
+**Measured evidence**, all from re-deriving a fixture after changing one
+constant: `SLOT_MINS` 5→30, `YOUTH_VET_BOUT_DELTA` −5→−60, `DE_BOUT_DURATION.FOIL`
+20→60 and `THRESHOLD_MINS` 10→600 each produced a byte-identical
+`ScheduleResult`. `DEFAULT_DE_STRIP_FOOTPRINT` 16→4 did move the schedule –
+`de_duration_actual` 233→116 – off a duration table calibrated only at 16.
+
+**What the destination looks like**: a scenario / what-if mode, not a settings
+panel – an organizer picks a hypothesis ("what if épée bouts ran faster"),
+the engine re-derives a schedule from it, and the result is compared against
+the committed schedule and labelled hypothetical throughout its display so it
+can never be mistaken for a plan. This is a different feature shape than
+`SettingsPanel`'s default/override/revert pattern, which presents a value as
+something the organizer's own tournament genuinely uses.
+
+`SettingsPanel.tsx`'s `NotSurfacedKey` union is the list of what stays out of
+the gears panel, and the compile-time exhaustiveness check beside it means a
+new `GlobalOverrides` key cannot reach the store without either a row or a
+reasoned entry there. All five keys keep their store, `buildConfig`,
+serialization and engine-threading support regardless of which of them a
+scenario feature ends up using – that work is tested and behaviour-preserving.
+
+Mechanical path for whoever picks up `SLOT_MINS`, since it is the one purely
+mechanical piece here: `config.SLOT_MINS` is read nowhere today; the only slot
+consumer is `snapToSlot` (`src/engine/resources.ts`), which takes no config
+and closes over the module constant. Give it a slot parameter and thread
+`config.SLOT_MINS` through its **10** call sites, counted 2026-09-01 –
+`de.ts` ×1, `concurrentScheduler.ts` ×4, `derive.ts` ×5; `resources.ts` only
+defines the function. No design decision is needed for this one, but every
+scheduled time is snapped, so the drift review is the real work regardless of
+how mechanical the wiring is.
 
 ## Save / load / share browser plumbing
 

@@ -7,6 +7,9 @@ import {
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
   DEFAULT_DE_DURATION_TABLE,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
+  DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
 
 // Minutes-from-midnight constants used across test factories
@@ -60,6 +63,13 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     MIN_FENCERS: 2,
     pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
     de_duration_table: DEFAULT_DE_DURATION_TABLE,
+    // T072: de.ts and capacity.ts read these off the config instead of
+    // importing them, so every config needs them. Sourced from the constants
+    // the engine used to import directly, which is what keeps the factory's
+    // configs byte-identical in behavior to their pre-T072 selves.
+    DE_BOUT_DURATION,
+    YOUTH_VET_BOUT_DELTA,
+    DEFAULT_DE_STRIP_FOOTPRINT,
     dayConfigs: [],
     max_pool_strip_pct: 0.80,
     max_de_strip_pct: 0.80,

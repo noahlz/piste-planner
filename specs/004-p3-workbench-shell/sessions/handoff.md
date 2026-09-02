@@ -1723,3 +1723,59 @@ amendment are already resolved on this branch.
 
 `git merge --no-ff --no-commit 004-us4-drift-gate`, gate the merged tree, then
 `commit-with-costs` completes it.
+
+## S9
+
+**Scope**: US5 close-out, T080–T084. T085 (the merge handoff) is what this
+session ends on.
+
+### Final gate
+
+`tsc -b` exit 0 · `lint` exit 0 · **68 files, 1809 tests, 0 failures**, run
+2026-09-01 22:00.
+
+### T081 — PASS
+
+Three consecutive green live-smoke runs, zero console errors, no locator
+repairs, `scripts/smoke.mjs` unchanged. Verified the gears panel's
+override/revert/share round-trip end to end.
+
+### T083/T084
+
+Commit `6efaab8c14` closes the two design docs against what US4 and US5
+actually shipped.
+
+### A DE engine defect found and recorded, not fixed
+
+Commit `da6bae3c2c`. See `docs/design/backlog.md` §"DE prelims gets a sliver
+of its bracket's time, not its bout share" for the finding — not restated
+here.
+
+### T082 — one criterion fails, one is mixed
+
+**SC-004 fails.** **SC-002 is mixed**: two-finger scroll and zoom-by-gesture
+perform fine, but zoom is broken badly enough (canvas goes flat past ~6 clicks
+of Zoom in) that the criterion cannot be called passed. Both are recorded in
+`docs/design/backlog.md` §"The workbench canvas is not yet a finished
+surface" rather than restated here.
+
+### A lost-subagent incident worth recording
+
+An earlier attempt at this session dispatched T081 and T083/T084 as
+subagents. Both vanished with no completion notice — no commits, no error,
+nothing to resume — and left two orphaned vite dev servers running. The work
+was redone from scratch in this session rather than trusted from a silent
+gap.
+
+Also worth recording: this feature was orchestrated from the **main**
+checkout rather than from the worktree, so no worktree-keyed session
+transcript exists for `004-us5-gears`. `merge-with-costs`'s worktree-path
+resolution will find nothing there, and the session id for the cost trailers
+has to be picked by hand rather than resolved automatically.
+
+### Not done, and it is the user's
+
+The `tasks.md` checkboxes for T069–T084 remain unticked — the re-plan hook
+halts edits to that file, so this session left it alone rather than working
+around it. The merge itself is the user's, same as every prior session in
+this feature.

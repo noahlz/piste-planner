@@ -11,7 +11,6 @@ import {
   DAY_END_MINS,
   LATEST_START_MINS,
   LATEST_START_OFFSET,
-  SLOT_MINS,
   DAY_LENGTH_MINS,
   DE_REFS,
   SAME_TIME_WINDOW_MINS,
@@ -74,17 +73,23 @@ export function buildTournamentConfig(
       day_end_time: d * DAY_AXIS_SPACING_MINS + day.day_end_time,
     })),
 
-    // Global overrides from store
+    // Global overrides from store. SLOT_MINS lives here rather than in the
+    // "Engine constants" block below because the gears panel can retune it
+    // (FR-042) — the store seeds the slice from the same constant, so an
+    // untouched setting still arrives at its default.
     ADMIN_GAP_MINS: state.globalOverrides.ADMIN_GAP_MINS,
     FLIGHT_BUFFER_MINS: state.globalOverrides.FLIGHT_BUFFER_MINS,
     THRESHOLD_MINS: state.globalOverrides.THRESHOLD_MINS,
+    SLOT_MINS: state.globalOverrides.SLOT_MINS,
+    DE_BOUT_DURATION: state.globalOverrides.DE_BOUT_DURATION,
+    YOUTH_VET_BOUT_DELTA: state.globalOverrides.YOUTH_VET_BOUT_DELTA,
+    DEFAULT_DE_STRIP_FOOTPRINT: state.globalOverrides.DEFAULT_DE_STRIP_FOOTPRINT,
 
     // Engine constants
     DAY_START_MINS,
     DAY_END_MINS,
     LATEST_START_MINS,
     LATEST_START_OFFSET,
-    SLOT_MINS,
     DAY_LENGTH_MINS,
     DE_REFS,
     SAME_TIME_WINDOW_MINS,

@@ -24,6 +24,10 @@ import {
   ADMIN_GAP_MINS,
   FLIGHT_BUFFER_MINS,
   THRESHOLD_MINS,
+  SLOT_MINS,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
+  DEFAULT_DE_STRIP_FOOTPRINT,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../engine/constants.ts'
 import { defaultCutForEntry } from './competitionDefaults.ts'
@@ -83,10 +87,20 @@ export interface CompetitionConfig {
   use_single_pool_override: boolean
 }
 
+/**
+ * The engine settings the organizer can retune from the gears panel (FR-042).
+ * Every key is spelled exactly as its `src/engine/constants.ts` export and its
+ * `TournamentConfig` field, so the store key, the config field, the serialized
+ * key and the constant are one traceable name.
+ */
 export interface GlobalOverrides {
   ADMIN_GAP_MINS: number
   FLIGHT_BUFFER_MINS: number
   THRESHOLD_MINS: number
+  SLOT_MINS: number
+  DE_BOUT_DURATION: Record<Weapon, number>
+  YOUTH_VET_BOUT_DELTA: number
+  DEFAULT_DE_STRIP_FOOTPRINT: number
 }
 
 export interface CompetitionSlice {
@@ -267,10 +281,19 @@ function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): Co
 function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice {
   return {
     selectedCompetitions: {},
+    // Seeded from the constants themselves, never a repeated literal, so a
+    // default that moves in constants.ts moves here with it.
     globalOverrides: {
       ADMIN_GAP_MINS,
       FLIGHT_BUFFER_MINS,
       THRESHOLD_MINS,
+      SLOT_MINS,
+      // Copied, not aliased: `setGlobalOverrides` replaces this record whole
+      // (the merge is shallow), and a caller spreading it must not be able to
+      // mutate the module-level constant.
+      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
+      YOUTH_VET_BOUT_DELTA,
+      DEFAULT_DE_STRIP_FOOTPRINT,
     },
 
     selectCompetitions: (ids) => {
