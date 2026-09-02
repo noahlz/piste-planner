@@ -562,17 +562,20 @@ log('opening Settings closed Save / Share — top bar panels are mutually exclus
 // FR-041/SC-009: the panel is reachable, and every row reads its default on
 // first open — nothing above this point in the driver touches an engine
 // constant (the fencer-count edit above is a per-competition field, not one
-// of these). 6 rows total: the 3 in SettingsPanel.ROWS plus
+// of these). 5 rows total: the 2 in SettingsPanel.ROWS plus
 // PoolDurationSettings' own 3, moved in behind this same trigger. It was 12
 // until T078 measured that six of the nine gears rows leave the derived
-// schedule byte-identical, and T079 finding 1 cut them.
+// schedule byte-identical, and T079 finding 1 cut them to three; a seventh,
+// `DE strip footprint`, was cut afterward for a different reason — it moves
+// the schedule, but off `de_duration_table` durations calibrated against it,
+// so an override desyncs the two rather than doing nothing.
 const settingsDefaultCount = () => settingsRegion.getByText('Default', { exact: true }).count()
-if ((await settingsDefaultCount()) !== 6) {
+if ((await settingsDefaultCount()) !== 5) {
   throw new Error(
-    `gears panel: expected 6 rows reading Default on first open, got ${await settingsDefaultCount()}`,
+    `gears panel: expected 5 rows reading Default on first open, got ${await settingsDefaultCount()}`,
   )
 }
-log('gears panel opened, all 6 settings read Default')
+log('gears panel opened, all 5 settings read Default')
 await shot('09-gears-default')
 
 // FR-046: a setting change must move the schedule with no explicit re-run.
@@ -618,7 +621,7 @@ await page.waitForTimeout(400)
 if (Number(await adminGapInput.inputValue()) !== adminGapDefault) {
   throw new Error('Revert Admin gap to default did not restore the default value (FR-044)')
 }
-if ((await settingsDefaultCount()) !== 6) {
+if ((await settingsDefaultCount()) !== 5) {
   throw new Error('Revert Admin gap to default did not restore its Default badge (FR-044)')
 }
 if ((await schedTable.textContent()) !== scheduleBeforeGap) {

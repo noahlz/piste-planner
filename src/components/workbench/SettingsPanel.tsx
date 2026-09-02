@@ -1,6 +1,6 @@
 import { useStore } from '../../store/store.ts'
 import type { GlobalOverrides } from '../../store/store.ts'
-import { ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS, DEFAULT_DE_STRIP_FOOTPRINT } from '../../engine/constants.ts'
+import { ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS } from '../../engine/constants.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -51,26 +51,16 @@ const ROWS = [
     min: 0,
     max: 240,
   },
-  {
-    key: 'DEFAULT_DE_STRIP_FOOTPRINT',
-    label: 'DE strip footprint',
-    default: DEFAULT_DE_STRIP_FOOTPRINT,
-    unit: 'strips',
-    // A DE phase always asks for at least one strip (`deStripFootprint` floors
-    // at 1), and 64 is bracketSize/2 for the largest bracket the engine builds.
-    min: 1,
-    max: 64,
-  },
 ] as const satisfies readonly SettingRowSpec[]
 
 /**
- * Keys deliberately given no row, each with the reason it cannot act on the
- * derived schedule today (T078 measured each one: changing it produces a
- * byte-identical `ScheduleResult`). FR-046 requires a setting to move the
- * schedule, and a control that silently does nothing is worse than an absent
- * one, so the editing surface is withdrawn while the store, `buildConfig` and
- * serialization keep carrying the value. The engine work that would earn these
- * rows back is in `docs/design/backlog.md` under "Global settings".
+ * Keys deliberately given no row. The first four cannot act on the derived
+ * schedule at all today (T078 measured each one: changing it produces a
+ * byte-identical `ScheduleResult`), and FR-046 requires a setting to move the
+ * schedule, so a control that silently does nothing is worse than an absent
+ * one. The store, `buildConfig` and serialization keep carrying every value
+ * regardless. The engine work that would earn a row back is in
+ * `docs/design/backlog.md` under "Global settings".
  */
 type NotSurfacedKey =
   // No reader anywhere in `src/engine/`. `flighting.ts` decides by pool count
@@ -85,6 +75,16 @@ type NotSurfacedKey =
   // duration comes from `config.de_duration_table`, so on an individual-only
   // tournament these do nothing – the value still travels for team estimates.
   | 'DE_BOUT_DURATION'
+  // Different from the four above: this one *does* reach the schedule, which
+  // is worse. `concurrentScheduler.ts`'s DE phase strip footprint cap is the
+  // value `DEFAULT_DE_DURATION_TABLE`'s empirical durations were derived
+  // against (`constants.ts:68-70`) – moving the cap without re-deriving the
+  // table desynchronises the two, and the engine computes a confident wrong
+  // number rather than doing nothing. Measured: 16→4 moved a fixture's
+  // `de_duration_actual` 233→116 off a table only ever valid at 16. Returning
+  // this row needs the table re-derived first, not just an engine reader
+  // wired up – see "Four settings" in `docs/design/backlog.md`.
+  | 'DEFAULT_DE_STRIP_FOOTPRINT'
 
 /** Fails to satisfy its constraint – and so fails `tsc` – for any type but `never`. */
 type AssertNever<T extends never> = T

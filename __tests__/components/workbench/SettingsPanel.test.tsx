@@ -5,7 +5,6 @@ import { useStore } from '../../../src/store/store.ts'
 import {
   ADMIN_GAP_MINS,
   FLIGHT_BUFFER_MINS,
-  DEFAULT_DE_STRIP_FOOTPRINT,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../../../src/engine/constants.ts'
 
@@ -14,22 +13,28 @@ import {
 // so the implementation and this file agree without discovering each other's
 // choices.
 //
-// Three rows, each following the settled `PoolDurationSettings` pattern
+// Two rows, each following the settled `PoolDurationSettings` pattern
 // (src/components/sections/PoolDurationSettings.tsx:34-73): a Label +
 // NumberInput pair, override state derived by comparison against the
 // imported constant (no stored flag – research D8), a `DefaultLabel` badge
 // while at default, and a `default: N` hint plus a `Revert <label> to
 // default` ghost button while not. `ROWS` below is that table, driving every
-// generic assertion so no case is copy-pasted three times.
+// generic assertion so no case is copy-pasted twice.
 //
-// T078/T079 finding 1 cut this table from nine rows to three. `THRESHOLD_MINS`,
-// `SLOT_MINS`, `YOUTH_VET_BOUT_DELTA` and the three `DE_BOUT_DURATION` weapons
-// were each measured to produce a byte-identical `ScheduleResult` when changed,
-// which FR-046 forbids a control from doing. Item 9 below is the assertion that
-// holds that decision. Two cases went with them: the per-weapon independence
-// case (item 6), whose subject – `DE_BOUT_DURATION` – no longer has rows here,
-// and the 'Epee DE bout duration' half of item 5, replaced by a second
-// surviving row so that case keeps testing two rows rather than one.
+// T078/T079 finding 1 cut this table from nine rows to three, and this task
+// cut `DE strip footprint` from three to two. `THRESHOLD_MINS`, `SLOT_MINS`,
+// `YOUTH_VET_BOUT_DELTA` and the three `DE_BOUT_DURATION` weapons were each
+// measured to produce a byte-identical `ScheduleResult` when changed, which
+// FR-046 forbids a control from doing – `DEFAULT_DE_STRIP_FOOTPRINT` is
+// different: it moves the schedule, but off `de_duration_table`'s durations,
+// which are calibrated against it and only valid at its default. Item 9 below
+// holds the first four out; item 11 holds the footprint out on its own,
+// separately worded for that reason. Two cases went with the first cut:
+// the per-weapon independence case (item 6), whose subject – `DE_BOUT_DURATION`
+// – no longer has rows here, and the 'Epee DE bout duration' half of item 5,
+// replaced by the footprint row so that case kept testing two rows rather than
+// one — that row is now gone too, so item 5 covers 'Admin gap' and
+// 'Flight buffer' instead.
 //
 // Last in the panel, `PoolDurationSettings` itself is mounted (FR-043) –
 // item 8 below proves it by locating one of its own rows from inside this
@@ -63,12 +68,6 @@ const ROWS: Row[] = [
     default: FLIGHT_BUFFER_MINS,
     setOverride: overrideRecord('FLIGHT_BUFFER_MINS'),
     storedValue: storedNumber('FLIGHT_BUFFER_MINS'),
-  },
-  {
-    label: 'DE strip footprint',
-    default: DEFAULT_DE_STRIP_FOOTPRINT,
-    setOverride: overrideRecord('DEFAULT_DE_STRIP_FOOTPRINT'),
-    storedValue: storedNumber('DEFAULT_DE_STRIP_FOOTPRINT'),
   },
 ]
 
@@ -211,11 +210,7 @@ describe('SettingsPanel is editable (SC-009)', () => {
 // ──────────────────────────────────────────────
 
 describe('SettingsPanel override state is derived, not stored (research D8)', () => {
-  const casesToCheck = ROWS.filter(
-    (row) => row.label === 'Admin gap' || row.label === 'DE strip footprint',
-  )
-
-  it.each(casesToCheck)(
+  it.each(ROWS)(
     'setting $label to its own default through setGlobalOverrides still reads as Default',
     (row) => {
       row.setOverride(row.default)
@@ -229,7 +224,7 @@ describe('SettingsPanel override state is derived, not stored (research D8)', ()
 })
 
 // ──────────────────────────────────────────────
-// Item 7 (FR-047): the panel exposes nothing beyond its three rows and
+// Item 7 (FR-047): the panel exposes nothing beyond its two rows and
 // PoolDurationSettings. Terms chosen are ones a scheduling-weight, penalty,
 // category-start-preference, or earliest-start-offset control would actually
 // surface by, not a made-up id – so a future accidental addition would be
@@ -287,5 +282,25 @@ describe('SettingsPanel offers no control that cannot move the schedule (FR-046)
 
     expect(within(panel).queryByRole('spinbutton', { name: label })).toBeNull()
     expect(within(panel).queryByText(label)).toBeNull()
+  })
+})
+
+// ──────────────────────────────────────────────
+// Item 11 (FR-046): `DE strip footprint` withdrawn for a different reason
+// than item 9's six — those six cannot reach the schedule at all, this one
+// reaches it and desynchronises from `de_duration_table`'s calibration when it
+// does (T069 measured 16→4 moving a fixture's `de_duration_actual` 233→116 off
+// a table only ever valid at 16). A separate case names that distinction
+// rather than folding it into item 9's "cannot move the schedule" list, which
+// would misstate why this one has no row.
+// ──────────────────────────────────────────────
+
+describe('SettingsPanel offers no control that would desync from its calibration (FR-046)', () => {
+  it('has no DE strip footprint control', () => {
+    render(<SettingsPanel />)
+    const panel = settingsPanel()
+
+    expect(within(panel).queryByRole('spinbutton', { name: 'DE strip footprint' })).toBeNull()
+    expect(within(panel).queryByText('DE strip footprint')).toBeNull()
   })
 })

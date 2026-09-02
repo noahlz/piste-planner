@@ -465,13 +465,15 @@ a gears control in the top bar. Per-event and global weights, penalties, and
 earliest-start offsets are all editable. Serialization persists only the
 overrides, so unset values continue to track the defaults in `constants.ts`.
 
-**What P3 took**: the top-bar gears control and a panel over three settings –
-`ADMIN_GAP_MINS`, `FLIGHT_BUFFER_MINS` and `DEFAULT_DE_STRIP_FOOTPRINT` – plus
-`PoolDurationSettings` from 002, which is the precedent for the default /
-override / reset / overrides-only-persistence pattern and moved behind the same
-gears surface. It intended to take seven, and the four it did not are now the
-entry below. All seven still travel through the store, `buildConfig` and the
-share URL; only three have an editing surface.
+**What P3 took**: the top-bar gears control and a panel over two settings –
+`ADMIN_GAP_MINS` and `FLIGHT_BUFFER_MINS` – plus `PoolDurationSettings` from
+002, which is the precedent for the default / override / reset /
+overrides-only-persistence pattern and moved behind the same gears surface. It
+intended to take seven, and the five it did not are now the entry below. All
+seven still travel through the store, `buildConfig` and the share URL; only two
+have an editing surface. `DEFAULT_DE_STRIP_FOOTPRINT` shipped a row briefly and
+was withdrawn in the same commit that cut the other four – see the entry below
+for why moving the schedule was not enough to keep it.
 
 **What stays here**: promoting the rest of `constants.ts` – per-event and global
 weights, the penalty matrices, category start preferences, earliest-start
@@ -480,50 +482,94 @@ size and it needs a spec directory when it is picked up, after P5.
 
 `video_stage_mode` arrives with P5, not P1.
 
-## Four settings the engine cannot yet act on
+## A what-if scenario mode, not more settings rows
 
-*Unassigned and unnumbered. Blocks the return of four gears rows, and needs its
-own spec directory: the fix edits `src/engine/`, so constitution III puts it
-behind the B1–B8 drift ledger.*
+*Reframed 2026-09-01 by the product owner, rejecting this entry's earlier
+"teach the engine to read these five settings" framing. Unassigned and
+unnumbered – needs its own spec directory, and sits behind the B1–B8 drift
+ledger because it edits `src/engine/` (constitution III).*
 
-004's US5 built nine gears rows and shipped three. T078 measured each candidate
-by changing it and re-deriving: `SLOT_MINS` 5→30, `YOUTH_VET_BOUT_DELTA` −5→−60,
-`DE_BOUT_DURATION.FOIL` 20→60 and `THRESHOLD_MINS` 10→600 each produced a
-**byte-identical `ScheduleResult`**. FR-046 requires a setting to move the
-schedule, and an organizer must not be shown a control that silently does
-nothing, so the rows were cut rather than shipped with a caveat. The keys keep
-their store, `buildConfig`, serialization and engine-threading support – that
-work is the seam this entry builds on, and it is tested and behaviour-preserving.
+004's US5 built nine gears rows and shipped three, then withdrew one of those
+three – `DEFAULT_DE_STRIP_FOOTPRINT` – in the same commit, leaving two. The
+five withdrawn keys are not organizer settings with an incomplete engine
+reader. They are **hypotheses about how the tournament would run differently**,
+and the settings panel is the wrong shape for that regardless of whether the
+engine is wired up to read them:
 
-`SettingsPanel.tsx`'s `NotSurfacedKey` union is the list, and the compile-time
-exhaustiveness check beside it means a new `GlobalOverrides` key cannot reach
-the store without either a row or a reasoned entry here.
+- **`SLOT_MINS` (scheduling grid resolution)** is an implementation artifact,
+  not a domain parameter – it controls how finely the scheduler rounds times,
+  not anything about the tournament. It arguably belongs in no user-facing
+  panel under any design, settings or otherwise.
+- **`YOUTH_VET_BOUT_DELTA` (youth/vet bout adjustment)** is not an organizer's
+  choice to make. USA Fencing's rules give Y8/Y10 and veteran categories fewer
+  touches per bout (`constants.ts:79-80`), so this delta is a rule the engine
+  should apply correctly, not a knob to turn. A what-if tool can still ask "what
+  if this rule were different" as a hypothesis, but a settings panel implies an
+  organizer is allowed to opt out of the rule as it stands today, and they are not.
+- **`DE_BOUT_DURATION` (per-weapon DE bout duration)** is a measured average,
+  not a policy – it includes the 5-minute strip-changeover overhead, which is
+  why sabre is 15 minutes rather than the pure fencing time (`constants.ts:72-73`).
+  Retuning it is a calibration exercise against real data, not a per-tournament
+  organizer preference.
+- **`THRESHOLD_MINS` (flighting threshold)** has zero readers anywhere in
+  `src/engine/` and looks vestigial – `flighting.ts` decides whether to flight
+  an event by counting pools against `strips_total`, never by minutes. This
+  reads as a parameter left over from a design flighting no longer uses, not a
+  hypothesis worth modelling. The open question is whether it should exist in
+  `GlobalOverrides` at all, not how to wire it up.
+- **`DEFAULT_DE_STRIP_FOOTPRINT` (DE strip footprint)** is the hardest case and
+  the reason this whole entry is a what-if feature rather than a settings
+  feature. See below – it is not merely inert like the other four, and any
+  scenario tool inherits its constraint.
 
-What each key would take, smallest first:
+**The calibration coupling is a hard constraint, not a detail.**
+`DEFAULT_DE_STRIP_FOOTPRINT` (`constants.ts:68-70`) and
+`DEFAULT_DE_DURATION_TABLE` (`config.de_duration_table`) are calibrated
+against each other – the table's empirical per-round durations were measured
+at the footprint's default value, and the comment at the constant says so.
+Moving the footprint without re-deriving the table does not fail loudly and
+does not do nothing: it produces a **confidently wrong number** on a model
+that was never validated at the new value. T069 measured this directly – an
+override from 16 to 4 moved a fixture's `de_duration_actual` from 233 to 116,
+a schedule roughly half as long, computed entirely from durations only ever
+valid at 16. This is exactly why the footprint's row was cut in this same
+commit rather than kept as "at least it moves the schedule" (FR-046's literal
+bar) – a control that silently does nothing costs an afternoon of a confused
+organizer; one that silently produces a plausible wrong schedule costs a
+tournament day. Any what-if tool that lets an organizer move the footprint
+must re-derive or interpolate the duration table alongside it, or it inherits
+this exact defect with a friendlier UI around it.
 
-- **`SLOT_MINS` – mechanical.** `config.SLOT_MINS` is read nowhere; the only
-  slot consumer is `snapToSlot` (`src/engine/resources.ts`), which takes one
-  argument and closes over the module constant. Give it a slot parameter and
-  thread `config.SLOT_MINS` through its 10 call sites – `de.ts` ×1,
-  `concurrentScheduler.ts` ×4, `derive.ts` ×5, counted 2026-09-01;
-  `resources.ts` only defines it. No design decision, but every scheduled time
-  is snapped, so the drift review is the real work.
-- **`DE_BOUT_DURATION` and `YOUTH_VET_BOUT_DELTA` for individual events – design
-  work.** `DE_BOUT_DURATION` is read once, at `capacity.ts:132`, inside the
-  `EventType.TEAM` branch, and it genuinely drives team day-assignment
-  estimates today – it is only inert on an individual-only tournament.
-  Individual DE duration instead comes from the table-driven
-  `config.de_duration_table`, and per-bout duration is not in that path at all.
-  `YOUTH_VET_BOUT_DELTA`'s only reader, `perBoutDuration` (`de.ts:148`), has no
-  caller in `src/`. Making either act on individual events means deciding how a
-  per-bout duration and a per-round duration table compose – whether the table
-  derives from bout duration, or the delta adjusts the table – which is a
-  modelling decision before it is a code change.
-- **`THRESHOLD_MINS` – no smallest change exists.** Nothing in `src/engine/`
-  reads it. `flighting.ts` decides by pool count against `strips_total`, never
-  by minutes. The open question is not how to wire it up but whether a
-  minutes-based flighting threshold should exist at all; if the answer is no,
-  the key leaves `GlobalOverrides` instead of gaining a row.
+**Measured evidence**, all from re-deriving a fixture after changing one
+constant: `SLOT_MINS` 5→30, `YOUTH_VET_BOUT_DELTA` −5→−60, `DE_BOUT_DURATION.FOIL`
+20→60 and `THRESHOLD_MINS` 10→600 each produced a byte-identical
+`ScheduleResult`. `DEFAULT_DE_STRIP_FOOTPRINT` 16→4 did move the schedule –
+`de_duration_actual` 233→116 – off a duration table calibrated only at 16.
+
+**What the destination looks like**: a scenario / what-if mode, not a settings
+panel – an organizer picks a hypothesis ("what if épée bouts ran faster"),
+the engine re-derives a schedule from it, and the result is compared against
+the committed schedule and labelled hypothetical throughout its display so it
+can never be mistaken for a plan. This is a different feature shape than
+`SettingsPanel`'s default/override/revert pattern, which presents a value as
+something the organizer's own tournament genuinely uses.
+
+`SettingsPanel.tsx`'s `NotSurfacedKey` union is the list of what stays out of
+the gears panel, and the compile-time exhaustiveness check beside it means a
+new `GlobalOverrides` key cannot reach the store without either a row or a
+reasoned entry there. All five keys keep their store, `buildConfig`,
+serialization and engine-threading support regardless of which of them a
+scenario feature ends up using – that work is tested and behaviour-preserving.
+
+Mechanical path for whoever picks up `SLOT_MINS`, since it is the one purely
+mechanical piece here: `config.SLOT_MINS` is read nowhere today; the only slot
+consumer is `snapToSlot` (`src/engine/resources.ts`), which takes no config
+and closes over the module constant. Give it a slot parameter and thread
+`config.SLOT_MINS` through its **10** call sites, counted 2026-09-01 –
+`de.ts` ×1, `concurrentScheduler.ts` ×4, `derive.ts` ×5; `resources.ts` only
+defines the function. No design decision is needed for this one, but every
+scheduled time is snapped, so the drift review is the real work regardless of
+how mechanical the wiring is.
 
 ## Save / load / share browser plumbing
 
