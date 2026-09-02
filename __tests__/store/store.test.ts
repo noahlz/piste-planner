@@ -6,6 +6,13 @@ import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
+  ADMIN_GAP_MINS,
+  FLIGHT_BUFFER_MINS,
+  THRESHOLD_MINS,
+  SLOT_MINS,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
+  DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
 
 // Reset store to initial state before each test
@@ -146,12 +153,22 @@ describe('competitionSlice', () => {
       expect(state.selectedCompetitions).toEqual({})
     })
 
+    // Re-baselined by T072 (004 US5): the slice widened from three keys to the
+    // seven the gears panel exposes (FR-042), so a three-key literal no longer
+    // describes it. Asserted against the `constants.ts` exports rather than
+    // literals — the store is required to seed itself from those constants
+    // (contract §1), so a default that moves in constants.ts must move here
+    // with it, and a hardcoded 30/15/10 would hide exactly that break.
     it('globalOverrides has default values', () => {
       const state = useStore.getState()
       expect(state.globalOverrides).toEqual({
-        ADMIN_GAP_MINS: 30,
-        FLIGHT_BUFFER_MINS: 15,
-        THRESHOLD_MINS: 10,
+        ADMIN_GAP_MINS,
+        FLIGHT_BUFFER_MINS,
+        THRESHOLD_MINS,
+        SLOT_MINS,
+        DE_BOUT_DURATION,
+        YOUTH_VET_BOUT_DELTA,
+        DEFAULT_DE_STRIP_FOOTPRINT,
       })
     })
   })

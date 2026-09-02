@@ -2,7 +2,6 @@ import { Weapon, CutMode, EventType, Phase, Category, VetAgeGroup } from './type
 import type { DeBlockDurations } from './types.ts'
 import { computeDeFencerCount } from './pools.ts'
 import { snapToSlot } from './resources.ts'
-import { DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA, DEFAULT_DE_STRIP_FOOTPRINT } from './constants.ts'
 
 /**
  * Returns the smallest power of 2 that is ≥ n.
@@ -81,12 +80,16 @@ export function deBlockDurations(bracketSize: number, totalDeDuration: number): 
  * Strips one DE phase asks for.
  *
  * The empirical durations in de_duration_table are calibrated against a
- * DEFAULT_DE_STRIP_FOOTPRINT-strip footprint per event, not bracketSize/2.
- * Asking for bracketSize/2 would let one event's DE claim 64+ strips and
- * serialize against every other event sharing the day.
+ * fixed footprint per event, not bracketSize/2. Asking for bracketSize/2 would
+ * let one event's DE claim 64+ strips and serialize against every other event
+ * sharing the day.
+ *
+ * `defaultFootprint` is `config.DEFAULT_DE_STRIP_FOOTPRINT` — required rather
+ * than defaulted to the constant, so no caller can silently keep reading module
+ * state past the organizer's override.
  */
-export function deStripFootprint(bracketSize: number): number {
-  return Math.max(1, Math.min(Math.floor(bracketSize / 2), DEFAULT_DE_STRIP_FOOTPRINT))
+export function deStripFootprint(bracketSize: number, defaultFootprint: number): number {
+  return Math.max(1, Math.min(Math.floor(bracketSize / 2), defaultFootprint))
 }
 
 /**
@@ -135,17 +138,22 @@ export function calculateDeDuration(
 
 /**
  * Returns per-bout DE duration in minutes for a weapon/category/vet_age_group combination.
- * Applies YOUTH_VET_BOUT_DELTA when category is Y8 or Y10, or when vet_age_group is
+ * Applies `youthVetDelta` when category is Y8 or Y10, or when vet_age_group is
  * non-null. The veteran arm keys off vet_age_group rather than category so it covers
  * VET_COMBINED regardless of how a veteran event sets its category.
+ *
+ * `boutDurations` and `youthVetDelta` are `config.DE_BOUT_DURATION` and
+ * `config.YOUTH_VET_BOUT_DELTA`.
  */
 export function perBoutDuration(
   weapon: Weapon,
   category: Category,
   vet_age_group: VetAgeGroup | null,
+  boutDurations: Record<Weapon, number>,
+  youthVetDelta: number,
 ): number {
-  const base = DE_BOUT_DURATION[weapon]
+  const base = boutDurations[weapon]
   const isYouth = category === Category.Y8 || category === Category.Y10
   const isVet = vet_age_group !== null
-  return isYouth || isVet ? base + YOUTH_VET_BOUT_DELTA : base
+  return isYouth || isVet ? base + youthVetDelta : base
 }

@@ -201,7 +201,7 @@ export function deriveEventSchedule(
   // DE block(s). The placement's strip budget covers the pool block only — DE
   // phases carry their own footprint (deStripFootprint / de_round_of_16_strips).
   const deStart = snapToSlot(poolEnd + config.ADMIN_GAP_MINS)
-  const deDesired = deStripFootprint(bracketSize)
+  const deDesired = deStripFootprint(bracketSize, config.DEFAULT_DE_STRIP_FOOTPRINT)
   let terminalEnd: number
 
   if (competition.de_mode === DeMode.SINGLE_STAGE) {

@@ -2,6 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
 import { TournamentType, RefPolicy, DeMode, CutMode, VideoPolicy } from '../../src/engine/types.ts'
+import {
+  SLOT_MINS,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
+  DEFAULT_DE_STRIP_FOOTPRINT,
+} from '../../src/engine/constants.ts'
 
 /**
  * Same snapshot-then-reset convention as buildConfig.test.ts's storeWith:
@@ -57,7 +63,19 @@ function minimalState(overrides: {
         use_single_pool_override: false,
       },
     },
-    globalOverrides: { ADMIN_GAP_MINS: 20, FLIGHT_BUFFER_MINS: 10, THRESHOLD_MINS: 5 },
+    // T072 (004 US5): the slice's four new keys carry the constants' own
+    // values — this file exercises per-type default resolution, not overrides,
+    // and `SLOT_MINS` now reaches the config through the slice rather than an
+    // import, so it has to be seeded from the constant to stay unchanged.
+    globalOverrides: {
+      ADMIN_GAP_MINS: 20,
+      FLIGHT_BUFFER_MINS: 10,
+      THRESHOLD_MINS: 5,
+      SLOT_MINS,
+      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
+      YOUTH_VET_BOUT_DELTA,
+      DEFAULT_DE_STRIP_FOOTPRINT,
+    },
     flightingSuggestionStates: [],
   }
 }

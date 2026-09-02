@@ -107,10 +107,20 @@ function validSerializedData(): SerializedStateV2 {
           use_single_pool_override: false,
         },
       },
+      // T072 (004 US5) widened GlobalOverrides to seven keys, so a three-key
+      // payload no longer satisfies the type. Spelled as literals, not imported
+      // constants, deliberately: this is a wire-format fixture standing in for
+      // bytes that arrived from a shared URL, and a decoded payload is not
+      // obliged to track whatever `constants.ts` happens to hold today. The
+      // only assertion reading it back is line 180's ADMIN_GAP_MINS.
       globalOverrides: {
         ADMIN_GAP_MINS: 15,
         FLIGHT_BUFFER_MINS: 15,
         THRESHOLD_MINS: 10,
+        SLOT_MINS: 5,
+        DE_BOUT_DURATION: { EPEE: 20, FOIL: 20, SABRE: 15 },
+        YOUTH_VET_BOUT_DELTA: -5,
+        DEFAULT_DE_STRIP_FOOTPRINT: 16,
       },
     },
     // Non-empty by default so 'accepts valid v2 data' actually exercises a

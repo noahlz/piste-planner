@@ -12,7 +12,7 @@
 
 import { Category, DeMode, EventType } from './types.ts'
 import type { Competition, TournamentConfig, GlobalState } from './types.ts'
-import { CATEGORY_START_PREFERENCE, DE_BOUT_DURATION } from './constants.ts'
+import { CATEGORY_START_PREFERENCE } from './constants.ts'
 import { computePoolStructure, weightedPoolDuration, computeDeFencerCount } from './pools.ts'
 import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
 
@@ -48,9 +48,12 @@ function prevPowerOf2(n: number): number {
 function teamDeStripHours(
   teamCount: number,
   weapon: Competition['weapon'],
+  // `config.DE_BOUT_DURATION`, threaded from the caller rather than imported,
+  // so an organizer's override reaches the capacity estimate too.
+  boutDurations: TournamentConfig['DE_BOUT_DURATION'],
 ): number {
   if (teamCount <= 1) return 0
-  const boutDuration = DE_BOUT_DURATION[weapon]
+  const boutDuration = boutDurations[weapon]
 
   const playInBouts = teamCount - prevPowerOf2(teamCount)
   let totalStripHours = 0
@@ -123,7 +126,11 @@ export function estimateCompetitionStripHours(
 
   // Team events always use the team round-by-round model
   if (competition.event_type === EventType.TEAM) {
-    de_strip_hours = teamDeStripHours(competition.fencer_count, competition.weapon)
+    de_strip_hours = teamDeStripHours(
+      competition.fencer_count,
+      competition.weapon,
+      config.DE_BOUT_DURATION,
+    )
   } else if (competition.de_mode === DeMode.STAGED) {
     // Split DE into prelims / R16 / finals phases and attribute strip-hours separately.
     // R16 and finals phases require video strips (per competition policy).
