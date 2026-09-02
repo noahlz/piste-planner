@@ -8,6 +8,12 @@ on it.
 
 ## 1. Where the project stands
 
+> **Superseded 2026-09-01.** This section's status table and the GitHub issue
+> counts below it are stale — 004 closed with US5 merged as `1fc119ae00`, and
+> 006 and 008 have since merged too. The current table is
+> [reassessment-2026-09-01.md §1](./reassessment-2026-09-01.md). §2–§4 of this
+> file remain the record of the day-axis finding and the sequence it produced.
+
 | Feature | Scope | Status |
 |---|---|---|
 | 001-p1-foundations | P1: SLOT_MINS 5, pod/double-strip removal, capacity collapse, DE ref correction | merged |

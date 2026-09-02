@@ -259,20 +259,20 @@ reflects it, reset it, and confirm a shared URL carries only what was changed.
 
 ### Tests for User Story 5 ⚠️ Write first, confirm they fail
 
-- [ ] T069 [P] [US5] Write failing tests for the widened `globalOverrides` in `__tests__/store/globalOverrides.test.ts` – the three existing settings plus the four P1 constants reach `buildConfig` and change the derived schedule
-- [ ] T070 [P] [US5] Write failing tests for override-versus-default derivation in `__tests__/components/workbench/SettingsPanel.test.tsx` – derived by comparison with no stored flag, reset restores the default, matching the `PoolDurationSettings` pattern (research D8)
-- [ ] T071 [P] [US5] Write failing tests for overrides-only serialization in `__tests__/store/settingsSerialization.test.ts` – two overridden settings round-trip, unset settings track their defaults, and a URL saved without the new keys opens at defaults (FR-045)
+- [x] T069 [P] [US5] Write failing tests for the widened `globalOverrides` in `__tests__/store/globalOverrides.test.ts` – the three existing settings plus the four P1 constants reach `buildConfig` and change the derived schedule
+- [x] T070 [P] [US5] Write failing tests for override-versus-default derivation in `__tests__/components/workbench/SettingsPanel.test.tsx` – derived by comparison with no stored flag, reset restores the default, matching the `PoolDurationSettings` pattern (research D8)
+- [x] T071 [P] [US5] Write failing tests for overrides-only serialization in `__tests__/store/settingsSerialization.test.ts` – two overridden settings round-trip, unset settings track their defaults, and a URL saved without the new keys opens at defaults (FR-045)
 
 ### Implementation for User Story 5
 
-- [ ] T072 [US5] Widen `globalOverrides` in `src/store/store.ts` with `SLOT_MINS`, per-weapon `DE_BOUT_DURATION`, `YOUTH_VET_BOUT_DELTA`, and `DEFAULT_DE_STRIP_FOOTPRINT`, and feed them through `src/store/buildConfig.ts` alongside the three already at line 55 (research D8)
-- [ ] T073 [US5] Build `src/components/workbench/SettingsPanel.tsx` covering every setting in [contracts/ui-contract.md](./contracts/ui-contract.md) §The gears panel, reusing the existing `DefaultLabel` component rather than a second convention
-- [ ] T074 [US5] Move `PoolDurationSettings` out of the rail and behind the gears, keeping `__tests__/components/sections/PoolDurationSettings.test.tsx` passing against its new home (FR-043)
-- [ ] T075 [US5] Add the gears control to `src/components/workbench/TopBar.tsx` (FR-041)
-- [ ] T076 [US5] Extend `src/store/serialization.ts` for the widened overrides, optional on read (FR-045)
-- [ ] T077 [US5] Extend `scripts/smoke.mjs` to open the gears, change a setting, confirm the schedule follows, and confirm it round-trips through a share link (constitution VI)
-- [ ] T078 [US5] Dispatch `test-quality-reviewer` on T069–T071
-- [ ] T079 [US5] Dispatch `react-code-reviewer` on T073–T075
+- [x] T072 [US5] Widen `globalOverrides` in `src/store/store.ts` with `SLOT_MINS`, per-weapon `DE_BOUT_DURATION`, `YOUTH_VET_BOUT_DELTA`, and `DEFAULT_DE_STRIP_FOOTPRINT`, and feed them through `src/store/buildConfig.ts` alongside the three already at line 55 (research D8)
+- [x] T073 [US5] Build `src/components/workbench/SettingsPanel.tsx` covering every setting in [contracts/ui-contract.md](./contracts/ui-contract.md) §The gears panel, reusing the existing `DefaultLabel` component rather than a second convention
+- [x] T074 [US5] Move `PoolDurationSettings` out of the rail and behind the gears, keeping `__tests__/components/sections/PoolDurationSettings.test.tsx` passing against its new home (FR-043)
+- [x] T075 [US5] Add the gears control to `src/components/workbench/TopBar.tsx` (FR-041)
+- [x] T076 [US5] Extend `src/store/serialization.ts` for the widened overrides, optional on read (FR-045)
+- [x] T077 [US5] Extend `scripts/smoke.mjs` to open the gears, change a setting, confirm the schedule follows, and confirm it round-trips through a share link (constitution VI)
+- [x] T078 [US5] Dispatch `test-quality-reviewer` on T069–T071
+- [x] T079 [US5] Dispatch `react-code-reviewer` on T073–T075
 
 **Checkpoint**: Three settings that were saved, shared, and unreachable are now reachable. *(subagent commits)*
 
@@ -283,12 +283,12 @@ reflects it, reset it, and confirm a shared URL carries only what was changed.
 **Purpose**: Confirm the whole feature, then stop. The closing merge is the
 user's.
 
-- [ ] T080 Run the full gate – `tsc -b`, `lint`, and the full test suite – and confirm no test in the suite references `WizardShell`, `KitchenSinkPage`, or `layoutMode` (FR-046, SC-010)
-- [ ] T081 Run `scripts/smoke.mjs` end to end against the finished workbench. Dispatch this to a subagent – locator repair runs in rounds of four or five full round trips, and an orchestrator deep into a feature pays its whole context for each (constitution §Orchestration)
-- [ ] T082 Make the two human judgments [quickstart.md](./quickstart.md) §What a human has to confirm names – SC-004 encoding legibility at normal row height, and SC-002 pan and zoom responsiveness on the largest preset. A failure here is a finding against the palette or the windowing, not a matter of taste
-- [ ] T083 [P] Update `docs/design/backlog.md` – close the per-type defaults entry, and narrow the global settings entry to what remains for after P5, per the split recorded on 2026-08-29
-- [ ] T084 [P] Update `docs/design/competition-planner-workbench.md` – mark the P3 roadmap row delivered, and record in the design's own text that the canvas is plain SVG rather than visx, pointing at [research D1](./research.md) for the reasoning
-- [ ] T085 Confirm the branch is ready and hand the user a resume prompt naming the merge command. **The resume prompt names the post-merge gate** – constitution 1.6.0 requires `tsc -b`, `lint`, and the full suite to run on the merged tree after `git merge --no-ff --no-commit` and before `commit-with-costs` writes the merge commit. Agents do not push, do not merge, and do not make the closing commit (constitution §Git Ownership)
+- [x] T080 Run the full gate – `tsc -b`, `lint`, and the full test suite – and confirm no test in the suite references `WizardShell`, `KitchenSinkPage`, or `layoutMode` (FR-046, SC-010)
+- [x] T081 Run `scripts/smoke.mjs` end to end against the finished workbench. Dispatch this to a subagent – locator repair runs in rounds of four or five full round trips, and an orchestrator deep into a feature pays its whole context for each (constitution §Orchestration)
+- [x] T082 Make the two human judgments [quickstart.md](./quickstart.md) §What a human has to confirm names – SC-004 encoding legibility at normal row height, and SC-002 pan and zoom responsiveness on the largest preset. A failure here is a finding against the palette or the windowing, not a matter of taste — **done, and the judgments went against the build: SC-004 fails, SC-002 mixed** (scroll and gesture-zoom fine, but the canvas flattens past ~6 Zoom in clicks). Both recorded in [`backlog.md` §The workbench canvas is not yet a finished surface](../../docs/design/backlog.md), and they are the reason [reassessment-2026-09-01.md §7](../../docs/design/reassessment-2026-09-01.md) makes the canvas defects part of the next feature
+- [x] T083 [P] Update `docs/design/backlog.md` – close the per-type defaults entry, and narrow the global settings entry to what remains for after P5, per the split recorded on 2026-08-29
+- [x] T084 [P] Update `docs/design/competition-planner-workbench.md` – mark the P3 roadmap row delivered, and record in the design's own text that the canvas is plain SVG rather than visx, pointing at [research D1](./research.md) for the reasoning
+- [x] T085 Confirm the branch is ready and hand the user a resume prompt naming the merge command. **The resume prompt names the post-merge gate** – constitution 1.6.0 requires `tsc -b`, `lint`, and the full suite to run on the merged tree after `git merge --no-ff --no-commit` and before `commit-with-costs` writes the merge commit. Agents do not push, do not merge, and do not make the closing commit (constitution §Git Ownership)
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-29
 
-**Status**: Draft
+**Status**: Delivered 2026-09-01
 
 **Input**: User description: "Begin P3 of the Competition Planner Workbench roadmap. Source of truth: docs/design/competition-planner-workbench.md (§Roadmap P3 row, §Architecture Shell, §Canvas, §Scorecard, §View toggle, §Testing). Scope: workbench shell replacing both existing layouts (top bar, left rail, center canvas, bottom drawer, unplaced tray); strips × time matrix with continuous X zoom, stepped Y row heights, row+time-window virtualization, category/phase/weapon/gender encoding, and a portaled tooltip; scorecard in the drawer with preset-baseline deltas; Matrix⇄Schedule view toggle; 'Auto-schedule all' action. Deletes WizardShell, WizardStep1-4, KitchenSinkPage, layoutMode, and the layout toggle, pruning or re-targeting the wizard/kitchen-sink tests. Plus two backlog items assigned to P3 on 2026-08-29: per-type defaults in the rail's Advanced panel, and the top-bar gears surface scoped to settings the store already carries. Promoting the rest of constants.ts to a config file is explicitly out of scope and stays in the backlog for after P5. Manual placement, drag, and 'Auto-fill unplaced' are P4, not here. Constitution VI applies. Worktree flow, branch 004-p3-workbench-shell."
 

@@ -214,7 +214,9 @@ export const TEMPLATES: Record<string, string[]> = {
     EventType.TEAM,
   ]),
 
-  // 3 categories × 3 weapons × 2 genders × (IND + TEAM) = 36
+  // 66: Div1 + Junior contribute 24 (2 × 3 weapons × 2 genders × (IND + TEAM)),
+  // Veteran contributes 42 — its individual events expand to 6 age groups
+  // (3 × 2 × 6 = 36 IND) plus 6 TEAM
   'NAC Vet/Div1/Junior': ids([Category.VETERAN, Category.DIV1, Category.JUNIOR], [
     EventType.INDIVIDUAL,
     EventType.TEAM,
