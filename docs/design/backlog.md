@@ -211,6 +211,63 @@ the schedule's own requirement. Worth reconciling when the referee model is next
 opened; until then the divergence is bounded, one-directional, and confined to
 saturated days.
 
+## DE prelims gets a sliver of its bracket's time, not its bout share
+
+*Found by the product owner on 2026-09-02 in the live app. Recorded, not
+fixed — the fix edits `src/engine/`, so it sits behind constitution III's
+B1–B8 drift-ledger review, and needs its own spec directory when picked up.*
+
+A Veteran Combined Men's Saber Individual event with a bracket of 64 showed a
+**DE prelims** block of **5 minutes** across 16 strips.
+
+`deBlockDurations` (`src/engine/de.ts:63-77`) splits `totalDeDuration` between
+the DE_PRELIMS and DE_ROUND_OF_16 phases — the only two `dePhasesForBracket`
+returns once `bracketSize >= 64` (`de.ts:44-49`) — by bout count:
+
+```
+totalBouts   = bracketSize / 2
+r16Bouts     = min(30, totalBouts - 1)
+prelimsBouts = max(totalBouts - 30 - 1, 0)
+```
+
+`totalBouts` is meant to stand for every scheduled bout in the bracket, but
+`bracketSize / 2` only counts the bracket's first round. The literal `30` is a
+cumulative count — bouts from the round of 32 down through the semifinals,
+stop-at-semis — measured against that first-round-only total. The subtraction
+that produces `prelimsBouts` compares two different units.
+
+- **Bracket 64**: `totalBouts = 32`, `r16Bouts = min(30, 31) = 30`,
+  `prelimsBouts = max(32-30-1, 0) = 1`. Prelims gets `round(total × 1/32)`,
+  about 3% of DE time, which `deStagedPhaseDuration`'s slot-snap floors to one
+  5-minute slot — the reported defect. The round of 64 is 32 bouts, the
+  largest single round in the event, and it receives one bout's worth of time.
+- **Bracket 128**: `totalBouts = 64`, `r16Bouts = min(30, 63) = 30`,
+  `prelimsBouts = max(64-30-1, 0) = 33`. Prelims gets 33/64 ≈ 52% of DE time.
+  The bracket's true bout share above the round of 32 is 96 of the 126
+  stop-at-semis bouts ≈ 76%. Less severe than bracket 64, but wrong in the
+  same direction.
+
+Root cause: `totalBouts = bracketSize / 2` counts only the bracket's first
+round, while the `30` it is measured against counts a cumulative total from
+the round of 32 to the semifinals, so the formula subtracts a running total
+from a single round's count.
+
+**Invisible to the B1–B8 drift ledger by construction.** `totalDeDuration` is
+conserved across the split — the misallocated share moves from prelims to r16
+rather than disappearing — so no scenario's `scheduledCount` drops and no
+ledger snapshot cell moves. The damage is confined to where the
+prelims/r16 boundary falls inside an event's own DE block: phase durations,
+the strip demand each staged block reports, and the referee-peak window it
+lands in are all wrong, but nothing the ledger measures notices. This is why
+the defect survived all eight 004 drift-ledger scenarios untouched.
+
+Pre-existing, not introduced by 004: `git log --oneline main..HEAD -L
+'63,77:src/engine/de.ts'` on `004-us5-gears` is empty. US5's only touch to
+`de.ts` was `c7035a6b28`, which threaded `defaultFootprint`, `boutDurations`,
+and `youthVetDelta` as parameters into `deStripFootprint` and
+`perBoutDuration` — `deBlockDurations` is untouched by that commit, which is
+documented BEHAVIOUR-PRESERVING.
+
 ## Day-end overrun is a hard failure the methodology calls a warning
 
 *Found by the 2026-08-31 methodology review (web research + code cross-check).
