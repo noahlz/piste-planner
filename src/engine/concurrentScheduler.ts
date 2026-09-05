@@ -205,7 +205,7 @@ export function scheduleAllConcurrent(
 
   // Day assignment via DSatur graph coloring.
   const graph = buildConstraintGraph(competitions)
-  const { dayMap, relaxations } = assignDaysByColoring(graph, competitions, config)
+  const { dayMap, relaxations, violations } = assignDaysByColoring(graph, competitions, config)
 
   // Build per-event state & phase nodes.
   const events = buildEventStates(competitions, dayMap, config)
@@ -235,6 +235,21 @@ export function scheduleAllConcurrent(
         message: `${event.competition.id}: constraint relaxed to level ${relaxLevel} during day assignment`,
       })
     }
+  }
+
+  // Report every hard edge the least-bad-color fallback broke to produce
+  // dayMap (FR-003). One WARN per violated pair, naming both competitions —
+  // never constraint_relaxation_level, which keeps its current meaning and
+  // writer (FR-005, research.md D1).
+  for (const violation of violations) {
+    state.bottlenecks.push({
+      competition_id: violation.id,
+      phase: Phase.DAY_ASSIGNMENT,
+      cause: BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
+      severity: BottleneckSeverity.WARN,
+      delay_mins: 0,
+      message: `${violation.id} and ${violation.targetId} share a day: a hard separation could not be honored within the available days`,
+    })
   }
 
   // Post-schedule ref demand via peakConcurrentStrips: one RefDemandInterval

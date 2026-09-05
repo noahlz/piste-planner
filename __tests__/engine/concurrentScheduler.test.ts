@@ -17,6 +17,8 @@ import {
 import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
 import { computePoolStructure, resolveRefsPerPool } from '../../src/engine/pools.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
+import { useStore } from '../../src/store/store.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -571,5 +573,78 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     expect(s.pool_refs_count).toBeLessThan(s.de_round_of_16_strip_count)
 
     expect(peakRefsOnDay(result, s.assigned_day)).toBe(s.de_round_of_16_strip_count * config.DE_REFS)
+  })
+})
+
+// ──────────────────────────────────────────────
+// DSatur least-bad-color fallback: report the hard edges it breaks as WARN
+// bottlenecks (R7 / US2, T010)
+//
+// T009 (dayColoring.ts) already collects the pairs the least-bad-color
+// fallback shares a day across a hard (Infinity-weight) edge, in
+// `assignDaysByColoring`'s returned `violations`. This suite pins the
+// consumer side: scheduleAllConcurrent must turn each one into a WARN
+// bottleneck naming both competitions, and must never emit one when the
+// coloring is satisfiable. Fixture and strip count match
+// __tests__/engine/dayColoring.test.ts's R7 suite exactly, per baseline.md §2.
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T010)', () => {
+  const STRIPS = 80
+  const VIDEO_STRIPS = 12
+
+  /** Builds one template through the app's own configuration path, exactly as baseline.md §2/§3 measured it. */
+  function buildTemplate(name: string) {
+    useStore.setState(useStore.getInitialState(), true)
+    const state = () => useStore.getState()
+    state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does
+    state().applyTemplate(name)
+    state().setStrips(STRIPS)
+    state().setVideoStrips(VIDEO_STRIPS)
+    return buildTournamentConfig(state())
+  }
+
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one WARN UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck per hard-edged pair, naming both ids (baseline.md §2, 6 pairs)', () => {
+    const { config, competitions } = buildTemplate('NAC Cadet/Junior')
+    const { bottlenecks } = scheduleAllConcurrent(competitions, config)
+
+    // baseline.md §2 "Witness pairs" table, 80 strips / 12 video column.
+    const expectedPairs: [string, string][] = [
+      ['CDT-M-EPEE-TEAM', 'JR-M-EPEE-TEAM'],
+      ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
+      ['CDT-M-SABRE-IND', 'JR-M-SABRE-TEAM'],
+      ['CDT-W-EPEE-TEAM', 'JR-W-EPEE-TEAM'],
+      ['CDT-W-FOIL-TEAM', 'JR-W-FOIL-TEAM'],
+      ['CDT-W-SABRE-TEAM', 'JR-W-SABRE-TEAM'],
+    ]
+
+    const crossoverBottlenecks = bottlenecks.filter(
+      b => b.cause === BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
+    )
+    expect(crossoverBottlenecks).toHaveLength(6)
+    for (const b of crossoverBottlenecks) {
+      expect(b.severity).toBe(BottleneckSeverity.WARN)
+    }
+
+    // Subject ids, not message wording: each expected pair must be the
+    // subject of exactly one bottleneck — its competition_id is one of the
+    // pair and its message names the other.
+    for (const [a, b] of expectedPairs) {
+      const match = crossoverBottlenecks.filter(bn =>
+        (bn.competition_id === a || bn.competition_id === b)
+        && bn.message.includes(a) && bn.message.includes(b),
+      )
+      expect(match, `expected exactly one bottleneck for ${a} + ${b}`).toHaveLength(1)
+    }
+  })
+
+  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable, reports no UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck (baseline.md §2, viol=0)', () => {
+    const { config, competitions } = buildTemplate('NAC Youth')
+    const { bottlenecks } = scheduleAllConcurrent(competitions, config)
+
+    const crossoverBottlenecks = bottlenecks.filter(
+      b => b.cause === BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
+    )
+    expect(crossoverBottlenecks).toHaveLength(0)
   })
 })
