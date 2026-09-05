@@ -4,6 +4,8 @@ import type { ConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { Category, Gender, Weapon, EventType, VetAgeGroup } from '../../src/engine/types.ts'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
+import { useStore } from '../../src/store/store.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
 // ──────────────────────────────────────────────
 // Graph-building helpers
@@ -387,6 +389,143 @@ describe('assignDaysByColoring', () => {
     const { dayMap } = assignDaysByColoring(graph, [big, candidate], config)
 
     expect(dayMap.get('candidate')).not.toBe(dayMap.get('big'))
+  })
+})
+
+// ──────────────────────────────────────────────
+// DSatur least-bad-color fallback reporting (R7 / US2, T007)
+//
+// Today, when every color is blocked for a vertex, dsaturLoop's two
+// least-bad-color branches (dayColoring.ts:534-544, :546-556) pick a color
+// anyway and leave no trace: no warning, no relaxation, no error. R7 (T009)
+// makes assignDaysByColoring return the broken hard-edge pairs so the caller
+// can report them. These tests pin the return shape T009 must implement:
+//
+//   assignDaysByColoring(...): {
+//     dayMap, relaxations, effectiveDays,
+//     violations: { id: string; targetId: string }[]
+//   }
+//
+// One entry per hard-edged pair sharing a day, order-insensitive between
+// `id` and `targetId`. The relaxed-success branch (:522-532) already reports
+// itself via `relaxations.set(id, 3)` and must NOT appear in `violations` —
+// that would double-report what `constraint_relaxation_level` already covers
+// (research.md D1).
+// ──────────────────────────────────────────────
+
+describe('assignDaysByColoring — least-bad-color fallback violations (R7)', () => {
+  // baseline.md §2 pins the strip count: colorPenalty's load-balancing term
+  // reads dayCapacity = strips_total × DAY_LENGTH_MINS / 60, so the witness
+  // pairs for NAC Cadet/Junior differ at 39 (app-suggested) vs 80/12 strips
+  // even though the violation count is 6 at both. 80/12 matches the venue
+  // __tests__/engine/integration.test.ts uses for the same templates.
+  const STRIPS = 80
+  const VIDEO_STRIPS = 12
+
+  function pairKey(a: string, b: string): string {
+    return [a, b].sort().join('|')
+  }
+
+  /** Builds one template through the app's own configuration path, exactly as baseline.md §2/§3 measured it. */
+  function buildTemplate(name: string) {
+    useStore.setState(useStore.getInitialState(), true)
+    const state = () => useStore.getState()
+    state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does
+    state().applyTemplate(name)
+    state().setStrips(STRIPS)
+    state().setVideoStrips(VIDEO_STRIPS)
+    return buildTournamentConfig(state())
+  }
+
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one violation per hard-edged pair sharing day 0, naming both ids (baseline.md §2, 6 pairs, least-bad branch)', () => {
+    const { config, competitions } = buildTemplate('NAC Cadet/Junior')
+    const graph = buildConstraintGraph(competitions)
+
+    const { violations } = assignDaysByColoring(graph, competitions, config)
+
+    // baseline.md §2 "Witness pairs" table, 80 strips / 12 video column.
+    const expectedPairs: [string, string][] = [
+      ['CDT-M-EPEE-TEAM', 'JR-M-EPEE-TEAM'],
+      ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
+      ['CDT-M-SABRE-IND', 'JR-M-SABRE-TEAM'],
+      ['CDT-W-EPEE-TEAM', 'JR-W-EPEE-TEAM'],
+      ['CDT-W-FOIL-TEAM', 'JR-W-FOIL-TEAM'],
+      ['CDT-W-SABRE-TEAM', 'JR-W-SABRE-TEAM'],
+    ]
+
+    expect(violations.length).toBe(6)
+    const actualKeys = violations.map(v => pairKey(v.id, v.targetId)).sort()
+    const expectedKeys = expectedPairs.map(([a, b]) => pairKey(a, b)).sort()
+    expect(actualKeys).toEqual(expectedKeys)
+  })
+
+  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable in the days available, reports no violations (baseline.md §2, relax=0/viol=0)', () => {
+    const { config, competitions } = buildTemplate('NAC Youth')
+    const graph = buildConstraintGraph(competitions)
+
+    const { violations } = assignDaysByColoring(graph, competitions, config)
+
+    expect(violations.length).toBe(0)
+  })
+
+  it('NAC Div1/Junior at 3 days / 80 strips / 12 video: its six DIV1-ind/JUNIOR-team conflicts resolve through the relaxed branch and must not also appear as violations (baseline.md §2, relax=6/viol=0)', () => {
+    const { config, competitions } = buildTemplate('NAC Div1/Junior')
+    const graph = buildConstraintGraph(competitions)
+
+    const { violations, relaxations } = assignDaysByColoring(graph, competitions, config)
+
+    // Confirms the fixture actually exercises the relaxed branch (baseline.md
+    // §2: 6 relaxations, 0 violations) — if this drops to 0, the premise
+    // changed and the "reports no violations" assertion below is vacuous.
+    expect(relaxations.size).toBe(6)
+    expect(violations.length).toBe(0)
+  })
+
+  // FR-004 / FR-005 guard, not a red test — T009 adds `violations` reporting
+  // to the least-bad-color fallback and must change no coloring decision. The
+  // expected map below was captured by running this exact call against the
+  // pre-T009 code (tmp/t008-probe.test.ts, deleted after capture). It passes
+  // today and must still pass after T009: if it ever goes red, T009 moved a
+  // day assignment, not just added a report, and both T008 and T009 halt.
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: the day map and relaxations are unchanged by R7 (FR-004, FR-005 guard)', () => {
+    const { config, competitions } = buildTemplate('NAC Cadet/Junior')
+    const graph = buildConstraintGraph(competitions)
+
+    const { dayMap, relaxations } = assignDaysByColoring(graph, competitions, config)
+
+    // Captured from the current code, not derived from this same call.
+    const expectedDayMap: Record<string, number> = {
+      'CDT-M-EPEE-IND': 2,
+      'CDT-M-EPEE-TEAM': 0,
+      'CDT-M-FOIL-IND': 2,
+      'CDT-M-FOIL-TEAM': 0,
+      'CDT-M-SABRE-IND': 0,
+      'CDT-M-SABRE-TEAM': 1,
+      'CDT-W-EPEE-IND': 1,
+      'CDT-W-EPEE-TEAM': 0,
+      'CDT-W-FOIL-IND': 1,
+      'CDT-W-FOIL-TEAM': 0,
+      'CDT-W-SABRE-IND': 1,
+      'CDT-W-SABRE-TEAM': 0,
+      'JR-M-EPEE-IND': 1,
+      'JR-M-EPEE-TEAM': 0,
+      'JR-M-FOIL-IND': 1,
+      'JR-M-FOIL-TEAM': 0,
+      'JR-M-SABRE-IND': 2,
+      'JR-M-SABRE-TEAM': 0,
+      'JR-W-EPEE-IND': 2,
+      'JR-W-EPEE-TEAM': 0,
+      'JR-W-FOIL-IND': 2,
+      'JR-W-FOIL-TEAM': 0,
+      'JR-W-SABRE-IND': 2,
+      'JR-W-SABRE-TEAM': 0,
+    }
+
+    expect(Object.fromEntries(dayMap)).toEqual(expectedDayMap)
+    // baseline.md §2: NAC Cadet/Junior's six violations come from the
+    // least-bad branch, not the relaxed branch — zero relaxations here.
+    // R7 must not start writing to relaxations for this witness.
+    expect(relaxations.size).toBe(0)
   })
 })
 
