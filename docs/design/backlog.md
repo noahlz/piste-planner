@@ -220,6 +220,48 @@ repair loop – re-color the failed event with its failed day excluded, capped a
 one pass – would convert permanent drops into placements at the cost of a
 second coloring round.
 
+## The store's default day count is unsatisfiable for three templates
+
+*Found by the 2026-08-31 methodology review, made visible (not fixed) by 010
+T009/T010 (R7), 2026-09-05.*
+
+`docs/design/methodology-reconciliation.md` §1.2.2 calls this "the single most
+serious finding in the audit": the DSatur least-bad-color fallback can break a
+hard separation and report nothing. 010's baseline measurement
+([`specs/010-wave-1-reconciliation/baseline.md`](../../specs/010-wave-1-reconciliation/baseline.md)
+§2) adds two facts the audit's table did not have, and 010 T009/T010 made the
+break visible going forward without repairing it.
+
+- **The drift ledger's own eight scenarios cannot catch this class of
+  defect.** Two independent methods agree: reconstructing every hard-edge pair
+  from the returned day map, and V8 statement coverage showing the fallback's
+  no-valid-color block executing 0 times across 896 vertex colorings, in
+  either coloring phase. B1–B8 have always been blind to an unsatisfiable
+  coloring — 010 did not change that, it proved it.
+- **`NAC Cadet/Junior` at the store's default 3 days places 6 hard-blocked
+  pairs, 0 relaxations, all on day 0.** The six pairs are not the same at
+  every strip count, because `colorPenalty`'s load-balancing term reads
+  `dayCapacity` (derived from `strips_total`, `src/engine/dayColoring.ts:653`):
+  at the app-suggested 39 strips, five are Group 1 CADET↔JUNIOR breaks plus
+  one same-population break; at 80 strips / 12 video, all six are Group 1
+  CADET↔JUNIOR. Full witness tables: baseline.md §2.
+- Per the audit's §1.2.1 clique/chromatic computation, three templates — `NAC
+  Cadet/Junior`, `NAC Div1/Junior`, `NAC Vet/Div1/Junior` — carry a K₄ per
+  (gender, weapon) and need 4 days. The store defaults to **3**
+  (`src/store/store.ts:193`): the default configuration cannot satisfy its own
+  hard constraints.
+
+**010 made this visible and did not fix it.** `assignDaysByColoring` now
+returns the hard edges its fallback breaks, and `scheduleAllConcurrent` emits
+one WARN per pair with cause `UNAVOIDABLE_CROSSOVER_CONFLICT` — the engine no
+longer reports a clean schedule when it broke a hard separation to produce
+one. The repair is a bounded re-color pass — the audit's Part 3 Option B,
+which shares its machinery with §Runtime failure is terminal above — and it
+needs the Part 3 decision first. Tracked as the audit's Wave 3.
+
+Record: [`specs/010-wave-1-reconciliation/`](../../specs/010-wave-1-reconciliation/),
+[`methodology-reconciliation.md`](./methodology-reconciliation.md) §1.2.2.
+
 ## Vet co-day serialization is unsourced and never fit-checked
 
 *Found by the 2026-08-31 methodology review. Recorded, not fixed.*
