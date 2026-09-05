@@ -12,10 +12,14 @@ import {
   RefPolicy,
   CutMode,
   DeStripRequirement,
+  Phase,
+  ValidationMode,
   tailEstimateMins,
 } from '../../src/engine/types.ts'
 import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
 import { computePoolStructure, resolveRefsPerPool } from '../../src/engine/pools.ts'
+import { validateConfig } from '../../src/engine/validation.ts'
+import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
@@ -646,5 +650,223 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
       b => b.cause === BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
     )
     expect(crossoverBottlenecks).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// R2 / US3 (T012): a per-event structural finding excludes its own
+// competition, not the tournament. Today (pre-T015) any ERROR from
+// validateConfig empties the whole schedule — see the gate at
+// concurrentScheduler.ts:197-204. Each case below is red for that reason:
+// the valid events are absent too, not just the defective one.
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent — a per-event finding excludes one event, not the tournament (R2 / US3, T012)', () => {
+  /**
+   * Three valid events, deliberately distinct in category/gender/weapon so
+   * none collides with another on the same-population key (category|gender|
+   * weapon) and none is mistaken for the defective event.
+   */
+  function validTrio(): Competition[] {
+    return [
+      comp('valid-1', { category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL }),
+      comp('valid-2', { category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE }),
+      comp('valid-3', { category: Category.VETERAN, gender: Gender.WOMEN, weapon: Weapon.EPEE }),
+    ]
+  }
+
+  /** FR-006 half 1: the named rule fires as an ERROR naming the bad event, via validateConfig directly — rule id and subjects, never message text. */
+  function assertRuleError(competitions: Competition[], config: TournamentConfig, badId: string, rule: string): void {
+    const errors = validateConfig(config, competitions, ValidationMode.BINDING)
+    const matches = errors.filter(
+      e => e.severity === BottleneckSeverity.ERROR && e.rule === rule && (e.subjects ?? []).includes(badId),
+    )
+    expect(matches.length, `expected a '${rule}' ERROR naming ${badId}`).toBeGreaterThan(0)
+  }
+
+  /** FR-006 half 2: every valid event is scheduled and the bad one has no entry. */
+  function assertOnlyValidScheduled(competitions: Competition[], config: TournamentConfig, badIds: string[]): void {
+    const { schedule } = scheduleAllConcurrent(competitions, config)
+    for (const c of competitions) {
+      if (badIds.includes(c.id)) continue
+      expect(schedule[c.id], `${c.id} should be scheduled`).toBeDefined()
+    }
+    for (const badId of badIds) {
+      expect(schedule[badId], `${badId} should have no schedule entry`).toBeUndefined()
+    }
+  }
+
+  it('fencer-count-bounds: the valid events schedule, the below-minimum event is excluded', () => {
+    // fencer_count 1 < MIN_FENCERS (2). Guarded everywhere else in
+    // validation.ts by `fencer_count >= MIN_FENCERS`, so no other rule
+    // reads this competition's derived fields — isolated to one finding.
+    const bad = comp('bad-fencer-count', { fencer_count: 1 })
+    const competitions = [...validTrio(), bad]
+    const config = smallConfig()
+
+    assertRuleError(competitions, config, bad.id, 'fencer-count-bounds')
+    assertOnlyValidScheduled(competitions, config, [bad.id])
+  })
+
+  it('cut-value-range: the valid events schedule, the out-of-range COUNT cut is excluded', () => {
+    // COUNT cut_value (30) exceeds fencer_count (24) — fires cut-value-range.
+    // computeDeFencerCount's COUNT branch clamps to min(cutValue, fencerCount)
+    // = fencerCount, so bracket size is unaffected and no other rule fires.
+    const bad = comp('bad-cut-range', { cut_mode: CutMode.COUNT, cut_value: 30, fencer_count: 24, category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.SABRE })
+    const competitions = [...validTrio(), bad]
+    const config = smallConfig()
+
+    assertRuleError(competitions, config, bad.id, 'cut-value-range')
+    assertOnlyValidScheduled(competitions, config, [bad.id])
+  })
+
+  it('cut-value-min-promotions: the valid events schedule, the too-small COUNT cut is excluded', () => {
+    // COUNT cut_value (1) is within fencer_count so cut-value-range does not
+    // fire, but computeDeFencerCount clamps promoted to max(1, 2) = 2 before
+    // the bracket lookup, so the raw rawPromoted=1 check here is the only
+    // finding — bracket size 2 has a table entry for every weapon.
+    const bad = comp('bad-min-promotions', { cut_mode: CutMode.COUNT, cut_value: 1, fencer_count: 24, category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.SABRE })
+    const competitions = [...validTrio(), bad]
+    const config = smallConfig()
+
+    assertRuleError(competitions, config, bad.id, 'cut-value-min-promotions')
+    assertOnlyValidScheduled(competitions, config, [bad.id])
+  })
+
+  it('de-duration-table-missing-entry: the valid events schedule, the event with no table entry is excluded', () => {
+    // fencer_count 24, cut_mode DISABLED -> bracket 32. The config's DE
+    // duration table has the SABRE/32 entry removed, and only the
+    // defective event uses SABRE — the three valid events stay on
+    // FOIL/EPEE, whose tables are untouched.
+    const sabreTable: Record<number, number> = { ...DEFAULT_DE_DURATION_TABLE[Weapon.SABRE] }
+    delete sabreTable[32]
+    const config = smallConfig({
+      de_duration_table: { ...DEFAULT_DE_DURATION_TABLE, [Weapon.SABRE]: sabreTable },
+    })
+    const bad = comp('bad-de-duration', { weapon: Weapon.SABRE, category: Category.CADET, gender: Gender.MEN })
+    const competitions = [...validTrio(), bad]
+
+    assertRuleError(competitions, config, bad.id, 'de-duration-table-missing-entry')
+    assertOnlyValidScheduled(competitions, config, [bad.id])
+  })
+
+  it('video-r16-strip-shortfall: the valid events schedule, the under-provisioned STAGED/REQUIRED event is excluded', () => {
+    // STAGED + REQUIRED video with de_round_of_16_strips (8) exceeding
+    // video_strips_total (4, from smallConfig's makeStrips(20, 4)). Bracket
+    // size and cut fields are left at their defaults so nothing else fires.
+    const bad = comp('bad-video-shortfall', {
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+      de_round_of_16_strips: 8,
+      category: Category.CADET,
+      gender: Gender.WOMEN,
+    })
+    const competitions = [...validTrio(), bad]
+    const config = smallConfig()
+
+    assertRuleError(competitions, config, bad.id, 'video-r16-strip-shortfall')
+    assertOnlyValidScheduled(competitions, config, [bad.id])
+  })
+
+  it('FR-009: one summary finding names how many competitions were excluded', () => {
+    // Two independent fencer-count-bounds defects, so the excluded count is
+    // unambiguous (2) and distinct from "one ERROR per excluded event."
+    const bad1 = comp('bad-1', { fencer_count: 1 })
+    const bad2 = comp('bad-2', { fencer_count: 1, category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE })
+    const competitions = [...validTrio(), bad1, bad2]
+    const config = smallConfig()
+
+    assertOnlyValidScheduled(competitions, config, [bad1.id, bad2.id])
+
+    // Every other bottleneck this validation gate produces today is either
+    // an ERROR (the per-event findings themselves) or lives outside
+    // Phase.VALIDATION entirely — so cause RESOURCE_EXHAUSTION + WARN +
+    // Phase.VALIDATION is free for T015 to use for the summary alone, and
+    // this is where T015 must put it (research.md D2, FR-009).
+    const { bottlenecks } = scheduleAllConcurrent(competitions, config)
+    const summaries = bottlenecks.filter(
+      b => b.phase === Phase.VALIDATION
+        && b.severity === BottleneckSeverity.WARN
+        && b.cause === BottleneckCause.RESOURCE_EXHAUSTION,
+    )
+    expect(summaries, 'expected exactly one summary bottleneck for the excluded count').toHaveLength(1)
+    expect(summaries[0]?.message, 'summary message should name the excluded count').toMatch(/\b2\b/)
+  })
+
+  // ──────────────────────────────────────────────
+  // T013 (FR-008 complement): a *global* ERROR — one not on R2's per-event
+  // list — must still empty the whole schedule, exactly as today. This is a
+  // guard, not a red test: it passes now (pre-T015, every ERROR empties the
+  // schedule) and it MUST STILL PASS after T015 restricts the exclusion to
+  // the five per-event rule ids (research.md D2, D3). Do not "fix" this file
+  // by making these red — a green run here is what proves T015 did not
+  // over-reach into global findings. Nested here (rather than as a sibling
+  // describe) to reuse validTrio() by closure instead of duplicating it.
+  // ──────────────────────────────────────────────
+
+  describe('a global finding still empties the whole schedule (T013)', () => {
+    /** Every case must schedule nothing and must carry the named rule id among its ERRORs. */
+    function assertEmptyWithRuleError(competitions: Competition[], config: TournamentConfig, rule: string): void {
+      const errors = validateConfig(config, competitions, ValidationMode.BINDING)
+      const matches = errors.filter(e => e.severity === BottleneckSeverity.ERROR && e.rule === rule)
+      expect(matches.length, `expected a '${rule}' ERROR`).toBeGreaterThan(0)
+
+      const { schedule } = scheduleAllConcurrent(competitions, config)
+      expect(Object.keys(schedule), 'expected an empty schedule').toHaveLength(0)
+    }
+
+    it('strips-total-positive: no strips at all still empties the schedule', () => {
+      const competitions = validTrio()
+      const config = smallConfig({ strips_total: 0 })
+
+      assertEmptyWithRuleError(competitions, config, 'strips-total-positive')
+    })
+
+    it('duplicate-competition-id: two competitions sharing an id still empties the schedule', () => {
+      const dupe = comp('valid-1', { category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE })
+      const competitions = [...validTrio(), dupe]
+      const config = smallConfig()
+
+      assertEmptyWithRuleError(competitions, config, 'duplicate-competition-id')
+    })
+
+    it('feasibility-strip-hours: an aggregate shortfall with every individual event valid still empties the schedule', () => {
+      // Every event here is individually valid (no per-event finding fires),
+      // but the aggregate demand exceeds capacity. baseline.md notes this
+      // rule empties B4 and four of the ten templates — it is a *policy*
+      // finding computed over the whole set (research.md D2, D3), not a
+      // per-event one, so R2 must not touch it.
+      const competitions = [
+        comp('big-1', { category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, fencer_count: 200 }),
+        comp('big-2', { category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE, fencer_count: 200 }),
+        comp('big-3', { category: Category.VETERAN, gender: Gender.WOMEN, weapon: Weapon.EPEE, fencer_count: 200 }),
+      ]
+      const config = smallConfig({ days_available: 1, strips: makeStrips(2, 0), strips_total: 2, video_strips_total: 0 })
+
+      assertEmptyWithRuleError(competitions, config, 'feasibility-strip-hours')
+    })
+
+    it('mixed: a per-event finding alongside a global one still empties the schedule (D3)', () => {
+      // D3: findings are computed once over the full set. A tournament
+      // carrying both a per-event finding (fencer-count-bounds) and a global
+      // one (strips-total-positive) is rejected whole -- today's behavior,
+      // unchanged, which is what FR-008 pins.
+      const badFencerCount = comp('bad-fencer-count', { fencer_count: 1 })
+      const competitions = [...validTrio(), badFencerCount]
+      const config = smallConfig({ strips_total: 0 })
+
+      const errors = validateConfig(config, competitions, ValidationMode.BINDING)
+      expect(
+        errors.some(e => e.severity === BottleneckSeverity.ERROR && e.rule === 'fencer-count-bounds'),
+        'expected a fencer-count-bounds ERROR',
+      ).toBe(true)
+      expect(
+        errors.some(e => e.severity === BottleneckSeverity.ERROR && e.rule === 'strips-total-positive'),
+        'expected a strips-total-positive ERROR',
+      ).toBe(true)
+
+      const { schedule } = scheduleAllConcurrent(competitions, config)
+      expect(Object.keys(schedule), 'expected an empty schedule').toHaveLength(0)
+    })
   })
 })

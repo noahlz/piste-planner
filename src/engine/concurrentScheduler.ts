@@ -175,6 +175,27 @@ const MAX_DEFERS_PER_PHASE = 16
 // Public entry point
 // ──────────────────────────────────────────────
 
+/**
+ * Rule ids whose ERROR findings are about the competitions they name, so the
+ * violation scopes to those events rather than to the tournament (FR-006/007,
+ * research.md D2).
+ *
+ * Written out by hand rather than inferred from `kind === RuleKind.STRUCTURAL`
+ * or from whether a finding's `subjects` resolve to competition ids. Both
+ * inferences admit `duplicate-competition-id`, which is the one rule that must
+ * never be excluded: a schedule keyed by id cannot be built from a set with
+ * duplicates in it, and dropping both copies discards a real event to fix a
+ * naming problem. `strips-total-positive` is structural too, with a field name
+ * in `subjects`. The list admits neither.
+ */
+const PER_EVENT_ERROR_RULES: ReadonlySet<string> = new Set([
+  'fencer-count-bounds',
+  'cut-value-range',
+  'cut-value-min-promotions',
+  'de-duration-table-missing-entry',
+  'video-r16-strip-shortfall',
+])
+
 export function scheduleAllConcurrent(
   competitions: Competition[],
   config: TournamentConfig,
@@ -194,8 +215,37 @@ export function scheduleAllConcurrent(
       message: ve.message,
     })
   }
-  const hasErrors = validationErrors.some(ve => ve.severity === BottleneckSeverity.ERROR)
-  if (hasErrors) {
+  // Findings are computed once, over the full competition set, and are never
+  // recomputed over the reduced one (research.md D3) — the global rules are
+  // sums over that set, so re-validating would turn "fails feasibility with 24
+  // events" into "passes with 23", a scheduling decision dressed as validation.
+  //
+  // When every ERROR is on the per-event list, the competitions those findings
+  // name are dropped and the remainder is scheduled (FR-006). One ERROR
+  // bottleneck per finding is already in `state.bottlenecks` above, unchanged.
+  // Any ERROR from outside the list — a global rule, or a per-event rule
+  // alongside a global one — empties the whole schedule exactly as before
+  // (FR-008).
+  const errorFindings = validationErrors.filter(ve => ve.severity === BottleneckSeverity.ERROR)
+  const scoped = errorFindings.length > 0
+    && errorFindings.every(ve => ve.rule !== undefined && PER_EVENT_ERROR_RULES.has(ve.rule))
+
+  // The union of the scoped findings' subjects: two findings may name the same
+  // competition, and the count below is of competitions, not of findings.
+  const excludedIds = new Set<string>()
+  if (scoped) {
+    for (const ve of errorFindings) {
+      for (const subject of ve.subjects ?? []) excludedIds.add(subject)
+    }
+  }
+  const remaining = scoped ? competitions.filter(c => !excludedIds.has(c.id)) : competitions
+  const excludedCount = competitions.length - remaining.length
+
+  // `excludedCount === 0` covers the case where every subject named a
+  // competition that is not in the set. The ERROR is real and nothing can be
+  // removed to answer it, so the tournament is discarded as it is today rather
+  // than scheduled in full with an unexplained ERROR attached.
+  if (errorFindings.length > 0 && excludedCount === 0) {
     return {
       schedule: state.schedule,
       bottlenecks: state.bottlenecks,
@@ -203,12 +253,24 @@ export function scheduleAllConcurrent(
     }
   }
 
+  // One summary so a reader of a partial board knows it is partial (FR-009).
+  if (excludedCount > 0) {
+    state.bottlenecks.push({
+      competition_id: '',
+      phase: Phase.VALIDATION,
+      cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      severity: BottleneckSeverity.WARN,
+      delay_mins: 0,
+      message: `${excludedCount} competition(s) excluded by per-event validation errors, leaving ${remaining.length} to schedule`,
+    })
+  }
+
   // Day assignment via DSatur graph coloring.
-  const graph = buildConstraintGraph(competitions)
-  const { dayMap, relaxations, violations } = assignDaysByColoring(graph, competitions, config)
+  const graph = buildConstraintGraph(remaining)
+  const { dayMap, relaxations, violations } = assignDaysByColoring(graph, remaining, config)
 
   // Build per-event state & phase nodes.
-  const events = buildEventStates(competitions, dayMap, config)
+  const events = buildEventStates(remaining, dayMap, config)
 
   // Wire cross-event dependency edges (indv→team, Vet sibling order).
   applyCrossEventEdges(events, config)
@@ -255,12 +317,15 @@ export function scheduleAllConcurrent(
   // Post-schedule ref demand via peakConcurrentStrips: one RefDemandInterval
   // per (event, phase) allocation window, scaled by refs_per_pool (pools,
   // flights) or DE_REFS (DE, DE_PRELIMS, DE_ROUND_OF_16).
-  state.ref_demand_by_day = computePostScheduleRefDemand(state, config, competitions)
+  // `remaining`, not `competitions`: an excluded event has no allocations, so
+  // counting it here would report demand and diagnostics for a board it is
+  // absent from.
+  state.ref_demand_by_day = computePostScheduleRefDemand(state, config, remaining)
 
   // Standard post-schedule pipeline.
-  const diagnostics = postScheduleDiagnostics(competitions, config, state.bottlenecks)
+  const diagnostics = postScheduleDiagnostics(remaining, config, state.bottlenecks)
   state.bottlenecks.push(...diagnostics)
-  const dayBreakdown = postScheduleDayBreakdown(competitions, config, state)
+  const dayBreakdown = postScheduleDayBreakdown(remaining, config, state)
   state.bottlenecks.push(...dayBreakdown)
   const postWarnings = postScheduleWarnings(state.schedule, config)
   state.bottlenecks.push(...postWarnings)
