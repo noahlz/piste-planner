@@ -57,9 +57,6 @@ function findingIdentity(finding: ValidationError): string {
 //     identical FEASIBILITY_SLACK-tolerant resource-insufficiency computation
 //     applied to the video-strip-hours axis. Grouped with feasibility rather
 //     than invented as a new bucket.
-//   - indiv_team_same_day — a worst-case combined-duration ESTIMATE (like
-//     feasibility's FEASIBILITY_SLACK-tolerant estimate), not an absolute
-//     physical block; an organizer may accept the risk.
 //
 // NOTICE — WARN in BOTH modes, never escalates to ERROR, never blocks.
 // Moved off POLICY by research D3's 2026-08-29 correction: probing
@@ -158,10 +155,11 @@ function expectNoticePair(field: string, binding: ValidationError[], advisory: V
 
 /**
  * A DIV1/MEN/FOIL individual+team pair sharing one population key — the
- * shape team-requires-individual, cut-on-team, and indiv-team-same-day all
- * pair against. `overrides.individual`/`overrides.team` extend the fixture
- * per test (e.g. fencer_count, cut_mode) without repeating the shared
- * category/gender/weapon fields at each call site.
+ * shape team-requires-individual and cut-on-team pair against, and the shape
+ * the deleted indiv-team-same-day rule used to fire on (FR-001).
+ * `overrides.individual`/`overrides.team` extend the fixture per test (e.g.
+ * fencer_count, cut_mode) without repeating the shared category/gender/weapon
+ * fields at each call site.
  */
 function makeIndividualTeamPair(overrides: { individual?: Partial<Competition>; team?: Partial<Competition> } = {}) {
   const individual = makeCompetition({
@@ -468,27 +466,22 @@ describe('validateConfig — video dead-config warning (notice: video-dead-confi
   })
 })
 
-describe('validateConfig — individual+team same-day duration (policy: indiv-team-same-day)', () => {
-  it('binding ERROR / advisory WARN when individual + gap + team exceeds DAY_LENGTH_MINS', () => {
-    // Use a very short day to force the violation
+describe('validateConfig — individual+team same-day duration (rule deleted, FR-001)', () => {
+  it('produces no indiv-team-same-day finding even when the combined worst-case duration exceeds DAY_LENGTH_MINS', () => {
+    // Same fixture the deleted rule used to fire on: a very short day forces
+    // the combined worst-case duration over DAY_LENGTH_MINS. Every such pair
+    // is same-population, so crossoverPenalty is Infinity and the day
+    // assigner can never place them on the same day — the rule reasoned
+    // about a hypothetical the engine forbids (methodology-reconciliation.md
+    // §1.2.4). Asserted on rule id, never message text.
     const config = makeConfig({ DAY_LENGTH_MINS: 50 })
     const { individual, team } = makeIndividualTeamPair({
       individual: { fencer_count: 24 },
       team: { fencer_count: 8 },
     })
     const { binding, advisory } = validateBoth(config, [individual, team])
-    expectPolicyPair('indiv_team_same_day', binding, advisory)
-  })
-
-  it('does not error when individual + gap + team fits within DAY_LENGTH_MINS', () => {
-    const config = makeConfig()
-    const { individual, team } = makeIndividualTeamPair({
-      individual: { fencer_count: 24 },
-      team: { fencer_count: 8 },
-    })
-    const { binding, advisory } = validateBoth(config, [individual, team])
-    expect(binding.filter(e => e.field === 'indiv_team_same_day')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'indiv_team_same_day')).toHaveLength(0)
+    expect(binding.filter(e => e.rule === 'indiv-team-same-day')).toHaveLength(0)
+    expect(advisory.filter(e => e.rule === 'indiv-team-same-day')).toHaveLength(0)
   })
 })
 

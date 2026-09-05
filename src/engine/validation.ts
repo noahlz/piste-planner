@@ -4,7 +4,6 @@ import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration } from './de.ts'
 import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
-import { findIndividualCounterpart } from './crossover.ts'
 import { estimateCompetitionStripHours } from './capacity.ts'
 
 function err(field: string, message: string): ValidationError {
@@ -269,46 +268,6 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
   return errors
 }
 
-function validateTimingConstraints(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
-  const errors: ValidationError[] = []
-
-  // Individual + team same-day worst-case duration
-  for (const team of competitions) {
-    if (team.event_type !== EventType.TEAM) continue
-    if (team.fencer_count < config.MIN_FENCERS) continue
-
-    const matchingIndividual = findIndividualCounterpart(team, competitions)
-    if (!matchingIndividual) continue
-    if (matchingIndividual.fencer_count < config.MIN_FENCERS) continue
-
-    // Compute total durations independently to find the worst-case combined day
-    const indivPoolStructure = computePoolStructure(matchingIndividual.fencer_count, matchingIndividual.use_single_pool_override)
-    const indivPoolDur = weightedPoolDuration(indivPoolStructure, matchingIndividual.weapon, config.pool_round_duration_table)
-    const indivBracket = computeBracketSize(matchingIndividual.fencer_count, matchingIndividual.cut_mode, matchingIndividual.cut_value, matchingIndividual.event_type)
-    const indivDeDur = calculateDeDuration(matchingIndividual.weapon, indivBracket, config.de_duration_table) ?? 0
-    const indivTotal = indivPoolDur + config.ADMIN_GAP_MINS + indivDeDur
-
-    const teamPoolStructure = computePoolStructure(team.fencer_count, team.use_single_pool_override)
-    const teamPoolDur = weightedPoolDuration(teamPoolStructure, team.weapon, config.pool_round_duration_table)
-    const teamBracket = computeBracketSize(team.fencer_count, team.cut_mode, team.cut_value, team.event_type)
-    const teamDeDur = calculateDeDuration(team.weapon, teamBracket, config.de_duration_table) ?? 0
-    const teamTotal = teamPoolDur + config.ADMIN_GAP_MINS + teamDeDur
-
-    const combinedTotal = indivTotal + config.INDIV_TEAM_MIN_GAP_MINS + teamTotal
-    if (combinedTotal > config.DAY_LENGTH_MINS) {
-      errors.push(policy(
-        'indiv_team_same_day',
-        `Individual ${matchingIndividual.id} + team ${team.id} worst-case same-day duration ${combinedTotal} min exceeds DAY_LENGTH_MINS ${config.DAY_LENGTH_MINS} min`,
-        mode,
-        'indiv-team-same-day',
-        [matchingIndividual.id, team.id].sort(),
-      ))
-    }
-  }
-
-  return errors
-}
-
 function validateDependencies(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
   const errors: ValidationError[] = []
 
@@ -478,7 +437,6 @@ export function validateConfig(
     ...validateStripConfig(config, competitions, mode),
     ...validateRefConfig(config, competitions),
     ...validateCompetitionFields(config, competitions, mode),
-    ...validateTimingConstraints(config, competitions, mode),
     ...validateDependencies(config, competitions, mode),
     ...feasibilityFindings,
   ]
