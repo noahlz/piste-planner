@@ -370,6 +370,31 @@ describe('buildTournamentConfig', () => {
     })
   })
 
+  describe('team event cut_mode coercion (R3, cut-on-team, FR-010)', () => {
+    it('coerces a TEAM competition cut_mode to DISABLED before it reaches the engine', () => {
+      const state = storeWith({
+        ...minimalState(),
+        tournament_type: TournamentType.NAC,
+        selectedCompetitions: {
+          'JR-M-FOIL-TEAM': {
+            fencer_count: 40,
+            ref_policy: RefPolicy.AUTO,
+            cut_mode: CutMode.PERCENTAGE,
+            cut_value: 20,
+            de_mode: DeMode.SINGLE_STAGE,
+            de_video_policy: VideoPolicy.BEST_EFFORT,
+            use_single_pool_override: false,
+          },
+        },
+      })
+      const { competitions } = buildTournamentConfig(state)
+      const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-TEAM')
+
+      expect(comp).toBeDefined()
+      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
+    })
+  })
+
   describe('flighting suggestions', () => {
     function twoCompState() {
       return {

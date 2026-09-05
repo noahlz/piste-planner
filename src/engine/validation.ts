@@ -152,9 +152,12 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} exceeds maximum ${config.MAX_FENCERS}`, 'fencer-count-bounds', [comp.id]))
     }
 
-    // Team events must not use cuts
+    // Team events must not use cuts — notice, not policy (R3, FR-011):
+    // buildConfig already coerces cut_mode to DISABLED before the engine sees
+    // it, so this is a heads-up on a cosmetic field, never a gate
+    // (research.md D4).
     if (comp.event_type === EventType.TEAM && comp.cut_mode !== CutMode.DISABLED) {
-      errors.push(policy('cut_mode', `${comp.id}: team events must have cut_mode=DISABLED`, mode, 'cut-on-team', [comp.id]))
+      errors.push(notice('cut_mode', `${comp.id}: team events must have cut_mode=DISABLED`, 'cut-on-team', [comp.id]))
     }
 
     // Cut value range checks (individual events only)
