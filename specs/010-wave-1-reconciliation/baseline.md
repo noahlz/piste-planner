@@ -318,6 +318,66 @@ Typing the regional templates resolves video strips to 0 and applies
 at its suggested count — the case §1.2.5 reports and the app path does not
 reproduce.
 
+### After R1 — T006, measured at commit `5a3a1a6826`
+
+`[M]` Same method, unchanged: `tmp/t006-remeasure-probe.test.ts`, Appendix C,
+run with `pnpm --silent vitest run tmp/t006-remeasure-probe.test.ts`, deleted
+after this file was written. `indiv-team-same-day` no longer exists in
+`src/engine/validation.ts` as of `5a3a1a6826` (R1). Before/after side by side;
+the "before" column is §3's table above, unchanged.
+
+| Template | Placed @ suggested (before → after) | ERROR rules @ suggested (before → after) | Placed @ 80/12 (before → after) | ERROR rules @ 80/12 (before → after) |
+|---|---|---|---|---|
+| NAC Youth | 0 → **0** | `feasibility-strip-hours` ×1 → **same** | 22 → **22** | none → **same** |
+| NAC Cadet/Junior | 0 → **0** | `feasibility-strip-hours` ×1 → **same** | 24 → **24** | none → **same** |
+| **NAC Div1/Junior** | 0 → **13** | `indiv-team-same-day` ×2 → **none** | 0 → **24** | `indiv-team-same-day` ×2 → **none** |
+| **NAC Vet/Div1/Junior** | 0 → **0** | `indiv-team-same-day` ×2, `feasibility-strip-hours` ×1 → **`feasibility-strip-hours` ×1** | 0 → **45** | `indiv-team-same-day` ×2 → **none** |
+| ROC Div1A/Vet | 12 → **12** | none → **same** | 12 → **12** | none → **same** |
+| ROC Div1A/Div2/Vet | 16 → **16** | none → **same** | 18 → **18** | none → **same** |
+| ROC Mega | 0 → **0** | `feasibility-strip-hours` ×1 → **same** | 42 → **42** | none → **same** |
+| RYC Weekend | 12 → **12** | none → **same** | 18 → **18** | none → **same** |
+| RJCC Weekend | 6 → **6** | none → **same** | 12 → **12** | none → **same** |
+| Junior Olympics | 0 → **0** | `feasibility-strip-hours` ×1 → **same** | 18 → **18** | none → **same** |
+
+Only the two templates R1 targets moved. The other eight are identical in
+every field, before and after — `indiv-team-same-day` never fired on them, so
+deleting it had nothing to remove.
+
+**NAC Div1/Junior**'s new non-empty schedules carry no ERROR at either strip
+count. At suggested (45 strips) it places 13 of 24 with 14 `DEADLINE_BREACH`
+warnings; at 80/12 it places all 24 clean.
+
+**NAC Vet/Div1/Junior** stays at 0 at its suggested 45 strips, now on
+`feasibility-strip-hours` alone — exactly the dispatch's prediction, and the
+reason is unchanged from §3: that finding sits underneath R1's two errors and
+belongs to Wave 3's R5, not this feature.
+
+**Correction to the dispatch's prediction:** at 80/12, `NAC Vet/Div1/Junior`
+was expected to reach 66/66. It measures **45 of 66**, with 21
+`DEADLINE_BREACH` warnings and zero ERRORs — the same warning-driven shortfall
+pattern §3 already documented on ROC Div1A/Div2/Vet, RYC Weekend and RJCC
+Weekend (events surviving validation but losing a scheduling race against the
+deadline). The measurement is the number this feature uses per the tasks.md
+standing rule; 45/66 is still non-zero, so SC-001 does not turn on the
+discrepancy.
+
+### SC-001 verdict
+
+**Met.** Both named templates now place a non-zero count at the store's
+default day count: `NAC Div1/Junior` places 13/24 (suggested) and 24/24
+(80/12); `NAC Vet/Div1/Junior` places 0/66 (suggested, blocked by
+`feasibility-strip-hours`, not R1's rule) and 45/66 (80/12). SC-001 does not
+name a strip count, and both templates clear it at 80/12; `NAC Div1/Junior`
+clears it at its suggested count too.
+
+### Still blocked after R1
+
+**`NAC Vet/Div1/Junior` at its suggested 45 strips** is the only cell in the
+table still at zero. It is blocked by `feasibility-strip-hours` ×1
+(`RESOURCE_INSUFFICIENT: 3670 strip-hours needed over 66 events; 1890
+available`), which belongs to Wave 3's R5 per the dispatch brief and is not
+touched here.
+
 ---
 
 ## §4 `crossoverPenalty` today — the five pairs T017 must find
@@ -721,3 +781,99 @@ columns × 2 phases.
 
 The B1–B8 column is the answer to §2: the whole fallback is dead code on the
 drift ledger, in both phases.
+
+---
+
+## Appendix C — the T006 re-measure probe
+
+Written to `tmp/t006-remeasure-probe.test.ts`, run with
+`pnpm --silent vitest run tmp/t006-remeasure-probe.test.ts`, and deleted. It
+reads `src/` and never writes to it, and reuses Appendix A's `runTemplate`
+function unchanged except for dropping the `tournamentType` parameter and the
+`noDayConfigs`/`typed` supplementary variants, which §3's after-R1 table does
+not need.
+
+```ts
+/**
+ * TEMPORARY probe for 010 T006. Deleted after measurement. Re-runs exactly
+ * the §3 method from baseline.md Appendix A (`runTemplate`), unchanged, after
+ * R1's deletion of `indiv-team-same-day` in commit 5a3a1a6826.
+ */
+import { describe, it } from 'vitest'
+import { scheduleAll } from '../src/engine/scheduler.ts'
+import { validateConfig } from '../src/engine/validation.ts'
+import { BottleneckSeverity, ValidationMode } from '../src/engine/types.ts'
+import type { Bottleneck, Competition, TournamentConfig } from '../src/engine/types.ts'
+import { TEMPLATES } from '../src/engine/catalogue.ts'
+import { useStore } from '../src/store/store.ts'
+import { buildTournamentConfig } from '../src/store/buildConfig.ts'
+
+function warnCountsByCause(bottlenecks: Bottleneck[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const b of bottlenecks) {
+    if (b.severity !== BottleneckSeverity.WARN) continue
+    counts[b.cause] = (counts[b.cause] ?? 0) + 1
+  }
+  return counts
+}
+
+function errorRules(competitions: Competition[], config: TournamentConfig) {
+  const findings = validateConfig(config, competitions, ValidationMode.BINDING)
+  const errors = findings.filter(f => f.severity === BottleneckSeverity.ERROR)
+  const byRule: Record<string, number> = {}
+  for (const e of errors) byRule[e.rule] = (byRule[e.rule] ?? 0) + 1
+  return {
+    errorRuleCounts: byRule,
+    firstErrorMessage: errors.length > 0 ? errors[0].message : null,
+    warnRuleCounts: findings
+      .filter(f => f.severity === BottleneckSeverity.WARN)
+      .reduce<Record<string, number>>((acc, f) => {
+        acc[f.rule] = (acc[f.rule] ?? 0) + 1
+        return acc
+      }, {}),
+  }
+}
+
+/** Applies one template through the store's own actions, then builds the engine config. */
+function runTemplate(name: string, strips: 'suggest' | number, videoStrips: number | null) {
+  useStore.setState(useStore.getInitialState(), true)
+  const state = () => useStore.getState()
+  state().setDays(state().days_available) // populates dayConfigs at the default 3
+  state().applyTemplate(name)
+  if (strips === 'suggest') state().suggestStrips()
+  else state().setStrips(strips)
+  state().setVideoStrips(videoStrips)
+
+  const { config, competitions } = buildTournamentConfig(state())
+  const { schedule, bottlenecks } = scheduleAll(competitions, config)
+  const placedIds = Object.entries(schedule)
+    .filter(([, r]) => r.pool_start !== null).map(([id]) => id)
+
+  return {
+    days: config.days_available,
+    strips: config.strips_total,
+    videoStrips: config.video_strips_total,
+    eventCount: competitions.length,
+    placed: placedIds.length,
+    ...errorRules(competitions, config),
+    warnCountsByCause: warnCountsByCause(bottlenecks),
+  }
+}
+
+function emit(label: string, value: unknown) {
+  console.log(`\n<<<${label}>>>\n${JSON.stringify(value, null, 1)}\n<<<END ${label}>>>`)
+}
+
+describe('T006 re-measure probe', () => {
+  it('S3 after R1: the ten templates down the app path, two strip columns', () => {
+    const out: Record<string, unknown> = {}
+    for (const name of Object.keys(TEMPLATES)) {
+      out[name] = {
+        suggested: runTemplate(name, 'suggest', null),
+        '80/12': runTemplate(name, 80, 12),
+      }
+    }
+    emit('S3_AFTER_R1', out)
+  })
+})
+```
