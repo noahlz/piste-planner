@@ -34,13 +34,22 @@ describe('runAppPath', () => {
   // they were, at T063a on 2026-09-01, against the post-D5/D6/D7/T061a tree.
   // The parity file carries the FR-004a classification; this one carries only
   // the numbers.
+  //
+  // 010 L9, 2026-09-05 — B6's placed count moved 39 → 40, re-measured on this
+  // branch, and nothing else in the table moved. T019 emptied
+  // `CROSSOVER_GRAPH[Y8]`, which drops Y8's constraint-graph edges to Y10 (0.8)
+  // and, through `buildPenaltyMatrix`'s two-hop derivation, to Y12 (0.3). B6 is
+  // the only scenario carrying Y8 events, its three Y8 women's events rotate
+  // days under the freed coloring, and one more event clears its deadline. The
+  // drift ledger's own B6 count moved by the same +1 (44 → 45), so the parity
+  // gap is unchanged at 5.
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
     B4: { selected: 30, placed: 0 }, // pre-fix: 8; 16 until T061a, when pre-allocated strips restored the DE term of the feasibility estimate and the upfront gate finally fired — the ledger's own count
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
-    B6: { selected: 54, placed: 39 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031)
+    B6: { selected: 54, placed: 40 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
     B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4
   }

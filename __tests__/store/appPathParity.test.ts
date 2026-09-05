@@ -42,9 +42,14 @@ import type { ScenarioId } from '../../src/data/tournaments.ts'
  * measured against, carried from baseline.md's ledger column and unchanged
  * by this feature (FR-005). Where a pin below differs from its entry here,
  * `PARITY_EXCEPTIONS` must say why.
+ *
+ * 010 L9, 2026-09-05 — B6 moved 44 → 45, read from the drift ledger's own
+ * re-taken snapshot in the same commit (T019). It is the only entry that moved:
+ * B6 is the only scenario holding Y8 events, and T019 emptied
+ * `CROSSOVER_GRAPH[Y8]`.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 44, B7: 18, B8: 52,
+  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 45, B7: 18, B8: 52,
 }
 
 interface ParityException {
@@ -115,12 +120,24 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
    * `ref_policy` differs on all 54 (the app's resolved `ONE` against the
    * ledger's unresolved `AUTO`, which is D5 working) but is inert on
    * placement — swapping it alone leaves 39.
+   *
+   * **010 L9, 2026-09-05 — both numbers moved by +1 and the gap did not.**
+   * T019 emptied `CROSSOVER_GRAPH[Y8]`, so B6's Y8 events lose their edges to
+   * Y10 (0.8 direct) and Y12 (0.3 two-hop), the three Y8 women's events rotate
+   * days, and one more event clears its deadline on both paths: app path
+   * 39 → **40**, ledger 44 → **45**. The cause below is unchanged — it is about
+   * `cut_mode`/`de_mode` resolution, which L9 does not touch — and the two
+   * counts are re-measured, not inferred. The `evidence` field's isolation
+   * swaps were run at T063a against that tree and are **not** re-run here:
+   * re-running them is a measurement task of its own, and L9 gives no reason to
+   * think a crossover weight changed which per-competition default accounts for
+   * the gap.
    */
   B6: {
-    appPath: 39,
-    ledger: 44,
-    cause: 'the ledger\'s factory applies neither per-type resolution the store now ships: it cuts B6\'s Y14/Cadet/Junior/Div1 events at 20% where buildConfig.ts forces the regional all-advance override (18 of 54 events), and it stages DEs per event from a REQUIRED video policy where US4 resolves de_mode per tournament type, ROC to SINGLE_STAGE (12 of 54). T061a moved this pin 43 → 39 by a capacity re-pack, so the gap is wider than 006 recorded, not narrower',
-    evidence: 'measured at T063a: 39 on the app\'s config and 39 on the ledger\'s, against the ledger\'s 44 on either config — the axis stays uninvolved. Of the fields still differing, swapping in the ledger\'s de_mode alone reaches exactly 44, its cut_mode alone overshoots to 54, cut_value alone stays 39, and swapping every differing field reaches 44. strips_allocated and de_video_policy differ on zero events',
+    appPath: 40,
+    ledger: 45,
+    cause: 'the ledger\'s factory applies neither per-type resolution the store now ships: it cuts B6\'s Y14/Cadet/Junior/Div1 events at 20% where buildConfig.ts forces the regional all-advance override (18 of 54 events), and it stages DEs per event from a REQUIRED video policy where US4 resolves de_mode per tournament type, ROC to SINGLE_STAGE (12 of 54). T061a moved this pin 43 → 39 by a capacity re-pack, so the gap is wider than 006 recorded, not narrower, and 010 L9 moved both sides by +1 (39 → 40 against 44 → 45) when it emptied CROSSOVER_GRAPH[Y8], leaving the gap at 5',
+    evidence: 'measured at T063a: 39 on the app\'s config and 39 on the ledger\'s, against the ledger\'s 44 on either config — the axis stays uninvolved. Of the fields still differing, swapping in the ledger\'s de_mode alone reaches exactly 44, its cut_mode alone overshoots to 54, cut_value alone stays 39, and swapping every differing field reaches 44. strips_allocated and de_video_policy differ on zero events. Those swap figures are T063a\'s, taken against that tree; 010 L9 re-measured only the two counts (40 and 45) and did not re-run the swaps',
     closedBy: 'a follow-up feature, unnumbered and named in docs/design/backlog.md as "The drift ledger\'s factory does not apply the store\'s per-type resolutions": the ledger\'s factory (__tests__/helpers/scenarios.ts) adopts REGIONAL_CUT_OVERRIDES and the per-type de_mode table. It cannot close in 004 US4 — scenarios.ts is the comparison point T062 diffs against, and changing it moves the drift ledger\'s own recorded counts, a constitution III change owing its own snapshot review',
   },
 
@@ -173,9 +190,13 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
  * rather than the parity contract. The duplication is deliberate — that file
  * must be able to fail on its own — but the two move together, so a task that
  * re-measures one re-measures both.
+ *
+ * 010 L9, 2026-09-05 — B6 re-measured 39 → 40 (T019 emptied
+ * `CROSSOVER_GRAPH[Y8]`), and its copy in `appPath.test.ts` moved with it in
+ * the same commit. No other scenario carries Y8 events, and no other pin moved.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 39, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 40, B7: 18, B8: 53,
 }
 
 describe('app-path parity with the drift ledger (contracts/day-axis.md C5)', () => {

@@ -412,7 +412,16 @@ export const REGIONAL_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>>
 // Maximum edge weight is 0.8 (capped per METHODOLOGY.md).
 // Two-hop indirect edges are computed in crossover.ts, capped at 0.3.
 export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>> = {
-  [Category.Y8]: { [Category.Y10]: 0.8 },
+  // Y8 has no edges. METHODOLOGY:118 states, in bold, that **Y8 CAN and SHOULD
+  // be on the same day as Y10**, and this graph used to carry Y8→Y10 at 0.8 –
+  // the largest finite same-day penalty – applied against the one pairing the
+  // specification asks for. The note above GROUP_1_MANDATORY below records the
+  // intent correctly; this line contradicted it. Removing the edge makes "CAN"
+  // true. "SHOULD" would need a same-day bonus, and METHODOLOGY states the
+  // preference without a magnitude, so no number is invented here (010 L9,
+  // research.md D5). Y8→Y10 was Y8's only direct edge, so buildPenaltyMatrix's
+  // two-hop Y8↔Y12 derivation (0.3) goes with it.
+  [Category.Y8]: {},
   [Category.Y10]: { [Category.Y12]: 0.8 },
   [Category.Y12]: { [Category.Y14]: 0.8 },
   [Category.Y14]: {

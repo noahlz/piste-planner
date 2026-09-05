@@ -7,6 +7,7 @@ import {
   SOFT_SEPARATION_PAIRS,
   DE_BOUT_DURATION,
   YOUTH_VET_BOUT_DELTA,
+  CROSSOVER_GRAPH,
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
 
@@ -95,6 +96,16 @@ describe('DE_BOUT_DURATION', () => {
 describe('YOUTH_VET_BOUT_DELTA', () => {
   it('is -5', () => {
     expect(YOUTH_VET_BOUT_DELTA).toBe(-5)
+  })
+})
+
+describe('CROSSOVER_GRAPH', () => {
+  it('Y8 has no edges — METHODOLOGY:118 says Y8 CAN and SHOULD share a day with Y10 (L9)', () => {
+    // Y8→Y10 was Y8's only direct edge (0.8). Removing it is what research.md
+    // D5 calls "removes the edge and invents no bonus" — the specification
+    // states the preference, not a magnitude, so the fix is silence, not a
+    // negative weight.
+    expect(CROSSOVER_GRAPH[Category.Y8]).toEqual({})
   })
 })
 
