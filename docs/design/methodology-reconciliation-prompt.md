@@ -1,5 +1,10 @@
 # Dispatch prompt: reconcile METHODOLOGY.md with the engine
 
+> **Executed 2026-09-05.** The analysis this brief asks for now exists at
+> [`methodology-reconciliation.md`](./methodology-reconciliation.md). This file
+> is kept for provenance – do not re-run it against a changed tree without
+> re-reading the output first.
+
 **What this file is.** A ready-to-run brief for a fresh session. Written
 2026-09-02 against `main` at `2a18984b8d`. It is a prompt, not a design
 document — the analysis it asks for is the design document, and it does not
