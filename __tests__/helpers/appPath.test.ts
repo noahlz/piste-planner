@@ -71,14 +71,25 @@ describe('runAppPath', () => {
     // buildConfig.ts:60 fills in. The per-scenario account is in
     // specs/004-p3-workbench-shell/drift-baseline.md §T062.
     //
+    // 010 L1, 2026-09-05 — six of the twelve numbers moved and all four
+    // peak_time values held. T018 wired PENALTY_WEIGHTS.PROXIMITY_3_PLUS_DAYS
+    // into colorPenalty, which had never read it: the adjacent-day loop's
+    // `if (dayGap !== 1) continue` excluded every gap of 3 or more. Six of B1's
+    // VET events change day under the new term, since VETERAN↔VETERAN carries
+    // proximity weight 1.0, so each day now holds a different set of events and
+    // therefore a different concurrent ref demand. The peak *times* are
+    // unchanged because the day windows themselves did not move, only their
+    // membership. Day 3 absorbs the sabre load the reshuffle displaces, which is
+    // why both of its numbers rise the most.
+    //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.
     const result = runAppPath('B1')
     expect(result.refRequirementsByDay).toEqual([
-      { day: 0, peak_total_refs: 160, peak_saber_refs: 64, peak_time: 480 },
-      { day: 1, peak_total_refs: 182, peak_saber_refs: 64, peak_time: 2025 },
-      { day: 2, peak_total_refs: 156, peak_saber_refs: 46, peak_time: 3360 },
-      { day: 3, peak_total_refs: 194, peak_saber_refs: 64, peak_time: 4905 },
+      { day: 0, peak_total_refs: 154, peak_saber_refs: 64, peak_time: 480 },
+      { day: 1, peak_total_refs: 186, peak_saber_refs: 64, peak_time: 2025 },
+      { day: 2, peak_total_refs: 160, peak_saber_refs: 50, peak_time: 3360 },
+      { day: 3, peak_total_refs: 202, peak_saber_refs: 76, peak_time: 4905 },
     ])
   })
 

@@ -247,7 +247,8 @@ function vetCombinedOrderingPenalty(
  * Includes:
  *   - direct soft-edge neighbor penalties (weight !== Infinity)
  *   - rest-day penalties for adjacent days (same gender + weapon, REST_DAY_PAIRS)
- *   - proximity bonuses for adjacent days (same gender + weapon, PROXIMITY_GRAPH)
+ *   - proximity terms by day gap (same gender + weapon, PROXIMITY_GRAPH): a
+ *     bonus at a gap of 1, nothing at 2, a penalty at 3 or more
  *   - individual/team ordering penalties
  *   - VET_COMBINED day-after preference (F3c)
  */
@@ -277,25 +278,36 @@ function colorPenalty(
     total += effectiveWeight
   }
 
-  // Rest-day and proximity adjustments — only for graph neighbors on adjacent days
+  // Rest-day and proximity adjustments — graph neighbors of the same gender and
+  // weapon, banded by day gap (METHODOLOGY:234-240):
+  //   gap 1     – rest-day check, plus the PROXIMITY_1_DAY bonus
+  //   gap 2     – neutral, neither term
+  //   gap 3+    – the PROXIMITY_3_PLUS_DAYS penalty
+  // The rest-day check stays at gap 1 alone. A rest-day violation is the claim
+  // that two events sit on adjacent days, and nothing wider (research.md D7).
   for (const edge of edges) {
     const neighborColor = coloring.get(edge.targetId)
     if (neighborColor === undefined) continue
 
     const dayGap = Math.abs(c - neighborColor)
-    if (dayGap !== 1) continue // only adjacent days matter for these adjustments
+    if (dayGap !== 1 && dayGap < 3) continue // same day and gap 2 carry no term
 
     const neighbor = compMap.get(edge.targetId)
     if (!neighbor) continue
     if (neighbor.gender !== self.gender) continue
     if (neighbor.weapon !== self.weapon) continue
 
-    if (isRestDayPair(self.category, neighbor.category)) {
-      total += PENALTY_WEIGHTS.REST_DAY_VIOLATION
-    }
     const proxW = proximityWeight(self.category, neighbor.category)
-    if (proxW > 0) {
-      total += PENALTY_WEIGHTS.PROXIMITY_1_DAY * proxW
+
+    if (dayGap === 1) {
+      if (isRestDayPair(self.category, neighbor.category)) {
+        total += PENALTY_WEIGHTS.REST_DAY_VIOLATION
+      }
+      if (proxW > 0) {
+        total += PENALTY_WEIGHTS.PROXIMITY_1_DAY * proxW
+      }
+    } else if (proxW > 0) {
+      total += PENALTY_WEIGHTS.PROXIMITY_3_PLUS_DAYS * proxW
     }
   }
 

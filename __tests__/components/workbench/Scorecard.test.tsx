@@ -42,12 +42,20 @@ import { makePlacement } from '../../helpers/factories.ts'
 // account is in __tests__/store/scorecardBaseline.test.ts's B1_BASELINE, which
 // pins the same numbers unformatted; the per-scenario one is in
 // specs/004-p3-workbench-shell/drift-baseline.md §T062.
+// 010 L1, 2026-09-05 — three of this block's seven constants moved. T018 wired
+// `PENALTY_WEIGHTS.PROXIMITY_3_PLUS_DAYS` into `colorPenalty`, which had never
+// read it: the adjacent-day loop's `if (dayGap !== 1) continue` excluded every
+// gap of 3 or more. Six of B1's VET events change day under the new term, since
+// VETERAN↔VETERAN carries proximity weight 1.0, and that re-packs all four
+// days. B1_FINISH_TOURNAMENT, B1_UTILIZATION and B1_FINDINGS all held — the
+// same 24 events do the same total work on different days, so only the
+// distribution moved, not the sum.
 const B1_FINISH_TOURNAMENT = '17:30' // max de_total_end = 1050 → formatMinutes (was 17:17 / 1037)
-const B1_FINISH_BY_DAY = ['17:30', '17:05', '16:20', '16:35'] // 1050 / 1025 / 980 / 995
-const B1_PEAK_TOTAL = '194' // max peak_total_refs over the four ref rows (was 220)
-const B1_PEAK_SABRE = '64' // max peak_saber_refs, reached on days 0, 1 and 3 (was 76)
+const B1_FINISH_BY_DAY = ['17:30', '17:25', '16:20', '16:35'] // 1050 / 1045 / 980 / 995
+const B1_PEAK_TOTAL = '202' // max peak_total_refs over the four ref rows (was 194, and 220 before that)
+const B1_PEAK_SABRE = '76' // max peak_saber_refs, now reached on day 3 alone (was 64, tied across days 0, 1 and 3)
 const B1_UTILIZATION = '35.5%' // 95308 strip-min used ÷ 268800 available (was 41.4%)
-const B1_BALANCE_SPREAD = '10.6%' // day utilizations 42.379 (max) − 31.783 (min)
+const B1_BALANCE_SPREAD = '11.8%' // day utilizations spread further apart under L1 (was 10.6%)
 const B1_FINDINGS = { ERROR: '0', WARN: '4', INFO: '12' }
 // 0 validation errors and 4 WARN STRIP_CONTENTION; 12 INFO CUT_SUMMARY. The 12
 // WARN de_video_policy are D6's: `video-dead-config` fires only on REQUIRED +
@@ -369,6 +377,15 @@ describe('Scorecard deltas (research D9)', () => {
    * would have asserted a delta that no longer existed. The event moved is now
    * the argmax; the delta is smaller (−0:25 rather than −1:00) but still
    * negative, still a time, and still the only one in this file.
+   *
+   * 010 L1, 2026-09-05 — the vehicle still holds and only the numbers moved.
+   * VET-M-FOIL-IND-VCMB is still B1's argmax at 1050 on day 0, so pushing it
+   * out of range still drops the tournament finish, but what it drops *to*
+   * changed: T018's PROXIMITY_3_PLUS_DAYS term re-packs the four days and day
+   * 1's finish moves 1025 to 1045, so the runner-up is now 1045 rather than
+   * 1025 and the delta is −5 minutes rather than −25. Measured, not assumed.
+   * Still negative, still a time, still the only one in this file — which is
+   * what the case exists to render.
    */
   it('renders a negative time delta as a signed clock time', () => {
     loadB1()
@@ -378,8 +395,8 @@ describe('Scorecard deltas (research D9)', () => {
     render(<Scorecard />)
     fireEvent.click(disclosure())
 
-    expect(valueOf(scorecard(), 'finish:tournament')).toBe('17:05')
-    expect(deltaOf(scorecard(), 'finish:tournament')).toBe('−0:25')
+    expect(valueOf(scorecard(), 'finish:tournament')).toBe('17:25')
+    expect(deltaOf(scorecard(), 'finish:tournament')).toBe('−0:05')
   })
 
   /**
@@ -623,6 +640,18 @@ describe('Scorecard hover names the driving blocks (FR-029)', () => {
    * the singular branch of the `length === 1 ? '' : 's'` ternary is
    * **unasserted anywhere in this file**. Restoring it needs a new fixture,
    * which is test design rather than re-baselining and was left undone.
+   *
+   * 010 L1, 2026-09-05 — the sabre row goes 0 blocks back to 1, and with it the
+   * singular half returns to this case. T018's PROXIMITY_3_PLUS_DAYS term
+   * re-packs B1's four days, and `peak_saber_refs` now reaches its maximum of
+   * 76 on day 3 **alone** rather than tying at 64 across days 0, 1 and 3. The
+   * argmax is therefore day 3 rather than day 0, its `peak_time` is 4905, and
+   * at that minute one sabre block on that day is open — so the driving set is
+   * exactly 1 and the ternary renders "block", not "blocks". The
+   * `finish:tournament` count is untouched at 3. This does not retire
+   * `loadOneSabreEvent` (T067): that fixture pins the singular branch on a
+   * shape that does not depend on which day B1's sabre peak lands on, and it
+   * is the one that survives the next re-pack.
    */
   it('announces which metric is driving and how many blocks it lights', () => {
     loadB1()
@@ -639,7 +668,7 @@ describe('Scorecard hover names the driving blocks (FR-029)', () => {
     expect(status()?.textContent).toBe('Tournament finish: 3 blocks highlighted')
 
     pointerEnter(row(scorecard(), 'refs:peak-sabre'))
-    expect(status()?.textContent).toBe('Peak sabre referees: 0 blocks highlighted')
+    expect(status()?.textContent).toBe('Peak sabre referees: 1 block highlighted')
 
     pointerLeave(row(scorecard(), 'refs:peak-sabre'))
     expect(status()?.textContent).toBe('')
