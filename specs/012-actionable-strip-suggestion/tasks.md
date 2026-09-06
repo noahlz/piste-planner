@@ -214,7 +214,7 @@ exceeds 100 (SC-004).
   count that places every event – no number, no mention of the floor or the
   ceiling (standing rule 6) *(subagent commits)*
 
-- [ ] **T008** [US1] Re-run the T002 harness through the **app's own path** –
+- [X] **T008** [US1] Re-run the T002 harness through the **app's own path** –
   `suggestStrips()` awaited, then `buildTournamentConfig` and `scheduleAll` –
   and append the after-US1 table to `baseline.md`: suggested before → after,
   placed at suggested, placed at suggested − 1, placed at 80/12, and wall time

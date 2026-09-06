@@ -406,3 +406,104 @@ a search that exhausts its range rather than finding an answer.
 
 Section 2 is T011's "before". No scheduled count may move, and all eight
 `stripRecommendation` values are expected to.
+
+---
+
+## 5. Ten templates after US1
+
+`[M]` Re-runs §The method through the **app's own path** — `suggestStrips()`
+now returns a `Promise<void>` (T007), so the probe awaits it before reading
+`strips_total` — rather than the T002 probe's own inline scan. Two changes
+from §The method's step order:
+
+1. Video strips are set **before** the press, not after. §The method's old
+   order never mattered, because the ceiling-only rule read no strip list at
+   all. The search now builds each candidate's config with
+   `buildStrips(count, config.video_strips_total)`, so the video count is part
+   of what the search evaluates, and the order could in principle change the
+   answer.
+2. **It did not, here.** `[R]` The store's initial state sets
+   `video_strips_total: null` (`store.ts:207`), the same value
+   `setVideoStrips(null)` writes in the suggested column. Calling it before or
+   after the press is therefore a no-op either way on all ten templates —
+   `resolveVideoStrips(null, 'NAC')` resolves to 8 regardless of when it runs,
+   confirmed (`videoStripsAtSuggest: 8` on all ten, both passes below).
+
+Probe: `tmp/probe-012-t008.test.ts`, run with
+
+```
+timeout 600 pnpm --silent vitest run tmp/probe-012-t008.test.ts > ./tmp/probe.log 2>&1
+```
+
+and deleted after the numbers were recorded. It reads `src/` and never writes
+to it; every loop is bounded by `TEMPLATES`' ten fixed keys or a fixed
+two-pass count. Run twice in one file: **every count is identical across both
+passes on all ten templates** — only `pressMs` differs, by under 30ms on the
+one template it moves visibly (NAC Vet/Div1/Junior: 228.58ms → 198.69ms).
+Confirmed on every run, both passes: `config.days_available === 4`,
+`config.tournament_type === 'NAC'`, and in the suggested column
+`config.video_strips_total === 8`.
+
+| Template | Events | Suggested before → after | Placed @ after | Placed @ after−1 | Placed @ 80/12 | Press ms | §1 scan ms |
+|---|---:|---|---:|---:|---:|---:|---:|
+| NAC Youth | 24 | 197 → 66 | 24 | 22 | 24 | 54.69 | 33.95 |
+| NAC Cadet/Junior | 24 | 144 → 48 | 24 | 21 | 24 | 21.17 | 9.06 |
+| NAC Div1/Junior | 24 | 147 → 49 | 24 | 23 | 24 | 19.73 | 5.92 |
+| NAC Vet/Div1/Junior | 66 | 268 → 85 | 66 | 65 | 66 | 228.58 | 202.71 |
+| ROC Div1A/Vet | 12 | 23 → 15 | 12 | 0 | 12 | 13.56 | 0.34 |
+| ROC Div1A/Div2/Vet | 18 | 37 → 16 | 18 | 17 | 18 | 13.09 | 0.86 |
+| ROC Mega | 42 | 158 → 46 | 42 | 41 | 42 | 63.89 | 44.75 |
+| RYC Weekend | 18 | 78 → 32 | 18 | 17 | 18 | 28.25 | 7.25 |
+| RJCC Weekend | 12 | 54 → 24 | 12 | 11 | 12 | 18.71 | 1.76 |
+| Junior Olympics | 18 | 135 → 49 | 18 | 17 | 18 | 21.99 | 5.32 |
+
+**The app-path column equals §1's engine-path Smallest working column cell for
+cell, on all ten templates** — 66 / 48 / 49 / 85 / 15 / 16 / 46 / 32 / 24 / 49.
+This is T008's halt condition, and it passes: the search's per-candidate
+config and `buildTournamentConfig`'s own config agree on every field on every
+template, so no diff was needed.
+
+### Verdicts
+
+**SC-001 — every template places its full event count at its new suggested
+count.** Holds, 10/10: Placed @ after equals Events on every row above.
+
+**SC-002 — one strip fewer places short.** Holds, 10/10: Placed @ after−1 is
+below Events on every row (22/24, 21/24, 23/24, 65/66, 0/12, 17/18, 41/42,
+17/18, 11/12, 17/18).
+
+**SC-003 — no suggested count rose, and the six that were above 100 are now
+below half their old count.** Holds, 10/10 on the first clause (every "after"
+is ≤ its "before"); holds 6/6 on the second — NAC Youth 66 < 98.5, NAC
+Cadet/Junior 48 < 72, NAC Div1/Junior 49 < 73.5, NAC Vet/Div1/Junior 85 < 134,
+ROC Mega 46 < 79, Junior Olympics 49 < 67.5.
+
+**SC-004 — every suggested count is at or below 100.** Holds, 10/10. The
+largest is 85, on NAC Vet/Div1/Junior.
+
+**SC-007 — the whole press finishes inside two seconds.** `[M]` NAC
+Vet/Div1/Junior, the dearest template, presses in 228.58ms and 198.69ms across
+the two runs — under an eighth of the bound. `[E]` §0 separately records the
+cost a scan that finds **no** answer would pay on this template: 1468ms of raw
+scheduler time over its full 203-candidate range (floor 66 to ceiling 268),
+measured before `suggestStrips` awaited a macrotask per candidate. This run
+adds that overhead: comparing this template's press time against §1's scan-ms
+column (which has no yields) gives 228.58 − 202.71 = 25.87ms over 20
+candidates, or 198.69 − 202.71 = −4.02ms on the second pass — so each
+`setTimeout(0)` tick costs roughly 0–1.3ms in this runtime, not enough to move
+the verdict. Applying the higher end of that per-tick cost to the 203-candidate
+exhausting case: 1468ms + 203 × 1.3ms ≈ 1732ms, still inside the two-second
+bound, with **roughly 268ms to spare** rather than the quarter-budget §0
+recorded before the yields existed. The bound holds, with less margin than §0
+assumed but margin nonetheless.
+
+**The 011 §7 finding 2 defect, closed by measurement.** On the largest
+template by event count, NAC Vet/Div1/Junior, the old ceiling-based rule's
+count (268) is now **3.15×** the new search's count (85) — a board that used
+to need 268 strips suggested now needs 85, the smallest count the app has ever
+been able to name that still places every event.
+
+No `src/` or `__tests__/` file is touched by this task beyond the T005 review
+pin (a separate commit). Gate after: `tsc -b` clean, `lint` clean, `pnpm test`
+67 files / 1848 tests passed — unchanged from §0, since this task adds no
+tests.
