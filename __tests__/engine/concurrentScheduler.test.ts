@@ -976,7 +976,7 @@ describe('scheduleAllConcurrent — the demoted feasibility finding (011 T006)',
 // WARN-only feasibility finding (011 US1 T005, research.md D3, FR-004)
 // ──────────────────────────────────────────────
 
-describe('postScheduleDiagnostics — the strip recommendation survives a WARN-only feasibility finding (T005)', () => {
+describe('postScheduleDiagnostics — the recommendation survives a WARN-only feasibility finding, and its message names four levers in order with no strip count (T005, T009)', () => {
   it('a configuration whose only finding is feasibility-strip-hours (WARN) still emits the post-schedule RESOURCE_RECOMMENDATION INFO', () => {
     // 13 events, one strip-hour-hungry combination per category/gender/weapon
     // so `same-population` never fires. max_pool_strip_pct is deliberately
@@ -1048,13 +1048,55 @@ describe('postScheduleDiagnostics — the strip recommendation survives a WARN-o
     const recommendation = bottlenecks.find(b => b.cause === BottleneckCause.RESOURCE_RECOMMENDATION)
     expect(recommendation, 'expected the post-schedule strip recommendation to survive the WARN-only feasibility finding').toBeDefined()
     expect(recommendation?.severity).toBe(BottleneckSeverity.INFO)
-    // `[M]` at T011. Was `need 9` under the max-over-events rule, which sized
-    // the venue for ONE of these 13 identical events (ceil(5 / 0.6) = 9). The
-    // busiest-day rule sizes for the events that share a day: 13 events × 5
-    // pools = 65, split across days_available=2 into 7 + 6, so the busiest day
-    // is 35 pools and ceil(35 / 0.6) = 59. The gate this test is about opens on
-    // either number — both exceed 8 — so the test's subject is unchanged and
-    // only the number it reports moved.
-    expect(recommendation?.message).toMatch(/^Strips: need 59, have 8 —/)
+
+    // T009/FR-012: the four levers are named in this fixed order — add a day,
+    // flight the largest events, cap entries, add strips (last, because
+    // strips mean renting more of the facility). Asserted on each phrase's
+    // index, not on the whole string, so the surrounding prose can change
+    // freely as long as the order holds.
+    const message = recommendation?.message ?? ''
+    const iDay = message.indexOf('add a day')
+    const iFlight = message.indexOf('flight')
+    const iCap = message.indexOf('cap entries')
+    const iStrips = message.indexOf('add strips')
+    expect(iDay, 'expected "add a day" in the message').toBeGreaterThanOrEqual(0)
+    expect(iFlight, 'expected "flight" in the message').toBeGreaterThanOrEqual(0)
+    expect(iCap, 'expected "cap entries" in the message').toBeGreaterThanOrEqual(0)
+    expect(iStrips, 'expected "add strips" in the message').toBeGreaterThanOrEqual(0)
+    expect(iDay, 'days before flighting').toBeLessThan(iFlight)
+    expect(iFlight, 'flighting before entry caps').toBeLessThan(iCap)
+    expect(iCap, 'entry caps before strips').toBeLessThan(iStrips)
+
+    // FR-015: the finding reports no strip count of its own — the shortfall
+    // figures above already carry the numbers (FR-013).
+    expect(message, 'expected no digit anywhere in the lever message').not.toMatch(/\d/)
+  })
+
+  it('a board that fits emits no RESOURCE_RECOMMENDATION bottleneck', () => {
+    // Same shape as test 1 (lines 64-75): two comp(...) events of 20 fencers
+    // each on a plain smallConfig() (2 days, 20 strips). validateConfig is
+    // checked first so this pins "the board really fits," not merely "this
+    // gate stays quiet for some other reason."
+    const c1 = comp('e1', {
+      gender: Gender.MEN, weapon: Weapon.EPEE, category: Category.VETERAN,
+      fencer_count: 20,
+    })
+    const c2 = comp('e2', {
+      gender: Gender.WOMEN, weapon: Weapon.FOIL, category: Category.VETERAN,
+      fencer_count: 20,
+    })
+    const config = smallConfig()
+
+    const findings = validateConfig(config, [c1, c2], ValidationMode.BINDING)
+    expect(
+      findings.some(f => f.rule === 'feasibility-strip-hours'),
+      'expected no feasibility finding — this board is meant to fit',
+    ).toBe(false)
+
+    const { bottlenecks } = scheduleAllConcurrent([c1, c2], config)
+    expect(
+      bottlenecks.some(b => b.cause === BottleneckCause.RESOURCE_RECOMMENDATION),
+      'a board that fits must not receive the post-schedule strip recommendation',
+    ).toBe(false)
   })
 })

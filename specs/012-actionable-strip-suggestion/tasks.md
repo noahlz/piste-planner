@@ -242,7 +242,7 @@ US3 runs before US2 because it touches the engine and the ledger, where a late
 change is expensive, while US2 is confined to one action and one component
 (plan.md §Phase sequence).
 
-- [ ] **T009** [US3] Write the red tests. Rewrite the T005 block at
+- [X] **T009** [US3] Write the red tests. Rewrite the T005 block at
   `__tests__/engine/concurrentScheduler.test.ts:979-1059`, keeping its fixture
   and its first three assertions (the WARN-only gate, the non-empty board, no
   RESOURCE_EXHAUSTION ERROR): the `RESOURCE_RECOMMENDATION` INFO is still
@@ -256,7 +256,7 @@ change is expensive, while US2 is confined to one action and one component
   `/^Strips: need 59, have 8 —/` text and the second on whichever assertion the
   current gate trips
 
-- [ ] **T010** [US3] Reword `postScheduleDiagnostics` at
+- [X] **T010** [US3] Reword `postScheduleDiagnostics` at
   `concurrentScheduler.ts:1461-1476` ([research.md D6](./research.md)): drop the
   `recommendStripCount` call and the `recommended > strips_total` condition; the
   INFO fires on `hasResourceExhaustion` alone and its message names the four
