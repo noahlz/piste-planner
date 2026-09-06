@@ -35,10 +35,12 @@ describe('buildPenaltyMatrix', () => {
     }
   })
 
-  it('indirect pairs are capped at 0.3 (Y8↔Y12 via Y10 = 0.3)', () => {
-    // Y8→Y10 = 1.0, Y10→Y12 = 1.0, so indirect = min(1.0 * 1.0, 0.3) = 0.3
-    expect(matrix.get(`${Category.Y8}|${Category.Y12}`)).toBe(0.3)
-    expect(matrix.get(`${Category.Y12}|${Category.Y8}`)).toBe(0.3)
+  it('Y8↔Y12 two-hop edge is gone now that Y8→Y10 is (L9, research.md D5)', () => {
+    // Y8→Y10 was Y8's only direct edge (METHODOLOGY:118: Y8 CAN and SHOULD
+    // share a day with Y10). Removing it removes the two-hop derivation this
+    // matrix entry came from — 0.3 → 0.0, not just the direct edge's 0.8.
+    expect(matrix.get(`${Category.Y8}|${Category.Y12}`)).toBeUndefined()
+    expect(matrix.get(`${Category.Y12}|${Category.Y8}`)).toBeUndefined()
   })
 
   it('has no self-pairs', () => {
@@ -109,21 +111,41 @@ describe('crossoverPenalty', () => {
     expect(crossoverPenalty(c1, c2)).toBe(expected)
   })
 
-  it('Y8↔Y10 is NOT a hard conflict — returns 0.8, not Infinity', () => {
-    // Y8/Y10 were removed from GROUP_1_MANDATORY; they can and should share a day.
+  it('Y8↔Y10 returns 0.0 — METHODOLOGY:118 says Y8 CAN and SHOULD share a day (L9)', () => {
+    // Y8/Y10 were removed from GROUP_1_MANDATORY (they can share a day); L9
+    // additionally removes CROSSOVER_GRAPH's Y8→Y10 penalty, since the
+    // specification states the preference and no magnitude for it
+    // (research.md D5). 0.8 was today's value before L9; it is not restored
+    // as a bonus.
     const c1 = makeComp('a', Category.Y8, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.Y10, Gender.MEN, Weapon.FOIL)
     const result = crossoverPenalty(c1, c2)
-    expect(result).toBe(0.8)
+    expect(result).toBe(0.0)
     expect(result).not.toBe(Infinity)
   })
 
-  it('Div1↔Cadet returns soft penalty (0.8), not Infinity — moved to SOFT_SEPARATION_PAIRS', () => {
+  it('Y8↔Y12 returns 0.0 — the two-hop consequence of removing Y8→Y10 (L9, research.md D5)', () => {
+    // Y8→Y10 was Y8's only direct edge, so it was also the sole source of the
+    // Y8↔Y12 two-hop edge buildPenaltyMatrix derives. Removing it drops this
+    // pair too (0.3 → 0.0) — a second, deliberate change the drift review
+    // must name alongside Y8↔Y10, not a copy of that assertion.
+    const c1 = makeComp('a', Category.Y8, Gender.MEN, Weapon.FOIL)
+    const c2 = makeComp('b', Category.Y12, Gender.MEN, Weapon.FOIL)
+    const result = crossoverPenalty(c1, c2)
+    expect(result).toBe(0.0)
+    expect(crossoverPenalty(c2, c1)).toBe(0.0)
+  })
+
+  it('Div1↔Cadet returns 5.0 — the SOFT_SEPARATION_PAIRS penalty, not the 0.8 matrix edge (L3)', () => {
+    // METHODOLOGY:252 makes this pair "allowed in rare cases". 5.0 is what says
+    // rare; CROSSOVER_GRAPH's 0.8 (constants.ts:426) made it an ordinary
+    // crossover edge. The SOFT_SEPARATION_PAIRS lookup overrides the matrix,
+    // which is why it sits before it (research.md D6). Finite, so it never
+    // blocks a day — it only makes sharing one expensive.
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.CADET, Gender.MEN, Weapon.FOIL)
-    const result = crossoverPenalty(c1, c2)
-    expect(result).toBe(0.8)
-    expect(result).not.toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).toBe(5.0)
+    expect(crossoverPenalty(c2, c1)).toBe(5.0)
   })
 
   it('Div1↔Div1A returns Infinity (GROUP_1_MANDATORY)', () => {
@@ -132,16 +154,24 @@ describe('crossoverPenalty', () => {
     expect(crossoverPenalty(c1, c2)).toBe(Infinity)
   })
 
-  it('Div1↔Div2 returns soft penalty (not Infinity) — moved to SOFT_SEPARATION_PAIRS', () => {
+  it('Div1↔Div2 returns 3.0 — the SOFT_SEPARATION_PAIRS penalty (L3)', () => {
+    // METHODOLOGY:253. The pair has no CROSSOVER_GRAPH edge at all, direct or
+    // two-hop, so it scored 0.0 — unmodelled, not deliberately free. The old
+    // assertion here was `.not.toBe(Infinity)`, which 0.0 satisfies: pinning
+    // the value is what makes this test able to catch the defect.
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV2, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1, c2)).not.toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).toBe(3.0)
+    expect(crossoverPenalty(c2, c1)).toBe(3.0)
   })
 
-  it('Div1↔Div3 returns soft penalty (not Infinity) — moved to SOFT_SEPARATION_PAIRS', () => {
+  it('Div1↔Div3 returns 3.0 — the SOFT_SEPARATION_PAIRS penalty (L3)', () => {
+    // METHODOLOGY:254, and the same story as DIV1↔DIV2: no graph edge, so 0.0,
+    // under a `.not.toBe(Infinity)` assertion that could not tell 0.0 from 3.0.
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV3, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1, c2)).not.toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).toBe(3.0)
+    expect(crossoverPenalty(c2, c1)).toBe(3.0)
   })
 
   it('All CROSSOVER_GRAPH direct edges are ≤ 0.8', () => {

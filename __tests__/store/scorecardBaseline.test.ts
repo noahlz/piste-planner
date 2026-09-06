@@ -72,17 +72,36 @@ const B5_BASELINE: ScorecardBaseline = {
  * four days, moving every finish and both ref peaks. D5 does not reach it: NAC
  * resolves ref_policy to TWO, which `resolveRefsPerPool` already scored the
  * same as AUTO. Neither does D7: applyPreset sets B1's video strips.
+ *
+ * 010 L1, 2026-09-05 — four of the twelve moved. T018 wired
+ * `PENALTY_WEIGHTS.PROXIMITY_3_PLUS_DAYS` into `colorPenalty`, whose
+ * adjacent-day loop had excluded every gap of 3 or more with
+ * `if (dayGap !== 1) continue`, so the constant had no reader at all. Six of
+ * B1's VET events change day under the new term (VETERAN↔VETERAN carries
+ * proximity weight 1.0), which re-packs all four days.
+ *
+ * `refs:peak-total` 194 to 202 and `refs:peak-sabre` 64 to 76 are the same
+ * reshuffle concentrating more ref demand on day 3 — a worse operational
+ * outcome for B1, and the measured price of the rule. `finish:day:1` 1025 to
+ * 1045 is that day's last `de_total_end` under its new membership, and
+ * `days:balance-spread` 10.59… to 11.84… follows from the day utilizations
+ * spreading further apart.
+ *
+ * The eight that held are the check on the above: `strips:utilization` is
+ * unchanged to the last digit because the same 24 events do the same total
+ * work, only on different days, and `finish:tournament` with days 0, 2 and 3
+ * keep their argmax events. No finding count moved.
  */
 const B1_BASELINE: ScorecardBaseline = {
   'finish:tournament': 1050,
-  'refs:peak-total': 194,
+  'refs:peak-total': 202,
   'finish:day:0': 1050,
-  'finish:day:1': 1025,
+  'finish:day:1': 1045,
   'finish:day:2': 980,
   'finish:day:3': 995,
-  'refs:peak-sabre': 64,
+  'refs:peak-sabre': 76,
   'strips:utilization': 35.456845238095234,
-  'days:balance-spread': 10.59672619047619,
+  'days:balance-spread': 11.848214285714285,
   'findings:ERROR': 0,
   'findings:WARN': 4,
   'findings:INFO': 12,

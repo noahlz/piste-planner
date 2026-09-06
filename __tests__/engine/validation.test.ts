@@ -46,8 +46,7 @@ function findingIdentity(finding: ValidationError): string {
 //
 // POLICY — advisable, not physically blocking; ERROR(binding) / WARN(advisory).
 // D3-explicit: same_population, team-requires-individual (event_type),
-//   cut-on-team (cut_mode), strip minimum shortfalls (resource_precondition),
-//   feasibility.
+//   strip minimum shortfalls (resource_precondition), feasibility.
 // Self-classified:
 //   - flighting_group strip shortfalls — same resource-capacity class as
 //     resource_precondition's "strip minimum shortfalls", D3's explicit policy
@@ -57,9 +56,6 @@ function findingIdentity(finding: ValidationError): string {
 //     identical FEASIBILITY_SLACK-tolerant resource-insufficiency computation
 //     applied to the video-strip-hours axis. Grouped with feasibility rather
 //     than invented as a new bucket.
-//   - indiv_team_same_day — a worst-case combined-duration ESTIMATE (like
-//     feasibility's FEASIBILITY_SLACK-tolerant estimate), not an absolute
-//     physical block; an organizer may accept the risk.
 //
 // NOTICE — WARN in BOTH modes, never escalates to ERROR, never blocks.
 // Moved off POLICY by research D3's 2026-08-29 correction: probing
@@ -85,6 +81,10 @@ function findingIdentity(finding: ValidationError): string {
 //   - days_available outside 2–4 (within structural 1–14) — advisory-only
 //     per spec acceptance scenario 3 (spec.md:106-108): a 5-day tournament
 //     warns and the schedule can still be computed.
+//   - cut-on-team (cut_mode) — moved off POLICY by R3/FR-011 (research.md
+//     D4, 010-wave-1-reconciliation): buildConfig already coerces a TEAM
+//     competition's cut_mode to DISABLED before the engine sees it, so the
+//     finding is a heads-up on a cosmetic field, not a gate.
 //
 // OUT OF SCOPE for this catalogue: `validateSameDayCompletion` is exported
 // and directly tested, but has zero callers anywhere in src/ (confirmed by
@@ -158,10 +158,11 @@ function expectNoticePair(field: string, binding: ValidationError[], advisory: V
 
 /**
  * A DIV1/MEN/FOIL individual+team pair sharing one population key — the
- * shape team-requires-individual, cut-on-team, and indiv-team-same-day all
- * pair against. `overrides.individual`/`overrides.team` extend the fixture
- * per test (e.g. fencer_count, cut_mode) without repeating the shared
- * category/gender/weapon fields at each call site.
+ * shape team-requires-individual and cut-on-team pair against, and the shape
+ * the deleted indiv-team-same-day rule used to fire on (FR-001).
+ * `overrides.individual`/`overrides.team` extend the fixture per test (e.g.
+ * fencer_count, cut_mode) without repeating the shared category/gender/weapon
+ * fields at each call site.
  */
 function makeIndividualTeamPair(overrides: { individual?: Partial<Competition>; team?: Partial<Competition> } = {}) {
   const individual = makeCompetition({
@@ -396,11 +397,22 @@ describe('validateConfig — team event without matching individual (policy: tea
   })
 })
 
-describe('validateConfig — team event cut_mode (policy: cut-on-team)', () => {
-  it('binding ERROR / advisory WARN when team event has cut_mode != DISABLED', () => {
+describe('validateConfig — team event cut_mode (notice: cut-on-team, FR-011)', () => {
+  it('WARN in both modes, never ERROR, when a team event has cut_mode != DISABLED', () => {
+    // Was a policy pair (binding ERROR / advisory WARN) before FR-011 — R3
+    // demotes it to a notice so a cosmetic field can never discard a
+    // schedule (research.md D4). Asserted on rule id, severity and kind,
+    // never message text, matching how regional-cut-override is tested.
     const { individual, team } = makeIndividualTeamPair({ team: { cut_mode: CutMode.PERCENTAGE, cut_value: 50 } })
     const { binding, advisory } = validateBoth(makeConfig(), [individual, team])
-    expectPolicyPair('cut_mode', binding, advisory, 'must have cut_mode=DISABLED')
+    const b = binding.find(e => e.rule === 'cut-on-team')
+    const a = advisory.find(e => e.rule === 'cut-on-team')
+    expect(b, 'binding: expected a cut-on-team finding').toBeDefined()
+    expect(a, 'advisory: expected a cut-on-team finding').toBeDefined()
+    expect(b!.severity).toBe(BottleneckSeverity.WARN)
+    expect(a!.severity).toBe(BottleneckSeverity.WARN)
+    expect(b!.kind).toBe(RuleKind.NOTICE)
+    expect(a!.kind).toBe(RuleKind.NOTICE)
   })
 })
 
@@ -468,27 +480,22 @@ describe('validateConfig — video dead-config warning (notice: video-dead-confi
   })
 })
 
-describe('validateConfig — individual+team same-day duration (policy: indiv-team-same-day)', () => {
-  it('binding ERROR / advisory WARN when individual + gap + team exceeds DAY_LENGTH_MINS', () => {
-    // Use a very short day to force the violation
+describe('validateConfig — individual+team same-day duration (rule deleted, FR-001)', () => {
+  it('produces no indiv-team-same-day finding even when the combined worst-case duration exceeds DAY_LENGTH_MINS', () => {
+    // Same fixture the deleted rule used to fire on: a very short day forces
+    // the combined worst-case duration over DAY_LENGTH_MINS. Every such pair
+    // is same-population, so crossoverPenalty is Infinity and the day
+    // assigner can never place them on the same day — the rule reasoned
+    // about a hypothetical the engine forbids (methodology-reconciliation.md
+    // §1.2.4). Asserted on rule id, never message text.
     const config = makeConfig({ DAY_LENGTH_MINS: 50 })
     const { individual, team } = makeIndividualTeamPair({
       individual: { fencer_count: 24 },
       team: { fencer_count: 8 },
     })
     const { binding, advisory } = validateBoth(config, [individual, team])
-    expectPolicyPair('indiv_team_same_day', binding, advisory)
-  })
-
-  it('does not error when individual + gap + team fits within DAY_LENGTH_MINS', () => {
-    const config = makeConfig()
-    const { individual, team } = makeIndividualTeamPair({
-      individual: { fencer_count: 24 },
-      team: { fencer_count: 8 },
-    })
-    const { binding, advisory } = validateBoth(config, [individual, team])
-    expect(binding.filter(e => e.field === 'indiv_team_same_day')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'indiv_team_same_day')).toHaveLength(0)
+    expect(binding.filter(e => e.rule === 'indiv-team-same-day')).toHaveLength(0)
+    expect(advisory.filter(e => e.rule === 'indiv-team-same-day')).toHaveLength(0)
   })
 })
 

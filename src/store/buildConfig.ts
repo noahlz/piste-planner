@@ -4,7 +4,7 @@ import type {
   Strip,
   TournamentConfig,
 } from '../engine/types.ts'
-import { DeStripRequirement, RefPolicy } from '../engine/types.ts'
+import { CutMode, DeStripRequirement, EventType, RefPolicy } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import {
   DAY_START_MINS,
@@ -198,6 +198,22 @@ function buildCompetitions(
         comp.cut_mode = override.mode
         comp.cut_value = override.value
       }
+    }
+  }
+
+  // Team events never cut (R3, FR-010): coerce cut_mode to DISABLED before the
+  // competition reaches the engine, mirroring the regional-cut loop above.
+  // cut_value follows to 100, the TEAM default pair competitionDefaults.ts:22
+  // already establishes — DISABLED makes the value inert either way, but a
+  // stray non-default number left behind would still read as user intent
+  // (`CompetitionOverrides.tsx`'s "user-modified" check compares against that
+  // default pair). `validation.ts`'s `cut-on-team` is a notice, not a gate
+  // (FR-011), because this coercion already makes the engine's arithmetic
+  // ignore the field (research.md D4).
+  for (const comp of competitions) {
+    if (comp.event_type === EventType.TEAM && comp.cut_mode !== CutMode.DISABLED) {
+      comp.cut_mode = CutMode.DISABLED
+      comp.cut_value = 100
     }
   }
 

@@ -247,7 +247,8 @@ function vetCombinedOrderingPenalty(
  * Includes:
  *   - direct soft-edge neighbor penalties (weight !== Infinity)
  *   - rest-day penalties for adjacent days (same gender + weapon, REST_DAY_PAIRS)
- *   - proximity bonuses for adjacent days (same gender + weapon, PROXIMITY_GRAPH)
+ *   - proximity terms by day gap (same gender + weapon, PROXIMITY_GRAPH): a
+ *     bonus at a gap of 1, nothing at 2, a penalty at 3 or more
  *   - individual/team ordering penalties
  *   - VET_COMBINED day-after preference (F3c)
  */
@@ -277,25 +278,36 @@ function colorPenalty(
     total += effectiveWeight
   }
 
-  // Rest-day and proximity adjustments — only for graph neighbors on adjacent days
+  // Rest-day and proximity adjustments — graph neighbors of the same gender and
+  // weapon, banded by day gap (METHODOLOGY:234-240):
+  //   gap 1     – rest-day check, plus the PROXIMITY_1_DAY bonus
+  //   gap 2     – neutral, neither term
+  //   gap 3+    – the PROXIMITY_3_PLUS_DAYS penalty
+  // The rest-day check stays at gap 1 alone. A rest-day violation is the claim
+  // that two events sit on adjacent days, and nothing wider (research.md D7).
   for (const edge of edges) {
     const neighborColor = coloring.get(edge.targetId)
     if (neighborColor === undefined) continue
 
     const dayGap = Math.abs(c - neighborColor)
-    if (dayGap !== 1) continue // only adjacent days matter for these adjustments
+    if (dayGap !== 1 && dayGap < 3) continue // same day and gap 2 carry no term
 
     const neighbor = compMap.get(edge.targetId)
     if (!neighbor) continue
     if (neighbor.gender !== self.gender) continue
     if (neighbor.weapon !== self.weapon) continue
 
-    if (isRestDayPair(self.category, neighbor.category)) {
-      total += PENALTY_WEIGHTS.REST_DAY_VIOLATION
-    }
     const proxW = proximityWeight(self.category, neighbor.category)
-    if (proxW > 0) {
-      total += PENALTY_WEIGHTS.PROXIMITY_1_DAY * proxW
+
+    if (dayGap === 1) {
+      if (isRestDayPair(self.category, neighbor.category)) {
+        total += PENALTY_WEIGHTS.REST_DAY_VIOLATION
+      }
+      if (proxW > 0) {
+        total += PENALTY_WEIGHTS.PROXIMITY_1_DAY * proxW
+      }
+    } else if (proxW > 0) {
+      total += PENALTY_WEIGHTS.PROXIMITY_3_PLUS_DAYS * proxW
     }
   }
 
@@ -414,6 +426,15 @@ function findRelaxableEdges(
 // ──────────────────────────────────────────────
 
 /**
+ * One hard edge (weight === Infinity) that a least-bad-color fallback broke:
+ * `id` was placed on a day `targetId` already held. Both endpoints are named so
+ * a caller can report the pair without re-deriving it from the day map. The
+ * pair is unordered – it is recorded once, when the second of the two is
+ * colored.
+ */
+export type HardEdgeViolation = { id: string; targetId: string }
+
+/**
  * Runs one pass of DSatur graph coloring over all competitions.
  *
  * When `loadBalance` is true, `colorPenalty` adds per-event fullness costs so
@@ -429,9 +450,14 @@ function dsaturLoop(
   loadBalance: boolean,
   stripHoursMap: Map<string, number>,
   dayCapacity: number,
-): { coloring: Map<string, number>; relaxations: Map<string, number> } {
+): {
+  coloring: Map<string, number>
+  relaxations: Map<string, number>
+  violations: HardEdgeViolation[]
+} {
   const coloring = new Map<string, number>()
   const relaxations = new Map<string, number>()
+  const violations: HardEdgeViolation[] = []
 
   // All competition IDs that need coloring
   const uncolored = new Set<string>(competitions.map(c => c.id))
@@ -506,6 +532,12 @@ function dsaturLoop(
       // No valid color — try relaxing INDIV_TEAM edges
       const relaxable = findRelaxableEdges(id, graph, compMap)
 
+      // Set only by the two least-bad-color branches. The relaxed branch below
+      // succeeds without breaking anything it is not allowed to break, and
+      // reports itself through `relaxations`, so its hard edges are NOT
+      // collected here (research.md D1).
+      let leastBadFallback = false
+
       if (relaxable.size > 0) {
         // Recompute blocked colors excluding relaxable edges
         const relaxedBlockedColors = new Set<number>()
@@ -532,6 +564,7 @@ function dsaturLoop(
           chosenColor = bestColor
         } else {
           // Still no valid color — pick least-bad color
+          leastBadFallback = true
           chosenColor = 0
           let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
           for (let c = 1; c < nDays; c++) {
@@ -544,6 +577,7 @@ function dsaturLoop(
         }
       } else {
         // No relaxable edges — pick least-bad color
+        leastBadFallback = true
         chosenColor = 0
         let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
         for (let c = 1; c < nDays; c++) {
@@ -551,6 +585,18 @@ function dsaturLoop(
           if (p < bestPenalty) {
             bestPenalty = p
             chosenColor = c
+          }
+        }
+      }
+
+      // A least-bad color is placed on a day that hard neighbours already
+      // hold. Record every such pair — without this the break is silent: the
+      // coloring reports no relaxation, no warning and no error.
+      if (leastBadFallback) {
+        for (const edge of edges) {
+          if (edge.weight !== Infinity) continue
+          if (coloring.get(edge.targetId) === chosenColor) {
+            violations.push({ id, targetId: edge.targetId })
           }
         }
       }
@@ -565,7 +611,7 @@ function dsaturLoop(
     uncolored.delete(id)
   }
 
-  return { coloring, relaxations }
+  return { coloring, relaxations, violations }
 }
 
 // ──────────────────────────────────────────────
@@ -579,13 +625,20 @@ function dsaturLoop(
  * Phase 1 discovers the minimum number of days (no load balancing).
  * Phase 2 rebalances events within that minimum day count.
  *
- * Returns `effectiveDays` – the actual number of distinct days used.
+ * Returns `effectiveDays` – the actual number of distinct days used – and
+ * `violations`, the hard edges phase 2's least-bad-color fallback broke to
+ * produce `dayMap`.
  */
 export function assignDaysByColoring(
   graph: ConstraintGraph,
   competitions: Competition[],
   config: TournamentConfig,
-): { dayMap: Map<string, number>; relaxations: Map<string, number>; effectiveDays: number } {
+): {
+  dayMap: Map<string, number>
+  relaxations: Map<string, number>
+  effectiveDays: number
+  violations: HardEdgeViolation[]
+} {
   // Build lookup maps
   const compMap = new Map<string, Competition>()
   for (const c of competitions) compMap.set(c.id, c)
@@ -642,5 +695,16 @@ export function assignDaysByColoring(
   const dayMap = new Map<string, number>()
   for (const [id, day] of phase2.coloring) dayMap.set(id, dayRemap.get(day)!)
 
-  return { dayMap, relaxations: phase2.relaxations, effectiveDays: sortedUsed.length }
+  // Phase 1's coloring is discarded — only its chromatic number survives, and
+  // it runs at `days_available` rather than `effectiveDays`, so its breaks
+  // describe a day assignment nobody receives. `dayMap` and `relaxations` both
+  // come from phase 2, and `violations` must come from the same pass or it
+  // would name pairs the returned map does not put together. Compaction remaps
+  // day numbers only, so pairs sharing a color still share the compacted day.
+  return {
+    dayMap,
+    relaxations: phase2.relaxations,
+    effectiveDays: sortedUsed.length,
+    violations: phase2.violations,
+  }
 }

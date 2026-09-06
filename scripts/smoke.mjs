@@ -679,6 +679,53 @@ log('share round-trip: Admin gap', adminGapChanged, 'arrived marked as an overri
 await page3.screenshot({ path: `${SHOTS}11-gears-roundtrip.png`, fullPage: FULLPAGE })
 await page3.close()
 
+// ── NAC Div1/Junior (010 R1) ──
+// Before R1, indiv-team-same-day blocked D1-M-EPEE-IND + D1-M-EPEE-TEAM's
+// worst-case same-day duration (855 vs DAY_LENGTH_MINS 840) and emptied this
+// template's whole board at every strip count (baseline.md §3). 80 strips /
+// 12 video is the column baseline.md's after-R1 table measured clean through
+// the engine (24/24, no ERROR); this is the same claim through the browser.
+// Still under tournament type NAC — nothing above this point has changed it.
+const div1JuniorVisible = await page
+  .getByText('NAC Div1/Junior', { exact: true })
+  .isVisible()
+  .catch(() => false)
+if (!div1JuniorVisible) {
+  await page.getByRole('button', { name: 'Presets…' }).click()
+}
+await page.getByText('NAC Div1/Junior', { exact: true }).click()
+log('NAC Div1/Junior template applied')
+
+// Video strips' max is the live strip count, so strips has to commit first —
+// filling video to 12 while strips was still ROC's 15 would clamp it to 15.
+const div1JuniorStrips = page.getByRole('spinbutton', { name: 'Number of strips' })
+await div1JuniorStrips.fill('80')
+await div1JuniorStrips.blur()
+await page.waitForTimeout(200)
+const div1JuniorVideo = page.getByRole('spinbutton', { name: 'Number of video strips' })
+await div1JuniorVideo.fill('12')
+await div1JuniorVideo.blur()
+await page.waitForTimeout(200)
+
+const div1JuniorGen = page.getByRole('button', { name: 'Auto-schedule all' })
+if (await div1JuniorGen.isDisabled()) {
+  await shot('06b-div1junior-generate-disabled')
+  throw new Error('Auto-schedule all disabled for NAC Div1/Junior — read smoke-shots/06b for the blocking findings')
+}
+await div1JuniorGen.click()
+await page.waitForTimeout(300)
+
+await page.getByRole('radio', { name: 'Schedule' }).click()
+await page.waitForTimeout(200)
+const div1JuniorRowCount = await page.locator('[data-schedule-row]').count()
+log('NAC Div1/Junior schedule table rows =', div1JuniorRowCount)
+// Measured against the running app, 2026-09-05: 80 strips / 12 video places
+// all 24 of 24, agreeing with baseline.md's after-R1 engine measurement.
+if (div1JuniorRowCount !== 24) {
+  throw new Error(`NAC Div1/Junior schedule table rendered ${div1JuniorRowCount} rows, expected 24`)
+}
+await shot('06-div1junior-schedule')
+
 // ── Team event cut (008) ──
 // Before this feature, defaultCutForEntry gave every TEAM catalogue entry a
 // percentage cut inherited from its category, which the engine's cut-on-team

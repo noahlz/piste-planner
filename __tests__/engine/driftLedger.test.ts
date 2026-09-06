@@ -46,7 +46,11 @@ const AUTO_REFS_PER_POOL = 2
  * exact behavior (0 scheduled, 1 validation error) instead of this generic floor.
  */
 const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 44, B7: 18, B8: 52,
+  // B6 raised 44 → 45 by 010's L9 (2026-09-05, commit 2bacf2aa8e): removing the
+  // Y8→Y10 crossover edge repacked B6's oversubscribed board and placed one more
+  // event. A deliberate raise under the rule above, so a later regression to 44
+  // halts its own task instead of passing the gate.
+  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 45, B7: 18, B8: 52,
 }
 
 /**

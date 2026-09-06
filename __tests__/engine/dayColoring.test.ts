@@ -4,6 +4,8 @@ import type { ConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { Category, Gender, Weapon, EventType, VetAgeGroup } from '../../src/engine/types.ts'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
+import { useStore } from '../../src/store/store.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
 // ──────────────────────────────────────────────
 // Graph-building helpers
@@ -387,6 +389,262 @@ describe('assignDaysByColoring', () => {
     const { dayMap } = assignDaysByColoring(graph, [big, candidate], config)
 
     expect(dayMap.get('candidate')).not.toBe(dayMap.get('big'))
+  })
+})
+
+// ──────────────────────────────────────────────
+// PROXIMITY_3_PLUS_DAYS wiring (L1 / US4, T017)
+//
+// colorPenalty's adjacent-day block (dayColoring.ts:280-300) reads
+// `if (dayGap !== 1) continue` before it ever looks at PROXIMITY_3_PLUS_DAYS,
+// so a gap of 3+ has never been read — only the gap-of-1 bonus applies. T018
+// splits this into a gap-of-1 branch (rest-day check + PROXIMITY_1_DAY,
+// unchanged) and a gap-of-3-or-more branch (PROXIMITY_3_PLUS_DAYS); a gap of
+// 2 gets neither (research.md D7, FR-012).
+//
+// Both tests below use the same technique as the VET_COMBINED day-after test
+// above: a K4 of mutually hard-conflicting fillers, ordered by packing
+// footprint (strips_allocated × categoryWeight) so DSatur's tie-breaks
+// deterministically place each filler on a known day. CADET↔Y14 is a real
+// PROXIMITY_GRAPH pair (weight 1.0) that is also GROUP_1_MANDATORY (hard), so
+// it gives a genuine hard-separated, proximity-related pair without needing a
+// synthetic edge for the category relationship — only the graph's structure
+// (which days are open) is synthetic.
+// ──────────────────────────────────────────────
+
+describe('colorPenalty — PROXIMITY_3_PLUS_DAYS (L1)', () => {
+  it('gap of 1 keeps its bonus, unaffected by the gap-3+ term T018 adds (pinned)', () => {
+    // K4: x0, x1, cadet, x3 mutually hard-conflict (Infinity). All four start
+    // at saturation 0 and hard-degree 3 (tied), so packing footprint decides
+    // processing order: x0 (12.0) > x1 (9.0) > cadet (5.2) > x3 (1.4). Each
+    // is colored onto the lowest day not yet blocked, in that order, landing
+    // cadet in the middle at day 2 — deliberately not day 0, so the winning
+    // day below can't be explained by "lowest index wins ties".
+    //
+    // y14's edge to cadet is a large FINITE weight (20), not Infinity: an
+    // Infinity edge here would give cadet a 4th hard neighbor and win the
+    // first pick on degree instead of footprint, upsetting the ordering
+    // above. A same-day cost of 20 rules out day 2 for y14 just as surely.
+    const x0 = makeCompetition({ id: 'x0', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 8 })
+    const x1 = makeCompetition({ id: 'x1', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 6 })
+    const cadet = makeCompetition({ id: 'cadet', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 4 })
+    const x3 = makeCompetition({ id: 'x3', category: Category.DIV3, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 2 })
+    const y14 = makeCompetition({ id: 'y14', category: Category.Y14, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 1 })
+
+    const graph = buildGraph([
+      ['x0', 'x1', Infinity], ['x0', 'cadet', Infinity], ['x0', 'x3', Infinity],
+      ['x1', 'cadet', Infinity], ['x1', 'x3', Infinity],
+      ['cadet', 'x3', Infinity],
+      ['cadet', 'y14', 20.0], // large soft cost, not hard — see comment above
+    ])
+    const config = makeConfig({ days_available: 4 })
+
+    const { dayMap } = assignDaysByColoring(graph, [x0, x1, cadet, x3, y14], config)
+
+    // Sanity: the clique lands exactly where the footprint argument predicts.
+    expect(dayMap.get('x0')).toBe(0)
+    expect(dayMap.get('x1')).toBe(1)
+    expect(dayMap.get('cadet')).toBe(2)
+    expect(dayMap.get('x3')).toBe(3)
+
+    // y14 is free to land on any of the 4 days (no hard edge blocks it).
+    // Day 2 (same day as cadet) costs 20 outright. Day 0 is gap=2 from cadet
+    // (0, both before and after T018). Days 1 and 3 are BOTH gap=1 from cadet
+    // (|1-2|=1, |3-2|=1) and tie at -0.4 each (PROXIMITY_1_DAY × weight 1.0)
+    // plus identical load-balancing fullness (one clique member already sits
+    // on every day) — strictly better than day 0's 0. If the bonus were gone,
+    // days 0/1/3 would all tie at 0 and day 0 (lowest index) would win
+    // instead, so landing on 1 is what proves the bonus fired. Ties among 1
+    // and 3 break to whichever is checked first (day 1).
+    expect(dayMap.get('y14')).toBe(1)
+  })
+
+  it('gap of 3+ gains PROXIMITY_3_PLUS_DAYS, and a gap of 2 stays untouched', () => {
+    // Same K4 mechanism, cadet fixed at day 0 this time (its edge to the
+    // floater is the one under test, and here it may safely be Infinity: the
+    // floater — y14team — has only this one edge, so it never contends for
+    // the first pick regardless of the edge's weight). x1 and x3 are inert
+    // fillers; y14ind doubles as y14team's individual counterpart — same
+    // category/gender/weapon, EventType.INDIVIDUAL — found by
+    // findIndividualCounterpart independent of any graph edge, giving a
+    // second, independently-controlled day-gap term to pit against the
+    // proximity term under test.
+    const cadet = makeCompetition({ id: 'cadet', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 8 })
+    const x1 = makeCompetition({ id: 'x1', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 6 })
+    const y14ind = makeCompetition({ id: 'y14ind', category: Category.Y14, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL, strips_allocated: 4 })
+    const x3 = makeCompetition({ id: 'x3', category: Category.DIV3, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 2 })
+    const y14team = makeCompetition({ id: 'y14team', category: Category.Y14, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM, strips_allocated: 1 })
+
+    const graph = buildGraph([
+      ['cadet', 'x1', Infinity], ['cadet', 'y14ind', Infinity], ['cadet', 'x3', Infinity],
+      ['x1', 'y14ind', Infinity], ['x1', 'x3', Infinity],
+      ['y14ind', 'x3', Infinity],
+      ['cadet', 'y14team', Infinity], // the pair under test
+    ])
+    const config = makeConfig({ days_available: 4 })
+
+    const { dayMap } = assignDaysByColoring(graph, [cadet, x1, y14ind, x3, y14team], config)
+
+    // Sanity: the clique lands exactly where the footprint argument predicts.
+    expect(dayMap.get('cadet')).toBe(0)
+    expect(dayMap.get('x1')).toBe(1)
+    expect(dayMap.get('y14ind')).toBe(2)
+    expect(dayMap.get('x3')).toBe(3)
+
+    // y14team's open days are {1, 2, 3} (0 is blocked by the cadet edge).
+    // Load-balancing fullness is identical on every candidate (one clique
+    // member already sits on each day), so it cancels and is dropped below.
+    //   day 1: proximity gap=1 from cadet (-0.4)
+    //          + individual/team gap=-1, team-before-individual (+1.0) = +0.6
+    //   day 2: proximity gap=2 (0, both regimes)
+    //          + same day as its individual counterpart (0.0)            = 0.0
+    //   day 3: proximity gap=3 (0 TODAY / +0.5 after T018)
+    //          + individual/team gap=+1, day-after bonus (-0.4)
+    //          = -0.4 TODAY / +0.1 after T018
+    // TODAY: -0.4 < 0.0 < 0.6 — day 3 wins, proving gap>=3 carries no term
+    // yet (the day-after bonus is free to pull the floater as far as it
+    // likes). After T018, day 3 becomes 0.1 > day 2's 0.0, so day 2 wins
+    // instead: the new term lands on gap 3 and is strong enough to flip this
+    // case, and day 2's total is still exactly 0.0 — proving gap 2 itself
+    // stayed untouched.
+    expect(dayMap.get('y14team')).toBe(2)
+  })
+})
+
+// ──────────────────────────────────────────────
+// DSatur least-bad-color fallback reporting (R7 / US2, T007)
+//
+// Today, when every color is blocked for a vertex, dsaturLoop's two
+// least-bad-color branches (dayColoring.ts:534-544, :546-556) pick a color
+// anyway and leave no trace: no warning, no relaxation, no error. R7 (T009)
+// makes assignDaysByColoring return the broken hard-edge pairs so the caller
+// can report them. These tests pin the return shape T009 must implement:
+//
+//   assignDaysByColoring(...): {
+//     dayMap, relaxations, effectiveDays,
+//     violations: { id: string; targetId: string }[]
+//   }
+//
+// One entry per hard-edged pair sharing a day, order-insensitive between
+// `id` and `targetId`. The relaxed-success branch (:522-532) already reports
+// itself via `relaxations.set(id, 3)` and must NOT appear in `violations` —
+// that would double-report what `constraint_relaxation_level` already covers
+// (research.md D1).
+// ──────────────────────────────────────────────
+
+describe('assignDaysByColoring — least-bad-color fallback violations (R7)', () => {
+  // baseline.md §2 pins the strip count: colorPenalty's load-balancing term
+  // reads dayCapacity = strips_total × DAY_LENGTH_MINS / 60, so the witness
+  // pairs for NAC Cadet/Junior differ at 39 (app-suggested) vs 80/12 strips
+  // even though the violation count is 6 at both. 80/12 matches the venue
+  // __tests__/engine/integration.test.ts uses for the same templates.
+  const STRIPS = 80
+  const VIDEO_STRIPS = 12
+
+  function pairKey(a: string, b: string): string {
+    return [a, b].sort().join('|')
+  }
+
+  /** Builds one template through the app's own configuration path, exactly as baseline.md §2/§3 measured it. */
+  function buildTemplate(name: string) {
+    useStore.setState(useStore.getInitialState(), true)
+    const state = () => useStore.getState()
+    state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does
+    state().applyTemplate(name)
+    state().setStrips(STRIPS)
+    state().setVideoStrips(VIDEO_STRIPS)
+    return buildTournamentConfig(state())
+  }
+
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one violation per hard-edged pair sharing day 0, naming both ids (baseline.md §2, 6 pairs, least-bad branch)', () => {
+    const { config, competitions } = buildTemplate('NAC Cadet/Junior')
+    const graph = buildConstraintGraph(competitions)
+
+    const { violations } = assignDaysByColoring(graph, competitions, config)
+
+    // baseline.md §2 "Witness pairs" table, 80 strips / 12 video column.
+    const expectedPairs: [string, string][] = [
+      ['CDT-M-EPEE-TEAM', 'JR-M-EPEE-TEAM'],
+      ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
+      ['CDT-M-SABRE-IND', 'JR-M-SABRE-TEAM'],
+      ['CDT-W-EPEE-TEAM', 'JR-W-EPEE-TEAM'],
+      ['CDT-W-FOIL-TEAM', 'JR-W-FOIL-TEAM'],
+      ['CDT-W-SABRE-TEAM', 'JR-W-SABRE-TEAM'],
+    ]
+
+    expect(violations.length).toBe(6)
+    const actualKeys = violations.map(v => pairKey(v.id, v.targetId)).sort()
+    const expectedKeys = expectedPairs.map(([a, b]) => pairKey(a, b)).sort()
+    expect(actualKeys).toEqual(expectedKeys)
+  })
+
+  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable in the days available, reports no violations (baseline.md §2, relax=0/viol=0)', () => {
+    const { config, competitions } = buildTemplate('NAC Youth')
+    const graph = buildConstraintGraph(competitions)
+
+    const { violations } = assignDaysByColoring(graph, competitions, config)
+
+    expect(violations.length).toBe(0)
+  })
+
+  it('NAC Div1/Junior at 3 days / 80 strips / 12 video: its six DIV1-ind/JUNIOR-team conflicts resolve through the relaxed branch and must not also appear as violations (baseline.md §2, relax=6/viol=0)', () => {
+    const { config, competitions } = buildTemplate('NAC Div1/Junior')
+    const graph = buildConstraintGraph(competitions)
+
+    const { violations, relaxations } = assignDaysByColoring(graph, competitions, config)
+
+    // Confirms the fixture actually exercises the relaxed branch (baseline.md
+    // §2: 6 relaxations, 0 violations) — if this drops to 0, the premise
+    // changed and the "reports no violations" assertion below is vacuous.
+    expect(relaxations.size).toBe(6)
+    expect(violations.length).toBe(0)
+  })
+
+  // FR-004 / FR-005 guard, not a red test — T009 adds `violations` reporting
+  // to the least-bad-color fallback and must change no coloring decision. The
+  // expected map below was captured by running this exact call against the
+  // pre-T009 code (tmp/t008-probe.test.ts, deleted after capture). It passes
+  // today and must still pass after T009: if it ever goes red, T009 moved a
+  // day assignment, not just added a report, and both T008 and T009 halt.
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: the day map and relaxations are unchanged by R7 (FR-004, FR-005 guard)', () => {
+    const { config, competitions } = buildTemplate('NAC Cadet/Junior')
+    const graph = buildConstraintGraph(competitions)
+
+    const { dayMap, relaxations } = assignDaysByColoring(graph, competitions, config)
+
+    // Captured from the current code, not derived from this same call.
+    const expectedDayMap: Record<string, number> = {
+      'CDT-M-EPEE-IND': 2,
+      'CDT-M-EPEE-TEAM': 0,
+      'CDT-M-FOIL-IND': 2,
+      'CDT-M-FOIL-TEAM': 0,
+      'CDT-M-SABRE-IND': 0,
+      'CDT-M-SABRE-TEAM': 1,
+      'CDT-W-EPEE-IND': 1,
+      'CDT-W-EPEE-TEAM': 0,
+      'CDT-W-FOIL-IND': 1,
+      'CDT-W-FOIL-TEAM': 0,
+      'CDT-W-SABRE-IND': 1,
+      'CDT-W-SABRE-TEAM': 0,
+      'JR-M-EPEE-IND': 1,
+      'JR-M-EPEE-TEAM': 0,
+      'JR-M-FOIL-IND': 1,
+      'JR-M-FOIL-TEAM': 0,
+      'JR-M-SABRE-IND': 2,
+      'JR-M-SABRE-TEAM': 0,
+      'JR-W-EPEE-IND': 2,
+      'JR-W-EPEE-TEAM': 0,
+      'JR-W-FOIL-IND': 2,
+      'JR-W-FOIL-TEAM': 0,
+      'JR-W-SABRE-IND': 2,
+      'JR-W-SABRE-TEAM': 0,
+    }
+
+    expect(Object.fromEntries(dayMap)).toEqual(expectedDayMap)
+    // baseline.md §2: NAC Cadet/Junior's six violations come from the
+    // least-bad branch, not the relaxed branch — zero relaxations here.
+    // R7 must not start writing to relaxations for this witness.
+    expect(relaxations.size).toBe(0)
   })
 })
 
