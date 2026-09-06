@@ -1117,6 +1117,31 @@ observed rather than assumed:
 change – the failure this replaces – or the app re-runs constantly and flickers
 an indicator at values the organizer never meant to enter.
 
+## Adding strips can place fewer events
+
+*Measured 2026-09-06 by 012's baseline sweep. Design note with the mechanism,
+the literature and the fix options:
+[`strip-count-scheduling-anomaly.md`](./strip-count-scheduling-anomaly.md).*
+
+`[M]` On four of the ten templates at four days, some strip count above the
+smallest working one places fewer events than it does – NAC Vet/Div1/Junior
+places all 66 at 85 strips and 65 at 86, and does not hold all 66 at every
+count until 96. The engine is a greedy list scheduler and this is Graham's
+multiprocessing timing anomaly (1966, 1969), a known property of the algorithm
+class rather than a defect in one line. The strip count reaches the packer only
+through the two `floor(strips_total × pct)` caps at
+`concurrentScheduler.ts:466` and `:958-966`.
+
+012's **Suggest** search is safe against it by construction: it scans upward
+and returns the first count that places every event. What it cannot protect is
+an organizer who books one strip more than the count it wrote, or who edits the
+field by hand.
+
+**Cost if ignored**: on a non-monotone board, a hand edit or a venue that rents
+strips in pairs can drop an event from the board with no explanation, and it
+will be reported as a bug. The design note has the answer to that report and
+four fix options with their costs. None is scheduled.
+
 ---
 
 # Closed

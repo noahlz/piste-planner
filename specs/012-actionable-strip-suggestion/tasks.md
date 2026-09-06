@@ -338,8 +338,9 @@ a candidate.
   the strip field changing or the `role="status"` indicator being absent, and
   re-measure the counts their comments record (197 and 144 are the old rule).
   Add the SC-008 step: load `NAC Vet/Div1/Junior` – the largest template, not
-  yet in the driver – press **Suggest**, read the field (expected `[M]` 96,
-  measured not assumed), **Auto-schedule all**, and assert 66 rows. Run the
+  yet in the driver – press **Suggest**, read the field (expected `[M]` 85 per
+  `baseline.md` §1 – the spec's 96 was the monotone threshold, §1a – measured
+  not assumed), **Auto-schedule all**, and assert 66 rows. Run the
   driver twice; report SMOKE PASS/FAIL for both, every Suggest count read, and
   the console error count, which must be 0 *(subagent commits)*
 
