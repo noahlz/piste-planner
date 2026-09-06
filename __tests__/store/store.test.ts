@@ -112,10 +112,17 @@ describe('tournamentSlice', () => {
   // the single terminal write (FR-010), and the `null` cases — the search's
   // own arithmetic belongs to `__tests__/engine/stripSearch.test.ts`.
   describe('suggestStrips', () => {
-    it("returns a promise that resolves with the search's own answer", async () => {
+    // Shared by every test below that needs a board the search can size: 2
+    // days, one 70-fencer event selected. The `[M]` comment on the ceiling
+    // above documents what this fixture measures to — 10 strips.
+    function seedLargeFoilEvent() {
       useStore.getState().setDays(2)
       useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
       useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
+    }
+
+    it("returns a promise that resolves with the search's own answer", async () => {
+      seedLargeFoilEvent()
 
       const pending = useStore.getState().suggestStrips()
       expect(pending).toBeInstanceOf(Promise)
@@ -134,9 +141,7 @@ describe('tournamentSlice', () => {
     })
 
     it('never suggests above the old ceiling rule (FR-007)', async () => {
-      useStore.getState().setDays(2)
-      useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
-      useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
+      seedLargeFoilEvent()
 
       await useStore.getState().suggestStrips()
 
@@ -171,9 +176,7 @@ describe('tournamentSlice', () => {
     })
 
     it('writes strips_total exactly once, at the end (FR-010)', async () => {
-      useStore.getState().setDays(2)
-      useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
-      useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
+      seedLargeFoilEvent()
       useStore.getState().setStrips(24)
 
       const seen: number[] = []
@@ -181,16 +184,21 @@ describe('tournamentSlice', () => {
         if (state.strips_total !== prev.strips_total) seen.push(state.strips_total)
       })
 
-      const pending = useStore.getState().suggestStrips()
-      // Checked synchronously, before any await: nothing has written yet, no
-      // matter how many candidates the search evaluates.
-      expect(seen).toEqual([])
-      expect(useStore.getState().strips_total).toBe(24)
+      // Guarded so a failing assertion below can never leak this subscription
+      // into later tests — `beforeEach` resets the store but not this listener.
+      try {
+        const pending = useStore.getState().suggestStrips()
+        // Checked synchronously, before any await: nothing has written yet, no
+        // matter how many candidates the search evaluates.
+        expect(seen).toEqual([])
+        expect(useStore.getState().strips_total).toBe(24)
 
-      await pending
+        await pending
 
-      expect(seen).toEqual([useStore.getState().strips_total])
-      unsubscribe()
+        expect(seen).toEqual([useStore.getState().strips_total])
+      } finally {
+        unsubscribe()
+      }
     })
   })
 
