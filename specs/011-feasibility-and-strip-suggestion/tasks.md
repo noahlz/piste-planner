@@ -144,7 +144,7 @@ suite are green before Phase 3 begins.
 **Independent test**: the ten-template harness, comparing the suggested number
 and the placed count at it.
 
-- [ ] **T009** [US2] Write the red tests for the new rule in
+- [X] **T009** [US2] Write the red tests for the new rule in
   `__tests__/engine/analysis.test.ts`. The fixtures must **separate max from
   sum** by construction — a set where the largest event's pool count and the
   busiest day's summed pool count differ, so a max-rule implementation cannot
@@ -155,7 +155,7 @@ and the placed count at it.
   zero (FR-010). Run them; confirm each fails on the number the max rule
   produces
 
-- [ ] **T010** [US2] **(Opus)** **(drift)** Implement the rule in
+- [X] **T010** [US2] **(Opus)** **(drift)** Implement the rule in
   `src/engine/analysis.ts` as a pure function of competitions, `days_available`
   and `max_pool_strip_pct`, replacing the dead `suggestStripCount`. The rule is
   stated in [research.md D4](./research.md): one strip per pool, distribute

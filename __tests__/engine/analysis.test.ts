@@ -405,33 +405,101 @@ describe('initialAnalysis — statelessness', () => {
 })
 
 // ──────────────────────────────────────────────
-// suggestStripCount
+// suggestStripCount — busiest-day-sum rule (011 US2, research.md D4)
 // ──────────────────────────────────────────────
+//
+// Pool counts referenced below (computePoolStructure: ceil(n/7) above 9
+// fencers):
+//   70 fencers → 10 pools
+//   42 fencers → 6 pools
+//   35 fencers → 5 pools
+//
+// The shared three-event set is built so the largest single event's demand
+// (10) and the busiest day's summed demand (11, at days_available=2) differ
+// by construction — a max-over-events implementation cannot pass these.
+// New signature: suggestStripCount(competitions, daysAvailable, maxPoolStripPct).
 
 describe('suggestStripCount', () => {
-  it('returns max pool count across all competitions', () => {
-    // comp-a: 24 fencers → ceil(24/7)=4 pools; comp-b: 49 fencers → ceil(49/7)=7 pools
-    const compA = makeCompetition({ id: 'comp-a', fencer_count: 24 }) // 4 pools
-    const compB = makeCompetition({ id: 'comp-b', fencer_count: 49 }) // 7 pools
+  const evtA = makeCompetition({ id: 'evt-a', fencer_count: 70 }) // 10 pools
+  const evtB = makeCompetition({ id: 'evt-b', fencer_count: 42 }) // 6 pools
+  const evtC = makeCompetition({ id: 'evt-c', fencer_count: 35 }) // 5 pools
+  const threeEvents = [evtA, evtB, evtC]
 
-    expect(suggestStripCount([compA, compB])).toBe(7)
+  it('sizes for the busiest day, not the largest event, across multiple days', () => {
+    // 2 days: LPT packs evt-a (10) alone, then evt-b+evt-c (6+5=11) into the
+    // other day. Busiest day is 11. The MAX rule (today's dead
+    // implementation) returns 10 — these differ, so a max-rule
+    // implementation cannot pass this assertion.
+    // ceil(11 / 0.80) = 14.
+    expect(suggestStripCount(threeEvents, 2, 0.8)).toBe(14)
   })
 
-  it('returns the single competition pool count with one competition', () => {
-    // 70 fencers → ceil(70/7) = 10 pools
-    const comp = makeCompetition({ id: 'solo', fencer_count: 70 })
-
-    expect(suggestStripCount([comp])).toBe(10)
+  it('sums every event when there is only one day', () => {
+    // 1 day: every event shares it, so the answer is the sum over ALL
+    // events: 10 + 6 + 5 = 21. ceil(21 / 0.80) = 27. The MAX rule would
+    // return 10 — far below this.
+    expect(suggestStripCount(threeEvents, 1, 0.8)).toBe(27)
   })
 
-  it('returns 0 for empty competition list', () => {
-    expect(suggestStripCount([])).toBe(0)
+  it('falls back to the single largest event when days outnumber events', () => {
+    // 5 days, 3 events: each event lands alone in its own empty group before
+    // any group holds two, so the busiest group's total IS the largest
+    // single event's demand: 10. This is the one case where MAX and SUM
+    // legitimately coincide — not proof of a max-rule implementation, just
+    // the degenerate case where the two rules agree by construction.
+    // ceil(10 / 0.80) = 13.
+    expect(suggestStripCount(threeEvents, 5, 0.8)).toBe(13)
   })
 
-  it('skips competitions with fencer_count <= 1 (no pools to run)', () => {
-    const invalid = makeCompetition({ id: 'invalid', fencer_count: 1 })
-    const valid = makeCompetition({ id: 'valid', fencer_count: 14 }) // ceil(14/7)=2 pools
+  it('applies the max_pool_strip_pct divisor — different percentages give different answers', () => {
+    // Same 3 events, 2 days → busiest day is 11 pools (see first test above).
+    expect(suggestStripCount(threeEvents, 2, 0.8)).toBe(14) // ceil(11/0.80)=14
+    expect(suggestStripCount(threeEvents, 2, 0.6)).toBe(19) // ceil(11/0.60)=19
+  })
 
-    expect(suggestStripCount([invalid, valid])).toBe(2)
+  it('is deterministic across repeated calls with identical inputs', () => {
+    const first = suggestStripCount(threeEvents, 2, 0.8)
+    const second = suggestStripCount(threeEvents, 2, 0.8)
+    expect(first).toBe(second)
+    expect(first).toBe(14)
+  })
+
+  it('adjusts even the single-event degenerate case for the pool strip percentage', () => {
+    // One event, any day count: the busiest (only) group is that event's
+    // pool count. Unlike today's dead max-rule (which returns the raw pool
+    // count, 10, with no percentage applied), the suggestion divides by
+    // max_pool_strip_pct: ceil(10 / 0.80) = 13.
+    const solo = makeCompetition({ id: 'solo', fencer_count: 70 }) // 10 pools
+    expect(suggestStripCount([solo], 3, 0.8)).toBe(13)
+  })
+
+  it('excludes an unsizeable competition from the partition and still sizes the rest', () => {
+    // A mixed list: one competition below the minimum fencer count alongside a
+    // sizeable one. `computePoolStructure` THROWS for fencer_count <= 1
+    // (pools.ts:26), so an implementation that sizes every competition
+    // unconditionally raises rather than returning a number. The invalid entry
+    // contributes nothing to the partition and the valid one is sized normally:
+    // busiest group is evt-c's 5 pools, ceil(5 / 0.80) = 7.
+    const mixed = [makeCompetition({ id: 'bye', fencer_count: 1 }), evtC]
+    expect(suggestStripCount(mixed, 2, 0.8)).toBe(7)
+  })
+
+  describe('FR-010 — no sizeable competition reports the absence of an answer, not zero', () => {
+    it('returns null for an empty competition list', () => {
+      expect(suggestStripCount([], 2, 0.8)).toBeNull()
+    })
+
+    it('returns null when every competition is below the minimum fencer count', () => {
+      // fencer_count <= 1 cannot form a pool (computePoolStructure throws)
+      // and is skipped, same as today's dead implementation. With nothing
+      // left to size, the answer must be the ABSENCE of a number — the old
+      // rule's 0 would be written into the strip field as a valid
+      // configuration.
+      const unsizeable = [
+        makeCompetition({ id: 'bye-1', fencer_count: 1 }),
+        makeCompetition({ id: 'bye-2', fencer_count: 1 }),
+      ]
+      expect(suggestStripCount(unsizeable, 2, 0.8)).toBeNull()
+    })
   })
 })
