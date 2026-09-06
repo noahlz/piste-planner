@@ -366,7 +366,7 @@ a candidate.
     `e2adeed85e`) added an assertion to an existing test case, not a new
     test, so it moves no count.
 
-- [ ] **T016** Write `specs/012-actionable-strip-suggestion/handoff.md`: the
+- [X] **T016** Write `specs/012-actionable-strip-suggestion/handoff.md`: the
   ten-template table before / after (T002 and T008 side by side); the eight
   `stripRecommendation` values before and after with each movement explained,
   and the eight scheduled counts unchanged; one row per task with the drift it
