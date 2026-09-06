@@ -87,7 +87,7 @@ that count. T008 checks this from the app's own path.
   starting numbers. Commit the artifacts and the backlog change as the branch's
   first commit *(subagent commits)*
 
-- [ ] **T002** **(Opus)** Build the measurement harness and write
+- [X] **T002** **(Opus)** Build the measurement harness and write
   `specs/012-actionable-strip-suggestion/baseline.md`. The method is
   `011/baseline.md` §The method with **one change**: `setDays(4)` after the
   store reset (plan.md §The measurement instrument). The probe is a temporary
