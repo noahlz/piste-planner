@@ -344,10 +344,27 @@ a candidate.
   driver twice; report SMOKE PASS/FAIL for both, every Suggest count read, and
   the console error count, which must be 0 *(subagent commits)*
 
-- [ ] **T015** Run the full gate on the finished branch twice: `tsc -b`, `lint`,
+- [X] **T015** Run the full gate on the finished branch twice: `tsc -b`, `lint`,
   `pnpm test`. Account for the test-count delta against T001's starting numbers –
   tests added minus tests deleted must close exactly, with none skipped and no
   assertion weakened. Record both runs' numbers here
+  - Run 1 (HEAD `e2adeed85e`): `tsc -b` exit 0, `lint` exit 0, `pnpm test` 68
+    files / 1848 tests passed, 0 skipped, wall 6.40s test / ~11s total.
+  - Run 2, identical tree: `tsc -b` exit 0, `lint` exit 0, `pnpm test` 68
+    files / 1848 tests passed, 0 skipped, wall 6.35s test / ~10s total.
+    `grep -rE 'it\.skip|test\.skip|describe\.skip|\.todo|\.only'` over
+    `__tests__/` and `src/` returns 0 matches.
+  - Delta closes exactly: T001 baseline 66 files / 1829 tests. Ledger — T003
+    +6, T005 +11, T007 +2, T009 +1, T011 −5, T013 +3, T013 review +1 — nets
+    +19, matching commit-by-commit measured totals in each task's own
+    message (`7b70e6fbf4` 1829→1835, `b439f08128` 1835→1846,
+    `356b52fd64` 1846→1848, `703f454bef` 1848→1849, `b5e0600efc`
+    1849→1844, `cc44ff6282` 1844→1847, `ab0f3c4921` 1847→1848). 1829 + 19 =
+    1848, matching both measured runs exactly. Files: 66 → 68, +1 each from
+    `stripSearch.test.ts` (T005) and `StripSetup.test.tsx` (T013), matching
+    the predicted +2. The T013-review test-quality fix (this session,
+    `e2adeed85e`) added an assertion to an existing test case, not a new
+    test, so it moves no count.
 
 - [ ] **T016** Write `specs/012-actionable-strip-suggestion/handoff.md`: the
   ten-template table before / after (T002 and T008 side by side); the eight
