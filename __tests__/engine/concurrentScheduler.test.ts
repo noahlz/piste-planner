@@ -982,8 +982,8 @@ describe('postScheduleDiagnostics — the strip recommendation survives a WARN-o
     // so `same-population` never fires. max_pool_strip_pct is deliberately
     // below 1.0 so each event's own pool count (5, from 32 fencers) stays
     // under strips_total (8) — no per-event resource-precondition-strips
-    // ERROR — while recommendStripCount's ceil(5 / 0.6) = 9 still exceeds it,
-    // which is what the post-schedule INFO is gated on. The resulting demand
+    // ERROR — while recommendStripCount's answer still exceeds it, which is
+    // what the post-schedule INFO is gated on. The resulting demand
     // (13 events) trips the aggregate feasibility band, which after 011 T004
     // is a WARN, not an ERROR: validateConfig produces exactly that one
     // finding and nothing else, so the only bottleneck carrying
@@ -1048,6 +1048,13 @@ describe('postScheduleDiagnostics — the strip recommendation survives a WARN-o
     const recommendation = bottlenecks.find(b => b.cause === BottleneckCause.RESOURCE_RECOMMENDATION)
     expect(recommendation, 'expected the post-schedule strip recommendation to survive the WARN-only feasibility finding').toBeDefined()
     expect(recommendation?.severity).toBe(BottleneckSeverity.INFO)
-    expect(recommendation?.message).toMatch(/^Strips: need 9, have 8 —/)
+    // `[M]` at T011. Was `need 9` under the max-over-events rule, which sized
+    // the venue for ONE of these 13 identical events (ceil(5 / 0.6) = 9). The
+    // busiest-day rule sizes for the events that share a day: 13 events × 5
+    // pools = 65, split across days_available=2 into 7 + 6, so the busiest day
+    // is 35 pools and ceil(35 / 0.6) = 59. The gate this test is about opens on
+    // either number — both exceed 8 — so the test's subject is unchanged and
+    // only the number it reports moved.
+    expect(recommendation?.message).toMatch(/^Strips: need 59, have 8 —/)
   })
 })

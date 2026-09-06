@@ -1458,9 +1458,13 @@ export function postScheduleDiagnostics(
   })
   if (!hasResourceExhaustion) return results
 
-  // Strip recommendation
-  const recommended = recommendStripCount(competitions, config.max_pool_strip_pct)
-  if (recommended > config.strips_total) {
+  // Strip recommendation. `null` is the absence of an answer — no competition
+  // on this board can be sized — and there is nothing to recommend, so the INFO
+  // is not emitted at all. Coercing it to 0 would either read as "need 0 strips"
+  // or, worse, pass the `> strips_total` test on a 0-strip venue and print a
+  // shortfall that was never computed (FR-010).
+  const recommended = recommendStripCount(competitions, config.days_available, config.max_pool_strip_pct)
+  if (recommended !== null && recommended > config.strips_total) {
     results.push({
       competition_id: '',
       phase: Phase.POST_SCHEDULE,

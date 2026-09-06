@@ -102,7 +102,11 @@ type ScenarioDigest = {
   refRequirementsByDay: RefRequirementsByDay[] | undefined
   daySummaryPeaks: number[]
   refRecommendation: { three_weapon: number; foil_epee: number }
-  stripRecommendation: number
+  // `null` when no competition on the scenario can be sized (011 FR-010). The
+  // digest records what the rule returned rather than coercing, so a scenario
+  // that loses every sizeable event shows the absence of an answer instead of a
+  // recommendation of 0 strips. All eight scenarios return a number today.
+  stripRecommendation: number | null
   events: Record<string, EventDigest>
 }
 
@@ -203,7 +207,7 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
     refRequirementsByDay: ref_requirements_by_day,
     daySummaryPeaks: dayPeakRefDemands(competitions, config, schedule),
     refRecommendation: recommendRefCount(competitions, AUTO_REFS_PER_POOL, config),
-    stripRecommendation: recommendStripCount(competitions, config.max_pool_strip_pct),
+    stripRecommendation: recommendStripCount(competitions, config.days_available, config.max_pool_strip_pct),
     events,
   }
 }

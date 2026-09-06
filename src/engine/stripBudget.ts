@@ -5,6 +5,12 @@ import type { Competition, TournamentConfig } from './types.ts'
 import { Weapon, DeMode } from './types.ts'
 import { poolCountFor } from './pools.ts'
 import { peakDeRefDemand } from './refs.ts'
+// `analysis.ts` imports `computeStripCap` from this module, so this import
+// closes a cycle. Both sides are hoisted function declarations used only when
+// called, never at module-evaluation time, so neither module observes the other
+// half-initialized. The alternative was a second copy of the rule, which is the
+// defect FR-008 exists to remove.
+import { suggestStripCount } from './analysis.ts'
 
 /**
  * Peak strip count a staged DE will hold concurrently — the round-of-16 allocation.
@@ -29,20 +35,26 @@ export function computeStripCap(
 }
 
 /**
- * Estimates the minimum strip count needed so that the busiest pool round can
- * run with all pools in parallel while staying within the given percentage cap.
+ * The strip count the venue needs so the busiest day's pool round can run every
+ * pool at once. Kept as a name because the post-schedule INFO
+ * (`concurrentScheduler.ts`) has always called it, but it is no longer a rule of
+ * its own: it is an alias for `suggestStripCount`, the single implementation
+ * (research.md D5, FR-008).
+ *
+ * It used to take the MAX pool count over events, which sized the venue for the
+ * largest event alone and left every other event on that day unhoused. The
+ * physics is a SUM over the events sharing a day, which is why the signature
+ * gained `daysAvailable` (research.md D4, FR-005).
+ *
+ * Returns `null` when no competition can be sized — the absence of an answer,
+ * which the old rule reported as the number 0 (FR-010).
  */
 export function recommendStripCount(
   competitions: Competition[],
+  daysAvailable: number,
   maxPoolStripPct: number,
-): number {
-  const maxPools = competitions.reduce((max, comp) => {
-    const n_pools = poolCountFor(comp.fencer_count, comp.use_single_pool_override)
-    return Math.max(max, n_pools)
-  }, 0)
-
-  if (maxPools === 0) return 0
-  return Math.ceil(maxPools / maxPoolStripPct)
+): number | null {
+  return suggestStripCount(competitions, daysAvailable, maxPoolStripPct)
 }
 
 /**

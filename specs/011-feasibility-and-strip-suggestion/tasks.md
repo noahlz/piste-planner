@@ -165,7 +165,7 @@ and the placed count at it.
   Ledger expected to show nothing moved; a movement halts the task
   *(subagent commits)*
 
-- [ ] **T011** [US2] Collapse `stripBudget.ts`'s `recommendStripCount` onto the
+- [X] **T011** [US2] Collapse `stripBudget.ts`'s `recommendStripCount` onto the
   new rule, keeping its exported name and its call site at
   `concurrentScheduler.ts:1450` and its INFO message text. Rewrite the four
   cases at `__tests__/engine/stripBudget.test.ts:44-67`, which assert the
