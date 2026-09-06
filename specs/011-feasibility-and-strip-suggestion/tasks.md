@@ -125,7 +125,7 @@ suggested strip count; B1–B8 hold their floors.
   comment above the constant so it says why the count changed. Dispatch
   `react-code-reviewer` after *(subagent commits)*
 
-- [ ] **T008** [US1] Re-run the T002 harness and append the after-US1 table to
+- [X] **T008** [US1] Re-run the T002 harness and append the after-US1 table to
   `baseline.md`, before and after side by side. **SC-001 is judged here**: all
   five named templates must place a non-zero count at their suggested strip
   count. **SC-002 is judged here**: no template may place fewer than it did in

@@ -266,3 +266,113 @@ Recorded so a later reader does not mistake them for drift.
   expected to rise off zero (and its floor rising with it, in the same commit).
 - The suggested-strips column of §1 is what US2 moves. It is 39 / 39 / 45 / 45 /
   15 / 15 / 20 / 20 / 19 / 39 today, and T012 records it again.
+
+---
+
+## 4. Ten templates after US1
+
+`[M]` Measured at `d7c58dbd90` (T006), the last US1 commit. Same method as §1,
+unchanged: the probe is §The method's `runTemplate` verbatim, written to
+`tmp/t008-remeasure-probe.test.ts`, run with
+
+```
+timeout 300 pnpm --silent vitest run tmp/t008-remeasure-probe.test.ts > ./tmp/probe-t008.log 2>&1
+```
+
+and deleted after the numbers were recorded. Two fields were added to the
+returned object (`unplacedIds`, `errorBottleneckCount`) — reporting only, read
+off the same `schedule` and `bottlenecks` §1 already read. Nothing in the setup
+path moved.
+
+`__tests__/components/workbench/Scorecard.test.tsx` is red at this commit and is
+T007's to fix. It does not enter this measurement, which calls the engine and the
+store directly.
+
+### Before and after, side by side
+
+"Before" is §1, measured at `8335928dc5`. "After" is this run.
+
+| Template | Events | Suggested (before → after) | Placed @ suggested (before → after) | ERROR rule ids @ suggested (before → after) | Placed @ 80/12 (before → after) |
+|---|---:|---|---|---|---|
+| **NAC Youth** | 24 | 39 → **39** | 0 → **10** | `feasibility-strip-hours` ×1 → **none** | 22 → **22** |
+| **NAC Cadet/Junior** | 24 | 39 → **39** | 0 → **13** | `feasibility-strip-hours` ×1 → **none** | 24 → **24** |
+| NAC Div1/Junior | 24 | 45 → **45** | 13 → **13** | none → **none** | 24 → **24** |
+| **NAC Vet/Div1/Junior** | 66 | 45 → **45** | 0 → **19** | `feasibility-strip-hours` ×1 → **none** | 45 → **45** |
+| ROC Div1A/Vet | 12 | 15 → **15** | 12 → **12** | none → **none** | 12 → **12** |
+| ROC Div1A/Div2/Vet | 18 | 15 → **15** | 16 → **16** | none → **none** | 18 → **18** |
+| **ROC Mega** | 42 | 20 → **20** | 0 → **12** | `feasibility-strip-hours` ×1 → **none** | 42 → **42** |
+| RYC Weekend | 18 | 20 → **20** | 12 → **12** | none → **none** | 18 → **18** |
+| RJCC Weekend | 12 | 19 → **19** | 6 → **6** | none → **none** | 12 → **12** |
+| **Junior Olympics** | 18 | 39 → **39** | 0 → **11** | `feasibility-strip-hours` ×1 → **none** | 18 → **18** |
+
+The suggested column did not move on any of the ten, which is the expected
+result: US1 changes severity only. US2 (T010–T012) is what moves it.
+
+`validateConfig(…, BINDING)` now returns **zero ERROR findings on all twenty
+cells**. The five that carried `feasibility-strip-hours` ×1 as an ERROR carry it
+as a WARN — `warnRuleCounts` reads `{ "feasibility-strip-hours": 1 }` on each of
+the five, at the suggested count, and empty at 80/12. The rule id, field and
+message text are unchanged; only the severity moved. Nothing at 80/12 changed at
+all, in any field, on any template — no template was ever emptied there.
+
+### SC-001 verdict: **met, on all five**
+
+> all five named templates must place a non-zero count at their suggested strip
+> count
+
+| Template | Placed @ suggested | Non-zero? |
+|---|---|---|
+| NAC Youth | **10** of 24 | **yes** |
+| NAC Cadet/Junior | **13** of 24 | **yes** |
+| NAC Vet/Div1/Junior | **19** of 66 | **yes** |
+| ROC Mega | **12** of 42 | **yes** |
+| Junior Olympics | **11** of 18 | **yes** |
+
+**No template in the table remains at zero**, at either strip count. There is no
+row to record against a blocking rule id.
+
+### SC-002 verdict: **met**
+
+> no template may place fewer than it did in T002
+
+Cell by cell against §1, at both strip counts: five cells rose
+(0→10, 0→13, 0→19, 0→12, 0→11, all in the suggested column) and the other
+**fifteen are identical**. Not one cell fell. The five non-feasibility templates
+— NAC Div1/Junior, ROC Div1A/Vet, ROC Div1A/Div2/Vet, RYC Weekend, RJCC Weekend
+— are unchanged in every field, which is what a severity-only change should do to
+a template the finding never fired on.
+
+### What the demotion did, and what it did not
+
+The demotion did exactly one thing: it stopped the gate aborting before packing.
+§1 recorded that each of the five returned **exactly one bottleneck in total** at
+its suggested count — the feasibility ERROR — because `scheduleAll` never reached
+the packer. Now the packer runs and reports on every event it could not fit. That
+is the shape §1 predicted, and it is the demotion working, not drift.
+
+What it did not do is make the boards full. Every one of the five is still a
+partial board, and two are small ones:
+
+| Template | Placed @ suggested | Unplaced | Warnings behind the shortfall |
+|---|---|---:|---|
+| NAC Youth | 10 of 24 | 14 | `DEADLINE_BREACH` ×16, `RESOURCE_EXHAUSTION` ×1 |
+| NAC Cadet/Junior | 13 of 24 | 11 | `DEADLINE_BREACH` ×13, `UNAVOIDABLE_CROSSOVER_CONFLICT` ×6, `RESOURCE_EXHAUSTION` ×1 |
+| NAC Vet/Div1/Junior | 19 of 66 | 47 | `DEADLINE_BREACH` ×53, `RESOURCE_EXHAUSTION` ×1 |
+| ROC Mega | 12 of 42 | 30 | `DEADLINE_BREACH` ×33, `RESOURCE_EXHAUSTION` ×1 |
+| Junior Olympics | 11 of 18 | 7 | `DEADLINE_BREACH` ×9, `RESOURCE_EXHAUSTION` ×1 |
+
+The `RESOURCE_EXHAUSTION` ×1 on each of the five is the demoted feasibility
+finding itself, now arriving as a WARN bottleneck instead of aborting the run.
+The shortfall is `DEADLINE_BREACH` — events that survive validation and then lose
+a race against the day's end — which is the shortfall
+[spec.md §Out of Scope](./spec.md) explicitly does not fix. NAC Cadet/Junior's
+six `UNAVOIDABLE_CROSSOVER_CONFLICT` warnings are 010's R7 reporting the
+least-bad-color fallback, the same six §1 recorded at 80/12; they cost it no
+events there and they are not what holds back the 11 here.
+
+`NAC Vet/Div1/Junior` (19 of 66) and `ROC Mega` (12 of 42) are the two thin
+boards. Both fill substantially when given strips — 45 of 66 and 42 of 42 at
+80/12 — so the remaining gap at the suggested count is a strip count too low for
+the work, not an engine that cannot place the events. **That is precisely what
+US2 exists to fix**, and the numbers above are what T012's after-US2 table is
+measured against.
