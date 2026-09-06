@@ -187,7 +187,7 @@ and the placed count at it.
 
 ## Phase 4: Verified live
 
-- [ ] **T013** **(dispatched — locator repair iterates, plan.md §Constitution
+- [X] **T013** **(dispatched — locator repair iterates, plan.md §Constitution
   Check VI)** Repair `scripts/smoke.mjs` **in place**. Add a step that selects a
   template rendering nothing today (`NAC Youth` or `ROC Mega`), presses
   **Suggest**, schedules, and measures the placed count, asserting it is
