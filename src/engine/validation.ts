@@ -332,15 +332,15 @@ function validateDependencies(config: TournamentConfig, competitions: Competitio
 const FEASIBILITY_SLACK = 1.15
 
 /**
- * Feasibility finding: kind is always 'policy' (research D3 — grouped with
- * resource shortfalls), but severity stays ERROR regardless of mode. This
- * function's own 2-arg contract is unchanged by the T017 mode split —
- * `validateConfig` re-derives mode-driven severity when it assembles these
- * findings into its pipeline (see below). `subjects` is `[field]` since
- * feasibility aggregates across the whole competition list, not one subject.
+ * Feasibility finding: notice-kind — WARN in every validation mode, never
+ * escalating (011 FR-001/FR-002, research D1/D2). The check is a worst-case
+ * aggregate estimate over the whole competition list, tolerant to a 15% slack
+ * band, so it cannot justify emptying a board: it reports a shortfall and the
+ * scheduler goes on to place what fits. `subjects` is `[field]` since
+ * feasibility aggregates across the whole list, not one subject.
  */
 function feasibilityErr(field: string, message: string, rule: string): ValidationError {
-  return { field, message, severity: BottleneckSeverity.ERROR, kind: RuleKind.POLICY, rule, subjects: [field] }
+  return notice(field, message, rule, [field])
 }
 
 export function validateFeasibility(
@@ -427,20 +427,14 @@ export function validateConfig(
     globalErrors.push(notice('days_available', `days_available outside the recommended 2–4 day range, got ${config.days_available} — the schedule can still be computed`, 'days-available-range', ['days_available']))
   }
 
-  // Feasibility findings are always ERROR from validateFeasibility itself
-  // (its own 2-arg contract), so re-derive severity from mode here — the
-  // same policy-kind mapping every other policy finding gets.
-  const feasibilityFindings = validateFeasibility(config, competitions).map(finding => ({
-    ...finding,
-    severity: mode === ValidationMode.BINDING ? BottleneckSeverity.ERROR : BottleneckSeverity.WARN,
-  }))
-
   return [
     ...globalErrors,
     ...validateStripConfig(config, competitions, mode),
     ...validateRefConfig(config, competitions),
     ...validateCompetitionFields(config, competitions, mode),
     ...validateDependencies(config, competitions, mode),
-    ...feasibilityFindings,
+    // Feasibility is notice-kind at its source (011 FR-001/FR-002): WARN in
+    // every mode, so there is no mode re-derivation left to do here.
+    ...validateFeasibility(config, competitions),
   ]
 }

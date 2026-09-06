@@ -15,11 +15,12 @@
  * ERROR and WARN *counts* are in, the messages are out.
  */
 import { describe, it, expect } from 'vitest'
-import { BottleneckSeverity, BottleneckCause, Phase } from '../../src/engine/types.ts'
+import { BottleneckSeverity, Phase, ValidationMode } from '../../src/engine/types.ts'
 import type {
-  Bottleneck, Competition, RefRequirementsByDay, ScheduleResult, TournamentConfig,
+  Bottleneck, BottleneckCause, Competition, RefRequirementsByDay, ScheduleResult, TournamentConfig,
 } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
+import { validateConfig } from '../../src/engine/validation.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from '../../src/engine/refs.ts'
 import { recommendRefCount, recommendStripCount } from '../../src/engine/stripBudget.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
@@ -40,26 +41,39 @@ const AUTO_REFS_PER_POOL = 2
  * one is the regression the gate exists to catch: never edit a floor down to make
  * a red test pass — identify the cause first, and record both counts.
  *
- * B4's floor is 0, not a lowered regression: Ruling 11 accepted its collapse from
- * 15 to 0 as the flat SINGLE_STAGE formula tripping the pre-existing upfront
- * `validateFeasibility` gate. B4 gets its own dedicated test below pinning that
- * exact behavior (0 scheduled, 1 validation error) instead of this generic floor.
+ * B4's floor was 0 for as long as the upfront `validateFeasibility` gate aborted
+ * its build. 011's T004 demoted that finding to a WARN, so B4 packs again and its
+ * floor rises with it (see the entry below).
  */
 const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // B6 raised 44 → 45 by 010's L9 (2026-09-05, commit 2bacf2aa8e): removing the
   // Y8→Y10 crossover edge repacked B6's oversubscribed board and placed one more
   // event. A deliberate raise under the rule above, so a later regression to 44
   // halts its own task instead of passing the gate.
-  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 45, B7: 18, B8: 52,
+  //
+  // B4 raised 0 → 17 by 011's T004 (2026-09-05): `feasibility-strip-hours` is a
+  // WARN in every mode now, so the aggregate estimate no longer empties the board
+  // and B4 places 17 of its 30 events. Measured, not predicted. A deliberate raise
+  // under the rule above — a later collapse toward 0 halts its own task instead of
+  // passing the gate. T006 removed the `continue` that had kept B4 out of the
+  // generic floor test below, so from T006 on this number is asserted for B4 the
+  // same way it is for the other seven.
+  B1: 24, B2: 24, B3: 24, B4: 17, B5: 12, B6: 45, B7: 18, B8: 52,
 }
 
 /**
  * Scenarios that emit at least one `Day N refs: peak demand M.` summary line.
- * B4 is deliberately absent — it now trips the upfront feasibility gate before
- * any per-day packing runs, so `postScheduleDayBreakdown` never executes and
- * no summary line is ever emitted for it (see the B4-specific test below).
+ *
+ * B4 was absent for as long as the upfront feasibility gate aborted its build
+ * before any per-day packing ran, so `postScheduleDayBreakdown` never executed
+ * for it. 011's T004 demoted that finding to a WARN and B4 packs again: `[M]` at
+ * T006 it emits three summary lines (days 1-3, peak demand 86 / 182 / 98) and
+ * `dayPeakRefDemands` reproduces all three, so B4 joins the list rather than the
+ * comment being rewritten around its absence. B1/B2/B3/B5/B7 stay out because
+ * they emit no summary line at all — the scheduler only writes one for a day
+ * that had a failure, and those five place every event.
  */
-const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B6', 'B8']
+const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6', 'B8']
 
 /** Matches the refs line built by `postScheduleDayBreakdown` in `concurrentScheduler.ts`. */
 const DAY_REFS_SUMMARY = /^Day (\d+) refs: peak demand (\d+)\.$/
@@ -88,7 +102,11 @@ type ScenarioDigest = {
   refRequirementsByDay: RefRequirementsByDay[] | undefined
   daySummaryPeaks: number[]
   refRecommendation: { three_weapon: number; foil_epee: number }
-  stripRecommendation: number
+  // `null` when no competition on the scenario can be sized (011 FR-010). The
+  // digest records what the rule returned rather than coercing, so a scenario
+  // that loses every sizeable event shows the absence of an answer instead of a
+  // recommendation of 0 strips. All eight scenarios return a number today.
+  stripRecommendation: number | null
   events: Record<string, EventDigest>
 }
 
@@ -189,7 +207,7 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
     refRequirementsByDay: ref_requirements_by_day,
     daySummaryPeaks: dayPeakRefDemands(competitions, config, schedule),
     refRecommendation: recommendRefCount(competitions, AUTO_REFS_PER_POOL, config),
-    stripRecommendation: recommendStripCount(competitions, config.max_pool_strip_pct),
+    stripRecommendation: recommendStripCount(competitions, config.days_available, config.max_pool_strip_pct),
     events,
   }
 }
@@ -203,22 +221,57 @@ describe('drift ledger', () => {
       expect(buildDigest(id)).toMatchSnapshot()
     })
 
-    // B4: Ruling 11 accepted the collapse from 15 scheduled to 0 — the flat
-    // SINGLE_STAGE formula raises B4's aggregate strip-hour demand past the
-    // upfront `validateFeasibility` gate (validation.ts:310), which aborts the
-    // whole build before any per-day packing runs. This test pins that exact
-    // outcome by cause and phase (not message text) so it trips if B4 ever
-    // silently schedules again or the gate stops firing.
+    // B4 carries an extra pin on top of the floor test below, and it always has.
+    //
+    // Until 011's T004 it read "0 scheduled, 1 validation error": Ruling 11 had
+    // accepted a collapse from 15 to 0, because the flat SINGLE_STAGE formula
+    // raised B4's aggregate strip-hour demand past the upfront
+    // `validateFeasibility` gate (validation.ts:310), which aborted the whole
+    // build before any per-day packing ran. The pin existed so that collapse
+    // could not deepen or evaporate unnoticed.
+    //
+    // T004 demoted `feasibility-strip-hours` to a WARN in every mode, so the
+    // gate no longer aborts and B4 packs 17 of its 30 events. T006 keeps the
+    // pin's purpose and inverts what it pins: the ONE structural fact about B4
+    // is no longer "an aggregate estimate empties it" but "an aggregate estimate
+    // does not empty it". So this asserts, `[M]` at T006 against the real run:
+    //
+    //  - 17 scheduled exactly, not merely at-or-above the floor. The floor test
+    //    below catches a collapse; this catches any movement in either
+    //    direction, which is what the old `toBe(0)` did for the old number.
+    //  - no ERROR-severity validation finding at all, and in particular neither
+    //    feasibility rule id among them. A `Bottleneck` drops the rule id
+    //    (`validateConfig`'s `ValidationError` carries it; concurrentScheduler
+    //    discards it when it pushes the bottleneck), so this reads
+    //    `validateConfig` directly — a severity re-escalation of either
+    //    feasibility rule would otherwise show up only as a scheduledCount
+    //    change, and a re-escalation that happened to leave B4 at 17 would be
+    //    invisible. FR-001/FR-002 are what this holds.
+    //  - the demoted `feasibility-strip-hours` finding is still PRESENT, as a
+    //    WARN. The demotion must not become a deletion: B4's 481-strip-hour
+    //    shortfall (~29%, baseline.md §2) is real and the organizer still has to
+    //    be told about it. Without this the rule could be dropped outright and
+    //    every other assertion here would still pass.
+    //  - no ERROR sits in Phase.VALIDATION. B4's 13 ERRORs are all
+    //    DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the ordinary
+    //    per-event degradation of an oversubscribed board, which is spec.md
+    //    §Edge Cases' accepted cost. A validation-phase ERROR returning is the
+    //    shape that empties the board, and it halts here whatever its rule id.
     if (id === 'B4') {
-      it('B4 trips the upfront feasibility gate — 0 scheduled, 1 validation error', () => {
-        const { bottlenecks } = runScenario(id)
+      it('B4 packs under a demoted feasibility WARN — 17 scheduled, no validation ERROR', () => {
+        const { competitions, config, bottlenecks } = runScenario(id)
+
+        expect(buildDigest(id).scheduledCount).toBe(17)
+
+        const findings = validateConfig(config, competitions, ValidationMode.BINDING)
+        expect(findings.filter(f => f.severity === BottleneckSeverity.ERROR)).toEqual([])
+        expect(
+          findings.filter(f => f.rule === 'feasibility-strip-hours' && f.severity === BottleneckSeverity.WARN),
+        ).toHaveLength(1)
+
         const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
-        expect(errors).toHaveLength(1)
-        expect(errors[0].cause).toBe(BottleneckCause.RESOURCE_EXHAUSTION)
-        expect(errors[0].phase).toBe(Phase.VALIDATION)
-        expect(buildDigest(id).scheduledCount).toBe(0)
+        expect(errors.filter(b => b.phase === Phase.VALIDATION)).toEqual([])
       })
-      continue
     }
 
     it(`${id} schedules at least its baseline event count`, () => {

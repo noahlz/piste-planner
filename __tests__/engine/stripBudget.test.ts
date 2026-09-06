@@ -41,30 +41,72 @@ describe('computeStripCap', () => {
 // recommendStripCount
 // ──────────────────────────────────────────────
 
+// 011 T011: this name is now an alias for `analysis.ts`'s `suggestStripCount`
+// (research.md D4/D5, FR-005..FR-010) and the signature gained `daysAvailable`.
+// The rule itself is pinned in `analysis.test.ts`; what these four cases hold is
+// the DELEGATION — that this name is no longer the max-over-events rule, that
+// both of its extra arguments reach the rule, and that the absence of an answer
+// crosses the alias as `null` rather than being coerced to 0.
+//
+// Every expected number below was `[M]` measured by running the rule, not
+// derived by hand (tasks.md standing rule 8).
+
 describe('recommendStripCount', () => {
-  it('returns 0 for an empty competition list', () => {
-    expect(recommendStripCount([], 0.80)).toBe(0)
+  it('reports the absence of an answer, not 0, for an empty competition list', () => {
+    // The old max rule returned 0 here. 0 is a legitimate strip count and would
+    // read to the post-schedule INFO as "need 0 strips"; the absence of any
+    // sizeable competition is not that (FR-010). The INFO's gate reads the null
+    // and emits nothing at all.
+    expect(recommendStripCount([], 2, 0.80)).toBeNull()
   })
 
-  it('handles a single competition', () => {
-    // fencer_count=21 → n_pools=ceil(21/7)=3; strips=ceil(3/0.80)=4
-    const comps = [makeCompetition({ fencer_count: 21 })]
-    expect(recommendStripCount(comps, 0.80)).toBe(4)
-  })
-
-  it('uses the competition with the most pools', () => {
+  it('sums the events sharing the busiest day rather than taking the largest', () => {
     const comps = [
       makeCompetition({ id: 'small', fencer_count: 14 }), // ceil(14/7)=2 pools
       makeCompetition({ id: 'large', fencer_count: 70 }), // ceil(70/7)=10 pools
     ]
-    // ceil(10 / 0.80) = 13
-    expect(recommendStripCount(comps, 0.80)).toBe(13)
+    // One day, so both events share it: 2 + 10 = 12 pools concurrent,
+    // ceil(12 / 0.80) = 15. The max rule this replaces returned 13 — it sized
+    // for the larger event alone and left the smaller one's 2 pools unhoused.
+    expect(recommendStripCount(comps, 1, 0.80)).toBe(15)
+  })
+
+  it('passes the day count through — the same events over more days need fewer strips', () => {
+    const comps = [
+      makeCompetition({ id: 'small', fencer_count: 14 }), // 2 pools
+      makeCompetition({ id: 'large', fencer_count: 70 }), // 10 pools
+    ]
+    // Two days separate the two events, so the busiest day is the large event
+    // alone: ceil(10 / 0.80) = 13. Lower than the same set on one day (15
+    // above), which is what proves `daysAvailable` reaches the rule rather
+    // than being dropped by the alias.
+    expect(recommendStripCount(comps, 2, 0.80)).toBe(13)
   })
 
   it('plan example: 54 pools at 0.80 → 68 strips', () => {
-    // A single event with 378 fencers → ceil(378/7)=54 pools
+    // A single event with 378 fencers → ceil(378/7)=54 pools. One event cannot
+    // be split across days, so this answer is the same at any day count — it
+    // isolates the max_pool_strip_pct divisor: ceil(54 / 0.80) = 68.
     const comps = [makeCompetition({ fencer_count: 378 })]
-    expect(recommendStripCount(comps, 0.80)).toBe(68)
+    expect(recommendStripCount(comps, 3, 0.80)).toBe(68)
+  })
+
+  it('no longer throws on a competition too small to form a pool', () => {
+    // Before T011 this name called `poolCountFor` on every competition
+    // unconditionally (the old stripBudget.ts:40), so `fencer_count <= 1` threw
+    // out of `computePoolStructure` (pools.ts:26) and took the whole
+    // post-schedule diagnostic pass with it. The rule filters first, so the
+    // unsizeable event contributes nothing and the rest is still sized:
+    // 42 fencers → 6 pools, ceil(6 / 0.80) = 8.
+    //
+    // `analysis.test.ts` pins the same behavior on the rule. This pins it on
+    // the call path that actually used to throw.
+    const comps = [
+      makeCompetition({ id: 'unsizeable', fencer_count: 1 }),
+      makeCompetition({ id: 'sizeable', fencer_count: 42 }),
+    ]
+    expect(() => recommendStripCount(comps, 2, 0.80)).not.toThrow()
+    expect(recommendStripCount(comps, 2, 0.80)).toBe(8)
   })
 })
 

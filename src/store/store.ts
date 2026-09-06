@@ -12,7 +12,8 @@ import type {
 import { BottleneckSeverity, PlacementSource } from '../engine/types.ts'
 import { findingIdentity } from '../engine/validation.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
-import { suggestStrips as computeStripSuggestion } from './stripSuggestion.ts'
+import { suggestStripCount } from '../engine/analysis.ts'
+import { buildTournamentConfig } from './buildConfig.ts'
 import type { ScenarioId } from '../data/tournaments.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
@@ -228,9 +229,23 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
 
     suggestStrips: () => {
       const state = get()
-      const suggested = computeStripSuggestion(
-        state.selectedCompetitions,
+      // The rule is domain math and lives in the engine (constitution I,
+      // research.md D5): it needs `days_available` and `max_pool_strip_pct`
+      // alongside the competitions, so the store reaches it through
+      // `buildTournamentConfig`, the sanctioned bridge, rather than keeping a
+      // second copy of the sizing here. `buildTournamentConfig` also derives a
+      // strip list from `strips_total`, but the suggestion reads none of it —
+      // its three arguments are independent of the number it is suggesting
+      // (FR-009).
+      const { config, competitions } = buildTournamentConfig(state)
+      const suggested = suggestStripCount(
+        competitions,
+        config.days_available,
+        config.max_pool_strip_pct,
       )
+      // `null` is the absence of an answer, not zero (FR-010). Nothing here can
+      // be sized, so the strip field keeps whatever the organizer already has —
+      // writing 0 would look like a deliberate configuration.
       if (suggested !== null) {
         set({ strips_total: suggested })
       }

@@ -367,13 +367,26 @@ await shot('03-matrix')
 // 12 of its 12 competitions (re-measured after 006's day-axis fix — see the
 // header comment; the Unplaced tray is empty). The canvas still windows by
 // viewport, not by placement count, so not all 12 placed events have a block
-// in the DOM at the default scroll position: measured against the running
-// app, 11 render and the twelfth sits below the fold at rowScroll 0. The
-// schedule table below is the locator that reads the true placed count; this
-// floor only guards against the canvas windowing away everything.
+// in the DOM at the default scroll position. The schedule table below is the
+// locator that reads the true placed count; this floor only guards against the
+// canvas windowing away everything.
+//
+// 011 T013: this floor moved from 11 to 8. `applyTemplate` never touches
+// `days_available`, so it stays at boot's B1 value of 4 throughout this whole
+// driver — nothing here ever calls setDays. Before this feature the strip
+// suggestion was a function of the largest event alone and did not read day
+// count, so the old rule and baseline.md's day=3 harness happened to agree.
+// T010's busiest-day rule is a function of `days_available` (FR-005) by
+// design, so at the app's real days=4 it suggests 23 strips for this template
+// where baseline.md's forced days=3 harness measures 30 — both are the rule
+// working correctly at different day counts, not a disagreement. 23 strips
+// still places all 12 of 12 (re-confirmed via the engine directly), but the
+// wider strip axis pushes some of the 12 placed events onto higher strip
+// numbers that scroll out of the default viewport, so fewer blocks render
+// without scrolling. Measured against the running app, 2026-09-05.
 const blockCount = await page.locator('[data-event-block]').count()
 log('matrix event blocks =', blockCount)
-if (blockCount < 11) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
+if (blockCount < 8) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
 
 // Captured now, before "Fit to day" below can scroll a block out of the
 // window and drop its DOM node (windowing culls what is off-window rather
@@ -726,6 +739,59 @@ if (div1JuniorRowCount !== 24) {
 }
 await shot('06-div1junior-schedule')
 
+// ── Suggest on a template that renders nothing today (011 SC-005) ──
+// Before this feature, NAC Youth's Suggest button wrote 39 strips (the largest
+// single event's pool count) and the board came back empty:
+// `feasibility-strip-hours` tripped a blocking ERROR before the scheduler ever
+// ran (baseline.md §1). US1 (R5) demoted that finding to a WARN and US2 (L5)
+// replaced the largest-event rule with one sized for the busiest day's summed
+// pool demand, so this step presses the same button on the same template and
+// checks the board is no longer empty. The "Presets…" panel stays open from
+// the steps above, so click the trigger only if the list is not already
+// showing — same defensive shape as the NAC Div1/Junior and NAC Cadet/Junior
+// steps.
+const nacYouthVisible = await page
+  .getByText('NAC Youth', { exact: true })
+  .isVisible()
+  .catch(() => false)
+if (!nacYouthVisible) {
+  await page.getByRole('button', { name: 'Presets…' }).click()
+}
+await page.getByText('NAC Youth', { exact: true }).click()
+log('NAC Youth template applied')
+
+await page.getByRole('button', { name: 'Suggest' }).first().click()
+await page.waitForTimeout(100)
+const nacYouthStrips = await page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
+log('NAC Youth suggested strips =', nacYouthStrips)
+
+const nacYouthGen = page.getByRole('button', { name: 'Auto-schedule all' })
+if (await nacYouthGen.isDisabled()) {
+  await shot('06c-nacyouth-generate-disabled')
+  throw new Error('Auto-schedule all disabled for NAC Youth — read smoke-shots/06c for the blocking findings')
+}
+await nacYouthGen.click()
+await page.waitForTimeout(300)
+
+await page.getByRole('radio', { name: 'Schedule' }).click()
+await page.waitForTimeout(200)
+const nacYouthRowCount = await page.locator('[data-schedule-row]').count()
+log('NAC Youth schedule table rows =', nacYouthRowCount)
+// Not pinned to a literal count: `days_available` sits at boot's B1 value of 4
+// for this whole driver (applyTemplate never touches it), so the suggested
+// number and the placed count here are one instance of the busiest-day rule
+// at a day count baseline.md's engine harness (forced to 3) does not share —
+// see the ROC Div1A/Vet matrix-block comment above for the same effect. The
+// assertion that matters for SC-005 is non-zero: zero is exactly the outcome
+// R5/L5 exist to prevent, and pinning to a packing detail would make this
+// driver brittle against day-count or fixture changes that do not bear on the
+// defect this step exists to catch. Measured against the running app,
+// 2026-09-05: suggested 197 strips, 24 of 24 placed.
+if (nacYouthRowCount === 0) {
+  throw new Error('SC-005: NAC Youth placed 0 events at its Suggest count — the feasibility-strip-hours demotion or the busiest-day suggestion regressed')
+}
+await shot('06c-nacyouth-schedule')
+
 // ── Team event cut (008) ──
 // Before this feature, defaultCutForEntry gave every TEAM catalogue entry a
 // percentage cut inherited from its category, which the engine's cut-on-team
@@ -768,10 +834,7 @@ const teamRowCount = await page.locator('[data-schedule-row]').count()
 log('NAC Cadet/Junior schedule table rows =', teamRowCount)
 // Measured against the running app by running this file's exact sequence
 // (Presets… → NAC Cadet/Junior → Suggest → Auto-schedule all → Schedule radio
-// → count [data-schedule-row]) twice in a row. The strip count is 39 either
-// way (baseline.md's fresh-store measurement of Suggest for this template
-// recorded 39 too), and the shortfall against 24 is a strip-capacity limit on
-// this template, not a regression. This count is measured at this point in the
+// → count [data-schedule-row]). This count is measured at this point in the
 // driver's accumulated session state — after the ROC template, the
 // fencer-count edit to 99, and the share round-trip — not from a fresh boot,
 // so it need not match a fresh-store after-column measured elsewhere (e.g.
@@ -787,11 +850,18 @@ log('NAC Cadet/Junior schedule table rows =', teamRowCount)
 // event `strips_allocated: max(2, ceil(n/7))` where buildConfig used to send 0.
 // drift-baseline.md §Part 2 measured both against B1–B8 and attributes exactly
 // this kind of movement to them ("re-packing under D6 … and T061a"); five more
-// events fitting is that re-pack landing in this template's favour. An
-// increase, so constitution III's halt — which is a *drop* in scheduled event
-// count — does not apply.
-if (teamRowCount !== 20) {
-  throw new Error(`NAC Cadet/Junior schedule table rendered ${teamRowCount} rows, expected 20`)
+// events fitting is that re-pack landing in this template's favour.
+// 2026-09-05 (011 T013): 20 → 24, suggested strips 39 → 144. This is T010's
+// busiest-day suggestion rule, not a scheduling change: `applyTemplate` never
+// touches `days_available`, which stays at boot's B1 value of 4 for this whole
+// driver, so Suggest here sizes for the busiest of 4 day-groups' summed pool
+// demand rather than the old rule's largest-single-event count. The bigger
+// number the button now writes into the strip field is what closes the
+// remaining 4-event shortfall — this is R5/L5 (011) working as specified, an
+// increase, so constitution III's halt (a *drop* in scheduled count) does not
+// apply.
+if (teamRowCount !== 24) {
+  throw new Error(`NAC Cadet/Junior schedule table rendered ${teamRowCount} rows, expected 24`)
 }
 await shot('07-team-schedule')
 

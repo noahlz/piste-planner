@@ -1,6 +1,6 @@
 import { BottleneckSeverity, CutMode, VideoPolicy, DeMode, BottleneckCause, Phase } from './types.ts'
 import type { AnalysisResult, Bottleneck, Competition, TournamentConfig } from './types.ts'
-import { computePoolStructure, computeDeFencerCount } from './pools.ts'
+import { computePoolStructure, computeDeFencerCount, poolCountFor } from './pools.ts'
 import { computeBracketSize } from './de.ts'
 import { suggestFlightingGroups } from './flighting.ts'
 import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
@@ -15,18 +15,57 @@ export function isRegionalQualifier(config: TournamentConfig): boolean {
 }
 
 /**
- * Returns the suggested strip count baseline — the maximum number of pools
- * across all competitions (peak strip demand during the pool round phase).
- * Competitions with ≤1 fencer are skipped (no pools to run).
+ * Returns the suggested strip count — the strips the venue needs so its busiest
+ * day's pool round can run every pool at once (research.md D4, FR-005..FR-010).
+ *
+ * Every event gets one strip per pool, which is the scheduler's own invariant
+ * (`concurrentScheduler.ts:526` sets `desired_strip_count` to the pool count).
+ * The events are spread across `daysAvailable` by longest-processing-time
+ * greedy — descending pool demand, each event whole into the currently emptiest
+ * day — and the fullest day's total is divided by `maxPoolStripPct`, so the
+ * pool phase's share of the venue is what has to cover it.
+ *
+ * The busiest day is a SUM, not a max over events: a 3–5 event day shares the
+ * strip pool concurrently (`concurrentScheduler.ts:535`). Dividing total pools
+ * by the day count is not the same rule — it splits an event's pools across
+ * days, which cannot happen.
+ *
+ * Pure in its three arguments. It reads no `strips_total`, no day assignment
+ * and no scheduling result (FR-009), so it does not depend on the strip count
+ * it is being asked to suggest.
+ *
+ * Competitions with ≤1 fencer cannot form a pool (`computePoolStructure`
+ * throws) and contribute nothing. When none remains, the answer is `null` —
+ * the absence of a suggestion, distinguishable from a suggestion of 0 strips
+ * (FR-010).
  */
-export function suggestStripCount(competitions: Competition[]): number {
-  let maxPools = 0
+export function suggestStripCount(
+  competitions: Competition[],
+  daysAvailable: number,
+  maxPoolStripPct: number,
+): number | null {
+  const poolDemands: number[] = []
   for (const comp of competitions) {
     if (comp.fencer_count <= 1) continue
-    const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
-    maxPools = Math.max(maxPools, n_pools)
+    poolDemands.push(poolCountFor(comp.fencer_count, comp.use_single_pool_override))
   }
-  return maxPools
+  if (poolDemands.length === 0) return null
+
+  // Longest-processing-time greedy: biggest events placed first, each into the
+  // day that is emptiest at the time. One sort plus one pass over a fixed
+  // group count — no iteration to convergence (constitution IV).
+  poolDemands.sort((a, b) => b - a)
+  const dayLoads: number[] = new Array<number>(Math.max(1, Math.floor(daysAvailable))).fill(0)
+  for (const demand of poolDemands) {
+    let emptiest = 0
+    for (let day = 1; day < dayLoads.length; day++) {
+      if (dayLoads[day] < dayLoads[emptiest]) emptiest = day
+    }
+    dayLoads[emptiest] += demand
+  }
+
+  const busiestDayPools = Math.max(...dayLoads)
+  return Math.ceil(busiestDayPools / maxPoolStripPct)
 }
 
 /**

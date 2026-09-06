@@ -849,21 +849,14 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
       assertEmptyWithRuleError(competitions, config, 'duplicate-competition-id')
     })
 
-    it('feasibility-strip-hours: an aggregate shortfall with every individual event valid still empties the schedule', () => {
-      // Every event here is individually valid (no per-event finding fires),
-      // but the aggregate demand exceeds capacity. baseline.md notes this
-      // rule empties B4 and four of the ten templates — it is a *policy*
-      // finding computed over the whole set (research.md D2, D3), not a
-      // per-event one, so R2 must not touch it.
-      const competitions = [
-        comp('big-1', { category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, fencer_count: 200 }),
-        comp('big-2', { category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE, fencer_count: 200 }),
-        comp('big-3', { category: Category.VETERAN, gender: Gender.WOMEN, weapon: Weapon.EPEE, fencer_count: 200 }),
-      ]
-      const config = smallConfig({ days_available: 1, strips: makeStrips(2, 0), strips_total: 2, video_strips_total: 0 })
-
-      assertEmptyWithRuleError(competitions, config, 'feasibility-strip-hours')
-    })
+    // A `feasibility-strip-hours` case stood here until 011's T006. It was the
+    // block's fourth witness, and it is gone rather than rewritten in place:
+    // T004 demoted that rule to a WARN in every mode, so the fixture it used no
+    // longer contains a global ERROR of any kind and cannot demonstrate this
+    // block's claim in any form. The fixture itself survives — see
+    // 'the demotion does not rescue a structurally impossible venue' below,
+    // where it now guards the opposite half. The three cases above are
+    // untouched and still carry the block's purpose.
 
     it('mixed: a per-event finding alongside a global one still empties the schedule (D3)', () => {
       // D3: findings are computed once over the full set. A tournament
@@ -887,5 +880,181 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
       const { schedule } = scheduleAllConcurrent(competitions, config)
       expect(Object.keys(schedule), 'expected an empty schedule').toHaveLength(0)
     })
+  })
+})
+
+// ──────────────────────────────────────────────
+// The demoted feasibility finding (011 US1 T006, FR-001, SC-004)
+//
+// This block holds the fixture that used to live in the T013 block above as
+// 'feasibility-strip-hours: an aggregate shortfall with every individual event
+// valid still empties the schedule'. Three 200-fencer events, one day, two
+// strips — an aggregate demand of 323 strip-hours against 28 available.
+//
+// T006 was told to rewrite that case to assert a non-empty board carrying the
+// WARN. Measurement says otherwise and measurement wins (tasks.md standing rule
+// 8): this fixture's board is STILL empty after the demotion, and the reason it
+// was empty was never feasibility alone. `[M]` at T006, `validateConfig` on it
+// returns three ERROR `resource-precondition-strips` — one per event, "requires
+// 29 strips for pools but only 2 total strips configured" — alongside the
+// feasibility finding. The old case's own comment claimed "every event here is
+// individually valid (no per-event finding fires)", and that claim was already
+// false before 011 touched anything. It passed only because it asserted the
+// presence of a feasibility ERROR and then an empty board, and the per-event
+// ERRORs delivered the empty board independently.
+//
+// So the fixture is kept and its two halves are separated, which is what it
+// could never do while it was asserting one thing:
+//
+//  - the demotion reached it: no ERROR carries either feasibility rule id, and
+//    the shortfall is still reported, as a WARN (FR-001, FR-002).
+//  - the demotion did not reach past it: a structurally impossible venue still
+//    empties the board. SC-004 says every board still empty after this feature
+//    is empty for a structural reason, and this is the engine-level case of it.
+//
+// The "non-empty board carrying the WARN" assertion T006 was asked for is made
+// where a fixture can actually carry it: on B4 in `driftLedger.test.ts`, and on
+// the 13-event single-finding fixture in the T005 block below.
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent — the demoted feasibility finding (011 T006)', () => {
+  /** Three 200-fencer events on one day and two strips: 323 strip-hours wanted, 28 available. */
+  function aggregateShortfall(): { competitions: Competition[]; config: TournamentConfig } {
+    return {
+      competitions: [
+        comp('big-1', { category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, fencer_count: 200 }),
+        comp('big-2', { category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE, fencer_count: 200 }),
+        comp('big-3', { category: Category.VETERAN, gender: Gender.WOMEN, weapon: Weapon.EPEE, fencer_count: 200 }),
+      ],
+      config: smallConfig({ days_available: 1, strips: makeStrips(2, 0), strips_total: 2, video_strips_total: 0 }),
+    }
+  }
+
+  it('reports the aggregate shortfall as a WARN and contributes no ERROR', () => {
+    const { competitions, config } = aggregateShortfall()
+    const findings = validateConfig(config, competitions, ValidationMode.BINDING)
+
+    // Present, so the demotion cannot become a deletion: the organizer is still
+    // told about a 295 strip-hour shortfall. Rule id and severity, never message
+    // text — FR-001 holds the text unchanged and this file does not police it.
+    const feasibility = findings.filter(f => f.rule === 'feasibility-strip-hours')
+    expect(feasibility, 'the shortfall must still be reported').toHaveLength(1)
+    expect(feasibility[0]?.severity).toBe(BottleneckSeverity.WARN)
+
+    // And absent from the ERROR set, in both modes. A re-escalation in either
+    // one is what empties boards, and BINDING alone would not catch a mode
+    // re-derivation returning to validation.ts:74-77 (research.md D1).
+    for (const mode of [ValidationMode.BINDING, ValidationMode.ADVISORY]) {
+      const errors = validateConfig(config, competitions, mode)
+        .filter(f => f.severity === BottleneckSeverity.ERROR)
+        .map(f => f.rule)
+      expect(errors, `no feasibility ERROR under ${mode}`).not.toContain('feasibility-strip-hours')
+      expect(errors, `no video feasibility ERROR under ${mode}`).not.toContain('feasibility-video-strip-hours')
+    }
+  })
+
+  it('does not rescue a structurally impossible venue — the board is still empty (SC-004)', () => {
+    const { competitions, config } = aggregateShortfall()
+
+    // The ERRORs that hold this board empty are per-event and structural: each
+    // of the three events needs 29 pool strips and the venue has 2. Pinned by
+    // rule id so this fails loudly if the emptying ever changes hands back to
+    // an aggregate estimate rather than silently reading as "still empty".
+    const errors = validateConfig(config, competitions, ValidationMode.BINDING)
+      .filter(f => f.severity === BottleneckSeverity.ERROR)
+    expect(errors.map(f => f.rule)).toEqual([
+      'resource-precondition-strips', 'resource-precondition-strips', 'resource-precondition-strips',
+    ])
+
+    const { schedule } = scheduleAllConcurrent(competitions, config)
+    expect(Object.keys(schedule), 'a venue that cannot hold one event\'s pools schedules nothing').toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// postScheduleDiagnostics — the strip recommendation must survive a
+// WARN-only feasibility finding (011 US1 T005, research.md D3, FR-004)
+// ──────────────────────────────────────────────
+
+describe('postScheduleDiagnostics — the strip recommendation survives a WARN-only feasibility finding (T005)', () => {
+  it('a configuration whose only finding is feasibility-strip-hours (WARN) still emits the post-schedule RESOURCE_RECOMMENDATION INFO', () => {
+    // 13 events, one strip-hour-hungry combination per category/gender/weapon
+    // so `same-population` never fires. max_pool_strip_pct is deliberately
+    // below 1.0 so each event's own pool count (5, from 32 fencers) stays
+    // under strips_total (8) — no per-event resource-precondition-strips
+    // ERROR — while recommendStripCount's answer still exceeds it, which is
+    // what the post-schedule INFO is gated on. The resulting demand
+    // (13 events) trips the aggregate feasibility band, which after 011 T004
+    // is a WARN, not an ERROR: validateConfig produces exactly that one
+    // finding and nothing else, so the only bottleneck carrying
+    // RESOURCE_EXHAUSTION is a WARN, never an ERROR. Some events still miss
+    // their deadline once scheduling actually runs — an oversubscribed venue
+    // producing DEADLINE_BREACH_UNRESOLVABLE ERRORs on excluded events is the
+    // accepted cost recorded in spec.md Edge Cases, and those ERRORs carry a
+    // different cause, so they play no part in the gate this test checks.
+    const combos: Array<[Category, Gender, Weapon]> = [
+      [Category.DIV1, Gender.MEN, Weapon.FOIL],
+      [Category.DIV1, Gender.WOMEN, Weapon.EPEE],
+      [Category.DIV1A, Gender.MEN, Weapon.SABRE],
+      [Category.DIV1A, Gender.WOMEN, Weapon.FOIL],
+      [Category.DIV2, Gender.MEN, Weapon.EPEE],
+      [Category.DIV2, Gender.WOMEN, Weapon.SABRE],
+      [Category.DIV3, Gender.MEN, Weapon.FOIL],
+      [Category.DIV3, Gender.WOMEN, Weapon.EPEE],
+      [Category.JUNIOR, Gender.MEN, Weapon.SABRE],
+      [Category.JUNIOR, Gender.WOMEN, Weapon.FOIL],
+      [Category.CADET, Gender.MEN, Weapon.EPEE],
+      [Category.CADET, Gender.WOMEN, Weapon.SABRE],
+      [Category.DIV1, Gender.MEN, Weapon.EPEE],
+    ]
+    const competitions = combos.map(([category, gender, weapon], i) =>
+      comp(`ev-${i}`, { category, gender, weapon, fencer_count: 32, de_round_of_16_strips: 4 }),
+    )
+    const config = smallConfig({
+      days_available: 2,
+      strips: makeStrips(8, 8),
+      strips_total: 8,
+      video_strips_total: 8,
+      max_pool_strip_pct: 0.6,
+      max_de_strip_pct: 1.0,
+    })
+
+    const errors = validateConfig(config, competitions, ValidationMode.BINDING)
+    expect(errors, 'expected exactly one finding: the feasibility WARN').toHaveLength(1)
+    expect(errors[0]?.rule).toBe('feasibility-strip-hours')
+    expect(errors[0]?.severity).toBe(BottleneckSeverity.WARN)
+
+    const { schedule, bottlenecks } = scheduleAllConcurrent(competitions, config)
+
+    // 011 T006, FR-003. This is the file's only fixture whose validation output
+    // is the feasibility WARN and nothing else, so it is the only one that can
+    // witness "a board is not emptied by an aggregate estimate" without another
+    // finding confounding the result. Before T004 this same configuration
+    // returned nothing at all. `[M]` at T006 it places 3 of its 13 events —
+    // asserted as a lower bound rather than pinned at 3, because the number a
+    // 13-event board fits into 8 strips is packing detail this test has no
+    // stake in, while zero is the outcome R5 exists to prevent. The drift
+    // ledger pins exact counts; this pins the absence of a collapse.
+    expect(
+      Object.keys(schedule).length,
+      'a board whose only finding is a feasibility WARN must not come back empty (FR-003)',
+    ).toBeGreaterThan(0)
+
+    expect(
+      bottlenecks.some(b => b.severity === BottleneckSeverity.ERROR && b.cause === BottleneckCause.RESOURCE_EXHAUSTION),
+      'expected no ERROR carrying RESOURCE_EXHAUSTION — feasibility is the only such finding and it is a WARN',
+    ).toBe(false)
+
+    const recommendation = bottlenecks.find(b => b.cause === BottleneckCause.RESOURCE_RECOMMENDATION)
+    expect(recommendation, 'expected the post-schedule strip recommendation to survive the WARN-only feasibility finding').toBeDefined()
+    expect(recommendation?.severity).toBe(BottleneckSeverity.INFO)
+    // `[M]` at T011. Was `need 9` under the max-over-events rule, which sized
+    // the venue for ONE of these 13 identical events (ceil(5 / 0.6) = 9). The
+    // busiest-day rule sizes for the events that share a day: 13 events × 5
+    // pools = 65, split across days_available=2 into 7 + 6, so the busiest day
+    // is 35 pools and ceil(35 / 0.6) = 59. The gate this test is about opens on
+    // either number — both exceed 8 — so the test's subject is unchanged and
+    // only the number it reports moved.
+    expect(recommendation?.message).toMatch(/^Strips: need 59, have 8 —/)
   })
 })
