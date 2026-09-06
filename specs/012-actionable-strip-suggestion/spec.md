@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-06
 
-**Status**: Draft
+**Status**: Delivered
 
 **Input**: Make the strip suggestion actionable. 011 made the suggested count one
 that schedules successfully; it did not make it one an organizer can act on. The
@@ -31,6 +31,16 @@ B1), not the days=3 that `baseline.md`'s harness forces.
 | RYC Weekend | 18 | 78 | **32** | 18 of 18 |
 | RJCC Weekend | 12 | 54 | **24** | 12 of 12 |
 | Junior Olympics | 18 | 135 | **49** | 18 of 18 |
+
+**Reconciliation, 2026-09-06**: the smallest-count column above (76 / 96 / 48
+on the three largest templates) is the *monotone threshold* — the smallest
+count above which every count places every event — not the smallest count
+that places every event at all. `baseline.md` §1a measured both and found
+scheduling non-monotonic in strip count on four templates; the delivered
+counts are the smaller, correct answers to FR-001's question: 66 / 85 / 46
+(`baseline.md` §1, §5). In the running app, NAC Vet/Div1/Junior reads 80
+rather than 85 because the app boots with 12 video strips, which changes the
+search's per-candidate config (`handoff.md` §7b).
 
 The suggestion overshoots by 1.53× to 3.29×. The cause is the rule's own premise:
 it sizes the venue so that every pool scheduled on the busiest day could run at

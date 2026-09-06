@@ -820,6 +820,11 @@ saying what to do).
 **Whoever takes this re-measures at `days_available` = 4 first** – see the next
 item.
 
+**Closed by 012 (2026-09-06)**: the search returns the smallest count that
+places every event; 268 → 85 on the largest template
+([`specs/012-actionable-strip-suggestion/handoff.md`](../../specs/012-actionable-strip-suggestion/handoff.md)
+§2).
+
 ## `baseline.md`'s suggested strip counts are days=3; the app runs at days=4
 
 *Found by 011's T013 against the running app, 2026-09-06. Recorded, not fixed –
@@ -842,6 +847,10 @@ counts hold at days=4. The hazard is quotation: `baseline.md` §5's suggested
 column is the most quotable table in that feature and it is **not** the number
 the product shows. Anyone sizing a follow-up against 258 is sizing it against a
 harness constant.
+
+**012 measured everything at days=4**;
+[`specs/012-actionable-strip-suggestion/baseline.md`](../../specs/012-actionable-strip-suggestion/baseline.md)
+supersedes 011's §5 for the suggestion.
 
 ## B4's app path places 18 where the drift ledger places 17
 
@@ -906,6 +915,9 @@ the failure appears at import time in an unrelated test. The fix is a third leaf
 module holding the shared arithmetic. Worth doing opportunistically the next
 time either file needs real work – not as a feature of its own.
 
+**Closed by 012 T011** (`b5e0600efc`): `recommendStripCount` deleted,
+`stripBudget.ts` no longer imports `analysis.ts`.
+
 ## The post-schedule strip recommendation is gated on message text
 
 *Introduced by 011's T005, 2026-09-05, as the only option against today's
@@ -928,6 +940,10 @@ This is the same root cause as
 [§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject):
 `Bottleneck` needs a rule id, or `subjects`, or both. Two features have now had
 to couple to message text for want of one.
+
+**012 removed the number from the finding**; the gate on the
+`RESOURCE_INSUFFICIENT` prefix remains (`concurrentScheduler.ts`,
+`postScheduleDiagnostics`). Still open.
 
 ## Per-event entry caps are not modelled
 
@@ -957,6 +973,9 @@ never a scheduling decision.
 **Cost if ignored**: the app can name capping in advice prose but cannot let an
 organizer try it and see the result, so the one lever that reduces the problem is
 the one lever the tool cannot model.
+
+012 named this as a lever (FR-014) in the post-schedule finding and did not
+model it. Still open.
 
 ## The 2026-27 Elite/National split is unmodelled, and it bites where 315 does not
 
@@ -1058,6 +1077,8 @@ the schedule USA Fencing rules forbid, and the organizer finds out at the
 tournament. It also makes the two halves of the app disagree about what is legal,
 which is worse than either rule alone.
 
+012 recorded this in its handoff §8 as something it did not fix. Still open.
+
 ## Templates are invented numbers, not a real season
 
 *Raised 2026-09-06 during 012's brainstorming as a product requirement.*
@@ -1141,6 +1162,31 @@ field by hand.
 strips in pairs can drop an event from the board with no explanation, and it
 will be reported as a bug. The design note has the answer to that report and
 four fix options with their costs. None is scheduled.
+
+012 measured this (`baseline.md` §1a) and did not fix it. Still open.
+
+## NAC Youth suggests 63 in the smoke driver's accumulated state and 66 from a fresh store
+
+*Found by 012's T014 live smoke run, 2026-09-06. Recorded, not isolated
+further —
+[`specs/012-actionable-strip-suggestion/handoff.md`](../../specs/012-actionable-strip-suggestion/handoff.md)
+§7(c) has the probe.*
+
+`[M]` Both counts place 24 of 24 (`scripts/smoke.mjs`, `633d27adb5`). A fresh
+store's `NAC Youth` **Suggest** search lands on 66; the same template pressed
+partway through the smoke driver's accumulated session state lands on 63.
+Video strip count is ruled out by a throwaway probe – a fresh store returns 66
+at both 8 and 12 video strips.
+
+`applyTemplate` does not reset several candidate fields, and none of them is
+isolated as the cause: `dayConfigs` carried from boot's B1 preset versus
+`setDays(4)`'s own defaults, the Admin-gap edit sequence earlier in the
+driver, tournament type, and the ROC fencer-count edit that precedes this
+step.
+
+**Cost if ignored**: a suggested strip count that depends on session history
+rather than the template alone is hard to explain to an organizer, and the
+smoke driver's own comment is the only record of the disagreement.
 
 ---
 
