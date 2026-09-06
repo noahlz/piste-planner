@@ -982,7 +982,7 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     // so `same-population` never fires. max_pool_strip_pct is deliberately
     // below 1.0 so each event's own pool count (5, from 32 fencers) stays
     // under strips_total (8) — no per-event resource-precondition-strips
-    // ERROR — while recommendStripCount's answer still exceeds it, which is
+    // ERROR — while suggestStripCount's ceiling still exceeds it, which is
     // what the post-schedule INFO is gated on. The resulting demand
     // (13 events) trips the aggregate feasibility band, which after 011 T004
     // is a WARN, not an ERROR: validateConfig produces exactly that one
@@ -1088,10 +1088,7 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     const config = smallConfig()
 
     const findings = validateConfig(config, [c1, c2], ValidationMode.BINDING)
-    expect(
-      findings.some(f => f.rule === 'feasibility-strip-hours'),
-      'expected no feasibility finding — this board is meant to fit',
-    ).toBe(false)
+    expect(findings, 'expected no validation finding — this board is meant to fit').toHaveLength(0)
 
     const { bottlenecks } = scheduleAllConcurrent([c1, c2], config)
     expect(

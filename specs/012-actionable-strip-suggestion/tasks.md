@@ -287,7 +287,7 @@ change is expensive, while US2 is confined to one action and one component
     scenario by scenario before accepting it. Record the ledger test's added
     wall time (`[M]` ~2s expected) *(subagent commits)*
 
-- [ ] **T012** [US3] Verify the split by grep, from the orchestrator, no commit:
+- [X] **T012** [US3] Verify the split by grep, from the orchestrator, no commit:
   `recommendStripCount` appears nowhere under `src/` or `__tests__/`;
   `suggestStripCount` is imported only by `stripSearch.ts` and
   `analysis.test.ts`; `stripSearch` is imported by nothing under `src/engine/`;
