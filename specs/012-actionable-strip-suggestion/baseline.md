@@ -31,13 +31,19 @@ spec's ~350ms worst-case scan estimate is also confirmed for the scans that
 find an answer: `[M]` the dearest full scan is **203ms**, on
 NAC Vet/Div1/Junior.
 
-**One cost the spec does not state, recorded here for T008.** Every scan
-measured below stops at its answer. A scan that finds *no* answer runs the full
+**One cost the spec does not state, recorded here for T008.** Every scan in §1
+stops at its answer. A scan that finds *no* answer runs the full
 `ceiling − floor + 1` range, which on NAC Vet/Div1/Junior is **203 candidates**.
-`[E]` at the 8.9–10.1ms per-run cost measured on that template, an exhausting
-scan there costs roughly **1.8–2.2s**, which straddles SC-007's two-second
-bound. This is the absence case only. It is not measured here and T008 is where
-it is judged.
+`[M]` §1a swept exactly that range on that template, and it cost **1468ms**, or
+7.2ms per candidate. An exhausting scan on the largest template therefore
+finishes **inside SC-007's two-second bound**, with roughly a quarter of the
+budget to spare.
+
+Recorded because this file's first revision estimated `[E]` 1.8–2.2s from the
+per-run figure above and was wrong on the pessimistic side. Candidates far above
+the answer are cheaper than candidates near it, so the average over a full sweep
+sits below the per-run cost measured at the answer. `[M]` all ten sweeps
+together are 946 scheduler runs for 2436ms.
 
 ---
 
@@ -187,6 +193,98 @@ short. Recorded so that a later reader does not mistake it for a broken
 measurement: the scan evaluated 11 candidates from 5 to 15 and the first ten
 placed fewer than 12.
 
+### 1a. Monotonicity above the answer
+
+`[M]` A second probe, `tmp/probe-012-monotonicity.test.ts`, evaluated **every**
+candidate from floor to ceiling inclusive on all ten templates — 946 scheduler
+runs, 2436ms — using the same per-candidate config as §1. It was run with
+
+```
+timeout 900 pnpm --silent vitest run tmp/probe-012-monotonicity.test.ts > ./tmp/mono.log 2>&1
+```
+
+and deleted after the numbers were recorded. Two quantities per template:
+**shortfalls above** is every candidate strictly greater than the smallest
+working count that places fewer than every event, and the **monotone threshold**
+is the smallest count at or above which every candidate up to the ceiling places
+every event.
+
+| Template | Smallest working | Candidates above it that fall short | Monotone threshold | Decreases anywhere in range |
+|---|---:|---|---:|---:|
+| NAC Youth | 66 | **69–75, each placing 23 of 24** | **76** | 3 |
+| NAC Cadet/Junior | 48 | **61 (22 of 24), 62–67 (23 of 24)** | **68** | 1 |
+| NAC Div1/Junior | 49 | none | 49 | 0 |
+| NAC Vet/Div1/Junior | 85 | **86 (65), 87 (65), 88 (64), 90 (65), 91 (64), 92 (65), 93 (64), 94 (64), 95 (65)** — all of 66 | **96** | 9 |
+| ROC Div1A/Vet | 15 | none | 15 | 0 |
+| ROC Div1A/Div2/Vet | 16 | none | 16 | 0 |
+| ROC Mega | 46 | **47, placing 41 of 42** | **48** | 3 |
+| RYC Weekend | 32 | none | 32 | 0 |
+| RJCC Weekend | 24 | none | 24 | 0 |
+| Junior Olympics | 49 | none | 49 | 0 |
+
+**Scheduling is not monotonic in strip count, and this is the first time the
+project has observed it.** [research.md D3](./research.md) assumed
+non-monotonicity and specified an upward scan rather than a bisection on that
+assumption, without a counterexample in hand. Four templates now supply one.
+NAC Vet/Div1/Junior loses an event at 86 strips that it places at 85, and does
+not hold all 66 reliably until 96. NAC Youth places 24 at 66, 67 and 68, then
+places 23 at every count from 69 to 75. `[M]` The largest single drop is
+NAC Vet/Div1/Junior falling from 64 placed at 78 strips to 60 at 79.
+
+### Does the 76 → 66 gap have a non-monotonic explanation?
+
+**On the three templates that disagree with the spec, yes, exactly.** `[M]` The
+spec's figure equals the measured monotone threshold on each of them, to the
+strip:
+
+| Template | Spec §Context | Smallest working `[M]` | Monotone threshold `[M]` |
+|---|---:|---:|---:|
+| NAC Youth | 76 | 66 | **76** |
+| NAC Vet/Div1/Junior | 96 | 85 | **96** |
+| ROC Mega | 48 | 46 | **48** |
+
+A method that assumes monotonicity — a bisection, or a scan that samples rather
+than steps — cannot return a count below the threshold, because every probe it
+takes in the non-monotone band reads as failure and pushes its lower bound up.
+The three disagreements are therefore not measurement error in either direction.
+Both numbers are correct answers to different questions: 66 is the smallest
+count that places every event, and 76 is the smallest count above which *every*
+count places every event.
+
+**What this does not establish.** The spec's ten figures are not uniformly the
+monotone threshold, so no single method is shown to have produced them.
+NAC Cadet/Junior is the counterexample: its threshold is **68** and the spec
+records **48**, which is the upward scan's answer.
+
+`[E]` The sweep fixes the pass/fail verdict at every count in every range, so a
+bisection can be replayed exactly against it rather than guessed at. A standard
+lower-bound bisection returns **76** on NAC Youth, matching the spec, and
+**68** on NAC Cadet/Junior, which the spec does not record. So the spec's
+numbers agree with the threshold on nine of ten and with the upward scan on the
+tenth, and no single method is shown to have produced all ten. No cause is
+proposed for the mixture. What is shown is narrower and sufficient: each of the
+three disagreements has a precise non-monotonic explanation, and none remains
+unaccounted for.
+
+### What this means for T005, T006 and the organizer
+
+Three consequences, each measured rather than argued.
+
+1. **The upward scan is load-bearing, not a precaution.** A bisection would
+   return 76, 96 and 48 on the three templates above. Those are the numbers
+   this feature exists to shrink, and two of them are within a strip or two of
+   what the ceiling-based rule already produces on the small regionals. The
+   scan's cost buys 10, 11 and 2 strips on the three largest boards.
+2. **T005's "minimality from both sides" case has a real fixture.** Any of the
+   four non-monotone templates satisfies it, and NAC Vet/Div1/Junior does so
+   most sharply: 85 places 66 of 66 and 86 places 65.
+3. **An organizer who adds strips to the suggested count can lose an event.**
+   `[M]` On four of ten templates, at least one count above the answer places
+   fewer events than the answer does. Nothing in this feature's scope addresses
+   that, and nothing in its scope claims otherwise, but it is the first measured
+   evidence for the behaviour [spec.md §Edge Cases](./spec.md) describes as "not
+   proven impossible". It belongs in the handoff.
+
 ---
 
 ## 2. B1–B8, as they stand
@@ -259,12 +357,17 @@ strengthens the feature's case rather than weakening it.
    that the aggregate "agrees to the strip-hour" with the message is what keeps
    the two consistent.
 
-No cause is proposed for the first three. Three templates measuring lower than a
-figure the spec recorded on the same commit is worth naming as unexplained: this
-probe hardcodes `setDays(4)`, and if the spec's figures came from a run that
-took days from a different path the two are measuring different tournaments.
-Nothing in this task establishes which. The numbers above are reproducible from
-the method in §The method and are what T008 is judged against.
+**The first three are explained by §1a, and were not when this section was first
+written.** `[M]` On each of them the spec's figure is exactly the measured
+monotone threshold — the smallest count above which every count places every
+event — while the figure here is the smallest count that places every event at
+all. Both are correct answers to different questions, and the gap between them
+is the non-monotone band §1a measures. Nothing about the day count or the
+measurement path differs, which was this section's first conjecture and is
+withdrawn.
+
+The numbers above are reproducible from the method in §The method and are what
+T008 is judged against.
 
 ### The four structural claims
 
