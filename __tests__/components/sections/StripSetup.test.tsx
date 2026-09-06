@@ -110,6 +110,13 @@ describe('StripSetup — the searching indicator (T013)', () => {
 
     unmount()
 
+    // The cleanup effect must clear the reveal timer synchronously on
+    // unmount. Without this the test below cannot fail: unmount() already
+    // tears down the DOM tree, so queryByRole('status') reads null either
+    // way, and React 19 silently no-ops a setState on an unmounted
+    // component rather than throwing.
+    expect(vi.getTimerCount()).toBe(0)
+
     expect(() => {
       act(() => {
         vi.advanceTimersByTime(SUGGEST_INDICATOR_DELAY_MS + 1)
