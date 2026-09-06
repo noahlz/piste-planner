@@ -377,4 +377,31 @@ describe('Realistic tournament integration', () => {
       expect(Object.keys(schedule).length).toBeGreaterThan(0)
     })
   })
+
+  describe('NAC Vet/Div1/Junior — the app configuration path (010 US1, T004)', () => {
+    // Same isolating venue as NAC Div1/Junior above, for the same reason:
+    // baseline.md §3 records feasibility-strip-hours underneath R1's two
+    // errors at this template's suggested strip count, and 80/12 is the venue
+    // baseline.md measured as clean of that Wave 3 defect.
+    const STRIPS_ISOLATING_INDIV_TEAM_SAME_DAY = 80
+    const VIDEO_STRIPS = 12
+
+    it('places events for NAC Vet/Div1/Junior, built through applyTemplate + buildTournamentConfig', () => {
+      useStore.setState(useStore.getInitialState(), true)
+      useStore.getState().setDays(useStore.getState().days_available) // store's default day count (3), dayConfigs populated as boot does
+      useStore.getState().applyTemplate('NAC Vet/Div1/Junior')
+      useStore.getState().setStrips(STRIPS_ISOLATING_INDIV_TEAM_SAME_DAY)
+      useStore.getState().setVideoStrips(VIDEO_STRIPS)
+
+      const { config, competitions } = buildTournamentConfig(useStore.getState())
+      const { schedule } = scheduleAll(competitions, config)
+
+      // baseline.md §3 "After R1" measures this at 45/66, driven by
+      // DEADLINE_BREACH warnings and the scheduling-density feasibility rule
+      // this feature does not touch — Wave 3's territory. Assert non-emptiness,
+      // not the exact 45: pinning it would pin a number Wave 3 is expected to
+      // move.
+      expect(Object.keys(schedule).length).toBeGreaterThan(0)
+    })
+  })
 })

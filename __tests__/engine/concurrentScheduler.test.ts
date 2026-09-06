@@ -630,9 +630,13 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
       expect(b.severity).toBe(BottleneckSeverity.WARN)
     }
 
-    // Subject ids, not message wording: each expected pair must be the
-    // subject of exactly one bottleneck — its competition_id is one of the
-    // pair and its message names the other.
+    // Reads bn.message for the paired competition rather than a structured
+    // subject, because Bottleneck (src/engine/types.ts) carries only a single
+    // competition_id and a free-text message — no field for a second subject
+    // the way ValidationError carries `subjects: string[]`. This is the best
+    // available option against today's interface, not an oversight; see
+    // docs/design/backlog.md §Bottleneck has no structured field for a second
+    // subject.
     for (const [a, b] of expectedPairs) {
       const match = crossoverBottlenecks.filter(bn =>
         (bn.competition_id === a || bn.competition_id === b)
@@ -675,13 +679,18 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
     ]
   }
 
-  /** FR-006 half 1: the named rule fires as an ERROR naming the bad event, via validateConfig directly — rule id and subjects, never message text. */
+  /**
+   * FR-006 half 1: the named rule fires as an ERROR naming the bad event, via
+   * validateConfig directly — rule id and subjects, never message text.
+   * Exactly one, per FR-006's "keeping one ERROR per excluded competition" —
+   * a second match here would be a duplicate emission, not a passing variant.
+   */
   function assertRuleError(competitions: Competition[], config: TournamentConfig, badId: string, rule: string): void {
     const errors = validateConfig(config, competitions, ValidationMode.BINDING)
     const matches = errors.filter(
       e => e.severity === BottleneckSeverity.ERROR && e.rule === rule && (e.subjects ?? []).includes(badId),
     )
-    expect(matches.length, `expected a '${rule}' ERROR naming ${badId}`).toBeGreaterThan(0)
+    expect(matches.length, `expected exactly one '${rule}' ERROR naming ${badId}`).toBe(1)
   }
 
   /** FR-006 half 2: every valid event is scheduled and the bad one has no entry. */
@@ -700,7 +709,14 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
     // fencer_count 1 < MIN_FENCERS (2). Guarded everywhere else in
     // validation.ts by `fencer_count >= MIN_FENCERS`, so no other rule
     // reads this competition's derived fields — isolated to one finding.
-    const bad = comp('bad-fencer-count', { fencer_count: 1 })
+    // category/gender/weapon deliberately differ from validTrio()'s
+    // 'valid-1' (DIV1/MEN/FOIL) so this event does not share its
+    // same-population key — smallConfig()'s 2-day default sits exactly at
+    // the same-population rule's threshold, so a collision here would pass
+    // by accident rather than by isolation.
+    const bad = comp('bad-fencer-count', {
+      fencer_count: 1, category: Category.CADET, gender: Gender.WOMEN, weapon: Weapon.EPEE,
+    })
     const competitions = [...validTrio(), bad]
     const config = smallConfig()
 
@@ -771,7 +787,10 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
   it('FR-009: one summary finding names how many competitions were excluded', () => {
     // Two independent fencer-count-bounds defects, so the excluded count is
     // unambiguous (2) and distinct from "one ERROR per excluded event."
-    const bad1 = comp('bad-1', { fencer_count: 1 })
+    // category/gender/weapon deliberately unique per event (and distinct from
+    // validTrio()'s DIV1/MEN/FOIL) so neither collides with the other or with
+    // a valid event on the same-population key.
+    const bad1 = comp('bad-1', { fencer_count: 1, category: Category.DIV3, gender: Gender.WOMEN, weapon: Weapon.FOIL })
     const bad2 = comp('bad-2', { fencer_count: 1, category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE })
     const competitions = [...validTrio(), bad1, bad2]
     const config = smallConfig()

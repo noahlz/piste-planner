@@ -20,6 +20,32 @@ Spec Kit feature directory is created for one only when it is assigned a phase.
 > needs doing, read the bottom half before reopening ground a closed feature
 > already covered.
 
+## `Bottleneck` has no structured field for a second subject
+
+*Found by 010's test-quality review of T010 (R7), 2026-09-05. Recorded, not
+fixed — `types.ts` is out of this feature's scope.*
+
+`Bottleneck` (`src/engine/types.ts:354-362`) carries a single `competition_id`
+plus a free-text `message`, with no field for a second subject. R7's
+hard-edge-violation bottlenecks (010 T010,
+[`specs/010-wave-1-reconciliation/`](../../specs/010-wave-1-reconciliation/))
+are the first producer that genuinely needs two — FR-003 requires naming both
+competitions in a violated pair — and with no structured place to put the
+second one, the consumer test in
+`__tests__/engine/concurrentScheduler.test.ts` ("one WARN
+UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck per hard-edged pair") can only assert
+`bn.message.includes(a) && bn.message.includes(b)`, which is message-text
+coupling this feature's own rules otherwise prohibit. `ValidationError`
+(`types.ts`) already solves this with `subjects: string[]`; `Bottleneck` has no
+equivalent.
+
+The test's coupling is the best available option against today's interface,
+not a test-authoring gap — the cause is the production type, not the
+assertion. Fixing it means giving `Bottleneck` a `subjects: string[]` field
+mirroring `ValidationError`'s and updating every bottleneck producer to fill
+it, which ripples wider than this feature's one-file-per-item scope and needs
+its own review.
+
 ## A fencer count of 0 or 1 unmounts the whole app
 
 *Found by 004's T054 React review on 2026-09-01 while reviewing US3. Not fixed
