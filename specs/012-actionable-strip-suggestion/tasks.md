@@ -266,7 +266,7 @@ change is expensive, while US2 is confined to one action and one component
   green. The ledger digest carries no INFO text, so nothing is expected to
   move; run it anyway and say so in the commit *(subagent commits)*
 
-- [ ] **T011** [US3] **(Opus)** **(drift)** Remove the rule and re-point the
+- [X] **T011** [US3] **(Opus)** **(drift)** Remove the rule and re-point the
   ledger, in one commit so `tsc -b` is never red between them:
   - Delete `recommendStripCount` (`stripBudget.ts:37-58`) and the import of
     `analysis.ts` at `stripBudget.ts:8-13` – the two-module import cycle 011's

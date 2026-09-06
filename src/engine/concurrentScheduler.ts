@@ -1465,7 +1465,7 @@ export function postScheduleDiagnostics(
   // No strip count of its own (FR-015, research.md D4). All three candidates
   // that could supply one are barred: the search's answer runs inside
   // `scheduleAll` and calling it here would recurse (FR-011); the concurrency
-  // ceiling `recommendStripCount` computed must reach no user-visible surface
+  // ceiling (`suggestStripCount`) must reach no user-visible surface
   // (FR-005); and reporting the strip-hours floor as an answer is 011's
   // research.md D4 rejection of strip-hours-over-day-length — it implies a
   // pool round can run on fewer strips over more hours, the double-stripping

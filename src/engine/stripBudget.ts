@@ -1,16 +1,14 @@
-// Strip budget utilities: compute strip caps, recommend strip/ref counts,
-// and flag competitions that need flighting due to strip scarcity.
+// Strip budget utilities: build the engine's strip list, compute strip caps,
+// recommend ref counts, and flag competitions that need flighting due to strip
+// scarcity. No strip-count recommendation lives here: 012 FR-016 removed it,
+// which also ended this module's import of the analysis module and with it the
+// mutual import between the two that 011 introduced. This module imports
+// downward only, and the analysis module still imports `computeStripCap` here.
 
 import type { Competition, Strip, TournamentConfig } from './types.ts'
 import { Weapon, DeMode } from './types.ts'
 import { poolCountFor } from './pools.ts'
 import { peakDeRefDemand } from './refs.ts'
-// `analysis.ts` imports `computeStripCap` from this module, so this import
-// closes a cycle. Both sides are hoisted function declarations used only when
-// called, never at module-evaluation time, so neither module observes the other
-// half-initialized. The alternative was a second copy of the rule, which is the
-// defect FR-008 exists to remove.
-import { suggestStripCount } from './analysis.ts'
 
 /**
  * The one rule that turns a strip count into the engine's strip list:
@@ -46,29 +44,6 @@ export function computeStripCap(
 ): number {
   const pct = eventOverridePct ?? globalPct
   return Math.floor(stripTotal * pct)
-}
-
-/**
- * The strip count the venue needs so the busiest day's pool round can run every
- * pool at once. Kept as a name because the post-schedule INFO
- * (`concurrentScheduler.ts`) has always called it, but it is no longer a rule of
- * its own: it is an alias for `suggestStripCount`, the single implementation
- * (research.md D5, FR-008).
- *
- * It used to take the MAX pool count over events, which sized the venue for the
- * largest event alone and left every other event on that day unhoused. The
- * physics is a SUM over the events sharing a day, which is why the signature
- * gained `daysAvailable` (research.md D4, FR-005).
- *
- * Returns `null` when no competition can be sized — the absence of an answer,
- * which the old rule reported as the number 0 (FR-010).
- */
-export function recommendStripCount(
-  competitions: Competition[],
-  daysAvailable: number,
-  maxPoolStripPct: number,
-): number | null {
-  return suggestStripCount(competitions, daysAvailable, maxPoolStripPct)
 }
 
 /**

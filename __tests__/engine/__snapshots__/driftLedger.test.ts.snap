@@ -403,7 +403,7 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
   ],
   "scheduledCount": 24,
-  "stripRecommendation": 135,
+  "stripRecommendation": 48,
   "warnCountsByCause": {},
 }
 `;
@@ -811,7 +811,7 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
   ],
   "scheduledCount": 24,
-  "stripRecommendation": 189,
+  "stripRecommendation": 70,
   "warnCountsByCause": {
     "RESOURCE_EXHAUSTION": 6,
     "SCHEDULE_ACCEPTED_WITH_WARNINGS": 2,
@@ -1222,7 +1222,7 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
   ],
   "scheduledCount": 24,
-  "stripRecommendation": 182,
+  "stripRecommendation": 71,
   "warnCountsByCause": {},
 }
 `;
@@ -1518,7 +1518,7 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
   ],
   "scheduledCount": 17,
-  "stripRecommendation": 190,
+  "stripRecommendation": 76,
   "warnCountsByCause": {
     "DEADLINE_BREACH": 14,
     "RESOURCE_EXHAUSTION": 13,
@@ -1742,7 +1742,7 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
   ],
   "scheduledCount": 12,
-  "stripRecommendation": 73,
+  "stripRecommendation": 28,
   "warnCountsByCause": {
     "RESOURCE_EXHAUSTION": 12,
   },
@@ -2460,7 +2460,7 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
   ],
   "scheduledCount": 45,
-  "stripRecommendation": 165,
+  "stripRecommendation": 60,
   "warnCountsByCause": {
     "DEADLINE_BREACH": 9,
     "RESOURCE_EXHAUSTION": 18,
@@ -2781,7 +2781,7 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
   ],
   "scheduledCount": 18,
-  "stripRecommendation": 207,
+  "stripRecommendation": 64,
   "warnCountsByCause": {
     "SCHEDULE_ACCEPTED_WITH_WARNINGS": 2,
   },
@@ -3611,7 +3611,7 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
   ],
   "scheduledCount": 52,
-  "stripRecommendation": 147,
+  "stripRecommendation": 69,
   "warnCountsByCause": {
     "DEADLINE_BREACH": 1,
     "RESOURCE_EXHAUSTION": 5,
