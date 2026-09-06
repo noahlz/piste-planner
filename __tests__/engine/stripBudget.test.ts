@@ -1,12 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import {
   computeStripCap,
   recommendStripCount,
   recommendRefCount,
   flagFlightingCandidates,
+  buildStrips,
 } from '../../src/engine/stripBudget.ts'
 import { makeCompetition, makeConfig } from '../helpers/factories.ts'
 import { Weapon, DeMode } from '../../src/engine/types.ts'
+import { useStore } from '../../src/store/store.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { resolveVideoStrips } from '../../src/store/typeDefaults.ts'
 
 // ──────────────────────────────────────────────
 // computeStripCap
@@ -255,5 +259,34 @@ describe('flagFlightingCandidates', () => {
     // at a cap of 1, but the real pool count is 1 so it should not be flagged at cap=1.
     const comps = [makeCompetition({ id: 'tiny', fencer_count: 9 })]
     expect(flagFlightingCandidates(comps, 1)).toEqual([])
+  })
+})
+
+// ──────────────────────────────────────────────
+// buildStrips
+// ──────────────────────────────────────────────
+
+describe('buildStrips', () => {
+  beforeEach(() => {
+    useStore.setState(useStore.getInitialState())
+  })
+
+  it('returns `total` strips with ids strip-1..strip-N and the first videoCount video-capable', () => {
+    const strips = buildStrips(5, 2)
+
+    expect(strips).toHaveLength(5)
+    expect(strips.map(s => s.id)).toEqual(['strip-1', 'strip-2', 'strip-3', 'strip-4', 'strip-5'])
+    expect(strips.map(s => s.video_capable)).toEqual([true, true, false, false, false])
+  })
+
+  it('buildTournamentConfig(state) yields config.strips deep-equal to buildStrips(state.strips_total, resolved video count)', () => {
+    const state = useStore.getState()
+    state.setStrips(10)
+    state.setVideoStrips(3)
+
+    const { config } = buildTournamentConfig(useStore.getState())
+    const resolvedVideo = resolveVideoStrips(useStore.getState().video_strips_total, useStore.getState().tournament_type)
+
+    expect(config.strips).toEqual(buildStrips(useStore.getState().strips_total, resolvedVideo))
   })
 })

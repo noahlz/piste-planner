@@ -115,7 +115,7 @@ that count. T008 checks this from the app's own path.
 **Purpose**: the aggregate strip-hours and the strip list each get a single
 definition before anything reads them a second time.
 
-- [ ] **T003** Write the red tests. In `__tests__/engine/capacity.test.ts`: a
+- [X] **T003** Write the red tests. In `__tests__/engine/capacity.test.ts`: a
   named aggregate function sums `estimateCompetitionStripHours(...).total_strip_hours`
   over the list, skips a competition whose `fencer_count` is below
   `config.MIN_FENCERS` or above `config.MAX_FENCERS` (the filter is part of the
@@ -128,7 +128,7 @@ definition before anything reads them a second time.
   `buildStrips(state.strips_total, resolved video count)`. Run both; confirm
   each fails because the export is missing, not for any other reason
 
-- [ ] **T004** **(drift)** Make T003 green. Extract the summation at
+- [X] **T004** **(drift)** Make T003 green. Extract the summation at
   `validation.ts:355-362` into the named function in `src/engine/capacity.ts`
   beside `estimateCompetitionStripHours`, and have `validateFeasibility` call it –
   the message text, rule ids and severity at `validation.ts:374-380` are

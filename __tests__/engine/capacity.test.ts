@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   estimateCompetitionStripHours,
+  aggregateStripHours,
   dayConsumedCapacity,
   dayRemainingCapacity,
   categoryWeight,
@@ -10,7 +11,8 @@ import type { GlobalState } from '../../src/engine/types.ts'
 import {
   Category, CutMode, DeMode, EventType, VideoPolicy, VetAgeGroup, Weapon,
 } from '../../src/engine/types.ts'
-import { makeConfig, makeCompetition, makeScheduleResult } from '../helpers/factories.ts'
+import { makeConfig, makeCompetition, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
+import { validateFeasibility } from '../../src/engine/validation.ts'
 
 function makeGlobalState(
   scheduleEntries: Record<string, ReturnType<typeof makeScheduleResult>> = {},
@@ -640,5 +642,77 @@ describe('weightedStripHours', () => {
 
     expect(weighted).toBeCloseTo(raw.total_strip_hours * weight, 5)
     expect(weight).toBe(1.3)
+  })
+})
+
+// ──────────────────────────────────────────────
+// aggregateStripHours
+// ──────────────────────────────────────────────
+
+describe('aggregateStripHours', () => {
+  it('sums estimateCompetitionStripHours(...).total_strip_hours and video_strip_hours over the list', () => {
+    const config = makeConfig()
+    const comps = [
+      makeCompetition({ id: 'a', fencer_count: 24, de_mode: DeMode.STAGED }),
+      makeCompetition({ id: 'b', fencer_count: 56, de_mode: DeMode.STAGED }),
+      makeCompetition({ id: 'c', fencer_count: 100, de_mode: DeMode.SINGLE_STAGE }),
+    ]
+    const expectedTotal = comps.reduce(
+      (sum, c) => sum + estimateCompetitionStripHours(c, config).total_strip_hours,
+      0,
+    )
+    const expectedVideo = comps.reduce(
+      (sum, c) => sum + estimateCompetitionStripHours(c, config).video_strip_hours,
+      0,
+    )
+
+    const result = aggregateStripHours(comps, config)
+
+    expect(result.total_strip_hours).toBeCloseTo(expectedTotal, 5)
+    expect(result.video_strip_hours).toBeCloseTo(expectedVideo, 5)
+  })
+
+  it('skips a competition below MIN_FENCERS and one above MAX_FENCERS', () => {
+    const config = makeConfig() // MIN_FENCERS 2, MAX_FENCERS 500
+    const inRange = makeCompetition({ id: 'in-range', fencer_count: 24 })
+    // fencer_count 1 is below MIN_FENCERS; estimateCompetitionStripHours may
+    // throw on an unsizeable event, so the filter must run before the
+    // estimator is ever called on this competition.
+    const tooFew = makeCompetition({ id: 'too-few', fencer_count: 1 })
+    const tooMany = makeCompetition({ id: 'too-many', fencer_count: 501 })
+
+    const expected = estimateCompetitionStripHours(inRange, config)
+    const result = aggregateStripHours([inRange, tooFew, tooMany], config)
+
+    expect(result.total_strip_hours).toBeCloseTo(expected.total_strip_hours, 5)
+    expect(result.video_strip_hours).toBeCloseTo(expected.video_strip_hours, 5)
+  })
+
+  it('returns 0 for both fields on an empty list', () => {
+    const config = makeConfig()
+    expect(aggregateStripHours([], config)).toEqual({
+      total_strip_hours: 0,
+      video_strip_hours: 0,
+    })
+  })
+
+  it('agrees to the strip-hour with the number validateFeasibility reports for the same board', () => {
+    const config = makeConfig({
+      days_available: 2,
+      strips: makeStrips(2, 0),
+    })
+    const comps = Array.from({ length: 20 }, (_, i) =>
+      makeCompetition({ id: `EVT-${i}`, fencer_count: 200 }),
+    )
+
+    const findings = validateFeasibility(config, comps)
+    const finding = findings.find(f => f.field === 'feasibility')
+    expect(finding).toBeDefined()
+    const match = finding!.message.match(/(\d+) strip-hours needed/)
+    expect(match).not.toBeNull()
+    const reported = Number(match![1])
+
+    const result = aggregateStripHours(comps, config)
+    expect(Math.round(result.total_strip_hours)).toBe(reported)
   })
 })

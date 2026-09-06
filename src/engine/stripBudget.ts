@@ -1,7 +1,7 @@
 // Strip budget utilities: compute strip caps, recommend strip/ref counts,
 // and flag competitions that need flighting due to strip scarcity.
 
-import type { Competition, TournamentConfig } from './types.ts'
+import type { Competition, Strip, TournamentConfig } from './types.ts'
 import { Weapon, DeMode } from './types.ts'
 import { poolCountFor } from './pools.ts'
 import { peakDeRefDemand } from './refs.ts'
@@ -11,6 +11,20 @@ import { peakDeRefDemand } from './refs.ts'
 // half-initialized. The alternative was a second copy of the rule, which is the
 // defect FR-008 exists to remove.
 import { suggestStripCount } from './analysis.ts'
+
+/**
+ * The one rule that turns a strip count into the engine's strip list:
+ * `total` strips, ids `strip-1..strip-N`, the first `videoCount`
+ * video-capable. The store and the Suggest search's per-candidate config
+ * (012 tasks.md §One decision) both call this, so the app cannot build one
+ * strip list and the search another.
+ */
+export function buildStrips(total: number, videoCount: number): Strip[] {
+  return Array.from({ length: total }, (_, i) => ({
+    id: `strip-${i + 1}`,
+    video_capable: i < videoCount,
+  }))
+}
 
 /**
  * Peak strip count a staged DE will hold concurrently — the round-of-16 allocation.
