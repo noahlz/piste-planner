@@ -65,7 +65,7 @@ import {
   deStagedPhaseDuration,
   deStripFootprint,
 } from './de.ts'
-import { computeStripCap, recommendStripCount, peakDeStripDemand } from './stripBudget.ts'
+import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
 import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
@@ -1430,14 +1430,18 @@ export function postScheduleWarnings(
 // ──────────────────────────────────────────────
 
 /**
- * When scheduling fails due to resource exhaustion, emits INFO-severity
- * recommendations telling users how many strips and refs they actually need.
- * Returns empty array if no RESOURCE_EXHAUSTION ERROR exists and no feasibility
- * WARN was reported.
+ * When scheduling fails due to resource exhaustion, emits one INFO-severity
+ * finding naming the four levers an organizer can pull, in order: add a day,
+ * flight events, cap entries, add strips. Reports no strip count of its own
+ * (FR-015) — see the comment below for why. Returns empty array if no
+ * RESOURCE_EXHAUSTION ERROR exists and no feasibility WARN was reported.
  */
 export function postScheduleDiagnostics(
-  competitions: Competition[],
-  config: TournamentConfig,
+  // Unused since T010 dropped the strip-count recommendation (FR-015): the
+  // signature is kept stable for its one call site and its export from
+  // scheduler.ts rather than reshaping a public function for this alone.
+  _competitions: Competition[],
+  _config: TournamentConfig,
   bottlenecks: Bottleneck[],
 ): Bottleneck[] {
   const results: Bottleneck[] = []
@@ -1458,22 +1462,26 @@ export function postScheduleDiagnostics(
   })
   if (!hasResourceExhaustion) return results
 
-  // Strip recommendation. `null` is the absence of an answer — no competition
-  // on this board can be sized — and there is nothing to recommend, so the INFO
-  // is not emitted at all. Coercing it to 0 would either read as "need 0 strips"
-  // or, worse, pass the `> strips_total` test on a 0-strip venue and print a
-  // shortfall that was never computed (FR-010).
-  const recommended = recommendStripCount(competitions, config.days_available, config.max_pool_strip_pct)
-  if (recommended !== null && recommended > config.strips_total) {
-    results.push({
-      competition_id: '',
-      phase: Phase.POST_SCHEDULE,
-      cause: BottleneckCause.RESOURCE_RECOMMENDATION,
-      severity: BottleneckSeverity.INFO,
-      delay_mins: 0,
-      message: `Strips: need ${recommended}, have ${config.strips_total} — add ${recommended - config.strips_total} more (or enable flighting for large events).`,
-    })
-  }
+  // No strip count of its own (FR-015, research.md D4). All three candidates
+  // that could supply one are barred: the search's answer runs inside
+  // `scheduleAll` and calling it here would recurse (FR-011); the concurrency
+  // ceiling (`suggestStripCount`) must reach no user-visible surface
+  // (FR-005); and reporting the strip-hours floor as an answer is 011's
+  // research.md D4 rejection of strip-hours-over-day-length — it implies a
+  // pool round can run on fewer strips over more hours, the double-stripping
+  // practice the averaged pool durations already absorb. The organizer keeps
+  // the shortfall figures they have today from the feasibility WARN (FR-013);
+  // this finding adds only the levers, in the product owner's order
+  // (research.md D6, FR-012). Cap entries is prose only — the app has no
+  // per-event entry cap (FR-014).
+  results.push({
+    competition_id: '',
+    phase: Phase.POST_SCHEDULE,
+    cause: BottleneckCause.RESOURCE_RECOMMENDATION,
+    severity: BottleneckSeverity.INFO,
+    delay_mins: 0,
+    message: 'More work than the venue holds. In the order an organizer can act: add a day, flight the largest events, cap entries, and last add strips — strips mean renting more of the facility. The feasibility warning carries the shortfall figures.',
+  })
 
   return results
 }

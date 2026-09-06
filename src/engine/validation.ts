@@ -4,7 +4,7 @@ import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, calculateDeDuration } from './de.ts'
 import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
-import { estimateCompetitionStripHours } from './capacity.ts'
+import { aggregateStripHours } from './capacity.ts'
 
 function err(field: string, message: string): ValidationError {
   return { field, message, severity: BottleneckSeverity.ERROR }
@@ -352,14 +352,8 @@ export function validateFeasibility(
   if (config.strips_total <= 0 || config.days_available <= 0) return errors
   if (config.DAY_LENGTH_MINS <= 0) return errors
 
-  let totalNeeded = 0
-  let videoNeeded = 0
-  for (const c of competitions) {
-    if (c.fencer_count < config.MIN_FENCERS || c.fencer_count > config.MAX_FENCERS) continue
-    const e = estimateCompetitionStripHours(c, config)
-    totalNeeded += e.total_strip_hours
-    videoNeeded += e.video_strip_hours
-  }
+  const { total_strip_hours: totalNeeded, video_strip_hours: videoNeeded } =
+    aggregateStripHours(competitions, config)
 
   const dayLengthHours = config.DAY_LENGTH_MINS / 60
   const totalAvailable = config.days_available * config.strips_total * dayLengthHours

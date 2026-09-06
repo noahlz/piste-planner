@@ -153,6 +153,26 @@ function geometryChanged(before, after) {
   return false
 }
 
+// 012 T007/T013 made suggestStrips asynchronous (research.md D5) and the
+// Suggest button `disabled` while it runs; the reveal indicator ("Searching
+// for…") is not a signal because a board that finishes inside the 100ms
+// reveal delay never shows it. "Number of strips" also matches three elements
+// unless scoped to the spinbutton role. This presses Suggest and polls,
+// bounded, until the button re-enables and the field's value has moved off
+// its pre-press reading, rather than racing the action with a fixed wait.
+async function pressSuggest(stepName) {
+  const field = page.getByRole('spinbutton', { name: 'Number of strips' })
+  const before = await field.inputValue()
+  await page.getByRole('button', { name: 'Suggest' }).first().click()
+  for (let i = 0; i < 60; i++) {
+    const button = page.getByRole('button', { name: 'Suggest' }).first()
+    const [disabled, value] = await Promise.all([button.isDisabled(), field.inputValue()])
+    if (!disabled && value !== before) return value
+    await page.waitForTimeout(50)
+  }
+  throw new Error(`${stepName}: Suggest did not finish within 3s (button never re-enabled or the field never changed from ${before})`)
+}
+
 // ── Workbench shell ──
 await page.goto(BASE)
 // The workbench is the only layout and boots directly — no tab to select.
@@ -344,9 +364,7 @@ await page.getByRole('button', { name: 'Presets…' }).click()
 await page.getByText('ROC Div1A/Vet', { exact: true }).click()
 log('template applied')
 
-// "Number of strips" matches three elements unless scoped to the spinbutton role.
-await page.getByRole('button', { name: 'Suggest' }).first().click()
-const strips = await page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
+const strips = await pressSuggest('ROC Div1A/Vet')
 log('suggested strips =', strips)
 await shot('02-configured')
 
@@ -384,6 +402,11 @@ await shot('03-matrix')
 // wider strip axis pushes some of the 12 placed events onto higher strip
 // numbers that scroll out of the default viewport, so fewer blocks render
 // without scrolling. Measured against the running app, 2026-09-05.
+//
+// `[M]` 012 T014, 2026-09-06: T007-T011's search-based rule further lowers
+// this to 15 strips (baseline.md §5), down from 23. Matrix event blocks
+// measured at 14 at that count, still above this floor of 8, so the floor
+// below needs no change.
 const blockCount = await page.locator('[data-event-block]').count()
 log('matrix event blocks =', blockCount)
 if (blockCount < 8) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
@@ -760,9 +783,7 @@ if (!nacYouthVisible) {
 await page.getByText('NAC Youth', { exact: true }).click()
 log('NAC Youth template applied')
 
-await page.getByRole('button', { name: 'Suggest' }).first().click()
-await page.waitForTimeout(100)
-const nacYouthStrips = await page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
+const nacYouthStrips = await pressSuggest('NAC Youth')
 log('NAC Youth suggested strips =', nacYouthStrips)
 
 const nacYouthGen = page.getByRole('button', { name: 'Auto-schedule all' })
@@ -785,12 +806,83 @@ log('NAC Youth schedule table rows =', nacYouthRowCount)
 // assertion that matters for SC-005 is non-zero: zero is exactly the outcome
 // R5/L5 exist to prevent, and pinning to a packing detail would make this
 // driver brittle against day-count or fixture changes that do not bear on the
-// defect this step exists to catch. Measured against the running app,
-// 2026-09-05: suggested 197 strips, 24 of 24 placed.
+// defect this step exists to catch.
+//
+// `[M]` 012 T014, 2026-09-06, in the driver's accumulated session state:
+// suggested 63 strips, 24 of 24 placed (superseding the pre-search-rule 197
+// this comment recorded on 2026-09-05). baseline.md §5's fresh-store answer
+// is 66, at both 8 and 12 video strips — a throwaway probe
+// (tmp/probe-t014-video.test.ts, deleted) confirmed video_strips_total makes
+// no difference to this template's suggested count at a fresh store, so it
+// does not explain the driver's 63. The cause was not isolated further; the
+// candidates are fields `applyTemplate` does not reset that a fresh store
+// starts differently: dayConfigs from boot's B1 preset versus `setDays(4)`'s
+// own defaults, the Admin-gap 30→15→reverted edit earlier in this driver, the
+// tournament type, and the ROC Div1A/Vet fencer-count edit. This step's
+// assertion stays non-zero rows by design (see above), so the open question
+// does not block SC-005.
 if (nacYouthRowCount === 0) {
   throw new Error('SC-005: NAC Youth placed 0 events at its Suggest count — the feasibility-strip-hours demotion or the busiest-day suggestion regressed')
 }
 await shot('06c-nacyouth-schedule')
+
+// ── SC-008: Suggest sizes the largest template (012 T014) ──
+// NAC Vet/Div1/Junior (66 events) is the largest template and was not yet
+// exercised by this driver. This runs before the Team event cut section
+// below rather than after it: that section's closing Advanced-panel checks
+// run "on the 24 events NAC Cadet/Junior just selected" (comment further
+// down), so switching templates again after it would break that assumption.
+//
+// `[M]` 012 T014, 2026-09-06: this driver's accumulated session state carries
+// boot's B1 preset video strip count of 12 into this step (nothing before it
+// resets video_strips_total), and at 12 video strips the suggested count is
+// 80, not baseline.md §5's fresh-store 85 (measured there at 8 video
+// strips — the spec's 96 is the monotone threshold, baseline.md §1a, the
+// smallest count above which *every* count places every event, not the
+// smallest count that does). A throwaway probe (tmp/probe-t014-video.test.ts,
+// deleted) reproduced both numbers from a fresh store: 80 at video=12, 85 at
+// video=null(8). The search evaluates the config the app would actually
+// build (tasks.md §One decision), so a different video count is a different
+// board — 80 is correct for the config this driver hands it, not a
+// regression against baseline.md's 85.
+const vetTemplateVisible = await page
+  .getByText('NAC Vet/Div1/Junior', { exact: true })
+  .isVisible()
+  .catch(() => false)
+if (!vetTemplateVisible) {
+  await page.getByRole('button', { name: 'Presets…' }).click()
+}
+await page.getByText('NAC Vet/Div1/Junior', { exact: true }).click()
+log('NAC Vet/Div1/Junior template applied')
+
+const vetVideoStrips = await page.getByRole('spinbutton', { name: 'Number of video strips' }).inputValue()
+log('NAC Vet/Div1/Junior video strips before Suggest =', vetVideoStrips)
+
+const vetStrips = await pressSuggest('NAC Vet/Div1/Junior')
+log('NAC Vet/Div1/Junior suggested strips =', vetStrips)
+await shot('06d-vet-configured')
+if (Number(vetStrips) !== 80) {
+  throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 80 at ${vetVideoStrips} video strips (tmp/probe-t014-video.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
+}
+
+const vetGen = page.getByRole('button', { name: 'Auto-schedule all' })
+if (await vetGen.isDisabled()) {
+  await shot('06d-vet-generate-disabled')
+  throw new Error('Auto-schedule all disabled for NAC Vet/Div1/Junior — read smoke-shots/06d for the blocking findings')
+}
+await vetGen.click()
+await page.waitForTimeout(300)
+
+await page.getByRole('radio', { name: 'Schedule' }).click()
+await page.waitForTimeout(200)
+const vetRowCount = await page.locator('[data-schedule-row]').count()
+log('NAC Vet/Div1/Junior schedule table rows =', vetRowCount)
+// SC-008: the largest template places its whole 66-event field at its
+// suggested count of 80. `[M]` measured in the running app, 2026-09-06.
+if (vetRowCount !== 66) {
+  throw new Error(`NAC Vet/Div1/Junior schedule table rendered ${vetRowCount} rows, expected 66`)
+}
+await shot('06d-vet-schedule')
 
 // ── Team event cut (008) ──
 // Before this feature, defaultCutForEntry gave every TEAM catalogue entry a
@@ -815,9 +907,7 @@ if (!teamTemplateVisible) {
 await page.getByText('NAC Cadet/Junior', { exact: true }).click()
 log('NAC Cadet/Junior template applied')
 
-await page.getByRole('button', { name: 'Suggest' }).first().click()
-await page.waitForTimeout(100)
-const teamStrips = await page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
+const teamStrips = await pressSuggest('NAC Cadet/Junior')
 log('NAC Cadet/Junior suggested strips =', teamStrips)
 
 const teamGen = page.getByRole('button', { name: 'Auto-schedule all' })
@@ -860,6 +950,12 @@ log('NAC Cadet/Junior schedule table rows =', teamRowCount)
 // remaining 4-event shortfall — this is R5/L5 (011) working as specified, an
 // increase, so constitution III's halt (a *drop* in scheduled count) does not
 // apply.
+// `[M]` 2026-09-06 (012 T014): 144 → 48, rows unchanged at 24. T007-T011's
+// search-based rule supersedes the busiest-day rule above. Measured at 12
+// video strips (this driver's accumulated state, same as the SC-008 step
+// above) and still lands on 48 — matching baseline.md §5's fresh-store
+// answer exactly, so unlike NAC Vet/Div1/Junior, video strip count does not
+// move this template's suggested count.
 if (teamRowCount !== 24) {
   throw new Error(`NAC Cadet/Junior schedule table rendered ${teamRowCount} rows, expected 24`)
 }

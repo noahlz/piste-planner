@@ -1,7 +1,6 @@
 import type {
   Competition,
   FlightingGroup,
-  Strip,
   TournamentConfig,
 } from '../engine/types.ts'
 import { CutMode, DeStripRequirement, EventType, RefPolicy } from '../engine/types.ts'
@@ -25,6 +24,7 @@ import {
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
 import { TYPE_DEFAULTS, resolveVideoStrips } from './typeDefaults.ts'
+import { buildStrips } from '../engine/stripBudget.ts'
 
 /**
  * Calendar-day spacing between scheduler-axis day windows (research.md D5).
@@ -109,13 +109,6 @@ export function buildTournamentConfig(
   const competitions = buildCompetitions(state, flightingSuggestions)
 
   return { config, competitions }
-}
-
-function buildStrips(total: number, videoCount: number): Strip[] {
-  return Array.from({ length: total }, (_, i) => ({
-    id: `strip-${i + 1}`,
-    video_capable: i < videoCount,
-  }))
 }
 
 function buildCompetitions(

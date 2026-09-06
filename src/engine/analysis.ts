@@ -15,8 +15,15 @@ export function isRegionalQualifier(config: TournamentConfig): boolean {
 }
 
 /**
- * Returns the suggested strip count — the strips the venue needs so its busiest
- * day's pool round can run every pool at once (research.md D4, FR-005..FR-010).
+ * The **ceiling** of the strip search (`stripSearch.ts`): the strips the venue
+ * would need so its busiest day's pool round could run every pool at once. A
+ * board the scheduler cannot place at this count is not placed by adding
+ * strips, so the upward scan terminates here.
+ *
+ * It is a bound, not a suggestion, and it reaches no user surface (012 FR-005).
+ * 011 published it as one through an alias in `stripBudget.ts` that 012 FR-016
+ * removed; what an organizer sees is `stripSearch.ts`'s answer — the smallest
+ * count that actually places every event, which is far below this number.
  *
  * Every event gets one strip per pool, which is the scheduler's own invariant
  * (`concurrentScheduler.ts:526` sets `desired_strip_count` to the pool count).

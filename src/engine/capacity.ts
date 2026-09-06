@@ -177,6 +177,30 @@ function prelimsStripHours(
 }
 
 /**
+ * Sums `estimateCompetitionStripHours` over `competitions`, skipping any
+ * competition outside `MIN_FENCERS`–`MAX_FENCERS`. This is the tournament's
+ * one aggregate strip-hours fact: `validateFeasibility`'s shortfall message
+ * and the Suggest search's floor (012 research.md D2) both read it here
+ * rather than each summing the list a second time. The filter is part of the
+ * fact — dropping it would make the floor disagree with the warning printed
+ * beside it.
+ */
+export function aggregateStripHours(
+  competitions: Competition[],
+  config: TournamentConfig,
+): { total_strip_hours: number; video_strip_hours: number } {
+  let total_strip_hours = 0
+  let video_strip_hours = 0
+  for (const c of competitions) {
+    if (c.fencer_count < config.MIN_FENCERS || c.fencer_count > config.MAX_FENCERS) continue
+    const e = estimateCompetitionStripHours(c, config)
+    total_strip_hours += e.total_strip_hours
+    video_strip_hours += e.video_strip_hours
+  }
+  return { total_strip_hours, video_strip_hours }
+}
+
+/**
  * Sums the strip-hours consumed by all competitions assigned to `day`.
  */
 export function dayConsumedCapacity(

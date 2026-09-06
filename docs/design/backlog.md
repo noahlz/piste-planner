@@ -820,6 +820,11 @@ saying what to do).
 **Whoever takes this re-measures at `days_available` = 4 first** – see the next
 item.
 
+**Closed by 012 (2026-09-06)**: the search returns the smallest count that
+places every event; 268 → 85 on the largest template
+([`specs/012-actionable-strip-suggestion/handoff.md`](../../specs/012-actionable-strip-suggestion/handoff.md)
+§2).
+
 ## `baseline.md`'s suggested strip counts are days=3; the app runs at days=4
 
 *Found by 011's T013 against the running app, 2026-09-06. Recorded, not fixed –
@@ -842,6 +847,10 @@ counts hold at days=4. The hazard is quotation: `baseline.md` §5's suggested
 column is the most quotable table in that feature and it is **not** the number
 the product shows. Anyone sizing a follow-up against 258 is sizing it against a
 harness constant.
+
+**012 measured everything at days=4**;
+[`specs/012-actionable-strip-suggestion/baseline.md`](../../specs/012-actionable-strip-suggestion/baseline.md)
+supersedes 011's §5 for the suggestion.
 
 ## B4's app path places 18 where the drift ledger places 17
 
@@ -906,6 +915,9 @@ the failure appears at import time in an unrelated test. The fix is a third leaf
 module holding the shared arithmetic. Worth doing opportunistically the next
 time either file needs real work – not as a feature of its own.
 
+**Closed by 012 T011** (`b5e0600efc`): `recommendStripCount` deleted,
+`stripBudget.ts` no longer imports `analysis.ts`.
+
 ## The post-schedule strip recommendation is gated on message text
 
 *Introduced by 011's T005, 2026-09-05, as the only option against today's
@@ -928,6 +940,253 @@ This is the same root cause as
 [§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject):
 `Bottleneck` needs a rule id, or `subjects`, or both. Two features have now had
 to couple to message text for want of one.
+
+**012 removed the number from the finding**; the gate on the
+`RESOURCE_INSUFFICIENT` prefix remains (`concurrentScheduler.ts`,
+`postScheduleDiagnostics`). Still open.
+
+## Per-event entry caps are not modelled
+
+*Raised 2026-09-06 during 012's brainstorming, as one of the demand-side levers
+an organizer reaches for before renting more rooms.*
+
+Nothing in the store, engine, or UI lets an organizer cap entries for one event.
+`MAX_FENCERS = 500` (`src/engine/constants.ts:91`) is a structural sanity bound
+enforced by `validation.ts:151` – it rejects an impossible `fencer_count`, it
+does not express a planning decision.
+
+This matters because capping is the lever that shrinks demand rather than adding
+supply. A lower `fencer_count` cuts the event's pool count, which cuts both the
+aggregate strip-hours `validateFeasibility` measures and the busiest-day pool sum
+`suggestStripCount` measures. Every other lever the app can name – more days,
+flighting, more strips – adds capacity. This one removes work, and organizers use
+it: USA Fencing itself capped NAC Div1/Junior/Cadet at 315 entries for 2025-26
+(see [§Policy tables are stale against USA Fencing 2025-26
+changes](#policy-tables-are-stale-against-usa-fencing-2025-26-changes)).
+
+**What it needs**: a per-event cap field alongside `fencer_count`, carried
+through `buildConfig.ts`, serialization, and the shared-URL round trip, with the
+scheduler reading the capped count. The cap belongs to the organizer – the engine
+must never apply one on its own, because capping turns away entrants and that is
+never a scheduling decision.
+
+**Cost if ignored**: the app can name capping in advice prose but cannot let an
+organizer try it and see the result, so the one lever that reduces the problem is
+the one lever the tool cannot model.
+
+012 named this as a lever (FR-014) in the post-schedule finding and did not
+model it. Still open.
+
+## The 2026-27 Elite/National split is unmodelled, and it bites where 315 does not
+
+*Raised 2026-09-06 during 012's brainstorming. Distinct from the stale-policy
+item above: that one records tables that are already wrong, this one records a
+restructure that has not taken effect yet.*
+
+USA Fencing has announced a 2026-27 overhaul splitting NAC events into Elite and
+National tiers at **168 entries**, alongside a single national points list
+(recorded under [§Policy tables are stale against USA Fencing 2025-26
+changes](#policy-tables-are-stale-against-usa-fencing-2025-26-changes)). The
+engine models neither tier.
+
+The reason to record it separately is a measured one. The **2025-26 315-entrant
+cap does not bite on this app's own defaults** – the largest entry in
+`NAC_FENCER_DEFAULTS` (`constants.ts:209`) is Div1 Men's Epee at 310, then 270,
+270, 260, 260, 260. Not one event reaches 315, so implementing that cap would
+change no template. **A 168 threshold bites nearly every one of them**: 310, 270,
+270, 260, 260, 260, 250, 220, 210, 210, 210, 200, 180 all clear it. Whatever the
+split does to format, seeding, or scheduling, it applies to most of a NAC's
+board, not to an exceptional event or two.
+
+**What it needs**: research first, then a model. The published detail found so far
+is the 168 threshold and the single points list; how the two tiers differ in
+rounds, cuts, or DE structure is not yet established, and the app should not
+encode a guess.
+
+**Cost if ignored**: the ten NAC templates keep describing a season structure
+that no longer exists, and every number measured against them – drift ledger
+floors included – describes a tournament USA Fencing has stopped running.
+
+## An experimental mode for engine rules the product should not show
+
+*Raised and deferred 2026-09-06 during 012's brainstorming. Deferred
+deliberately – it is worth building only after the core engine is right and has
+been refactored to accept custom logic.*
+
+012 removes the simultaneous-pools strip sizing from the product, because a
+venue sized so every pool of the busiest day runs at once is a tournament nobody
+runs – it returned 197 and 268 strips on templates that need 76 and 96. The
+arithmetic is not wrong, it answers a question no organizer asks.
+
+The idea recorded here is a switch that lets a rule like that be reachable
+anyway, for exploring engine behaviour rather than for planning a tournament.
+**It was considered for 012 and rejected there**, on four grounds worth keeping
+so the next session does not relitigate them:
+
+1. A mode is config, and constitution Principle I requires every result be
+   reproducible from its config alone – so the flag enters `buildConfig.ts`,
+   serialization, the shared URL, and the drift ledger, and each grows a branch.
+2. No user was nameable who would switch it on, nor a decision it would inform.
+3. "Disables guards like this one" has no boundary, so every later guard has to
+   argue about whether it belongs inside.
+4. The busiest-day figure is better kept as a *named internal upper bound* – you
+   provably never need more – than as a user-visible mode. A search that needs a
+   ceiling can use it without the product ever printing it.
+
+**The precondition for revisiting**: the engine is extensible with pluggable
+rules. At that point this stops being a boolean bolted onto config and becomes
+rule selection, which is the shape it should have had. Until then a dev tool – a
+probe, a test, a URL parameter that never ships – covers the same need at no
+cost to the product surface.
+
+## Hand-placed events are never checked against the crossover constraint graph
+
+*Found 2026-09-06 during 012's brainstorming, by grep. This is the largest gap
+between the workbench as built and the workbench as described.*
+
+The engine models demographic crossover properly – `crossover.ts` computes a
+penalty between any two competitions, `constraintGraph.ts` turns those into
+weighted edges, and `dayColoring.ts` reads `hardEdgeDegree` when it assigns days.
+That machinery is what stops Cadet and Junior Men's Foil landing on one day when
+the auto-scheduler runs.
+
+**None of it is reachable from a hand placement.** `grep` over `src/store` and
+`src/components` returns no reference to `constraintGraph.ts`, `crossover.ts`, or
+`hardEdgeDegree`. `selectDerivedFindings` recomputes from placements – so a
+hand-edited placement does re-validate – but what it recomputes is
+`validateConfig`, which checks fencer counts, strips, refs and dependencies. It
+has no notion of two events being wrong *together on a day*.
+
+The consequence is asymmetric and easy to miss: press **Auto-schedule all** and
+the crossover rules are enforced. Drag the same two events onto the same day by
+hand and the app says nothing. `TopBar.tsx:103` disables the auto-schedule button
+on hard errors, which makes the app look like it is guarding placements when the
+guard covers only configuration.
+
+**What it needs**: a derived selector that evaluates the current placements
+against the constraint graph and emits a finding per violated hard edge, wired
+into the same findings surface `validateConfig` already feeds, so a manual
+placement and an auto placement are judged by one rule set. `Bottleneck`'s
+missing second subject
+([§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject))
+is in the way – a violated edge names two competitions and there is nowhere
+structured to put the second.
+
+**Cost if ignored**: the drag-drop half of the product silently permits exactly
+the schedule USA Fencing rules forbid, and the organizer finds out at the
+tournament. It also makes the two halves of the app disagree about what is legal,
+which is worse than either rule alone.
+
+012 recorded this in its handoff §8 as something it did not fix. Still open.
+
+## Templates are invented numbers, not a real season
+
+*Raised 2026-09-06 during 012's brainstorming as a product requirement.*
+
+`TEMPLATE_FENCER_DEFAULTS` (`catalogue.ts:270`) maps all five NAC templates to one
+`NAC_FENCER_DEFAULTS` table and all five regional templates to one
+`REGIONAL_FENCER_DEFAULTS` table (`constants.ts:209`, `:307`). The counts are
+round numbers – 310, 270, 260, 250 – described in their own comment as "rounded
+to the nearest 10". They are plausible, and they are not any actual event.
+
+The requirement is that a user can load **a real USA Fencing 2026-27 event** –
+an actual NAC or ROC as scheduled – and adjust it, rather than a synthetic
+average. Entry counts would be estimated per event from comparable events across
+the previous three seasons.
+
+**The hard part is data, not code.** The template mechanism already exists and
+takes a table per template; pointing it at real numbers is mechanical. Finding
+three seasons of per-event entry counts is not, and no source for them has been
+identified. Until one is, this cannot be scoped. Note also that every number this
+project has measured – the drift ledger floors, `baseline.md`, 012's minimums –
+is measured against these synthetic tables, so replacing them moves every
+recorded figure at once.
+
+Related: [§The 2026-27 Elite/National split is
+unmodelled](#the-2026-27-elitenational-split-is-unmodelled-and-it-bites-where-315-does-not),
+which is the format half of the same season change.
+
+**Cost if ignored**: organizers plan against a tournament shape nobody ran, and
+the app's credibility rests on numbers it invented.
+
+## Changing a parameter should re-run the engine, with a working indicator
+
+*Raised 2026-09-06 during 012's brainstorming.*
+
+Today the engine runs only when **Auto-schedule all** is pressed
+(`TopBar.tsx:103`) or on boot (`boot.ts:41`). Changing strips or days updates the
+config and leaves the schedule stale until the organizer presses the button
+again. The desired behaviour is that adjusting a parameter re-runs the engine, so
+the loop is adjust-and-see rather than adjust-and-remember-to-press.
+
+Three things the implementation has to get right, all of them measured or
+observed rather than assumed:
+
+- **Most re-runs need no indicator at all.** One `scheduleAll` is 0.6ms on a
+  small regional and 7-12ms on the 66-event NAC template `[M]` 2026-09-06. Those
+  never approach a second. Only a search-backed action – 012's strip suggestion
+  scan, ~350ms estimated worst case – gets anywhere near it.
+- **"Show a modal if it takes more than a second" cannot be implemented as
+  stated**, because the duration is not knowable before the run. The workable
+  form is show-after-delay: start the run, reveal the indicator if it is still
+  going after a fixed threshold, so fast runs never flash it.
+- **A re-run on every keystroke will thrash.** A number field emits a change per
+  digit, and 80 typed one digit at a time is three runs, two of them against
+  nonsense values. Needs debouncing or commit-on-blur.
+
+**Cost if ignored**: either the schedule is quietly stale after a parameter
+change – the failure this replaces – or the app re-runs constantly and flickers
+an indicator at values the organizer never meant to enter.
+
+## Adding strips can place fewer events
+
+*Measured 2026-09-06 by 012's baseline sweep. Design note with the mechanism,
+the literature and the fix options:
+[`strip-count-scheduling-anomaly.md`](./strip-count-scheduling-anomaly.md).*
+
+`[M]` On four of the ten templates at four days, some strip count above the
+smallest working one places fewer events than it does – NAC Vet/Div1/Junior
+places all 66 at 85 strips and 65 at 86, and does not hold all 66 at every
+count until 96. The engine is a greedy list scheduler and this is Graham's
+multiprocessing timing anomaly (1966, 1969), a known property of the algorithm
+class rather than a defect in one line. The strip count reaches the packer only
+through the two `floor(strips_total × pct)` caps at
+`concurrentScheduler.ts:466` and `:958-966`.
+
+012's **Suggest** search is safe against it by construction: it scans upward
+and returns the first count that places every event. What it cannot protect is
+an organizer who books one strip more than the count it wrote, or who edits the
+field by hand.
+
+**Cost if ignored**: on a non-monotone board, a hand edit or a venue that rents
+strips in pairs can drop an event from the board with no explanation, and it
+will be reported as a bug. The design note has the answer to that report and
+four fix options with their costs. None is scheduled.
+
+012 measured this (`baseline.md` §1a) and did not fix it. Still open.
+
+## NAC Youth suggests 63 in the smoke driver's accumulated state and 66 from a fresh store
+
+*Found by 012's T014 live smoke run, 2026-09-06. Recorded, not isolated
+further —
+[`specs/012-actionable-strip-suggestion/handoff.md`](../../specs/012-actionable-strip-suggestion/handoff.md)
+§7(c) has the probe.*
+
+`[M]` Both counts place 24 of 24 (`scripts/smoke.mjs`, `633d27adb5`). A fresh
+store's `NAC Youth` **Suggest** search lands on 66; the same template pressed
+partway through the smoke driver's accumulated session state lands on 63.
+Video strip count is ruled out by a throwaway probe – a fresh store returns 66
+at both 8 and 12 video strips.
+
+`applyTemplate` does not reset several candidate fields, and none of them is
+isolated as the cause: `dayConfigs` carried from boot's B1 preset versus
+`setDays(4)`'s own defaults, the Admin-gap edit sequence earlier in the
+driver, tournament type, and the ROC fencer-count edit that precedes this
+step.
+
+**Cost if ignored**: a suggested strip count that depends on session history
+rather than the template alone is hard to explain to an organizer, and the
+smoke driver's own comment is the only record of the disagreement.
 
 ---
 

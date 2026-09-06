@@ -22,7 +22,8 @@ import type {
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { validateConfig } from '../../src/engine/validation.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from '../../src/engine/refs.ts'
-import { recommendRefCount, recommendStripCount } from '../../src/engine/stripBudget.ts'
+import { recommendRefCount } from '../../src/engine/stripBudget.ts'
+import { searchStripCount } from '../../src/engine/stripSearch.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
 
@@ -102,10 +103,17 @@ type ScenarioDigest = {
   refRequirementsByDay: RefRequirementsByDay[] | undefined
   daySummaryPeaks: number[]
   refRecommendation: { three_weapon: number; foil_epee: number }
-  // `null` when no competition on the scenario can be sized (011 FR-010). The
-  // digest records what the rule returned rather than coercing, so a scenario
-  // that loses every sizeable event shows the absence of an answer instead of a
-  // recommendation of 0 strips. All eight scenarios return a number today.
+  // The smallest strip count that places every event — what pressing **Suggest**
+  // writes into the app (`stripSearch.ts`), and the only strip number a user
+  // sees. `null` is the absence of an answer, never a recommendation of 0
+  // strips: either no competition on the scenario can be sized (011 FR-010, so
+  // the search has no ceiling), or no count in `[floor, ceiling]` places every
+  // event.
+  //
+  // The field is *recorded* by the ledger and *consumed* by nothing: no
+  // scenario's strip count comes from it, so it has no path to move a scheduled
+  // count. A scheduled count that moves alongside it means something unexamined
+  // reads this number, and halts the task that moved it (research.md D7).
   stripRecommendation: number | null
   events: Record<string, EventDigest>
 }
@@ -207,7 +215,7 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
     refRequirementsByDay: ref_requirements_by_day,
     daySummaryPeaks: dayPeakRefDemands(competitions, config, schedule),
     refRecommendation: recommendRefCount(competitions, AUTO_REFS_PER_POOL, config),
-    stripRecommendation: recommendStripCount(competitions, config.days_available, config.max_pool_strip_pct),
+    stripRecommendation: searchStripCount(competitions, config),
     events,
   }
 }

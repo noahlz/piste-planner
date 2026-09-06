@@ -12,7 +12,7 @@ import type {
 import { BottleneckSeverity, PlacementSource } from '../engine/types.ts'
 import { findingIdentity } from '../engine/validation.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
-import { suggestStripCount } from '../engine/analysis.ts'
+import { stripSearchRange, scanStripCounts } from '../engine/stripSearch.ts'
 import { buildTournamentConfig } from './buildConfig.ts'
 import type { ScenarioId } from '../data/tournaments.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
@@ -60,7 +60,7 @@ export interface TournamentSlice {
   updateDayConfig: (dayIndex: number, partial: Partial<DayConfig>) => void
   setStrips: (total: number) => void
   setVideoStrips: (total: number | null) => void
-  suggestStrips: () => void
+  suggestStrips: () => Promise<void>
   setPoolRoundDuration: (weapon: Weapon, minutes: number) => void
   resetPoolRoundDuration: (weapon: Weapon) => void
 }
@@ -188,6 +188,16 @@ type SetState = (
 ) => void
 type GetState = () => StoreState
 
+/**
+ * Hands the browser a paint turn between strip-search candidates. A
+ * macrotask (`setTimeout`), not a microtask (`Promise.resolve()`) — a
+ * microtask runs before the next paint, so it would not let the in-progress
+ * indicator (FR-008) actually render between candidates (research.md D5).
+ */
+function yieldToBrowser(): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
+
 function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
   return {
     tournament_type: 'NAC',
@@ -227,27 +237,38 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
       set({ video_strips_total: total })
     },
 
-    suggestStrips: () => {
-      const state = get()
-      // The rule is domain math and lives in the engine (constitution I,
-      // research.md D5): it needs `days_available` and `max_pool_strip_pct`
-      // alongside the competitions, so the store reaches it through
-      // `buildTournamentConfig`, the sanctioned bridge, rather than keeping a
-      // second copy of the sizing here. `buildTournamentConfig` also derives a
-      // strip list from `strips_total`, but the suggestion reads none of it —
-      // its three arguments are independent of the number it is suggesting
-      // (FR-009).
-      const { config, competitions } = buildTournamentConfig(state)
-      const suggested = suggestStripCount(
-        competitions,
-        config.days_available,
-        config.max_pool_strip_pct,
-      )
+    suggestStrips: async () => {
+      // The search is domain math and lives in the engine (constitution I,
+      // research.md D1): `stripSearch.ts` finds the smallest strip count that
+      // places every event, replacing the ceiling-only rule this action used
+      // to write directly. `buildTournamentConfig` is read once, up front —
+      // the whole search runs against that snapshot, not against whatever the
+      // organizer might change while it's mid-flight.
+      const { config, competitions } = buildTournamentConfig(get())
+      const range = stripSearchRange(competitions, config)
       // `null` is the absence of an answer, not zero (FR-010). Nothing here can
       // be sized, so the strip field keeps whatever the organizer already has —
       // writing 0 would look like a deliberate configuration.
-      if (suggested !== null) {
-        set({ strips_total: suggested })
+      if (range === null) return
+
+      // The scan is bounded by construction (constitution IV, `stripSearch.ts`
+      // — `ceiling − floor + 1` iterations, fixed before the loop starts), so
+      // this loop always terminates. Yielding a macrotask between candidates
+      // is what makes this action asynchronous at all: it hands the browser a
+      // paint turn so the in-progress indicator can render (research.md D5).
+      const scan = scanStripCounts(competitions, config, range)
+      let step = scan.next()
+      while (!step.done) {
+        await yieldToBrowser()
+        step = scan.next()
+      }
+
+      // Written once, at the end (FR-010): no candidate along the way ever
+      // reaches `strips_total`, only the search's final answer does — and a
+      // `null` answer (no count in range placed everything) leaves the field
+      // untouched, same as an absent range above.
+      if (step.value !== null) {
+        set({ strips_total: step.value })
       }
     },
 
