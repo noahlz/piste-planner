@@ -797,6 +797,77 @@ one reason only: what each feature **deliberately did not fix**, so a later
 session does not rediscover it. Each entry is a pointer to the feature record
 plus that list. The narrative lives in the linked spec directory, not here.
 
+## Wave 1 of the methodology reconciliation
+
+*Feature 010, done 2026-09-05.*
+
+Record: [`specs/010-wave-1-reconciliation/`](../../specs/010-wave-1-reconciliation/),
+built against
+[`methodology-reconciliation.md`](./methodology-reconciliation.md) §Recommended
+sequence, Wave 1. `baseline.md` there holds every number below.
+
+The seven independent fixes, one commit each:
+
+- **R1** (delete `indiv-team-same-day`) — `NAC Div1/Junior` 0/24 → 24/24 at
+  80/12, `NAC Vet/Div1/Junior` 0/66 → 45/66. Drift: nothing moved.
+- **R7** (report the fallback's broken hard edges) — one WARN per pair, cause
+  `UNAVOIDABLE_CROSSOVER_CONFLICT`. Drift: nothing moved.
+- **R2** (scope per-event structural findings to their subjects) — one bad
+  event no longer discards the tournament. Drift: nothing moved.
+- **R3** (coerce the team cut) — `buildConfig` coerces `cut_mode` to
+  `DISABLED`, `cut-on-team` demoted to a notice. Drift: nothing moved.
+- **L1** (wire `PROXIMITY_3_PLUS_DAYS`) — day assignments moved on
+  B1/B2/B3/B7/B8 with no count lost; B5/B6 byte-identical.
+- **L9** (remove the Y8→Y10 penalty) — B6 44 → 45, errors 10 → 9, floor raised
+  to 45. Also removed the derived Y8↔Y12 two-hop edge.
+- **L3** (apply `SOFT_SEPARATION_PAIRS`) — DIV1↔CADET 0.8 → 5.0, DIV1↔DIV2
+  0.0 → 3.0, DIV1↔DIV3 0.0 → 3.0. Drift: nothing moved — see the coverage note
+  below.
+
+**What Wave 1 deliberately did not fix:**
+
+- **Part 3 is still open.** The eight time-of-day penalty weights have no
+  mechanism, and the Option A/B/C decision on giving them one is the product
+  owner's. Wave 1 was built to be unaffected either way —
+  [`methodology-reconciliation.md`](./methodology-reconciliation.md) Part 3.
+- **Waves 2, 3 and 4 are unbuilt.** §Recommended sequence in that same document
+  names them: Wave 2 is documentation-only, Wave 3 needs the Part 3 answer,
+  Wave 4 needs its own drift review per item.
+- **`feasibility-strip-hours` is the next target.** The product owner directed
+  on 2026-09-05 that the next session plans the audit's **R5** — demoting it
+  from a blocking ERROR to a WARN. It is why four templates still place zero
+  at the app-suggested strip count (`NAC Youth`, `NAC Cadet/Junior`,
+  `ROC Mega`, `Junior Olympics`) and why `NAC Vet/Div1/Junior` still places
+  zero there too (`baseline.md` §3). The audit's **L5** — `suggestStrips`
+  recommending one strip per pool of the largest event, ignoring every other
+  event on the day — is the cause under that symptom: the app suggests the
+  very configuration its own validation gate then refuses.
+- **No same-day bonus was added for Y8/Y10.** METHODOLOGY:118 says Y8 "CAN and
+  SHOULD" share a day with Y10. L9 removed the penalty, making "CAN" true;
+  "SHOULD" would need a weight the specification does not state, and inventing
+  one is the habit the audit exists to break (spec.md §Out of Scope).
+- **`NAC Youth` places 22 of 24 at 80/12, not 24.** Two events
+  (`CDT-W-FOIL-IND`, `Y14-W-FOIL-IND`) go unplaced on `DEADLINE_BREACH`
+  warnings with no ERROR. This corrects the audit's §2.1 L5 claim of 24/24 —
+  `baseline.md` §6, finding 1.
+
+**Two coverage gaps the drift ledger cannot see, found while building this
+feature — these matter more than any single fix, because they say what the
+ledger cannot prove:**
+
+1. **B1–B8 never enter the DSatur least-bad-color fallback**, proved by
+   day-map reconstruction and by V8 statement coverage showing 0 executions
+   across 896 vertex colourings. Already recorded above at §The store's
+   default day count is unsatisfiable for three templates — not restated
+   here.
+2. **L3 moved nothing because the ledger cannot exercise two of its three
+   pairs.** DIV1 appears in B1/B2/B7/B8 and DIV2/DIV3 in B3/B6, and those sets
+   never intersect, so DIV1↔DIV2 and DIV1↔DIV3 have zero occurrences across
+   all eight scenarios — unit-tested only. The third pair, DIV1↔CADET, occurs
+   18 times (12 in B2, 6 in B7) and all 18 were already on different days at
+   0.8, so raising it to 5.0 only made an already-rejected option more
+   expensive. A green ledger is not evidence that L3 is correct.
+
 ## Day-axis parity
 
 *Feature 006, done 2026-08-31. Unblocked 004's US3.*
