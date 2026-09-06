@@ -28,8 +28,7 @@ export function StripSetup() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="w-64 text-xs">
-              Suggests enough strips to run every pool of the busiest day at once, within the pool
-              phase's share of the venue.
+              Finds the smallest number of strips that places every event on the board.
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

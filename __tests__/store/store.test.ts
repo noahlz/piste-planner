@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
+import { searchStripCount } from '../../src/engine/stripSearch.ts'
 import { Category, TournamentType, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import {
@@ -103,48 +104,93 @@ describe('tournamentSlice', () => {
     })
   })
 
-  // The **Suggest** button's action (`StripSetup.tsx:25`). 011 T012 deleted the
-  // store's own copy of the sizing rule and routed this action through
-  // `buildTournamentConfig` to `suggestStripCount`, so what is pinned here is
-  // the wiring and the `null` case — the arithmetic itself belongs to
-  // `__tests__/engine/analysis.test.ts`.
+  // The **Suggest** button's action (`StripSetup.tsx:25`). 012 T007 replaced
+  // the ceiling-only rule with the search from `stripSearch.ts`: the button
+  // now drives `scanStripCounts` to the smallest strip count that places every
+  // event, asynchronously so the browser can paint between candidates
+  // (research.md D5). What is pinned here is the wiring, the async contract,
+  // the single terminal write (FR-010), and the `null` cases — the search's
+  // own arithmetic belongs to `__tests__/engine/stripSearch.test.ts`.
   describe('suggestStrips', () => {
-    it("writes the engine rule's own answer into strips_total", () => {
+    it("returns a promise that resolves with the search's own answer", async () => {
       useStore.getState().setDays(2)
       useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
       useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
 
-      useStore.getState().suggestStrips()
+      const pending = useStore.getState().suggestStrips()
+      expect(pending).toBeInstanceOf(Promise)
+      await pending
 
-      // 70 fencers → 10 pools, alone on the busiest of 2 days,
-      // ceil(10 / 0.80) = 13. Cross-checked against the engine below so the
-      // button and the engine can never drift into two rules again (SC-006).
+      // `buildTournamentConfig` is read after the promise resolves so its
+      // `strips_total` reflects the write the action just made — the search's
+      // answer does not depend on that field either way.
       const { config, competitions } = buildTournamentConfig(useStore.getState())
-      expect(useStore.getState().strips_total).toBe(13)
-      expect(useStore.getState().strips_total).toBe(
-        suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct),
-      )
+      expect(useStore.getState().strips_total).toBe(searchStripCount(competitions, config))
+      // `[M]` measured directly against the fixture: 70 fencers → 10 pools is
+      // the smallest count that places every event. 13 was the old rule's
+      // ceiling — `suggestStripCount` sizes for the busiest day running at
+      // once, not for placing everything, and asserted as the upper bound below.
+      expect(useStore.getState().strips_total).toBe(10)
     })
 
-    it('leaves strips_total alone when no competition is selected — never writes 0', () => {
+    it('never suggests above the old ceiling rule (FR-007)', async () => {
+      useStore.getState().setDays(2)
+      useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
+      useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
+
+      await useStore.getState().suggestStrips()
+
+      const { config, competitions } = buildTournamentConfig(useStore.getState())
+      const ceiling = suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct)
+      // This fixture always has a sizeable competition selected, so the
+      // ceiling is a real number here — narrowed for `toBeLessThanOrEqual`,
+      // which does not accept `number | null`.
+      expect(ceiling).not.toBeNull()
+      expect(useStore.getState().strips_total).toBeLessThanOrEqual(ceiling as number)
+    })
+
+    it('leaves strips_total alone when no competition is selected — never writes 0', async () => {
       useStore.getState().setStrips(24)
 
-      useStore.getState().suggestStrips()
+      await useStore.getState().suggestStrips()
 
       // FR-010: the absence of an answer is not the number zero. A 0 here
       // would read as a deliberate configuration and fail validation.
       expect(useStore.getState().strips_total).toBe(24)
     })
 
-    it('leaves strips_total alone when every selected event has no fencers entered', () => {
+    it('leaves strips_total alone when every selected event has no fencers entered', async () => {
       useStore.getState().setStrips(24)
       // `selectCompetitions` seeds `fencer_count: 0` — the state the button is
       // in the moment an organizer picks events and has not typed counts yet.
       useStore.getState().selectCompetitions(['D1-M-FOIL-IND', 'D1-W-FOIL-IND'])
 
-      useStore.getState().suggestStrips()
+      await useStore.getState().suggestStrips()
 
       expect(useStore.getState().strips_total).toBe(24)
+    })
+
+    it('writes strips_total exactly once, at the end (FR-010)', async () => {
+      useStore.getState().setDays(2)
+      useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
+      useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
+      useStore.getState().setStrips(24)
+
+      const seen: number[] = []
+      const unsubscribe = useStore.subscribe((state, prev) => {
+        if (state.strips_total !== prev.strips_total) seen.push(state.strips_total)
+      })
+
+      const pending = useStore.getState().suggestStrips()
+      // Checked synchronously, before any await: nothing has written yet, no
+      // matter how many candidates the search evaluates.
+      expect(seen).toEqual([])
+      expect(useStore.getState().strips_total).toBe(24)
+
+      await pending
+
+      expect(seen).toEqual([useStore.getState().strips_total])
+      unsubscribe()
     })
   })
 

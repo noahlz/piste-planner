@@ -198,7 +198,7 @@ exceeds 100 (SC-004).
   store's ([research.md D5](./research.md)). T005 goes green. Ledger expected to
   show nothing moved – nothing reads the search yet *(subagent commits)*
 
-- [ ] **T007** [US1] Rewire the **Suggest** action. First the red tests in
+- [X] **T007** [US1] Rewire the **Suggest** action. First the red tests in
   `__tests__/store/store.test.ts` `describe('suggestStrips')`: the action
   returns a promise; when it resolves `strips_total` holds the search's own
   answer for `buildTournamentConfig(state)` (replace the 13-strip pin at
