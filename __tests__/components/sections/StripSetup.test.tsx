@@ -101,4 +101,26 @@ describe('StripSetup — the searching indicator (T013)', () => {
 
     expect(button).not.toBeDisabled()
   })
+
+  it('cancels the reveal timer on unmount so a still-pending search never renders', async () => {
+    const resolveSearch = stubSuggestStrips()
+    const { unmount } = render(<StripSetup />)
+
+    fireEvent.click(screen.getByRole('button', { name: /suggest/i }))
+
+    unmount()
+
+    expect(() => {
+      act(() => {
+        vi.advanceTimersByTime(SUGGEST_INDICATOR_DELAY_MS + 1)
+      })
+    }).not.toThrow()
+    expect(screen.queryByRole('status')).toBeNull()
+
+    // The suggestStrips call is still pending after unmount — resolve it so
+    // the `finally` handler's setState calls no-op instead of throwing.
+    await act(async () => {
+      resolveSearch()
+    })
+  })
 })
