@@ -15,8 +15,9 @@ import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
 // Fixtures
 //
 // Every number in the comments below is [M] measured directly, not derived by
-// hand (tasks.md standing rule 8) — see the T005 dispatch report for the probe
-// that produced them.
+// hand (tasks.md standing rule 8) — see the floor and ceiling pins in
+// `stripSearchRange`'s test below, measured by the same probe that produced
+// the numbers in this file's comments.
 // ──────────────────────────────────────────────
 
 /**
@@ -101,6 +102,12 @@ describe('stripSearchRange', () => {
     expect(range!.floor).toBe(expectedFloor)
     expect(range!.ceiling).toBe(expectedCeiling)
     expect(range!.floor).toBeLessThanOrEqual(range!.ceiling)
+
+    // [M] measured pins, not recomputed: a formula built from the same two
+    // functions the implementation calls cannot fail when either regresses.
+    // These are the literal B1 (days=4) numbers T005's probe measured.
+    expect(range!.floor).toBe(36)
+    expect(range!.ceiling).toBe(135)
   })
 
   it('returns null when no competition is sizeable enough for suggestStripCount', () => {
