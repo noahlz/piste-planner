@@ -40,17 +40,24 @@ const AUTO_REFS_PER_POOL = 2
  * one is the regression the gate exists to catch: never edit a floor down to make
  * a red test pass — identify the cause first, and record both counts.
  *
- * B4's floor is 0, not a lowered regression: Ruling 11 accepted its collapse from
- * 15 to 0 as the flat SINGLE_STAGE formula tripping the pre-existing upfront
- * `validateFeasibility` gate. B4 gets its own dedicated test below pinning that
- * exact behavior (0 scheduled, 1 validation error) instead of this generic floor.
+ * B4's floor was 0 for as long as the upfront `validateFeasibility` gate aborted
+ * its build. 011's T004 demoted that finding to a WARN, so B4 packs again and its
+ * floor rises with it (see the entry below).
  */
 const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // B6 raised 44 → 45 by 010's L9 (2026-09-05, commit 2bacf2aa8e): removing the
   // Y8→Y10 crossover edge repacked B6's oversubscribed board and placed one more
   // event. A deliberate raise under the rule above, so a later regression to 44
   // halts its own task instead of passing the gate.
-  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 45, B7: 18, B8: 52,
+  //
+  // B4 raised 0 → 17 by 011's T004 (2026-09-05): `feasibility-strip-hours` is a
+  // WARN in every mode now, so the aggregate estimate no longer empties the board
+  // and B4 places 17 of its 30 events. Measured, not predicted. A deliberate raise
+  // under the rule above — a later collapse toward 0 halts its own task instead of
+  // passing the gate. Note that until T006 rewrites B4's dedicated pin below, the
+  // `continue` there keeps B4 out of the generic floor test, so this number is
+  // recorded here and asserted from T006 onward.
+  B1: 24, B2: 24, B3: 24, B4: 17, B5: 12, B6: 45, B7: 18, B8: 52,
 }
 
 /**

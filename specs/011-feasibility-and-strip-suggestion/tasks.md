@@ -55,7 +55,7 @@
 
 ## Phase 1: Setup and baseline
 
-- [ ] **T001** Confirm the workspace: branch
+- [X] **T001** Confirm the workspace: branch
   `011-feasibility-and-strip-suggestion` exists at
   `/Users/noahlz/projects/piste-planner-011-feasibility-and-strip-suggestion`,
   branched from `main` at `ec3d3aee74`; dependencies installed; every artifact
@@ -64,7 +64,7 @@
   starting numbers. Commit the spec artifacts as the branch's first commit
   *(subagent commits)*
 
-- [ ] **T002** **(Opus)** Rebuild the ten-template measurement harness and write
+- [X] **T002** **(Opus)** Rebuild the ten-template measurement harness and write
   `baseline.md`. Method is fixed by [plan.md §The measurement instrument](./plan.md)
   and must match 010's `baseline.md` §3 exactly so the two tables compare. The
   probe is a temporary file under `tmp/`, run with `pnpm vitest run`, deleted
@@ -85,7 +85,7 @@
 **Independent test**: the five zero templates place a non-zero count at their
 suggested strip count; B1–B8 hold their floors.
 
-- [ ] **T003** [US1] Write the red tests for the demotion, in
+- [X] **T003** [US1] Write the red tests for the demotion, in
   `__tests__/engine/validation.test.ts`: a configuration that trips the
   strip-hour band produces `feasibility-strip-hours` at severity WARN under
   **both** validation modes with its message text unchanged, and a configuration
@@ -93,7 +93,7 @@ suggested strip count; B1–B8 hold their floors.
   Run them; confirm they fail because the severity is ERROR, not because the
   finding is absent
 
-- [ ] **T004** [US1] **(drift)** Make feasibility findings notice-kind — WARN in
+- [X] **T004** [US1] **(drift)** Make feasibility findings notice-kind — WARN in
   every mode — and remove the mode re-derivation at `validation.ts:74-77` that
   exists only to serve them. Rule ids, fields and message text unchanged
   ([research.md D1, D2](./research.md)). T003 goes green. **B4 moves off zero

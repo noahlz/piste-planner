@@ -91,11 +91,13 @@ function findingIdentity(finding: ValidationError): string {
 // grep) — it is not wired into validateConfig's pipeline, so the kind/mode
 // split does not reach it. Its existing direct-call tests are left as-is.
 // `validateFeasibility` is a sub-validator assembled into validateConfig's
-// pipeline; its own direct-call tests are also left as-is (still ERROR,
-// called with the current 2-arg signature) since only validateConfig's
+// pipeline, called with the 2-arg signature since only validateConfig's
 // signature is contractually stated to gain the mode parameter (research
-// D3, tasks.md T017) — mode-based feasibility severity is tested only
-// through validateConfig below.
+// D3, tasks.md T017). Its findings are NOTICE-kind as of 011 (FR-001/FR-002,
+// research D1/D2): the demotion lives in the finding constructor, not in a
+// re-derivation inside validateConfig, so the direct-call tests below see
+// WARN too. That correction supersedes this note's earlier prediction that
+// they would keep ERROR — measured, not predicted (011 tasks.md rule 8).
 // ──────────────────────────────────────────────
 
 /** Runs validateConfig once per mode; only severity (and now kind) should differ. */
@@ -617,19 +619,38 @@ describe('validateConfig — regional cut override (notice: regional-cut-overrid
   })
 })
 
-describe('validateConfig — feasibility (policy: feasibility)', () => {
-  it('binding ERROR / advisory WARN when total strip-hours exceed total capacity', () => {
+// ──────────────────────────────────────────────
+// Feasibility demotes to notice-kind (011, FR-001/FR-002, research D1/D2) —
+// TDD red for T003/T004. Today validateConfig re-derives feasibility's
+// severity from mode (ERROR under binding, WARN under advisory), the same
+// policy-kind mapping asserted two describe blocks up. FR-001/FR-002 replace
+// that with WARN in EVERY mode, never escalating — the notice-kind shape
+// `expectNoticePair` already asserts for other rules above. Rule id, field
+// and message text must survive the demotion unchanged, so both are pinned
+// explicitly below rather than left to `expectNoticePair`'s field-only match.
+// ──────────────────────────────────────────────
+
+describe('validateConfig — feasibility demotes to notice in every mode (011 FR-001)', () => {
+  it('feasibility-strip-hours is WARN under binding AND advisory, rule id/field/message unchanged', () => {
     const config = makeConfig({ days_available: 2, strips: makeStrips(2, 0) })
     const comps = Array.from({ length: 20 }, (_, i) => makeCompetition({ id: `EVT-${i}`, fencer_count: 200 }))
     const { binding, advisory } = validateBoth(config, comps)
-    expectPolicyPair('feasibility', binding, advisory)
-    const bFinding = binding.find(e => e.field === 'feasibility')!
-    expect(bFinding.message).toMatch(/RESOURCE_INSUFFICIENT/)
+
+    // Fails today: validateConfig sets binding severity to ERROR (validation.ts:433-436).
+    expectNoticePair('feasibility', binding, advisory)
+
+    const b = binding.find(e => e.field === 'feasibility')!
+    const a = advisory.find(e => e.field === 'feasibility')!
+    expect(b.rule).toBe('feasibility-strip-hours')
+    expect(a.rule).toBe('feasibility-strip-hours')
+    expect(b.message).toBe(
+      'RESOURCE_INSUFFICIENT: 2022 strip-hours needed over 20 events; 56 available (2d × 2s × 14h). Shortfall 1966 (~3511%). Add 71 more day(s) OR 71 more strip(s).',
+    )
   })
 })
 
-describe('validateConfig — feasibility_video (policy: feasibility)', () => {
-  it('binding ERROR / advisory WARN when staged events need more video strip-hours than available', () => {
+describe('validateConfig — feasibility_video demotes to notice in every mode (011 FR-002)', () => {
+  it('feasibility-video-strip-hours is WARN under binding AND advisory, rule id/field/message unchanged', () => {
     const config = makeConfig({ days_available: 4, strips: makeStrips(80, 1) })
     const comps = Array.from({ length: 40 }, (_, i) =>
       makeCompetition({
@@ -641,7 +662,17 @@ describe('validateConfig — feasibility_video (policy: feasibility)', () => {
       }),
     )
     const { binding, advisory } = validateBoth(config, comps)
-    expectPolicyPair('feasibility_video', binding, advisory)
+
+    // Fails today: validateConfig sets binding severity to ERROR (validation.ts:433-436).
+    expectNoticePair('feasibility_video', binding, advisory)
+
+    const b = binding.find(e => e.field === 'feasibility_video')!
+    const a = advisory.find(e => e.field === 'feasibility_video')!
+    expect(b.rule).toBe('feasibility-video-strip-hours')
+    expect(a.rule).toBe('feasibility-video-strip-hours')
+    expect(b.message).toBe(
+      'RESOURCE_INSUFFICIENT (video): 149 video strip-hours needed; 56 available (4d × 1vs × 14h). Shortfall 93. 7 more day(s) OR 2 more video strip(s).',
+    )
   })
 })
 
@@ -876,7 +907,9 @@ describe('validateFeasibility', () => {
     const errors = validateFeasibility(config, comps)
     const error = errors.find(e => e.field === 'feasibility')
     expect(error).toBeDefined()
-    expect(error!.severity).toBe(BottleneckSeverity.ERROR)
+    // WARN, not ERROR: 011 FR-001 moved the demotion into the finding itself,
+    // so the sub-validator's own output carries it (see catalogue note above).
+    expect(error!.severity).toBe(BottleneckSeverity.WARN)
     expect(error!.message).toMatch(/RESOURCE_INSUFFICIENT/)
     expect(error!.message).toMatch(/Add \d+ more day\(s\)/)
     expect(error!.message).toMatch(/OR \d+ more strip\(s\)/)
@@ -931,17 +964,6 @@ describe('validateFeasibility', () => {
 })
 
 describe('validateConfig integrates feasibility', () => {
-  it('surfaces RESOURCE_INSUFFICIENT errors via the main validateConfig pipeline (binding mode)', () => {
-    const config = makeConfig({ days_available: 2, strips: makeStrips(2, 0) })
-    const comps = Array.from({ length: 20 }, (_, i) =>
-      makeCompetition({ id: `EVT-${i}`, fencer_count: 200 }),
-    )
-    const { binding } = validateBoth(config, comps)
-    const error = binding.find(e => e.field === 'feasibility')
-    expect(error).toBeDefined()
-    expect(error!.severity).toBe(BottleneckSeverity.ERROR)
-  })
-
   it('does not flag B-series-style realistic configs', () => {
     // Approximate B7: 4d, 80 strips, 8 video, 18 large events.
     const config = makeConfig({ days_available: 4, strips: makeStrips(80, 8) })
