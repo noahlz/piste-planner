@@ -120,7 +120,7 @@ searches costing about 0.73s, below research.md D7's `[M]` ~2s estimate
 | `459473b75b` | Recorded the strip-count scheduling anomaly design note; annotated T014's stale 96→85 prediction | none — no code |
 | `7b70e6fbf4` T003+T004 | Extracted `aggregateStripHours` (`capacity.ts`) and moved `buildStrips` to `stripBudget.ts` | **none** — driftLedger passed before and after, no snapshot field changed |
 | `b439f08128` T005+T006 | Added `src/engine/stripSearch.ts` — the floor/ceiling range, the bounded scan, the synchronous driver | **none** — nothing reads the search yet |
-| `73a7578806` T005 review | Replaced a measured literal with a formula recomputed from the same two functions the implementation calls, on B1's floor/ceiling pin | test-quality only |
+| `73a7578806` T005 review | Pinned B1's floor and ceiling as measured literals (36, 135) beside the range test's recomputed formula — a formula recomputed from the same two functions cannot fail when either regresses; a measured constant can | test-quality only |
 | `356b52fd64` T007 | `suggestStrips` becomes async, drives the search itself, writes `strips_total` once at the end; tooltip reworded | not a drift task (store-only change) |
 | `e6845a3d6e` T007 review | Shared fixture, guarded cleanup in `suggestStrips` tests | test-quality only |
 | `77c081a60a` T008 | Re-ran the harness through the app's own path; confirmed cell-for-cell agreement with T002's engine path | none — measurement only |
@@ -200,7 +200,7 @@ touching a React component. Each should-fix produced its own commit:
 
 | Review | Commit | What it found |
 |---|---|---|
-| T005 | `73a7578806` | A measured literal pin on B1 cannot fail when the two functions it was measured from regress; replaced with a recomputed formula |
+| T005 | `73a7578806` | The range test recomputed the implementation's own formula from the same two functions, so nothing in the file pinned the floor or ceiling as a number; added the measured literals 36 and 135 on B1 |
 | T007 | `e6845a3d6e` | Repeated three-line setup across three tests, and a subscription that could leak past a failing assertion |
 | T009+T010 | `0d9ee14b0a` | A fits-precheck assertion too narrow to catch a sibling finding; a stale `recommendStripCount` name in a comment |
 | T013 (react-code-reviewer) | `ab0f3c4921` | The unmount case was missing — a stray reveal timer or settling promise could still fire after unmount |
@@ -270,9 +270,10 @@ edit.
 
 ## 8. What this feature did not fix
 
-- **The `DEADLINE_BREACH` shortfall strips cannot buy.** Unchanged since 011 —
-  some templates place fewer events than they have on deadline warnings alone,
-  with no ERROR, and no rule in this feature or the last touches the cause.
+- **The `DEADLINE_BREACH` shortfall strips cannot buy.** Events that fail on a
+  deadline or a structural conflict are unchanged by this feature. For such a
+  board the search reports no count (FR-006) rather than a count that appears
+  to work, and the four-lever finding names what to change instead.
 - **Per-event entry caps.** Named as a lever in the post-schedule finding
   (FR-014) but not modelled. `docs/design/backlog.md` §Per-event entry caps
   are not modelled carries the detail.
