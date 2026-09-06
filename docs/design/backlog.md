@@ -788,6 +788,147 @@ integration-test floors, both done in 003 – are under
   [research D8](../../specs/003-p2-derived-state/research.md)'s correction for
   why none of today's scenarios can discriminate the constant.
 
+## The suggested strip count is sufficient, not minimal
+
+*Found by 011, 2026-09-06, and measured across all ten templates. Not fixed
+there – FR-005 scoped the rule to the busiest day's summed demand and it does
+that correctly. **This is the highest-value open item in the strip-suggestion
+area.***
+
+011 made the **Suggest** button size for the busiest day rather than the largest
+single event, and every one of the ten templates now places 100% of its events
+at its suggested count. The number is arithmetically right and, at the top end,
+not actionable: nothing in the rule searches for the *smallest* count that fills
+the board, and the gap between sufficient and minimal is large.
+
+**On eight of the ten templates, 80 strips place exactly what the suggested
+count places.** The suggestion buys events on two templates only – +21 on
+`NAC Vet/Div1/Junior` for +277 strips, and +2 on `NAC Youth` for +178. A venue
+told it needs 357 strips is being asked to more than quadruple a floor that
+already schedules 45 of 66. The small regionals (30, 49, 72, 100) read as
+plausible venue plans; the large NACs (179–357) read as a theoretical ceiling.
+
+The per-template table is
+[`specs/011-feasibility-and-strip-suggestion/handoff.md`](../../specs/011-feasibility-and-strip-suggestion/handoff.md)
+§7 finding 2, which also holds the three options and why they are ordered as
+they are: a minimal-sufficient bisection (best answer, most expensive, and it
+must be a *second* number because FR-009 forbids this rule depending on a
+scheduling result), reporting both figures side by side (cheapest honest
+option), or a confidence band (weakest – it says the answer is uncertain without
+saying what to do).
+
+**Whoever takes this re-measures at `days_available` = 4 first** – see the next
+item.
+
+## `baseline.md`'s suggested strip counts are days=3; the app runs at days=4
+
+*Found by 011's T013 against the running app, 2026-09-06. Recorded, not fixed –
+the harness's day count is what makes 010's and 011's tables comparable.*
+
+010's and 011's ten-template harnesses both force `setDays(3)`. The app boots at
+**4 days** and `applyTemplate` never touches `days_available`. The old
+suggestion rule was a function of the largest event alone and never read day
+count, so the harness and the app agreed by accident. The rule 011 shipped reads
+`days_available` by design (FR-005), so they no longer agree:
+
+| Template | days=3 (`baseline.md` §5) | **days=4 (what a user sees)** |
+|---|---:|---:|
+| NAC Youth | 258 | **197** |
+| NAC Cadet/Junior | 192 | **144** |
+| ROC Div1A/Vet | 30 | **23** |
+
+Both are the rule working correctly at different day counts, and the placed
+counts hold at days=4. The hazard is quotation: `baseline.md` §5's suggested
+column is the most quotable table in that feature and it is **not** the number
+the product shows. Anyone sizing a follow-up against 258 is sizing it against a
+harness constant.
+
+## B4's app path places 18 where the drift ledger places 17
+
+*Found by 011's T006, 2026-09-05. Recorded, not reconciled, by product-owner
+direction.*
+
+Two code paths over the same scenario disagree by one event. The divergence is
+**not new** – it was masked for as long as both paths read 0, and 011's
+demotion of `feasibility-strip-hours` made it visible rather than creating it.
+It is recorded in `__tests__/store/appPathParity.test.ts` as an FR-004a
+exception whose `cause` is marked **unconfirmed**.
+
+Measured: `validateConfig` on the *ledger's* B4 config returns twelve WARN
+`regional-cut-override` findings, because B4 is an SYC and `buildConfig.ts:196`
+applies `REGIONAL_CUT_OVERRIDES` for Y14 and Cadet while the ledger's factory
+(`scenarios.ts:50-52`) cuts at 20%. That is the same seam
+[§The drift ledger's factory does not apply the store's per-type resolutions](#the-drift-ledgers-factory-does-not-apply-the-stores-per-type-resolutions)
+already documents for B6 and B8. **Not** run: the swap-one-default isolation
+that would prove those twelve events account for the one-event gap.
+
+The exception's `closedBy` names that existing item as the owner *with the
+caveat that B4's attribution to it is unconfirmed*. Whoever takes it runs B4's
+isolation first – if `cut_mode` does not account for the +1, this needs its own
+owner and that `closedBy` is wrong.
+
+## A test comment described its own fixture wrongly, and hid what the test proved
+
+*Found by 011's T006, 2026-09-05, in `__tests__/engine/concurrentScheduler.test.ts`.
+The one case was fixed there; the class of defect was not audited for.*
+
+The case's comment claimed "every event here is individually valid (no per-event
+finding fires)". `[M]` `validateConfig` on that fixture returns **three ERROR
+`resource-precondition-strips`**, one per event. The claim was false before 011
+touched anything: the test passed because it asserted a feasibility ERROR and
+then an empty board, and the three per-event ERRORs delivered the empty board
+independently of feasibility. It sat in a describe block titled "a global
+finding still empties the whole schedule" while proving nothing of the sort.
+
+A test comment that describes a fixture wrongly is worse than no comment – it is
+what the next reader reasons from, and it is invisible to a green suite. 011
+fixed this one and split the case into the two halves it could never separate.
+**Nothing audited the rest of the suite for the same defect**, and there is no
+cheap way to: it needs someone to re-measure fixtures against the claims their
+comments make.
+
+## `stripBudget.ts` and `analysis.ts` are a mutual import
+
+*Introduced deliberately by 011's T011, 2026-09-05, and recorded in a comment at
+the import site.*
+
+`analysis.ts` imports `computeStripCap` from `stripBudget.ts`, and T011's
+delegation of `recommendStripCount` to `suggestStripCount` made the dependency
+mutual. **Safe today**: both sides are hoisted function declarations used only
+when called, never at module-evaluation time, so neither module observes the
+other half-initialized. The alternative was a second copy of the suggestion
+rule, which is the exact defect FR-008 exists to remove, so the cycle was the
+right call.
+
+It is fragile in a specific, silent way: the day either module gains a top-level
+`const` that calls into the other, one of them evaluates against `undefined` and
+the failure appears at import time in an unrelated test. The fix is a third leaf
+module holding the shared arithmetic. Worth doing opportunistically the next
+time either file needs real work – not as a feature of its own.
+
+## The post-schedule strip recommendation is gated on message text
+
+*Introduced by 011's T005, 2026-09-05, as the only option against today's
+`Bottleneck` interface.*
+
+`postScheduleDiagnostics`'s gate (`concurrentScheduler.ts:1457`) tells the
+demoted feasibility finding apart by
+`message.startsWith('RESOURCE_INSUFFICIENT')`, because `Bottleneck` carries no
+rule id – `ValidationError` has one and it is dropped when the finding is pushed
+at `:212`.
+
+**It is safe as written**, and the reason is worth stating: 011's FR-001 and
+FR-002 pin that message text as unchanged, and `grep` confirms no other
+validation message starts with that prefix, so a WARN from any other
+notice-kind rule pushed with the same cause still leaves the gate closed. What
+it is not is *robust* – reword the message and the "Strips: need N, have M" INFO
+silently stops appearing on exactly the boards it exists for.
+
+This is the same root cause as
+[§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject):
+`Bottleneck` needs a rule id, or `subjects`, or both. Two features have now had
+to couple to message text for want of one.
+
 ---
 
 # Closed
@@ -796,6 +937,85 @@ Everything above this line is open. Everything below is done, and is kept for
 one reason only: what each feature **deliberately did not fix**, so a later
 session does not rediscover it. Each entry is a pointer to the feature record
 plus that list. The narrative lives in the linked spec directory, not here.
+
+## R5 and L5 — the app refused to schedule at its own recommendation
+
+*Feature 011, done 2026-09-06. Closes the audit's **R5** and **L5**.*
+
+Record:
+[`specs/011-feasibility-and-strip-suggestion/`](../../specs/011-feasibility-and-strip-suggestion/),
+built against
+[`methodology-reconciliation.md`](./methodology-reconciliation.md) §1.3 R5 and
+§2.1 L5. `baseline.md` there holds every number and `handoff.md` the record.
+
+Two defects that were two halves of one failure – the app recommended a strip
+count and then refused to schedule at it.
+
+- **R5** (`feasibility-strip-hours` demoted ERROR → WARN) — both feasibility
+  rules became notice-kind, WARN in every validation mode, rule id, field and
+  message text unchanged, and `validateConfig`'s mode re-derivation deleted with
+  them. No board is returned empty on an aggregate estimate any more. Drift:
+  **B4 0 → 17**, its floor raised to 17 in the same commit; the other seven
+  scenarios byte-identical.
+- **L5** (the suggestion sizes for the busiest day, not the largest event) —
+  three implementations collapsed to one pure function in `src/engine/`, reached
+  from the store through `buildConfig`. Drift: no scheduled count moved;
+  `stripRecommendation` moved on all eight (B1 57→135, B2 57→189, B3 50→182,
+  B4 37→190, B5 23→73, B6 23→165, B7 58→207, B8 48→147), which is what
+  `max` → `sum` must do.
+
+**All ten templates now place 100% of their events at their suggested strip
+count.** The five that rendered a blank board: `NAC Youth` 0→24 of 24,
+`NAC Cadet/Junior` 0→24, `NAC Vet/Div1/Junior` 0→66, `ROC Mega` 0→42,
+`Junior Olympics` 0→18. Confirmed live: `NAC Youth` at 197 suggested strips
+places 24 of 24 in the browser, SMOKE PASS twice with 0 console errors.
+
+**What 011 deliberately did not fix:**
+
+- **The `DEADLINE_BREACH` shortfall.** Several templates placed fewer events
+  than they have on deadline warnings alone, with no ERROR. It disappears from
+  the suggested column after L5 – but only because the new strip counts are
+  large enough that no event loses its race against the day's end. **The cause
+  is untouched.** Give any of those templates a realistic strip count again and
+  it returns. Spec §Out of Scope; a separate defect with a separate cause.
+- **The feasibility estimate's magnitude.** R5 demoted the finding's severity
+  and changed nothing about how it is computed – not the worst-case aggregate
+  sum, not the 15% slack band. An estimate that is wrong in magnitude is still
+  wrong in magnitude; it merely stops discarding tournaments. It is still shown
+  to the user as a warning with a shortfall number in it.
+- **Video strip suggestion.** `resolveVideoStrips` still picks a video count by
+  tournament type. FR-002 demoted `feasibility-video-strip-hours` alongside its
+  sibling, but no rule in 011 recommends a video strip count, and the
+  busiest-day rule sizes competition strips only.
+- **Double-stripping, in any form.** Never a planned scheduling input. No
+  toggle, no ratio, no strip-for-time trade appears anywhere in the feature –
+  the rule allocates one strip per pool throughout. Recorded above at
+  §Double-stripping.
+- **Wave 3's remaining items still wait on Part 3.** R5 was taken out of Wave
+  3's order by product-owner direction on 2026-09-05 and nothing else moved with
+  it. The eight time-of-day penalty weights are still undecided, and R4, R6, R8,
+  R9 and the rest of Waves 2–4 are unbuilt.
+
+**Six things it found and could not fix are open above the divider**: the
+suggestion being sufficient rather than minimal (the largest of them), the
+days=3 / days=4 harness gap, B4's 18-vs-17 app-path divergence, a test comment
+that described its own fixture wrongly, the `stripBudget` ↔ `analysis` import
+cycle, and the message-text gate on the strip recommendation.
+
+**Two corrections to its own planning artifacts, recorded because both repeat:**
+
+1. **`research.md` D6 was half wrong.** It claimed US2 could not move the drift
+   ledger. True for scheduled counts – B1–B8 supply strip counts as fixture
+   literals and nothing consumes the recommendation – and false for the
+   snapshot, which records `stripRecommendation`. "The ledger has no reference
+   to X" is a claim about the *fixtures*; the digest is a separate surface that
+   has to be read separately.
+2. **`spec.md` §Tests that invert listed six tests; eleven inverted.** The five
+   extra were found by measurement, not by reading, and all five were the same
+   "feasibility empties the board" fixture class on files the spec did not name.
+   **That table is a merge-gate artifact and it should be built by measurement**
+   – make the change on a scratch branch and run the suite, which enumerates the
+   list exactly. Reading the codebase for it found 6 of 11.
 
 ## Wave 1 of the methodology reconciliation
 
@@ -833,7 +1053,9 @@ The seven independent fixes, one commit each:
 - **Waves 2, 3 and 4 are unbuilt.** §Recommended sequence in that same document
   names them: Wave 2 is documentation-only, Wave 3 needs the Part 3 answer,
   Wave 4 needs its own drift review per item.
-- **`feasibility-strip-hours` is the next target.** The product owner directed
+- **`feasibility-strip-hours` was the next target — and is now done in 011**
+  (§R5 and L5 above; this bullet is kept as Wave 1 wrote it). The product owner
+  directed
   on 2026-09-05 that the next session plans the audit's **R5** — demoting it
   from a blocking ERROR to a WARN. It is why four templates still place zero
   at the app-suggested strip count (`NAC Youth`, `NAC Cadet/Junior`,

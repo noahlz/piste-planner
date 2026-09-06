@@ -201,12 +201,16 @@ and the placed count at it.
 
 ## Phase 5: Close-out
 
-- [ ] **T014** Run the full gate on the finished branch twice: `tsc -b`, `lint`,
+- [X] **T014** Run the full gate on the finished branch twice: `tsc -b`, `lint`,
   `pnpm test`. Account for the test-count delta against T001's starting numbers
   — tests added minus tests deleted must close exactly, with none skipped and no
   assertion weakened
+  — **`[M]` both runs green**: `tsc -b` exit 0, `lint` exit 0, `pnpm test` exit 0
+  at **66 files / 1829 tests / 0 skipped**, identical across the two runs. The
+  delta closes exactly: 27 added − 19 deleted = +8, and 1821 + 8 = 1829. Per-task
+  arithmetic in [handoff.md §5](./handoff.md)
 
-- [ ] **T015** Write `handoff.md`: the ten-template table before / after US1 /
+- [X] **T015** Write `handoff.md`: the ten-template table before / after US1 /
   after US2, the eight B1–B8 counts before and after with B4's movement
   explained, one row per task with the drift it moved, the verification record,
   the merge instructions with predicted conflicts, and a paste-ready resume

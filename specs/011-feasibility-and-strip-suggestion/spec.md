@@ -4,7 +4,8 @@
 
 **Created**: 2026-09-05
 
-**Status**: Draft
+**Status**: Delivered *(2026-09-06 — all six Success Criteria met; see
+[`handoff.md`](./handoff.md))*
 
 **Input**: User description: "Plan the demotion of feasibility-strip-hours from
 a blocking error to a warning (R5), plus the strip-suggestion defect underneath
