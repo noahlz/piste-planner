@@ -118,7 +118,7 @@ suggested strip count; B1–B8 hold their floors.
     … still empties the schedule". Rewrite it to assert a non-empty board
     carrying the WARN. *(subagent commits)*
 
-- [ ] **T007** [US1] Update `__tests__/components/workbench/Scorecard.test.tsx`.
+- [X] **T007** [US1] Update `__tests__/components/workbench/Scorecard.test.tsx`.
   `B1_STRIPS20_FINDINGS` (line 65) expects 11 ERROR / 17 WARN, one of the errors
   being the feasibility finding that pre-allocated strips push past the gate.
   Re-measure rather than assume the arithmetic, and correct the explanatory

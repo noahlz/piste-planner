@@ -62,11 +62,18 @@ const B1_FINDINGS = { ERROR: '0', WARN: '4', INFO: '12' }
 // SINGLE_STAGE (src/engine/validation.ts:212-215), which no NAC event is now.
 
 // ── B1 with strips cut to 20, placements unchanged: the findings move.
-const B1_STRIPS20_FINDINGS = { ERROR: '11', WARN: '17', INFO: '12' }
-// +11 ERROR (10 resource_precondition and, new under T061a, 1
-// feasibility-strip-hours — pre-allocated strips raise the estimate past the
-// gate), +13 WARN (STRIP_DEFICIT_NO_FLIGHTING), INFO unchanged — so the deltas
-// are +11, +13 and zero respectively.
+const B1_STRIPS20_FINDINGS = { ERROR: '10', WARN: '18', INFO: '12' }
+// +10 ERROR (10 resource-precondition-strips), +14 WARN (13
+// STRIP_DEFICIT_NO_FLIGHTING and 1 feasibility-strip-hours), INFO unchanged —
+// so the deltas are +10, +14 and zero respectively.
+// 011 US1, 2026-09-05 — was 11 ERROR / 17 WARN. T004 made feasibility findings
+// notice-kind in every validation mode, so feasibility-strip-hours (pre-
+// allocated strips raising the estimate past the gate) moved from the ERROR
+// tally into the WARN tally rather than appearing or disappearing: measured
+// via selectDerivedFindings, ERROR:resource-precondition-strips still counts
+// 10 and WARN now carries feasibility-strip-hours:1 alongside
+// STRIP_DEFICIT_NO_FLIGHTING:13. ERROR+WARN holds at 28 before and after; INFO
+// (CUT_SUMMARY:12) is untouched. Matches spec.md's predicted 10/18.
 
 const COLLAPSED_IDS = ['finish:tournament', 'refs:peak-total']
 
@@ -307,7 +314,7 @@ describe('Scorecard deltas (research D9)', () => {
     }
 
     // Cutting strips leaves the placements alone (no re-schedule) and moves
-    // the findings: 11 errors and 13 more warnings appear, while the 12
+    // the findings: 10 errors and 14 more warnings appear, while the 12
     // CUT_SUMMARY infos do not move.
     act(() => {
       useStore.getState().setStrips(20)
@@ -322,8 +329,11 @@ describe('Scorecard deltas (research D9)', () => {
     // not against the previous render. 004 US4 T063: the ERROR delta went +10
     // to +11 with the eleventh error described on B1_STRIPS20_FINDINGS; the
     // WARN delta is unchanged at +13 because both ends fell by the same 12.
-    expect(deltaOf(card, 'findings:ERROR')).toBe('+11')
-    expect(deltaOf(card, 'findings:WARN')).toBe('+13')
+    // 011 US1, 2026-09-05 — T004's demotion moves feasibility-strip-hours out
+    // of the ERROR tally, so the ERROR delta falls back to +10 and the WARN
+    // delta absorbs it at +14 — the same finding, counted on the other side.
+    expect(deltaOf(card, 'findings:ERROR')).toBe('+10')
+    expect(deltaOf(card, 'findings:WARN')).toBe('+14')
     // A metric that did not move still shows a delta, and it reads zero. The
     // sign a zero carries is not fixed by the contract, so only the magnitude
     // is asserted.
