@@ -153,7 +153,7 @@ every event and one strip fewer does not (SC-001, SC-002), no count exceeds the
 old rule's and the six that exceeded 100 are less than half (SC-003), and none
 exceeds 100 (SC-004).
 
-- [ ] **T005** [US1] Write the red tests in a new
+- [X] **T005** [US1] Write the red tests in a new
   `__tests__/engine/stripSearch.test.ts`. The module under test exposes three
   things: the range (`floor` and `ceiling`) for a board, a **bounded sequence**
   of candidate evaluations over that range that reports each candidate and
@@ -182,7 +182,7 @@ exceeds 100 (SC-004).
   Run; confirm every case fails because `src/engine/stripSearch.ts` does not
   exist
 
-- [ ] **T006** [US1] **(Opus)** **(drift)** Implement `src/engine/stripSearch.ts`
+- [X] **T006** [US1] **(Opus)** **(drift)** Implement `src/engine/stripSearch.ts`
   as a **leaf** module ([research.md D1](./research.md)): it imports
   `scheduleAll` (`scheduler.ts`), the aggregate and `buildStrips`, and
   `suggestStripCount`; nothing under `src/engine/` imports it. Floor is the
