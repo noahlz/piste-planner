@@ -1432,7 +1432,8 @@ export function postScheduleWarnings(
 /**
  * When scheduling fails due to resource exhaustion, emits INFO-severity
  * recommendations telling users how many strips and refs they actually need.
- * Returns empty array if no RESOURCE_EXHAUSTION errors exist.
+ * Returns empty array if no RESOURCE_EXHAUSTION ERROR exists and no feasibility
+ * WARN was reported.
  */
 export function postScheduleDiagnostics(
   competitions: Competition[],
@@ -1441,9 +1442,20 @@ export function postScheduleDiagnostics(
 ): Bottleneck[] {
   const results: Bottleneck[] = []
 
-  const hasResourceExhaustion = bottlenecks.some(
-    b => b.severity === BottleneckSeverity.ERROR && b.cause === BottleneckCause.RESOURCE_EXHAUSTION,
-  )
+  // A Bottleneck carries no rule id (only validateConfig's ValidationError
+  // does — the id is dropped when validation findings are pushed at :212), so
+  // a demoted feasibility finding is told apart by the one thing that does
+  // survive: its message text, which FR-001/FR-002 (011) hold unchanged and
+  // which is unique among notice-kind findings to feasibility-strip-hours and
+  // feasibility-video-strip-hours (validation.ts's 'RESOURCE_INSUFFICIENT'
+  // prefix). Widened per research.md D3: feasibility demoting to WARN must
+  // not silence the strip recommendation it is paired with. A WARN from any
+  // other rule (e.g. days-available-range) still leaves this false.
+  const hasResourceExhaustion = bottlenecks.some(b => {
+    if (b.cause !== BottleneckCause.RESOURCE_EXHAUSTION) return false
+    if (b.severity === BottleneckSeverity.ERROR) return true
+    return b.severity === BottleneckSeverity.WARN && b.message.startsWith('RESOURCE_INSUFFICIENT')
+  })
   if (!hasResourceExhaustion) return results
 
   // Strip recommendation

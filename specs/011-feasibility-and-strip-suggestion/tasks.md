@@ -101,7 +101,7 @@ suggested strip count; B1–B8 hold their floors.
   match **in this same commit**, and explain every snapshot field that moved
   *(subagent commits)*
 
-- [ ] **T005** [US1] Write the red test for the recommendation gate: a
+- [X] **T005** [US1] Write the red test for the recommendation gate: a
   configuration whose only finding is a feasibility WARN still emits the
   post-schedule `RESOURCE_RECOMMENDATION` INFO. Then widen the
   `hasResourceExhaustion` condition at `concurrentScheduler.ts:1444` to accept a

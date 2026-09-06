@@ -889,3 +889,69 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
     })
   })
 })
+
+// ──────────────────────────────────────────────
+// postScheduleDiagnostics — the strip recommendation must survive a
+// WARN-only feasibility finding (011 US1 T005, research.md D3, FR-004)
+// ──────────────────────────────────────────────
+
+describe('postScheduleDiagnostics — the strip recommendation survives a WARN-only feasibility finding (T005)', () => {
+  it('a configuration whose only finding is feasibility-strip-hours (WARN) still emits the post-schedule RESOURCE_RECOMMENDATION INFO', () => {
+    // 13 events, one strip-hour-hungry combination per category/gender/weapon
+    // so `same-population` never fires. max_pool_strip_pct is deliberately
+    // below 1.0 so each event's own pool count (5, from 32 fencers) stays
+    // under strips_total (8) — no per-event resource-precondition-strips
+    // ERROR — while recommendStripCount's ceil(5 / 0.6) = 9 still exceeds it,
+    // which is what the post-schedule INFO is gated on. The resulting demand
+    // (13 events) trips the aggregate feasibility band, which after 011 T004
+    // is a WARN, not an ERROR: validateConfig produces exactly that one
+    // finding and nothing else, so the only bottleneck carrying
+    // RESOURCE_EXHAUSTION is a WARN, never an ERROR. Some events still miss
+    // their deadline once scheduling actually runs — an oversubscribed venue
+    // producing DEADLINE_BREACH_UNRESOLVABLE ERRORs on excluded events is the
+    // accepted cost recorded in spec.md Edge Cases, and those ERRORs carry a
+    // different cause, so they play no part in the gate this test checks.
+    const combos: Array<[Category, Gender, Weapon]> = [
+      [Category.DIV1, Gender.MEN, Weapon.FOIL],
+      [Category.DIV1, Gender.WOMEN, Weapon.EPEE],
+      [Category.DIV1A, Gender.MEN, Weapon.SABRE],
+      [Category.DIV1A, Gender.WOMEN, Weapon.FOIL],
+      [Category.DIV2, Gender.MEN, Weapon.EPEE],
+      [Category.DIV2, Gender.WOMEN, Weapon.SABRE],
+      [Category.DIV3, Gender.MEN, Weapon.FOIL],
+      [Category.DIV3, Gender.WOMEN, Weapon.EPEE],
+      [Category.JUNIOR, Gender.MEN, Weapon.SABRE],
+      [Category.JUNIOR, Gender.WOMEN, Weapon.FOIL],
+      [Category.CADET, Gender.MEN, Weapon.EPEE],
+      [Category.CADET, Gender.WOMEN, Weapon.SABRE],
+      [Category.DIV1, Gender.MEN, Weapon.EPEE],
+    ]
+    const competitions = combos.map(([category, gender, weapon], i) =>
+      comp(`ev-${i}`, { category, gender, weapon, fencer_count: 32, de_round_of_16_strips: 4 }),
+    )
+    const config = smallConfig({
+      days_available: 2,
+      strips: makeStrips(8, 8),
+      strips_total: 8,
+      video_strips_total: 8,
+      max_pool_strip_pct: 0.6,
+      max_de_strip_pct: 1.0,
+    })
+
+    const errors = validateConfig(config, competitions, ValidationMode.BINDING)
+    expect(errors, 'expected exactly one finding: the feasibility WARN').toHaveLength(1)
+    expect(errors[0]?.rule).toBe('feasibility-strip-hours')
+    expect(errors[0]?.severity).toBe(BottleneckSeverity.WARN)
+
+    const { bottlenecks } = scheduleAllConcurrent(competitions, config)
+    expect(
+      bottlenecks.some(b => b.severity === BottleneckSeverity.ERROR && b.cause === BottleneckCause.RESOURCE_EXHAUSTION),
+      'expected no ERROR carrying RESOURCE_EXHAUSTION — feasibility is the only such finding and it is a WARN',
+    ).toBe(false)
+
+    const recommendation = bottlenecks.find(b => b.cause === BottleneckCause.RESOURCE_RECOMMENDATION)
+    expect(recommendation, 'expected the post-schedule strip recommendation to survive the WARN-only feasibility finding').toBeDefined()
+    expect(recommendation?.severity).toBe(BottleneckSeverity.INFO)
+    expect(recommendation?.message).toMatch(/^Strips: need 9, have 8 —/)
+  })
+})
