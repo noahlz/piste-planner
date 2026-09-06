@@ -136,12 +136,16 @@ describe('crossoverPenalty', () => {
     expect(crossoverPenalty(c2, c1)).toBe(0.0)
   })
 
-  it('Div1↔Cadet returns soft penalty (0.8), not Infinity — moved to SOFT_SEPARATION_PAIRS', () => {
+  it('Div1↔Cadet returns 5.0 — the SOFT_SEPARATION_PAIRS penalty, not the 0.8 matrix edge (L3)', () => {
+    // METHODOLOGY:252 makes this pair "allowed in rare cases". 5.0 is what says
+    // rare; CROSSOVER_GRAPH's 0.8 (constants.ts:426) made it an ordinary
+    // crossover edge. The SOFT_SEPARATION_PAIRS lookup overrides the matrix,
+    // which is why it sits before it (research.md D6). Finite, so it never
+    // blocks a day — it only makes sharing one expensive.
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.CADET, Gender.MEN, Weapon.FOIL)
-    const result = crossoverPenalty(c1, c2)
-    expect(result).toBe(0.8)
-    expect(result).not.toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).toBe(5.0)
+    expect(crossoverPenalty(c2, c1)).toBe(5.0)
   })
 
   it('Div1↔Div1A returns Infinity (GROUP_1_MANDATORY)', () => {
@@ -150,16 +154,24 @@ describe('crossoverPenalty', () => {
     expect(crossoverPenalty(c1, c2)).toBe(Infinity)
   })
 
-  it('Div1↔Div2 returns soft penalty (not Infinity) — moved to SOFT_SEPARATION_PAIRS', () => {
+  it('Div1↔Div2 returns 3.0 — the SOFT_SEPARATION_PAIRS penalty (L3)', () => {
+    // METHODOLOGY:253. The pair has no CROSSOVER_GRAPH edge at all, direct or
+    // two-hop, so it scored 0.0 — unmodelled, not deliberately free. The old
+    // assertion here was `.not.toBe(Infinity)`, which 0.0 satisfies: pinning
+    // the value is what makes this test able to catch the defect.
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV2, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1, c2)).not.toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).toBe(3.0)
+    expect(crossoverPenalty(c2, c1)).toBe(3.0)
   })
 
-  it('Div1↔Div3 returns soft penalty (not Infinity) — moved to SOFT_SEPARATION_PAIRS', () => {
+  it('Div1↔Div3 returns 3.0 — the SOFT_SEPARATION_PAIRS penalty (L3)', () => {
+    // METHODOLOGY:254, and the same story as DIV1↔DIV2: no graph edge, so 0.0,
+    // under a `.not.toBe(Infinity)` assertion that could not tell 0.0 from 3.0.
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV3, Gender.MEN, Weapon.FOIL)
-    expect(crossoverPenalty(c1, c2)).not.toBe(Infinity)
+    expect(crossoverPenalty(c1, c2)).toBe(3.0)
+    expect(crossoverPenalty(c2, c1)).toBe(3.0)
   })
 
   it('All CROSSOVER_GRAPH direct edges are ≤ 0.8', () => {

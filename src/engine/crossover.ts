@@ -6,6 +6,7 @@ import {
   PENALTY_WEIGHTS,
   PROXIMITY_GRAPH,
   PROXIMITY_PENALTY_WEIGHTS,
+  SOFT_SEPARATION_PAIRS,
 } from './constants.ts'
 
 // ──────────────────────────────────────────────
@@ -65,6 +66,22 @@ function isGroup1Mandatory(a: Category, b: Category): boolean {
   return GROUP_1_MANDATORY.some(
     ([x, y]) => (x === a && y === b) || (x === b && y === a),
   )
+}
+
+/**
+ * The soft-separation penalty for a pair, or `undefined` when the pair is not
+ * listed (METHODOLOGY:252-254, `SOFT_SEPARATION_PAIRS` in `constants.ts`).
+ *
+ * These are policy numbers, not crossover fractions, which is why they live in
+ * their own table rather than in `CROSSOVER_GRAPH`: that graph means "fraction
+ * of fencers in category A who also compete in B", capped at 0.8, and it feeds
+ * `buildPenaltyMatrix`'s two-hop derivation. 5.0 is neither a fraction nor
+ * something to derive indirect edges from.
+ */
+function softSeparationPenalty(a: Category, b: Category): number | undefined {
+  return SOFT_SEPARATION_PAIRS.find(
+    ({ pair: [x, y] }) => (x === a && y === b) || (x === b && y === a),
+  )?.penalty
 }
 
 /**
@@ -138,6 +155,13 @@ function isVetCombinedAgeBandedBlock(c1: CompFields, c2: CompFields): boolean {
  *      enter both, so they must be on different days.
  *   3. GROUP_1_MANDATORY pairs (checked before PENALTY_MATRIX because some
  *      mandatory pairs, e.g. Div1↔Div1A, have no edge in CROSSOVER_GRAPH).
+ *
+ * Then SOFT_SEPARATION_PAIRS, which is soft (finite) but overrides the matrix:
+ * a listed pair takes its stated penalty whether or not CROSSOVER_GRAPH has an
+ * edge for it. Placed AFTER the Group 1 test so a pair later made mandatory
+ * still returns Infinity, and BEFORE PENALTY_MATRIX so the specified value wins
+ * over the graph's — DIV1↔CADET's matrix value is 0.8 and its specified
+ * separation penalty is 5.0 (research.md D6).
  */
 export function crossoverPenalty(c1: CompFields, c2: CompFields): number {
   if (isSamePopulation(c1, c2)) return Infinity
@@ -146,6 +170,9 @@ export function crossoverPenalty(c1: CompFields, c2: CompFields): number {
   if (c1.weapon !== c2.weapon) return 0.0
 
   if (isGroup1Mandatory(c1.category, c2.category)) return Infinity
+
+  const softPenalty = softSeparationPenalty(c1.category, c2.category)
+  if (softPenalty !== undefined) return softPenalty
 
   return PENALTY_MATRIX.get(pairKey(c1.category, c2.category)) ?? 0.0
 }
