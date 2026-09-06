@@ -484,9 +484,45 @@ describe('suggestStripCount', () => {
     expect(suggestStripCount(mixed, 2, 0.8)).toBe(7)
   })
 
+  // Relocated from the deleted `src/store/__tests__/stripSuggestion.test.ts`
+  // (011 T012). Both cases exercise `poolCountFor`'s inputs through the
+  // suggestion, which the cases above never reach: every fixture there is a
+  // multi-pool event with the override off.
+
+  it('honours use_single_pool_override — one pool, not the fencer count divided', () => {
+    // The override is honoured at exactly 10 fencers and nowhere else
+    // (`pools.ts:28`), so 10 is the only count where the flag can be shown to
+    // reach `poolCountFor`: 2 pools off, 1 pool on. The two answers differ, so
+    // an implementation that drops the flag fails the second assertion.
+    const split = makeCompetition({ id: 'split', fencer_count: 10, use_single_pool_override: false })
+    const single = makeCompetition({ id: 'single', fencer_count: 10, use_single_pool_override: true })
+    expect(suggestStripCount([split], 1, 0.8)).toBe(3) // ceil(2 / 0.80) = 3
+    expect(suggestStripCount([single], 1, 0.8)).toBe(2) // ceil(1 / 0.80) = 2
+  })
+
+  it('sizes a competition small enough for a single pool (≤9 fencers)', () => {
+    // 8 fencers form one pool without any override. The suggestion still
+    // applies the percentage: ceil(1 / 0.80) = 2, not the bare pool count.
+    const tiny = makeCompetition({ id: 'tiny', fencer_count: 8 })
+    expect(suggestStripCount([tiny], 3, 0.8)).toBe(2)
+  })
+
   describe('FR-010 — no sizeable competition reports the absence of an answer, not zero', () => {
     it('returns null for an empty competition list', () => {
       expect(suggestStripCount([], 2, 0.8)).toBeNull()
+    })
+
+    it('returns null when every competition has no fencers entered', () => {
+      // The store's own starting state for a freshly selected event
+      // (`defaultConfigForId` leaves `fencer_count` at 0), so this is the
+      // condition the Suggest button meets before any count is typed. 0 is
+      // below the same minimum as 1 and is skipped the same way — what must
+      // not happen is the button writing 0 into the strip field.
+      const empty = [
+        makeCompetition({ id: 'empty-1', fencer_count: 0 }),
+        makeCompetition({ id: 'empty-2', fencer_count: 0 }),
+      ]
+      expect(suggestStripCount(empty, 2, 0.8)).toBeNull()
     })
 
     it('returns null when every competition is below the minimum fencer count', () => {

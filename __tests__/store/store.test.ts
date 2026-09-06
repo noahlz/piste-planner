@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { Category, TournamentType, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import {
@@ -98,6 +100,51 @@ describe('tournamentSlice', () => {
       useStore.getState().setVideoStrips(4)
 
       expect(useStore.getState().video_strips_total).toBe(4)
+    })
+  })
+
+  // The **Suggest** button's action (`StripSetup.tsx:25`). 011 T012 deleted the
+  // store's own copy of the sizing rule and routed this action through
+  // `buildTournamentConfig` to `suggestStripCount`, so what is pinned here is
+  // the wiring and the `null` case — the arithmetic itself belongs to
+  // `__tests__/engine/analysis.test.ts`.
+  describe('suggestStrips', () => {
+    it("writes the engine rule's own answer into strips_total", () => {
+      useStore.getState().setDays(2)
+      useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
+      useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
+
+      useStore.getState().suggestStrips()
+
+      // 70 fencers → 10 pools, alone on the busiest of 2 days,
+      // ceil(10 / 0.80) = 13. Cross-checked against the engine below so the
+      // button and the engine can never drift into two rules again (SC-006).
+      const { config, competitions } = buildTournamentConfig(useStore.getState())
+      expect(useStore.getState().strips_total).toBe(13)
+      expect(useStore.getState().strips_total).toBe(
+        suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct),
+      )
+    })
+
+    it('leaves strips_total alone when no competition is selected — never writes 0', () => {
+      useStore.getState().setStrips(24)
+
+      useStore.getState().suggestStrips()
+
+      // FR-010: the absence of an answer is not the number zero. A 0 here
+      // would read as a deliberate configuration and fail validation.
+      expect(useStore.getState().strips_total).toBe(24)
+    })
+
+    it('leaves strips_total alone when every selected event has no fencers entered', () => {
+      useStore.getState().setStrips(24)
+      // `selectCompetitions` seeds `fencer_count: 0` — the state the button is
+      // in the moment an organizer picks events and has not typed counts yet.
+      useStore.getState().selectCompetitions(['D1-M-FOIL-IND', 'D1-W-FOIL-IND'])
+
+      useStore.getState().suggestStrips()
+
+      expect(useStore.getState().strips_total).toBe(24)
     })
   })
 

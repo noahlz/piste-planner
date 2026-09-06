@@ -28,7 +28,8 @@ export function StripSetup() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="w-64 text-xs">
-              Suggests enough strips to run all pools of the largest competition in a single flight.
+              Suggests enough strips to run every pool of the busiest day at once, within the pool
+              phase's share of the venue.
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

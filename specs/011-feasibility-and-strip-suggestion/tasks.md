@@ -172,7 +172,7 @@ and the placed count at it.
   max-over-events rule, against the busiest-day rule — re-measure each expected
   number rather than deriving it by hand *(subagent commits)*
 
-- [ ] **T012** [US2] Delete `src/store/stripSuggestion.ts` and its test file
+- [X] **T012** [US2] Delete `src/store/stripSuggestion.ts` and its test file
   `src/store/__tests__/stripSuggestion.test.ts`, relocating any case the engine
   test does not already cover. Rewire the `suggestStrips` action
   (`src/store/store.ts:229`) to reach the engine rule through

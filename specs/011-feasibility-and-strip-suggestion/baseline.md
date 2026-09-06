@@ -376,3 +376,106 @@ boards. Both fill substantially when given strips — 45 of 66 and 42 of 42 at
 the work, not an engine that cannot place the events. **That is precisely what
 US2 exists to fix**, and the numbers above are what T012's after-US2 table is
 measured against.
+
+---
+
+## 5. Ten templates after US2
+
+`[M]` Measured at `2d449233c1` (T011) plus T012's working tree — the store copy
+deleted and the **Suggest** button routed through `buildTournamentConfig` to
+`suggestStripCount`. Same method as §1 and §4, unchanged: §The method's
+`runTemplate` verbatim, written to `tmp/t012-remeasure-probe.test.ts`, run with
+
+```
+timeout 500 pnpm --silent vitest run tmp/t012-remeasure-probe.test.ts > ./tmp/probe-t012.log 2>&1
+```
+
+and deleted after the numbers were recorded. It carries T008's two reporting
+fields (`unplacedIds`, `errorBottleneckCount`) and nothing else new. Days stay at
+the store's default of 3, tournament type stays NAC on all ten, video strips
+resolve to 8 in the suggested column.
+
+### Three-way comparison
+
+"Before" is §1 (`8335928dc5`, pre-feature). "After US1" is §4 (`d7c58dbd90`).
+"After US2" is this run.
+
+| Template | Events | Suggested (before / US1 / **US2**) | Placed @ suggested (before / US1 / **US2**) | Placed @ 80/12 (before / US1 / **US2**) |
+|---|---:|---|---|---|
+| NAC Youth | 24 | 39 / 39 / **258** | 0 / 10 / **24** | 22 / 22 / **22** |
+| NAC Cadet/Junior | 24 | 39 / 39 / **192** | 0 / 13 / **24** | 24 / 24 / **24** |
+| NAC Div1/Junior | 24 | 45 / 45 / **195** | 13 / 13 / **24** | 24 / 24 / **24** |
+| NAC Vet/Div1/Junior | 66 | 45 / 45 / **357** | 0 / 19 / **66** | 45 / 45 / **45** |
+| ROC Div1A/Vet | 12 | 15 / 15 / **30** | 12 / 12 / **12** | 12 / 12 / **12** |
+| ROC Div1A/Div2/Vet | 18 | 15 / 15 / **49** | 16 / 16 / **18** | 18 / 18 / **18** |
+| ROC Mega | 42 | 20 / 20 / **210** | 0 / 12 / **42** | 42 / 42 / **42** |
+| RYC Weekend | 18 | 20 / 20 / **100** | 12 / 12 / **18** | 18 / 18 / **18** |
+| RJCC Weekend | 12 | 19 / 19 / **72** | 6 / 6 / **12** | 12 / 12 / **12** |
+| Junior Olympics | 18 | 39 / 39 / **179** | 0 / 11 / **18** | 18 / 18 / **18** |
+
+**Every template places its whole field at its suggested count** — ten of ten,
+`placed == eventCount` on every row. `validateConfig(…, BINDING)` returns zero
+ERROR findings and zero WARN findings on all twenty cells. The
+`feasibility-strip-hours` WARN that §4 recorded on five templates is gone
+entirely: at these strip counts the estimate is no longer short.
+
+`DEADLINE_BREACH` — the shortfall §4 named and spec §Out of Scope does not fix —
+vanishes from the suggested column on all ten. It was never a validation problem:
+with enough strips to run the day's pools at once, no event loses its race
+against the day's end. The only warning left anywhere in the suggested column is
+`NAC Cadet/Junior`'s `UNAVOIDABLE_CROSSOVER_CONFLICT` ×6, which is 010's R7
+reporting the least-bad-color fallback and costs it no events (it places 24 of
+24).
+
+The **80/12 column is byte-identical to §1 and §4 on all ten templates**, which
+is the expected result: that column never calls the suggestion.
+
+### SC-002 verdict: **met**
+
+> No template places fewer events after this feature than before it, at either
+> the suggested count or at 80 strips / 12 video.
+
+Cell by cell against both §1 and §4, at both strip counts: **not one cell fell.**
+Ten cells rose in the suggested column (every template gained, from +6 on
+ROC Div1A/Vet's already-full 12 to +47 on NAC Vet/Div1/Junior) and the ten cells
+at 80/12 are unchanged. No halt condition fired.
+
+### Is this a number an organizer can act on?
+
+Honestly: **on the four largest templates, no.** The rule is arithmetically
+correct and the boards it produces are full, but the number it produces is a
+*sufficient* strip count, not a *minimum* one — nothing in the rule searches for
+the smallest count that fills the board, and the gap between the two is large.
+
+| Template | Suggested | × the 80-strip column | Placed @ 80 | Placed @ suggested | Events bought by the extra strips |
+|---|---:|---:|---:|---:|---|
+| NAC Vet/Div1/Junior | **357** | 4.5× | 45 of 66 | 66 of 66 | +21, for +277 strips |
+| NAC Youth | **258** | 3.2× | 22 of 24 | 24 of 24 | **+2, for +178 strips** |
+| ROC Mega | **210** | 2.6× | 42 of 42 | 42 of 42 | **none** |
+| NAC Div1/Junior | **195** | 2.4× | 24 of 24 | 24 of 24 | **none** |
+| NAC Cadet/Junior | **192** | 2.4× | 24 of 24 | 24 of 24 | **none** |
+| Junior Olympics | **179** | 2.2× | 18 of 18 | 18 of 18 | **none** |
+| RYC Weekend | **100** | 1.3× | 18 of 18 | 18 of 18 | none |
+| RJCC Weekend | **72** | 0.9× | 12 of 12 | 12 of 12 | none |
+| ROC Div1A/Div2/Vet | **49** | 0.6× | 18 of 18 | 18 of 18 | none |
+| ROC Div1A/Vet | **30** | 0.4× | 12 of 12 | 12 of 12 | none |
+
+**On eight of the ten templates, 80 strips already place exactly what the
+suggested count places.** The suggestion buys additional events on two templates
+only, and on `NAC Youth` it costs 178 extra strips to place 2 more events. A
+venue asked for 357 strips is being asked to more than quadruple a floor that
+already schedules 45 of 66 events.
+
+What US2 fixed is real and is what it was scoped to fix: there is now **one** rule,
+it sizes for the busiest day rather than the largest single event (the defect
+audit §2.1 L5 named), and the count it returns genuinely runs the tournament —
+the five templates that used to return an empty board now return a complete one.
+What it did not do, and was not asked to do, is return the *cheapest* count that
+works. On the small regionals (30, 49, 72, 100) the answer is plausible as a
+venue plan. On the large NACs (179–357) it reads as a theoretical ceiling.
+
+**For the handoff, not fixed here**: the suggestion has no lower bound and no
+search. A follow-up that reports the smallest strip count placing every event —
+or that presents the busiest-day number as "to run every pool concurrently" next
+to a second, smaller "to place every event" figure — is what would make the large
+templates actionable. Recording it here rather than treating 258 as a clean win.
