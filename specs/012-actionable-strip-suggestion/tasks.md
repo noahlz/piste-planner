@@ -330,7 +330,7 @@ a candidate.
 
 ## Phase 6: Verified live, and close-out
 
-- [ ] **T014** **(dispatched – locator repair iterates, plan.md §Constitution
+- [X] **T014** **(dispatched – locator repair iterates, plan.md §Constitution
   Check VI)** Repair `scripts/smoke.mjs` **in place**, never rewritten. Three
   existing steps press **Suggest** and read the field with no wait or a 100ms
   one – `ROC Div1A/Vet` at `:348`, `NAC Youth` at `:763`, `NAC Cadet/Junior` at
