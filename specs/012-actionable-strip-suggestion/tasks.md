@@ -308,7 +308,7 @@ a search outlasts a fixed reveal delay, and clears when the count is written.
 indicator; a search shorter than it never shows it; the strip field never shows
 a candidate.
 
-- [ ] **T013** [US2] One dispatch, test then implementation. Create
+- [X] **T013** [US2] One dispatch, test then implementation. Create
   `__tests__/components/sections/StripSetup.test.tsx` on the pattern of
   `CompetitionOverrides.test.tsx` (store reset in `beforeEach`, RTL render),
   with fake timers and `suggestStrips` replaced on the store by a promise the
