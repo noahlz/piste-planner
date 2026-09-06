@@ -236,25 +236,55 @@ describe('Realistic tournament integration', () => {
     const competitions = buildCompetitions(fencerCounts)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
-    it('B4 trips the upfront feasibility gate — nothing scheduled (Ruling 11)', () => {
+    it('B4 degrades per event under a demoted feasibility WARN rather than emptying (011 T006)', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      // B4: T041's flat SINGLE_STAGE formula raises aggregate strip-hour demand
-      // past the upfront validateFeasibility gate (validation.ts:310), which
-      // aborts the whole build before any per-day packing runs — accepted under
-      // Ruling 11 (2161 strip-hours demanded vs. the 1932 threshold). This test
-      // pins that upfront-infeasibility result explicitly, by bottleneck cause
-      // and phase rather than message text, instead of the graceful per-event
-      // degradation `assertScheduleIntegrity` exercises for other scenarios.
-      expect(Object.keys(schedule).length).toBe(0)
 
+      // Until 011's T004 this case read "trips the upfront feasibility gate —
+      // nothing scheduled (Ruling 11)": T041's flat SINGLE_STAGE formula raised
+      // B4's aggregate strip-hour demand past the upfront validateFeasibility
+      // gate (validation.ts:310), which aborted the whole build before any
+      // per-day packing ran, and Ruling 11 accepted that (2161 strip-hours
+      // demanded against the 1932 threshold). B4 was the one scenario in this
+      // file that could not run `assertScheduleIntegrity`, because there was no
+      // schedule whose integrity could be checked.
+      //
+      // T004 demoted `feasibility-strip-hours` to a WARN in every mode. The
+      // demand and the threshold are untouched — R5 moved the severity and
+      // nothing about the estimate — so B4 is still an oversubscribed venue.
+      // What moved is what an oversubscribed venue returns: a partial board,
+      // thirteen unplaced events, and the shortfall as a warning.
+      //
+      // The regression this case has always guarded is B4's *shape*, and it
+      // still does; the shape inverted. It fails if B4 collapses back to an
+      // empty board and it fails if a validation ERROR returns to empty it. The
+      // one thing it no longer does is assert that collapse as the correct
+      // answer — and it now holds B4 to the same hard-constraint integrity as
+      // the other seven scenarios, which for as long as it was empty it escaped.
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
+
+      // `[M]` at T006: 17 of 30, asserted as a lower bound rather than pinned.
+      // `driftLedger.test.ts` owns B4's exact count and halts on movement in
+      // either direction; a second exact pin here would mean two files to
+      // re-measure for one number. What this file adds is that the count is
+      // reached through the integrity assertion above, not merely reported.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(17)
+
+      // No ERROR out of validation. B4's ERRORs are all
+      // DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the per-event
+      // degradation of a board that cannot fit everything, which spec.md §Edge
+      // Cases records as R5's accepted cost. A Phase.VALIDATION ERROR is the
+      // shape that empties a board, so its return halts here whatever rule
+      // produced it, and the cause check keeps the ERRORs that remain honest
+      // about being per-event rather than whole-tournament.
       const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
-      expect(errors).toHaveLength(1)
-      expect(errors[0].cause).toBe(BottleneckCause.RESOURCE_EXHAUSTION)
-      expect(errors[0].phase).toBe(Phase.VALIDATION)
+      expect(errors.filter(b => b.phase === Phase.VALIDATION)).toEqual([])
+      expect(errors.every(b => b.cause === BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE)).toBe(true)
 
-      // The gate short-circuits before per-day scheduling, so no ref requirements
-      // are computed.
-      expect(ref_requirements_by_day).toBeUndefined()
+      // Per-day scheduling runs now, so ref requirements are computed — one
+      // entry per day, where the short-circuiting gate left this undefined.
+      // This is the observable half of "the build actually ran".
+      expect(ref_requirements_by_day).toBeDefined()
+      expect(ref_requirements_by_day).toHaveLength(config.days_available)
 
       maybeDumpAsciiLanes('B4', schedule, bottlenecks, strip_allocations, config, competitions)
     })

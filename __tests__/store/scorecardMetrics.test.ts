@@ -529,7 +529,19 @@ describe('selectScorecardMetrics — findings on a constrained fixture', () => {
    *   `STRIP_DEFICIT_NO_FLIGHTING` on `POOLS` (one per competition), and three
    *   INFO `CUT_SUMMARY` on `CUT`.
    *
-   * ERROR is therefore 4, WARN is 3 + 1 + 2 + 3 = 9 and INFO is 3.
+   * ERROR is therefore 3, WARN is 3 + 1 + 1 + 2 + 3 = 10 and INFO is 3.
+   *
+   * 011 T006, 2026-09-05 — ERROR 4 → 3 and WARN 9 → 10. One finding moved
+   * between the two tallies and nothing else changed: T004 made
+   * `feasibility-video-strip-hours` notice-kind, so the `feasibility_video`
+   * ERROR above is now a WARN (FR-002). This is the scorecard's own view of the
+   * demotion, one level below `Scorecard.test.tsx` — the count that used to say
+   * "this tournament is refused" now says "this tournament has a warning", and
+   * the total is unchanged at 13 because a demotion is not a deletion. The
+   * fixture is untouched; only the two numbers moved, and they moved by one in
+   * opposite directions, which is the signature to look for if either is ever
+   * questioned. What this case guards is unchanged: that a whole-tournament
+   * finding and the per-competition ones are counted into the same tallies.
    *
    * 004 US4 T063 — was ERROR 0, WARN 10, INFO 3. D6's cause, on both moves.
    * This fixture sets NAC explicitly, so its de_mode resolves AUTO to STAGED,
@@ -549,8 +561,8 @@ describe('selectScorecardMetrics — findings on a constrained fixture', () => {
    */
   it('counts the day-level warning and the per-competition ones together', () => {
     contendedTwoPlaced()
-    expect(metric('findings:ERROR').value).toBe(4)
-    expect(metric('findings:WARN').value).toBe(9)
+    expect(metric('findings:ERROR').value).toBe(3)
+    expect(metric('findings:WARN').value).toBe(10)
     expect(metric('findings:INFO').value).toBe(3)
   })
 

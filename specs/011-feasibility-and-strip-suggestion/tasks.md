@@ -107,7 +107,7 @@ suggested strip count; B1–B8 hold their floors.
   `hasResourceExhaustion` condition at `concurrentScheduler.ts:1444` to accept a
   WARN feasibility finding ([research.md D3](./research.md)) *(subagent commits)*
 
-- [ ] **T006** [US1] **(Opus)** **(drift)** Invert the two engine tests that use
+- [X] **T006** [US1] **(Opus)** **(drift)** Invert the two engine tests that use
   "feasibility empties the board" as a fixture, and explain each inversion in
   the commit message rather than merely rewriting the expectation:
   - `__tests__/engine/driftLedger.test.ts:213` — B4's dedicated pin. It asserts

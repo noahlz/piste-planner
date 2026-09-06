@@ -47,9 +47,14 @@ import type { ScenarioId } from '../../src/data/tournaments.ts'
  * re-taken snapshot in the same commit (T019). It is the only entry that moved:
  * B6 is the only scenario holding Y8 events, and T019 emptied
  * `CROSSOVER_GRAPH[Y8]`.
+ *
+ * 011 T004/T006, 2026-09-05 — B4 moved 0 → 17, read from the drift ledger's own
+ * snapshot, which T004 re-took in the commit that demoted
+ * `feasibility-strip-hours` to a WARN in every mode. It is the only entry that
+ * moved: B4 was the one scenario the aggregate feasibility gate emptied.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 45, B7: 18, B8: 52,
+  B1: 24, B2: 24, B3: 24, B4: 17, B5: 12, B6: 45, B7: 18, B8: 52,
 }
 
 interface ParityException {
@@ -89,6 +94,40 @@ interface ParityException {
  * entry's `closedBy`.
  */
 const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
+  /**
+   * B4 is a **new** exception, opened by 011 T006, and it is the one entry here
+   * whose cause was recorded rather than isolated.
+   *
+   * B4 had no exception because both paths read **0** — the aggregate
+   * feasibility gate emptied the board on either config, so a per-competition
+   * difference between them could not show up in a placed count. T004's
+   * demotion removed that floor-to-ceiling zero and the two paths landed one
+   * event apart: `[M]` at T006, ledger **17**, app path **18**. The divergence
+   * did not appear at T004; it was always there and nothing could see it.
+   *
+   * **011 does not explain the +1, by product-owner direction: it is recorded
+   * here, not reconciled.** What is measured, and is not a guess:
+   * `validateConfig` on the *ledger's* B4 config returns twelve WARN
+   * `regional-cut-override` findings — "regional tournament (SYC) requires
+   * all-advance for Y14 / CADET". B4 is an SYC, `REGIONAL_CUT_OVERRIDES` covers
+   * Y14 and Cadet, and `src/store/buildConfig.ts:196` applies it while the
+   * ledger's factory (`__tests__/helpers/scenarios.ts:50-52`) cuts at 20%
+   * instead. So the two configs demonstrably disagree on `cut_mode` for twelve
+   * of B4's thirty events, and it is the same seam B6's entry below documents
+   * for an ROC. What was **not** done is the isolation run that would prove
+   * those twelve events are what the one-event gap is made of — swapping only
+   * `cut_mode` and re-measuring. Until someone runs it, the attribution below
+   * is the likeliest seam and not a demonstrated cause, and this comment says
+   * so rather than borrowing B6's confidence.
+   */
+  B4: {
+    appPath: 18,
+    ledger: 17,
+    cause: 'unconfirmed. The two configs are measured to disagree on cut_mode for 12 of B4\'s 30 events — B4 is an SYC, buildConfig.ts:196 applies REGIONAL_CUT_OVERRIDES for Y14 and Cadet, and the ledger\'s factory (scenarios.ts:50-52) cuts at 20% instead, which is why validateConfig raises 12 WARN regional-cut-override findings against the ledger\'s config and none against the app\'s. That is the same seam B6 and B8 sit on. Whether it accounts for the one-event gap was not established: 011 T006 recorded this divergence under product-owner direction and did not isolate it',
+    evidence: 'measured at T006 on 2026-09-05: app path 18, drift ledger 17, both re-measured on this branch after T004 demoted feasibility-strip-hours. Before T004 both paths read 0, so no measurement could have exposed the gap — it is newly visible, not newly created. The 12 regional-cut-override WARNs on the ledger\'s config are measured; no swap-one-default isolation run was performed, which is the difference between this entry and the two below',
+    closedBy: 'the same follow-up as B6 and B8 — "The drift ledger\'s factory does not apply the store\'s per-type resolutions" in docs/design/backlog.md, whose scope already covers the cut_mode half of this gap. Whoever takes it runs B4\'s isolation first: if cut_mode does not account for the +1, this entry needs its own owner and this closedBy is wrong',
+  },
+
   /**
    * B6 moved **away** from the ledger under US4: 43 → 39 against the ledger's
    * unchanged 44. That is not a regression to hunt. T061a's pre-allocated
@@ -181,9 +220,9 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
 
 /**
  * What the app path places today, measured (T011, re-measured T063a), one
- * number per scenario. **Six** now equal their ledger count — B4 joined them
- * at 0 — and two are the FR-004a exceptions above, gated exactly as the six
- * are: a different pinned number, never an unasserted one.
+ * number per scenario. **Five** now equal their ledger count and three are the
+ * FR-004a exceptions above, gated exactly as the five are: a different pinned
+ * number, never an unasserted one.
  *
  * A second copy of B4's and B6's pins lives in
  * `__tests__/helpers/appPath.test.ts`'s `BASELINE`, which proves the harness
@@ -194,9 +233,15 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
  * 010 L9, 2026-09-05 — B6 re-measured 39 → 40 (T019 emptied
  * `CROSSOVER_GRAPH[Y8]`), and its copy in `appPath.test.ts` moved with it in
  * the same commit. No other scenario carries Y8 events, and no other pin moved.
+ *
+ * 011 T006, 2026-09-05 — B4 re-measured 0 → **18**, against the ledger's 17. It
+ * left the equal-to-ledger group and became the third FR-004a exception, and
+ * its copy in `appPath.test.ts` moved with it in the same commit. The count
+ * moved because T004 demoted `feasibility-strip-hours`; the *gap* it exposes is
+ * older than that and is recorded, not closed — see `PARITY_EXCEPTIONS.B4`.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 0, B5: 12, B6: 40, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
 }
 
 describe('app-path parity with the drift ledger (contracts/day-axis.md C5)', () => {
