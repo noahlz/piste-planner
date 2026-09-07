@@ -264,7 +264,7 @@ reviews (FR-069).
   and `RailPanel.tsx` *(subagent commits)*
   → Done 2026-09-07: 74 files / 1890 tests, tsc and lint clean. `PanelId` lives in `viewState.ts`; `AdvancedPanel` unwrapped into a `<section aria-label="Advanced">`, summary always rendered (`RailPanel`'s summary-slot cases have no successor — no collapsible remains — and are recorded here); `InspectorPanel.tsx` exports `PANEL_TITLES` with an `eslint-disable-next-line react-refresh/only-export-components` (precedent: `EventBlock.tsx`'s `blockChannels`), keeping the map beside the component whose header it labels rather than splitting it out. `WorkbenchShell.test.tsx`'s two top-bar cases scoped to the banner because the rail has its own "Settings" button until T010 deletes the top bar
 
-- [ ] **T010** [US1] The header ([research D12](./research.md), FR-004 to
+- [x] **T010** [US1] The header ([research D12](./research.md), FR-004 to
   FR-008). Red first: `__tests__/components/workbench/Header.test.tsx` – a
   `header` "Header" with the brand, `combobox` "Preset" listing eight
   tournaments under "Tournaments" and ten templates under "Templates –
@@ -287,6 +287,19 @@ reviews (FR-069).
   at `src/App.tsx:18–23` with its badge. The top bar's Settings popover goes
   with it – the old `SettingsPanel` is already behind the rail's Settings
   button (T009) *(subagent commits)*
+  → Done 2026-09-07: 8 files created (`popover.tsx`, `PresetPicker.tsx`,
+  `ExportPopover.tsx`, `Header.tsx`, `Header.test.tsx`, `ExportPopover.test.tsx`,
+  `__tests__/lib/time.test.ts`), 5 edited (`test-setup.ts` gained a
+  `ResizeObserver` stub – none existed, Radix's Popover needs one the same way
+  Tooltip does; `time.ts` gained `formatClock`; `WorkbenchShell.tsx`, `App.tsx`,
+  `SettingsPanel.tsx`'s now-stale mounting comment), 3 deleted (`TopBar.tsx`,
+  `SaveLoadShare.tsx`, `saveLoadShare.test.tsx`). `WorkbenchShell.test.tsx`'s
+  dead "top bar strip count" describe (TopBar's own duplicate spinbutton, not
+  StripSetup's differently-named "Number of strips" control) was removed
+  rather than re-targeted – no equivalent survives, and `number-input.test.tsx`
+  already covers `commitOnChange` generically. 76 files / 1903 tests, tsc and
+  lint clean, grep for stale references clean (remaining hits are historical
+  comments explaining what T010 replaced).
 
 - [ ] **T011** [US1] The footer, and the center loses its chrome (FR-049,
   FR-050, [research D7, D18](./research.md)). Red first:

@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { SaveLoadShare } from '../../src/components/sections/SaveLoadShare.tsx'
-import { useStore } from '../../src/store/store.ts'
-import { serializeState } from '../../src/store/serialization.ts'
-import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { makePlacement } from '../helpers/factories.ts'
+import { ExportPopover } from '../../../src/components/workbench/ExportPopover.tsx'
+import { useStore } from '../../../src/store/store.ts'
+import { serializeState } from '../../../src/store/serialization.ts'
+import { TEMPLATES } from '../../../src/engine/catalogue.ts'
+import { makePlacement } from '../../helpers/factories.ts'
 
-// ──────────────────────────────────────────────
-// Setup
-// ──────────────────────────────────────────────
+// 013 T010 — re-targets the deleted __tests__/components/saveLoadShare.test.tsx
+// at ExportPopover, the Header's Popover wrapper over the same
+// src/store/exportActions.ts behavior SaveLoadShare exposed. `defaultOpen`
+// renders the popover content pre-mounted, the same way select.test.tsx opens
+// a Radix Select without a pointer-capture-dependent click.
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
@@ -16,7 +18,7 @@ beforeEach(() => {
   vi.unstubAllGlobals()
 })
 
-/** Selects a file in SaveLoadShare's hidden input and fires the change event. */
+/** Selects a file in the popover's hidden input and fires the change event. */
 function uploadJson(json: string): void {
   const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
   const file = new File([json], 'tournament.piste.json', { type: 'application/json' })
@@ -28,19 +30,19 @@ function uploadJson(json: string): void {
 // Render tests
 // ──────────────────────────────────────────────
 
-describe('SaveLoadShare render tests', () => {
+describe('ExportPopover render tests', () => {
   it('renders Save to File button', () => {
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     expect(screen.getByRole('button', { name: 'Save to File' })).toBeInTheDocument()
   })
 
   it('renders Generate Link button', () => {
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     expect(screen.getByRole('button', { name: 'Generate Link' })).toBeInTheDocument()
   })
 
   it('renders file input for loading configurations', () => {
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     expect(document.querySelector('input[type="file"]')).toBeInTheDocument()
   })
 })
@@ -49,7 +51,7 @@ describe('SaveLoadShare render tests', () => {
 // Save tests
 // ──────────────────────────────────────────────
 
-describe('SaveLoadShare save tests', () => {
+describe('ExportPopover save tests', () => {
   it('clicking Save to File triggers URL.createObjectURL', () => {
     const createObjectURL = vi.fn(() => 'blob:mock-url')
     const revokeObjectURL = vi.fn()
@@ -64,7 +66,7 @@ describe('SaveLoadShare save tests', () => {
       return originalCreateElement(tag)
     })
 
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     fireEvent.click(screen.getByRole('button', { name: 'Save to File' }))
 
     expect(createObjectURL).toHaveBeenCalledOnce()
@@ -92,7 +94,7 @@ describe('SaveLoadShare save tests', () => {
       return originalCreateElement2(tag)
     })
 
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     fireEvent.click(screen.getByRole('button', { name: 'Save to File' }))
 
     expect(capturedBlob).toBeTruthy()
@@ -124,9 +126,7 @@ describe('SaveLoadShare save tests', () => {
 // Load tests
 // ──────────────────────────────────────────────
 
-describe('SaveLoadShare load tests', () => {
-  // Validation findings render as role="alert" on every page now, so load errors
-  // are matched by their text rather than by role.
+describe('ExportPopover load tests', () => {
   it('loading valid JSON hydrates store state', async () => {
     // Prepare a valid serialized state
     useStore.getState().setStrips(18)
@@ -137,7 +137,7 @@ describe('SaveLoadShare load tests', () => {
     useStore.setState(useStore.getInitialState())
     expect(useStore.getState().strips_total).toBe(0)
 
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     uploadJson(json)
 
     await waitFor(() => {
@@ -146,7 +146,7 @@ describe('SaveLoadShare load tests', () => {
   })
 
   it('loading a placement whose event is not selected reports the drop', async () => {
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
 
     const json = JSON.stringify({
       schemaVersion: 2,
@@ -191,7 +191,7 @@ describe('SaveLoadShare load tests', () => {
     const json = serializeState(useStore.getState())
     useStore.setState(useStore.getInitialState())
 
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     uploadJson(json)
 
     await waitFor(() => {
@@ -203,7 +203,7 @@ describe('SaveLoadShare load tests', () => {
 
   it('loading valid JSON clears any previous load error', async () => {
     useStore.setState(useStore.getInitialState())
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
 
     uploadJson('not valid json!!!')
 
@@ -219,7 +219,7 @@ describe('SaveLoadShare load tests', () => {
   })
 
   it('loading invalid JSON shows error message', async () => {
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     uploadJson('{ this is not valid json }')
 
     await waitFor(() => {
@@ -228,7 +228,7 @@ describe('SaveLoadShare load tests', () => {
   })
 
   it('loading JSON with wrong schema shows error message', async () => {
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
     uploadJson(JSON.stringify({ schemaVersion: 2, foo: 'bar' }))
 
     await waitFor(() => {
@@ -241,17 +241,28 @@ describe('SaveLoadShare load tests', () => {
 // Share tests
 // ──────────────────────────────────────────────
 
-describe('SaveLoadShare share tests', () => {
+describe('ExportPopover share tests', () => {
   it('Generate Link produces URL containing #config= hash', () => {
-    render(<SaveLoadShare />)
+    render(<ExportPopover defaultOpen />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate Link' }))
 
-    // Scoped to this component's own subtree — the readonly share-URL input
-    // is SaveLoadShare's only readonly input, so a bare mount keeps the
-    // page-wide count from the source case meaningful here too.
     const urlInputs = document.querySelectorAll('input[readonly]')
     expect(urlInputs.length).toBe(1)
     expect((urlInputs[0] as HTMLInputElement).value).toContain('#config=')
+  })
+
+  it('Copy writes the share link to a stubbed clipboard and reads "Copied"', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+
+    render(<ExportPopover defaultOpen />)
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Link' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    })
+    expect(writeText).toHaveBeenCalledOnce()
   })
 })

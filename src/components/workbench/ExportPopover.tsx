@@ -7,12 +7,22 @@ import {
   shareLinkExceedsLimit,
   copyToClipboard,
 } from '../../store/exportActions.ts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Download, Upload, Share2, Copy, Check } from 'lucide-react'
 
-export function SaveLoadShare() {
+interface ExportPopoverProps {
+  /** Test-only: opens the popover without a pointer-capture-dependent click. */
+  defaultOpen?: boolean
+}
+
+/**
+ * The Header's Export control (013 T010, ui-contract.md §Header, FR-004–FR-009):
+ * `SaveLoadShare`'s save/load/share behavior, unchanged, behind one Popover
+ * trigger instead of the old `Collapsible` under "Save / Share".
+ */
+export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [droppedPlacements, setDroppedPlacements] = useState<string[]>([])
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -60,11 +70,14 @@ export function SaveLoadShare() {
   const urlExceedsLimit = shareUrl != null && shareLinkExceedsLimit(shareUrl)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Save / Load / Share</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Popover defaultOpen={defaultOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline">
+          <Share2 className="mr-2 h-4 w-4" />
+          Export
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[28rem] space-y-4">
         {/* Save */}
         <div>
           <h3 className="mb-2 text-sm font-medium text-foreground">Save Configuration</h3>
@@ -84,11 +97,7 @@ export function SaveLoadShare() {
             onChange={handleFileChange}
             className="hidden"
           />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-          >
+          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
             Load from File
           </Button>
@@ -124,11 +133,7 @@ export function SaveLoadShare() {
           {shareUrl && (
             <div className="mt-2 space-y-2">
               <div className="flex items-center gap-2">
-                <Input
-                  readOnly
-                  value={shareUrl}
-                  className="flex-1 bg-muted text-xs"
-                />
+                <Input readOnly value={shareUrl} className="flex-1 bg-muted text-xs" />
                 <Button type="button" variant="outline" onClick={handleCopy}>
                   {copied ? (
                     <>
@@ -152,7 +157,7 @@ export function SaveLoadShare() {
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </PopoverContent>
+    </Popover>
   )
 }

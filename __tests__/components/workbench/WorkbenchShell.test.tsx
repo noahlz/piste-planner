@@ -3,15 +3,16 @@ import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { useStore } from '../../../src/store/store.ts'
 
-// 004 T006 — the shell's four regions plus the tray, the top bar's seven
-// controls, and the rail's four panel triggers, each locatable by the
-// accessible name contracts/ui-contract.md §Regions fixes (S2-contract.md).
-// The last describe covers the Auto-schedule all gate that restores
-// ActionButtons' hard-error scheduling block (S2-contract.md §Top bar
-// controls).
+// 004 T006 — the shell's four regions plus the tray, the header's controls,
+// and the rail's four panel triggers, each locatable by the accessible name
+// contracts/ui-contract.md §Regions fixes (S2-contract.md). The last describe
+// covers the Auto-assign gate that restores ActionButtons' hard-error
+// scheduling block (S2-contract.md §Top bar controls).
 //
-// US5 (T075) added the gears control beside Save / Share, and moved Pool
-// durations out of the rail behind it (T074, FR-043).
+// 013 T010 replaced TopBar (preset picker plus duplicate type/day/strip
+// inputs and a gears disclosure) with Header (ui-contract.md §Header):
+// Preset, a read-only summary, Auto-assign, and Export. The type/day/strip
+// inputs and Settings now live only behind the rail's own panels (T009).
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
@@ -29,7 +30,7 @@ describe('WorkbenchShell regions', () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
-    expect(screen.getByRole('banner', { name: 'Top bar' })).toBeInTheDocument()
+    expect(screen.getByRole('banner', { name: 'Header' })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Tool rail' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Unplaced events' })).toBeInTheDocument()
     expect(screen.getByRole('main', { name: 'Center view' })).toBeInTheDocument()
@@ -44,42 +45,42 @@ describe('WorkbenchShell regions', () => {
   })
 })
 
-describe('WorkbenchShell top bar', () => {
-  it('exposes each of the seven controls by role and accessible name', () => {
+describe('WorkbenchShell header', () => {
+  it('exposes the header\'s Preset, Auto-assign and Export controls, and no type, day or strip input', () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
-    // Scoped to the banner: the tool rail (T009) has its own "Settings"
-    // button now, so the top bar's gears button is no longer unambiguous by
-    // name alone. Untouched otherwise — T010 deletes this whole describe.
-    const topBar = screen.getByRole('banner', { name: 'Top bar' })
-    expect(within(topBar).getByRole('combobox', { name: 'Preset' })).toBeInTheDocument()
-    expect(within(topBar).getByRole('combobox', { name: 'Tournament type' })).toBeInTheDocument()
-    expect(within(topBar).getByRole('combobox', { name: 'Day count' })).toBeInTheDocument()
-    expect(within(topBar).getByRole('spinbutton', { name: 'Strip count' })).toBeInTheDocument()
-    expect(within(topBar).getByRole('button', { name: 'Auto-schedule all' })).toBeInTheDocument()
-    expect(within(topBar).getByRole('button', { name: 'Settings' })).toBeInTheDocument()
-    expect(within(topBar).getByRole('button', { name: 'Save / Share' })).toBeInTheDocument()
+    // Scoped to the banner: T010 removed TopBar's duplicate type/day/strip
+    // inputs and gears disclosure. The type/day/strip inputs now live only
+    // behind the rail's own panels (T009) — this checks the header holds no
+    // copy of them.
+    const header = screen.getByRole('banner', { name: 'Header' })
+    expect(within(header).getByRole('combobox', { name: 'Preset' })).toBeInTheDocument()
+    expect(within(header).getByRole('button', { name: 'Auto-assign' })).toBeInTheDocument()
+    expect(within(header).getByRole('button', { name: 'Export' })).toBeInTheDocument()
+    expect(within(header).queryByRole('combobox', { name: 'Tournament type' })).toBeNull()
+    expect(within(header).queryByRole('combobox', { name: 'Day count' })).toBeNull()
+    expect(within(header).queryByRole('spinbutton', { name: 'Strip count' })).toBeNull()
   })
 
-  // FR-041's "opens" half (T078 finding 3). The control's existence is pinned
-  // above and SettingsPanel's own suite renders the panel directly, so nothing
-  // joined the two: a trigger that lost `asChild`, a panel dropped out of
-  // `CollapsibleContent`, or an `open`/`onOpenChange` pair on the wrong state
-  // left both files green with an unreachable panel — US4's FR-038 shape.
-  it('opens the settings panel from the gears control, and starts closed', () => {
+  // FR-041's "opens" half (T078 finding 3), re-targeted at the rail's own
+  // Settings button (T009) now that TopBar's gears disclosure is gone. The
+  // control's existence is pinned by WorkbenchShell rail's own describe below
+  // and SettingsPanel's own suite renders the panel directly, so nothing
+  // joined the two: a trigger that lost its handler, or a panel id that never
+  // reaches `panelContent`, left both files green with an unreachable panel —
+  // US4's FR-038 shape.
+  it("opens the inspector panel holding the old Settings section from the rail's Settings button, and starts closed", () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
     expect(screen.queryByRole('region', { name: 'Settings' })).toBeNull()
 
-    // Scoped to the banner for the same reason as above — the tool rail's
-    // own "Settings" button until T010.
-    const topBar = screen.getByRole('banner', { name: 'Top bar' })
-    fireEvent.click(within(topBar).getByRole('button', { name: 'Settings' }))
+    const rail = screen.getByRole('navigation', { name: 'Tool rail' })
+    fireEvent.click(within(rail).getByRole('button', { name: 'Settings' }))
 
-    // Only one Settings panel is open at a time, so this stays unscoped.
-    expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument()
+    const aside = screen.getByRole('complementary', { name: 'Inspector panel' })
+    expect(within(aside).getByRole('region', { name: 'Settings' })).toBeInTheDocument()
   })
 })
 
@@ -116,26 +117,12 @@ describe('WorkbenchShell rail', () => {
   })
 })
 
-describe('WorkbenchShell top bar strip count', () => {
-  it('commits a typed value to the store on change, with no blur', () => {
-    seedValidConfig()
-    render(<WorkbenchShell />)
-
-    const input = screen.getByRole('spinbutton', { name: 'Strip count' })
-    act(() => {
-      fireEvent.change(input, { target: { value: '20' } })
-    })
-
-    expect(useStore.getState().strips_total).toBe(20)
-  })
-})
-
-describe('WorkbenchShell Auto-schedule all gating', () => {
+describe('WorkbenchShell Auto-assign gating', () => {
   it('is enabled with no ERROR finding, disabled once one appears, and re-enabled once it is fixed', () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
-    const button = screen.getByRole('button', { name: 'Auto-schedule all' })
+    const button = screen.getByRole('button', { name: 'Auto-assign' })
     expect(button).toBeEnabled()
 
     // strips_total === 0 is a structural ERROR ('strips_total must be > 0')

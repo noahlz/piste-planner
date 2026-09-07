@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { TopBar } from './TopBar.tsx'
+import { Header } from './Header.tsx'
 import { ToolRail } from './ToolRail.tsx'
 import { InspectorPanel } from './InspectorPanel.tsx'
 import { UnplacedTray } from './UnplacedTray.tsx'
@@ -21,8 +21,7 @@ import { PanelId, loadViewState, saveViewState } from '../../store/viewState.ts'
  * components the old collapsible rail mounted, unmodified.
  *
  * `findings` also still renders inside `Drawer` until T011 folds the drawer
- * into the footer — the duplicate is expected for this task. `settings`
- * duplicates `TopBar`'s gears disclosure until T010 removes that copy.
+ * into the footer — the duplicate is expected for this task.
  */
 function panelContent(id: PanelId): ReactNode {
   switch (id) {
@@ -52,7 +51,7 @@ function panelContent(id: PanelId): ReactNode {
 
 /**
  * The workbench: one full-bleed screen replacing the max-w-4xl card stack
- * (FR-002, S2-contract.md §Regions). Top bar across the top; below it the
+ * (FR-002, S2-contract.md §Regions). Header across the top; below it the
  * tool rail beside the inspector panel host (013 T009, ui-contract.md §Tool
  * rail, §Inspector panel) and a column holding the unplaced tray docked above
  * the center; the drawer along the bottom.
@@ -81,7 +80,7 @@ export function WorkbenchShell() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <TopBar />
+      <Header />
       <div className="flex flex-1 overflow-hidden">
         <ToolRail panel={panel} onSelect={selectPanel} />
         <div className="relative flex flex-1 overflow-hidden">

@@ -104,10 +104,12 @@ export type EveryOverrideKeyIsAccountedFor = AssertNever<
 >
 
 /**
- * The gears panel (US5, FR-041/042/043/047): the engine settings the organizer
- * can retune and that actually reach the schedule, followed by
- * `PoolDurationSettings` moved out of the rail. Rendered inside the top bar's
- * gears `CollapsibleContent` (`TopBar.tsx`).
+ * The Settings panel (US5, FR-041/042/043/047): the engine settings the
+ * organizer can retune and that actually reach the schedule, followed by
+ * `PoolDurationSettings` moved out of the rail. Rendered inside the tool
+ * rail's inspector panel (`WorkbenchShell.tsx`'s `panelContent`), reached by
+ * the rail's own "Settings" button (T009) — the old top bar's gears
+ * disclosure this once sat behind is gone as of 013 T010.
  *
  * Every row follows `PoolDurationSettings`' settled pattern: override state
  * is derived by comparison against the imported constant, never a stored
