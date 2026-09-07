@@ -18,8 +18,7 @@ import type { ScenarioId } from '../data/tournaments.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
-import { selectDerivedFindings, selectScorecardMetrics } from './derived.ts'
-import type { ScorecardBaseline } from './derived.ts'
+import { selectDerivedFindings } from './derived.ts'
 import {
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   ADMIN_GAP_MINS,
@@ -138,23 +137,10 @@ export interface UiSlice {
   /** The preset or template last loaded, for the top bar's picker to read back (review finding B). Not serialized. */
   loadedPresetId: PresetId | null
 
-  /**
-   * The loaded preset's scorecard metrics, frozen at the moment it was first
-   * placed — what the scorecard's deltas are measured against (research D9).
-   * `null` means there is nothing to compare to and no delta renders. Not
-   * serialized: a baseline is the recipient's own frame of reference, never the
-   * sender's.
-   */
-  scorecardBaseline: ScorecardBaseline | null
-
-  /** The scorecard row the pointer or keyboard focus is on, whose blocks the canvas lights. Not serialized. */
-  hoveredMetricId: string | null
-
   /** The most recent `runScheduleAll` outcome, or `null` before it has ever run. Not serialized. */
   lastAutoRun: LastAutoRun | null
 
   setLoadedPresetId: (id: PresetId | null) => void
-  setHoveredMetricId: (id: string | null) => void
   setLastAutoRun: (run: LastAutoRun | null) => void
 }
 
@@ -402,10 +388,10 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
         const config = defaultConfigForId(id, fencerDefaults)
         if (config) map[id] = config
       }
-      // Records the template the same way setLoadedPresetId does — including
-      // re-arming scorecardBaseline — so a template-loaded config reads back
-      // through the picker exactly like a preset-loaded one (T006).
-      set({ selectedCompetitions: map, loadedPresetId: templateName, scorecardBaseline: null })
+      // Records the template the same way setLoadedPresetId does, so a
+      // template-loaded config reads back through the picker exactly like a
+      // preset-loaded one (T006).
+      set({ selectedCompetitions: map, loadedPresetId: templateName })
     },
 
     setGlobalOverrides: (partial) => {
@@ -419,23 +405,15 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
 function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
     loadedPresetId: null,
-    scorecardBaseline: null,
-    hoveredMetricId: null,
     lastAutoRun: null,
 
-    // Recording a preset re-arms the baseline rather than capturing one:
-    // `applyPreset` places nothing, so a capture here would freeze the metrics
-    // of a tournament with zero events on it and the first frame would show an
-    // enormous delta on every row. `setPlacementsFromAuto` fills the arm.
-    setLoadedPresetId: (id) => set({ loadedPresetId: id, scorecardBaseline: null }),
-
-    setHoveredMetricId: (id) => set({ hoveredMetricId: id }),
+    setLoadedPresetId: (id) => set({ loadedPresetId: id }),
 
     setLastAutoRun: (run) => set({ lastAutoRun: run }),
   }
 }
 
-function createPlacementsSlice(set: SetState, get: GetState): PlacementsSlice {
+function createPlacementsSlice(set: SetState, _get: GetState): PlacementsSlice {
   return {
     placements: {},
 
@@ -444,33 +422,9 @@ function createPlacementsSlice(set: SetState, get: GetState): PlacementsSlice {
       for (const [id, placement] of Object.entries(placements)) {
         normalised[id] = { ...placement, source: PlacementSource.AUTO, pinned: false }
       }
-      // The scorecard baseline is captured here, on the first placement after a
-      // preset was recorded — boot and the picker both go `applyPreset(id)`
-      // then `runScheduleAll()`, so neither needs special-casing, and a
-      // shared-URL boot calls neither and so never captures one. The
-      // `scorecardBaseline === null` arm is what stops a later `Auto-schedule
-      // all` from re-baselining, which research D9 rejects.
-      //
-      // Computed from a **projection** of the state with the new placements,
-      // before anything is written, and committed in one `set` with them. The
-      // selector reaches `initialAnalysis` → `computePoolStructure`, which
-      // throws for `fencer_count <= 1`, and the only caller
-      // (`runActions.ts`) invokes this outside its own try — so a capture run
-      // after the write would unwind `bootstrap()` with `placements` already
-      // replaced and no baseline beside them. `dismissFinding` already holds
-      // this invariant the same way: select first, then set once. The
-      // projection is complete because `computeScorecardMetrics` reads only
-      // data fields, and memoization stays warm because `normalised` is the
-      // same reference the store ends up holding.
-      const prior = get()
-      let baseline: ScorecardBaseline | null = null
-      if (prior.loadedPresetId !== null && prior.scorecardBaseline === null) {
-        const projected: StoreState = { ...prior, placements: normalised }
-        baseline = {}
-        for (const metric of selectScorecardMetrics(projected)) baseline[metric.id] = metric.value
-      }
-
-      set(baseline === null ? { placements: normalised } : { placements: normalised, scorecardBaseline: baseline })
+      // The placements map is the only thing written — the scorecard baseline
+      // this action used to capture went with the Scorecard (T011).
+      set({ placements: normalised })
     },
 
     updatePlacement: (id, partial) => {

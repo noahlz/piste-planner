@@ -30,8 +30,6 @@ function sampleViewState(): ViewState {
     timeZoom: 3,
     timeScroll: 165,
     rowScroll: 42,
-    drawerHeight: 280,
-    scorecardExpanded: true,
     // EVENTS and true, both distinct from DEFAULT_VIEW_STATE's null/false, so
     // a round trip that dropped either field would not coincidentally match.
     panel: PanelId.EVENTS,
@@ -48,7 +46,7 @@ function sampleViewState(): ViewState {
  * wrong reason. Building the payload text by hand is the only way to store
  * an actual non-finite number.
  */
-function jsonWithNonFiniteField(field: 'timeZoom' | 'timeScroll' | 'drawerHeight'): string {
+function jsonWithNonFiniteField(field: 'timeZoom' | 'timeScroll'): string {
   const sample = sampleViewState()
   const entries = (Object.keys(sample) as (keyof ViewState)[]).map((key) =>
     key === field
@@ -325,14 +323,6 @@ describe('viewState range validation', () => {
     expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })
 
-  it('returns defaults wholesale when drawerHeight is negative', () => {
-    localStorage.setItem(
-      VIEW_STATE_STORAGE_KEY,
-      JSON.stringify({ ...sampleViewState(), drawerHeight: -240 }),
-    )
-    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
-  })
-
   // typeof Infinity === 'number' and Infinity satisfies both `> 0` and
   // `>= 0`, so only an explicit finiteness check rejects it — a bound check
   // alone is not enough. (rowScroll is exempt: Number.isInteger(Infinity)
@@ -345,11 +335,6 @@ describe('viewState range validation', () => {
 
   it('returns defaults wholesale when timeScroll is +Infinity', () => {
     localStorage.setItem(VIEW_STATE_STORAGE_KEY, jsonWithNonFiniteField('timeScroll'))
-    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
-  })
-
-  it('returns defaults wholesale when drawerHeight is +Infinity', () => {
-    localStorage.setItem(VIEW_STATE_STORAGE_KEY, jsonWithNonFiniteField('drawerHeight'))
     expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })
 })

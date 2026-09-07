@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MatrixCanvas } from '../../../src/components/canvas/MatrixCanvas.tsx'
 import { ScheduleOutput } from '../../../src/components/sections/ScheduleOutput.tsx'
-import { CenterView } from '../../../src/components/workbench/CenterView.tsx'
+import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { deriveEventSchedule } from '../../../src/engine/derive.ts'
 import type { DerivedEventSchedule } from '../../../src/engine/derive.ts'
 import type { Competition, Placement, TournamentConfig } from '../../../src/engine/types.ts'
@@ -392,7 +392,7 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
 
   it('opens on the matrix, with the schedule table out of the document', () => {
     seedPlacedCompetitions()
-    render(<CenterView />)
+    render(<WorkbenchShell />)
 
     expect(screen.getByRole('radio', { name: 'Matrix' })).toBeChecked()
     expect(screen.getByRole('region', { name: 'Matrix canvas' })).toBeInTheDocument()
@@ -401,7 +401,7 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
 
   it('swaps the canvas out for the table, and back', () => {
     seedPlacedCompetitions()
-    render(<CenterView />)
+    render(<WorkbenchShell />)
 
     fireEvent.click(screen.getByRole('radio', { name: 'Schedule' }))
 
@@ -416,7 +416,7 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
 
   it('names the toggle so both views are reachable by name', () => {
     seedPlacedCompetitions()
-    render(<CenterView />)
+    render(<WorkbenchShell />)
 
     const group = screen.getByRole('radiogroup', { name: 'Center view mode' })
     expect(group).toBeInTheDocument()

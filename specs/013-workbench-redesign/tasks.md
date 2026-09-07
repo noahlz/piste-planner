@@ -310,8 +310,14 @@ reviews (FR-069).
   new test stubs the global `FileReader` to fail `readAsText` and asserts the
   alert appears with nothing written to the store. 76 files / 1904 tests, tsc
   and lint clean.
+  → Review fixes folded in before T011 (committed with T011): templates now run
+  Auto-assign (D12); ToolRail reads PANEL_TITLES; footprint test gained two
+  hand-derived literal cases; exportActions non-mutation case made
+  non-vacuous; lastAutoRun clock pinned; ExportPopover catches a failed read.
+  T010 was written green-first, not red-first – recorded as a process
+  deviation.
 
-- [ ] **T011** [US1] The footer, and the center loses its chrome (FR-049,
+- [x] **T011** [US1] The footer, and the center loses its chrome (FR-049,
   FR-050, [research D7, D18](./research.md)). Red first:
   `__tests__/components/workbench/StatusFooter.test.tsx` re-targets
   `Scorecard.test.tsx` (deleted here) – a `footer` "Status bar" with
@@ -342,6 +348,16 @@ reviews (FR-069).
   `Drawer.tsx` and `Scorecard.tsx` and the two fields from `viewState.ts`.
   `AnalysisOutput` is mounted only behind the rail's Findings button from
   here (decision 2) *(subagent commits)*
+  → Done 2026-09-07 in two halves: 75 files / 1854 tests, tsc and lint clean.
+  Footer reads `selectFooterMetrics` (three ids kept) and
+  `selectPlacementCounts`; `recompute.test.tsx`'s FR-029 hover case removed
+  with the hover (D7); `scorecardMetrics` cases for per-day finish, sabre
+  peak, balance spread, findings counts and block keys dropped with their
+  subjects. `viewMode` is owned by the shell and passed to the center and
+  footer. Measured: B5's baseline `selectPlacementCounts` is
+  `{ placed: 12, unplaced: 3, pinned: 0 }` – the lane packer's first fit
+  cannot place 3 of 24 drawn segments the scheduler placed; two packers over
+  the same strips do not always agree. Recorded, not corrected.
 
 - [ ] **T012** [US1] The dock (FR-010, FR-011). Red first:
   `__tests__/components/workbench/UnplacedDock.test.tsx` re-targets

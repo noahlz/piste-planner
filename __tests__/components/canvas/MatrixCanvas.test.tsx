@@ -10,6 +10,7 @@ import { BottleneckCause, BottleneckSeverity, Phase } from '../../../src/engine/
 import {
   DEFAULT_VIEW_STATE,
   VIEW_STATE_STORAGE_KEY,
+  PanelId,
   loadViewState,
   saveViewState,
   type ViewState,
@@ -779,14 +780,14 @@ describe('MatrixCanvas zoom persistence (FR-017, FR-018)', () => {
   })
 
   it('leaves view-state fields the canvas does not own alone', () => {
-    seedViewState({ timeScroll: 480, drawerHeight: 321, scorecardExpanded: true })
+    seedViewState({ timeScroll: 480, panel: PanelId.EVENTS, panelDocked: true })
     render(<MatrixCanvas />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
 
     const stored = loadViewState()
-    expect(stored.drawerHeight).toBe(321)
-    expect(stored.scorecardExpanded).toBe(true)
+    expect(stored.panel).toBe(PanelId.EVENTS)
+    expect(stored.panelDocked).toBe(true)
   })
 
   it('persists a row-height step and honours it on remount', () => {

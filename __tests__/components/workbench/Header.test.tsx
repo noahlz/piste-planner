@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within, act } from '@testing-library/react'
+import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { Header } from '../../../src/components/workbench/Header.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
@@ -54,12 +54,22 @@ describe('Header preset picker', () => {
     expect(Object.keys(useStore.getState().placements).length).toBeGreaterThan(0)
   })
 
-  it('choosing a template records its name and leaves tournament_type unchanged', () => {
+  it('choosing a template records its name, runs Auto-assign, and leaves tournament_type unchanged', () => {
+    // RJCC Weekend's 12 competitions run 50-130 fencers each (REGIONAL_FENCER_DEFAULTS)
+    // — seedValidConfig's 12 strips schedule none of them, so this needs enough
+    // capacity to actually place something (measured: 40 strips places all 12).
+    seedValidConfig()
+    useStore.getState().setStrips(40)
+    useStore.getState().setVideoStrips(12)
     useStore.getState().setTournamentType('RYC')
-    useStore.getState().applyTemplate('RJCC Weekend')
+    render(<PresetPicker defaultOpen />)
+
+    fireEvent.keyDown(screen.getByRole('option', { name: 'RJCC Weekend' }), { key: 'Enter' })
 
     expect(useStore.getState().loadedPresetId).toBe('RJCC Weekend')
     expect(useStore.getState().tournament_type).toBe('RYC')
+    expect(Object.keys(useStore.getState().placements).length).toBeGreaterThan(0)
+    expect(useStore.getState().lastAutoRun).not.toBeNull()
   })
 })
 

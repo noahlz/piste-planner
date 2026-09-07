@@ -52,11 +52,14 @@ function readBlobText(blob: Blob): Promise<string> {
   })
 }
 
-/** Builds a valid v2 payload: RYC Weekend template plus one placement on its first event. */
+/** Builds a valid v2 payload: RYC Weekend template plus one placement on its first event.
+ * Sets strips_total to a non-default 27 (applyLoadedState's own case below) so a test
+ * asserting the store is untouched after parsing has a value that would actually move. */
 function validPayload(): { json: string; eventId: string } {
   const eventId = TEMPLATES['RYC Weekend'][0]
   useStore.getState().applyTemplate('RYC Weekend')
   useStore.getState().setPlacementsFromAuto({ [eventId]: makePlacement({ strip_count: 5 }) })
+  useStore.getState().setStrips(27)
   return { json: serializeState(useStore.getState()), eventId }
 }
 
@@ -118,7 +121,12 @@ describe('parseTournamentFile', () => {
     expect(result.droppedPlacements).toEqual([])
     expect(result.state.placements).toHaveProperty(eventId)
     // Parsing alone must not mutate the store — that is applyLoadedState's job.
+    // validPayload() sets strips_total to 27, so this only proves non-mutation
+    // if the store still reads its untouched initial 0 here, then 27 once
+    // applyLoadedState actually writes the parsed state.
     expect(useStore.getState().strips_total).toBe(0)
+    applyLoadedState(result.state)
+    expect(useStore.getState().strips_total).toBe(27)
   })
 
   it('reports a placement whose event id is not in the payload competitions as dropped', async () => {

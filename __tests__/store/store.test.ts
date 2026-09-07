@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { useStore, type PresetId } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
@@ -435,18 +435,24 @@ describe('analysisSlice', () => {
 // ──────────────────────────────────────────────
 
 describe('lastAutoRun', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('is null on the initial state', () => {
     expect(useStore.getState().lastAutoRun).toBeNull()
   })
 
   it('is stamped with the placed/unplaced counts runScheduleAll returns', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-07T14:07:00'))
     applyPreset('B1')
 
     const result = runScheduleAll()
 
     expect(result).toEqual({ placed: 24, unplaced: 0 })
     const lastAutoRun = useStore.getState().lastAutoRun
-    expect(typeof lastAutoRun?.at).toBe('number')
+    expect(lastAutoRun?.at).toBe(Date.now())
     expect(lastAutoRun).toEqual(expect.objectContaining({ placed: 24, unplaced: 0 }))
   })
 

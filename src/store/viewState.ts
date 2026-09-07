@@ -34,8 +34,6 @@ export interface ViewState {
   timeZoom: number // minutes per pixel
   timeScroll: number // minutes from midnight
   rowScroll: number // flat row index
-  drawerHeight: number
-  scorecardExpanded: boolean
   panel: PanelId | null
   panelDocked: boolean
 }
@@ -54,8 +52,6 @@ export const DEFAULT_VIEW_STATE: ViewState = Object.freeze({
   // right edge, which `Fit to day` then has to undo on every first load.
   timeScroll: 480,
   rowScroll: 0,
-  drawerHeight: 240,
-  scorecardExpanded: false,
   panel: null,
   panelDocked: false,
 })
@@ -96,14 +92,6 @@ function isValidViewState(value: unknown): value is ViewState {
   if (typeof v.rowScroll !== 'number' || !Number.isInteger(v.rowScroll) || v.rowScroll < 0) {
     return false
   }
-  if (
-    typeof v.drawerHeight !== 'number' ||
-    !Number.isFinite(v.drawerHeight) ||
-    v.drawerHeight < 0
-  ) {
-    return false
-  }
-  if (typeof v.scorecardExpanded !== 'boolean') return false
   // null is a valid value (the rail fully closed) — only a non-null value has
   // to match one of the five ids, and a missing field is `undefined`, which
   // satisfies neither branch and falls back like every other missing field.

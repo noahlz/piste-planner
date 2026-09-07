@@ -1,22 +1,24 @@
 import { Trophy, Rows3, CalendarDays, AlertTriangle, Settings as SettingsIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PanelId } from '../../store/viewState.ts'
+import { PANEL_TITLES } from './InspectorPanel.tsx'
 
 interface ToolRailButtonSpec {
   id: PanelId
-  label: string
   icon: typeof Trophy
 }
 
-// Order and labels are fixed by ui-contract.md §Tool rail — the same five
-// panels WorkbenchShell mounts by id (decision 1), replacing the collapsible
-// Rail's four headings plus Advanced.
+// Order is fixed by ui-contract.md §Tool rail — the same five panels
+// WorkbenchShell mounts by id (decision 1), replacing the collapsible Rail's
+// four headings plus Advanced. Labels come from InspectorPanel's
+// `PANEL_TITLES` so the rail and the panel it opens can never disagree about
+// a panel's name.
 const BUTTONS: ToolRailButtonSpec[] = [
-  { id: PanelId.TOURNAMENT, label: 'Tournament', icon: Trophy },
-  { id: PanelId.STRIPS, label: 'Strips & referees', icon: Rows3 },
-  { id: PanelId.EVENTS, label: 'Events', icon: CalendarDays },
-  { id: PanelId.FINDINGS, label: 'Findings', icon: AlertTriangle },
-  { id: PanelId.SETTINGS, label: 'Settings', icon: SettingsIcon },
+  { id: PanelId.TOURNAMENT, icon: Trophy },
+  { id: PanelId.STRIPS, icon: Rows3 },
+  { id: PanelId.EVENTS, icon: CalendarDays },
+  { id: PanelId.FINDINGS, icon: AlertTriangle },
+  { id: PanelId.SETTINGS, icon: SettingsIcon },
 ]
 
 interface ToolRailProps {
@@ -36,8 +38,9 @@ interface ToolRailProps {
 export function ToolRail({ panel, onSelect }: ToolRailProps) {
   return (
     <nav aria-label="Tool rail" className="flex w-16 shrink-0 flex-col border-r bg-background">
-      {BUTTONS.map(({ id, label, icon: Icon }) => {
+      {BUTTONS.map(({ id, icon: Icon }) => {
         const pressed = panel === id
+        const label = PANEL_TITLES[id]
         return (
           <button
             key={id}

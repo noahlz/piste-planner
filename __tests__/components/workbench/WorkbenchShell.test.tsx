@@ -34,7 +34,7 @@ describe('WorkbenchShell regions', () => {
     expect(screen.getByRole('navigation', { name: 'Tool rail' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Unplaced events' })).toBeInTheDocument()
     expect(screen.getByRole('main', { name: 'Center view' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Drawer' })).toBeInTheDocument()
+    expect(screen.getByRole('contentinfo', { name: 'Status bar' })).toBeInTheDocument()
   })
 
   it('starts with no inspector panel open', () => {

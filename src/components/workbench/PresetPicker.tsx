@@ -28,10 +28,11 @@ interface PresetPickerProps {
 /**
  * The Header's preset picker (013 T010, ui-contract.md §Header, FR-004–FR-009):
  * one Select grouping the eight B1–B8 tournament fixtures above the ten
- * invented-figure templates. Choosing a tournament applies its fixture and
- * re-runs the auto-scheduler the same way the old top bar's picker did;
- * choosing a template only replaces the selected competitions — `applyTemplate`
- * leaves `tournament_type` untouched — so it does not re-run the scheduler.
+ * invented-figure templates. Choosing either a tournament or a template
+ * applies it and re-runs the auto-scheduler the same way (research D12,
+ * FR-005) — `applyTemplate` still leaves `tournament_type` untouched, but
+ * both branches now call `runScheduleAll` so a chosen template shows placed
+ * events immediately instead of only its empty selection.
  */
 export function PresetPicker({ defaultOpen }: PresetPickerProps) {
   const loadedPresetId = useStore((s) => s.loadedPresetId)
@@ -39,10 +40,10 @@ export function PresetPicker({ defaultOpen }: PresetPickerProps) {
   function handleChange(value: string) {
     if (isScenarioId(value)) {
       applyPreset(value)
-      runScheduleAll()
     } else {
       useStore.getState().applyTemplate(value)
     }
+    runScheduleAll()
   }
 
   return (
