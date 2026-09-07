@@ -2,7 +2,6 @@ import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { RailPanel } from './RailPanel.tsx'
 import { useStore } from '../../store/store.ts'
 import { TYPE_DEFAULTS, resolveVideoStrips } from '../../store/typeDefaults.ts'
 import { findCompetition } from '../../engine/catalogue.ts'
@@ -18,15 +17,15 @@ function refereesPerPool(policy: RefPolicy): number {
 }
 
 /**
- * The rail's Advanced panel: the three settings a tournament type defaults for
- * its events (FR-031), and the per-event referee override that departs from one
- * (FR-039).
+ * The Strips & referees panel's Advanced section: the three settings a
+ * tournament type defaults for its events (FR-031), and the per-event referee
+ * override that departs from one (FR-039).
  *
- * It is a `RailPanel` like the other five, passing its applied defaults as that
- * panel's `summary` — the slot outside `CollapsibleContent`, which is what
- * FR-035 needs, since Radix unmounts the content on close. Before T068 finding
- * 7 the slot did not exist and this panel carried a byte-for-byte copy of
- * `RailPanel`'s trigger to work around it.
+ * It no longer collapses (013 T009 unwrapped it from `RailPanel`, which this
+ * component now outlives — the panel host mounts it directly, always
+ * expanded), so the summary paragraph that used to be `RailPanel`'s
+ * `summary` slot is now always-rendered content, same three lines, ahead of
+ * the table.
  *
  * Only referees are editable here. DE mode's control already lives in
  * `CompetitionOverrides` and the video strip count in `StripSetup` — a second
@@ -67,10 +66,10 @@ export function AdvancedPanel() {
 
   const sortedIds = Object.keys(selectedCompetitions).sort()
 
-  // FR-035 — dim, and passed as the summary slot so closing the panel does not
-  // unmount it.
+  // FR-035 — dim, always rendered ahead of the table (no collapse to hide it
+  // behind, now that this panel is not a RailPanel).
   const summary = (
-    <>
+    <div className="mb-2 flex flex-col gap-0.5 text-xs text-muted-foreground">
       <span>Referees per pool: {defaultReferees}</span>
       {/* The count's text stays this element's own direct children so it
           reads as one line — the badge and revert control are sibling
@@ -92,68 +91,68 @@ export function AdvancedPanel() {
         )}
       </span>
       <span>DE mode: {DE_MODE_LABELS[typeDefaults.de_mode]}</span>
-    </>
+    </div>
   )
 
   return (
-    <RailPanel heading="Advanced" summary={summary}>
-      <>
-        <p className="mb-2 text-xs text-muted-foreground">
-          An event follows the type's referee count until it is set here. DE mode is set per
-          event under Per-event overrides, and the video strip count under Strips.
-        </p>
-        {sortedIds.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No events selected.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event</TableHead>
-                <TableHead>Referees per pool</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedIds.map((id) => {
-                const entry = findCompetition(id)
-                const label = entry ? competitionLabel(entry) : id
-                const config = selectedCompetitions[id]
-                // FR-039 — the stored AUTO is the marker, never a comparison of
-                // the resolved count against the default (data-model.md
-                // §Settings override state). An event explicitly set to TWO at a
-                // NAC resolves to the same 2 an unset event does, and only the
-                // stored value tells them apart.
-                const followsTypeDefault = config.ref_policy === RefPolicy.AUTO
+    <section aria-label="Advanced">
+      <h3 className="mb-2 text-sm font-semibold text-foreground">Advanced</h3>
+      {summary}
+      <p className="mb-2 text-xs text-muted-foreground">
+        An event follows the type's referee count until it is set here. DE mode is set per event
+        under Per-event overrides, and the video strip count under Strips.
+      </p>
+      {sortedIds.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No events selected.</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Event</TableHead>
+              <TableHead>Referees per pool</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedIds.map((id) => {
+              const entry = findCompetition(id)
+              const label = entry ? competitionLabel(entry) : id
+              const config = selectedCompetitions[id]
+              // FR-039 — the stored AUTO is the marker, never a comparison of
+              // the resolved count against the default (data-model.md
+              // §Settings override state). An event explicitly set to TWO at a
+              // NAC resolves to the same 2 an unset event does, and only the
+              // stored value tells them apart.
+              const followsTypeDefault = config.ref_policy === RefPolicy.AUTO
 
-                return (
-                  <TableRow key={id}>
-                    <TableCell className="text-foreground">{label}</TableCell>
-                    <TableCell>
-                      <Select
-                        value={config.ref_policy}
-                        onValueChange={(value) =>
-                          updateCompetition(id, { ref_policy: value as RefPolicy })
-                        }
-                      >
-                        <SelectTrigger className="h-8 w-[130px]" aria-label={`Referees for ${label}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {refPolicyOptions.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <DefaultLabel isDefault={followsTypeDefault} />
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </>
-    </RailPanel>
+              return (
+                <TableRow key={id}>
+                  <TableCell className="text-foreground">{label}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={config.ref_policy}
+                      onValueChange={(value) =>
+                        updateCompetition(id, { ref_policy: value as RefPolicy })
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[130px]" aria-label={`Referees for ${label}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {refPolicyOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <DefaultLabel isDefault={followsTypeDefault} />
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </section>
   )
 }

@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useStore } from '../../src/store/store.ts'
+import { useStore, type PresetId } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
 import { Category, TournamentType, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
+import { runScheduleAll } from '../../src/store/runActions.ts'
+import { applyPreset } from '../../src/store/presets.ts'
+import { serializeState } from '../../src/store/serialization.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
@@ -365,7 +368,18 @@ describe('competitionSlice', () => {
       const templateIds = TEMPLATES['RYC Weekend']
       expect(Object.keys(state.selectedCompetitions).sort()).toEqual([...templateIds].sort())
     })
+
+    it('records the template name as loadedPresetId, so a template-loaded config reads back like a preset-loaded one', () => {
+      useStore.getState().applyTemplate('RYC Weekend')
+
+      expect(useStore.getState().loadedPresetId).toBe('RYC Weekend')
+    })
   })
+
+  // PresetId admits both a fixture ScenarioId and a template name — a
+  // compile-time check, not a runtime assertion (T006, research D12/D17).
+  const _presetIdAdmitsBoth: PresetId[] = ['B1', 'RYC Weekend']
+  void _presetIdAdmitsBoth
 
   describe('setGlobalOverrides', () => {
     it('updates global override values', () => {
@@ -413,5 +427,61 @@ describe('analysisSlice', () => {
       expect(state.flightingSuggestionStates[0]).toBe('pending')
       expect(state.flightingSuggestionStates[1]).toBe('rejected')
     })
+  })
+})
+
+// ──────────────────────────────────────────────
+// runScheduleAll's return value and lastAutoRun stamp (T006, research D12)
+// ──────────────────────────────────────────────
+
+describe('lastAutoRun', () => {
+  it('is null on the initial state', () => {
+    expect(useStore.getState().lastAutoRun).toBeNull()
+  })
+
+  it('is stamped with the placed/unplaced counts runScheduleAll returns', () => {
+    applyPreset('B1')
+
+    const result = runScheduleAll()
+
+    expect(result).toEqual({ placed: 24, unplaced: 0 })
+    const lastAutoRun = useStore.getState().lastAutoRun
+    expect(typeof lastAutoRun?.at).toBe('number')
+    expect(lastAutoRun).toEqual(expect.objectContaining({ placed: 24, unplaced: 0 }))
+  })
+
+  // B4 is one of drift-baseline.md's two named "has unplaced events" fixtures
+  // (the other, B5, places all 12 of its events, so it can't demonstrate this).
+  // Its scheduledCount there (17 of 30) was measured before other 013 phase-1
+  // tasks landed in this worktree; standing rule 11 says measurements win, so
+  // this pins the number this test file actually observes today (18 placed,
+  // 12 unplaced) rather than the stale baseline figure.
+  //
+  // unplaced is `competitions.length - placed`, not "entries in schedule with
+  // a null pool_start" — concurrentScheduler.ts's commitEventResult only ever
+  // writes a schedule entry once an event's terminal phase completes, so a
+  // permanently-failed event (BottleneckSeverity.ERROR, event.permanently_failed)
+  // never gets a schedule entry at all rather than getting one with a null
+  // pool_start. The latter reading would make unplaced always 0.
+  it('counts events the scheduler drops entirely as unplaced, for a preset that does not place everything', () => {
+    applyPreset('B4')
+
+    const result = runScheduleAll()
+
+    expect(result).toEqual({ placed: 18, unplaced: 12 })
+    expect(useStore.getState().lastAutoRun).toEqual(
+      expect.objectContaining({ placed: 18, unplaced: 12 }),
+    )
+  })
+})
+
+describe('runScheduleAll — serialization', () => {
+  it('never appears in the serialized wire shape', () => {
+    applyPreset('B1')
+    runScheduleAll()
+
+    const json = serializeState(useStore.getState())
+
+    expect(json).not.toContain('lastAutoRun')
   })
 })

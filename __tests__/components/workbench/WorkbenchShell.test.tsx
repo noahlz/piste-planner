@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, act, fireEvent } from '@testing-library/react'
+import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { useStore } from '../../../src/store/store.ts'
 
@@ -25,15 +25,22 @@ function seedValidConfig(): void {
 }
 
 describe('WorkbenchShell regions', () => {
-  it('renders the four regions plus the tray, each locatable by its accessible name', () => {
+  it('renders the four regions plus the tray and tool rail, each locatable by its accessible name', () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
     expect(screen.getByRole('banner', { name: 'Top bar' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: 'Left rail' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Tool rail' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Unplaced events' })).toBeInTheDocument()
     expect(screen.getByRole('main', { name: 'Center view' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Drawer' })).toBeInTheDocument()
+  })
+
+  it('starts with no inspector panel open', () => {
+    seedValidConfig()
+    render(<WorkbenchShell />)
+
+    expect(screen.queryByRole('complementary', { name: 'Inspector panel' })).toBeNull()
   })
 })
 
@@ -42,13 +49,17 @@ describe('WorkbenchShell top bar', () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
-    expect(screen.getByRole('combobox', { name: 'Preset' })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Tournament type' })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Day count' })).toBeInTheDocument()
-    expect(screen.getByRole('spinbutton', { name: 'Strip count' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Auto-schedule all' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save / Share' })).toBeInTheDocument()
+    // Scoped to the banner: the tool rail (T009) has its own "Settings"
+    // button now, so the top bar's gears button is no longer unambiguous by
+    // name alone. Untouched otherwise — T010 deletes this whole describe.
+    const topBar = screen.getByRole('banner', { name: 'Top bar' })
+    expect(within(topBar).getByRole('combobox', { name: 'Preset' })).toBeInTheDocument()
+    expect(within(topBar).getByRole('combobox', { name: 'Tournament type' })).toBeInTheDocument()
+    expect(within(topBar).getByRole('combobox', { name: 'Day count' })).toBeInTheDocument()
+    expect(within(topBar).getByRole('spinbutton', { name: 'Strip count' })).toBeInTheDocument()
+    expect(within(topBar).getByRole('button', { name: 'Auto-schedule all' })).toBeInTheDocument()
+    expect(within(topBar).getByRole('button', { name: 'Settings' })).toBeInTheDocument()
+    expect(within(topBar).getByRole('button', { name: 'Save / Share' })).toBeInTheDocument()
   })
 
   // FR-041's "opens" half (T078 finding 3). The control's existence is pinned
@@ -62,21 +73,46 @@ describe('WorkbenchShell top bar', () => {
 
     expect(screen.queryByRole('region', { name: 'Settings' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    // Scoped to the banner for the same reason as above — the tool rail's
+    // own "Settings" button until T010.
+    const topBar = screen.getByRole('banner', { name: 'Top bar' })
+    fireEvent.click(within(topBar).getByRole('button', { name: 'Settings' }))
 
+    // Only one Settings panel is open at a time, so this stays unscoped.
     expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument()
   })
 })
 
 describe('WorkbenchShell rail', () => {
-  it('exposes each of the four panel triggers by its heading, whether open or collapsed', () => {
+  it('exposes each of the five tool rail buttons by name', () => {
     seedValidConfig()
     render(<WorkbenchShell />)
 
-    expect(screen.getByRole('button', { name: 'Tournament' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Strips' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Events' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Per-event overrides' })).toBeInTheDocument()
+    const rail = screen.getByRole('navigation', { name: 'Tool rail' })
+    expect(within(rail).getByRole('button', { name: 'Tournament' })).toBeInTheDocument()
+    expect(within(rail).getByRole('button', { name: 'Strips & referees' })).toBeInTheDocument()
+    expect(within(rail).getByRole('button', { name: 'Events' })).toBeInTheDocument()
+    expect(within(rail).getByRole('button', { name: 'Findings' })).toBeInTheDocument()
+    expect(within(rail).getByRole('button', { name: 'Settings' })).toBeInTheDocument()
+  })
+
+  it('opens the Tournament panel on press, showing the Tournament type control, and closes it on a second press', () => {
+    seedValidConfig()
+    render(<WorkbenchShell />)
+
+    const rail = screen.getByRole('navigation', { name: 'Tool rail' })
+    const trigger = within(rail).getByRole('button', { name: 'Tournament' })
+
+    fireEvent.click(trigger)
+    const aside = screen.getByRole('complementary', { name: 'Inspector panel' })
+    expect(within(aside).getByRole('heading', { level: 2, name: 'Tournament' })).toBeInTheDocument()
+    // TournamentSetup's own type control is labelled "Type" (its <Label>,
+    // not an aria-label) — unchanged here, since the section is mounted
+    // unmodified until phase 2 renames it per ui-contract.md.
+    expect(within(aside).getByRole('combobox', { name: 'Type' })).toBeInTheDocument()
+
+    fireEvent.click(trigger)
+    expect(screen.queryByRole('complementary', { name: 'Inspector panel' })).toBeNull()
   })
 })
 

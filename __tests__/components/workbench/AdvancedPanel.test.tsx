@@ -34,18 +34,17 @@ function competitionLabelFor(id: string): string {
   return competitionLabel(entry)
 }
 
-function advancedTrigger(): HTMLElement {
-  return screen.getByRole('button', { name: 'Advanced' })
+function advancedSection(): HTMLElement {
+  return screen.getByRole('region', { name: 'Advanced' })
 }
 
 describe('AdvancedPanel collapsed summary', () => {
-  it('shows the current type\'s three resolved defaults as text, without expanding the panel', () => {
+  // The panel no longer collapses (T009 unwrapped it from RailPanel), so
+  // these cases assert the summary is always rendered inside the section,
+  // rather than pinning an aria-expanded state that no longer exists.
+  it('shows the current type\'s three resolved defaults as text', () => {
     render(<AdvancedPanel />)
 
-    // Collapsed — Radix has not mounted the trigger's CollapsibleContent.
-    expect(advancedTrigger()).toHaveAttribute('aria-expanded', 'false')
-
-    // Still readable: this text lives outside CollapsibleContent (FR-035).
     expect(screen.getByText('Referees per pool: 2')).toBeInTheDocument()
     expect(screen.getByText('Video strips: 8')).toBeInTheDocument()
     expect(screen.getByText('DE mode: Staged DE Blocks')).toBeInTheDocument()
@@ -62,7 +61,6 @@ describe('AdvancedPanel collapsed summary', () => {
 
     render(<AdvancedPanel />)
 
-    expect(advancedTrigger()).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByText('Referees per pool: 1')).toBeInTheDocument()
     expect(screen.getByText('Video strips: 0')).toBeInTheDocument()
     expect(screen.getByText('DE mode: Single Block')).toBeInTheDocument()
@@ -212,26 +210,26 @@ describe('rail agreement on the video strip count', () => {
   })
 })
 
-// 004 T068 finding 5. The summary is in the DOM and reachable in browse mode,
-// but nothing tied it to the trigger, so a screen-reader user tabbing the rail
-// heard "Advanced, collapsed" and none of the three applied defaults FR-035
-// puts there for them.
-describe('AdvancedPanel collapsed summary announcement', () => {
-  it('names the summary as the trigger\'s description without changing its accessible name', () => {
+// 004 T068 finding 5 named a screen-reader gap that a collapsible trigger
+// created: "Advanced, collapsed" with none of the three applied defaults
+// (FR-035). T009 removed the trigger — the panel no longer collapses — so
+// that gap cannot recur; this case's successor is a placement check instead.
+describe('AdvancedPanel section content', () => {
+  it('renders the summary inside the section named Advanced, ahead of the table', () => {
+    useStore.getState().addCompetition(COMP_ID)
     render(<AdvancedPanel />)
 
-    const describedBy = advancedTrigger().getAttribute('aria-describedby')
-    expect(describedBy, 'the Advanced trigger names no description').toBeTruthy()
+    const section = advancedSection()
+    expect(section).toHaveTextContent('Referees per pool: 2')
+    expect(section).toHaveTextContent('Video strips: 8')
+    expect(section).toHaveTextContent('DE mode: Staged DE Blocks')
 
-    const summary = document.getElementById(describedBy as string)
-    expect(summary, `aria-describedby names "${describedBy}" but no element carries that id`).not.toBeNull()
-    expect(summary).toHaveTextContent('Referees per pool: 2')
-    expect(summary).toHaveTextContent('Video strips: 8')
-    expect(summary).toHaveTextContent('DE mode: Staged DE Blocks')
-
-    // The description must not leak into the name — every existing case finds
-    // this trigger by `{ name: 'Advanced' }`.
-    expect(advancedTrigger()).toHaveAccessibleName('Advanced')
+    const summaryNode = within(section).getByText('Referees per pool: 2')
+    const table = within(section).getByRole('table')
+    expect(
+      summaryNode.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING,
+      'the summary does not precede the table',
+    ).toBeTruthy()
   })
 })
 
@@ -241,7 +239,6 @@ describe('AdvancedPanel per-event referee override marker', () => {
     const label = competitionLabelFor(COMP_ID)
 
     render(<AdvancedPanel />)
-    fireEvent.click(advancedTrigger())
 
     function refereesControl(): HTMLElement {
       return screen.getByRole('combobox', { name: `Referees for ${label}` })
@@ -303,11 +300,10 @@ describe('AdvancedPanel per-event referee override marker', () => {
 })
 
 describe('AdvancedPanel hard policy exclusion', () => {
-  it('renders no cut-mode control, even expanded with a competition selected', () => {
+  it('renders no cut-mode control, even with a competition selected', () => {
     useStore.getState().addCompetition(COMP_ID)
 
     render(<AdvancedPanel />)
-    fireEvent.click(advancedTrigger())
 
     // The regional cut override (FR-040) is handbook policy, not an
     // organizer-adjustable per-type default — it has no place in this panel.

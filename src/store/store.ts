@@ -116,9 +116,27 @@ export interface CompetitionSlice {
   setGlobalOverrides: (partial: Partial<GlobalOverrides>) => void
 }
 
+/**
+ * Every template name `applyTemplate` accepts. `TEMPLATES` (`catalogue.ts`) is
+ * typed `Record<string, string[]>`, so this resolves to `string` — a template
+ * name has no narrower compile-time identity than a preset's `ScenarioId`
+ * does, but the alias still names the concept at each call site (research D17).
+ */
+export type TemplateName = keyof typeof TEMPLATES
+
+/** Either kind of thing the top bar's picker can have most recently loaded. */
+export type PresetId = ScenarioId | TemplateName
+
+/** The result of the most recent `runScheduleAll` call (research D12). Not serialized: it describes this session's last action, not tournament state. */
+export interface LastAutoRun {
+  at: number
+  placed: number
+  unplaced: number
+}
+
 export interface UiSlice {
-  /** The preset last loaded by `applyPreset`, for the top bar's picker to read back (review finding B). Not serialized. */
-  loadedPresetId: ScenarioId | null
+  /** The preset or template last loaded, for the top bar's picker to read back (review finding B). Not serialized. */
+  loadedPresetId: PresetId | null
 
   /**
    * The loaded preset's scorecard metrics, frozen at the moment it was first
@@ -132,8 +150,12 @@ export interface UiSlice {
   /** The scorecard row the pointer or keyboard focus is on, whose blocks the canvas lights. Not serialized. */
   hoveredMetricId: string | null
 
-  setLoadedPresetId: (id: ScenarioId | null) => void
+  /** The most recent `runScheduleAll` outcome, or `null` before it has ever run. Not serialized. */
+  lastAutoRun: LastAutoRun | null
+
+  setLoadedPresetId: (id: PresetId | null) => void
   setHoveredMetricId: (id: string | null) => void
+  setLastAutoRun: (run: LastAutoRun | null) => void
 }
 
 /** Where an event sits. The only schedule state — everything else derives from it. */
@@ -380,7 +402,10 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
         const config = defaultConfigForId(id, fencerDefaults)
         if (config) map[id] = config
       }
-      set({ selectedCompetitions: map })
+      // Records the template the same way setLoadedPresetId does — including
+      // re-arming scorecardBaseline — so a template-loaded config reads back
+      // through the picker exactly like a preset-loaded one (T006).
+      set({ selectedCompetitions: map, loadedPresetId: templateName, scorecardBaseline: null })
     },
 
     setGlobalOverrides: (partial) => {
@@ -396,6 +421,7 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
     loadedPresetId: null,
     scorecardBaseline: null,
     hoveredMetricId: null,
+    lastAutoRun: null,
 
     // Recording a preset re-arms the baseline rather than capturing one:
     // `applyPreset` places nothing, so a capture here would freeze the metrics
@@ -404,6 +430,8 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
     setLoadedPresetId: (id) => set({ loadedPresetId: id, scorecardBaseline: null }),
 
     setHoveredMetricId: (id) => set({ hoveredMetricId: id }),
+
+    setLastAutoRun: (run) => set({ lastAutoRun: run }),
   }
 }
 

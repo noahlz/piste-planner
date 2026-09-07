@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { WorkbenchShell } from './components/workbench/WorkbenchShell.tsx'
+import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { bootstrap } from './store/boot.ts'
 
 function App() {
@@ -21,7 +22,9 @@ function App() {
           <span className="rounded-full bg-orange-500 px-3 py-0.5 text-xs font-semibold text-white">Work in Progress!</span>
         </div>
       </header>
-      <WorkbenchShell />
+      <ErrorBoundary>
+        <WorkbenchShell />
+      </ErrorBoundary>
     </div>
   )
 }

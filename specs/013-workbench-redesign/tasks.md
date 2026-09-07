@@ -199,7 +199,7 @@ new panel host until phase 2 replaces them (decision 1).
 second copy of type, days or strips anywhere. The screenshot the product owner
 reviews (FR-069).
 
-- [ ] **T005** [P] [US1] **(drift)** The dock's need. Red first:
+- [x] **T005** [P] [US1] **(drift)** The dock's need. Red first:
   `__tests__/engine/footprint.test.ts` asserts `estimateEventFootprint(competition, config)`
   returns `{ strips, poolMinutes, deMinutes }` equal to what
   `deriveEventSchedule` yields for a synthetic placement at day 0, the day's
@@ -209,8 +209,9 @@ reviews (FR-069).
   with `deriveEventSchedule` too ([research D10](./research.md)). Run: fails
   because the export is missing. Then add it to `src/engine/derive.ts` with no
   new arithmetic. Ledger expected to show nothing moved – nothing reads it yet
+  → Done 2026-09-07: 5 cases; ledger and parity pass before and after, snapshot SHA-256 unchanged (`5483c40c1349…`). Staged DE reads `de_prelims_start ?? de_round_of_16_start` as the DE start. Day start falls back to `config.DAY_START_MINS` (`TournamentConfig` has no `day_start_time`)
 
-- [ ] **T006** [P] [US1] The last run and the preset id. Red first, in
+- [x] **T006** [P] [US1] The last run and the preset id. Red first, in
   `__tests__/store/store.test.ts`: (1) `runScheduleAll` returns
   `{ placed, unplaced }` and writes `lastAutoRun: { at, placed, unplaced }` on
   the `UiSlice`, where `placed` counts events the run gave a pool start and
@@ -221,8 +222,9 @@ reviews (FR-069).
   want of the field and the wider type. Then implement in `src/store/store.ts`
   (`UiSlice` at `:119`, `loadedPresetId` at `:121`, `applyTemplate` at `:375`)
   and `src/store/runActions.ts:14`
+  → Done 2026-09-07: 4 cases. `unplaced` is `competitions.length − placed` – a permanently failed event has no `schedule` entry at all, so "no pool start" within `schedule` is always empty. Measured B1 24/0, B4 18/12 (18 is the recorded app-path parity exception against the ledger's 17, not drift). `applyTemplate` recording the preset broke `Scorecard.test.tsx`'s `loadWithoutPreset` fixture; re-pointed at `selectCompetitions` (orchestrator, 1-line)
 
-- [ ] **T007** [P] [US1] Export plumbing without a popover (FR-009). Red first:
+- [x] **T007** [P] [US1] Export plumbing without a popover (FR-009). Red first:
   `__tests__/store/exportActions.test.ts` covers save to file (a JSON blob of
   `serializeState`), load from file (parses, rejects an invalid payload with
   an error, reports whether the load would drop placements so a caller can
@@ -232,16 +234,18 @@ reviews (FR-069).
   handlers out of `src/components/sections/SaveLoadShare.tsx`, leave that
   component rendering over the new module until T011 deletes it, and confirm
   `__tests__/components/saveLoadShare.test.tsx` still passes
+  → Done 2026-09-07: 14 cases; `saveLoadShare.test.tsx` passes unchanged (12). Parse and apply are separate (`parseTournamentFile` / `applyLoadedState`) so a caller can warn about dropped placements first. jsdom has no `File.text()`, so the module reads through `FileReader`
 
-- [ ] **T008** [P] [US1] The error boundary ([research D15](./research.md)).
+- [x] **T008** [P] [US1] The error boundary ([research D15](./research.md)).
   Red first: `__tests__/components/ErrorBoundary.test.tsx` renders a child
   that throws and asserts a message and a `button` "Reload" appear instead of
   nothing, and that a child that does not throw renders through. Run: fails
   because `src/components/ErrorBoundary.tsx` does not exist. Then write it as a
   class component with state initialised as a field – no parameter property –
   and wrap `<WorkbenchShell />` with it in `src/App.tsx:24`
+  → Done 2026-09-07: 3 cases. `onReload` prop defaults to `window.location.reload` so the test can inject a spy; no parameter property
 
-- [ ] **T009** [US1] The rail and the panel host. Red first:
+- [x] **T009** [US1] The rail and the panel host. Red first:
   `__tests__/components/workbench/ToolRail.test.tsx` – a `nav` "Tool rail" with
   five `button`s "Tournament", "Strips & referees", "Events", "Findings",
   "Settings", the open one `aria-pressed="true"`, pressing an open one closes
@@ -258,6 +262,7 @@ reviews (FR-069).
   inside the host (decision 1). `src/components/workbench/WorkbenchShell.tsx`
   mounts the rail and host in place of `<Rail />` (`:24`). Delete `Rail.tsx`
   and `RailPanel.tsx` *(subagent commits)*
+  → Done 2026-09-07: 74 files / 1890 tests, tsc and lint clean. `PanelId` lives in `viewState.ts`; `AdvancedPanel` unwrapped into a `<section aria-label="Advanced">`, summary always rendered (`RailPanel`'s summary-slot cases have no successor — no collapsible remains — and are recorded here); `InspectorPanel.tsx` exports `PANEL_TITLES` with an `eslint-disable-next-line react-refresh/only-export-components` (precedent: `EventBlock.tsx`'s `blockChannels`), keeping the map beside the component whose header it labels rather than splitting it out. `WorkbenchShell.test.tsx`'s two top-bar cases scoped to the banner because the rail has its own "Settings" button until T010 deletes the top bar
 
 - [ ] **T010** [US1] The header ([research D12](./research.md), FR-004 to
   FR-008). Red first: `__tests__/components/workbench/Header.test.tsx` – a

@@ -17,6 +17,17 @@ export const RowHeightStep = {
 } as const
 export type RowHeightStep = (typeof RowHeightStep)[keyof typeof RowHeightStep]
 
+// The tool rail's five inspector panels (013 T009, ui-contract.md §Tool
+// rail). `null` means the rail is fully closed.
+export const PanelId = {
+  TOURNAMENT: 'tournament',
+  STRIPS: 'strips',
+  EVENTS: 'events',
+  FINDINGS: 'findings',
+  SETTINGS: 'settings',
+} as const
+export type PanelId = (typeof PanelId)[keyof typeof PanelId]
+
 export interface ViewState {
   viewMode: ViewMode
   rowHeightStep: RowHeightStep
@@ -25,6 +36,8 @@ export interface ViewState {
   rowScroll: number // flat row index
   drawerHeight: number
   scorecardExpanded: boolean
+  panel: PanelId | null
+  panelDocked: boolean
 }
 
 // Frozen so a future accidental write (e.g. `state.timeZoom = x` instead of a
@@ -43,12 +56,15 @@ export const DEFAULT_VIEW_STATE: ViewState = Object.freeze({
   rowScroll: 0,
   drawerHeight: 240,
   scorecardExpanded: false,
+  panel: null,
+  panelDocked: false,
 })
 
 export const VIEW_STATE_STORAGE_KEY = 'piste-planner:view-state'
 
 const VIEW_MODES: Set<string> = new Set(Object.values(ViewMode))
 const ROW_HEIGHT_STEPS: Set<string> = new Set(Object.values(RowHeightStep))
+const PANEL_IDS: Set<string> = new Set(Object.values(PanelId))
 
 /**
  * Structural validation against DEFAULT_VIEW_STATE's shape. Every field is
@@ -88,6 +104,13 @@ function isValidViewState(value: unknown): value is ViewState {
     return false
   }
   if (typeof v.scorecardExpanded !== 'boolean') return false
+  // null is a valid value (the rail fully closed) — only a non-null value has
+  // to match one of the five ids, and a missing field is `undefined`, which
+  // satisfies neither branch and falls back like every other missing field.
+  if (v.panel !== null && (typeof v.panel !== 'string' || !PANEL_IDS.has(v.panel))) {
+    return false
+  }
+  if (typeof v.panelDocked !== 'boolean') return false
 
   return true
 }

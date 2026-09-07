@@ -6,6 +6,7 @@ import {
   VIEW_STATE_STORAGE_KEY,
   ViewMode,
   RowHeightStep,
+  PanelId,
 } from '../../src/store/viewState.ts'
 import type { ViewState } from '../../src/store/viewState.ts'
 import { serializeState } from '../../src/store/serialization.ts'
@@ -31,6 +32,10 @@ function sampleViewState(): ViewState {
     rowScroll: 42,
     drawerHeight: 280,
     scorecardExpanded: true,
+    // EVENTS and true, both distinct from DEFAULT_VIEW_STATE's null/false, so
+    // a round trip that dropped either field would not coincidentally match.
+    panel: PanelId.EVENTS,
+    panelDocked: true,
   }
 }
 
@@ -247,6 +252,28 @@ describe('viewState corrupt-storage handling', () => {
     const { timeZoom: _timeZoom, ...partial } = sampleViewState()
     localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify(partial))
     expect(() => loadViewState()).not.toThrow()
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when panel carries an unknown value', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), panel: 'bogus-panel' }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when panel is missing entirely', () => {
+    const { panel: _panel, ...partial } = sampleViewState()
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify(partial))
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when panelDocked is not a boolean', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), panelDocked: 'yes' }),
+    )
     expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })
 

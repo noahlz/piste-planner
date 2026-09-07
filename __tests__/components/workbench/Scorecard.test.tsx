@@ -117,6 +117,9 @@ function loadWithoutPreset(): void {
   state.setStrips(32)
   state.setVideoStrips(4)
   state.applyTemplate('RYC Weekend')
+  // Since 013 T006 a template records loadedPresetId like a scenario does,
+  // which would arm the baseline this fixture exists to leave uncaptured.
+  state.setLoadedPresetId(null)
   runScheduleAll()
 }
 

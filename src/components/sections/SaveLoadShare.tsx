@@ -1,16 +1,16 @@
 import { useState, useRef } from 'react'
-import { useStore } from '../../store/store.ts'
 import {
-  serializeState,
-  deserializeState,
-  encodeToUrl,
-} from '../../store/serialization.ts'
+  saveToFile,
+  parseTournamentFile,
+  applyLoadedState,
+  buildShareLink,
+  shareLinkExceedsLimit,
+  copyToClipboard,
+} from '../../store/exportActions.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Download, Upload, Share2, Copy, Check } from 'lucide-react'
-
-const URL_SIZE_WARNING_BYTES = 2048
 
 export function SaveLoadShare() {
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -20,38 +20,26 @@ export function SaveLoadShare() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleSave() {
-    const state = useStore.getState()
-    const json = serializeState(state)
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'tournament.piste.json'
-    a.click()
-    URL.revokeObjectURL(url)
+    saveToFile()
   }
 
-  function handleLoad(file: File) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = deserializeState(reader.result as string)
-      if ('error' in result) {
-        setLoadError(result.error)
-      } else {
-        useStore.setState(result.state)
-        setLoadError(null)
-        // A lenient load keeps going but says what it threw away, so a
-        // silently shorter schedule never looks like the saved one.
-        setDroppedPlacements(result.droppedPlacements)
-      }
+  async function handleLoad(file: File) {
+    const result = await parseTournamentFile(file)
+    if ('error' in result) {
+      setLoadError(result.error)
+    } else {
+      applyLoadedState(result.state)
+      setLoadError(null)
+      // A lenient load keeps going but says what it threw away, so a
+      // silently shorter schedule never looks like the saved one.
+      setDroppedPlacements(result.droppedPlacements)
     }
-    reader.readAsText(file)
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) {
-      handleLoad(file)
+      void handleLoad(file)
     }
     // Reset so the same file can be re-selected
     if (fileInputRef.current) {
@@ -60,24 +48,16 @@ export function SaveLoadShare() {
   }
 
   function handleShare() {
-    const state = useStore.getState()
-    const hash = encodeToUrl(state)
-    const url = `${window.location.origin}${window.location.pathname}${hash}`
-    setShareUrl(url)
+    setShareUrl(buildShareLink())
     setCopied(false)
   }
 
   async function handleCopy() {
     if (!shareUrl) return
-    try {
-      await navigator.clipboard.writeText(shareUrl)
-      setCopied(true)
-    } catch {
-      // Fallback: select the text for manual copy
-    }
+    setCopied(await copyToClipboard(shareUrl))
   }
 
-  const urlExceedsLimit = shareUrl != null && new Blob([shareUrl]).size > URL_SIZE_WARNING_BYTES
+  const urlExceedsLimit = shareUrl != null && shareLinkExceedsLimit(shareUrl)
 
   return (
     <Card>
