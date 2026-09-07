@@ -28,7 +28,7 @@ function errorMessage(err: unknown): string {
 
 /**
  * The Header's Export control (013 T010, ui-contract.md §Header, FR-004–FR-009):
- * `SaveLoadShare`'s save/load/share behavior, unchanged, behind one Popover
+ * the retired top bar's save/load/share behavior, unchanged, behind one Popover
  * trigger instead of the old `Collapsible` under "Save / Share".
  */
 export function ExportPopover({ defaultOpen }: ExportPopoverProps) {

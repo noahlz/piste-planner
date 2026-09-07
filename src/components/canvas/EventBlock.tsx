@@ -45,25 +45,6 @@ import type { BlockPlacement } from '../../layout/lanes.ts'
  * a hardcoded colour: `data-category` names the category for a test, the custom
  * properties are what a person sees. `ROW_HEIGHT_PX` and the palette are the
  * only two homes a canvas visual constant has.
- *
- * ## The highlight is not a fifth channel
- *
- * `highlighted` says the scorecard metric under the pointer is driven by this
- * block (FR-029). That is a transient fact about the *pointer*, not about the
- * event, so it is drawn strictly outside the four channels: its own overlay
- * span, consulting neither `blockChannels` nor the palette, present at every
- * width and at the compact row height where every text channel is already gone.
- * Riding the degradation order would mean the narrow blocks — exactly the ones
- * a person is squinting at when they reach for the scorecard — were the ones
- * that could not answer.
- *
- * Its paint is the deliberate exception to "paint comes from the palette". No
- * single palette token can do this job: `--cat-y8` is `#648fb9` against a
- * `--ring` of `#6b7fa8`, so one colour would disappear on some of the sixteen
- * fills. The cue is a near-white ring with a dark ring inside it — UI chrome
- * tokens, of which one always reads whether the fill beneath it is the darkest
- * or the lightest. Being chrome rather than palette is itself the statement
- * that it encodes nothing about the event.
  */
 
 /** Narrowest block that still carries the gender prefix. */
@@ -128,11 +109,6 @@ export interface EventBlockProps {
    * every block on the grid and never learn that one is in trouble.
    */
   findings: string[]
-  /**
-   * Whether the scorecard metric under the pointer is driven by this block
-   * (FR-029). Not a channel — see the highlight note in the module docblock.
-   */
-  highlighted?: boolean
 }
 
 export function EventBlock({
@@ -146,7 +122,6 @@ export function EventBlock({
   height,
   rowHeightStep,
   findings,
-  highlighted,
 }: EventBlockProps) {
   const category = resolveCanvasCategory(competition.category, competition.vet_age_group)
   const kind = phaseKind(placement.phase)
@@ -194,7 +169,6 @@ export function EventBlock({
       data-strips={placement.stripCount}
       data-first-strip={placement.firstStrip}
       data-overflow={placement.overflow ? 'true' : undefined}
-      data-highlighted={highlighted ? 'true' : undefined}
       className="absolute overflow-hidden rounded-[2px] bg-[var(--block-fill)] text-[var(--block-ink)]"
       style={style}
     >
@@ -217,38 +191,12 @@ export function EventBlock({
         />
       )}
 
-      {/* The scorecard's hover cue (FR-029). Solid, so it cannot be read as
-          the dashed overflow border below; a ring rather than a wash, since a
-          wash would change how the fill beneath it reads and the fill is the
-          age-category channel. Drawn after the DE hatch so the hatch does not
-          tint it, and before the overflow cue so both read at once on a block
-          that is highlighted *and* overflowing: the dashed --block-ink border
-          paints over the white ring with its own gaps showing through.
-
-          `inset-0` rather than an inset ring on purpose: a block one or two
-          pixels wide still paints its border box, where an inset one would
-          collapse to nothing on exactly the blocks a person most needs the
-          scorecard to point at. The cost of that choice, stated rather than
-          left to be rediscovered: on a block under about 4px the 2px
-          --background ring covers the whole border box, so a sub-4px block
-          loses its category fill for as long as it is highlighted. Nothing
-          here consults `blockChannels`. */}
-      {highlighted && (
-        <span
-          data-highlight-cue
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-[2px]"
-          style={{
-            boxShadow: 'inset 0 0 0 2px var(--background), inset 0 0 0 3px var(--foreground)',
-          }}
-        />
-      )}
       {/* The overflow cue. A block that found no run is drawn at strip 0 on top
           of whatever legitimately holds those strips, and without a cue an
           over-capacity day reads as an ordinary one — blocks quietly stacked,
           nothing saying anything failed to place. Dashed rather than a fill or
           an ink change, so it cannot be mistaken for the category or the phase
-          channel. Last of the overlays, so a highlight cannot hide it. */}
+          channel. */}
       {placement.overflow && (
         <span
           data-overflow-cue

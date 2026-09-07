@@ -13,9 +13,9 @@ import { makePlacement } from '../helpers/factories.ts'
  * T011b — `selectFooterMetrics` and `selectPlacementCounts` (research D7;
  * data-model.md §10; tasks.md decision 5).
  *
- * Re-targets `scorecardMetrics.test.ts` (deleted here). The Scorecard's
- * eleven rows, its collapsed/expanded tiers, its frozen baseline and its
- * per-metric block keys are gone with it (D7) — the footer is three rows,
+ * Re-targets `scorecardMetrics.test.ts` (deleted here). The retired
+ * scorecard's eleven rows, its collapsed/expanded tiers, its frozen baseline
+ * and its per-metric block keys are gone with it (D7) — the footer is three rows,
  * finish/refs/strips, values only. The per-day finish rows, the sabre peak,
  * the day-balance spread and the findings counts have no subject to measure
  * any more, so their cases go with them; the canvas-invariant and

@@ -39,9 +39,10 @@ function advancedSection(): HTMLElement {
 }
 
 describe('AdvancedPanel collapsed summary', () => {
-  // The panel no longer collapses (T009 unwrapped it from RailPanel), so
-  // these cases assert the summary is always rendered inside the section,
-  // rather than pinning an aria-expanded state that no longer exists.
+  // The panel no longer collapses (T009 unwrapped it from the retired
+  // collapsible rail), so these cases assert the summary is always rendered
+  // inside the section, rather than pinning an aria-expanded state that no
+  // longer exists.
   it('shows the current type\'s three resolved defaults as text', () => {
     render(<AdvancedPanel />)
 

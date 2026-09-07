@@ -21,11 +21,11 @@ function refereesPerPool(policy: RefPolicy): number {
  * tournament type defaults for its events (FR-031), and the per-event referee
  * override that departs from one (FR-039).
  *
- * It no longer collapses (013 T009 unwrapped it from `RailPanel`, which this
- * component now outlives — the panel host mounts it directly, always
- * expanded), so the summary paragraph that used to be `RailPanel`'s
- * `summary` slot is now always-rendered content, same three lines, ahead of
- * the table.
+ * It no longer collapses (013 T009 unwrapped it from the retired collapsible
+ * rail, which this component now outlives — the panel host mounts it
+ * directly, always expanded), so the summary paragraph that used to be that
+ * rail's `summary` slot is now always-rendered content, same three lines,
+ * ahead of the table.
  *
  * Only referees are editable here. DE mode's control already lives in
  * `CompetitionOverrides` and the video strip count in `StripSetup` — a second
@@ -67,7 +67,7 @@ export function AdvancedPanel() {
   const sortedIds = Object.keys(selectedCompetitions).sort()
 
   // FR-035 — dim, always rendered ahead of the table (no collapse to hide it
-  // behind, now that this panel is not a RailPanel).
+  // behind, now that this panel is not wrapped in the retired collapsible rail).
   const summary = (
     <div className="mb-2 flex flex-col gap-0.5 text-xs text-muted-foreground">
       <span>Referees per pool: {defaultReferees}</span>

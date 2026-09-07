@@ -80,11 +80,10 @@ interface CommittedModel {
  *
  * ## What used to cross the settle without waiting for it
  *
- * The scorecard's hover highlight (FR-029) did, undebounced, so a hover cue
- * would not arrive a settle late. 013 T011a deletes it along with the
- * Scorecard it lived on (research D7) — `MatrixCanvas`'s `highlight` prop is
- * no longer given a value here, and stays optional for the same reason T026
- * has not yet deleted it.
+ * The retired scorecard's hover highlight (FR-029) did, undebounced, so a
+ * hover cue would not arrive a settle late. 013 T011a deletes it along with
+ * the scorecard it lived on (research D7), and T013 removes the `highlight`
+ * prop `MatrixCanvas` and `EventBlock` drew it through.
  */
 export function CenterView({ viewMode }: { viewMode: ViewMode }) {
   const live = useStore(selectDerivedSchedule)

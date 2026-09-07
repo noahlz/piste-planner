@@ -141,8 +141,9 @@ const ZOOM_STEP_FACTOR = 2
  * How long after the last wheel event a gesture's window reaches localStorage.
  *
  * A wheel fires 60-120 events a second and `writeNow` is a parse, a stringify
- * and a synchronous `setItem`. `Drawer.tsx` answers the same problem the same
- * way, persisting once on pointer-up rather than on every pointer-move. Only
+ * and a synchronous `setItem`. The retired bottom panel answered the same
+ * problem the same way, persisting once on pointer-up rather than on every
+ * pointer-move. Only
  * the storage write waits — the state updates stay synchronous, so the canvas
  * still follows the gesture frame by frame.
  */
@@ -209,7 +210,7 @@ function writeNow(trailing: RefObject<TrailingWrite>, patch: Partial<ViewState>)
 /**
  * Coalesces a gesture's writes onto one trailing `writeNow`. Only the wheel
  * comes through here — a button or a key press is one discrete change and
- * stores immediately, as `Drawer.tsx`'s keyboard path does.
+ * stores immediately, as the retired bottom panel's keyboard path did.
  */
 function writeSoon(trailing: RefObject<TrailingWrite>, patch: Partial<ViewState>): void {
   const pending = trailing.current
@@ -255,21 +256,6 @@ export interface MatrixCanvasProps {
    */
   selection?: TimeRange | null
   /**
-   * The `${competitionId}:${phase}` keys of the blocks driving the scorecard
-   * metric under the pointer (FR-029) — the same string `data-event-block`
-   * carries. The canvas draws what it matches and derives nothing: the metric
-   * that owns the number owns the list of blocks behind it (S6 design §2), and
-   * a second definition here is how the two would come to disagree.
-   *
-   * Passed **undebounced**, unlike `schedule`/`findings`/`dayConfigs`. The
-   * scorecard follows the live store per keystroke while these draw a model
-   * committed `CENTER_SETTLE_MS` behind it, and a hover cue that arrived a
-   * settle after the hover would not be one. Keys are matched against the
-   * blocks actually committed, so a key with no block on screen simply does not
-   * light — fewer blocks lit during a settle, never a wrong one.
-   */
-  highlight?: ReadonlySet<string>
-  /**
    * Clock-time hours for each day (contracts/day-axis.md C4) — the store's
    * `dayConfigs`, never `schedule.config.dayConfigs`, which may carry the
    * scheduler's own axis (research.md D4, D5). Passed together with
@@ -286,8 +272,6 @@ interface MatrixCanvasViewProps {
   schedule: DerivedSchedule
   findings: DerivedFindings
   selection?: TimeRange | null
-  /** Never resolved from anything: absent means nothing is hovered. */
-  highlight?: ReadonlySet<string>
   dayConfigs: DayConfig[]
 }
 
@@ -463,7 +447,6 @@ export function MatrixCanvas({
   schedule,
   findings,
   selection,
-  highlight,
   dayConfigs,
 }: MatrixCanvasProps = {}) {
   if (schedule !== undefined && findings !== undefined && dayConfigs !== undefined) {
@@ -472,7 +455,6 @@ export function MatrixCanvas({
         schedule={schedule}
         findings={findings}
         selection={selection}
-        highlight={highlight}
         dayConfigs={dayConfigs}
       />
     )
@@ -482,20 +464,16 @@ export function MatrixCanvas({
       schedule={schedule}
       findings={findings}
       selection={selection}
-      highlight={highlight}
       dayConfigs={dayConfigs}
     />
   )
 }
 
-/** The fallback path: whichever field was not passed comes from the store.
- *  `highlight` has no fallback — the canvas never resolves a driving set of its
- *  own, so a bare mount simply highlights nothing. */
+/** The fallback path: whichever field was not passed comes from the store. */
 function StoreConnectedCanvas({
   schedule,
   findings,
   selection,
-  highlight,
   dayConfigs,
 }: MatrixCanvasProps) {
   const live = useStore(selectDerivedSchedule)
@@ -509,7 +487,6 @@ function StoreConnectedCanvas({
       schedule={schedule ?? live}
       findings={findings ?? liveFindings}
       selection={selection}
-      highlight={highlight}
       dayConfigs={dayConfigs ?? liveDayConfigs}
     />
   )
@@ -519,13 +496,13 @@ function MatrixCanvasView({
   schedule,
   findings,
   selection,
-  highlight,
   dayConfigs,
 }: MatrixCanvasViewProps) {
   const { config } = schedule
 
-  // One field per initializer, following Drawer.tsx: each read is independent
-  // so a write never has to reconstruct a field this component does not own.
+  // One field per initializer, following the retired bottom panel's own
+  // pattern: each read is independent so a write never has to reconstruct a
+  // field this component does not own.
   const [timeZoom, setTimeZoom] = useState<number>(() => clampTimeZoom(loadViewState().timeZoom))
   const [timeScroll, setTimeScroll] = useState<number>(() => loadViewState().timeScroll)
   const [rowScroll, setRowScroll] = useState<number>(() => loadViewState().rowScroll)
@@ -915,8 +892,8 @@ function MatrixCanvasView({
    * scroll positions are view state, so there is no scrollbar and no native key
    * handling to inherit — without this the toolbar's zoom actions are the only
    * reachable controls and rows cannot be panned at all without a wheel. Each
-   * press is discrete, so it stores immediately, as `Drawer.tsx`'s resize
-   * handle does.
+   * press is discrete, so it stores immediately, as the retired bottom
+   * panel's resize handle did.
    */
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
     const rowsPerPage = rowRange ? rowRange.lastRow - rowRange.firstRow + 1 : 1
@@ -1088,10 +1065,9 @@ function MatrixCanvasView({
           }}
         >
           {visibleBlocks.map((drawn) => {
-            // One expression for the key React reconciles on, the key
-            // `data-event-block` carries and the key a metric's `blockKeys`
-            // names — written twice they would drift, and the highlight would
-            // quietly stop matching anything.
+            // One expression for the key React reconciles on — the key
+            // `data-event-block` carries, written once so it cannot drift
+            // from what a test locates the block by.
             const key = `${drawn.placement.competitionId}:${drawn.placement.phase}`
             return (
               <EventBlock
@@ -1106,7 +1082,6 @@ function MatrixCanvasView({
                 height={drawn.height}
                 rowHeightStep={rowHeightStep}
                 findings={drawn.findings}
-                highlighted={highlight?.has(key)}
               />
             )
           })}

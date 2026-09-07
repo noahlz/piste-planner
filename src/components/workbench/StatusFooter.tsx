@@ -20,12 +20,14 @@ const LEGEND: { weapon: Weapon; swatchClass: string }[] = [
 ]
 
 /**
- * The one-line status bar that replaces the Drawer and its Scorecard
- * (FR-049, FR-050; research D7, D18; contracts/ui-contract.md §Footer).
+ * The one-line status bar that replaces the retired bottom panel and its
+ * scorecard (FR-049, FR-050; research D7, D18; contracts/ui-contract.md
+ * §Footer).
  *
  * Three metrics only — finish, peak referees, strip use — read straight off
  * `selectFooterMetrics` with no delta against a baseline and no hover: D7
- * drops both along with the Scorecard's disclosure and its expanded tier.
+ * drops both along with the retired scorecard's disclosure and its expanded
+ * tier.
  * `AnalysisOutput` is already mounted behind the rail's Findings button
  * (T009), so this is not a second home for it.
  *

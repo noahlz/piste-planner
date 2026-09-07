@@ -10,11 +10,12 @@ import { WEAPON_DISPLAY } from '../../../src/components/competitionLabels.ts'
 import { Weapon } from '../../../src/engine/types.ts'
 import { ViewMode } from '../../../src/store/viewState.ts'
 
-// 013 T011a — the drawer's Scorecard and Drawer collapse into a one-line
-// StatusFooter (FR-049, FR-050; research D7, D18; contracts/ui-contract.md
-// §Footer). Three metrics read from the live selector, a weapon legend, and
-// the view toggle moved verbatim from CenterView. No delta, no disclosure, no
-// hover — those were the Scorecard's, and the Scorecard is gone (research D7).
+// 013 T011a — the retired bottom panel and its scorecard collapse into a
+// one-line StatusFooter (FR-049, FR-050; research D7, D18; contracts/
+// ui-contract.md §Footer). Three metrics read from the live selector, a
+// weapon legend, and the view toggle moved verbatim from CenterView. No
+// delta, no disclosure, no hover — those belonged to the retired scorecard,
+// which is gone (research D7).
 
 function metricText(id: string): string {
   return document.querySelector(`[data-metric="${id}"]`)?.textContent ?? ''
@@ -120,15 +121,12 @@ describe('StatusFooter view toggle (moved verbatim from CenterView)', () => {
   })
 })
 
-describe('StatusFooter drops the scorecard and drawer surface (FR-066)', () => {
-  it('renders no delta, no disclosure button, and no Scorecard or Drawer region', () => {
+describe('StatusFooter drops the retired comparison surface (FR-066)', () => {
+  it('renders no metric delta', () => {
     applyPreset('B1')
     runScheduleAll()
     render(<StatusFooter viewMode={ViewMode.MATRIX} onViewModeChange={() => {}} />)
 
     expect(document.querySelectorAll('[data-metric-delta]')).toHaveLength(0)
-    expect(screen.queryByRole('button', { name: 'Scorecard details' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Scorecard' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Drawer' })).not.toBeInTheDocument()
   })
 })

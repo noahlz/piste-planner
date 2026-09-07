@@ -3,9 +3,10 @@ import { render, screen, within, fireEvent } from '@testing-library/react'
 import { ToolRail } from '../../../src/components/workbench/ToolRail.tsx'
 import { PanelId } from '../../../src/store/viewState.ts'
 
-// 013 T009 — re-targets RailPanel.test.tsx's "Rail panel order" cases
-// (deleted here). The collapsible rail's five headings become five buttons
-// that select one inspector panel at a time (ui-contract.md §Tool rail).
+// 013 T009 — re-targets the retired collapsible rail's own "Rail panel
+// order" test file (deleted here). The collapsible rail's five headings
+// become five buttons that select one inspector panel at a time
+// (ui-contract.md §Tool rail).
 
 const NAMES = ['Tournament', 'Strips & referees', 'Events', 'Findings', 'Settings']
 const IDS = [PanelId.TOURNAMENT, PanelId.STRIPS, PanelId.EVENTS, PanelId.FINDINGS, PanelId.SETTINGS]

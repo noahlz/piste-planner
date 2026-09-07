@@ -228,10 +228,11 @@ export const selectDerivedRefRequirements = memoizeOnDeps(scheduleDeps, computeD
  * `RefRequirementsByDay.peak_total_refs`) or a sum over it. No scheduling
  * arithmetic lives here — that belongs in `src/engine/` (constitution I).
  *
- * The Scorecard this replaces (T048) carried eleven rows, a collapsed/expanded
- * tier, a frozen baseline and per-metric block keys for hover highlighting.
- * D7 drops the disclosure, the baseline and the hover along with it — the
- * footer is three rows, always visible, with nothing to compare against.
+ * The retired scorecard this replaces (T048) carried eleven rows, a
+ * collapsed/expanded tier, a frozen baseline and per-metric block keys for
+ * hover highlighting. D7 drops the disclosure, the baseline and the hover
+ * along with it — the footer is three rows, always visible, with nothing to
+ * compare against.
  */
 export interface FooterMetric {
   /** Stable id. Also the value of the rendered row's `data-metric`. */

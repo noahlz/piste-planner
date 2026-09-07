@@ -422,8 +422,8 @@ function createPlacementsSlice(set: SetState, _get: GetState): PlacementsSlice {
       for (const [id, placement] of Object.entries(placements)) {
         normalised[id] = { ...placement, source: PlacementSource.AUTO, pinned: false }
       }
-      // The placements map is the only thing written — the scorecard baseline
-      // this action used to capture went with the Scorecard (T011).
+      // The placements map is the only thing written — the baseline this
+      // action used to capture went with the retired scorecard (T011).
       set({ placements: normalised })
     },
 

@@ -8,9 +8,10 @@ import { makePlacement } from '../../helpers/factories.ts'
 
 // 013 T010 — re-targets the deleted __tests__/components/saveLoadShare.test.tsx
 // at ExportPopover, the Header's Popover wrapper over the same
-// src/store/exportActions.ts behavior SaveLoadShare exposed. `defaultOpen`
-// renders the popover content pre-mounted, the same way select.test.tsx opens
-// a Radix Select without a pointer-capture-dependent click.
+// src/store/exportActions.ts behavior the retired top bar's save/load/share
+// control exposed. `defaultOpen` renders the popover content pre-mounted,
+// the same way select.test.tsx opens a Radix Select without a
+// pointer-capture-dependent click.
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())

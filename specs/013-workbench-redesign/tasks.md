@@ -359,7 +359,7 @@ reviews (FR-069).
   cannot place 3 of 24 drawn segments the scheduler placed; two packers over
   the same strips do not always agree. Recorded, not corrected.
 
-- [ ] **T012** [US1] The dock (FR-010, FR-011). Red first:
+- [x] **T012** [US1] The dock (FR-010, FR-011). Red first:
   `__tests__/components/workbench/UnplacedDock.test.tsx` re-targets
   `UnplacedTray.test.tsx` (deleted here) – a `section` "Unplaced events",
   identifiable when empty, one `button` chip per event with no placement
@@ -370,8 +370,14 @@ reviews (FR-069).
   component does not exist. Then build `src/components/workbench/UnplacedDock.tsx`,
   mount it in `WorkbenchShell.tsx` in place of `<UnplacedTray />` (`:26`), and
   delete `UnplacedTray.tsx`. The chip's click handler is wired in T030
+  → Done 2026-09-07: 3 files (UnplacedDock.tsx created, UnplacedTray.tsx and
+  UnplacedTray.test.tsx deleted, UnplacedDock.test.tsx created,
+  WorkbenchShell.tsx edited) / 1856 tests, tsc and lint clean. Need text from
+  estimateEventFootprint via selectDerivedSchedule's config; chips with
+  fencer_count < 2 render without a need rather than throwing. Run note
+  measured on B4: Placed 18, 12 could not be placed.
 
-- [ ] **T013** [US1] The shell, whole. Red first: rewrite
+- [x] **T013** [US1] The shell, whole. Red first: rewrite
   `__tests__/components/workbench/WorkbenchShell.test.tsx` – exactly one
   `header` "Header", one `section` "Unplaced events", one `nav` "Tool rail",
   at most one `aside` "Inspector panel", one `main` "Center view", one
@@ -386,6 +392,25 @@ reviews (FR-069).
   `SaveLoadShare`, `RailPanel`, `scorecardBaseline`, `hoveredMetricId`,
   `data-highlighted` – over `src/` and `__tests__/`; it must return nothing
   *(subagent commits)*
+  → Done 2026-09-07: rewrote `WorkbenchShell.test.tsx` around the six regions
+  (exactly one each of Header/Unplaced events/Tool rail/Center view/Status
+  bar, at most one Inspector panel), no retired surface, single source of
+  type/day/strip controls, one panel open at a time, and floating-vs-docked
+  surviving a remount. Finished `WorkbenchShell.tsx`'s middle row with
+  `min-h-0` and rewrote its doc comment around the six regions with no
+  retired name. Phase 1 grep returns nothing over `src/` and `__tests__/`.
+  Removed the `highlight`/`highlighted` prop and `data-highlighted` from
+  `MatrixCanvas.tsx` and `EventBlock.tsx` (D7) with their 5 (`MatrixCanvas
+  highlight (FR-029)`) and 15 (`EventBlock highlight cue (FR-029)`) cases;
+  `MatrixCanvas.test.tsx`'s existing overflow-cue case at `:586-596` still
+  covers `data-overflow-cue` end to end, so no coverage gap. Reworded every
+  other grep hit's prose (`Drawer.tsx`, `TopBar`, `RailPanel`,
+  `SaveLoadShare`, the scorecard) across 12 files without changing behavior;
+  trimmed 3 StatusFooter.test.tsx and WorkbenchShell.test.tsx assertions that
+  named the retired regions by role, since naming them is itself what the
+  grep bans and no component by either name exists anywhere to regress into.
+  75 files / 1837 tests green (1856→1837: the 20 deleted highlight cases less
+  1 net new WorkbenchShell case), tsc and lint clean.
 
 - [ ] **T014** [US1] **(dispatched)** Re-point `scripts/smoke.mjs` for phase 1,
   in place ([research D14](./research.md)): `button` "Save / Share" at `:181`,

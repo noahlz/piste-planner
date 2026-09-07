@@ -9,9 +9,10 @@ import { ExportPopover } from '../../../src/components/workbench/ExportPopover.t
 import { SCENARIO_IDS, SCENARIOS } from '../../../src/data/tournaments.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 
-// 013 T010 — the header replacing TopBar and App.tsx's standalone <header>
-// (ui-contract.md §Header, FR-004–FR-009): brand, preset picker, a read-only
-// summary, the last auto-run time, Auto-assign, and Export.
+// 013 T010 — the header replacing the retired top bar and App.tsx's
+// standalone <header> (ui-contract.md §Header, FR-004–FR-009): brand, preset
+// picker, a read-only summary, the last auto-run time, Auto-assign, and
+// Export.
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())

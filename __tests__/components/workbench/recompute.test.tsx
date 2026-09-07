@@ -355,9 +355,9 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     expect(findings()).toContain('10 pools but only 9 strips available')
   })
 
-  // T011a (013) — the scorecard's hover highlight (FR-029) had no successor:
-  // research D7 deletes the hover along with the Scorecard it lived on, so
-  // the case that proved the highlight crossed the settle undebounced was
-  // removed rather than ported. StatusFooter.tsx carries no hover state and
-  // MatrixCanvas's `highlight` prop is now always undefined.
+  // T011a (013) — the retired scorecard's hover highlight (FR-029) had no
+  // successor: research D7 deletes the hover along with the scorecard it
+  // lived on, so the case that proved the highlight crossed the settle
+  // undebounced was removed rather than ported. StatusFooter.tsx carries no
+  // hover state, and T013 removes the `highlight` prop this pointed at.
 })

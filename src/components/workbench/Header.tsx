@@ -10,7 +10,7 @@ import { Play } from 'lucide-react'
 /**
  * The workbench header (013 T010, ui-contract.md §Header, FR-004–FR-009):
  * brand, preset picker, a read-only tournament summary, the last auto-run
- * time, Auto-assign, and Export. Replaces the old `TopBar` (preset picker
+ * time, Auto-assign, and Export. Replaces the retired top bar (preset picker
  * plus duplicate type/day/strip inputs and a gears disclosure — both now
  * live only in the tool rail's panels) and `App.tsx`'s standalone `<header>`.
  */
