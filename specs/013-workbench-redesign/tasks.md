@@ -300,6 +300,16 @@ reviews (FR-069).
   already covers `commitOnChange` generically. 76 files / 1903 tests, tsc and
   lint clean, grep for stale references clean (remaining hits are historical
   comments explaining what T010 replaced).
+  → Follow-up 2026-09-07 (React review of T007): `ExportPopover.handleLoad`
+  now wraps `parseTournamentFile` in try/catch – `readFileText`'s `FileReader`
+  `onerror` path rejected uncaught before this, an unhandled rejection no
+  error boundary could reach. The catch routes into the existing `role="alert"`
+  as "Could not read the file: …"; a new `errorMessage` helper reads `.message`
+  structurally rather than assuming `instanceof Error`, since `DOMException`
+  (what `reader.error` actually is) doesn't reliably satisfy that check. One
+  new test stubs the global `FileReader` to fail `readAsText` and asserts the
+  alert appears with nothing written to the store. 76 files / 1904 tests, tsc
+  and lint clean.
 
 - [ ] **T011** [US1] The footer, and the center loses its chrome (FR-049,
   FR-050, [research D7, D18](./research.md)). Red first:

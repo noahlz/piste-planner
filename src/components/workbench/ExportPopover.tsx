@@ -17,6 +17,15 @@ interface ExportPopoverProps {
   defaultOpen?: boolean
 }
 
+/** `FileReader`'s `onerror` rejects with a `DOMException`, which does not
+ * reliably satisfy `instanceof Error` — read `.message` structurally instead. */
+function errorMessage(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err && typeof (err as { message?: unknown }).message === 'string') {
+    return (err as { message: string }).message
+  }
+  return String(err)
+}
+
 /**
  * The Header's Export control (013 T010, ui-contract.md §Header, FR-004–FR-009):
  * `SaveLoadShare`'s save/load/share behavior, unchanged, behind one Popover
@@ -34,15 +43,23 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
   }
 
   async function handleLoad(file: File) {
-    const result = await parseTournamentFile(file)
-    if ('error' in result) {
-      setLoadError(result.error)
-    } else {
-      applyLoadedState(result.state)
-      setLoadError(null)
-      // A lenient load keeps going but says what it threw away, so a
-      // silently shorter schedule never looks like the saved one.
-      setDroppedPlacements(result.droppedPlacements)
+    try {
+      const result = await parseTournamentFile(file)
+      if ('error' in result) {
+        setLoadError(result.error)
+      } else {
+        applyLoadedState(result.state)
+        setLoadError(null)
+        // A lenient load keeps going but says what it threw away, so a
+        // silently shorter schedule never looks like the saved one.
+        setDroppedPlacements(result.droppedPlacements)
+      }
+    } catch (err) {
+      // parseTournamentFile's readFileText rejects when FileReader fires
+      // onerror (an unreadable file, not a parse failure) — with no catch
+      // here that rejection reaches no error boundary (React review of
+      // T007). Route it into the same alert a parse/schema error uses.
+      setLoadError(`Could not read the file: ${errorMessage(err)}`)
     }
   }
 

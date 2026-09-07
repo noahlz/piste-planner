@@ -235,6 +235,32 @@ describe('ExportPopover load tests', () => {
       expect(screen.getByText(/Unknown top-level field/)).toBeInTheDocument()
     })
   })
+
+  // React review of T007 (013 T010 follow-up): parseTournamentFile's
+  // readFileText rejects when FileReader fires onerror — a read failure, not
+  // a parse failure. Uncaught, that rejection reaches no error boundary.
+  // Stubs the global FileReader (rather than the module's parseTournamentFile)
+  // so the assertion exercises handleLoad's real catch path end to end.
+  it('a file read failure shows an alert and writes nothing to the store', async () => {
+    class FailingFileReader {
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      result: string | null = null
+      error: DOMException = new DOMException('disk error', 'NotReadableError')
+      readAsText() {
+        queueMicrotask(() => this.onerror?.())
+      }
+    }
+    vi.stubGlobal('FileReader', FailingFileReader)
+
+    render(<ExportPopover defaultOpen />)
+    uploadJson('{}')
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not read the file: disk error')
+    })
+    expect(useStore.getState().strips_total).toBe(0)
+  })
 })
 
 // ──────────────────────────────────────────────
