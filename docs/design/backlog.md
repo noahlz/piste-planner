@@ -1165,29 +1165,6 @@ four fix options with their costs. None is scheduled.
 
 012 measured this (`baseline.md` §1a) and did not fix it. Still open.
 
-## NAC Youth suggests 63 in the smoke driver's accumulated state and 66 from a fresh store
-
-*Found by 012's T014 live smoke run, 2026-09-06. Recorded, not isolated
-further —
-[`specs/012-actionable-strip-suggestion/handoff.md`](../../specs/012-actionable-strip-suggestion/handoff.md)
-§7(c) has the probe.*
-
-`[M]` Both counts place 24 of 24 (`scripts/smoke.mjs`, `633d27adb5`). A fresh
-store's `NAC Youth` **Suggest** search lands on 66; the same template pressed
-partway through the smoke driver's accumulated session state lands on 63.
-Video strip count is ruled out by a throwaway probe – a fresh store returns 66
-at both 8 and 12 video strips.
-
-`applyTemplate` does not reset several candidate fields, and none of them is
-isolated as the cause: `dayConfigs` carried from boot's B1 preset versus
-`setDays(4)`'s own defaults, the Admin-gap edit sequence earlier in the
-driver, tournament type, and the ROC fencer-count edit that precedes this
-step.
-
-**Cost if ignored**: a suggested strip count that depends on session history
-rather than the template alone is hard to explain to an organizer, and the
-smoke driver's own comment is the only record of the disagreement.
-
 ---
 
 # Closed
@@ -1196,6 +1173,34 @@ Everything above this line is open. Everything below is done, and is kept for
 one reason only: what each feature **deliberately did not fix**, so a later
 session does not rediscover it. Each entry is a pointer to the feature record
 plus that list. The narrative lives in the linked spec directory, not here.
+
+## NAC Youth suggests 63 in the smoke driver's accumulated state and 66 from a fresh store
+
+*Diagnosed 2026-09-06, not a defect. Record: the NAC Youth step's comment in
+[`scripts/smoke.mjs`](../../scripts/smoke.mjs); the original probe is
+[`specs/012-actionable-strip-suggestion/handoff.md`](../../specs/012-actionable-strip-suggestion/handoff.md)
+§7(c).*
+
+`[M]` The cause: the driver's gears-panel step changes Admin gap 30 → 15,
+reverts it to 30, then re-applies 15 so the override carries through the
+share link – and nothing after that restores it. `applyTemplate` keeps that
+override across the NAC Youth switch the same way it keeps `days_available`,
+`strips_total`, `video_strips_total`, and `tournament_type`.
+
+A probe (`tmp/probe-nac-youth-gap.test.ts`, deleted) replayed the driver's
+store actions and swapped one field at a time: `ADMIN_GAP_MINS` alone moved
+the answer 63 ↔ 66 in both directions, while `strips_total`, `strips`, and
+`video_strips_total` were inert. The search's floor and ceiling were
+identical on both paths at 53/197, and all 24 competitions were
+byte-identical.
+
+Verdict: not a defect. A gears-panel override is a tournament-wide setting
+the organizer chose, and a template switch keeping it follows the same rule
+that keeps days, strips, type, and video strips.
+
+The original entry's description of this as "Admin-gap 30→15→reverted" was
+wrong – the driver re-applies 15 at `scripts/smoke.mjs:677` and never
+restores it.
 
 ## R5 and L5 — the app refused to schedule at its own recommendation
 

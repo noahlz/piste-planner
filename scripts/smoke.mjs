@@ -811,16 +811,18 @@ log('NAC Youth schedule table rows =', nacYouthRowCount)
 // `[M]` 012 T014, 2026-09-06, in the driver's accumulated session state:
 // suggested 63 strips, 24 of 24 placed (superseding the pre-search-rule 197
 // this comment recorded on 2026-09-05). baseline.md §5's fresh-store answer
-// is 66, at both 8 and 12 video strips — a throwaway probe
-// (tmp/probe-t014-video.test.ts, deleted) confirmed video_strips_total makes
-// no difference to this template's suggested count at a fresh store, so it
-// does not explain the driver's 63. The cause was not isolated further; the
-// candidates are fields `applyTemplate` does not reset that a fresh store
-// starts differently: dayConfigs from boot's B1 preset versus `setDays(4)`'s
-// own defaults, the Admin-gap 30→15→reverted edit earlier in this driver, the
-// tournament type, and the ROC Div1A/Vet fencer-count edit. This step's
-// assertion stays non-zero rows by design (see above), so the open question
-// does not block SC-005.
+// is 66. Isolated 2026-09-06: the gears-panel step above changes Admin gap
+// 30 → 15, reverts it to 30, then re-applies 15 so the override carries
+// through the share link — and nothing after that restores it.
+// `applyTemplate` keeps that override across a template switch the same way
+// it keeps `days_available`. A throwaway probe
+// (tmp/probe-nac-youth-gap.test.ts, deleted) replaying this driver's store
+// actions found `ADMIN_GAP_MINS` the only field whose single swap moves the
+// answer — 63 ↔ 66 in both directions — with `strips_total`, `strips`, and
+// `video_strips_total` inert and the search's floor/ceiling identical at
+// 53/197. Verdict: not a defect. A gears-panel override is a tournament-wide
+// setting, so this step's count is the busiest-day search at a 15-minute
+// admin gap; the assertion stays non-zero by design (see above).
 if (nacYouthRowCount === 0) {
   throw new Error('SC-005: NAC Youth placed 0 events at its Suggest count — the feasibility-strip-hours demotion or the busiest-day suggestion regressed')
 }
