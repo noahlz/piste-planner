@@ -112,7 +112,7 @@ Each row: what the design has, what the code has, what moves.
 | One preset picker | Two preset systems: `TopBar`'s B1–B8 picker and the rail's ten `TEMPLATES` toggles | One picker with two groups: *Tournaments* (B1–B8) and *Templates* (the ten). `applyTemplate` stays but goes through `applyPreset`'s shape so both paths record `loadedPresetId`. Template numbers are invented (backlog §Templates are invented numbers) – the group heading says so |
 | Read-only `NAC · 4 days · 15 strips` | Editable type / days / strips selects in the top bar, duplicating the rail | The header states, the panels edit. Resolves FR-003/FR-004 duplication |
 | `last run 2 min ago` | Nothing records when the scheduler ran | New `lastAutoRunAt: number | null` in `UiSlice`, set by `runScheduleAll`, not serialized. Rendered as a clock time, not a relative age |
-| **Auto-assign** | **Auto-schedule all**: overwrites every placement, disabled on any ERROR finding | Label changes. Semantics are decision D1. The ERROR disable stays – it is design decision 6 (structural preconditions block) |
+| **Auto-assign** | **Auto-schedule all**: overwrites every placement, disabled on any ERROR finding | Label changes. **Pinned events are fixed and the engine schedules around them** (D1, revised): a pinned event's day and start are handed to the scheduler as a pre-coloured vertex and a pre-claimed strip interval before it runs, so day assignment keeps that event's crossover neighbours off its day and the concurrent scheduler packs the rest of the day around it. The engine still chooses the strips (D2). The ERROR disable stays – it is design decision 6 (structural preconditions block) |
 | **Export** icon | **Save / Share** popover: JSON save, JSON load, share URL, copy | Export popover keeps all three plus the "dropped placements" warning. The inline browser plumbing moves to `src/store/exportActions.ts` (backlog §Save / load / share browser plumbing – this is the moment it named) |
 
 ### 4.3 Unplaced dock
@@ -229,7 +229,7 @@ none of it is needed to build the static surfaces.
 
 | # | The design does | The engine does | Backlog / roadmap home |
 |---|---|---|---|
-| E1 | Auto-assign places only the dock's events, one at a time against the board as it stands, and leaves everything already placed where it is | `scheduleAll` starts from an empty `GlobalState` and colours every vertex – it cannot be told "these are fixed" | Roadmap P4 "Auto-fill unplaced": pre-seeded strip intervals, pre-coloured days, exclusion from `buildEventStates` ([competition-planner-workbench.md](./competition-planner-workbench.md) §Roadmap) |
+| E1 | Auto-assign places only the dock's events, one at a time against the board as it stands, and leaves everything already placed where it is | `scheduleAll` starts from an empty `GlobalState` and colours every vertex – it cannot be told "these are fixed" | **In 013** (D1, revised 2026-09-07). The roadmap's P4 note is the shape: pre-seeded strip intervals, pre-coloured days, exclusion from `buildEventStates` ([competition-planner-workbench.md](./competition-planner-workbench.md) §Roadmap). An engine task with its own B1–B8 drift review – the ledger runs the no-pins path, so scheduled counts must not move |
 | E2 | A DE can be dragged to a different strip run and start than its pools, subject to "pools end before DE starts" | `Placement` has one `start_time` and one `strip_count`. DE start is `pool_end + ADMIN_GAP_MINS`, always | P4 "unpack to blocks". Needs `Placement` to carry per-phase start and strips, and `derive.ts` to honour a DE start override |
 | E3 | A hand-dropped event is checked, and warned about, only for strips, late finish and referees | Auto placement enforces the crossover constraint graph. Hand placement bypasses it entirely | Backlog §Hand-placed events are never checked against the crossover constraint graph. Needed the moment drag ships, because the design's drag makes the gap live |
 | E4 | A late finish is a warning: "DE finishes at 20:55, 35 minutes before the venue closes" | An overrun past `dayHardEnd` is `SAME_DAY_VIOLATION` at ERROR and two failed attempts drop the event | Backlog §Day-end overrun is a hard failure the methodology calls a warning. The derived late-finish finding (§4.5) works on hand placements now, but auto placement will keep dropping the events the design would warn about |
@@ -285,8 +285,9 @@ the SVG canvas's attributes. `__tests__/store/` loses `scorecardBaseline`,
 
 Answered by the product owner on 2026-09-07 – the answers are in §9. The
 options and recommendations below are kept as written, for the record of what
-was weighed. Where the answer departs from the recommendation (D2, D6, D8),
-§9 is the rule and the surface sections above have been corrected to match.
+was weighed. Where the answer departs from the recommendation (D1 on a second
+pass, D2, D6, D8), §9 is the rule and the surface sections above have been
+corrected to match.
 
 **D1 – What Auto-assign does to pinned events.** The design's semantics are
 E1 and need engine work. Options: (a) Auto-assign = today's Auto-schedule all,
@@ -361,27 +362,30 @@ Presets could carry their real dates later.
 
 ## 8. Proposed sequencing
 
-Two features. The split follows constitution III: the second edits the
-engine and needs its own drift review, the first does not.
+Two features. Both edit the engine and carry a B1–B8 drift review under
+constitution III: 013 for scheduling around pins, 014 for the crossover check
+on hand placements and whatever drag needs.
 
-**013 – Workbench redesign** (worktree flow, no engine change beyond pure
-additions). The shell, header, dock, rail, five panels, the canvas rewrite on
-the design's DOM model with the zoom ladder and weapon encoding, the footer
-with the Matrix ⇄ Schedule toggle, the Schedule view restyled after USA
-Fencing's published schedules with a print mode, the detail strip with
-select / Pin / Move day / Flight, the Findings panel with jump and the two
-derived findings, Export, the single preset picker, `flighted`,
-`de_mode_override`, `lastAutoRunAt`, and every deletion in §6. Pure engine
-additions only: `estimateEventFootprint`, the exported referees-per-pool
-factor, `computeSuggestedStrips` split from the write. No drag. Every
-placement change goes through a button, so the crossover gap (E3) is reached
-only by Move day, and the spec says so.
+**013 – Workbench redesign** (worktree flow). The shell, header, dock, rail,
+five panels, the canvas rewrite on the design's DOM model with the zoom
+ladder and weapon encoding, the footer with the Matrix ⇄ Schedule toggle, the
+Schedule view restyled after USA Fencing's published schedules with a print
+mode, the detail strip with select / Pin / Move day / Flight, the Findings
+panel with jump and the two derived findings, Export, the single preset
+picker, `flighted`, `de_mode_override`, `lastAutoRunAt`, and every deletion
+in §6. **One engine story**: Auto-assign schedules around pinned events (E1)
+– pinned placements enter `scheduleAll` as pre-coloured vertices and
+pre-claimed strip intervals, and the ledger's no-pins path must not move.
+Pure engine additions beside it: `estimateEventFootprint`, the exported
+referees-per-pool factor, `computeSuggestedStrips` split from the write. No
+drag. Every placement change goes through a button, so the crossover gap
+(E3) is reached only by Move day, and the spec says so.
 
 **014 – Manual placement** (worktree flow, engine drift review). Drag on the
 grid and from the dock with the ghost, five-minute snap and legal-range
-clamp, lanes honouring the dropped strip, the crossover finding for hand
-placements (E3), and Auto-assign around pins by pre-seeding the scheduler
-(E1). Per-phase drag (E2) is scoped out of 014 unless E1 turns out small.
+clamp, setting day and time only (D2), and the crossover finding for hand
+placements (E3). Per-phase drag (E2) is scoped out of 014 unless it turns out
+small.
 
 Before either: nothing. The cleanups in §6 are 013's first tasks, not a
 separate feature – each one removes a surface the design replaces in the same
@@ -401,7 +405,7 @@ Answered by the product owner in session, one question per decision.
 
 | # | Decision | Answer |
 |---|---|---|
-| D1 | Auto-assign and pinned events | **Re-apply pins after the run.** Full auto-schedule, then every pinned placement goes back where it was. Collisions surface as overflow and findings. Engine pre-seeding is 014's |
+| D1 | Auto-assign and pinned events | **The engine schedules around pins, in 013.** First answer was "re-apply pins after the run"; revised the same day once the product owner stated the intent: pinning Veteran Men's Epee (age groups, Team, Combined) means those are fixed and everything else is placed around them. Pinned placements enter the scheduler as pre-coloured vertices and pre-claimed strip intervals (E1). One engine story in 013 with its own drift review |
 | D2 | Store strips | **No.** Strip numbers are planning aids and will not match the strips assigned at the competition, so nothing preserves them across a re-allocation. `Placement.strips` stays `null`, the packer re-chooses lanes freely, the camera icon is dropped, and a 014 drag sets day and time only |
 | D3 | Preset picker | **Fold the ten templates into the one picker** under a *Templates* group |
 | D4 | Per-event fields | **Delete** `ref_policy`, `cut_mode`, `cut_value`, `de_mode`, `de_video_policy`, `use_single_pool_override` from `CompetitionConfig` and the URL. `buildConfig` computes them. `CompetitionConfig` becomes `{ fencer_count, flighted }` |
