@@ -138,7 +138,7 @@ every story reads. Nothing is deleted in this phase.
   the worktree and no copy was needed. `pnpm test`: 68 files, 1848 tests, 0
   skipped. `tsc -b` clean. `lint` clean.
 
-- [ ] **T002** Write `specs/013-workbench-redesign/drift-baseline.md` before any
+- [x] **T002** Write `specs/013-workbench-redesign/drift-baseline.md` before any
   `src/engine/` edit (plan.md §The drift instrument). Run the ledger and record
   per B1–B8 scenario: the scheduled count, the ERROR and WARN counts, and the
   `stripRecommendation` value, all read from
@@ -148,6 +148,9 @@ every story reads. Nothing is deleted in this phase.
   `scripts/smoke.mjs:367`, `:786`, `:863` and `:912` – NAC Youth's is expected
   to read 63 here and 66 after phase 2 ([research D14](./research.md))
   *(subagent commits)*
+  → Recorded 2026-09-07: B1–B8 scheduled counts 24/24/24/17/12/45/18/52,
+    snapshot SHA-256 5483c40c1349…, parity passes. Driver Suggest counts
+    15/63/80/48.
 
 - [ ] **T003** Move the two shared layout modules to `src/layout/`
   ([research D6](./research.md)). Red first: move
