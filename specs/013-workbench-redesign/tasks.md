@@ -125,7 +125,7 @@ by what the code shows. None changes what is built.
 **Purpose**: the workspace, the drift instrument, and the two structural moves
 every story reads. Nothing is deleted in this phase.
 
-- [ ] **T001** Create the workspace. From the main checkout run
+- [x] **T001** Create the workspace. From the main checkout run
   `git worktree add /Users/noahlz/projects/piste-planner-013-workbench-redesign -b 013-workbench-redesign 3cee79e1e8`,
   then `pnpm install` in the worktree. If `specs/013-workbench-redesign/tasks.md`
   is uncommitted in the main checkout, copy it into the worktree and leave the
@@ -133,6 +133,10 @@ every story reads. Nothing is deleted in this phase.
   Record `pnpm test` file and test counts, `tsc -b` and `lint` status as the
   branch's starting numbers. Commit as the branch's first commit
   *(subagent commits)*
+  → Measured 2026-09-07: cut from `1ab0d15c79` (main HEAD, child of `3cee79e1e8`,
+  carries tasks.md) instead of `3cee79e1e8`, so tasks.md was already present in
+  the worktree and no copy was needed. `pnpm test`: 68 files, 1848 tests, 0
+  skipped. `tsc -b` clean. `lint` clean.
 
 - [ ] **T002** Write `specs/013-workbench-redesign/drift-baseline.md` before any
   `src/engine/` edit (plan.md §The drift instrument). Run the ledger and record
