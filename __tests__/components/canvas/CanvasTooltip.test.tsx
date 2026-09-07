@@ -5,7 +5,7 @@ import {
   type CanvasTooltipTarget,
 } from '../../../src/components/canvas/CanvasTooltip.tsx'
 import { EventBlock } from '../../../src/components/canvas/EventBlock.tsx'
-import type { BlockPlacement } from '../../../src/components/canvas/lanes.ts'
+import type { BlockPlacement } from '../../../src/layout/lanes.ts'
 import { MatrixCanvas } from '../../../src/components/canvas/MatrixCanvas.tsx'
 import type { DerivedSchedule } from '../../../src/store/derived.ts'
 import { Category, Gender, Phase, Weapon } from '../../../src/engine/types.ts'

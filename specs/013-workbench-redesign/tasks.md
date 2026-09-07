@@ -152,7 +152,7 @@ every story reads. Nothing is deleted in this phase.
     snapshot SHA-256 5483c40c1349…, parity passes. Driver Suggest counts
     15/63/80/48.
 
-- [ ] **T003** Move the two shared layout modules to `src/layout/`
+- [x] **T003** Move the two shared layout modules to `src/layout/`
   ([research D6](./research.md)). Red first: move
   `__tests__/components/canvas/geometry.test.ts` to
   `__tests__/layout/segments.test.ts` and `__tests__/components/canvas/lanes.test.ts`
@@ -171,14 +171,16 @@ every story reads. Nothing is deleted in this phase.
   trimmed `__tests__/components/canvas/geometry.test.ts` until T027. Delete
   `src/components/canvas/lanes.ts`. Neither new module imports React or the
   store
+  → Done 2026-09-07: 14 files (3 created, 1 moved, 1 deleted, 9 edited) / 69 test files / 1848 tests, tsc and lint clean; intersectsTimeRange inlined in layout/lanes.ts until T026.
 
-- [ ] **T004** Extend the select wrapper ([research D12](./research.md)). Red
+- [x] **T004** Extend the select wrapper ([research D12](./research.md)). Red
   first: `src/components/ui/__tests__/select.test.tsx` renders a select with
   two groups and asserts each group's label is in the document and each option
   sits under its group. Run: fails because `SelectGroup` and `SelectLabel` are
   not exported. Then add both to `src/components/ui/select.tsx` over Radix's
   `Select.Group` and `Select.Label`, already in the `radix-ui` package, and
   export them at `select.tsx:142`
+  → Done 2026-09-07: 2 files (1 test created, select.tsx edited: SelectGroup/SelectLabel added and exported) / 70 test files / 1849 tests (+1 case), tsc and lint clean.
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green at T001's counts plus
 T004's cases, and the two layout files pass from `__tests__/layout/`

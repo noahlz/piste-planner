@@ -5,7 +5,7 @@ import { formatMinutes } from '../../lib/time.ts'
 import { RowHeightStep } from '../../store/viewState.ts'
 import { categoryFill, categoryInk, resolveCanvasCategory, weaponMark } from './palette.ts'
 import { phaseDisplay, stripAssignmentLabel } from './blockLabels.ts'
-import type { BlockPlacement } from './lanes.ts'
+import type { BlockPlacement } from '../../layout/lanes.ts'
 
 /**
  * One block on the matrix canvas — FR-014, FR-016,

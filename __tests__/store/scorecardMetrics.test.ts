@@ -7,7 +7,7 @@ import {
   selectScorecardMetrics,
   type ScorecardMetric,
 } from '../../src/store/derived.ts'
-import { assignStripLanes } from '../../src/components/canvas/lanes.ts'
+import { assignStripLanes } from '../../src/layout/lanes.ts'
 import { makePlacement } from '../helpers/factories.ts'
 
 /**
@@ -178,7 +178,7 @@ function peakAtABlockBoundary(): void {
  * `derived.day_out_of_range` (`src/engine/derive.ts:247`). The event still
  * derives a `ScheduleResult` — the flag only marks the placement, it does not
  * stop derivation — but `assignStripLanes` draws it no row
- * (`src/components/canvas/lanes.ts:138-144`), and the selector's own two
+ * (`src/layout/lanes.ts:138-144`), and the selector's own two
  * `day_out_of_range` skips (`scorecardBlocks`, `src/store/derived.ts:277`,
  * and `latestFinish`, `src/store/derived.ts:341`) are built to agree with it.
  */
@@ -575,7 +575,7 @@ describe('selectScorecardMetrics — findings on a constrained fixture', () => {
    * 004 US4 T063 — the phase in each key moved from `DE` to `DE_ROUND_OF_16`.
    * D6's cause: under the resolved STAGED de_mode `eventTimeSegments` emits
    * `DE_PRELIMS`/`DE_ROUND_OF_16` in place of the single `DE`
-   * (src/components/canvas/geometry.ts:143-152), and at 8 fencers the bracket
+   * (src/layout/segments.ts:143-152), and at 8 fencers the bracket
    * has no prelim round, so `DE_ROUND_OF_16` is the only DE segment drawn.
    */
   it('emits keys only for the named competitions that actually have blocks', () => {

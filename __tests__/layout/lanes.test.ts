@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   assignStripLanes,
   type BlockPlacement,
-} from '../../../src/components/canvas/lanes.ts'
-import type { DerivedEventSchedule } from '../../../src/engine/derive.ts'
-import { Phase } from '../../../src/engine/types.ts'
-import { makeScheduleResult } from '../../helpers/factories.ts'
+} from '../../src/layout/lanes.ts'
+import type { DerivedEventSchedule } from '../../src/engine/derive.ts'
+import { Phase } from '../../src/engine/types.ts'
+import { makeScheduleResult } from '../helpers/factories.ts'
 
 // 004 T037 — which rows a block occupies.
 //

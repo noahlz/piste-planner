@@ -29,7 +29,6 @@ import {
   blockWidth,
   blockX,
   blockY,
-  eventTimeSegments,
 } from './geometry.ts'
 import {
   buildDayLayout,
@@ -41,7 +40,8 @@ import {
   visibleTimeRange,
   type TimeRange,
 } from './windowing.ts'
-import { assignStripLanes, type BlockPlacement } from './lanes.ts'
+import { eventTimeSegments } from '../../layout/segments.ts'
+import { assignStripLanes, type BlockPlacement } from '../../layout/lanes.ts'
 import { EventBlock } from './EventBlock.tsx'
 import { CanvasTooltip, type CanvasTooltipTarget } from './CanvasTooltip.tsx'
 import { competitionLabel } from '../competitionLabels.ts'

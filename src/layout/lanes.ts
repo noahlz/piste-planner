@@ -34,10 +34,9 @@
  * pointer.
  */
 
-import type { DerivedEventSchedule } from '../../engine/derive.ts'
-import type { Phase } from '../../engine/types.ts'
-import { eventTimeSegments } from './geometry.ts'
-import { intersectsTimeRange } from './windowing.ts'
+import type { DerivedEventSchedule } from '../engine/derive.ts'
+import type { Phase } from '../engine/types.ts'
+import { eventTimeSegments } from './segments.ts'
 
 /** One block, resolved to the rows it draws across. */
 export interface BlockPlacement {
@@ -89,6 +88,17 @@ function compareCandidates(a: Candidate, b: Candidate): number {
   return 0
 }
 
+/**
+ * Whether an occupied span overlaps `[startMinutes, endMinutes)`. Duplicates
+ * `windowing.ts`'s `intersectsTimeRange` rule — half-open, so a span ending
+ * exactly at `startMinutes` or starting exactly at `endMinutes` does not
+ * overlap — because a layout module cannot import from `components/canvas/`.
+ * Inlined until T026 deletes `windowing.ts`.
+ */
+function intersectsOccupancy(taken: Occupancy, startMinutes: number, endMinutes: number): boolean {
+  return startMinutes < taken.endMinutes && endMinutes > taken.startMinutes
+}
+
 /** Whether every strip in `[firstStrip, firstStrip + stripCount)` is free. */
 function runIsFree(
   occupied: Occupancy[][],
@@ -97,13 +107,7 @@ function runIsFree(
 ): boolean {
   for (let strip = firstStrip; strip < firstStrip + candidate.stripCount; strip++) {
     for (const taken of occupied[strip]) {
-      if (
-        intersectsTimeRange(
-          { startMinutes: taken.startMinutes, endMinutes: taken.endMinutes },
-          candidate.startMinutes,
-          candidate.endMinutes,
-        )
-      ) {
+      if (intersectsOccupancy(taken, candidate.startMinutes, candidate.endMinutes)) {
         return false
       }
     }

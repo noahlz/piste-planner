@@ -8,7 +8,7 @@ import {
   LABEL_TEXT_MIN_WIDTH_PX,
   type EventBlockProps,
 } from '../../../src/components/canvas/EventBlock.tsx'
-import type { BlockPlacement } from '../../../src/components/canvas/lanes.ts'
+import type { BlockPlacement } from '../../../src/layout/lanes.ts'
 import { Category, Gender, Phase, VetAgeGroup, Weapon } from '../../../src/engine/types.ts'
 import { RowHeightStep } from '../../../src/store/viewState.ts'
 import { makeCompetition } from '../../helpers/factories.ts'

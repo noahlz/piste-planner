@@ -14,14 +14,13 @@ import type {
   TournamentConfig,
   ValidationError,
 } from '../engine/types.ts'
-// Store → components/canvas, the reverse of this app's usual direction. Chosen,
-// not stumbled into: the scorecard names blocks by the key the canvas draws
-// them under, so the two must agree on which segments an event has. Re-deriving
-// the phase list here would be a second home for that fact and the two copies
-// would drift silently (constitution, "each fact has exactly one home").
-// `geometry.ts` is pure arithmetic with no React and no store read, so the
-// import carries nothing back the other way.
-import { eventTimeSegments } from '../components/canvas/geometry.ts'
+// The scorecard names blocks by the key the canvas draws them under, so the
+// two must agree on which segments an event has. Re-deriving the phase list
+// here would be a second home for that fact and the two copies would drift
+// silently (constitution, "each fact has exactly one home"). `layout/segments.ts`
+// is pure arithmetic with no React and no store read, so the import carries
+// nothing back the other way.
+import { eventTimeSegments } from '../layout/segments.ts'
 import { buildTournamentConfig } from './buildConfig.ts'
 import type { StoreState } from './store.ts'
 
@@ -268,7 +267,7 @@ interface ScorecardBlock {
  *
  * The two rules here — skip an event whose `day_out_of_range` is set, and take
  * its segments from `eventTimeSegments` — are deliberately the same two
- * `assignStripLanes` (`src/components/canvas/lanes.ts`) uses, so a metric can
+ * `assignStripLanes` (`src/layout/lanes.ts`) uses, so a metric can
  * never name a block that is not on screen to highlight.
  */
 function scorecardBlocks(schedule: DerivedSchedule): ScorecardBlock[] {

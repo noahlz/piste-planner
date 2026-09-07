@@ -3,7 +3,7 @@ import { formatMinutes } from '../../lib/time.ts'
 import { GENDER_DISPLAY, WEAPON_DISPLAY, categoryDisplay } from '../competitionLabels.ts'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx'
 import { phaseDisplay, stripAssignmentLabel } from './blockLabels.ts'
-import type { BlockPlacement } from './lanes.ts'
+import type { BlockPlacement } from '../../layout/lanes.ts'
 
 /**
  * The canvas tooltip — FR-022, contracts/ui-contract.md §Tooltip contract.
