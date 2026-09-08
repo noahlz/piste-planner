@@ -5,7 +5,7 @@ import { formatClock } from '../../lib/time.ts'
 import { PresetPicker } from './PresetPicker.tsx'
 import { ExportPopover } from './ExportPopover.tsx'
 import { Button } from '@/components/ui/button'
-import { Play } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 
 /**
  * The workbench header (013 T010, ui-contract.md §Header, FR-004–FR-009):
@@ -26,34 +26,42 @@ export function Header() {
   return (
     <header
       aria-label="Header"
-      className="flex shrink-0 items-center gap-4 border-b bg-slate-800 px-4 py-2 text-white"
+      className="flex h-11 shrink-0 items-center gap-3.5 border-b bg-chrome px-3.5 text-foreground"
     >
-      <span className="text-lg font-bold italic">Piste Planner</span>
+      <div className="flex flex-none items-center gap-[9px]">
+        <span className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg bg-primary text-[15px] font-bold text-primary-foreground">
+          P
+        </span>
+        <span className="text-[19px] font-bold whitespace-nowrap">Piste Planner</span>
+      </div>
+
+      <div className="h-6 w-[1.5px] flex-none rounded-sm bg-chrome-border" />
 
       <PresetPicker />
 
-      <span data-summary className="text-sm text-slate-300">
+      <span data-summary className="font-mono text-[11.5px] font-semibold text-neutral-700">
         {tournamentType} · {daysAvailable} days · {stripsTotal} strips
       </span>
 
-      {lastAutoRun !== null && (
-        <span data-last-run className="text-sm text-slate-300">
-          Last run {formatClock(dateToMinutesFromMidnight(new Date(lastAutoRun.at)))}
-        </span>
-      )}
+      <div className="ml-auto flex flex-none items-center gap-2.5">
+        {lastAutoRun !== null && (
+          <span data-last-run className="font-mono text-[11px] font-semibold text-neutral-500">
+            Last run {formatClock(dateToMinutesFromMidnight(new Date(lastAutoRun.at)))}
+          </span>
+        )}
 
-      <Button
-        type="button"
-        variant="success"
-        className="ml-auto"
-        onClick={() => runScheduleAll()}
-        disabled={hasHardErrors}
-      >
-        <Play className="mr-2 h-4 w-4" />
-        Auto-assign
-      </Button>
+        <Button
+          type="button"
+          onClick={() => runScheduleAll()}
+          disabled={hasHardErrors}
+          className="h-8 gap-2 rounded-[10px] px-[15px] text-[13.5px] font-bold tracking-[.03em] uppercase shadow-sm hover:bg-accent-hover"
+        >
+          <Sparkles className="h-4 w-4" strokeWidth={1.75} />
+          Auto-assign
+        </Button>
 
-      <ExportPopover />
+        <ExportPopover />
+      </div>
     </header>
   )
 }

@@ -48,7 +48,17 @@ export function PresetPicker({ defaultOpen }: PresetPickerProps) {
 
   return (
     <Select value={loadedPresetId ?? ''} onValueChange={handleChange} defaultOpen={defaultOpen}>
-      <SelectTrigger id="header-preset" aria-label="Preset" className="w-64">
+      <SelectTrigger
+        id="header-preset"
+        aria-label="Preset"
+        className="w-64 gap-[9px] border-[1.5px] border-chrome-border bg-secondary px-3 text-[13px] text-foreground hover:border-accent-400 hover:bg-hover-tint"
+      >
+        <span
+          aria-hidden="true"
+          className="text-[10.5px] font-semibold tracking-[.05em] text-neutral-600 uppercase"
+        >
+          Preset
+        </span>
         <SelectValue placeholder="Preset" />
       </SelectTrigger>
       <SelectContent>

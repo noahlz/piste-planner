@@ -5,18 +5,20 @@ import { WEAPON_DISPLAY } from '../competitionLabels.ts'
 import { Weapon } from '../../engine/types.ts'
 import { ViewMode } from '../../store/viewState.ts'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 
 interface StatusFooterProps {
   viewMode: ViewMode
   onViewModeChange: (next: ViewMode) => void
 }
 
-// Plain Tailwind colours for now — T024 swaps these for the weapon design
-// tokens once they exist.
+// Weapon design tokens (docs/design/mockup/, standing rule 13). T024 still
+// adds weaponTokens.ts as the shared mapping module — the tokens themselves
+// already live in index.css.
 const LEGEND: { weapon: Weapon; swatchClass: string }[] = [
-  { weapon: Weapon.FOIL, swatchClass: 'bg-sky-200' },
-  { weapon: Weapon.EPEE, swatchClass: 'bg-emerald-200' },
-  { weapon: Weapon.SABRE, swatchClass: 'bg-orange-200' },
+  { weapon: Weapon.FOIL, swatchClass: 'border-weapon-foil-edge bg-weapon-foil-fill' },
+  { weapon: Weapon.EPEE, swatchClass: 'border-weapon-epee-edge bg-weapon-epee-fill' },
+  { weapon: Weapon.SABRE, swatchClass: 'border-weapon-sabre-edge bg-weapon-sabre-fill' },
 ]
 
 /**
@@ -45,29 +47,40 @@ export function StatusFooter({ viewMode, onViewModeChange }: StatusFooterProps) 
   return (
     <footer
       aria-label="Status bar"
-      className="flex shrink-0 items-center gap-4 border-t bg-background px-3 py-1 text-xs"
+      className="flex h-8 shrink-0 items-center gap-0 overflow-hidden border-t-[1.5px] border-chrome-border bg-chrome-deep text-[11.5px] whitespace-nowrap"
     >
-      <span data-counts className="text-muted-foreground">
+      <span data-counts className="px-4 text-neutral-700">
         {`${counts.placed} placed · ${counts.unplaced} unplaced · ${counts.pinned} pinned`}
       </span>
-      <span data-metric="finish" className="flex items-baseline gap-1">
-        <span className="text-muted-foreground">Finish</span>
+      <Rule />
+      <span data-metric="finish" className="flex items-baseline gap-1.5 px-4">
+        <span className="text-neutral-500">Finish</span>
         {/* FR-041: every time is 24-hour HH:MM — formatClock, not formatMinutes. */}
-        <span className="font-mono tabular-nums">{finish === null ? '—' : formatClock(finish)}</span>
+        <span className="font-mono font-semibold tabular-nums text-foreground">
+          {finish === null ? '—' : formatClock(finish)}
+        </span>
       </span>
-      <span data-metric="refs" className="flex items-baseline gap-1">
-        <span className="text-muted-foreground">Peak referees</span>
-        <span className="font-mono tabular-nums">{refs === null ? '—' : String(Math.round(refs))}</span>
+      <Rule />
+      <span data-metric="refs" className="flex items-baseline gap-1.5 px-4">
+        <span className="text-neutral-500">Peak referees</span>
+        <span className="font-mono font-semibold tabular-nums text-foreground">
+          {refs === null ? '—' : String(Math.round(refs))}
+        </span>
       </span>
-      <span data-metric="strips" className="flex items-baseline gap-1">
-        <span className="text-muted-foreground">Strip use</span>
-        <span className="font-mono tabular-nums">{strips === null ? '—' : `${strips.toFixed(1)}%`}</span>
+      <Rule />
+      <span data-metric="strips" className="flex items-baseline gap-1.5 px-4">
+        <span className="text-neutral-500">Strip use</span>
+        <span className="font-mono font-semibold tabular-nums text-foreground">
+          {strips === null ? '—' : `${strips.toFixed(1)}%`}
+        </span>
       </span>
+      <Rule />
 
-      <span data-legend className="flex items-center gap-2">
+      <span data-legend className="ml-auto flex items-center gap-1.5 px-4">
+        <span className="text-neutral-500">Weapon</span>
         {LEGEND.map(({ weapon, swatchClass }) => (
-          <span key={weapon} className="flex items-center gap-1">
-            <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-sm ${swatchClass}`} />
+          <span key={weapon} className="flex items-center gap-1.5">
+            <span aria-hidden="true" className={cn('h-2.5 w-2.5 rounded-[4px] border-[1.5px]', swatchClass)} />
             {WEAPON_DISPLAY[weapon]}
           </span>
         ))}
@@ -85,11 +98,25 @@ export function StatusFooter({ viewMode, onViewModeChange }: StatusFooterProps) 
         // Radix reports '' when the pressed item is the selected one. There
         // is no "no view" state to fall into, so that clears nothing.
         onValueChange={(next) => next && onViewModeChange(next as ViewMode)}
-        className="ml-auto"
+        className="mr-3.5 gap-0 rounded-[7px]"
       >
-        <ToggleGroupItem value={ViewMode.MATRIX}>Matrix</ToggleGroupItem>
-        <ToggleGroupItem value={ViewMode.SCHEDULE}>Schedule</ToggleGroupItem>
+        <ToggleGroupItem
+          value={ViewMode.MATRIX}
+          className="h-6 min-w-0 rounded-[7px] border-[1.5px] border-chrome-border bg-white px-3 text-[11.5px] font-semibold text-neutral-700 data-[state=on]:border-accent-400 data-[state=on]:bg-accent-100 data-[state=on]:text-accent-800"
+        >
+          Matrix
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value={ViewMode.SCHEDULE}
+          className="h-6 min-w-0 rounded-[7px] border-[1.5px] border-chrome-border bg-white px-3 text-[11.5px] font-semibold text-neutral-700 data-[state=on]:border-accent-400 data-[state=on]:bg-accent-100 data-[state=on]:text-accent-800"
+        >
+          Schedule
+        </ToggleGroupItem>
       </ToggleGroup>
     </footer>
   )
+}
+
+function Rule() {
+  return <span aria-hidden="true" className="h-[15px] w-[1.5px] shrink-0 rounded-sm bg-chrome-border" />
 }

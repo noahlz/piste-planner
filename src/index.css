@@ -3,26 +3,28 @@
 @import "shadcn/tailwind.css";
 
 :root {
-  /* shadcn core variables — Piste Planner brand palette */
-  --background: #faf9f6;
-  --foreground: #475569;
-  --card: #ffffff;
-  --card-foreground: #1e293b;
+  /* shadcn core variables — re-pointed to the Industry mockup's palette
+     (docs/design/mockup/, tasks.md standing rule 13). This re-skins every
+     shadcn primitive (Button, Select trigger, Popover, ToggleGroup) at once. */
+  --background: #eeeef0;
+  --foreground: #1d1f20;
+  --card: #f7f7f9;
+  --card-foreground: #1d1f20;
   --popover: #ffffff;
-  --popover-foreground: #1e293b;
-  --primary: #6b7fa8;
+  --popover-foreground: #1d1f20;
+  --primary: #5980a6;
   --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #1e293b;
-  --muted: #f1f5f9;
-  --muted-foreground: #94a3b8;
-  --accent: #f1f5f9;
-  --accent-foreground: #1e293b;
+  --secondary: #ffffff;
+  --secondary-foreground: #1d1f20;
+  --muted: #eaebee;
+  --muted-foreground: #7a7a7d;
+  --accent: #eef6ff;
+  --accent-foreground: #2c455d;
   --destructive: #a35b5b;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #6b7fa8;
-  --radius: 0.5rem;
+  --border: #dedee2;
+  --input: #dedee2;
+  --ring: #5980a6;
+  --radius: 10px;
 
   /* Custom Piste Planner variables */
   --success: #5a8a6a;
@@ -36,7 +38,54 @@
   --error-text: #991b1b;
   --info: #dbeafe;
   --info-text: #1e40af;
-  --accent-hover: #576d91;
+  --accent-hover: #4d7295;
+
+  /* Industry design-system tokens (docs/design/mockup/ds-styles.css) –
+     standing rule 13 */
+  --accent-100: #eef6ff;
+  --accent-200: #d6ebff;
+  --accent-300: #b5d9fd;
+  --accent-400: #94bce3;
+  --accent-500: #749dc4;
+  --accent-600: #597ea3;
+  --accent-700: #416180;
+  --accent-800: #2c455d;
+  --accent-900: #1d2d3d;
+  --neutral-100: #f5f5f8;
+  --neutral-200: #e7e7ea;
+  --neutral-300: #d4d4d7;
+  --neutral-400: #b7b7ba;
+  --neutral-500: #98989b;
+  --neutral-600: #7a7a7d;
+  --neutral-700: #5d5d60;
+  --neutral-800: #424244;
+  --neutral-900: #2b2b2d;
+  --divider: color-mix(in srgb, #1d1f20 16%, transparent);
+  --chrome: #f7f7f9;
+  --chrome-border: #dedee2;
+  --chrome-deep: #eaebee;
+  --hover-tint: #f7fbff;
+  --ok: #5b8f6a;
+  --shadow-sm: 0 1px 2px rgba(43, 43, 45, 0.14);
+  --shadow-md: 0 3px 10px rgba(43, 43, 45, 0.16);
+  --shadow-lg: 0 12px 32px rgba(43, 43, 45, 0.22);
+  --shadow-panel: 7px 0 24px rgba(43, 43, 45, 0.13);
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, Menlo, Monaco, Consolas, monospace;
+
+  /* Weapon tokens (T024 maps these in weaponTokens.ts) */
+  --weapon-foil-fill: #d7e3ef;
+  --weapon-foil-ink: #2c455d;
+  --weapon-foil-edge: #8fb0cd;
+  --weapon-foil-hatch: rgba(44, 69, 93, 0.16);
+  --weapon-epee-fill: #d9e6da;
+  --weapon-epee-ink: #2f4a37;
+  --weapon-epee-edge: #93b79a;
+  --weapon-epee-hatch: rgba(47, 74, 55, 0.16);
+  --weapon-sabre-fill: #f1e0d2;
+  --weapon-sabre-ink: #5a3f26;
+  --weapon-sabre-edge: #cfa887;
+  --weapon-sabre-hatch: rgba(90, 63, 38, 0.16);
 
   /* Canvas category palette (research D4) — sixteen values in four hue
      families (Youth, Cadet/Junior, Senior divisions, Veteran), lightness
@@ -89,6 +138,9 @@ body {
   margin: 0;
   background-color: var(--background);
   color: var(--foreground);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 button:not(:disabled) {
@@ -136,6 +188,50 @@ button:not(:disabled) {
   --color-info: var(--info);
   --color-info-text: var(--info-text);
   --color-accent-hover: var(--accent-hover);
+
+  /* Industry design-system ramps and chrome roles. This deliberately
+     replaces Tailwind's default neutral-100…900 utilities with the design
+     system's own ramp — a repo-wide grep found no existing use of
+     `neutral-*` classes, so nothing collides. */
+  --color-accent-100: var(--accent-100);
+  --color-accent-200: var(--accent-200);
+  --color-accent-300: var(--accent-300);
+  --color-accent-400: var(--accent-400);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+  --color-accent-700: var(--accent-700);
+  --color-accent-800: var(--accent-800);
+  --color-accent-900: var(--accent-900);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+  --color-divider: var(--divider);
+  --color-chrome: var(--chrome);
+  --color-chrome-border: var(--chrome-border);
+  --color-chrome-deep: var(--chrome-deep);
+  --color-hover-tint: var(--hover-tint);
+  --color-ok: var(--ok);
+  --color-weapon-foil-fill: var(--weapon-foil-fill);
+  --color-weapon-foil-ink: var(--weapon-foil-ink);
+  --color-weapon-foil-edge: var(--weapon-foil-edge);
+  --color-weapon-foil-hatch: var(--weapon-foil-hatch);
+  --color-weapon-epee-fill: var(--weapon-epee-fill);
+  --color-weapon-epee-ink: var(--weapon-epee-ink);
+  --color-weapon-epee-edge: var(--weapon-epee-edge);
+  --color-weapon-epee-hatch: var(--weapon-epee-hatch);
+  --color-weapon-sabre-fill: var(--weapon-sabre-fill);
+  --color-weapon-sabre-ink: var(--weapon-sabre-ink);
+  --color-weapon-sabre-edge: var(--weapon-sabre-edge);
+  --color-weapon-sabre-hatch: var(--weapon-sabre-hatch);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+  --shadow-panel: var(--shadow-panel);
 }
 
 @layer base {

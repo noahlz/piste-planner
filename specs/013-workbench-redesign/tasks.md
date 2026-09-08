@@ -484,7 +484,7 @@ reviews (FR-069).
   that follows: T015a, T015b, T044 and standing rule 13, added by the session
   that recorded the verdict, which then stopped.
 
-- [ ] **T015a** [US1] Chrome polish against the mockup (styling only, standing
+- [x] **T015a** [US1] Chrome polish against the mockup (styling only, standing
   rule 13). Reference: `docs/design/mockup/Piste Planner Workbench.dc.html`
   and `docs/design/mockup/ds-styles.css`. Port the design-system tokens the
   four chrome regions use – colour, type scale, radius, spacing, the button
@@ -502,6 +502,18 @@ reviews (FR-069).
   → Decided 2026-09-07 (handoff.md §Verdicts): type is a system-font stack
   carrying the mockup's sizes, weights, letter-spacing and line heights – no
   font file vendored or linked (plan.md: no new dependency).
+  → Done 2026-09-07: 8 files changed (src/index.css and Header, PresetPicker,
+  ExportPopover, ToolRail, UnplacedDock, StatusFooter, InspectorPanel). Shadcn
+  core variables re-pointed to the mockup's palette so every primitive
+  re-skins at once; Industry ramps --accent-100…900/--neutral-100…900 added
+  and mapped in @theme inline, replacing Tailwind's default neutral-100…900
+  (grep neutral- found no prior use); chrome roles --chrome/--chrome-border/
+  --chrome-deep/--hover-tint/--ok added; the twelve --weapon-* tokens added
+  now with the mockup's values so T024 finds them present and only writes
+  weaponTokens.ts. Export, the five rail buttons, and the panel's Dock/Float/
+  Close became icon-only with aria-label+title carrying the byte-identical
+  names. tsc clean, lint clean, 75 files / 1842 tests. SMOKE PASS, 0 console
+  errors, no driver edit; Suggest 15/63/80/48.
 
 - [ ] **T015b** [US1] **(dispatched, user judges)** Prove the polish changed
   nothing but paint. Run `scripts/smoke.mjs` once – SMOKE PASS, 0 console

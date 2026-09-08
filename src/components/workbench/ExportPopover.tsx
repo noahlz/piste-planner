@@ -89,9 +89,15 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
   return (
     <Popover defaultOpen={defaultOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline">
-          <Share2 className="mr-2 h-4 w-4" />
-          Export
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Export"
+          title="Export"
+          className="border-[1.5px] border-chrome-border bg-secondary text-neutral-700 hover:border-accent-400 hover:bg-hover-tint hover:text-accent-700"
+        >
+          <Download className="h-[17px] w-[17px]" strokeWidth={1.75} />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[28rem] space-y-4">

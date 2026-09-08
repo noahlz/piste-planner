@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { Trophy, Rows3, CalendarDays, AlertTriangle, Settings as SettingsIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PanelId } from '../../store/viewState.ts'
@@ -31,30 +32,42 @@ interface ToolRailProps {
  * (013 T009, ui-contract.md §Tool rail). Controlled — `WorkbenchShell` owns
  * `panel` so it can persist it to view state.
  *
- * The visible label under each icon *is* the accessible name (no `aria-label`
- * alongside it — that would give the button two competing names). Pressing
- * the open button closes the rail; pressing any other opens it.
+ * Icon-only (mockup `railLabels:false`) — the accessible name is `aria-label`
+ * (mirrored onto `title`), not a visible label, so no button carries two
+ * competing names. Pressing the open button closes the rail; pressing any
+ * other opens it. A decorative rule (`aria-hidden`) separates Settings from
+ * the four panel buttons above it — a styling addition, not a DOM-order
+ * change of any control.
  */
 export function ToolRail({ panel, onSelect }: ToolRailProps) {
   return (
-    <nav aria-label="Tool rail" className="flex w-16 shrink-0 flex-col border-r bg-background">
-      {BUTTONS.map(({ id, icon: Icon }) => {
+    <nav
+      aria-label="Tool rail"
+      className="flex w-[62px] shrink-0 flex-col items-center gap-[7px] border-r-[1.5px] border-chrome-border bg-chrome py-[11px]"
+    >
+      {BUTTONS.map(({ id, icon: Icon }, index) => {
         const pressed = panel === id
         const label = PANEL_TITLES[id]
         return (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={pressed}
-            onClick={() => onSelect(pressed ? null : id)}
-            className={cn(
-              'flex flex-col items-center gap-1 px-1 py-3 text-center text-[0.65rem] leading-tight text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
-              pressed && 'bg-foreground/10 text-foreground',
+          <Fragment key={id}>
+            {index === BUTTONS.length - 1 && (
+              <span aria-hidden="true" className="my-[3px] h-[1.5px] w-[31px] rounded-sm bg-chrome-border" />
             )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {label}
-          </button>
+            <button
+              type="button"
+              aria-pressed={pressed}
+              aria-label={label}
+              title={label}
+              onClick={() => onSelect(pressed ? null : id)}
+              className={cn(
+                'flex h-[46px] w-[46px] items-center justify-center rounded-[13px] border-[1.5px] border-chrome-border bg-secondary text-neutral-700 shadow-[0_1px_2px_rgba(43,43,45,.05)] hover:border-accent-400 hover:bg-hover-tint',
+                pressed &&
+                  'border-primary bg-accent-100 text-accent-800 shadow-[0_1px_3px_rgba(43,43,45,.1)] hover:border-primary hover:bg-accent-100',
+              )}
+            >
+              <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+            </button>
+          </Fragment>
         )
       })}
     </nav>

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Button } from '@/components/ui/button'
+import { PanelLeft, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PanelId } from '../../store/viewState.ts'
 
@@ -39,28 +39,42 @@ export function InspectorPanel({ panel, docked, onToggleDocked, onClose, childre
     <aside
       aria-label="Inspector panel"
       className={cn(
-        'flex w-96 flex-col bg-background',
-        docked ? 'relative shrink-0 border-r' : 'absolute top-0 left-0 z-40 h-full border-r shadow-xl',
+        'flex w-[324px] flex-col bg-chrome',
+        docked
+          ? 'relative shrink-0 border-r-[1.5px] border-chrome-border'
+          : 'absolute top-0 left-0 z-40 h-full border-r-[1.5px] border-chrome-border shadow-[var(--shadow-panel)]',
       )}
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
-        <h2 className="text-sm font-semibold text-foreground">{PANEL_TITLES[panel]}</h2>
-        <div className="flex items-center gap-1">
-          <Button
+      <div className="sticky top-0 z-[2] flex h-10 shrink-0 items-center justify-between gap-2 border-b-[1.5px] border-chrome-border bg-chrome pr-[7px] pl-3.5">
+        <h2 className="text-[11.5px] font-semibold tracking-[.06em] whitespace-nowrap uppercase">
+          {PANEL_TITLES[panel]}
+        </h2>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
             aria-pressed={docked}
+            aria-label={docked ? 'Float panel' : 'Dock panel'}
+            title={docked ? 'Float panel' : 'Dock panel'}
             onClick={onToggleDocked}
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200 hover:text-foreground',
+              docked && 'bg-accent-200 text-accent-800 hover:bg-accent-200 hover:text-accent-800',
+            )}
           >
-            {docked ? 'Float panel' : 'Dock panel'}
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Close panel
-          </Button>
+            <PanelLeft className="h-[15px] w-[15px]" strokeWidth={1.75} />
+          </button>
+          <button
+            type="button"
+            aria-label="Close panel"
+            title="Close panel"
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200 hover:text-foreground"
+          >
+            <X className="h-[15px] w-[15px]" strokeWidth={1.75} />
+          </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-3">{children}</div>
+      <div className="flex-1 overflow-y-auto p-3.5">{children}</div>
     </aside>
   )
 }

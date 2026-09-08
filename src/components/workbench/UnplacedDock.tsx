@@ -1,10 +1,24 @@
+import { Check, GripVertical } from 'lucide-react'
 import { useStore } from '../../store/store.ts'
 import { selectDerivedSchedule } from '../../store/derived.ts'
 import { findCompetition } from '../../engine/catalogue.ts'
 import { competitionLabel } from '../competitionLabels.ts'
 import { estimateEventFootprint } from '../../engine/derive.ts'
 import { formatMinutes } from '../../lib/time.ts'
+import { Weapon } from '../../engine/types.ts'
 import type { Competition, TournamentConfig } from '../../engine/types.ts'
+import { cn } from '@/lib/utils'
+
+// Weapon-tinted chip tokens (docs/design/mockup/, standing rule 13). A chip
+// whose id has no catalogue entry (shouldn't happen, but the dock reads
+// `entry?.weapon`) falls back to the neutral ramp rather than guessing a
+// weapon.
+const WEAPON_CHIP_TOKENS: Record<Weapon, string> = {
+  [Weapon.FOIL]: 'border-weapon-foil-edge bg-weapon-foil-fill text-weapon-foil-ink',
+  [Weapon.EPEE]: 'border-weapon-epee-edge bg-weapon-epee-fill text-weapon-epee-ink',
+  [Weapon.SABRE]: 'border-weapon-sabre-edge bg-weapon-sabre-fill text-weapon-sabre-ink',
+}
+const NEUTRAL_CHIP_TOKENS = 'border-neutral-400 bg-neutral-200 text-foreground'
 
 /**
  * Every selected competition with no placement, docked above the center
@@ -28,24 +42,32 @@ export function UnplacedDock() {
     .sort()
 
   return (
-    <section aria-label="Unplaced events" className="shrink-0 border-b bg-background px-4 py-2">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <section
+      aria-label="Unplaced events"
+      className="flex max-h-16 min-h-8 shrink-0 items-start gap-2.5 overflow-y-auto border-b-[1.5px] border-chrome-border bg-chrome px-3.5 py-[5px]"
+    >
+      <h2 className="shrink-0 text-[11px] font-semibold tracking-[.06em] whitespace-nowrap text-neutral-600 uppercase">
         Unplaced events
       </h2>
       {unplacedIds.length === 0 ? (
-        <p className="mt-1 text-sm text-muted-foreground">Every event has a slot.</p>
+        <p className="flex min-w-0 items-center gap-[7px] overflow-hidden text-[11.5px] whitespace-nowrap text-ellipsis text-neutral-600">
+          <Check aria-hidden="true" className="h-[13px] w-[13px] shrink-0 text-ok" strokeWidth={2} />
+          Every event has a slot.
+        </p>
       ) : (
         <>
           {lastAutoRun !== null && (
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="flex min-w-0 items-center gap-[7px] overflow-hidden text-[11.5px] whitespace-nowrap text-ellipsis text-neutral-600">
+              <Check aria-hidden="true" className="h-[13px] w-[13px] shrink-0 text-ok" strokeWidth={2} />
               {`Placed ${lastAutoRun.placed} events, ${lastAutoRun.unplaced} could not be placed.`}
             </p>
           )}
-          <div className="mt-1 flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {unplacedIds.map((id) => {
               const entry = findCompetition(id)
               const label = entry ? competitionLabel(entry) : id
               const need = footprintNeed(id, competitions, config)
+              const chipTokens = entry ? WEAPON_CHIP_TOKENS[entry.weapon] : NEUTRAL_CHIP_TOKENS
               return (
                 <button
                   key={id}
@@ -53,11 +75,15 @@ export function UnplacedDock() {
                   data-unplaced-chip
                   data-event-id={id}
                   data-weapon={entry?.weapon}
-                  className="flex flex-col items-start rounded-md border border-input bg-muted px-2 py-1 text-left text-xs text-foreground hover:bg-accent"
+                  className={cn(
+                    'inline-flex h-[26px] shrink-0 items-center gap-[7px] rounded-full border-[1.5px] px-[11px] text-[11.5px] font-semibold whitespace-nowrap',
+                    chipTokens,
+                  )}
                 >
-                  <span>{label}</span>
+                  <GripVertical aria-hidden="true" className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+                  <span className="min-w-0 max-w-[200px] overflow-hidden text-ellipsis">{label}</span>
                   {need !== null && (
-                    <span className="text-[10px] text-muted-foreground">{need}</span>
+                    <span className="font-mono text-[10px] font-semibold opacity-[.62]">{need}</span>
                   )}
                 </button>
               )
