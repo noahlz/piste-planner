@@ -32,11 +32,18 @@ import type { BlockPlacement } from '../../layout/lanes.ts'
  * on any of them. A tooltip whose contents changed with the zoom would make the
  * organizer zoom to read it.
  *
- * ## Neither layer takes the pointer
+ * ## No layer takes the pointer — and there are three of them
  *
  * The anchor and the content are both `pointer-events: none`. The anchor sits
  * under the pointer by construction, and Radix's own hover handling on either
  * would fight the canvas handler that actually owns the gesture.
+ *
+ * Between the portal and the content sits a third layer this file does not
+ * render: Radix's positioning wrapper, `div[data-radix-popper-content-wrapper]`.
+ * It takes no `className` and Radix exposes no prop for it, so it stayed
+ * hit-testable while the two layers around it did not — see
+ * `releasePopperWrapper` below for why that closed the tooltip it had just
+ * opened.
  */
 
 /** Everything the tooltip shows, resolved by the canvas for one hovered block. */
@@ -52,6 +59,30 @@ export interface CanvasTooltipTarget {
   /** Where the anchor sits, in viewport-relative pixels. */
   anchorX: number
   anchorY: number
+}
+
+/**
+ * Takes Radix's positioning wrapper out of hit testing.
+ *
+ * `MatrixCanvas` owns the hover gesture and clears it on the viewport's
+ * `pointerleave`, so *any* element that takes the pointer over the canvas
+ * closes the tooltip. `side="top"` keeps the content itself clear of the
+ * pointer only while there is room above the block: near the top of the plot
+ * Radix's collision detection flips the content to `bottom`, and the wrapper's
+ * rect then covers the pointer resting on the block it describes. The viewport
+ * gets `pointerleave` with `relatedTarget` reading
+ * `<div data-radix-popper-content-wrapper>`, `hovered` goes to null, and the
+ * tooltip closes about 20ms after it opened — with the pointer never having
+ * moved.
+ *
+ * Written imperatively because the wrapper is Radix's own element: it accepts
+ * no `className` and no `style`, and the only handle on it is the content ref
+ * React runs once the content is in the DOM. Radix never puts `pointer-events`
+ * in that wrapper's style object on the open path, so React's style diffing has
+ * nothing here to overwrite.
+ */
+function releasePopperWrapper(content: HTMLDivElement | null): void {
+  content?.parentElement?.style.setProperty('pointer-events', 'none')
 }
 
 export function CanvasTooltip({ target }: { target: CanvasTooltipTarget | null }) {
@@ -76,6 +107,7 @@ export function CanvasTooltip({ target }: { target: CanvasTooltipTarget | null }
             — the content would stay out of the DOM even if `open` were stuck
             true. */}
         <TooltipContent
+          ref={releasePopperWrapper}
           side="top"
           align="center"
           className="pointer-events-none block max-w-sm items-start text-left"

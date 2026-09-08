@@ -358,6 +358,7 @@ reviews (FR-069).
   `{ placed: 12, unplaced: 3, pinned: 0 }` – the lane packer's first fit
   cannot place 3 of 24 drawn segments the scheduler placed; two packers over
   the same strips do not always agree. Recorded, not corrected.
+  → Review fix before T014: selectPlacementCounts counts overflowing events once and excludes them from placed (data-model §10's "whatever the store says"), so placed + unplaced equals the selected count; B5 re-measured as { placed: 9, unplaced: 3, pinned: 0 }. Header.test's tournament case now drives the real picker; its export case renders the header.
 
 - [x] **T012** [US1] The dock (FR-010, FR-011). Red first:
   `__tests__/components/workbench/UnplacedDock.test.tsx` re-targets
@@ -412,7 +413,7 @@ reviews (FR-069).
   75 files / 1837 tests green (1856→1837: the 20 deleted highlight cases less
   1 net new WorkbenchShell case), tsc and lint clean.
 
-- [ ] **T014** [US1] **(dispatched)** Re-point `scripts/smoke.mjs` for phase 1,
+- [x] **T014** [US1] **(dispatched)** Re-point `scripts/smoke.mjs` for phase 1,
   in place ([research D14](./research.md)): `button` "Save / Share" at `:181`,
   `:547`, `:559`, `:685`, `:692` → `button` "Export", then "Generate Link" and
   `input[readonly]` as before; the scorecard steps at `:210–279` → read
@@ -430,6 +431,30 @@ reviews (FR-069).
   `radio` "Matrix" / "Schedule" steps stay, now inside the footer. Run the
   driver twice; report SMOKE PASS/FAIL for both, every Suggest count read, and
   the console error count, which must be 0 *(subagent commits)*
+  → Done 2026-09-07: SMOKE PASS twice, identical both runs. Suggest counts —
+  ROC Div1A/Vet 15, NAC Youth 63, NAC Vet/Div1/Junior 80, NAC Cadet/Junior 48.
+  Boot placed 24/24 on the schedule table vs the footer's `19 placed / 5
+  unplaced / 0 pinned` (logged, not asserted equal — the lane packer and the
+  scheduler can disagree). Console errors: 0 both runs. First run hit a real
+  defect, not a locator: the FR-022 tooltip opened then closed ~20ms later on
+  every hover after any preset switch (reproduced 15/15 attempts, isolated to
+  Radix's Popper wrapper being hit-testable and intercepting the viewport's
+  `onPointerLeave`) — fixed in `CanvasTooltip.tsx` by an Opus debugger and
+  carried on this same checkpoint, not by this task. Also found and fixed:
+  page3 (the Admin-gap share round-trip) shares `ctx`'s `localStorage` with
+  `page`, so `viewState.ts`'s `panel` was already "settings" on load and an
+  unconditional `Settings` click closed it instead of opening it — `openPanel`
+  now takes an optional target page so page3 gets the same aria-pressed guard.
+  Deleted assertions: the scorecard's expanded/collapsed row-id lists and the
+  FR-029 hover-highlight block (both retired by D7, no footer equivalent to
+  assert). Changed: the strip-count delta assertion now bumps strips through
+  the Strips & referees panel and reads the footer's `strips` metric plus the
+  header's `data-summary`, instead of a scorecard `[data-metric-delta]`; the
+  Settings mutual-exclusion assertion against "Save / Share" was kept, reworded
+  for Export's Popover-dismisses-on-outside-click behavior, since it still
+  holds. Added a `closePanel()` helper: the floating Inspector panel overlaps
+  the canvas's left edge and intercepted the tooltip hover before it was
+  closed first.
 
 - [ ] **T015** [US1] **(user judges)** The product owner's screenshot (FR-069,
   SC-001, quickstart §3). Dispatch the `live-smoke` skill to run the app, load

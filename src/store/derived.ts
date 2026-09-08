@@ -339,6 +339,20 @@ function computePlacementCounts(
   state: StoreState,
   flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
 ): PlacementCounts {
+  // An event the packer could not fit is unplaced from the canvas's point of
+  // view even though its own placement is in range (data-model.md §10: "an
+  // event the packer could not fit is unplaced whatever the store says") — so
+  // it counts once, in `unplaced`, and is excluded from `placed`, never both.
+  // A single event can emit up to three segments (`eventTimeSegments`), so
+  // this is keyed by competition id, not block count, or one event with two
+  // overflowing segments would count twice.
+  const schedule = selectDerivedSchedule(state, flightingSuggestions)
+  const overflowing = new Set(
+    assignStripLanes(schedule.events, state.strips_total)
+      .filter((block) => block.overflow)
+      .map((block) => block.competitionId),
+  )
+
   let placed = 0
   let unplaced = 0
   let pinned = 0
@@ -347,18 +361,12 @@ function computePlacementCounts(
     const placement = state.placements[id]
     const inRange =
       placement !== undefined && placement.day >= 0 && placement.day < state.days_available
-    if (inRange) placed++
-    else unplaced++
+    if (inRange && !overflowing.has(id)) placed++
+    else if (!inRange) unplaced++
     if (placement?.pinned) pinned++
   }
 
-  // A block the lane packer could not fit is unplaced from the canvas's point
-  // of view even though its own placement is in range — the schedule says
-  // where the event belongs, the canvas says there was no room to draw it.
-  const schedule = selectDerivedSchedule(state, flightingSuggestions)
-  unplaced += assignStripLanes(schedule.events, state.strips_total).filter(
-    (block) => block.overflow,
-  ).length
+  unplaced += overflowing.size
 
   return { placed, unplaced, pinned }
 }

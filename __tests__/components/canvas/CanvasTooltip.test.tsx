@@ -259,6 +259,48 @@ describe('CanvasTooltip findings (FR-022)', () => {
 })
 
 /**
+ * Three layers sit over the canvas when the tooltip is open, not two: the
+ * anchor, the content, and Radix's own portalled positioning wrapper between
+ * the portal and the content. The first two carry `pointer-events-none` in
+ * their class lists; the wrapper is Radix's element and takes no className, so
+ * it stayed hit-testable.
+ *
+ * That is not cosmetic. `MatrixCanvas` clears its hover on the viewport's
+ * `pointerleave`, so any element that takes the pointer over the canvas closes
+ * the tooltip. `side="top"` keeps the content clear of the pointer only while
+ * there is room above the block; near the top of the plot Radix's collision
+ * detection flips it to `bottom`, the wrapper's rect covers the pointer resting
+ * on the block, and the tooltip closes about 20ms after it opened — measured in
+ * Chrome, where `pointerleave` arrived with both `relatedTarget` and
+ * `elementFromPoint` reading `<div data-radix-popper-content-wrapper>`.
+ *
+ * jsdom lays nothing out and so cannot flip a side or hit-test a rect. What it
+ * can hold is the invariant the flip exposes: no layer of this tooltip takes
+ * the pointer, whatever the geometry does.
+ */
+describe('no layer of the tooltip takes the pointer (research D3)', () => {
+  it('leaves Radix’s positioning wrapper transparent to the pointer, as the anchor and content are', () => {
+    render(<CanvasTooltip target={makeTarget()} />)
+
+    const content = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]')
+    if (!content) throw new Error('tooltip content not rendered')
+
+    const wrapper = content.parentElement
+    expect(wrapper?.hasAttribute('data-radix-popper-content-wrapper')).toBe(true)
+    expect(wrapper?.style.pointerEvents).toBe('none')
+  })
+
+  it('keeps the anchor and the content transparent too', () => {
+    render(<CanvasTooltip target={makeTarget()} />)
+
+    const anchor = document.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]')
+    const content = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]')
+    expect(anchor?.className).toContain('pointer-events-none')
+    expect(content?.className).toContain('pointer-events-none')
+  })
+})
+
+/**
  * The tooltip's fields are unconditional — it is handed no width, no row height
  * and no record of what the block managed to draw, so no row can be gated on
  * any of them. The pair below is the contrast that makes that a claim rather

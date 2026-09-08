@@ -5,7 +5,6 @@ import { useStore } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
 import { PresetPicker } from '../../../src/components/workbench/PresetPicker.tsx'
-import { ExportPopover } from '../../../src/components/workbench/ExportPopover.tsx'
 import { SCENARIO_IDS, SCENARIOS } from '../../../src/data/tournaments.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 
@@ -23,6 +22,16 @@ function seedValidConfig(): void {
   useStore.getState().setDays(3)
   useStore.getState().setStrips(12)
   useStore.getState().setVideoStrips(2)
+}
+
+/**
+ * Renders the real `PresetPicker` (pre-opened — jsdom has no pointer capture
+ * for Radix Select to open on a click) and drives its combobox, the same path
+ * a user takes, rather than calling `applyPreset`/`runScheduleAll` directly.
+ */
+function choosePreset(optionName: string): void {
+  render(<PresetPicker defaultOpen />)
+  fireEvent.keyDown(screen.getByRole('option', { name: optionName }), { key: 'Enter' })
 }
 
 describe('Header regions', () => {
@@ -48,11 +57,12 @@ describe('Header preset picker', () => {
 
   it('choosing a tournament applies its fixture, runs Auto-assign, and records loadedPresetId', () => {
     seedValidConfig()
-    applyPreset('B2')
-    runScheduleAll()
+    choosePreset(SCENARIOS.B2.label)
 
+    expect(useStore.getState().strips_total).toBe(SCENARIOS.B2.strips)
     expect(useStore.getState().loadedPresetId).toBe('B2')
     expect(Object.keys(useStore.getState().placements).length).toBeGreaterThan(0)
+    expect(useStore.getState().lastAutoRun).not.toBeNull()
   })
 
   it('choosing a template records its name, runs Auto-assign, and leaves tournament_type unchanged', () => {
@@ -63,9 +73,7 @@ describe('Header preset picker', () => {
     useStore.getState().setStrips(40)
     useStore.getState().setVideoStrips(12)
     useStore.getState().setTournamentType('RYC')
-    render(<PresetPicker defaultOpen />)
-
-    fireEvent.keyDown(screen.getByRole('option', { name: 'RJCC Weekend' }), { key: 'Enter' })
+    choosePreset('RJCC Weekend')
 
     expect(useStore.getState().loadedPresetId).toBe('RJCC Weekend')
     expect(useStore.getState().tournament_type).toBe('RYC')
@@ -126,7 +134,10 @@ describe('Header Auto-assign', () => {
 
 describe('Header export', () => {
   it('opens the Export popover, showing Save to File', () => {
-    render(<ExportPopover defaultOpen />)
+    render(<Header />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
     expect(screen.getByRole('button', { name: 'Save to File' })).toBeInTheDocument()
   })
 })
