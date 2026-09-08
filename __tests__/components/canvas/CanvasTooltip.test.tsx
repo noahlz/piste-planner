@@ -280,6 +280,11 @@ describe('CanvasTooltip findings (FR-022)', () => {
  * the pointer, whatever the geometry does.
  */
 describe('no layer of the tooltip takes the pointer (research D3)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
   it('leaves Radix’s positioning wrapper transparent to the pointer, as the anchor and content are', () => {
     render(<CanvasTooltip target={makeTarget()} />)
 
@@ -315,8 +320,21 @@ describe('no layer of the tooltip takes the pointer (research D3)', () => {
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0]?.[0]).toContain('CanvasTooltip')
     expect(parent.style.pointerEvents).toBe('')
+  })
 
-    warn.mockRestore()
+  it('stays silent outside dev and leaves the parent untouched the same way', () => {
+    // import.meta.env.DEV is read inside releasePopperWrapper at call time, not
+    // cached at module load, so stubbing it here reaches the guard above.
+    vi.stubEnv('DEV', false)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parent = document.createElement('div')
+    const content = document.createElement('div')
+    parent.appendChild(content)
+
+    releasePopperWrapper(content)
+
+    expect(warn).not.toHaveBeenCalled()
+    expect(parent.style.pointerEvents).toBe('')
   })
 })
 
