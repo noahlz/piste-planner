@@ -76,6 +76,16 @@
     reach a predicted number.
 12. **Every time shown is 24-hour** (FR-041). No affordance suggests a block
     drags (FR-043). No new dependency (plan.md §Technical Context).
+13. **Every surface is styled to the mockup as it is built** (T015 verdict,
+    `handoff.md` §Verdicts). The reference is `docs/design/mockup/` – the
+    Claude Design file and its design-system CSS. Phase 2's panels, phase 3's
+    canvas, phase 4's detail strip, phase 5's findings panel and phase 7's
+    schedule view take their colour, type, spacing, radius and button variants
+    from the tokens in `src/index.css`, named as the mockup names them, never
+    from ad-hoc Tailwind colour classes. Styling only: where the mockup and
+    the alignment record's §9 disagree on structure, §9 wins (D6 keeps the
+    Matrix ⇄ Schedule toggle). A polish task never changes an accessible name,
+    role, `data-*` attribute or DOM order.
 
 ## Decisions made while writing this file
 
@@ -456,7 +466,7 @@ reviews (FR-069).
   the canvas's left edge and intercepted the tooltip hover before it was
   closed first.
 
-- [ ] **T015** [US1] **(user judges)** The product owner's screenshot (FR-069,
+- [x] **T015** [US1] **(user judges)** The product owner's screenshot (FR-069,
   SC-001, quickstart §3). Dispatch the `live-smoke` skill to run the app, load
   B1 at 80 strips, and save full-window screenshots at 1440×900 and 1920×1080
   under `scripts/smoke-shots/`. Send both to the product owner and **stop**.
@@ -465,9 +475,44 @@ reviews (FR-069).
   board at 100%. Record the verdict in `handoff.md` §Verdicts. **A "no" halts
   phase 3 until the look is revised**, and the revision is a re-plan – record
   it, hand back a resume prompt, stop (constitution §Orchestration)
+  → Done 2026-09-07: `scripts/screenshot.mjs` added as a repo artifact (reuses
+  the driver's Chrome discovery, viewport shots per size in its `SIZES`
+  list); B1 shots at 1440×900 and 1920×1080 sent, 0 console errors. Verdict:
+  **yes, with a polish pass** – recorded in `handoff.md` §Verdicts with the
+  decisions taken (chrome now and everything at close-out; styling only; the
+  mockup copied into `docs/design/mockup/`). The polish pass is the re-plan
+  that follows: T015a, T015b, T044 and standing rule 13, added by the session
+  that recorded the verdict, which then stopped.
+
+- [ ] **T015a** [US1] Chrome polish against the mockup (styling only, standing
+  rule 13). Reference: `docs/design/mockup/Piste Planner Workbench.dc.html`
+  and `docs/design/mockup/ds-styles.css`. Port the design-system tokens the
+  four chrome regions use – colour, type scale, radius, spacing, the button
+  variants – into `src/index.css` as CSS variables named as the mockup names
+  them, and restyle `Header.tsx`, `ToolRail.tsx`, `UnplacedDock.tsx` and
+  `StatusFooter.tsx` (and `PresetPicker.tsx`, `ExportPopover.tsx`'s trigger,
+  `InspectorPanel.tsx`'s chrome) to the mockup's look, including the Export
+  button, which today renders white-on-white. Delete every ad-hoc Tailwind
+  colour class a token replaces in the same commit (rule 4). No accessible
+  name, role, `data-*` attribute or DOM order changes – `scripts/smoke.mjs`
+  must pass without a locator edit, and that is the assertion this task is
+  held to. Existing component tests stay green; any test that pinned a phase-1
+  class string is re-targeted at the token in the same task; no new test is
+  written for a colour. `tsc -b` and `lint` clean *(subagent commits)*
+  → Decided 2026-09-07 (handoff.md §Verdicts): type is a system-font stack
+  carrying the mockup's sizes, weights, letter-spacing and line heights – no
+  font file vendored or linked (plan.md: no new dependency).
+
+- [ ] **T015b** [US1] **(dispatched, user judges)** Prove the polish changed
+  nothing but paint. Run `scripts/smoke.mjs` once – SMOKE PASS, 0 console
+  errors, no driver edit – then `scripts/screenshot.mjs` and send both shots to
+  the product owner. They judge against the mockup at a glance; a "no" is not
+  a halt but a list of what still differs, recorded under the T015 verdict in
+  `handoff.md` §Verdicts and carried into T044's scope
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. US1 is the MVP: the
-shell stands on the old panels and every old chrome surface is gone.
+shell stands on the old panels and every old chrome surface is gone, and the
+chrome wears the mockup's tokens.
 
 ---
 
@@ -956,6 +1001,20 @@ placed event once at the canvas's times, and printing yields four pages.
 
 ## Phase 8: Close-out
 
+- [ ] **T044** Close-out polish against the mockup (styling only, standing
+  rule 13; the second half of the T015 verdict). With every surface built,
+  walk the mockup region by region – header, rail, each of the five panels,
+  the dock, the canvas and its blocks, the detail strip, the findings panel,
+  the footer, the Schedule view – and bring each to the mockup's tokens,
+  type, spacing and radius where a phase left it short, plus whatever T015b's
+  verdict listed. Delete the ad-hoc colour classes each change replaces. Same
+  holds as T015a: no accessible name, role, `data-*` or DOM-order change, the
+  driver passes without a locator edit, existing tests stay green, `tsc -b`
+  and `lint` clean. End by running `scripts/screenshot.mjs` and sending the
+  shots to the product owner; their verdict goes in `handoff.md` §Verdicts
+  beside T015's. Runs before T039 so the live smoke validates it
+  *(subagent commits)*
+
 - [ ] **T037** [P] Design-document edits (FR-070). In
   `docs/design/competition-planner-workbench.md`: §Virtualization (`:161`)
   records that 013 removed windowing deliberately – native scrolling and
@@ -1028,7 +1087,7 @@ placed event once at the canvas's times, and printing yields four pages.
 ```
 T001 → T002 → T003 → T004
                        ↓
-[US1: T005 ‖ T006 ‖ T007 ‖ T008 → T009 → T010 → T011 → T012 → T013 → T014 → T015 (user judges)]
+[US1: T005 ‖ T006 ‖ T007 ‖ T008 → T009 → T010 → T011 → T012 → T013 → T014 → T015 (user judges) → T015a → T015b (user judges)]
                        ↓
 [US2: T016 ‖ T017 → T018 → T019 → T020 → T021 → T022 → T023]
                        ↓  (blocked by T015 = "yes")
@@ -1042,7 +1101,7 @@ T001 → T002 → T003 → T004
                        ↓
 [US7: T036]
                        ↓
-T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043
+T044 (user judges) → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043
 ```
 
 Stories run in this order and do not interleave (plan.md §Why this order):
@@ -1059,6 +1118,8 @@ Every drift-bearing task (T005, T034, T035) is the only change in its diff.
 |---|---|---|
 | T026, T031, T034, T035 | Opus | The canvas rewrite, the unified findings selector, the engine change and the ledger review are the places a wrong call stays green (plan.md §Constitution Check, Orchestration) |
 | T014, T023, T027, T039 | either, dispatched | Locator repair iterates |
+| T015b | Sonnet, dispatched | Runs the driver and the screenshot script; the judgment is the product owner's |
+| T015a, T044 | Sonnet | Styling to a reference the file names; the driver passing unchanged is the check |
 | T038 | orchestrator | Read-only grep |
 | T015, T041 | the product owner | Screenshot and print are human judgments |
 | all others | Sonnet | The decisions are in this file, the research and the contracts; the work is carrying them out |
@@ -1071,6 +1132,9 @@ Every drift-bearing task (T005, T034, T035) is the only change in its diff.
 - `appPathParity.test.ts` failing after T020 or T022, which means the shrink
   changed what a default store sends the engine.
 - A "no" from the product owner in T015, which halts phase 3.
+- A polish task (T015a, T044) that changes an accessible name, role, `data-*`
+  attribute or DOM order, or that needs a driver locator edited to pass
+  (standing rule 13).
 - A retired name surviving its phase's grep (standing rule 4).
 - A driver locator repaired by rewriting the driver rather than re-pointing
   it, or a `pressSuggest` call lost (FR-067).
