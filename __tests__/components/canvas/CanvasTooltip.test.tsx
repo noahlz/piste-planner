@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, cleanup, fireEvent } from '@testing-library/react'
 import {
   CanvasTooltip,
+  releasePopperWrapper,
   type CanvasTooltipTarget,
 } from '../../../src/components/canvas/CanvasTooltip.tsx'
 import { EventBlock } from '../../../src/components/canvas/EventBlock.tsx'
@@ -297,6 +298,25 @@ describe('no layer of the tooltip takes the pointer (research D3)', () => {
     const content = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]')
     expect(anchor?.className).toContain('pointer-events-none')
     expect(content?.className).toContain('pointer-events-none')
+  })
+
+  it('warns in dev and leaves the parent untouched when the Radix wrapper is not there to release', () => {
+    // Called directly, off a plain div rather than a rendered Radix tree: the
+    // shape `releasePopperWrapper` depends on — a parent carrying
+    // `data-radix-popper-content-wrapper` — is Radix's to change without
+    // notice, and this is the case where it has.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parent = document.createElement('div')
+    const content = document.createElement('div')
+    parent.appendChild(content)
+
+    releasePopperWrapper(content)
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[0]).toContain('CanvasTooltip')
+    expect(parent.style.pointerEvents).toBe('')
+
+    warn.mockRestore()
   })
 })
 

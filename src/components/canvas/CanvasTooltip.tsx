@@ -40,9 +40,9 @@ import type { BlockPlacement } from '../../layout/lanes.ts'
  *
  * Between the portal and the content sits a third layer this file does not
  * render: Radix's positioning wrapper, `div[data-radix-popper-content-wrapper]`.
- * It takes no `className` and Radix exposes no prop for it, so it stayed
- * hit-testable while the two layers around it did not — see
- * `releasePopperWrapper` below for why that closed the tooltip it had just
+ * It takes no `className` and `@radix-ui/react-popper@1.2.8` exposes no prop
+ * for it, so it stayed hit-testable while the two layers around it did not —
+ * see `releasePopperWrapper` below for why that closed the tooltip it had just
  * opened.
  */
 
@@ -77,12 +77,40 @@ export interface CanvasTooltipTarget {
  *
  * Written imperatively because the wrapper is Radix's own element: it accepts
  * no `className` and no `style`, and the only handle on it is the content ref
- * React runs once the content is in the DOM. Radix never puts `pointer-events`
- * in that wrapper's style object on the open path, so React's style diffing has
- * nothing here to overwrite.
+ * React runs once the content is in the DOM. Radix (`@radix-ui/react-popper@1.2.8`)
+ * never puts `pointer-events` in that wrapper's style object on the open path,
+ * so React's style diffing has nothing here to overwrite.
+ *
+ * That survives only because `TooltipContent` below never passes
+ * `hideWhenDetached`. With it true, `@radix-ui/react-popper@1.2.8` writes
+ * `pointerEvents` into the wrapper's own style object once the anchor goes
+ * off-screen (`react-popper`'s `index.mjs:161-164`), and React's style diffing
+ * then clears that key the next time the anchor is back on-screen — wiping
+ * this override along with it. Anyone adding that prop reintroduces the
+ * closing bug.
+ *
+ * Exported for its own test: the DOM shape it depends on — a wrapper carrying
+ * `data-radix-popper-content-wrapper` — is Radix's to change without notice,
+ * so a change of shape warns in dev rather than silently leaving the tooltip
+ * closable again.
  */
-function releasePopperWrapper(content: HTMLDivElement | null): void {
-  content?.parentElement?.style.setProperty('pointer-events', 'none')
+// The ref callback belongs with the component whose content ref it runs on,
+// and the test above imports it from here. Splitting it out to satisfy fast
+// refresh would put the Radix workaround and the markup it governs in two files.
+// eslint-disable-next-line react-refresh/only-export-components
+export function releasePopperWrapper(content: HTMLDivElement | null): void {
+  const wrapper = content?.parentElement
+  if (content && !wrapper?.hasAttribute('data-radix-popper-content-wrapper')) {
+    if (import.meta.env.DEV) {
+      console.warn(
+        '[CanvasTooltip] expected the tooltip content\'s parent to be Radix\'s ' +
+          '`div[data-radix-popper-content-wrapper]`, but it was not found. The ' +
+          'tooltip may close under the pointer.',
+      )
+    }
+    return
+  }
+  wrapper?.style.setProperty('pointer-events', 'none')
 }
 
 export function CanvasTooltip({ target }: { target: CanvasTooltipTarget | null }) {
