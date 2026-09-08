@@ -45,10 +45,10 @@ describe('TYPE_DEFAULTS', () => {
 
 /**
  * 004 T068 finding 3. The `null` → type-default resolution had three
- * independent copies — `buildConfig.ts:60`, `AdvancedPanel.tsx:49`, and
- * `StripSetup.tsx:53`, the last of which resolved to `0` instead of the type's
- * row and made the rail state two different counts from one field. Constitution
- * §Planning Artifacts gives the rule one home; this suite is its contract.
+ * independent copies across the store bridge and two rail sections, one of
+ * which resolved to `0` instead of the type's row and made the rail state two
+ * different counts from one field. Constitution §Planning Artifacts gives the
+ * rule one home; this suite is its contract.
  */
 describe('resolveVideoStrips', () => {
   it.each(Object.values(TournamentType))(

@@ -59,7 +59,7 @@ export interface TournamentSlice {
   updateDayConfig: (dayIndex: number, partial: Partial<DayConfig>) => void
   setStrips: (total: number) => void
   setVideoStrips: (total: number | null) => void
-  suggestStrips: () => Promise<void>
+  computeSuggestedStrips: () => Promise<number | null>
   setPoolRoundDuration: (weapon: Weapon, minutes: number) => void
   resetPoolRoundDuration: (weapon: Weapon) => void
 }
@@ -245,19 +245,20 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
       set({ video_strips_total: total })
     },
 
-    suggestStrips: async () => {
+    computeSuggestedStrips: async () => {
       // The search is domain math and lives in the engine (constitution I,
       // research.md D1): `stripSearch.ts` finds the smallest strip count that
       // places every event, replacing the ceiling-only rule this action used
       // to write directly. `buildTournamentConfig` is read once, up front —
       // the whole search runs against that snapshot, not against whatever the
-      // organizer might change while it's mid-flight.
+      // organizer might change while it's mid-flight. This action only answers
+      // the question — the caller writes the result through `setStrips`
+      // (research.md D8, FR-017).
       const { config, competitions } = buildTournamentConfig(get())
       const range = stripSearchRange(competitions, config)
-      // `null` is the absence of an answer, not zero (FR-010). Nothing here can
-      // be sized, so the strip field keeps whatever the organizer already has —
-      // writing 0 would look like a deliberate configuration.
-      if (range === null) return
+      // `null` is the absence of an answer, not zero (FR-010): nothing here can
+      // be sized.
+      if (range === null) return null
 
       // The scan is bounded by construction (constitution IV, `stripSearch.ts`
       // — `ceiling − floor + 1` iterations, fixed before the loop starts), so
@@ -271,13 +272,7 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
         step = scan.next()
       }
 
-      // Written once, at the end (FR-010): no candidate along the way ever
-      // reaches `strips_total`, only the search's final answer does — and a
-      // `null` answer (no count in range placed everything) leaves the field
-      // untouched, same as an absent range above.
-      if (step.value !== null) {
-        set({ strips_total: step.value })
-      }
+      return step.value
     },
 
     setPoolRoundDuration: (weapon, minutes) => {

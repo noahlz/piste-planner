@@ -107,46 +107,44 @@ describe('tournamentSlice', () => {
     })
   })
 
-  // The **Suggest** button's action (`StripSetup.tsx:25`). 012 T007 replaced
-  // the ceiling-only rule with the search from `stripSearch.ts`: the button
-  // now drives `scanStripCounts` to the smallest strip count that places every
-  // event, asynchronously so the browser can paint between candidates
-  // (research.md D5). What is pinned here is the wiring, the async contract,
-  // the single terminal write (FR-010), and the `null` cases — the search's
-  // own arithmetic belongs to `__tests__/engine/stripSearch.test.ts`.
-  describe('suggestStrips', () => {
+  // The strip search action, called from the Tournament panel (research.md
+  // D8, FR-017). 012 T007 replaced the ceiling-only rule with the search from
+  // `stripSearch.ts`; 013 T017 split writing out of it — the action now only
+  // answers the question, and the panel's Apply is what calls `setStrips` with
+  // the resolved number (FR-017). What is pinned here is the wiring, the
+  // async contract, that the field is never written by the search itself, and
+  // the `null` cases — the search's own arithmetic belongs to
+  // `__tests__/engine/stripSearch.test.ts`.
+  describe('computeSuggestedStrips', () => {
     // Shared by every test below that needs a board the search can size: 2
-    // days, one 70-fencer event selected. The `[M]` comment on the ceiling
-    // above documents what this fixture measures to — 10 strips.
+    // days, one 70-fencer event selected. The `[M]` comment below documents
+    // what this fixture measures to — 10 strips.
     function seedLargeFoilEvent() {
       useStore.getState().setDays(2)
       useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
       useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
     }
 
-    it("returns a promise that resolves with the search's own answer", async () => {
+    it("resolves to the search's own answer for the current config", async () => {
       seedLargeFoilEvent()
 
-      const pending = useStore.getState().suggestStrips()
+      const pending = useStore.getState().computeSuggestedStrips()
       expect(pending).toBeInstanceOf(Promise)
-      await pending
+      const result = await pending
 
-      // `buildTournamentConfig` is read after the promise resolves so its
-      // `strips_total` reflects the write the action just made — the search's
-      // answer does not depend on that field either way.
       const { config, competitions } = buildTournamentConfig(useStore.getState())
-      expect(useStore.getState().strips_total).toBe(searchStripCount(competitions, config))
+      expect(result).toBe(searchStripCount(competitions, config))
       // `[M]` measured directly against the fixture: 70 fencers → 10 pools is
       // the smallest count that places every event. 13 was the old rule's
       // ceiling — `suggestStripCount` sizes for the busiest day running at
       // once, not for placing everything, and asserted as the upper bound below.
-      expect(useStore.getState().strips_total).toBe(10)
+      expect(result).toBe(10)
     })
 
     it('never suggests above the old ceiling rule (FR-007)', async () => {
       seedLargeFoilEvent()
 
-      await useStore.getState().suggestStrips()
+      const result = await useStore.getState().computeSuggestedStrips()
 
       const { config, competitions } = buildTournamentConfig(useStore.getState())
       const ceiling = suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct)
@@ -154,31 +152,33 @@ describe('tournamentSlice', () => {
       // ceiling is a real number here — narrowed for `toBeLessThanOrEqual`,
       // which does not accept `number | null`.
       expect(ceiling).not.toBeNull()
-      expect(useStore.getState().strips_total).toBeLessThanOrEqual(ceiling as number)
+      expect(result).toBeLessThanOrEqual(ceiling as number)
     })
 
-    it('leaves strips_total alone when no competition is selected — never writes 0', async () => {
+    it('resolves null when no competition is selected — never writes 0', async () => {
       useStore.getState().setStrips(24)
 
-      await useStore.getState().suggestStrips()
+      const result = await useStore.getState().computeSuggestedStrips()
 
       // FR-010: the absence of an answer is not the number zero. A 0 here
       // would read as a deliberate configuration and fail validation.
+      expect(result).toBeNull()
       expect(useStore.getState().strips_total).toBe(24)
     })
 
-    it('leaves strips_total alone when every selected event has no fencers entered', async () => {
+    it('resolves null when every selected event has no fencers entered', async () => {
       useStore.getState().setStrips(24)
       // `selectCompetitions` seeds `fencer_count: 0` — the state the button is
       // in the moment an organizer picks events and has not typed counts yet.
       useStore.getState().selectCompetitions(['D1-M-FOIL-IND', 'D1-W-FOIL-IND'])
 
-      await useStore.getState().suggestStrips()
+      const result = await useStore.getState().computeSuggestedStrips()
 
+      expect(result).toBeNull()
       expect(useStore.getState().strips_total).toBe(24)
     })
 
-    it('writes strips_total exactly once, at the end (FR-010)', async () => {
+    it('never writes strips_total itself (FR-017) — the caller writes through setStrips', async () => {
       seedLargeFoilEvent()
       useStore.getState().setStrips(24)
 
@@ -190,18 +190,19 @@ describe('tournamentSlice', () => {
       // Guarded so a failing assertion below can never leak this subscription
       // into later tests — `beforeEach` resets the store but not this listener.
       try {
-        const pending = useStore.getState().suggestStrips()
-        // Checked synchronously, before any await: nothing has written yet, no
-        // matter how many candidates the search evaluates.
+        await useStore.getState().computeSuggestedStrips()
+
         expect(seen).toEqual([])
         expect(useStore.getState().strips_total).toBe(24)
-
-        await pending
-
-        expect(seen).toEqual([useStore.getState().strips_total])
       } finally {
         unsubscribe()
       }
+    })
+
+    it('setStrips is what changes strips_total', () => {
+      useStore.getState().setStrips(10)
+
+      expect(useStore.getState().strips_total).toBe(10)
     })
   })
 

@@ -206,26 +206,25 @@ async function choosePreset(name) {
   await page.getByRole('option', { name, exact: true }).click()
 }
 
-// 012 T007/T013 made suggestStrips asynchronous (research.md D5) and the
-// Suggest button `disabled` while it runs; the reveal indicator ("Searching
-// for…") is not a signal because a board that finishes inside the 100ms
-// reveal delay never shows it. "Number of strips" also matches three elements
-// unless scoped to the spinbutton role, and only exists once the Strips &
-// referees panel is open. This presses Suggest and polls, bounded, until the
-// button re-enables and the field's value has moved off its pre-press
-// reading, rather than racing the action with a fixed wait.
+// 013 T018 replaced the Suggest button with a search that runs on open and on
+// a debounce, answering into a "Suggested minimum" card the organizer applies
+// by hand (research.md D8) — the strip field itself never moves until Apply
+// is pressed. This opens the panel, polls (bounded) for
+// `[data-suggested-strips]` to hold a number rather than the panel's initial
+// em-dash, presses Apply, and returns the stepper's resulting value.
 async function pressSuggest(stepName) {
   await openPanel('Strips & referees')
-  const field = page.getByRole('spinbutton', { name: 'Number of strips' })
-  const before = await field.inputValue()
-  await page.getByRole('button', { name: 'Suggest' }).first().click()
+  const suggested = page.locator('[data-suggested-strips]')
   for (let i = 0; i < 60; i++) {
-    const button = page.getByRole('button', { name: 'Suggest' }).first()
-    const [disabled, value] = await Promise.all([button.isDisabled(), field.inputValue()])
-    if (!disabled && value !== before) return value
+    const text = (await suggested.textContent())?.trim() ?? ''
+    if (text !== '' && text !== '—' && !Number.isNaN(Number(text))) break
     await page.waitForTimeout(50)
+    if (i === 59) {
+      throw new Error(`${stepName}: no suggested strip count appeared within 3s (last read "${text}")`)
+    }
   }
-  throw new Error(`${stepName}: Suggest did not finish within 3s (button never re-enabled or the field never changed from ${before})`)
+  await page.getByRole('button', { name: 'Apply' }).click()
+  return page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
 }
 
 // ── Workbench shell ──
@@ -918,34 +917,32 @@ await shot('07-team-schedule')
 //
 // Runs last, on the 24 events NAC Cadet/Junior just selected, with the type
 // still at the NAC that B1's boot preset set. NAC → ROC is the pair that moves
-// all three defaults at once (src/store/typeDefaults.ts): referees 2 → 1, video
-// strips 8 → 0, DE mode "Staged DE Blocks" → "Single Block".
-// AdvancedPanel no longer collapses behind an "Advanced" trigger (013 T009) —
-// it renders always-expanded inside the Strips & referees panel, so its
-// FR-035 summary is just that section's first always-rendered `div` (ahead of
-// the referee table), read by content rather than through a retired
-// aria-describedby tie.
+// referees 2 → 1 and video strips 8 → 0 (src/store/typeDefaults.ts). DE mode's
+// own summary moved to the Settings panel in T022 and is asserted there, not
+// here.
+// 013 T018 replaced the old Advanced section's collapsed-into-one-`div`
+// summary with the Strips & referees panel's own controls — no region named
+// "Advanced" exists any more, so these reads are scoped to the open
+// "Inspector panel" aside instead.
 await openPanel('Strips & referees')
-const advanced = page.getByRole('region', { name: 'Advanced' })
-await advanced.waitFor()
-const summaryText = async () => ((await advanced.locator('div').first().textContent()) ?? '').trim()
+const stripsAside = page.getByRole('complementary', { name: 'Inspector panel' })
+const refsPerPool = () => stripsAside.locator('[data-refs-per-pool]').textContent()
+const videoField = stripsAside.getByRole('spinbutton', { name: 'Number of video strips' })
 
-const nacSummary = await summaryText()
-if (!nacSummary.includes('Referees per pool: 2') || !nacSummary.includes('DE mode: Staged DE Blocks')) {
-  throw new Error(`Advanced summary at a NAC did not read the NAC row of TYPE_DEFAULTS: "${nacSummary}"`)
+if ((await refsPerPool())?.trim() !== '2') {
+  throw new Error(`Referees per pool at a NAC did not read the NAC row of TYPE_DEFAULTS: "${await refsPerPool()}"`)
 }
 
 // B1's preset wrote an explicit 12 video strips (applyPreset → setVideoStrips),
 // so the count is *not* following the type default yet and the type change
 // below would correctly leave it alone. Revert it first (FR-038's control, the
 // only way back to the stored null) so it becomes a value that has to move.
-await page.getByRole('button', { name: 'Revert video strips to default' }).click()
+await stripsAside.getByRole('button', { name: 'Revert video strips to default' }).click()
 await page.waitForTimeout(200)
-const revertedSummary = await summaryText()
-if (!revertedSummary.includes('Video strips: 8')) {
-  throw new Error(`reverting video strips did not fall back to the NAC default of 8: "${revertedSummary}"`)
+if ((await videoField.inputValue()) !== '8') {
+  throw new Error(`reverting video strips did not fall back to the NAC default of 8: "${await videoField.inputValue()}"`)
 }
-log('advanced summary at a NAC:', revertedSummary.replace(/\s+/g, ' '))
+log('referees per pool at a NAC:', (await refsPerPool())?.trim(), 'video strips:', await videoField.inputValue())
 
 // Two events: the first gets a hand-set referee count, the second is left
 // following the default. Both start at the store's AUTO marker, which the
@@ -988,13 +985,14 @@ log('hand-set:', handSetName, '→ 1 referee; following the default:', following
 await shot('08-advanced-nac')
 
 // The type change. The retired top bar's own "Tournament type" control is
-// gone (013 T010) — the only one left is the Tournament panel's `combobox`
-// named just "Type" (its <Label>, TournamentSetup.tsx), and only an exact
-// match keeps "Type" from also matching a competition's "Referees for …"
-// combobox below.
+// gone (013 T010), and TournamentSetup's dropdown is gone too (013 T016) —
+// the Tournament panel's type control is now the "Tournament type" radiogroup
+// of pills, and clicking a pill commits immediately (no separate option step).
 await openPanel('Tournament')
-await page.getByRole('combobox', { name: 'Type', exact: true }).click()
-await page.getByRole('option', { name: 'ROC', exact: true }).click()
+await page
+  .getByRole('radiogroup', { name: 'Tournament type' })
+  .getByRole('radio', { name: 'ROC', exact: true })
+  .click()
 await page.waitForTimeout(400)
 
 // The Advanced summary and the referee selects read below live in the Strips
@@ -1003,11 +1001,11 @@ await page.waitForTimeout(400)
 await openPanel('Strips & referees')
 
 // Half one — everything that was following a default moved to the ROC row.
-const rocSummary = await summaryText()
-for (const expected of ['Referees per pool: 1', 'Video strips: 0', 'DE mode: Single Block']) {
-  if (!rocSummary.includes(expected)) {
-    throw new Error(`NAC → ROC did not re-resolve a default: expected "${expected}" in "${rocSummary}"`)
-  }
+if ((await refsPerPool())?.trim() !== '1') {
+  throw new Error(`NAC → ROC did not re-resolve referees per pool: "${await refsPerPool()}"`)
+}
+if ((await videoField.inputValue()) !== '0') {
+  throw new Error(`NAC → ROC did not re-resolve video strips: "${await videoField.inputValue()}"`)
 }
 if ((await refText(following)) !== 'Auto (1)') {
   throw new Error(

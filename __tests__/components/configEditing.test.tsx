@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
-import { TournamentSetup } from '../../src/components/sections/TournamentSetup.tsx'
-import { StripSetup } from '../../src/components/sections/StripSetup.tsx'
 import { FencerCounts } from '../../src/components/sections/FencerCounts.tsx'
 import { CompetitionMatrix } from '../../src/components/sections/CompetitionMatrix.tsx'
 import { AnalysisOutput } from '../../src/components/sections/AnalysisOutput.tsx'
@@ -28,47 +26,10 @@ function FencerCountsAndAnalysis() {
   )
 }
 
-// ──────────────────────────────────────────────
-// TournamentSetup
-// ──────────────────────────────────────────────
-
-describe('TournamentSetup', () => {
-  it('renders tournament type dropdown', () => {
-    render(<TournamentSetup />)
-    expect(document.getElementById('tournament-type')).toBeInTheDocument()
-  })
-
-  it('renders days input', () => {
-    render(<TournamentSetup />)
-    expect(document.getElementById('days-available')).toBeInTheDocument()
-  })
-})
-
-// ──────────────────────────────────────────────
-// StripSetup
-// ──────────────────────────────────────────────
-
-describe('StripSetup', () => {
-  it('renders strips input', () => {
-    render(<StripSetup />)
-    expect(screen.getByRole('spinbutton', { name: 'Number of strips' })).toBeInTheDocument()
-  })
-
-  it('renders video strips input', () => {
-    render(<StripSetup />)
-    expect(screen.getByRole('spinbutton', { name: 'Number of video strips' })).toBeInTheDocument()
-  })
-
-  it('changing strips input updates store state', () => {
-    render(<StripSetup />)
-    const stripsInput = screen.getByRole('spinbutton', { name: 'Number of strips' })
-
-    fireEvent.change(stripsInput, { target: { value: '20' } })
-    fireEvent.blur(stripsInput)
-
-    expect(useStore.getState().strips_total).toBe(20)
-  })
-})
+// The strips-and-video-strips spinbutton cases that used to live here moved
+// to __tests__/components/workbench/panels/StripsPanel.test.tsx (013 T018)
+// when the section component they mounted was replaced by the Strips &
+// referees inspector panel.
 
 // ──────────────────────────────────────────────
 // FencerCounts

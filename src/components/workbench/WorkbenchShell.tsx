@@ -5,20 +5,21 @@ import { InspectorPanel } from './InspectorPanel.tsx'
 import { UnplacedDock } from './UnplacedDock.tsx'
 import { CenterView } from './CenterView.tsx'
 import { StatusFooter } from './StatusFooter.tsx'
-import { TournamentSetup } from '../sections/TournamentSetup.tsx'
-import { StripSetup } from '../sections/StripSetup.tsx'
+import { TournamentPanel } from './panels/TournamentPanel.tsx'
+import { StripsPanel } from './panels/StripsPanel.tsx'
 import { CompetitionMatrix } from '../sections/CompetitionMatrix.tsx'
 import { FencerCounts } from '../sections/FencerCounts.tsx'
 import { CompetitionOverrides } from '../sections/CompetitionOverrides.tsx'
 import { AnalysisOutput } from '../sections/AnalysisOutput.tsx'
-import { AdvancedPanel } from './AdvancedPanel.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
 import { PanelId, ViewMode, loadViewState, saveViewState } from '../../store/viewState.ts'
 
 /**
  * Panel content by id — temporary (013 decision 1): phase 2 replaces each arm
- * with a purpose-built panel component. Until then these are the same section
- * components the old collapsible rail mounted, unmodified.
+ * with a purpose-built panel component. `tournament` (T016) and `strips`
+ * (T018) are done; `events`, `findings` and `settings` are still the section
+ * components the old collapsible rail mounted, unmodified, until their own
+ * tasks land.
  *
  * `findings` also renders behind the rail's Findings button (T009) — its only
  * home since T011a folded the drawer into `StatusFooter`.
@@ -26,14 +27,9 @@ import { PanelId, ViewMode, loadViewState, saveViewState } from '../../store/vie
 function panelContent(id: PanelId): ReactNode {
   switch (id) {
     case PanelId.TOURNAMENT:
-      return <TournamentSetup />
+      return <TournamentPanel />
     case PanelId.STRIPS:
-      return (
-        <div className="space-y-3">
-          <StripSetup />
-          <AdvancedPanel />
-        </div>
-      )
+      return <StripsPanel />
     case PanelId.EVENTS:
       return (
         <div className="space-y-3">
