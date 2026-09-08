@@ -102,13 +102,13 @@ export function StatusFooter({ viewMode, onViewModeChange }: StatusFooterProps) 
       >
         <ToggleGroupItem
           value={ViewMode.MATRIX}
-          className="h-6 min-w-0 rounded-[7px] border-[1.5px] border-chrome-border bg-white px-3 text-[11.5px] font-semibold text-neutral-700 data-[state=on]:border-accent-400 data-[state=on]:bg-accent-100 data-[state=on]:text-accent-800"
+          className="h-6 min-w-0 rounded-[7px] border-[1.5px] border-chrome-border bg-secondary px-3 text-[11.5px] font-semibold text-neutral-700 data-[state=on]:border-accent-400 data-[state=on]:bg-accent-100 data-[state=on]:text-accent-800"
         >
           Matrix
         </ToggleGroupItem>
         <ToggleGroupItem
           value={ViewMode.SCHEDULE}
-          className="h-6 min-w-0 rounded-[7px] border-[1.5px] border-chrome-border bg-white px-3 text-[11.5px] font-semibold text-neutral-700 data-[state=on]:border-accent-400 data-[state=on]:bg-accent-100 data-[state=on]:text-accent-800"
+          className="h-6 min-w-0 rounded-[7px] border-[1.5px] border-chrome-border bg-secondary px-3 text-[11.5px] font-semibold text-neutral-700 data-[state=on]:border-accent-400 data-[state=on]:bg-accent-100 data-[state=on]:text-accent-800"
         >
           Schedule
         </ToggleGroupItem>

@@ -42,7 +42,7 @@ export function InspectorPanel({ panel, docked, onToggleDocked, onClose, childre
         'flex w-[324px] flex-col bg-chrome',
         docked
           ? 'relative shrink-0 border-r-[1.5px] border-chrome-border'
-          : 'absolute top-0 left-0 z-40 h-full border-r-[1.5px] border-chrome-border shadow-[var(--shadow-panel)]',
+          : 'absolute top-0 left-0 z-40 h-full border-r-[1.5px] border-chrome-border shadow-panel',
       )}
     >
       <div className="sticky top-0 z-[2] flex h-10 shrink-0 items-center justify-between gap-2 border-b-[1.5px] border-chrome-border bg-chrome pr-[7px] pl-3.5">

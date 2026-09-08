@@ -66,10 +66,6 @@
   --chrome-deep: #eaebee;
   --hover-tint: #f7fbff;
   --ok: #5b8f6a;
-  --shadow-sm: 0 1px 2px rgba(43, 43, 45, 0.14);
-  --shadow-md: 0 3px 10px rgba(43, 43, 45, 0.16);
-  --shadow-lg: 0 12px 32px rgba(43, 43, 45, 0.22);
-  --shadow-panel: 7px 0 24px rgba(43, 43, 45, 0.13);
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, Menlo, Monaco, Consolas, monospace;
 
@@ -231,7 +227,14 @@ button:not(:disabled) {
   --color-weapon-sabre-hatch: var(--weapon-sabre-hatch);
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
-  --shadow-panel: var(--shadow-panel);
+
+  /* Design-system shadows live only here, in Tailwind's own theme
+     namespace, with literal values — a :root copy under the same name
+     would self-reference rather than feed the shadow-* utilities. */
+  --shadow-sm: 0 1px 2px rgba(43, 43, 45, 0.14);
+  --shadow-md: 0 3px 10px rgba(43, 43, 45, 0.16);
+  --shadow-lg: 0 12px 32px rgba(43, 43, 45, 0.22);
+  --shadow-panel: 7px 0 24px rgba(43, 43, 45, 0.13);
 }
 
 @layer base {
