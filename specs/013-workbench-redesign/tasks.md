@@ -515,12 +515,18 @@ reviews (FR-069).
   names. tsc clean, lint clean, 75 files / 1842 tests. SMOKE PASS, 0 console
   errors, no driver edit; Suggest 15/63/80/48.
 
-- [ ] **T015b** [US1] **(dispatched, user judges)** Prove the polish changed
+- [x] **T015b** [US1] **(dispatched, user judges)** Prove the polish changed
   nothing but paint. Run `scripts/smoke.mjs` once – SMOKE PASS, 0 console
   errors, no driver edit – then `scripts/screenshot.mjs` and send both shots to
   the product owner. They judge against the mockup at a glance; a "no" is not
   a halt but a list of what still differs, recorded under the T015 verdict in
   `handoff.md` §Verdicts and carried into T044's scope
+  → Run 2026-09-07 at 785327a42f: SMOKE PASS, 0 console errors, no driver
+  edit, Suggest 15/63/80/48; both shots sent to the product owner. Re-look
+  verdict pending – recorded and ticked in the next session (sessions/S4.md).
+  → Recorded 2026-09-07: SMOKE PASS, 0 console errors, no driver edit, and
+  the product owner's re-look verdict is "matches" – nothing carried into
+  T044 (handoff.md §Verdicts).
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. US1 is the MVP: the
 shell stands on the old panels and every old chrome surface is gone, and the

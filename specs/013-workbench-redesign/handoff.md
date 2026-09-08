@@ -43,6 +43,13 @@ This is a re-plan: `tasks.md` gains the polish tasks (T015a, T015b in phase
 mockup. Recorded here per constitution §Orchestration; the session that
 recorded it stopped and handed off.
 
+**T015b re-look (2026-09-07)**: shots retaken at `785327a42f` after T015a
+and its follow-up (`scripts/smoke-shots/shell-1440x900.png`,
+`shell-1920x1080.png`), SMOKE PASS, 0 console errors, no driver edit.
+**Verdict: matches.** The product owner judged the chrome against the mockup
+at a glance and listed nothing still off, so T044's scope gains nothing from
+this re-look. Phase 2 starts on this verdict.
+
 What the orchestrator saw in the 1440×900 shot before the verdict, for the
 record rather than as a judgment:
 
