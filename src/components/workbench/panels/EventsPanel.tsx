@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import { useStore } from '../../../store/store.ts'
 import { CATALOGUE, ALL_VET_AGE_GROUPS } from '../../../engine/catalogue.ts'
 import { MIN_FENCERS } from '../../../engine/constants.ts'
@@ -103,6 +104,45 @@ const CHIP_SELECTED = 'border-transparent bg-primary text-primary-foreground'
 const CHIP_UNSELECTED = 'border-chrome-border bg-white text-neutral-700 hover:bg-chrome-deep'
 
 /**
+ * One chip + its fencer-count input. Subscribes only to its own entry's
+ * config, not the whole `selectedCompetitions` record, so a fencer-count
+ * edit on one chip cannot re-render the other 119 (perf review on T020–T022,
+ * standing rule 13's DOM/aria contract preserved exactly).
+ */
+const EventChip = memo(function EventChip({ entry }: { entry: CatalogueEntry }) {
+  const config = useStore((s) => s.selectedCompetitions[entry.id])
+  const addCompetition = useStore((s) => s.addCompetition)
+  const removeCompetition = useStore((s) => s.removeCompetition)
+  const updateCompetition = useStore((s) => s.updateCompetition)
+
+  const isSelected = config !== undefined
+  const label = competitionLabel(entry)
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={isSelected}
+        onClick={() => (isSelected ? removeCompetition(entry.id) : addCompetition(entry.id))}
+        className={cn(CHIP_BASE, isSelected ? CHIP_SELECTED : CHIP_UNSELECTED)}
+      >
+        {chipText(entry)}
+      </button>
+      {isSelected && (
+        <NumberInput
+          value={config.fencer_count}
+          onChange={(v) => updateCompetition(entry.id, { fencer_count: v })}
+          min={MIN_FENCERS}
+          commitOnChange
+          aria-label={`Fencer count for ${label}`}
+        />
+      )}
+    </span>
+  )
+})
+
+/**
  * The Events inspector panel (013 T021, FR-019–FR-021, research D15). Replaces
  * the competition-matrix and fencer-count sections (both deleted in that
  * task): one
@@ -113,12 +153,16 @@ const CHIP_UNSELECTED = 'border-chrome-border bg-white text-neutral-700 hover:bg
  * the header in phase 1 and is deliberately not ported here.
  */
 export function EventsPanel() {
-  const selectedCompetitions = useStore((s) => s.selectedCompetitions)
-  const addCompetition = useStore((s) => s.addCompetition)
-  const removeCompetition = useStore((s) => s.removeCompetition)
-  const updateCompetition = useStore((s) => s.updateCompetition)
-
-  const selectedIds = new Set(Object.keys(selectedCompetitions))
+  // Serialized rather than watched by reference (same pattern as
+  // StripsPanel's fencerCountsKey): the parent only needs which ids are
+  // selected, never their fencer counts, so a count edit — which replaces
+  // the whole record — changes no selector value here and re-renders
+  // nothing but the one EventChip that owns that entry.
+  const selectedKey = useStore((s) => Object.keys(s.selectedCompetitions).sort().join(','))
+  const selectedIds = useMemo(
+    () => new Set(selectedKey === '' ? [] : selectedKey.split(',')),
+    [selectedKey],
+  )
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -144,34 +188,9 @@ export function EventsPanel() {
               <span className="font-mono font-semibold text-neutral-600">{groupCount}</span>
             </div>
             <div className="flex flex-wrap items-center gap-[5px] px-[11px] pt-[9px] pb-[11px]">
-              {group.entries.map((entry) => {
-                const isSelected = selectedIds.has(entry.id)
-                const label = competitionLabel(entry)
-                return (
-                  <span key={entry.id} className="inline-flex items-center gap-1">
-                    <button
-                      type="button"
-                      aria-label={label}
-                      aria-pressed={isSelected}
-                      onClick={() =>
-                        isSelected ? removeCompetition(entry.id) : addCompetition(entry.id)
-                      }
-                      className={cn(CHIP_BASE, isSelected ? CHIP_SELECTED : CHIP_UNSELECTED)}
-                    >
-                      {chipText(entry)}
-                    </button>
-                    {isSelected && (
-                      <NumberInput
-                        value={selectedCompetitions[entry.id].fencer_count}
-                        onChange={(v) => updateCompetition(entry.id, { fencer_count: v })}
-                        min={MIN_FENCERS}
-                        commitOnChange
-                        aria-label={`Fencer count for ${label}`}
-                      />
-                    )}
-                  </span>
-                )
-              })}
+              {group.entries.map((entry) => (
+                <EventChip key={entry.id} entry={entry} />
+              ))}
             </div>
           </section>
         )

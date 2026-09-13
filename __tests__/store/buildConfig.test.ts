@@ -640,6 +640,13 @@ describe('buildTournamentConfig', () => {
         },
       )
 
+      // `expected` below calls defaultCutForEntry, the same function
+      // production calls, so this case proves the three rules apply in the
+      // stated order — it cannot catch a wrong value returned by
+      // defaultCutForEntry itself. The cut table's actual values are pinned
+      // elsewhere: the frozen pre-shrink fixture deep-equal
+      // (__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json)
+      // and the explicit JUNIOR-at-ROC/NAC literal cases earlier in this file.
       it.each([TournamentType.NAC, TournamentType.ROC])(
         'cut_mode/cut_value follow defaultCutForEntry, then the regional override, then the team coercion, at %s',
         (type) => {

@@ -53,8 +53,9 @@ function minimalState(overrides: {
       },
     },
     // The seven-key override record this fixture seeded left with its slice
-    // (013 T022). Nothing here changes: every one of those values is read from
-    // `constants.ts` now, which is what the fixture was seeding them to.
+    // (013 T022). Nothing here changes: this file's assertions never read
+    // those keys, so removing them changes no expected value below —
+    // several of the removed keys did not in fact match constants.ts.
     flightingSuggestionStates: [],
   }
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { EventsPanel } from '../../../../src/components/workbench/panels/EventsPanel.tsx'
 import { useStore } from '../../../../src/store/store.ts'
@@ -6,6 +6,32 @@ import { CATALOGUE, ALL_VET_AGE_GROUPS, TEMPLATES, findCompetition } from '../..
 import { MIN_FENCERS } from '../../../../src/engine/constants.ts'
 import { Category, EventType, Gender, Weapon } from '../../../../src/engine/types.ts'
 import { categoryDisplay, vetAgeGroupDisplay, competitionLabel } from '../../../../src/components/competitionLabels.ts'
+
+// Perf review on T020-T022: EventsPanel used to subscribe to the whole
+// selectedCompetitions record, so committing one fencer count re-rendered
+// all 120 chips. NumberInput's aria-label is unique per chip
+// ("Fencer count for {label}"), so wrapping it counts renders per chip
+// without touching EventChip's internals or the DOM/aria contract the other
+// 13 cases in this file pin. A React Profiler around the whole tree only
+// reports one number for the whole subtree per commit, which can't
+// distinguish "one chip re-rendered" from "all 120 did" — this counts each
+// chip's NumberInput individually, which is what proves isolation.
+const { numberInputRenderCounts } = vi.hoisted(() => ({
+  numberInputRenderCounts: new Map<string, number>(),
+}))
+
+vi.mock('@/components/ui/number-input', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../../src/components/ui/number-input.tsx')>()
+  return {
+    ...actual,
+    NumberInput: (props: Parameters<typeof actual.NumberInput>[0]) => {
+      const label = props['aria-label'] ?? ''
+      numberInputRenderCounts.set(label, (numberInputRenderCounts.get(label) ?? 0) + 1)
+      return <actual.NumberInput {...props} />
+    },
+  }
+})
 
 // 013 T019 (FR-019–FR-021, ui-contract.md §Events): red first, against
 // src/components/workbench/panels/EventsPanel.tsx, which does not exist yet.
@@ -17,6 +43,7 @@ import { categoryDisplay, vetAgeGroupDisplay, competitionLabel } from '../../../
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
+  numberInputRenderCounts.clear()
 })
 
 // The individual-category order every gender/weapon group shares
@@ -192,6 +219,33 @@ describe('EventsPanel — fencer count', () => {
     // pins for the retired fencer-count component.
     const stillFirstId = Object.keys(useStore.getState().selectedCompetitions).sort()[0]
     expect(useStore.getState().selectedCompetitions[stillFirstId].fencer_count).not.toBe(MIN_FENCERS - 1)
+  })
+})
+
+describe('EventsPanel — chip render isolation (perf review, T020–T022 follow-up)', () => {
+  it('a fencer-count edit does not re-render an unrelated chip\'s input', () => {
+    useStore.getState().applyTemplate('RYC Weekend')
+
+    const ids = TEMPLATES['RYC Weekend']
+    const editedEntry = findCompetition(ids[0])!
+    const untouchedEntry = findCompetition(ids[1])!
+    const editedLabel = `Fencer count for ${competitionLabel(editedEntry)}`
+    const untouchedLabel = `Fencer count for ${competitionLabel(untouchedEntry)}`
+
+    render(<EventsPanel />)
+
+    // Mount renders every selected chip's input once.
+    expect(numberInputRenderCounts.get(untouchedLabel)).toBe(1)
+
+    const editedInput = screen.getByRole('spinbutton', { name: editedLabel })
+    fireEvent.change(editedInput, { target: { value: '64' } })
+
+    expect(useStore.getState().selectedCompetitions[ids[0]].fencer_count).toBe(64)
+    // The edited chip's own input re-renders (it owns the changed value);
+    // the sibling chip subscribes to a different store slice, so its
+    // NumberInput must not render again.
+    expect(numberInputRenderCounts.get(editedLabel)).toBeGreaterThan(1)
+    expect(numberInputRenderCounts.get(untouchedLabel)).toBe(1)
   })
 })
 

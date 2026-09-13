@@ -719,6 +719,14 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `:696–706` are deleted and replaced by one step that sets DE mode to Single,
   generates a link, opens it and reads the radio back, and one that changes a
   pool duration and confirms the schedule moves *(subagent commits)*
+  → Done 2026-09-13 at `260be6b22f`. 72 files, 1835 passing, tsc and lint
+  clean, `appPathParity.test.ts` unedited. Phase grep returns nothing after
+  comment-only rewording in six files. Radix `onValueChange` skips a press on
+  the checked pill, so each pill also writes on click; the Default marker
+  reads `de_mode_override`, never a value comparison. Two flags for handoff:
+  no control returns `de_mode_override` to null (spec names only two pills),
+  and the driver's leftover state is now a Single DE-mode override on NAC
+  that `applyTemplate` carries into NAC Youth's Suggest count (T023 records).
 
 - [ ] **T023** [US2] **(dispatched)** Run the driver twice. **Record NAC
   Youth's count** at `scripts/smoke.mjs:786` in the driver's own comment and

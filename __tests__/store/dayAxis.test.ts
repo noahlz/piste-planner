@@ -42,9 +42,10 @@ function stateWithDayConfigs(dayConfigs: DayConfig[]): Partial<StoreState> {
       },
     },
     // The seven-key override record this fixture seeded left with its slice
-    // (013 T022). `SLOT_MINS`, which every snapped boundary here depends on,
-    // is read from `constants.ts` again — the value this fixture was pinning
-    // it to.
+    // (013 T022). This file's snapped-boundary assertions depend on
+    // `SLOT_MINS` from `constants.ts`, never on the removed keys, so removing
+    // them changes no expected value below — several of the removed keys did
+    // not in fact match constants.ts.
     flightingSuggestionStates: [],
   }
 }

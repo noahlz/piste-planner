@@ -1140,6 +1140,22 @@ describe('de_mode_override (013 T022)', () => {
     expect(result.state.de_mode_override).toBe(DeMode.STAGED)
   })
 
+  it('treats an absent de_mode_override as null, not undefined (schema leniency, research D8)', () => {
+    const data = validSerializedData() as unknown as {
+      tournament: Record<string, unknown>
+    }
+    delete data.tournament.de_mode_override
+
+    const validated = validateSchema(data)
+    expect(validated.valid).toBe(true)
+
+    const result = deserializeState(JSON.stringify(data))
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect(result.state.de_mode_override).toBeNull()
+    expect(result.state.de_mode_override).not.toBeUndefined()
+  })
+
   it('rejects a de_mode_override that is not one of the two engine modes', () => {
     const data = validSerializedData() as unknown as { tournament: Record<string, unknown> }
     data.tournament.de_mode_override = 'THREE_STAGE'
