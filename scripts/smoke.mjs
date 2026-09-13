@@ -711,6 +711,25 @@ log('share round-trip: DE mode Single arrived marked as an override, not a defau
 await page3.screenshot({ path: `${SHOTS}11-gears-roundtrip.png`, fullPage: FULLPAGE })
 await page3.close()
 
+// ── Restore isolation: no control returns `de_mode_override` to null ──
+// (handoff.md finding 6), so the Single override set above for the round-trip
+// leaks into every template applied after this point — `applyTemplate` keeps
+// it across a switch the same way it keeps `days_available`. Clicking Staged
+// here writes an explicit STAGED override rather than clearing it, but NAC's
+// type default is Staged, so the resolved DE mode every later Suggest sees is
+// the same one a fresh store would compute; only the (absent) Default marker
+// differs, and nothing after this point reads that marker. 013 T023 measured
+// the leak before this step existed: NAC Vet/Div1/Junior's SC-008 read 69
+// instead of its fresh-store 80, and NAC Youth read 50 instead of 66. This is
+// driver hygiene under D14 (re-point, never rewrite), not an app fix.
+await deModeGroup.getByRole('radio', { name: 'Staged' }).click()
+await page.waitForTimeout(400)
+const stagedChecked = await deModeGroup.getByRole('radio', { name: 'Staged' }).getAttribute('aria-checked')
+if (stagedChecked !== 'true') {
+  throw new Error(`restoring DE mode to Staged after the round-trip did not check the Staged radio: aria-checked=${stagedChecked}`)
+}
+log('DE mode restored to Staged after the round-trip, isolating later templates from the leftover Single override')
+
 // ── NAC Div1/Junior (010 R1) ──
 // Before R1, indiv-team-same-day blocked D1-M-EPEE-IND + D1-M-EPEE-TEAM's
 // worst-case same-day duration (855 vs DAY_LENGTH_MINS 840) and emptied this
@@ -811,6 +830,18 @@ log('NAC Youth schedule table rows =', nacYouthRowCount)
 // nothing restores it, `applyTemplate` keeping it the same way it kept the
 // admin gap. T023 runs the driver and records whatever count that produces.
 // The assertion below is unchanged and stays non-zero by design.
+//
+// `[M]` 013 T023, 2026-09-13: two runs both read 66, agreeing with D14's
+// fresh-store expectation. This session's earlier readings (50, then 49
+// after adding the Staged-restore step above) were never a config leftover —
+// fresh-store probes at `df977bf487` computed 66 through both today's search
+// and the pre-T017 one, so the engine was correct the whole time. The stale
+// numbers were `pressSuggest` reading `[data-suggested-strips]` before
+// `StripsPanel`'s 300ms debounce had replaced the *previous* template's
+// answer with this one's — nothing marked the display stale in between.
+// Fixed at `9da51b1b15`: the panel now clears the card to `—` (Apply
+// disabled) the instant any of its search inputs change, so a read here can
+// only ever be this template's own answer.
 if (nacYouthRowCount === 0) {
   throw new Error('SC-005: NAC Youth placed 0 events at its Suggest count — the feasibility-strip-hours demotion or the busiest-day suggestion regressed')
 }
@@ -835,6 +866,11 @@ await shot('06c-nacyouth-schedule')
 // build (tasks.md §One decision), so a different video count is a different
 // board — 80 is correct for the config this driver hands it, not a
 // regression against baseline.md's 85.
+//
+// `[M]` 013 T023, 2026-09-13: two runs both read 80, holding this assertion.
+// The 69 and then 66 read earlier this session were both stale reads of
+// `[data-suggested-strips]`, not a config change — see the `[M]` note on the
+// NAC Youth step above for the mechanism and the fix (`9da51b1b15`).
 await choosePreset('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior template applied')
 

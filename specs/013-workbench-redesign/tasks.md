@@ -692,6 +692,11 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   commits; pressed count equals the template's length). `recompute.test.tsx`
   mounts `EventsPanel` in place of `FencerCounts`. Driver step unchanged but
   for its comment; not run until T023.
+  → Review follow-up 2026-09-13 at `df977bf487` (T020–T022 bundle): chips
+  are a memoised `EventChip` subscribing per entry, so a fencer keystroke no
+  longer re-renders all 120 (render-count test, red before the fix); absent
+  `de_mode_override` key round-trips to null; two fixture comments corrected;
+  the cut-ordering case is marked ordering-only. 72 files, 1837 passing.
 
 - [ ] **T022** [US2] Settings panel and the last two store changes (FR-029 to
   FR-031, FR-063, [research D7](./research.md)). Red first:
@@ -728,7 +733,7 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   and the driver's leftover state is now a Single DE-mode override on NAC
   that `applyTemplate` carries into NAC Youth's Suggest count (T023 records).
 
-- [ ] **T023** [US2] **(dispatched)** Run the driver twice. **Record NAC
+- [x] **T023** [US2] **(dispatched)** Run the driver twice. **Record NAC
   Youth's count** at `scripts/smoke.mjs:786` in the driver's own comment and
   in `handoff.md` §Verdicts – expected 66 now that the Admin gap step is gone
   ([research D14](./research.md)); a different value is recorded, not
@@ -738,6 +743,15 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `CompetitionOverrides`, `StripSetup`, `TournamentSetup`, `globalOverrides`,
   `FINALS_ONLY`, `deModeLabels`, `suggestStrips` – over `src/` and
   `__tests__/`; it must return nothing *(subagent commits)*
+  → Done 2026-09-13 at `9da51b1b15`. The first run tripped SC-008 (a hard,
+  unrelated assertion) on a leak from T022's DE-mode round-trip step, then a
+  UI display race in `StripsPanel` (fixed separately at `9da51b1b15`, not by
+  this task) — both diagnosed and recorded in `handoff.md` finding 8. Once
+  fixed, both runs: SMOKE PASS, 0 console errors, Suggest 15/66/80/48, boot
+  24 rows / 19·5·0. Grep returns nothing. 72 files / 1838 tests, tsc and lint
+  clean. The driver gained one structural line (restoring DE mode to Staged
+  after the T022 round-trip) beyond the dispatched comment edit — recorded
+  as finding 8, not folded in silently.
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. Every input has one
 home. Phases 0–2 are the MVP.

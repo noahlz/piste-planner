@@ -71,7 +71,33 @@ read as a board at 100%; legibility of the header summary, dock chips and
 footer. A "no" halts phase 3 (US3, the canvas) until the look is revised, and
 that revision is a re-plan.
 
-## Findings carried from phase 1
+### T023 – phase 2 smoke (FR-067, SC-013)
+
+Both runs at `9da51b1b15` (dev server on port 5174 in the worktree):
+**SMOKE PASS** twice, 0 console errors both runs. Suggest counts, identical
+across both runs:
+
+| Template | Suggested strips |
+|---|---|
+| ROC Div1A/Vet | 15 |
+| NAC Youth | 66 |
+| NAC Vet/Div1/Junior | 80 |
+| NAC Cadet/Junior | 48 |
+
+Boot (B1), both runs: schedule table 24 rows, footer `19 placed · 5 unplaced
+· 0 pinned` (finding 1, unchanged from phase 1).
+
+Locator repairs: none — `pressSuggest` needed no change (per dispatch,
+confirmed). Two comment repairs to record what was observed, not to fix a
+selector: dated `[M]` notes added at the NAC Youth and SC-008 blocks
+(`scripts/smoke.mjs`) recording that this session's earlier readings (69,
+66, 50, 49 across two prior attempts) were stale-display reads, not a search
+or engine defect, and that both hold at their fresh-store values (66, 80)
+now that `9da51b1b15` fixed the display race. A structural driver addition —
+restoring DE mode to Staged on page 1 right after the T022 share-round-trip
+step — was needed independently: see finding 8.
+
+
 
 1. **The lane packer and the scheduler disagree on placed counts.** The
    scheduler places every event the schedule table shows, but
@@ -113,6 +139,29 @@ that revision is a re-plan.
    with whatever panel the first left open. The driver's `openPanel` helper
    now guards on `aria-pressed` for every page. Not an app defect, but a
    trap for any future driver step that opens a panel on a fresh page.
+6. **No control returns `de_mode_override` to null**: once an organizer picks
+   Staged or Single the tournament stops following its type's default
+   permanently. The spec (FR-030) and `ui-contract.md` §Settings name only
+   the two pills, so T022 built exactly that. Product-owner decision needed:
+   add a third "Default" pill or a revert, or accept.
+7. **The team-event cut coercion loop in `src/store/buildConfig.ts` is now
+   unreachable under current constants** — `defaultCutForEntry` already
+   answers DISABLED/100 for every team entry and `REGIONAL_CUT_OVERRIDES`
+   maps its categories to the same pair — so no test proves it fires (T020
+   test review). Kept as defence in depth; a discriminating test would need a
+   `vi.doMock` of `constants.ts` with a non-DISABLED regional override for a
+   category that has a team event. Backlog, not phase 2.
+8. **T023 found two things through one failing assertion**: (a) T022's
+   DE-mode round-trip step leaked a Single override into every later
+   template, with no control to return `de_mode_override` to null — the
+   driver now restores Staged on page 1 after the round-trip; (b) the
+   Suggested-minimum card kept the previous configuration's number on
+   screen, Apply enabled, through the debounce and search, so the driver
+   applied the previous template's count (69/66 for NAC Vet/Div1/Junior
+   against 80, 50/49 for NAC Youth against 66). Fresh-store probes at
+   `df977bf487` gave 66/80 through both today's and the pre-T017 search, so
+   the engine and the search were never involved. Fixed in the app at
+   `9da51b1b15`.
 
 ## Measurements
 
@@ -127,3 +176,11 @@ that revision is a re-plan.
 | Console errors, both smoke runs | 0 | T014 |
 | Unit suite after T014 | 75 files / 1840 tests | T014 |
 | Unit suite at `37987dc5dc` (two tooltip follow-ups) | 75 files / 1842 tests, tsc and lint clean | phase 1 checkpoint |
+| Boot, B1, schedule rows | 24 | T023, both runs, `9da51b1b15` |
+| Boot, B1, footer `data-counts` | 19 placed · 5 unplaced · 0 pinned | T023, both runs |
+| Suggest: ROC Div1A/Vet | 15 | T023, both runs |
+| Suggest: NAC Youth | 66 (fresh-store value, D14's expectation confirmed once the Admin-gap leak, then the DE-mode leak and the display race, were gone) | T023, both runs |
+| Suggest: NAC Vet/Div1/Junior | 80 (SC-008 holds) | T023, both runs |
+| Suggest: NAC Cadet/Junior | 48 | T023, both runs |
+| Console errors, both smoke runs | 0 | T023 |
+| Unit suite at `9da51b1b15` | 72 files / 1838 tests, tsc and lint clean | T023 checkpoint |
