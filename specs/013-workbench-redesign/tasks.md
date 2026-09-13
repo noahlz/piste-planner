@@ -776,7 +776,7 @@ bands and gutter sticky, zoom stops at both ends with the button disabled, Fit
 day refits on resize, every block keeps fill, hatch and label at the closest
 rung.
 
-- [ ] **T024** [P] [US3] The ladder and the tokens ([research D3, D4](./research.md),
+- [x] **T024** [P] [US3] The ladder and the tokens ([research D3, D4](./research.md),
   data-model §7, §8). Red first: `__tests__/components/canvas/zoomLadder.test.ts`
   re-targets `zoom.test.ts` – six rungs with the exact `ppm` and `row` values,
   `DEFAULT_ZOOM = 2`, readout as a percentage of rung 2 (`47%`, `69%`, `100%`,
@@ -790,8 +790,11 @@ rung.
   twelve weapon tokens to `src/index.css`. `zoom.ts`, `palette.ts`, the
   `--cat-*` block and the two old test files are deleted in T026, when their
   last readers go
+  → 2026-09-13, committed with T026 at `05103d5ff4`. Red on missing modules,
+  then 24 + 42 tests. The twelve `--weapon-*` tokens already existed in
+  `index.css` from T015a and matched §8; nothing was added there.
 
-- [ ] **T025** [US3] Red tests for the canvas. `__tests__/components/canvas/Canvas.test.tsx`
+- [x] **T025** [US3] Red tests for the canvas. `__tests__/components/canvas/Canvas.test.tsx`
   re-targets `MatrixCanvas.test.tsx` – for B1 at 80 strips and four days,
   exactly 320 `data-strip-row` elements are in the document with no
   windowing, `data-canvas-scroller` is the one scrolling container, the axis
@@ -822,8 +825,15 @@ rung.
   boundaries, `unplaced` and `findings`. Run: everything fails for want of
   `Canvas.tsx`, `Block.tsx`, the selector and the view-state fields.
   `windowing.test.ts` has no successor and is deleted in T026
+  → 2026-09-13, two parallel red dispatches, committed with T026 at
+  `05103d5ff4`. Every file failed on the missing module, field or export it
+  predicted. `daySummaries.test.ts` counts `validationErrors` only: analysis
+  warnings have no `findingIdentity` and cannot be dismissed, so the
+  dismissal case can only be written against a validation finding.
+  `viewTogglePersistence.test.tsx` was re-pointed in T026 too – it spread the
+  deleted fields.
 
-- [ ] **T026** [US3] **(Opus)** The canvas ([research D2, D3, D4, D18](./research.md),
+- [x] **T026** [US3] **(Opus)** The canvas ([research D2, D3, D4, D18](./research.md),
   FR-032 to FR-043). Build `src/components/canvas/Canvas.tsx` – one natively
   scrolling container, a sticky time axis picking tick density from the rung,
   one group per day with a sticky band reading `selectDaySummaries`, a sticky
@@ -846,8 +856,19 @@ rung.
   Re-point the driver: `button` "Fit to day" at `scripts/smoke.mjs:463` →
   footer `button` "Fit day", and any toolbar locator → the footer's `toolbar`
   "Zoom" *(subagent commits)*
+  → 2026-09-13, `05103d5ff4`; review follow-up `01765a3087`. Suite 72 files /
+  1840 → 71 / 1663 (the six deleted SVG-canvas test files were 2,967 lines),
+  then 1666 after the follow-up. Drift ledger and parity unchanged. Two test
+  literals moved by measurement (handoff §T026). Tick ladder is
+  15/30/60/120/180/360 min at a 72 px gap – the dispatched 60–360 at 48 px
+  gave every rung 60-minute ticks. The "Fit to day" driver step was at
+  `smoke.mjs:430`, not 463; it now presses "Zoom in" first because the app
+  boots in fit mode. Review found the day band read the live store while the
+  grid drew the committed model (FR-042); fixed by `daySummariesFromBlocks`
+  over the canvas's own lanes. Finding 1 re-measured: the packer and the
+  counter agree (19 + 5 overflow = 24), see handoff finding 9.
 
-- [ ] **T027** [US3] **(dispatched)** Run the driver twice and add the SC-005
+- [x] **T027** [US3] **(dispatched)** Run the driver twice and add the SC-005
   read to the live check: step zoom in until "Zoom in" disables, count
   `[data-event-block]` and confirm every one still carries `data-weapon` and
   its label or icon, then "Reset zoom". Report SMOKE PASS/FAIL ×2, the rung
@@ -855,6 +876,19 @@ rung.
   for `MatrixCanvas`, `EventBlock`, `blockLabels`, `palette\.ts`, `windowing`,
   `canvas/zoom`, `--cat-`, `rowHeightStep`, `timeZoom` over `src/` and
   `__tests__/`; it must return nothing *(subagent commits)*
+  → 2026-09-13, `b9f9ad46b8` after the SC-005 read found a live defect: a
+  5-minute DE-prelims block 45 px wide at rung 5 drew neither label nor icon.
+  Fixed in the app at `41dfe0e31f` (icon shown alone, shrinking to a 10 px
+  floor), review follow-up `ce540ffd56` (padding and gap applied inline as
+  the mockup does, empty label span not rendered), driver re-pointed at
+  `2eda25bc66` (absent label read as empty). PASS ×2 at `b9f9ad46b8` and ×2
+  at `2eda25bc66`: 0 console errors, boot 24 rows / `19 placed · 5 unplaced
+  · 0 pinned`, Suggest 15 / 66 / 80 / 48, readout 281% after two presses
+  from the driver's rung 3, 30 blocks all with weapon and label-or-icon.
+  SC-005's "label" is read as label-or-phase-icon (FR-035 lets a block
+  choose); the driver comment names the block that set it. Grep clean apart
+  from `canvas/zoomLadder` paths and the three negative `--cat-` assertions
+  in `weaponTokens.test.ts`; ten prose mentions reworded.
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. 320 rows, six rungs,
 weapon fills, five cues, view equivalence holds.

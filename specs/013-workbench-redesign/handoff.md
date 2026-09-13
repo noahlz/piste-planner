@@ -166,6 +166,70 @@ counts, 0 console errors.
    the engine and the search were never involved. Fixed in the app at
    `9da51b1b15`.
 
+### T026 – the canvas (FR-032 to FR-043)
+
+Committed at `05103d5ff4`, review follow-up `01765a3087`. Two test literals
+moved after the red tests were written, both from measurement and both
+re-checked by the test-quality pass:
+
+- `daySummaries.test.ts` finding counts 1/1/0 → 2/2/0: the fixture raises two
+  validation findings per event (video dead-config and round-of-16 over-cap),
+  not one. The case's claim, one dismissal drops exactly one on that day, is
+  unchanged.
+- `Block.test.tsx` label constants 14/30 → 19/53: the mockup's own `namePx`
+  and `taken` rule for a 96 px block over 4 strips. Thirty was never
+  reachable.
+
+Two decisions the contract did not settle: the tick ladder is
+15/30/60/120/180/360 minutes at a 72 px minimum gap (the dispatched 60–360
+at 48 px gave every rung 60-minute ticks, so no rung could differ), and the
+tooltip is driven by entering the block, not by coordinates at the
+container, because native scrolling makes container hit-testing reconstruct
+what the DOM already answers.
+
+### T027 – phase 3 smoke (FR-067, SC-005, SC-013)
+
+**SMOKE PASS ×2 at `b9f9ad46b8` and ×2 at `2eda25bc66`**, 0 console errors
+every run. Suggest 15 / 66 / 80 / 48, boot 24 rows and `19 placed · 5
+unplaced · 0 pinned`, unchanged from T023. The new SC-005 step reaches
+`281%` after two presses (the driver arrives at rung 3, having pressed "Zoom
+in" once before "Fit day"), and all 30 blocks carry `data-weapon` and a
+label or a phase icon.
+
+Locator repairs: none on the first run. The one driver edit after the fix,
+`2eda25bc66`, reads an absent `[data-label]` as empty instead of waiting on
+it, because the fix stopped rendering the empty span.
+
+9. **The lane packer and the counter agree; the grid draws what the counter
+   calls unplaced.** Re-measured in T026 on B1 at 80 strips: 24 selected, 19
+   placed + 5 unplaced, 24 distinct competitions with a block, 66 blocks, 5
+   `assignStripLanes` overflow blocks. The five the footer calls unplaced are
+   the five the packer overflowed, drawn at strip 0 with the dashed edge.
+   Finding 1 closes as "not a disagreement": the schedule table shows 24
+   rows because the scheduler placed 24, and the footer subtracts the packer's
+   overflow. Whether an overflowed block should also count in the dock is
+   phase 6's question (it builds the unplaced flow).
+10. **A block at the closest rung can have no room for text** (SC-005 as
+    written). `D1A-M-SABRE-IND:DE_PRELIMS`, a 5-minute segment over 12
+    strips, is 45 px wide at rung 5. FR-035 allows "neither", SC-005 says
+    "label". Resolved at `41dfe0e31f` and `ce540ffd56`: when no label fits the
+    phase icon shows alone, sized to the block's real padding (`clamp(rowH ×
+    0.2, 6, 11)` per side, applied inline as the mockup does), shrinking to a
+    10 px floor, below which the block is blank. SC-005 is read as
+    label-or-phase-icon and the driver comment records it. The `CanvasTooltip`
+    "draws nothing" fixture moved from 27 px to 20 px to stay below the floor.
+    Product-owner note: the 5-minute DE-prelims segment itself looks like an
+    engine artefact worth a look, not a canvas one.
+11. **The day band read the live store while the grid drew the committed
+    model** (react-code-reviewer on `05103d5ff4`, FR-042). During the 150 ms
+    settle, and for as long as a blocking error suppressed the commit, the
+    band's counts could describe a schedule the grid was not showing. Fixed at
+    `01765a3087`: `daySummariesFromBlocks` is a pure function over the
+    canvas's own lanes and the committed validation errors; `selectDaySummaries`
+    stays as the live wrapper the store tests use. Left as recorded, not
+    fixed: the pin badge reads `placements` live (a boolean per block; phase 6
+    owns pinning).
+
 ## Measurements
 
 | Where | Value | When |
@@ -188,3 +252,10 @@ counts, 0 console errors.
 | Console errors, both smoke runs | 0 | T023 |
 | Unit suite at `9da51b1b15` | 72 files / 1838 tests, tsc and lint clean | T023 checkpoint |
 | Confirming run: Suggest 15/66/80/48, 0 console errors | PASS | T023, `e4fcd29058` |
+| Unit suite at `05103d5ff4` (SVG canvas deleted) | 71 files / 1663 tests, tsc and lint clean; drift ledger and parity unchanged | T026 |
+| B1 at 80 strips: placed / unplaced / overflow blocks / blocks drawn | 19 / 5 / 5 / 66 | T026, finding 9 |
+| Boot, B1, schedule rows and footer | 24 rows, 19 placed · 5 unplaced · 0 pinned | T027, all four runs |
+| Suggest: ROC Div1A/Vet, NAC Youth, NAC Vet/Div1/Junior, NAC Cadet/Junior | 15 / 66 / 80 / 48 | T027, all four runs |
+| SC-005: readout when "Zoom in" disables, blocks at rung 5 | 281%, 30 all with weapon and label-or-icon | T027, all four runs |
+| Console errors, four smoke runs | 0 | T027 |
+| Unit suite at `2eda25bc66` | 71 files / 1671 tests, tsc and lint clean | phase 3 checkpoint |
