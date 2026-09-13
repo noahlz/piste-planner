@@ -97,6 +97,9 @@ now that `9da51b1b15` fixed the display race. A structural driver addition —
 restoring DE mode to Staged on page 1 right after the T022 share-round-trip
 step — was needed independently: see finding 8.
 
+Confirming run at `e4fcd29058` (second Strips-panel follow-up): PASS, same
+counts, 0 console errors.
+
 
 
 1. **The lane packer and the scheduler disagree on placed counts.** The
@@ -184,3 +187,4 @@ step — was needed independently: see finding 8.
 | Suggest: NAC Cadet/Junior | 48 | T023, both runs |
 | Console errors, both smoke runs | 0 | T023 |
 | Unit suite at `9da51b1b15` | 72 files / 1838 tests, tsc and lint clean | T023 checkpoint |
+| Confirming run: Suggest 15/66/80/48, 0 console errors | PASS | T023, `e4fcd29058` |
