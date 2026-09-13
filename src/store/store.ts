@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type {
   DayConfig,
+  DeMode,
   TournamentType,
   Placement,
   Weapon,
@@ -15,16 +16,7 @@ import type { ScenarioId } from '../data/tournaments.ts'
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
 import { selectDerivedFindings } from './derived.ts'
-import {
-  ADMIN_GAP_MINS,
-  FLIGHT_BUFFER_MINS,
-  THRESHOLD_MINS,
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
-  DEFAULT_POOL_ROUND_DURATION_TABLE,
-} from '../engine/constants.ts'
+import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
 // Constants
@@ -47,6 +39,14 @@ export interface TournamentSlice {
    *  `buildConfig.ts`, never written back to the store. */
   video_strips_total: number | null
   pool_round_duration_table: Record<Weapon, number>
+  /** The Settings panel's Staged / Single choice (013 T022, FR-029, research
+   *  D7). `null` is the unset marker — "follow `TYPE_DEFAULTS[type].de_mode`" —
+   *  and stays `null` when the organizer picks the mode the type already
+   *  defaults to, so a later type change still moves with the type. One value
+   *  for the whole tournament: the per-competition `de_mode` the shrink retired
+   *  had no control and no successor. Resolved in `buildConfig.ts`, never
+   *  written back. Serialized. */
+  de_mode_override: DeMode | null
 
   setTournamentType: (type: TournamentType) => void
   setDays: (days: number) => void
@@ -56,6 +56,7 @@ export interface TournamentSlice {
   computeSuggestedStrips: () => Promise<number | null>
   setPoolRoundDuration: (weapon: Weapon, minutes: number) => void
   resetPoolRoundDuration: (weapon: Weapon) => void
+  setDeModeOverride: (mode: DeMode | null) => void
 }
 
 /**
@@ -71,32 +72,20 @@ export interface CompetitionConfig {
   flighted: boolean
 }
 
-/**
- * The engine settings the organizer can retune from the gears panel (FR-042).
- * Every key is spelled exactly as its `src/engine/constants.ts` export and its
- * `TournamentConfig` field, so the store key, the config field, the serialized
- * key and the constant are one traceable name.
- */
-export interface GlobalOverrides {
-  ADMIN_GAP_MINS: number
-  FLIGHT_BUFFER_MINS: number
-  THRESHOLD_MINS: number
-  SLOT_MINS: number
-  DE_BOUT_DURATION: Record<Weapon, number>
-  YOUTH_VET_BOUT_DELTA: number
-  DEFAULT_DE_STRIP_FOOTPRINT: number
-}
+// The `GlobalOverrides` slice lived here until 013 T022 (research D7): seven
+// engine constants the retired gears panel could retune. Two of them had rows,
+// the other five were carried but unreachable, and `buildConfig.ts` now reads
+// all seven from `constants.ts` directly. Retuning any of them again is engine
+// work first — see "Global settings" in `docs/design/backlog.md`.
 
 export interface CompetitionSlice {
   selectedCompetitions: Record<string, CompetitionConfig>
-  globalOverrides: GlobalOverrides
 
   selectCompetitions: (ids: string[]) => void
   addCompetition: (id: string) => void
   updateCompetition: (id: string, partial: Partial<CompetitionConfig>) => void
   removeCompetition: (id: string) => void
   applyTemplate: (templateName: string) => void
-  setGlobalOverrides: (partial: Partial<GlobalOverrides>) => void
 }
 
 /**
@@ -199,6 +188,7 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
     video_strips_total: null,
     // Copied so store mutations never alias the engine constant
     pool_round_duration_table: { ...DEFAULT_POOL_ROUND_DURATION_TABLE },
+    de_mode_override: null,
 
     setTournamentType: (type) => {
       set({ tournament_type: type })
@@ -273,6 +263,12 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
         },
       }))
     },
+
+    // `null` is a legitimate argument, not an absence: it returns the
+    // tournament to following its type's own DE mode.
+    setDeModeOverride: (mode) => {
+      set({ de_mode_override: mode })
+    },
   }
 }
 
@@ -301,20 +297,6 @@ function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): Co
 function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice {
   return {
     selectedCompetitions: {},
-    // Seeded from the constants themselves, never a repeated literal, so a
-    // default that moves in constants.ts moves here with it.
-    globalOverrides: {
-      ADMIN_GAP_MINS,
-      FLIGHT_BUFFER_MINS,
-      THRESHOLD_MINS,
-      SLOT_MINS,
-      // Copied, not aliased: `setGlobalOverrides` replaces this record whole
-      // (the merge is shallow), and a caller spreading it must not be able to
-      // mutate the module-level constant.
-      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
-      YOUTH_VET_BOUT_DELTA,
-      DEFAULT_DE_STRIP_FOOTPRINT,
-    },
 
     selectCompetitions: (ids) => {
       const map: Record<string, CompetitionConfig> = {}
@@ -368,12 +350,6 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
       // template-loaded config reads back through the picker exactly like a
       // preset-loaded one (T006).
       set({ selectedCompetitions: map, loadedPresetId: templateName })
-    },
-
-    setGlobalOverrides: (partial) => {
-      set((state) => ({
-        globalOverrides: { ...state.globalOverrides, ...partial },
-      }))
     },
   }
 }

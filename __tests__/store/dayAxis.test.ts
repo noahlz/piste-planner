@@ -1,12 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
-import {
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
-} from '../../src/engine/constants.ts'
+import { SLOT_MINS } from '../../src/engine/constants.ts'
 import type { DayConfig } from '../../src/engine/types.ts'
 import { TournamentType } from '../../src/engine/types.ts'
 
@@ -46,19 +41,10 @@ function stateWithDayConfigs(dayConfigs: DayConfig[]): Partial<StoreState> {
         flighted: false,
       },
     },
-    globalOverrides: {
-      ADMIN_GAP_MINS: 20,
-      FLIGHT_BUFFER_MINS: 10,
-      THRESHOLD_MINS: 5,
-      // T072 (004 US5): the four keys the slice gained, at the constants' own
-      // values. This file asserts on day-window arithmetic, and `SLOT_MINS` —
-      // which buildConfig now reads from the slice instead of importing — has
-      // to stay the constant or every snapped boundary here would shift.
-      SLOT_MINS,
-      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
-      YOUTH_VET_BOUT_DELTA,
-      DEFAULT_DE_STRIP_FOOTPRINT,
-    },
+    // The seven-key override record this fixture seeded left with its slice
+    // (013 T022). `SLOT_MINS`, which every snapped boundary here depends on,
+    // is read from `constants.ts` again — the value this fixture was pinning
+    // it to.
     flightingSuggestionStates: [],
   }
 }

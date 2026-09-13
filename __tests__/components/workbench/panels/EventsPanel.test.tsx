@@ -10,7 +10,8 @@ import { categoryDisplay, vetAgeGroupDisplay, competitionLabel } from '../../../
 // 013 T019 (FR-019–FR-021, ui-contract.md §Events): red first, against
 // src/components/workbench/panels/EventsPanel.tsx, which does not exist yet.
 // Takes the events and fencer-count cases from configEditing.test.tsx
-// (FencerCounts, CompetitionMatrix, the composed-host case) as its seed —
+// (the fencer-count and competition-matrix sections, the composed-host
+// case) as its seed —
 // that file is untouched here; T021 deletes it once this panel replaces both
 // section components.
 
@@ -108,7 +109,7 @@ describe('EventsPanel — selection', () => {
     expect(firstChip).toHaveAttribute('aria-pressed', 'true')
   })
 
-  // 013 T021: successor to configEditing.test.tsx's CompetitionMatrix case
+  // 013 T021: successor to configEditing.test.tsx's competition-matrix case
   // ("renders competition toggles when template is applied"), deleted with
   // that file. The heading case above proves the *count* the panel prints;
   // this proves the chips themselves carry the pressed state.
@@ -188,7 +189,7 @@ describe('EventsPanel — fencer count', () => {
     // commitOnChange never clamps mid-keystroke (number-input.tsx) — an
     // out-of-range value is simply not committed, the same rule
     // configEditing.test.tsx's fencer-count commit-on-change case already
-    // pins for the retired FencerCounts component.
+    // pins for the retired fencer-count component.
     const stillFirstId = Object.keys(useStore.getState().selectedCompetitions).sort()[0]
     expect(useStore.getState().selectedCompetitions[stillFirstId].fencer_count).not.toBe(MIN_FENCERS - 1)
   })

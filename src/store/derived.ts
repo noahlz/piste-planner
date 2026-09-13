@@ -90,7 +90,10 @@ function scheduleDeps(
     state.strips_total,
     state.video_strips_total,
     state.pool_round_duration_table,
-    state.globalOverrides,
+    // Replaced the store's global-overrides record in 013 T022: the slice is gone and its
+    // seven values are constants again, so nothing about them can change
+    // between two renders. This is the one setting left that can.
+    state.de_mode_override,
     // Read inside buildCompetitions when applying accepted suggestions, so an
     // accept/reject click must invalidate even though nothing here touches it.
     state.flightingSuggestionStates,

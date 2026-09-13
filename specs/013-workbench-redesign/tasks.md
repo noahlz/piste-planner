@@ -619,6 +619,11 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `data-suggested-strips`, presses Apply; the per-event `Referees for` steps
   are untouched until T020 deletes them, so the driver is not runnable
   between this commit and T020's.
+  → Review follow-up 2026-09-13 at `8f670eba53`: `runSearch` catches,
+  `TournamentPanel` reads `daysAvailableRangeMessage` (exported from
+  `validation.ts`, text unchanged) instead of the findings memo, the debounce
+  test splits its acts, the status text is asserted exactly, and the
+  video-strips-at-ROC coverage from `AdvancedPanel.test.tsx` is restored.
 
 - [x] **T019** [US2] Red tests for the shrink ([research D7](./research.md),
   FR-062, FR-064, FR-071). In `__tests__/store/buildConfig.test.ts`: on a
@@ -672,7 +677,7 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   payload key that T022 removes. Team-cut coercion in `buildConfig.ts` is now
   a backstop behind `defaultCutForEntry`; no test can prove it fires.
 
-- [ ] **T021** [US2] Events panel (FR-019 to FR-021, [research D15](./research.md)).
+- [x] **T021** [US2] Events panel (FR-019 to FR-021, [research D15](./research.md)).
   Build `src/components/workbench/panels/EventsPanel.tsx` so T019's panel
   cases go green, mount it under the Events button in place of
   `CompetitionMatrix` and `FencerCounts`, delete
@@ -681,6 +686,12 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   and T019), and re-point the driver's `spinbutton` /Fencer count for/ step at
   `scripts/smoke.mjs:524` to open the Events panel and read the pressed
   chips' inputs *(subagent commits)*
+  → Done 2026-09-13 at `c956bde6bb`. 74 files, 1858 passing, tsc and lint
+  clean. Fencer input sits inline after its pressed chip. Two successor gaps
+  from `configEditing.test.tsx` closed in `EventsPanel.test.tsx` (the input
+  commits; pressed count equals the template's length). `recompute.test.tsx`
+  mounts `EventsPanel` in place of `FencerCounts`. Driver step unchanged but
+  for its comment; not run until T023.
 
 - [ ] **T022** [US2] Settings panel and the last two store changes (FR-029 to
   FR-031, FR-063, [research D7](./research.md)). Red first:

@@ -6,7 +6,7 @@ import { useStore } from '../../../../src/store/store.ts'
 import { TournamentType } from '../../../../src/engine/types.ts'
 
 // 013 T016 (FR-013–FR-015, ui-contract.md §Inspector panel — Tournament):
-// takes over TournamentSetup's type, day-count and day-hours cases from
+// takes over the tournament-setup section's type, day-count and day-hours cases from
 // configEditing.test.tsx now that the panel replaces that section component.
 
 beforeEach(() => {

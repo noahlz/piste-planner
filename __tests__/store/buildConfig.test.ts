@@ -8,6 +8,7 @@ import { findCompetition } from '../../src/engine/catalogue.ts'
 import type { Strip, Competition, FlightingGroup } from '../../src/engine/types.ts'
 import {
   DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
+  ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS, THRESHOLD_MINS,
   SLOT_MINS, DAY_LENGTH_MINS, DE_REFS,
   SAME_TIME_WINDOW_MINS, INDIV_TEAM_MIN_GAP_MINS,
   EARLY_START_THRESHOLD, MAX_RESCHEDULE_ATTEMPTS,
@@ -49,20 +50,9 @@ function minimalState(): Partial<StoreState> {
         flighted: false,
       },
     },
-    globalOverrides: {
-      ADMIN_GAP_MINS: 20,
-      FLIGHT_BUFFER_MINS: 10,
-      THRESHOLD_MINS: 5,
-      // T072 (004 US5) widened the slice to seven keys. These four carry the
-      // constants' own values because this fixture exercises the three above,
-      // not them — and `SLOT_MINS` especially: buildConfig now reads it from
-      // the slice rather than importing it, so seeding it from the constant is
-      // what keeps every config this file builds identical to its pre-T072 self.
-      SLOT_MINS,
-      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
-      YOUTH_VET_BOUT_DELTA,
-      DEFAULT_DE_STRIP_FOOTPRINT,
-    },
+    // The seven-key override record this fixture seeded left with its slice
+    // (013 T022): `buildConfig` reads those constants from `constants.ts` now,
+    // so there is nothing for a fixture to state.
     flightingSuggestionStates: [],
   }
 }
@@ -250,14 +240,67 @@ describe('buildTournamentConfig', () => {
     })
   })
 
-  describe('global overrides', () => {
-    it('applies global overrides from competitionSlice', () => {
+  // Re-baselined by 013 T022 (research D7, data-model §4). This describe used
+  // to assert the three values `minimalState()` seeded into the store's
+  // global-overrides slice — 20/10/5 rather than the constants' 30/15/10 —
+  // which is what made it a test of the slice. The slice is deleted, no
+  // control writes any of these seven any more, and `buildConfig` reads them
+  // from `constants.ts` directly: the assertion is now that the config tracks
+  // the constant rather than a frozen literal, so a retuned constant moves the
+  // config with it instead of silently disagreeing.
+  describe('the seven retuned settings come from constants.ts (013 T022)', () => {
+    it('reads each one from its constants.ts export, with no store indirection', () => {
       const state = storeWith(minimalState())
       const { config } = buildTournamentConfig(state)
 
-      expect(config.ADMIN_GAP_MINS).toBe(20)
-      expect(config.FLIGHT_BUFFER_MINS).toBe(10)
-      expect(config.THRESHOLD_MINS).toBe(5)
+      expect(config.ADMIN_GAP_MINS).toBe(ADMIN_GAP_MINS)
+      expect(config.FLIGHT_BUFFER_MINS).toBe(FLIGHT_BUFFER_MINS)
+      expect(config.THRESHOLD_MINS).toBe(THRESHOLD_MINS)
+      expect(config.SLOT_MINS).toBe(SLOT_MINS)
+      expect(config.DE_BOUT_DURATION).toEqual(DE_BOUT_DURATION)
+      expect(config.YOUTH_VET_BOUT_DELTA).toBe(YOUTH_VET_BOUT_DELTA)
+      expect(config.DEFAULT_DE_STRIP_FOOTPRINT).toBe(DEFAULT_DE_STRIP_FOOTPRINT)
+    })
+  })
+
+  // The tournament-level override the Settings panel writes (T022, FR-029).
+  // A different mechanism from the per-competition `de_mode` the shrink
+  // retired (T019): one value applied to every competition alike, with `null`
+  // meaning "follow the type".
+  describe('de_mode from the tournament-level override (013 T022)', () => {
+    it('follows the tournament type when the override is null (NAC → STAGED)', () => {
+      const state = storeWith({
+        ...minimalState(),
+        tournament_type: TournamentType.NAC,
+        de_mode_override: null,
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      expect(competitions[0].de_mode).toBe(TYPE_DEFAULTS[TournamentType.NAC].de_mode)
+      expect(competitions[0].de_mode).toBe(DeMode.STAGED)
+    })
+
+    it('follows a different type when the override is null (ROC → SINGLE_STAGE)', () => {
+      const state = storeWith({
+        ...minimalState(),
+        tournament_type: TournamentType.ROC,
+        de_mode_override: null,
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      expect(competitions[0].de_mode).toBe(DeMode.SINGLE_STAGE)
+    })
+
+    it('an explicit override beats the type default (STAGED on ROC)', () => {
+      const state = storeWith({
+        ...minimalState(),
+        tournament_type: TournamentType.ROC,
+        de_mode_override: DeMode.STAGED,
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      expect(TYPE_DEFAULTS[TournamentType.ROC].de_mode).toBe(DeMode.SINGLE_STAGE)
+      expect(competitions[0].de_mode).toBe(DeMode.STAGED)
     })
   })
 

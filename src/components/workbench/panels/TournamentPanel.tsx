@@ -63,7 +63,7 @@ function DayHoursSelect({
 /**
  * The Tournament inspector panel (013 T016, ui-contract.md §Inspector panel
  * — Tournament, FR-013–FR-015): type, day count and per-day hours. Replaces
- * `TournamentSetup` (deleted in this task) — same store fields, restyled to
+ * the tournament-setup section (deleted in that task) — same store fields, restyled to
  * the mockup's pill controls instead of two `Select`s.
  */
 export function TournamentPanel() {

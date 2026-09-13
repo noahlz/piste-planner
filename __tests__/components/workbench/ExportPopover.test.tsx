@@ -159,7 +159,6 @@ describe('ExportPopover load tests', () => {
         video_strips_total: 2,
       },
       competitions: {},
-      globalOverrides: { ADMIN_GAP_MINS: 10, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 30 },
       placements: {
         'GHOST-EVENT': {
           day: 0,

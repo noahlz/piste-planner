@@ -22,6 +22,13 @@ import {
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
+  ADMIN_GAP_MINS,
+  FLIGHT_BUFFER_MINS,
+  THRESHOLD_MINS,
+  SLOT_MINS,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
+  DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
 import { defaultCutForEntry } from './competitionDefaults.ts'
@@ -75,17 +82,20 @@ export function buildTournamentConfig(
       day_end_time: d * DAY_AXIS_SPACING_MINS + day.day_end_time,
     })),
 
-    // Global overrides from store. SLOT_MINS lives here rather than in the
-    // "Engine constants" block below because the gears panel can retune it
-    // (FR-042) — the store seeds the slice from the same constant, so an
-    // untouched setting still arrives at its default.
-    ADMIN_GAP_MINS: state.globalOverrides.ADMIN_GAP_MINS,
-    FLIGHT_BUFFER_MINS: state.globalOverrides.FLIGHT_BUFFER_MINS,
-    THRESHOLD_MINS: state.globalOverrides.THRESHOLD_MINS,
-    SLOT_MINS: state.globalOverrides.SLOT_MINS,
-    DE_BOUT_DURATION: state.globalOverrides.DE_BOUT_DURATION,
-    YOUTH_VET_BOUT_DELTA: state.globalOverrides.YOUTH_VET_BOUT_DELTA,
-    DEFAULT_DE_STRIP_FOOTPRINT: state.globalOverrides.DEFAULT_DE_STRIP_FOOTPRINT,
+    // These seven used to come from the store's global-overrides slice, which 013 T022
+    // deleted with the panel that wrote to it (research D7): two had rows, five
+    // were carried but unreachable, and no control writes any of them now. They
+    // are ordinary engine constants again — kept in their own block only
+    // because a future setting that earns a row back would land here, and
+    // `docs/design/backlog.md` records what each would need first.
+    ADMIN_GAP_MINS,
+    FLIGHT_BUFFER_MINS,
+    THRESHOLD_MINS,
+    SLOT_MINS,
+    // Copied so no consumer spreading the config can reach the module constant.
+    DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
+    YOUTH_VET_BOUT_DELTA,
+    DEFAULT_DE_STRIP_FOOTPRINT,
 
     // Engine constants
     DAY_START_MINS,
@@ -152,7 +162,13 @@ function buildCompetitions(
       ref_policy: typeDefaults.ref_policy,
       cut_mode: cut.mode,
       cut_value: cut.value,
-      de_mode: typeDefaults.de_mode,
+      // The one derived field the organizer can still depart from, and it
+      // departs for the whole tournament at once (013 T022, FR-029): the
+      // Settings panel writes `de_mode_override`, `null` meaning follow the
+      // type. Resolved here rather than in the store so the store keeps the
+      // organizer's intent — "follow the type" — instead of a snapshot of what
+      // the type meant when they chose it.
+      de_mode: state.de_mode_override ?? typeDefaults.de_mode,
       de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
       use_single_pool_override: false,
 

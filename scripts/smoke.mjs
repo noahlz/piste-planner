@@ -575,18 +575,27 @@ log('opening the Settings panel closed Export — the popover dismisses on outsi
 // `DE strip footprint`, was cut afterward for a different reason — it moves
 // the schedule, but off `de_duration_table` durations calibrated against it,
 // so an override desyncs the two rather than doing nothing.
+// 4 markers, not 5, since 013 T022: the two gears rows left with the
+// global-overrides slice, and the DE mode pills gained one marker of their own
+// (it reads Default while the tournament type decides the mode). So the count
+// is PoolDurationSettings' 3 weapons plus DE mode's 1. The read is kept rather
+// than deleted with the rows it used to count — it is what catches a panel
+// that renders but reads every setting as overridden on first open.
 const settingsDefaultCount = () => settingsRegion.getByText('Default', { exact: true }).count()
-if ((await settingsDefaultCount()) !== 5) {
+if ((await settingsDefaultCount()) !== 4) {
   throw new Error(
-    `gears panel: expected 5 rows reading Default on first open, got ${await settingsDefaultCount()}`,
+    `Settings panel: expected 4 settings reading Default on first open, got ${await settingsDefaultCount()}`,
   )
 }
-log('gears panel opened, all 5 settings read Default')
+log('Settings panel opened, all 4 settings read Default')
 await shot('09-gears-default')
 
 // FR-046: a setting change must move the schedule with no explicit re-run.
-// Two settings were tried and rejected before this one, both measured at
-// this exact point in the driver (ROC Div1A/Vet, NAC type, Suggested strips,
+// This was the Admin gap row until 013 T022 deleted it with the
+// global-overrides slice; the claim is unchanged and a pool duration now
+// carries it. The rejected candidates are kept because each records a trap a
+// future re-pointing would otherwise walk back into, all measured at this
+// exact point in the driver (ROC Div1A/Vet, NAC type, Suggested strips,
 // fencer count of 99 on the edited competition):
 //   - DEFAULT_DE_STRIP_FOOTPRINT: T069 measured that an override only moves
 //     anything once it drops below the DE strip grant max_de_strip_pct
@@ -601,51 +610,58 @@ await shot('09-gears-default')
 //     the committed schedule at its last valid state — confirmed by reading
 //     `[data-dimmed]`, which flipped to "true" while the table never moved
 //     even though the store had genuinely changed.
-// A *decrease* only relaxes that sum, so it can never trigger the same
-// freeze — kept here for that reason.
-const adminGapInput = settingsRegion.getByRole('spinbutton', { name: 'Admin gap' })
-const adminGapDefault = Number(await adminGapInput.inputValue())
-const adminGapChanged = adminGapDefault - 15
-const scheduleBeforeGap = await schedTable.textContent()
-await adminGapInput.fill(String(adminGapChanged))
-await adminGapInput.blur()
+// Epee's pool duration sits in that same day-length sum as the first term, so
+// the direction rule the Admin gap step settled on carries over unchanged: a
+// *decrease* only relaxes the sum and can never trigger the freeze. The
+// template is ROC Div1A/Vet, which selects all three weapons across both
+// genders, so epee events are on the board for the change to move.
+const epeeDurationInput = settingsRegion.getByRole('spinbutton', { name: 'Epee pool round duration' })
+const epeeDurationDefault = Number(await epeeDurationInput.inputValue())
+const epeeDurationChanged = epeeDurationDefault - 15
+const scheduleBeforeDuration = await schedTable.textContent()
+await epeeDurationInput.fill(String(epeeDurationChanged))
+await epeeDurationInput.blur()
 await page.waitForTimeout(400)
-const scheduleAfterGap = await schedTable.textContent()
-if (scheduleBeforeGap === scheduleAfterGap) {
-  throw new Error('changing Admin gap did not move the schedule table (FR-046)')
+const scheduleAfterDuration = await schedTable.textContent()
+if (scheduleBeforeDuration === scheduleAfterDuration) {
+  throw new Error('changing the epee pool duration did not move the schedule table (FR-046)')
 }
 if ((await page.locator('[data-dimmed]').getAttribute('data-dimmed')) === 'true') {
-  throw new Error('Admin gap change left the center dimmed-invalid — the "after" read was not a real committed schedule')
+  throw new Error('epee pool duration change left the center dimmed-invalid — the "after" read was not a real committed schedule')
 }
-log('Admin gap', adminGapDefault, '->', adminGapChanged, 'moved the schedule')
+log('Epee pool duration', epeeDurationDefault, '->', epeeDurationChanged, 'moved the schedule')
 await shot('10-gears-changed')
 
 // FR-044: the revert control actually resets, not just relabels. Cheap once
 // the panel is open — nothing else in this driver exercises one.
-await settingsRegion.getByRole('button', { name: 'Revert Admin gap to default' }).click()
+await settingsRegion.getByRole('button', { name: 'Revert Epee to default' }).click()
 await page.waitForTimeout(400)
-if (Number(await adminGapInput.inputValue()) !== adminGapDefault) {
-  throw new Error('Revert Admin gap to default did not restore the default value (FR-044)')
+if (Number(await epeeDurationInput.inputValue()) !== epeeDurationDefault) {
+  throw new Error('Revert Epee to default did not restore the default value (FR-044)')
 }
-if ((await settingsDefaultCount()) !== 5) {
-  throw new Error('Revert Admin gap to default did not restore its Default badge (FR-044)')
+if ((await settingsDefaultCount()) !== 4) {
+  throw new Error('Revert Epee to default did not restore its Default badge (FR-044)')
 }
-if ((await schedTable.textContent()) !== scheduleBeforeGap) {
-  throw new Error('Revert Admin gap to default did not restore the schedule table (FR-044)')
+if ((await schedTable.textContent()) !== scheduleBeforeDuration) {
+  throw new Error('Revert Epee to default did not restore the schedule table (FR-044)')
 }
-log('Revert Admin gap to default restored the default value, badge, and schedule')
+log('Revert Epee to default restored the default value, badge, and schedule')
 
-// FR-045/SC-007: the override round-trips through a share link, and reads as
-// an override on the far side — not merely equal to the default by
-// coincidence. Re-apply the change just reverted so there is an override to
-// carry. Opening the Settings panel closed Export (the mutual exclusion
-// asserted above), so its trigger has to be clicked again — which in turn
-// closes the Settings panel, after the fill below has already used it. The
-// visibility check is kept rather than an unconditional click so the step
-// survives either state, the same defensive shape `openPanel` uses for a
-// panel that may already be open.
-await adminGapInput.fill(String(adminGapChanged))
-await adminGapInput.blur()
+// FR-045/SC-007: a setting round-trips through a share link and reads as an
+// override on the far side — not merely equal to the default by coincidence.
+// The carried setting is DE mode since 013 T022: it is the one setting left
+// that a share link can disagree with the tournament type about, which makes
+// it the one where "arrived as an override" and "arrived as a default" are
+// genuinely different states. Set it to Single on NAC, whose own default is
+// Staged, so the far side reading Single proves the payload decided it.
+// Opening the Settings panel closed Export (the mutual exclusion asserted
+// above), so its trigger has to be clicked again — which in turn closes the
+// Settings panel, after the click below has already used it. The visibility
+// check is kept rather than an unconditional click so the step survives
+// either state, the same defensive shape `openPanel` uses for a panel that
+// may already be open.
+const deModeGroup = settingsRegion.getByRole('radiogroup', { name: 'DE mode' })
+await deModeGroup.getByRole('radio', { name: 'Single' }).click()
 await page.waitForTimeout(400)
 const generateLinkVisible = await page
   .getByRole('button', { name: 'Generate Link' })
@@ -670,25 +686,28 @@ const settingsRegion3 = page3
   .getByRole('complementary', { name: 'Inspector panel' })
   .getByRole('region', { name: 'Settings' })
 await settingsRegion3.waitFor()
-const adminGapInput3 = settingsRegion3.getByRole('spinbutton', { name: 'Admin gap' })
-const adminGapOnLoad = Number(await adminGapInput3.inputValue())
-if (adminGapOnLoad !== adminGapChanged) {
+const deModeGroup3 = settingsRegion3.getByRole('radiogroup', { name: 'DE mode' })
+const singleChecked = await deModeGroup3
+  .getByRole('radio', { name: 'Single' })
+  .getAttribute('aria-checked')
+if (singleChecked !== 'true') {
   throw new Error(
-    `share round-trip lost the Admin gap override: expected ${adminGapChanged}, got ${adminGapOnLoad}`,
+    `share round-trip lost the DE mode override: expected Single checked, got aria-checked=${singleChecked}`,
   )
 }
-// The marker, not the value — an implementation that round-tripped the
-// number but forgot to mark it non-default would still pass the check above.
-const revertVisibleOnLoad = await settingsRegion3
-  .getByRole('button', { name: 'Revert Admin gap to default' })
-  .isVisible()
-  .catch(() => false)
-if (!revertVisibleOnLoad) {
+// The marker, not the checked pill — a payload that carried nothing would
+// still show Single checked on a tournament type that defaults to it, and
+// would read as Default while doing so. NAC defaults to Staged, so this is
+// doubly covered, and the marker is the half that generalises.
+const defaultMarkersOnLoad = await settingsRegion3
+  .getByText('Default', { exact: true })
+  .count()
+if (defaultMarkersOnLoad !== 3) {
   throw new Error(
-    'Admin gap round-tripped its value but not its override marker — the far side reads it as Default (FR-045)',
+    `DE mode round-tripped its value but not its override marker: expected 3 Default markers (the pool durations only), got ${defaultMarkersOnLoad} (FR-045)`,
   )
 }
-log('share round-trip: Admin gap', adminGapChanged, 'arrived marked as an override, not a default')
+log('share round-trip: DE mode Single arrived marked as an override, not a default')
 await page3.screenshot({ path: `${SHOTS}11-gears-roundtrip.png`, fullPage: FULLPAGE })
 await page3.close()
 
@@ -785,6 +804,13 @@ log('NAC Youth schedule table rows =', nacYouthRowCount)
 // 53/197. Verdict: not a defect. A gears-panel override is a tournament-wide
 // setting, so this step's count is the busiest-day search at a 15-minute
 // admin gap; the assertion stays non-zero by design (see above).
+//
+// 013 T022 deleted that Admin gap step, so the 63 above no longer has its
+// cause. The session state reaching here now carries a different tournament-
+// wide leftover instead — the share-link step sets DE mode to Single and
+// nothing restores it, `applyTemplate` keeping it the same way it kept the
+// admin gap. T023 runs the driver and records whatever count that produces.
+// The assertion below is unchanged and stays non-zero by design.
 if (nacYouthRowCount === 0) {
   throw new Error('SC-005: NAC Youth placed 0 events at its Suggest count — the feasibility-strip-hours demotion or the busiest-day suggestion regressed')
 }

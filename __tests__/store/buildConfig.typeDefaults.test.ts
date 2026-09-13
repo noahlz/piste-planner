@@ -2,12 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
 import { TournamentType, RefPolicy, DeMode } from '../../src/engine/types.ts'
-import {
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
-} from '../../src/engine/constants.ts'
 
 /**
  * Same snapshot-then-reset convention as buildConfig.test.ts's storeWith:
@@ -58,19 +52,9 @@ function minimalState(overrides: {
         flighted: false,
       },
     },
-    // T072 (004 US5): the slice's four new keys carry the constants' own
-    // values — this file exercises per-type default resolution, not overrides,
-    // and `SLOT_MINS` now reaches the config through the slice rather than an
-    // import, so it has to be seeded from the constant to stay unchanged.
-    globalOverrides: {
-      ADMIN_GAP_MINS: 20,
-      FLIGHT_BUFFER_MINS: 10,
-      THRESHOLD_MINS: 5,
-      SLOT_MINS,
-      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
-      YOUTH_VET_BOUT_DELTA,
-      DEFAULT_DE_STRIP_FOOTPRINT,
-    },
+    // The seven-key override record this fixture seeded left with its slice
+    // (013 T022). Nothing here changes: every one of those values is read from
+    // `constants.ts` now, which is what the fixture was seeding them to.
     flightingSuggestionStates: [],
   }
 }

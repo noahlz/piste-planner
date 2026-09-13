@@ -3,7 +3,7 @@ import { useStore, type PresetId } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
-import { Category, TournamentType, Weapon } from '../../src/engine/types.ts'
+import { Category, DeMode, TournamentType, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { applyPreset } from '../../src/store/presets.ts'
@@ -12,13 +12,6 @@ import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
-  ADMIN_GAP_MINS,
-  FLIGHT_BUFFER_MINS,
-  THRESHOLD_MINS,
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
 
 // Reset store to initial state before each test
@@ -239,6 +232,29 @@ describe('tournamentSlice', () => {
       expect(state.pool_round_duration_table[Weapon.FOIL]).toBe(90)
     })
   })
+
+  // 013 T022 (FR-029, research D7). The store keeps the organizer's intent,
+  // not a resolved mode: `null` is "follow the type", and `buildConfig.ts`
+  // resolves it per render. Which is why the setter has to accept `null` back
+  // — without that there is no way to return to following the type.
+  describe('setDeModeOverride', () => {
+    it('starts null, takes a mode, and takes null back', () => {
+      expect(useStore.getState().de_mode_override).toBeNull()
+
+      useStore.getState().setDeModeOverride(DeMode.SINGLE_STAGE)
+      expect(useStore.getState().de_mode_override).toBe(DeMode.SINGLE_STAGE)
+
+      useStore.getState().setDeModeOverride(null)
+      expect(useStore.getState().de_mode_override).toBeNull()
+    })
+
+    it('survives a tournament type change — an override is not re-resolved', () => {
+      useStore.getState().setDeModeOverride(DeMode.STAGED)
+      useStore.getState().setTournamentType(TournamentType.ROC)
+
+      expect(useStore.getState().de_mode_override).toBe(DeMode.STAGED)
+    })
+  })
 })
 
 describe('competitionSlice', () => {
@@ -258,24 +274,12 @@ describe('competitionSlice', () => {
       expect(state.selectedCompetitions).toEqual({})
     })
 
-    // Re-baselined by T072 (004 US5): the slice widened from three keys to the
-    // seven the gears panel exposes (FR-042), so a three-key literal no longer
-    // describes it. Asserted against the `constants.ts` exports rather than
-    // literals — the store is required to seed itself from those constants
-    // (contract §1), so a default that moves in constants.ts must move here
-    // with it, and a hardcoded 30/15/10 would hide exactly that break.
-    it('globalOverrides has default values', () => {
-      const state = useStore.getState()
-      expect(state.globalOverrides).toEqual({
-        ADMIN_GAP_MINS,
-        FLIGHT_BUFFER_MINS,
-        THRESHOLD_MINS,
-        SLOT_MINS,
-        DE_BOUT_DURATION,
-        YOUTH_VET_BOUT_DELTA,
-        DEFAULT_DE_STRIP_FOOTPRINT,
-      })
-    })
+    // Dropped without successor (013 T022, research D7): the seven-key
+    // override record this asserted the defaults of is deleted, and
+    // `buildConfig.ts` reads those seven from `constants.ts` directly.
+    // `buildConfig.test.ts` holds the successor claim — that the config
+    // tracks each constant — because the config is where they are now
+    // observable.
   })
 
   describe('selectCompetitions', () => {
@@ -395,17 +399,9 @@ describe('competitionSlice', () => {
   const _presetIdAdmitsBoth: PresetId[] = ['B1', 'RYC Weekend']
   void _presetIdAdmitsBoth
 
-  describe('setGlobalOverrides', () => {
-    it('updates global override values', () => {
-      useStore.getState().setGlobalOverrides({ ADMIN_GAP_MINS: 20 })
-
-      const state = useStore.getState()
-      expect(state.globalOverrides.ADMIN_GAP_MINS).toBe(20)
-      // Unchanged fields preserved
-      expect(state.globalOverrides.FLIGHT_BUFFER_MINS).toBe(15)
-      expect(state.globalOverrides.THRESHOLD_MINS).toBe(10)
-    })
-  })
+  // `setGlobalOverrides` was tested here until 013 T022 deleted it with its
+  // slice (research D7). Its successor is `setDeModeOverride`, which belongs
+  // to the tournament slice — its cases are with that slice above.
 })
 
 // ──────────────────────────────────────────────

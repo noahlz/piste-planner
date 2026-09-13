@@ -14,7 +14,7 @@ import { NumberInput } from '@/components/ui/number-input'
 import { cn } from '@/lib/utils'
 
 // ──────────────────────────────────────────────
-// Catalogue grouping (ported from the retired CompetitionMatrix)
+// Catalogue grouping (ported from the retired competition-matrix section)
 // ──────────────────────────────────────────────
 
 /** Veteran excluded — its six age bands come from ALL_VET_AGE_GROUPS instead. */
@@ -104,7 +104,8 @@ const CHIP_UNSELECTED = 'border-chrome-border bg-white text-neutral-700 hover:bg
 
 /**
  * The Events inspector panel (013 T021, FR-019–FR-021, research D15). Replaces
- * `CompetitionMatrix` and `FencerCounts` (both deleted in this task): one
+ * the competition-matrix and fencer-count sections (both deleted in that
+ * task): one
  * group card per gender × weapon, a chip per catalogue entry, and a fencer
  * count inline beside each selected chip. Per FR-021 selection and fencer
  * count are the only per-event inputs — cut, DE mode, video policy, referee

@@ -140,7 +140,6 @@ describe('parseTournamentFile', () => {
         video_strips_total: 2,
       },
       competitions: {},
-      globalOverrides: {},
       placements: {
         'GHOST-EVENT': {
           day: 0,

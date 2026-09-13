@@ -55,7 +55,8 @@ function RecomputeHost({ viewMode }: { viewMode: ViewMode }) {
   return (
     <>
       <div data-testid="fencer-counts">
-        {/* 013 T021: the fencer input moved from `FencerCounts` (deleted) to
+        {/* 013 T021: the fencer input moved from the retired fencer-count
+            section to
             the Events panel, where it hangs off a selected competition's
             pressed chip. Same aria-label, same commitOnChange, so the edit
             this test drives is unchanged. */}
