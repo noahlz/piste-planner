@@ -38,23 +38,23 @@ function freshStore(): StoreState {
 }
 
 /**
- * A minimal, valid v2 serialized payload. `overrides` deep-replaces the named
- * top-level keys (used here to swap in a hand-built `competitions` block) —
- * callers pass whole sections, not deep-merged fields.
+ * A minimal, valid serialized payload, v3 since 013 T020: `competitions` is the
+ * flat map itself and `globalOverrides` sits at the top level, where it stays
+ * until T022 deletes the slice and this whole file with it. `overrides`
+ * replaces the named top-level keys — callers pass whole sections, not
+ * deep-merged fields.
  */
 function baseValidPayload(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     tournament: {
       tournament_type: 'NAC',
       days_available: 1,
       dayConfigs: [{ day_start_time: 480, day_end_time: 1320 }],
       strips_total: 10,
     },
-    competitions: {
-      selectedCompetitions: {},
-      globalOverrides: {},
-    },
+    competitions: {},
+    globalOverrides: {},
     placements: {},
     dismissedFindings: [],
     ...overrides,
@@ -71,7 +71,7 @@ describe('serializeState — overrides-only globalOverrides (FR-045)', () => {
     store.setGlobalOverrides({ ADMIN_GAP_MINS: 45, YOUTH_VET_BOUT_DELTA: -8 })
 
     const parsed = JSON.parse(serializeState(useStore.getState()))
-    const written = parsed.competitions.globalOverrides
+    const written = parsed.globalOverrides
 
     expect(Object.keys(written).sort()).toEqual(['ADMIN_GAP_MINS', 'YOUTH_VET_BOUT_DELTA'])
     expect(written.ADMIN_GAP_MINS).toBe(45)
@@ -86,7 +86,7 @@ describe('serializeState — overrides-only globalOverrides (FR-045)', () => {
   })
 
   // Choice made here (per T071 dispatch): a fully default store writes an
-  // EMPTY globalOverrides object, not an absent key — `competitions` keeps
+  // EMPTY globalOverrides object, not an absent key — the payload keeps
   // `globalOverrides` as a required field, it is just empty. T076 implements
   // against this choice.
   it('writes an empty globalOverrides object when every setting is at its default', () => {
@@ -94,7 +94,7 @@ describe('serializeState — overrides-only globalOverrides (FR-045)', () => {
 
     const parsed = JSON.parse(serializeState(useStore.getState()))
 
-    expect(parsed.competitions.globalOverrides).toEqual({})
+    expect(parsed.globalOverrides).toEqual({})
   })
 })
 
@@ -132,10 +132,7 @@ describe('loading a payload saved before US5 (original three keys only)', () => 
     // ADMIN_GAP_MINS is departed here to prove a genuine pre-existing override
     // still survives the load, not just coincides with its default.
     const payload = baseValidPayload({
-      competitions: {
-        selectedCompetitions: {},
-        globalOverrides: { ADMIN_GAP_MINS: 45, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 },
-      },
+      globalOverrides: { ADMIN_GAP_MINS: 45, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 },
     })
 
     expect(validateSchema(payload).valid).toBe(true)
@@ -177,9 +174,7 @@ describe('unset settings track a default that moves', () => {
         '../../src/store/serialization.ts'
       )
 
-      const payload = baseValidPayload({
-        competitions: { selectedCompetitions: {}, globalOverrides: {} }, // THRESHOLD_MINS omitted entirely
-      })
+      const payload = baseValidPayload({ globalOverrides: {} }) // THRESHOLD_MINS omitted entirely
       const result = deserializeStateWithMovedDefault(JSON.stringify(payload))
       expect('state' in result).toBe(true)
       if (!('state' in result)) return
@@ -204,7 +199,7 @@ describe('DE_BOUT_DURATION departs as a whole record', () => {
 
     const parsed = JSON.parse(serializeState(useStore.getState()))
 
-    expect(parsed.competitions.globalOverrides.DE_BOUT_DURATION).toEqual({
+    expect(parsed.globalOverrides.DE_BOUT_DURATION).toEqual({
       ...DE_BOUT_DURATION,
       EPEE: 25,
     })
@@ -216,22 +211,17 @@ describe('DE_BOUT_DURATION departs as a whole record', () => {
 
     const parsed = JSON.parse(serializeState(useStore.getState()))
 
-    expect(parsed.competitions.globalOverrides).not.toHaveProperty('DE_BOUT_DURATION')
+    expect(parsed.globalOverrides).not.toHaveProperty('DE_BOUT_DURATION')
   })
 })
 
 // ──────────────────────────────────────────────
-// Case 7 – validation, following the de_mode/ref_policy idiom (serialization.ts:41-50)
+// Case 7 – validation, following the per-competition idiom in serialization.ts
 // ──────────────────────────────────────────────
 
 describe('validateSchema — globalOverrides', () => {
   it('rejects a non-number value for a numeric override key', () => {
-    const payload = baseValidPayload({
-      competitions: {
-        selectedCompetitions: {},
-        globalOverrides: { ADMIN_GAP_MINS: 'fast' },
-      },
-    })
+    const payload = baseValidPayload({ globalOverrides: { ADMIN_GAP_MINS: 'fast' } })
 
     const result = validateSchema(payload)
     expect(result.valid).toBe(false)
@@ -240,10 +230,7 @@ describe('validateSchema — globalOverrides', () => {
 
   it('rejects a DE_BOUT_DURATION record containing an unrecognized weapon key', () => {
     const payload = baseValidPayload({
-      competitions: {
-        selectedCompetitions: {},
-        globalOverrides: { DE_BOUT_DURATION: { EPEE: 20, FOIL: 20, SABRE: 15, DAGGER: 10 } },
-      },
+      globalOverrides: { DE_BOUT_DURATION: { EPEE: 20, FOIL: 20, SABRE: 15, DAGGER: 10 } },
     })
 
     const result = validateSchema(payload)
@@ -264,12 +251,7 @@ describe('a truncated DE_BOUT_DURATION on the wire', () => {
   // (and then capacity.ts's boutDurations[weapon]) as `undefined`. FR-045's
   // "unset settings continue to track their defaults", applied per weapon.
   it('fills the weapons it omits from constants.ts, never undefined', () => {
-    const payload = baseValidPayload({
-      competitions: {
-        selectedCompetitions: {},
-        globalOverrides: { DE_BOUT_DURATION: { EPEE: 25 } },
-      },
-    })
+    const payload = baseValidPayload({ globalOverrides: { DE_BOUT_DURATION: { EPEE: 25 } } })
 
     expect(validateSchema(payload).valid).toBe(true)
 

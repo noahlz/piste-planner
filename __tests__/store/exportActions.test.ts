@@ -131,7 +131,7 @@ describe('parseTournamentFile', () => {
 
   it('reports a placement whose event id is not in the payload competitions as dropped', async () => {
     const json = JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       tournament: {
         tournament_type: 'RYC',
         days_available: 2,
@@ -139,10 +139,8 @@ describe('parseTournamentFile', () => {
         strips_total: 12,
         video_strips_total: 2,
       },
-      competitions: {
-        selectedCompetitions: {},
-        globalOverrides: {},
-      },
+      competitions: {},
+      globalOverrides: {},
       placements: {
         'GHOST-EVENT': {
           day: 0,

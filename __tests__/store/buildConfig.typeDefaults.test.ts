@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
-import { TournamentType, RefPolicy, DeMode, CutMode, VideoPolicy } from '../../src/engine/types.ts'
+import { TournamentType, RefPolicy, DeMode } from '../../src/engine/types.ts'
 import {
   SLOT_MINS,
   DE_BOUT_DURATION,
@@ -28,18 +28,20 @@ function storeWith(partial: Partial<StoreState>): StoreState {
 const COMP_ID = 'D1-M-FOIL-IND'
 
 /**
- * One NAC competition, everything else at buildConfig.test.ts's minimalState
- * values. `de_mode` and `video_strips_total` are written against the *target*
- * shapes T060 introduces — DeModeSetting ('AUTO' | 'SINGLE_STAGE' | 'STAGED')
- * and `number | null` — not today's DeMode / number. That's expected not to
- * typecheck until T060 lands (data-model.md §Resolution rules); Vitest
- * transpiles via esbuild without type-checking, so the mismatch doesn't stop
- * the suite from running red for the right (assertion) reason.
+ * 013 T019 (research D7): re-targeted from the pre-shrink shape. `ref_policy`
+ * and `de_mode` used to be per-competition overrides carrying an `AUTO`
+ * sentinel that beat or deferred to the tournament type's default
+ * (data-model.md, pre-013). T020's shrink removes both fields from
+ * `CompetitionConfig` entirely — the store keeps only `fencer_count` and
+ * `flighted`, and `buildConfig.ts` derives `ref_policy`/`de_mode`
+ * unconditionally off `TYPE_DEFAULTS[type]` (data-model.md §4, FR-021: no
+ * per-event control survives for either field). So this file's fixture no
+ * longer has an override to set — only `tournamentType` and
+ * `videoStripsTotal` remain real inputs; `video_strips_total` stays a
+ * `TournamentSlice` field, untouched by the shrink.
  */
 function minimalState(overrides: {
   tournamentType?: TournamentType
-  refPolicy?: RefPolicy
-  deMode?: DeMode | 'AUTO'
   videoStripsTotal?: number | null
 } = {}): Partial<StoreState> {
   return {
@@ -53,14 +55,7 @@ function minimalState(overrides: {
     selectedCompetitions: {
       [COMP_ID]: {
         fencer_count: 64,
-        ref_policy: overrides.refPolicy ?? RefPolicy.AUTO,
-        cut_mode: CutMode.PERCENTAGE,
-        cut_value: 20,
-        // T060 target: DeModeSetting. Today's CompetitionConfig.de_mode type
-        // is DeMode (no 'AUTO' member) — see module doc comment above.
-        de_mode: (overrides.deMode ?? 'AUTO') as DeMode,
-        de_video_policy: VideoPolicy.REQUIRED,
-        use_single_pool_override: false,
+        flighted: false,
       },
     },
     // T072 (004 US5): the slice's four new keys carry the constants' own
@@ -81,45 +76,43 @@ function minimalState(overrides: {
 }
 
 describe('buildTournamentConfig — per-type default resolution (data-model.md §Resolution rules)', () => {
-  it('resolves ref_policy AUTO to the tournament type\'s referee count', () => {
-    const state = storeWith(minimalState({ tournamentType: TournamentType.NAC, refPolicy: RefPolicy.AUTO }))
+  it('resolves ref_policy to the tournament type\'s referee count (NAC)', () => {
+    const state = storeWith(minimalState({ tournamentType: TournamentType.NAC }))
     const { competitions } = buildTournamentConfig(state)
     expect(competitions[0].ref_policy).toBe(RefPolicy.TWO)
   })
 
-  it('resolves ref_policy AUTO to a different type\'s referee count (ROC, not NAC\'s)', () => {
-    const state = storeWith(minimalState({ tournamentType: TournamentType.ROC, refPolicy: RefPolicy.AUTO }))
+  it('resolves ref_policy to a different type\'s referee count (ROC, not NAC\'s)', () => {
+    const state = storeWith(minimalState({ tournamentType: TournamentType.ROC }))
     const { competitions } = buildTournamentConfig(state)
     expect(competitions[0].ref_policy).toBe(RefPolicy.ONE)
   })
 
-  it('leaves an explicit ref_policy alone even when it disagrees with the type default (organizer beats default)', () => {
-    // NAC's own default is TWO — ONE here can only survive if resolution
-    // skips it rather than overwriting it.
-    const state = storeWith(minimalState({ tournamentType: TournamentType.NAC, refPolicy: RefPolicy.ONE }))
-    const { competitions } = buildTournamentConfig(state)
-    expect(competitions[0].ref_policy).toBe(RefPolicy.ONE)
-  })
+  // Dropped without successor (013 T019, research D7): "an explicit
+  // ref_policy beats the type default" — no per-event ref_policy control
+  // survives the shrink (FR-021), so there is nothing left to be explicit
+  // about. The two tests above already prove the type-default resolution
+  // itself; this case's only content was the override winning, which no
+  // longer exists.
 
-  it('resolves de_mode AUTO to the tournament type\'s DE mode', () => {
-    const state = storeWith(minimalState({ tournamentType: TournamentType.NAC, deMode: 'AUTO' }))
+  it('resolves de_mode to the tournament type\'s DE mode (NAC)', () => {
+    const state = storeWith(minimalState({ tournamentType: TournamentType.NAC }))
     const { competitions } = buildTournamentConfig(state)
     expect(competitions[0].de_mode).toBe(DeMode.STAGED)
   })
 
-  it('resolves de_mode AUTO to a different type\'s DE mode (ROC, not NAC\'s)', () => {
-    const state = storeWith(minimalState({ tournamentType: TournamentType.ROC, deMode: 'AUTO' }))
+  it('resolves de_mode to a different type\'s DE mode (ROC, not NAC\'s)', () => {
+    const state = storeWith(minimalState({ tournamentType: TournamentType.ROC }))
     const { competitions } = buildTournamentConfig(state)
     expect(competitions[0].de_mode).toBe(DeMode.SINGLE_STAGE)
   })
 
-  it('leaves an explicit de_mode alone even when it disagrees with the type default (organizer beats default)', () => {
-    // NAC's own default is STAGED — SINGLE_STAGE here can only survive if
-    // resolution skips it rather than overwriting it.
-    const state = storeWith(minimalState({ tournamentType: TournamentType.NAC, deMode: DeMode.SINGLE_STAGE }))
-    const { competitions } = buildTournamentConfig(state)
-    expect(competitions[0].de_mode).toBe(DeMode.SINGLE_STAGE)
-  })
+  // Dropped without successor (013 T019, research D7): "an explicit de_mode
+  // beats the type default" — same reasoning as ref_policy above. T022 later
+  // adds a *tournament-level* de_mode_override (the Settings panel's
+  // Staged/Single pills), which is a different mechanism than the retired
+  // per-competition field this case exercised, and gets its own coverage
+  // when T022 lands.
 
   it('resolves video_strips_total null to the tournament type\'s video strip count', () => {
     const state = storeWith(minimalState({ tournamentType: TournamentType.NAC, videoStripsTotal: null }))
@@ -148,19 +141,19 @@ describe('buildTournamentConfig — per-type default resolution (data-model.md �
   })
 
   // FR-036: a tournament type change must not be able to destroy an
-  // organizer's setting. Resolution has to happen on a *copy* on the way to
-  // the engine — the store's own AUTO/AUTO/null stay put so a later type
-  // change still sees "unset" and re-resolves against the new type, rather
-  // than seeing whatever the previous type happened to resolve to.
-  it('does not write resolved values back to the store — AUTO/AUTO/null survive the call unresolved', () => {
+  // organizer's video_strips_total setting. Resolution has to happen on a
+  // *copy* on the way to the engine — the store's own `null` stays put so a
+  // later type change still sees "unset" and re-resolves against the new
+  // type. Re-targeted (013 T019): the ref_policy/de_mode halves of this case
+  // are gone with the fields themselves — there is nothing in the store left
+  // to "not write back".
+  it('does not write video_strips_total back to the store — null survives the call unresolved', () => {
     const state = storeWith(
-      minimalState({ tournamentType: TournamentType.NAC, refPolicy: RefPolicy.AUTO, deMode: 'AUTO', videoStripsTotal: null }),
+      minimalState({ tournamentType: TournamentType.NAC, videoStripsTotal: null }),
     )
 
     buildTournamentConfig(state)
 
-    expect(state.selectedCompetitions[COMP_ID].ref_policy).toBe(RefPolicy.AUTO)
-    expect(state.selectedCompetitions[COMP_ID].de_mode).toBe('AUTO')
     expect(state.video_strips_total).toBeNull()
   })
 })

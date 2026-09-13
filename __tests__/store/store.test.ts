@@ -279,44 +279,57 @@ describe('competitionSlice', () => {
   })
 
   describe('selectCompetitions', () => {
-    it('adds competitions with default per-competition config derived from catalogue', () => {
+    // Since 013 T020 the store record is the two fields below and nothing else,
+    // so the cut and video-policy defaults this case used to read off the store
+    // are asserted where they now live: the competition `buildTournamentConfig`
+    // hands the engine. Cadet is not in the derivation describe's fixture
+    // template (Vet/Div1/Junior), so these two categories are checked here
+    // rather than dropped as covered.
+    it('adds competitions carrying only a fencer count and a flighted flag', () => {
       useStore.getState().selectCompetitions([CADET_MF, JUNIOR_WE])
 
       const state = useStore.getState()
+
+      for (const id of [CADET_MF, JUNIOR_WE]) {
+        const config = state.selectedCompetitions[id]
+        expect(config, id).toBeDefined()
+        expect(Object.keys(config).sort(), id).toEqual(['fencer_count', 'flighted'])
+        expect(config.fencer_count, id).toBe(0)
+        expect(config.flighted, id).toBe(false)
+      }
+    })
+
+    it('derives the cut and video-policy defaults from the catalogue on the way to the engine', () => {
+      useStore.getState().selectCompetitions([CADET_MF, JUNIOR_WE])
       const cadetEntry = findCompetition(CADET_MF)!
       const juniorEntry = findCompetition(JUNIOR_WE)!
 
-      // Cadet defaults
-      const cadetConfig = state.selectedCompetitions[CADET_MF]
-      expect(cadetConfig).toBeDefined()
-      expect(cadetConfig.fencer_count).toBe(0)
-      expect(cadetConfig.ref_policy).toBe('AUTO')
-      expect(cadetConfig.cut_mode).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].mode)
-      expect(cadetConfig.cut_value).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].value)
-      // 'AUTO', not 'SINGLE_STAGE' — a new event follows its tournament type's
-      // DE mode until an organizer picks one (research D6). buildConfig resolves it.
-      expect(cadetConfig.de_mode).toBe('AUTO')
-      expect(cadetConfig.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[cadetEntry.category])
-      expect(cadetConfig.use_single_pool_override).toBe(false)
+      const { competitions } = buildTournamentConfig(useStore.getState())
 
-      // Junior defaults
-      const juniorConfig = state.selectedCompetitions[JUNIOR_WE]
-      expect(juniorConfig).toBeDefined()
-      expect(juniorConfig.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[juniorEntry.category])
+      const cadet = competitions.find((c) => c.id === CADET_MF)!
+      expect(cadet).toBeDefined()
+      expect(cadet.cut_mode).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].mode)
+      expect(cadet.cut_value).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].value)
+      expect(cadet.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[cadetEntry.category])
+      expect(cadet.use_single_pool_override).toBe(false)
+
+      const junior = competitions.find((c) => c.id === JUNIOR_WE)!
+      expect(junior).toBeDefined()
+      expect(junior.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[juniorEntry.category])
     })
 
-    it('defaults a team competition to all-advance regardless of its category default', () => {
+    it('sends a team competition to the engine all-advance regardless of its category default', () => {
       useStore.getState().selectCompetitions([CADET_MF_TEAM])
 
-      const state = useStore.getState()
-      const teamConfig = state.selectedCompetitions[CADET_MF_TEAM]
+      const { competitions } = buildTournamentConfig(useStore.getState())
+      const team = competitions.find((c) => c.id === CADET_MF_TEAM)!
 
-      expect(teamConfig).toBeDefined()
+      expect(team).toBeDefined()
       // Cadet's own category default is PERCENTAGE/20 (asserted above for the
-      // individual entry) — the team override must win over it.
+      // individual entry) — the team rule must win over it.
       expect(DEFAULT_CUT_BY_CATEGORY[Category.CADET].mode).toBe('PERCENTAGE')
-      expect(teamConfig.cut_mode).toBe('DISABLED')
-      expect(teamConfig.cut_value).toBe(100)
+      expect(team.cut_mode).toBe('DISABLED')
+      expect(team.cut_value).toBe(100)
     })
 
     it('skips unknown catalogue IDs without error', () => {
@@ -335,8 +348,8 @@ describe('competitionSlice', () => {
 
       const state = useStore.getState()
       expect(state.selectedCompetitions[CADET_MF].fencer_count).toBe(64)
-      // Other fields remain unchanged
-      expect(state.selectedCompetitions[CADET_MF].ref_policy).toBe('AUTO')
+      // The other field remains unchanged
+      expect(state.selectedCompetitions[CADET_MF].flighted).toBe(false)
     })
   })
 

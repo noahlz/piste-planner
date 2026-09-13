@@ -546,7 +546,7 @@ summary, canvas and footer follow. No input exists for referees available,
 admin gap, flight buffer, per-event cut, DE mode, video policy or referee
 policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
 
-- [ ] **T016** [P] [US2] Tournament panel (FR-013 to FR-015). Red first:
+- [x] **T016** [P] [US2] Tournament panel (FR-013 to FR-015). Red first:
   `__tests__/components/workbench/panels/TournamentPanel.test.tsx` takes the
   type, day-count and day-hours cases from `__tests__/components/configEditing.test.tsx`
   – `radiogroup` "Tournament type" with six `radio`s NAC, RYC, RJCC, ROC, SYC,
@@ -561,8 +561,13 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   delete `TournamentSetup.tsx`, and re-point the driver's type step at
   `scripts/smoke.mjs:1053` to `radio` "ROC" in that radiogroup. The events
   cases in `configEditing.test.tsx` wait for T020
+  → Done 2026-09-07 (committed with T018, `1e730723b7`): 7 cases; Radix
+  RadioGroup from the umbrella package. The "existing out-of-range notice" is
+  the engine's `days-available-range` rule (`validation.ts:421`), read from
+  the derived findings rather than re-worded. `TIME_OPTIONS` in `lib/time.ts`;
+  AM/PM `formatTime` deleted with `TournamentSetup`.
 
-- [ ] **T017** [P] [US2] The search returns instead of writing
+- [x] **T017** [P] [US2] The search returns instead of writing
   ([research D8](./research.md), FR-017). Red first, in
   `__tests__/store/store.test.ts`: `describe('suggestStrips')` becomes
   `describe('computeSuggestedStrips')` – it resolves to the search's answer for
@@ -573,8 +578,12 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   (`src/store/store.ts:63`, `:240–273`) into `computeSuggestedStrips():
   Promise<number | null>` with the same bounded scan and macrotask yield, and
   delete `suggestStrips`
+  → Done 2026-09-07 (committed with T018, `1e730723b7`): 6 cases, red on
+  "computeSuggestedStrips is not a function"; the subscribe case sees no
+  `strips_total` write during the search. No `suggestStrips` under `src/` or
+  `__tests__/`.
 
-- [ ] **T018** [US2] Strips & referees panel (FR-016 to FR-018,
+- [x] **T018** [US2] Strips & referees panel (FR-016 to FR-018,
   [research D8, D9](./research.md)). Red first:
   `__tests__/components/workbench/panels/StripsPanel.test.tsx` re-targets
   `__tests__/components/sections/StripSetup.test.tsx` and
@@ -601,8 +610,17 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   callers unchanged); the Advanced steps at `:978–1001` read
   `data-refs-per-pool` and press the video revert in this panel
   *(subagent commits)*
+  → Done 2026-09-07, `1e730723b7`: 24 cases; 75 files / 1849 tests, tsc and
+  lint clean. Reveal timers held in a `Set`, not one ref – the mount search
+  and a debounced search can overlap (the stale-token case proves it).
+  Dropped without successor: AdvancedPanel's per-event referee Default-badge
+  case (no per-event control remains) and its DE-mode summary assertions
+  (T022 re-homes DE mode). Driver: `pressSuggest` opens the panel, waits for
+  `data-suggested-strips`, presses Apply; the per-event `Referees for` steps
+  are untouched until T020 deletes them, so the driver is not runnable
+  between this commit and T020's.
 
-- [ ] **T019** [US2] Red tests for the shrink ([research D7](./research.md),
+- [x] **T019** [US2] Red tests for the shrink ([research D7](./research.md),
   FR-062, FR-064, FR-071). In `__tests__/store/buildConfig.test.ts`: on a
   default store `buildTournamentConfig` derives, per competition, `ref_policy`
   from `TYPE_DEFAULTS[type]`, `cut_mode` and `cut_value` from
@@ -625,6 +643,14 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `typeDefaultPrecedence.test.ts` and `competitionDefaults.test.ts` wherever
   they set a retired per-event field. Run: the shrink cases fail on the extra
   fields and the version, the panel cases because it does not exist
+  → Done 2026-09-08 at `1e730723b7`, uncommitted (T020 commits): red on
+  `flighted` (`buildConfig.test.ts:681`), v3 round trip and v2 refusal
+  (`serialization.test.ts:1075`, `:1091`), and the missing `EventsPanel.tsx`
+  (11 cases). Pre-shrink baseline captured to
+  `__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json` from
+  the code, not by hand. Dropped without successor: explicit per-event
+  `ref_policy`/`de_mode` survival (typeDefaults ×2, precedence ×2) and the
+  regional-cut-beats-explicit-cut describe (×2). Details in sessions/S5.md.
 
 - [ ] **T020** [US2] The per-event record shrinks. `CompetitionConfig`
   (`src/store/store.ts:81`) becomes `{ fencer_count, flighted }`,

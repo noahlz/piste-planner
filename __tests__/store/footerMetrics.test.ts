@@ -8,7 +8,6 @@ import {
   type FooterMetric,
 } from '../../src/store/derived.ts'
 import { makePlacement } from '../helpers/factories.ts'
-import { CutMode, DeMode } from '../../src/engine/types.ts'
 
 /**
  * T011b — `selectFooterMetrics` and `selectPlacementCounts` (research D7;
@@ -111,17 +110,18 @@ function oneOverflowBlock(): void {
 function twoSegmentOverflow(): void {
   useStore.setState(useStore.getInitialState(), true)
   const s = useStore.getState()
-  s.setTournamentType('NAC')
+  // ROC, not NAC, since 013 T020: the shape this fixture needs — cut disabled
+  // and a single-stage DE — used to be set per event, and both are derived now.
+  // A JUNIOR event at a regional type takes REGIONAL_CUT_OVERRIDES' DISABLED/100
+  // and TYPE_DEFAULTS[ROC].de_mode's SINGLE_STAGE, which is the same pair the
+  // two `updateCompetition` calls used to write by hand.
+  s.setTournamentType('ROC')
   s.setDays(1)
   s.setStrips(4)
   s.setVideoStrips(0)
   s.selectCompetitions(['JR-M-EPEE-IND', 'JR-W-EPEE-IND'])
   for (const id of ['JR-M-EPEE-IND', 'JR-W-EPEE-IND']) {
-    s.updateCompetition(id, {
-      fencer_count: 24,
-      cut_mode: CutMode.DISABLED,
-      de_mode: DeMode.SINGLE_STAGE,
-    })
+    s.updateCompetition(id, { fencer_count: 24 })
   }
   s.setPlacementsFromAuto({
     'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 2 }),

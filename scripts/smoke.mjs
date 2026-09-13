@@ -944,46 +944,6 @@ if ((await videoField.inputValue()) !== '8') {
 }
 log('referees per pool at a NAC:', (await refsPerPool())?.trim(), 'video strips:', await videoField.inputValue())
 
-// Two events: the first gets a hand-set referee count, the second is left
-// following the default. Both start at the store's AUTO marker, which the
-// option list names by the count it resolves to.
-const refSelects = await page.getByRole('combobox', { name: /^Referees for / }).all()
-if (refSelects.length < 2) {
-  throw new Error(`the Advanced table offered ${refSelects.length} referee controls; two are needed`)
-}
-const [handSet, following] = refSelects
-const handSetName = await handSet.getAttribute('aria-label')
-const followingName = await following.getAttribute('aria-label')
-const refText = async (sel) => ((await sel.textContent()) ?? '').trim()
-if ((await refText(handSet)) !== 'Auto (2)' || (await refText(following)) !== 'Auto (2)') {
-  throw new Error(
-    `a fresh event did not start on the type default: "${await refText(handSet)}" / "${await refText(following)}"`,
-  )
-}
-
-// Exact names throughout: a competition label is a prefix of its Team sibling's
-// ("… Épée" vs "… Épée Team"), so the default substring match makes both the
-// combobox and the cell lookups below strict-mode violations.
-await handSet.click()
-await page.getByRole('option', { name: '1 referee', exact: true }).click()
-await page.waitForTimeout(200)
-if ((await refText(handSet)) !== '1 referee') {
-  throw new Error(`setting an explicit referee count did not stick: "${await refText(handSet)}"`)
-}
-
-// FR-039's marker is the stored AUTO, never a comparison against the resolved
-// count — the cell's `Default` badge is where that shows.
-const refCell = (name) => page.locator('td').filter({ has: page.getByRole('combobox', { name, exact: true }) })
-const defaultBadges = (name) => refCell(name).getByText('Default', { exact: true }).count()
-if ((await defaultBadges(handSetName)) !== 0) {
-  throw new Error(`${handSetName} still reads Default after being set by hand`)
-}
-if ((await defaultBadges(followingName)) !== 1) {
-  throw new Error(`${followingName} lost its Default badge without being touched`)
-}
-log('hand-set:', handSetName, '→ 1 referee; following the default:', followingName)
-await shot('08-advanced-nac')
-
 // The type change. The retired top bar's own "Tournament type" control is
 // gone (013 T010), and TournamentSetup's dropdown is gone too (013 T016) —
 // the Tournament panel's type control is now the "Tournament type" radiogroup
@@ -995,41 +955,20 @@ await page
   .click()
 await page.waitForTimeout(400)
 
-// The Advanced summary and the referee selects read below live in the Strips
-// & referees panel, which the Tournament panel above just replaced it with —
-// reopen it before reading either.
+// Both readings below live in the Strips & referees panel, which the
+// Tournament panel above just replaced — reopen it before reading either.
 await openPanel('Strips & referees')
 
-// Half one — everything that was following a default moved to the ROC row.
+// Everything that follows the tournament type moved to the ROC row. Since the
+// per-event record shrank (013 T020) that is every event: referee policy is
+// derived in buildConfig.ts and no per-event control remains to depart from it.
 if ((await refsPerPool())?.trim() !== '1') {
   throw new Error(`NAC → ROC did not re-resolve referees per pool: "${await refsPerPool()}"`)
 }
 if ((await videoField.inputValue()) !== '0') {
   throw new Error(`NAC → ROC did not re-resolve video strips: "${await videoField.inputValue()}"`)
 }
-if ((await refText(following)) !== 'Auto (1)') {
-  throw new Error(
-    `${followingName} was following the NAC default and did not follow ROC's: "${await refText(following)}"`,
-  )
-}
-
-// Half two — the hand-set count survived (FR-036). And it still reads as *not*
-// default: ROC's own default is 1 referee, so an implementation that derived
-// the badge by comparing the resolved counts would call this event's explicit
-// ONE a default here, which is the exact trap data-model.md §Settings override
-// state describes.
-if ((await refText(handSet)) !== '1 referee') {
-  throw new Error(
-    `FR-036 violated: the tournament type change destroyed ${handSetName}'s hand-set referee count ("${await refText(handSet)}")`,
-  )
-}
-if ((await defaultBadges(handSetName)) !== 0) {
-  throw new Error(`${handSetName} reads Default at a ROC — the badge is comparing values, not reading the stored marker`)
-}
-if ((await defaultBadges(followingName)) !== 1) {
-  throw new Error(`${followingName} lost its Default badge across the type change`)
-}
-log('type NAC → ROC: defaults re-resolved,', handSetName, 'kept its hand-set 1 referee')
+log('type NAC → ROC: referees per pool and video strips re-resolved')
 await shot('08b-advanced-roc')
 
 await browser.close()

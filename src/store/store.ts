@@ -2,10 +2,6 @@ import { create } from 'zustand'
 import type {
   DayConfig,
   TournamentType,
-  RefPolicy,
-  CutMode,
-  DeMode,
-  VideoPolicy,
   Placement,
   Weapon,
 } from '../engine/types.ts'
@@ -20,7 +16,6 @@ import type { ScenarioId } from '../data/tournaments.ts'
 // — no runtime cycle, only a type-level one that TS resolves fine.
 import { selectDerivedFindings } from './derived.ts'
 import {
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   ADMIN_GAP_MINS,
   FLIGHT_BUFFER_MINS,
   THRESHOLD_MINS,
@@ -30,7 +25,6 @@ import {
   DEFAULT_DE_STRIP_FOOTPRINT,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../engine/constants.ts'
-import { defaultCutForEntry } from './competitionDefaults.ts'
 
 // ──────────────────────────────────────────────
 // Constants
@@ -65,26 +59,16 @@ export interface TournamentSlice {
 }
 
 /**
- * The store's DE mode *setting*: the engine's two modes plus `AUTO`, meaning
- * "follow the tournament type's default" (research D6). It lives here and not in
- * `src/engine/types.ts` because the engine cannot resolve `AUTO` — that needs
- * tournament-level context it never receives (constitution I). `buildConfig.ts`
- * resolves it, so the engine's `DeMode` keeps its two values.
- *
- * A union alias rather than an `as const` object: this file already spells these
- * settings as bare literals (`ref_policy: 'AUTO'` below), and no caller needs a
- * runtime member list. Constitution V — never an enum.
+ * Everything the organizer states per event (013 research D7, data-model §2).
+ * The five settings that used to live here — `ref_policy`, the cut pair,
+ * `de_mode`, `de_video_policy`, `use_single_pool_override` — had exactly one
+ * control between them and are now derivations in `buildConfig.ts`
+ * (data-model §4), so the record carries only what no rule can compute: how
+ * many fencers the organizer expects, and whether the event runs flighted.
  */
-export type DeModeSetting = DeMode | 'AUTO'
-
 export interface CompetitionConfig {
   fencer_count: number
-  ref_policy: RefPolicy
-  cut_mode: CutMode
-  cut_value: number
-  de_mode: DeModeSetting
-  de_video_policy: VideoPolicy
-  use_single_pool_override: boolean
+  flighted: boolean
 }
 
 /**
@@ -294,13 +278,15 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
 
 type FencerDefaultTable = Partial<Record<string, number>>
 
-/** Builds a default CompetitionConfig from a catalogue entry's category.
+/** Builds a default CompetitionConfig for a catalogue id. Since the record
+ *  shrank to `{ fencer_count, flighted }` (013 research D7) the entry is looked
+ *  up only to reject an unknown id and to key the template's fencer table —
+ *  every other per-event value is derived in `buildConfig.ts`.
  *  When fencerDefaults is provided (e.g. from a template), uses it to
  *  populate fencer_count instead of defaulting to 0. */
 function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): CompetitionConfig | null {
   const entry = findCompetition(id)
   if (!entry) return null
-  const cut = defaultCutForEntry(entry)
   const defaultKey =
     entry.event_type === 'TEAM'
       ? `${entry.category}:TEAM`
@@ -308,12 +294,7 @@ function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): Co
   const defaultCount = fencerDefaults?.[defaultKey] ?? 0
   return {
     fencer_count: defaultCount,
-    ref_policy: 'AUTO',
-    cut_mode: cut.mode,
-    cut_value: cut.value,
-    de_mode: 'AUTO',
-    de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
-    use_single_pool_override: false,
+    flighted: false,
   }
 }
 

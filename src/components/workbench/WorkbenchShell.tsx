@@ -9,7 +9,6 @@ import { TournamentPanel } from './panels/TournamentPanel.tsx'
 import { StripsPanel } from './panels/StripsPanel.tsx'
 import { CompetitionMatrix } from '../sections/CompetitionMatrix.tsx'
 import { FencerCounts } from '../sections/FencerCounts.tsx'
-import { CompetitionOverrides } from '../sections/CompetitionOverrides.tsx'
 import { AnalysisOutput } from '../sections/AnalysisOutput.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
 import { PanelId, ViewMode, loadViewState, saveViewState } from '../../store/viewState.ts'
@@ -35,7 +34,6 @@ function panelContent(id: PanelId): ReactNode {
         <div className="space-y-3">
           <CompetitionMatrix />
           <FencerCounts />
-          <CompetitionOverrides />
         </div>
       )
     case PanelId.FINDINGS:

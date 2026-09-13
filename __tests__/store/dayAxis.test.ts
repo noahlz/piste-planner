@@ -8,9 +8,7 @@ import {
   DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
 import type { DayConfig } from '../../src/engine/types.ts'
-import {
-  CutMode, DeMode, VideoPolicy, RefPolicy, TournamentType,
-} from '../../src/engine/types.ts'
+import { TournamentType } from '../../src/engine/types.ts'
 
 /**
  * Assertions for contracts/day-axis.md C1: the config handed to `scheduleAll`
@@ -45,12 +43,7 @@ function stateWithDayConfigs(dayConfigs: DayConfig[]): Partial<StoreState> {
     selectedCompetitions: {
       'D1-M-FOIL-IND': {
         fencer_count: 64,
-        ref_policy: RefPolicy.AUTO,
-        cut_mode: CutMode.PERCENTAGE,
-        cut_value: 20,
-        de_mode: DeMode.SINGLE_STAGE,
-        de_video_policy: VideoPolicy.REQUIRED,
-        use_single_pool_override: false,
+        flighted: false,
       },
     },
     globalOverrides: {

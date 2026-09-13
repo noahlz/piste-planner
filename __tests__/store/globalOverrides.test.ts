@@ -11,9 +11,7 @@ import {
   YOUTH_VET_BOUT_DELTA,
   DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
-import {
-  TournamentType, RefPolicy, CutMode, DeMode, VideoPolicy, Weapon,
-} from '../../src/engine/types.ts'
+import { TournamentType, Weapon } from '../../src/engine/types.ts'
 
 /**
  * T069 (004-p3-workbench-shell, US5) — failing tests for the widened
@@ -51,16 +49,24 @@ function defaultGlobalOverrides(): GlobalOverrides {
 const COMP_ID = 'D1-M-FOIL-IND'
 
 /**
- * One NAC individual foil event, 64 entries, SINGLE_STAGE DE — same shape
- * buildConfig.test.ts's minimalState uses. 64 fencers cut 20% (PERCENTAGE)
- * promotes to round(64*0.8)=51, which nextPowerOf2 rounds up to a 64
- * bracket, so deStripFootprint's cap (16, or whatever DEFAULT_DE_STRIP_FOOTPRINT
- * is overridden to) actually binds against bracketSize/2=32 — this is the
- * fixture the "changing an override changes the schedule" cases run.
+ * One individual foil event, 64 entries, SINGLE_STAGE DE. 64 fencers cut 20%
+ * (PERCENTAGE) promotes to round(64*0.8)=51, which nextPowerOf2 rounds up to a
+ * 64 bracket, so deStripFootprint's cap (16, or whatever
+ * DEFAULT_DE_STRIP_FOOTPRINT is overridden to) actually binds against
+ * bracketSize/2=32 — this is the fixture the "changing an override changes the
+ * schedule" cases run.
+ *
+ * RYC, not NAC, since 013 T020: the SINGLE_STAGE DE this fixture needs was a
+ * per-event field and is now `TYPE_DEFAULTS[type].de_mode`, and RYC is the one
+ * type that resolves to SINGLE_STAGE without also being in
+ * REGIONAL_CUT_TOURNAMENT_TYPES — a regional type would force DIV1's cut to
+ * DISABLED and take the 20% promotion above out of the fixture. At NAC the
+ * derived STAGED DE leaves the event unplaced, which is what made these two
+ * cases read `undefined`.
  */
 function minimalState(): Partial<StoreState> {
   return {
-    tournament_type: TournamentType.NAC,
+    tournament_type: TournamentType.RYC,
     days_available: 1,
     dayConfigs: [{ day_start_time: 480, day_end_time: 1320 }],
     strips_total: 10,
@@ -68,12 +74,7 @@ function minimalState(): Partial<StoreState> {
     selectedCompetitions: {
       [COMP_ID]: {
         fencer_count: 64,
-        ref_policy: RefPolicy.AUTO,
-        cut_mode: CutMode.PERCENTAGE,
-        cut_value: 20,
-        de_mode: DeMode.SINGLE_STAGE,
-        de_video_policy: VideoPolicy.BEST_EFFORT,
-        use_single_pool_override: false,
+        flighted: false,
       },
     },
     globalOverrides: defaultGlobalOverrides(),

@@ -75,7 +75,7 @@ describe('ExportPopover save tests', () => {
     expect(mockAnchor.download).toBe('tournament.piste.json')
   })
 
-  it('saved JSON carries the v2 shape including placements', () => {
+  it('saved JSON carries the v3 shape including placements', () => {
     const id = TEMPLATES['RYC Weekend'][0]
     useStore.getState().applyTemplate('RYC Weekend')
     useStore.getState().setStrips(12)
@@ -106,7 +106,7 @@ describe('ExportPopover save tests', () => {
       reader.onload = () => {
         try {
           const parsed = JSON.parse(reader.result as string)
-          expect(parsed.schemaVersion).toBe(2)
+          expect(parsed.schemaVersion).toBe(3)
           expect(parsed.tournament).toBeDefined()
           expect(parsed.competitions).toBeDefined()
           expect(parsed.tournament.strips_total).toBe(12)
@@ -150,7 +150,7 @@ describe('ExportPopover load tests', () => {
     render(<ExportPopover defaultOpen />)
 
     const json = JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       tournament: {
         tournament_type: 'RYC',
         days_available: 2,
@@ -158,10 +158,8 @@ describe('ExportPopover load tests', () => {
         strips_total: 12,
         video_strips_total: 2,
       },
-      competitions: {
-        selectedCompetitions: {},
-        globalOverrides: { ADMIN_GAP_MINS: 10, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 30 },
-      },
+      competitions: {},
+      globalOverrides: { ADMIN_GAP_MINS: 10, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 30 },
       placements: {
         'GHOST-EVENT': {
           day: 0,
