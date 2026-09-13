@@ -185,25 +185,68 @@ describe('Block label degrades as room shrinks (D4, mockup fits())', () => {
   // narrow even for a shrunk glyph, not for a 45px block that has room for
   // one — so when no label fits at all, the icon stands alone down to a 10px
   // floor before the block goes blank.
+  //
+  // T027 follow-up 2: the icon-alone size is `min(iconPx, widthPx - 2 *
+  // padding)`, and `padding` for this fixture (rowH = 96/4 = 24) is
+  // `clamp(24 * 0.2, 6, 11)` = 6. `iconPx` is 22 (see the comment above), so
+  // the formula's floor and its one-below edge are pinned exactly rather than
+  // bracketed by a range: widthPx 22 -> min(22, 22-12) = 10, and widthPx 21 ->
+  // min(22, 21-12) = 9, which is below the 10px floor and drops the icon.
   const PADDING_PX = 6 // clamp(rowH*0.2, 6, 11); rowH = 96/4 = 24 -> floors to 6
 
   it('keeps the phase icon alone when no label fits but the icon has room', () => {
     const el = renderBlock({ widthPx: 45, placement: { ...PLACEMENT, phase: Phase.DE_PRELIMS } })
 
     expect(labelText(el)).toBe('')
+    expect(el.querySelector('[data-label]')).toBeNull()
     const icon = el.querySelector<HTMLElement>('[data-icon="bracket"]')
     expect(icon).not.toBeNull()
-    const iconPx = Number(icon?.style.width.replace('px', ''))
-    expect(icon?.style.height.replace('px', '')).toBe(String(iconPx))
-    expect(iconPx).toBeGreaterThanOrEqual(10)
-    expect(iconPx).toBeLessThanOrEqual(45 - 2 * PADDING_PX)
+    expect(icon?.style.width.replace('px', '')).toBe('22')
+    expect(icon?.style.height.replace('px', '')).toBe('22')
+  })
+
+  it('sizes the lone icon at exactly the 10px floor when the width allows it', () => {
+    const el = renderBlock({ widthPx: 22, placement: { ...PLACEMENT, phase: Phase.DE_PRELIMS } })
+
+    expect(labelText(el)).toBe('')
+    expect(el.querySelector('[data-label]')).toBeNull()
+    const icon = el.querySelector<HTMLElement>('[data-icon="bracket"]')
+    expect(icon).not.toBeNull()
+    expect(icon?.style.width.replace('px', '')).toBe('10')
+    expect(icon?.style.height.replace('px', '')).toBe('10')
+  })
+
+  it('drops the icon one pixel below the 10px floor', () => {
+    const el = renderBlock({ widthPx: 21, placement: { ...PLACEMENT, phase: Phase.DE_PRELIMS } })
+
+    expect(labelText(el)).toBe('')
+    expect(el.querySelector('[data-label]')).toBeNull()
+    expect(el.querySelector('[data-icon]')).toBeNull()
   })
 
   it('goes blank — no label, no icon — below the 10px icon floor', () => {
     const el = renderBlock({ widthPx: 12, placement: { ...PLACEMENT, phase: Phase.DE_PRELIMS } })
 
     expect(labelText(el)).toBe('')
+    expect(el.querySelector('[data-label]')).toBeNull()
     expect(el.querySelector('[data-icon]')).toBeNull()
+  })
+
+  it("pads the inner flex by the block's own padding, not a fixed class", () => {
+    // rowH = 96/4 = 24 -> clamp(24*0.2, 6, 11) = 6
+    const narrow = renderBlock()
+    const contentNarrow = narrow.querySelector<HTMLElement>('[data-content]')
+    expect(contentNarrow).not.toBeNull()
+    expect(contentNarrow?.style.paddingLeft).toBe(`${PADDING_PX}px`)
+    expect(contentNarrow?.style.paddingRight).toBe(`${PADDING_PX}px`)
+    cleanup()
+
+    // rowH = 78/1 = 78 -> clamp(78*0.2, 6, 11) = 11
+    const wide = renderBlock({ heightPx: 78, placement: { ...PLACEMENT, stripCount: 1 } })
+    const contentWide = wide.querySelector<HTMLElement>('[data-content]')
+    expect(contentWide).not.toBeNull()
+    expect(contentWide?.style.paddingLeft).toBe('11px')
+    expect(contentWide?.style.paddingRight).toBe('11px')
   })
 })
 

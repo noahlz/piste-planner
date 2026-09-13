@@ -142,9 +142,17 @@ export function Block({
   const iconPx = Math.round(
     clamp(Math.min(contentHeightPx * 0.42, 22), 0, Math.max(10, contentHeightPx - 2)),
   )
-  // The inner flex's own padding (mockup: clamp(rowH*0.2, 6, 11) per side),
-  // needed again below to size an icon standing alone with no label beside it.
-  const padding = clamp(rowHeightPx * 0.2, 6, 11)
+  // The inner flex's own padding (mockup: round(clamp(rowH*0.2, 6, 11)) per
+  // side), needed again below to size an icon standing alone with no label
+  // beside it, and applied to the flex itself so the two stay true to each
+  // other (T027 follow-up 2: a static px-2 class charged 8px regardless of
+  // this value, so the icon-alone math was sizing against room the block did
+  // not actually have).
+  const padding = Math.round(clamp(rowHeightPx * 0.2, 6, 11))
+  // The inner flex's own gap (mockup: round(clamp(rowH*0.16, 4, 9))), applied
+  // the same way — a static gap-2 class was always charged even when no
+  // label rendered beside the icon.
+  const gap = Math.round(clamp(rowHeightPx * 0.16, 4, 9))
   // A pool grid is only distinguishable from a DE bracket above roughly 10px,
   // so below that the phase channel drops to the hatch alone. This is the
   // *icon-beside-name* tier: icon room plus a 9px gap plus space for the name.
@@ -167,14 +175,16 @@ export function Block({
   // this narrow still has the phase channel to give, so FR-035's "neither"
   // tier is reserved for blocks too narrow even for a shrunk glyph: below a
   // 10px floor the icon is dropped and the block goes blank.
+  //
+  // `widthPx === null` never reaches this branch: `fits()` returns true
+  // unconditionally when widthPx is null, so labelText is always the full
+  // label in that case and the `!showIcon && labelText === ''` guard below
+  // is never both true. The `widthPx !== null` check exists only to narrow
+  // the type for the arithmetic that follows.
   let iconAlonePx = 0
-  if (!showIcon && labelText === '') {
-    if (widthPx === null) {
-      iconAlonePx = iconPx
-    } else {
-      const shrunk = Math.min(iconPx, widthPx - 2 * padding)
-      iconAlonePx = shrunk >= 10 ? shrunk : 0
-    }
+  if (!showIcon && labelText === '' && widthPx !== null) {
+    const shrunk = Math.min(iconPx, widthPx - 2 * padding)
+    iconAlonePx = shrunk >= 10 ? shrunk : 0
   }
   const displayIconPx = showIcon ? iconPx : iconAlonePx
   const renderIcon = displayIconPx > 0
@@ -255,7 +265,9 @@ export function Block({
 
       <div
         aria-hidden="true"
-        className="relative flex h-full items-center justify-center gap-2 overflow-hidden px-2 leading-none"
+        data-content
+        className="relative flex h-full items-center justify-center overflow-hidden leading-none"
+        style={{ padding: `0 ${padding}px`, gap: `${gap}px` }}
       >
         {renderIcon && (
           <span
@@ -266,13 +278,15 @@ export function Block({
             {kind === 'de' ? <BracketIcon /> : <GridIcon />}
           </span>
         )}
-        <span
-          data-label
-          className="overflow-hidden font-semibold text-ellipsis whitespace-nowrap"
-          style={{ fontSize: `${namePx.toFixed(1)}px`, lineHeight: 1 }}
-        >
-          {labelText}
-        </span>
+        {labelText !== '' && (
+          <span
+            data-label
+            className="overflow-hidden font-semibold text-ellipsis whitespace-nowrap"
+            style={{ fontSize: `${namePx.toFixed(1)}px`, lineHeight: 1 }}
+          >
+            {labelText}
+          </span>
+        )}
       </div>
     </div>
   )

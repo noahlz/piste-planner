@@ -319,7 +319,7 @@ describe('CanvasTooltip fields do not vary with what the block drew (FR-016, FR-
     )
 
     expect(document.querySelector('[data-icon]')).toBeNull()
-    expect(document.querySelector('[data-label]')?.textContent).toBe('')
+    expect(document.querySelector('[data-label]')).toBeNull()
     cleanup()
 
     render(<CanvasTooltip target={makeTarget()} />)
