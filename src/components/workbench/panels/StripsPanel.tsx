@@ -148,7 +148,16 @@ export function StripsPanel() {
     // prior configuration sits in the card, with Apply enabled, for the
     // whole debounce window plus the search itself (research.md D8's
     // intent: Apply must never write a superseded configuration's answer).
+    // Bumping the token here — not only inside `runSearch` — invalidates a
+    // search still in flight (the mount search, or a previous debounce's)
+    // the instant its inputs go stale, so it can't pass the `token ===
+    // searchToken.current` guard and re-show its answer if it resolves
+    // during this new debounce. Its reveal timer is invalidated the same
+    // way, so `showIndicator` is cleared here too rather than left for that
+    // search's own (now token-mismatched, so skipped) `finally`.
+    searchToken.current += 1
     setSuggested(null)
+    setShowIndicator(false)
     const timer = setTimeout(() => void runSearch(), SEARCH_DEBOUNCE_MS)
     debounceTimer.current = timer
     // Cleanup runs before the next dependency change (or on unmount) and

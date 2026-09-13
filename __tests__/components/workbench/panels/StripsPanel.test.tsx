@@ -260,6 +260,69 @@ describe('StripsPanel — debounced re-search', () => {
     expect(screen.getByRole('button', { name: 'Apply' })).not.toBeDisabled()
   })
 
+  it('an in-flight search resolving during the debounce cannot re-show its answer', async () => {
+    const { resolvers, fn } = stubSuggestStrips()
+    render(<StripsPanel />)
+    // Search A is still pending (never resolved) when the input changes.
+
+    act(() => {
+      useStore.getState().setStrips(9)
+    })
+    expect(document.querySelector('[data-suggested-strips]')?.textContent).toBe('—')
+
+    // A resolves mid-debounce — its token was invalidated at the input
+    // change, so it must not overwrite the em-dash.
+    await act(async () => {
+      resolvers[0](18)
+    })
+    expect(document.querySelector('[data-suggested-strips]')?.textContent).toBe('—')
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+
+    await act(async () => {
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS)
+    })
+    expect(fn).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      resolvers[1](21)
+    })
+    expect(document.querySelector('[data-suggested-strips]')?.textContent).toBe('21')
+    expect(screen.getByRole('button', { name: 'Apply' })).not.toBeDisabled()
+  })
+
+  it('the indicator of an invalidated search does not stick', async () => {
+    const { resolvers } = stubSuggestStrips()
+    render(<StripsPanel />)
+
+    act(() => {
+      vi.advanceTimersByTime(SUGGEST_INDICATOR_DELAY_MS)
+    })
+    expect(screen.getByRole('status')).toBeInTheDocument()
+
+    act(() => {
+      useStore.getState().setStrips(9)
+    })
+    expect(screen.queryByRole('status')).toBeNull()
+
+    await act(async () => {
+      resolvers[0](18)
+    })
+    expect(screen.queryByRole('status')).toBeNull()
+
+    act(() => {
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS)
+    })
+    act(() => {
+      vi.advanceTimersByTime(SUGGEST_INDICATOR_DELAY_MS)
+    })
+    expect(screen.getByRole('status')).toBeInTheDocument()
+
+    await act(async () => {
+      resolvers[1](21)
+    })
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('coalesces two changes inside the debounce window into one more search', async () => {
     const { resolvers, fn } = stubSuggestStrips()
     render(<StripsPanel />)
