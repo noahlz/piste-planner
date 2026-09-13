@@ -488,7 +488,9 @@ for (let i = 0; i < zoomedBlockCount; i += 1) {
   const block = zoomedBlocks.nth(i)
   const weapon = await block.getAttribute('data-weapon')
   if (!weapon) throw new Error(`block ${i} at max zoom has no data-weapon`)
-  const labelText = (await block.locator('[data-label]').textContent())?.trim()
+  const labelLocator = block.locator('[data-label]')
+  const labelText =
+    (await labelLocator.count()) > 0 ? (await labelLocator.textContent())?.trim() : ''
   const hasIcon = (await block.locator('[data-icon]').count()) > 0
   if (!labelText && !hasIcon) {
     throw new Error(`block ${i} at max zoom has neither a label nor an icon`)
