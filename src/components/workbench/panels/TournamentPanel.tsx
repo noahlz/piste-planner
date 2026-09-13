@@ -1,7 +1,7 @@
 import { RadioGroup as RadioGroupPrimitive } from 'radix-ui'
 import { useStore } from '../../../store/store.ts'
-import { selectDerivedFindings } from '../../../store/derived.ts'
 import { TournamentType } from '../../../engine/types.ts'
+import { daysAvailableRangeMessage } from '../../../engine/validation.ts'
 import { TIME_OPTIONS, formatClock } from '../../../lib/time.ts'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
@@ -73,12 +73,15 @@ export function TournamentPanel() {
   const setDays = useStore((s) => s.setDays)
   const dayConfigs = useStore((s) => s.dayConfigs)
   const updateDayConfig = useStore((s) => s.updateDayConfig)
-  const { validationErrors } = useStore(selectDerivedFindings)
 
-  // The engine's own advisory notice (validation.ts, rule 'days-available-range')
-  // — reused rather than restated so the panel's wording never drifts from the
-  // rule that decides whether it shows (FR-014).
-  const dayRangeNotice = validationErrors.find((e) => e.rule === 'days-available-range')
+  // The engine's own advisory notice text (validation.ts,
+  // 'days-available-range') — reused rather than restated so the panel's
+  // wording never drifts from the rule that decides whether it shows
+  // (FR-014). Computed directly from `daysAvailable` (already subscribed
+  // above) instead of subscribing to the whole derived-findings memo, which
+  // is keyed on the schedule and would re-render this panel on any edit
+  // anywhere.
+  const dayRangeMessage = daysAvailableRangeMessage(daysAvailable)
   const isOutOfRange = daysAvailable !== 2 && daysAvailable !== 3 && daysAvailable !== 4
 
   return (
@@ -125,8 +128,8 @@ export function TournamentPanel() {
             </RadioGroupPrimitive.Item>
           )}
         </RadioGroupPrimitive.Root>
-        {isOutOfRange && dayRangeNotice && (
-          <p className="mt-2 text-[12.5px] leading-normal text-neutral-700">{dayRangeNotice.message}</p>
+        {isOutOfRange && dayRangeMessage !== null && (
+          <p className="mt-2 text-[12.5px] leading-normal text-neutral-700">{dayRangeMessage}</p>
         )}
       </div>
 

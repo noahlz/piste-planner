@@ -120,6 +120,11 @@ export function StripsPanel() {
       // — its answer is superseded and must not overwrite what the fresher
       // search already returned (D8).
       if (token === searchToken.current) setSuggested(result)
+    } catch {
+      // A rejected search leaves the panel with no answer rather than a
+      // stale one — same staleness guard as the success path, so a fresher
+      // search's in-flight result can't be clobbered by this one's failure.
+      if (token === searchToken.current) setSuggested(null)
     } finally {
       clearTimeout(revealTimer)
       activeRevealTimers.current.delete(revealTimer)

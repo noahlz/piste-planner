@@ -652,7 +652,7 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `ref_policy`/`de_mode` survival (typeDefaults ×2, precedence ×2) and the
   regional-cut-beats-explicit-cut describe (×2). Details in sessions/S5.md.
 
-- [ ] **T020** [US2] The per-event record shrinks. `CompetitionConfig`
+- [x] **T020** [US2] The per-event record shrinks. `CompetitionConfig`
   (`src/store/store.ts:81`) becomes `{ fencer_count, flighted }`,
   `defaultConfigForId` (`:297`) and `updateCompetition` follow,
   `src/store/buildConfig.ts` derives the six fields per data-model §4,
@@ -666,6 +666,11 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `__tests__/store/appPathParity.test.ts`: it must pass unedited – this is the
   check that the shrink changed nothing the engine sees on a default store
   *(subagent commits)*
+  → Done 2026-09-13 at `a85e14f5f5`. `appPathParity.test.ts` passed unedited
+  (17 cases). 75 files, 1848 passing, only `EventsPanel.test.tsx` red on its
+  missing module (T021). `globalOverrides` moved to a temporary top-level
+  payload key that T022 removes. Team-cut coercion in `buildConfig.ts` is now
+  a backstop behind `defaultCutForEntry`; no test can prove it fires.
 
 - [ ] **T021** [US2] Events panel (FR-019 to FR-021, [research D15](./research.md)).
   Build `src/components/workbench/panels/EventsPanel.tsx` so T019's panel

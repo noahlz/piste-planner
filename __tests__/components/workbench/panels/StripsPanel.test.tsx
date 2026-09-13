@@ -35,16 +35,19 @@ afterEach(() => {
  *  be resolved out of order. */
 function stubSuggestStrips(): {
   resolvers: Array<(value: number | null) => void>
+  rejecters: Array<(reason: unknown) => void>
   fn: ReturnType<typeof vi.fn>
 } {
   const resolvers: Array<(value: number | null) => void> = []
+  const rejecters: Array<(reason: unknown) => void> = []
   const fn = vi.fn(() => {
-    return new Promise<number | null>((resolve) => {
+    return new Promise<number | null>((resolve, reject) => {
       resolvers.push(resolve)
+      rejecters.push(reject)
     })
   })
   useStore.setState({ computeSuggestedStrips: fn })
-  return { resolvers, fn }
+  return { resolvers, rejecters, fn }
 }
 
 describe('StripsPanel — steppers', () => {
@@ -103,6 +106,39 @@ describe('StripsPanel — steppers', () => {
       await Promise.resolve()
     })
   })
+
+  it('re-resolves the video-strips field at the new type\'s default (0 for ROC) while unset', async () => {
+    stubSuggestStrips()
+    render(<StripsPanel />)
+
+    act(() => {
+      useStore.getState().setTournamentType(TournamentType.ROC)
+    })
+
+    expect(screen.getByRole('spinbutton', { name: 'Number of video strips' })).toHaveValue(0)
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+  })
+
+  it('an explicit video-strips count survives a type change', async () => {
+    stubSuggestStrips()
+    render(<StripsPanel />)
+
+    act(() => {
+      useStore.getState().setVideoStrips(3)
+    })
+    act(() => {
+      useStore.getState().setTournamentType(TournamentType.ROC)
+    })
+
+    expect(screen.getByRole('spinbutton', { name: 'Number of video strips' })).toHaveValue(3)
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+  })
 })
 
 describe('StripsPanel — suggested minimum', () => {
@@ -144,6 +180,31 @@ describe('StripsPanel — suggested minimum', () => {
     expect(section).toHaveTextContent('strips to place every event')
     expect(section.textContent).not.toMatch(/finish/i)
   })
+
+  it('a rejected search leaves the em-dash and disabled Apply, with no unhandled rejection', async () => {
+    const { rejecters } = stubSuggestStrips()
+    let unhandled: unknown = null
+    const onUnhandledRejection = (reason: unknown) => {
+      unhandled = reason
+    }
+    process.on('unhandledRejection', onUnhandledRejection)
+
+    render(<StripsPanel />)
+
+    await act(async () => {
+      rejecters[0](new Error('search failed'))
+      // Let the rejection's microtask settle (and any unhandled-rejection
+      // check Node schedules after it) before asserting.
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    process.off('unhandledRejection', onUnhandledRejection)
+
+    expect(document.querySelector('[data-suggested-strips]')?.textContent).toBe('—')
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+    expect(unhandled).toBeNull()
+  })
 })
 
 describe('StripsPanel — debounced re-search', () => {
@@ -180,7 +241,15 @@ describe('StripsPanel — debounced re-search', () => {
 
     act(() => {
       useStore.getState().setStrips(9)
+    })
+    expect(fn).toHaveBeenCalledTimes(1)
+
+    act(() => {
       vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS - 50)
+    })
+    expect(fn).toHaveBeenCalledTimes(1)
+
+    act(() => {
       useStore.getState().setVideoStrips(4)
     })
 
@@ -273,9 +342,7 @@ describe('StripsPanel — searching indicator', () => {
     })
 
     const indicator = screen.getByRole('status')
-    expect(indicator.textContent).toMatch(
-      /Searching for the smallest strip count that places every event…/,
-    )
+    expect(indicator.textContent).toBe('Searching for the smallest strip count that places every event…')
 
     await act(async () => {
       resolvers[0](null)

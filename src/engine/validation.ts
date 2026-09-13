@@ -398,6 +398,22 @@ export function validateFeasibility(
 }
 
 /**
+ * The 'days-available-range' notice's message, for `days_available` already
+ * known to be within the 1–14 structural bound (the 'days-available-bounds'
+ * rule above owns everything outside it). Exported so a caller that only
+ * needs this one notice's wording — TournamentPanel, which shows it without
+ * running the rest of validation — computes the identical string rather than
+ * restating it.
+ */
+export function daysAvailableRangeMessage(daysAvailable: number): string | null {
+  if (daysAvailable < 1 || daysAvailable > 14) return null
+  if (daysAvailable < 2 || daysAvailable > 4) {
+    return `days_available outside the recommended 2–4 day range, got ${daysAvailable} — the schedule can still be computed`
+  }
+  return null
+}
+
+/**
  * Validates tournament configuration and competition list before scheduling.
  * Returns an array of ValidationErrors; empty array means valid.
  * Checks all conditions per METHODOLOGY.md §Phase 1: Validation.
@@ -417,8 +433,11 @@ export function validateConfig(
 
   if (config.days_available < 1 || config.days_available > 14) {
     globalErrors.push(structural('days_available', `days_available must be 1–14, got ${config.days_available}`, 'days-available-bounds', ['days_available']))
-  } else if (config.days_available < 2 || config.days_available > 4) {
-    globalErrors.push(notice('days_available', `days_available outside the recommended 2–4 day range, got ${config.days_available} — the schedule can still be computed`, 'days-available-range', ['days_available']))
+  } else {
+    const rangeMessage = daysAvailableRangeMessage(config.days_available)
+    if (rangeMessage !== null) {
+      globalErrors.push(notice('days_available', rangeMessage, 'days-available-range', ['days_available']))
+    }
   }
 
   return [
