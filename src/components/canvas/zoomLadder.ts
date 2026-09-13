@@ -3,8 +3,8 @@
  * per-minute rungs plus a fit-to-day mode. Pure arithmetic: no React, no
  * store reads, nothing else in this module.
  *
- * A ladder replaces the continuous `[0.05, 8]` minutes-per-pixel zoom from
- * 004's MatrixCanvas (`components/canvas/zoom.ts`), which could reach scales
+ * A ladder replaces the continuous `[0.05, 8]` minutes-per-pixel zoom that
+ * 004's canvas view used, which could reach scales
  * where blocks were narrower than their own borders (backlog §Zooming in
  * destroys the view). A ladder cannot reach a scale it does not contain,
  * which closes that defect by construction rather than by a clamp somebody

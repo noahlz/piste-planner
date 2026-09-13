@@ -82,7 +82,7 @@ function eventBlocks(): HTMLElement[] {
 }
 
 describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
-  it('renders every strip row of every day, with no windowing', () => {
+  it('renders every strip row of every day, with no culling', () => {
     const { schedule, findings, dayConfigs } = b1Board()
     render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
 

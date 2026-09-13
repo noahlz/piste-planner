@@ -19,9 +19,9 @@ import { useStore } from '../../src/store/store.ts'
  * A fully-populated ViewState distinct from DEFAULT_VIEW_STATE in every field,
  * so a round trip proves fidelity rather than coincidentally matching defaults.
  *
- * 013 T025 (phase-3 contract, data-model.md §2): `rowHeightStep`, `timeZoom`,
- * `timeScroll` and `rowScroll` are gone, replaced by `zoomStep` and `fitting`
- * (the six-rung zoom ladder, contracts/ui-contract.md §Footer).
+ * 013 T025 (phase-3 contract, data-model.md §2): the old row-height-step,
+ * per-axis zoom, `timeScroll` and `rowScroll` fields are gone, replaced by
+ * `zoomStep` and `fitting` (the six-rung zoom ladder, contracts/ui-contract.md §Footer).
  */
 function sampleViewState(): ViewState {
   return {
@@ -326,7 +326,7 @@ describe('viewState range validation (zoomStep, fitting)', () => {
   })
 
   // Number.isInteger(Infinity) is false, so the integer check above already
-  // rejects it — this case is kept anyway (matching the old timeZoom/
+  // rejects it — this case is kept anyway (matching the old zoom-scale/
   // timeScroll non-finite cases this file used to carry) so a future rewrite
   // of the integer check cannot silently stop covering it.
   it('returns defaults wholesale when zoomStep is +Infinity', () => {

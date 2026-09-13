@@ -23,8 +23,8 @@ export type PanelId = (typeof PanelId)[keyof typeof PanelId]
 
 /**
  * 013 T026 (data-model §2, contracts/ui-contract.md §Footer): the canvas no
- * longer holds a window of its own. `rowHeightStep`, `timeZoom`, `timeScroll`
- * and `rowScroll` described a canvas that scrolled by arithmetic and sized its
+ * longer holds a window of its own. The old row-height-step, per-axis zoom,
+ * `timeScroll` and `rowScroll` fields described a canvas that scrolled by arithmetic and sized its
  * rows by a separate three-value control; the redesigned canvas scrolls
  * natively (so the browser owns both scroll positions) and its row height
  * follows the zoom rung. What is left to persist is where on the ladder the

@@ -25,7 +25,7 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  *
  * 004's canvas scrolled by arithmetic: `timeScroll` and `rowScroll` were view
  * state, the viewport was `overflow-hidden`, and every layer was positioned
- * from the window rather than translated with it. That bought windowing — only
+ * from the window rather than translated with it. That bought culling — only
  * the visible rows were in the DOM — and paid for it with a wheel listener, a
  * keyboard pan handler, a persisted window, two frozen layers positioned by
  * hand, and a hit-test that had to subtract both of them back out again.

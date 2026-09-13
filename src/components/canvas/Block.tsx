@@ -21,7 +21,7 @@ import { phaseDisplay, stripAssignmentLabel } from './CanvasTooltip.tsx'
  * | Pin badge | Pinned |
  * | Dashed edge / ring | Overflow / selection |
  *
- * 004's `EventBlock` painted the age category across sixteen fills and put the
+ * 004's block component painted the age category across sixteen fills and put the
  * weapon in a one-letter chip. Research D4 inverts that: weapon is the thing a
  * reader tracks across a day, three fills are three fills a person can actually
  * learn, and sixteen category fills were never distinguishable from each other
@@ -32,7 +32,7 @@ import { phaseDisplay, stripAssignmentLabel } from './CanvasTooltip.tsx'
  *
  * `--block-fill`, `--block-ink`, `--block-edge` and `--block-hatch` are set from
  * `weaponTokens.ts` and consumed by this element's own styles. No hex literal
- * and no `--cat-*` name reaches this file: the tokens in `src/index.css` are
+ * and no age-category token name reaches this file: the tokens in `src/index.css` are
  * the single home for the colours (standing rule 13).
  *
  * ## Nothing here drags, and nothing resizes (FR-043)

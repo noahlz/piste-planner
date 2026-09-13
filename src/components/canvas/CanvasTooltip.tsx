@@ -10,8 +10,8 @@ import type { BlockPlacement } from '../../layout/lanes.ts'
  *
  * Two surfaces read the same block: `Block`'s accessible name and this
  * tooltip's field rows. They must agree exactly, so the strings have one home,
- * and this is it — 013 T026 folded `blockLabels.ts` in here when `EventBlock`,
- * its other reader, was deleted. `competitionLabels.ts` is the same rule
+ * and this is it — 013 T026 folded the old label helper in here when its
+ * other reader was deleted. `competitionLabels.ts` is the same rule
  * applied to a competition's own vocabulary (weapon, category, gender); this is
  * the part of a block's description that comes from its placement instead.
  *

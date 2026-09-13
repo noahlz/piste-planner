@@ -350,11 +350,11 @@ await closePanel()
 
 // Blocks render. ROC Div1A/Vet at the Suggested strip count now places all
 // 12 of its 12 competitions (re-measured after 006's day-axis fix — see the
-// header comment; the Unplaced tray is empty). The canvas still windows by
+// header comment; the Unplaced tray is empty). The canvas still culled by
 // viewport, not by placement count, so not all 12 placed events have a block
 // in the DOM at the default scroll position. The schedule table below is the
 // locator that reads the true placed count; this floor only guards against the
-// canvas windowing away everything.
+// canvas culling away everything.
 //
 // 011 T013: this floor moved from 11 to 8. `applyTemplate` never touches
 // `days_available`, so it stays at boot's B1 value of 4 throughout this whole
@@ -375,7 +375,7 @@ await closePanel()
 // measured at 14 at that count, still above this floor of 8, so the floor
 // below needs no change.
 //
-// `[M]` 013 T026, 2026-09-13: the canvas no longer windows — every day group,
+// `[M]` 013 T026, 2026-09-13: the canvas no longer culls by viewport — every day group,
 // strip row and block is in the DOM inside one native scroller (research D2),
 // so the count above is now every placed block rather than the subset a
 // viewport happened to show. That can only raise it, so the floor of 8 still
@@ -385,7 +385,7 @@ log('matrix event blocks =', blockCount)
 if (blockCount < 8) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
 
 // Captured now, before the zoom actions below change any geometry. 013 T026
-// removed the windowing that used to drop a scrolled-out block's DOM node, so
+// removed the viewport culling that used to drop a scrolled-out block's DOM node, so
 // this is no longer load-bearing against culling — it still reads the blocks
 // before the zoom so the table cross-check below compares like with like.
 // Restricted to phase POOLS — see the header comment.
@@ -458,6 +458,51 @@ if (!geometryChanged(rungGeometry, afterGeometry)) {
   throw new Error('Fit day did not change any block geometry')
 }
 log('Fit day changed block geometry')
+
+// SC-005: step to the top of the ladder from fit mode. "Zoom in" clears
+// fitting and advances zoomStep by one each press (zoomLadder.stepZoom); the
+// button self-disables once zoomStep reaches MAX_ZOOM_STEP (rung 5, ppm 9.0,
+// a 281% readout against the rung-2 100% base). Bounded at 6 presses — a
+// button still enabled after that is a defect, not a slow ladder.
+const zoomInButton = zoomToolbar.getByRole('button', { name: 'Zoom in' })
+const zoomReadoutLocator = page.locator('[data-zoom-readout]')
+let zoomInPresses = 0
+while (!(await zoomInButton.isDisabled())) {
+  if (zoomInPresses >= 6) throw new Error('"Zoom in" did not disable within 6 presses')
+  await zoomInButton.click()
+  await page.waitForTimeout(100)
+  zoomInPresses += 1
+}
+const maxReadout = (await zoomReadoutLocator.textContent())?.trim()
+if (maxReadout !== '281%') {
+  throw new Error(`"Zoom in" disabled at readout ${maxReadout}, expected 281% (rung 5)`)
+}
+
+// SC-005's "label" is read here as label-or-phase-icon: FR-035 lets a block
+// choose either, and D1A-M-SABRE-IND:DE_PRELIMS in B1 (12 strips, 45px wide
+// at rung 5) is the case that set it — too narrow for even its category
+// label, it draws its phase icon alone instead (Block.tsx, 41dfe0e31f).
+const zoomedBlocks = page.locator('[data-event-block]')
+const zoomedBlockCount = await zoomedBlocks.count()
+for (let i = 0; i < zoomedBlockCount; i += 1) {
+  const block = zoomedBlocks.nth(i)
+  const weapon = await block.getAttribute('data-weapon')
+  if (!weapon) throw new Error(`block ${i} at max zoom has no data-weapon`)
+  const labelText = (await block.locator('[data-label]').textContent())?.trim()
+  const hasIcon = (await block.locator('[data-icon]').count()) > 0
+  if (!labelText && !hasIcon) {
+    throw new Error(`block ${i} at max zoom has neither a label nor an icon`)
+  }
+}
+log('SC-005: zoom in disabled after', zoomInPresses, 'presses at rung 5,', maxReadout, ',', zoomedBlockCount, 'blocks all carry weapon + label/icon')
+
+await zoomToolbar.getByRole('button', { name: 'Reset zoom' }).click()
+await page.waitForTimeout(100)
+const resetReadout = (await zoomReadoutLocator.textContent())?.trim()
+if (resetReadout !== '100%') {
+  throw new Error(`"Reset zoom" left readout at ${resetReadout}, expected 100%`)
+}
+log('Reset zoom returned to 100%')
 
 // ── Schedule table ──
 // The two views agree (FR-023): the schedule table must describe the same

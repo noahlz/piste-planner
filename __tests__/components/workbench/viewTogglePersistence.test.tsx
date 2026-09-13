@@ -70,8 +70,9 @@ describe('the center view choice survives the component (research D10)', () => {
   it('leaves the view-state fields the center does not own alone', () => {
     // The footer's zoom toolbar owns the rung and fit mode, and the rail owns
     // the open panel: a toggle that wrote its own field over a whole default
-    // state would silently reset all three (013 T026 — `timeScroll`,
-    // `timeZoom` and `rowScroll` are gone with the arithmetic-scrolled canvas).
+    // state would silently reset all three (013 T026 — the canvas's old
+    // scroll and per-axis zoom-scale fields are gone with the
+    // arithmetic-scrolled canvas).
     saveViewState({
       ...DEFAULT_VIEW_STATE,
       zoomStep: 5,

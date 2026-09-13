@@ -52,7 +52,7 @@ import {
 // "one derived model, two views" arrangement the contract is about.
 
 const VIEWPORT_WIDTH = 900
-// 013 T026 removed the windowing these two sized the window for: every day
+// 013 T026 removed the culling these two sized the window for: every day
 // group, strip row and block is in the DOM now, whatever the viewport is.
 // They are kept because Radix's popper still measures through the stubbed
 // ResizeObserver below, and a zero-size report there is its own problem.
