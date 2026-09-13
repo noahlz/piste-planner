@@ -345,7 +345,7 @@ await shot('03-matrix')
 await closePanel()
 
 // ── Matrix canvas (T041) ──
-// Still on the default view: everything below through "Fit to day" reads the
+// Still on the default view: everything below through "Fit day" reads the
 // matrix, not the schedule table.
 
 // Blocks render. ROC Div1A/Vet at the Suggested strip count now places all
@@ -374,14 +374,21 @@ await closePanel()
 // this to 15 strips (baseline.md §5), down from 23. Matrix event blocks
 // measured at 14 at that count, still above this floor of 8, so the floor
 // below needs no change.
+//
+// `[M]` 013 T026, 2026-09-13: the canvas no longer windows — every day group,
+// strip row and block is in the DOM inside one native scroller (research D2),
+// so the count above is now every placed block rather than the subset a
+// viewport happened to show. That can only raise it, so the floor of 8 still
+// holds and stays as measured.
 const blockCount = await page.locator('[data-event-block]').count()
 log('matrix event blocks =', blockCount)
 if (blockCount < 8) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
 
-// Captured now, before "Fit to day" below can scroll a block out of the
-// window and drop its DOM node (windowing culls what is off-window rather
-// than hiding it — see the "blocks the window actually shows" comment in
-// MatrixCanvas.tsx). Restricted to phase POOLS — see the header comment.
+// Captured now, before the zoom actions below change any geometry. 013 T026
+// removed the windowing that used to drop a scrolled-out block's DOM node, so
+// this is no longer load-bearing against culling — it still reads the blocks
+// before the zoom so the table cross-check below compares like with like.
+// Restricted to phase POOLS — see the header comment.
 const poolBlocks = await page.$$eval('[data-event-block][data-phase="POOLS"]', (els) =>
   els.slice(0, 5).map((el) => ({
     id: el.getAttribute('data-event-id'),
@@ -418,22 +425,39 @@ log('tooltip reads', tooltipName, tooltipStart, '-', tooltipEnd)
 await shot('03c-tooltip')
 
 // The hovered block is Strip 1 at the top of the grid, so its tooltip (side
-// "top") pops into the toolbar row above it and intercepts a click there
-// until it closes. Move off the canvas and let Radix's exit transition finish
-// before touching the toolbar.
+// "top") pops over whatever is above it and intercepts a click there until it
+// closes. Move off the canvas and let Radix's exit transition finish before
+// touching the footer.
 await page.mouse.move(5, 5)
 await page.waitForTimeout(200)
 
-// A zoom action does something: block geometry before and after "Fit to day"
+// A zoom action does something: block geometry before and after "Fit day"
 // must differ somewhere, or the click did nothing.
+//
+// 013 T026: the app boots *in* fit mode (DEFAULT_VIEW_STATE.fitting is true),
+// so pressing "Fit day" from the opening view would change nothing and this
+// check would pass on a dead button. "Zoom in" leaves fit mode for a rung
+// first — which is itself a geometry change, percentages to pixels — and
+// "Fit day" then has a state to come back from. Both transitions are
+// asserted, so the step proves more than it did before, not less. The zoom
+// controls live in the footer's `toolbar` "Zoom" now, not in a canvas toolbar.
+const zoomToolbar = page.getByRole('toolbar', { name: 'Zoom' })
 const beforeGeometry = await blockGeometrySnapshot()
-await page.getByRole('button', { name: 'Fit to day' }).click()
+await zoomToolbar.getByRole('button', { name: 'Zoom in' }).click()
+await page.waitForTimeout(100)
+const rungGeometry = await blockGeometrySnapshot()
+if (!geometryChanged(beforeGeometry, rungGeometry)) {
+  throw new Error('Zoom in did not change any block geometry')
+}
+log('Zoom in changed block geometry')
+
+await zoomToolbar.getByRole('button', { name: 'Fit day' }).click()
 await page.waitForTimeout(100)
 const afterGeometry = await blockGeometrySnapshot()
-if (!geometryChanged(beforeGeometry, afterGeometry)) {
-  throw new Error('Fit to day did not change any block geometry')
+if (!geometryChanged(rungGeometry, afterGeometry)) {
+  throw new Error('Fit day did not change any block geometry')
 }
-log('Fit to day changed block geometry')
+log('Fit day changed block geometry')
 
 // ── Schedule table ──
 // The two views agree (FR-023): the schedule table must describe the same

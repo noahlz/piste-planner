@@ -1,15 +1,28 @@
+import type { ReactNode } from 'react'
 import { useStore } from '../../store/store.ts'
 import { selectFooterMetrics, selectPlacementCounts } from '../../store/derived.ts'
 import { formatClock } from '../../lib/time.ts'
 import { WEAPON_DISPLAY } from '../competitionLabels.ts'
 import { Weapon } from '../../engine/types.ts'
 import { ViewMode } from '../../store/viewState.ts'
+import {
+  canZoomIn,
+  canZoomOut,
+  fitDay,
+  resetZoom,
+  stepZoom,
+  zoomReadout,
+  type ZoomState,
+} from '../canvas/zoomLadder.ts'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+import { Maximize2, Minus, Plus, RotateCcw } from 'lucide-react'
 
 interface StatusFooterProps {
   viewMode: ViewMode
   onViewModeChange: (next: ViewMode) => void
+  zoom: ZoomState
+  onZoomChange: (next: ZoomState) => void
 }
 
 // Weapon design tokens (docs/design/mockup/, standing rule 13). T024 still
@@ -36,8 +49,19 @@ const LEGEND: { weapon: Weapon; swatchClass: string }[] = [
  * The view toggle moved here verbatim from `CenterView.tsx` — the center no
  * longer owns which view is showing, only how it draws whichever one is
  * chosen (`WorkbenchShell` owns the state, `viewState.ts` persists it).
+ *
+ * The zoom toolbar (013 T026, FR-034) sits beside it for the same reason. The
+ * canvas draws at whatever rung it is handed and owns none of the choice, so
+ * the two controls that change what the center shows live together on one bar
+ * rather than one of them floating over the drawing it governs — which is what
+ * the retired `toolbar` "Canvas zoom controls" did.
  */
-export function StatusFooter({ viewMode, onViewModeChange }: StatusFooterProps) {
+export function StatusFooter({
+  viewMode,
+  onViewModeChange,
+  zoom,
+  onZoomChange,
+}: StatusFooterProps) {
   const metrics = useStore(selectFooterMetrics)
   const counts = useStore(selectPlacementCounts)
   const finish = metrics.find((m) => m.id === 'finish:tournament')?.value ?? null
@@ -86,6 +110,48 @@ export function StatusFooter({ viewMode, onViewModeChange }: StatusFooterProps) 
         ))}
       </span>
 
+      <Rule />
+
+      {/* Zoom (FR-034, SC-005). `aria-pressed` on Fit day only: it is the one
+          control with a state to report — the other three are actions. */}
+      <div
+        role="toolbar"
+        aria-label="Zoom"
+        aria-orientation="horizontal"
+        className="mr-3 flex items-center gap-1 px-3"
+      >
+        <ZoomButton
+          label="Zoom out"
+          disabled={!canZoomOut(zoom.zoomStep)}
+          onClick={() => onZoomChange(stepZoom(zoom, -1))}
+        >
+          <Minus className="h-3 w-3" />
+        </ZoomButton>
+        <span
+          data-zoom-readout
+          className="w-9 text-center font-mono text-[11px] font-semibold tabular-nums text-neutral-700"
+        >
+          {zoomReadout(zoom.zoomStep)}
+        </span>
+        <ZoomButton
+          label="Zoom in"
+          disabled={!canZoomIn(zoom.zoomStep)}
+          onClick={() => onZoomChange(stepZoom(zoom, 1))}
+        >
+          <Plus className="h-3 w-3" />
+        </ZoomButton>
+        <ZoomButton label="Reset zoom" onClick={() => onZoomChange(resetZoom())}>
+          <RotateCcw className="h-3 w-3" />
+        </ZoomButton>
+        <ZoomButton
+          label="Fit day"
+          pressed={zoom.fitting}
+          onClick={() => onZoomChange(fitDay(zoom))}
+        >
+          <Maximize2 className="h-3 w-3" />
+        </ZoomButton>
+      </div>
+
       <ToggleGroup
         type="single"
         // Radix's Root is role="group"; the two items are already role="radio"
@@ -119,4 +185,42 @@ export function StatusFooter({ viewMode, onViewModeChange }: StatusFooterProps) 
 
 function Rule() {
   return <span aria-hidden="true" className="h-[15px] w-[1.5px] shrink-0 rounded-sm bg-chrome-border" />
+}
+
+/**
+ * One zoom control, styled as the mockup's footer buttons are: a real bordered
+ * box at rest rather than a bare glyph, in the chrome ramp from `index.css`.
+ * The glyph is `aria-hidden` by lucide's own default and the name comes from
+ * `aria-label`, so the four controls are distinguishable to a screen reader
+ * without four visible captions crowding a 32px bar.
+ */
+function ZoomButton({
+  label,
+  onClick,
+  disabled,
+  pressed,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  pressed?: boolean
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={pressed}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'flex h-6 min-w-6 items-center justify-center rounded-[7px] border-[1.5px] border-chrome-border bg-secondary px-1.5 text-neutral-700',
+        'hover:bg-hover-tint disabled:opacity-40 disabled:hover:bg-secondary',
+        pressed && 'border-accent-400 bg-accent-100 text-accent-800',
+      )}
+    >
+      {children}
+    </button>
+  )
 }

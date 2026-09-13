@@ -11,6 +11,7 @@ import { EventsPanel } from './panels/EventsPanel.tsx'
 import { AnalysisOutput } from '../sections/AnalysisOutput.tsx'
 import { SettingsPanel } from './panels/SettingsPanel.tsx'
 import { PanelId, ViewMode, loadViewState, saveViewState } from '../../store/viewState.ts'
+import type { ZoomState } from '../canvas/zoomLadder.ts'
 
 /**
  * Panel content by id — temporary (013 decision 1): phase 2 replaces each arm
@@ -64,6 +65,13 @@ export function WorkbenchShell() {
   const [panel, setPanel] = useState<PanelId | null>(() => loadViewState().panel)
   const [panelDocked, setPanelDocked] = useState<boolean>(() => loadViewState().panelDocked)
   const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewState().viewMode)
+  // The zoom rung and fit mode, owned here for the same reason `viewMode` is:
+  // the footer changes them and the center draws at them, and neither of the
+  // two can own a value the other reads (013 T026, contracts §Footer).
+  const [zoom, setZoom] = useState<ZoomState>(() => {
+    const stored = loadViewState()
+    return { zoomStep: stored.zoomStep, fitting: stored.fitting }
+  })
 
   function selectPanel(id: PanelId | null): void {
     setPanel(id)
@@ -85,6 +93,13 @@ export function WorkbenchShell() {
     saveViewState({ ...loadViewState(), viewMode: next })
   }
 
+  function chooseZoom(next: ZoomState): void {
+    setZoom(next)
+    // Merged into the stored state rather than written over it, so the panel
+    // and the view mode this component also owns survive a zoom.
+    saveViewState({ ...loadViewState(), zoomStep: next.zoomStep, fitting: next.fitting })
+  }
+
   return (
     <div className="flex h-screen flex-col bg-background">
       <Header />
@@ -98,11 +113,16 @@ export function WorkbenchShell() {
           )}
           <div className="flex flex-1 flex-col overflow-hidden">
             <UnplacedDock />
-            <CenterView viewMode={viewMode} />
+            <CenterView viewMode={viewMode} zoom={zoom} />
           </div>
         </div>
       </div>
-      <StatusFooter viewMode={viewMode} onViewModeChange={chooseView} />
+      <StatusFooter
+        viewMode={viewMode}
+        onViewModeChange={chooseView}
+        zoom={zoom}
+        onZoomChange={chooseZoom}
+      />
     </div>
   )
 }

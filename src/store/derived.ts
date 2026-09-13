@@ -20,6 +20,8 @@ import type {
 // pure arithmetic with no React and no store read, so the import carries
 // nothing back the other way.
 import { assignStripLanes } from '../layout/lanes.ts'
+import type { BlockPlacement } from '../layout/lanes.ts'
+import { findingIdentity } from '../engine/validation.ts'
 import { buildTournamentConfig } from './buildConfig.ts'
 import type { StoreState } from './store.ts'
 
@@ -376,3 +378,146 @@ function computePlacementCounts(
 
 /** Placed / unplaced / pinned counts over the selected events (data-model.md §10). */
 export const selectPlacementCounts = memoizeOnDeps(scheduleDeps, computePlacementCounts)
+
+// ──────────────────────────────────────────────
+// Day summaries (data-model.md §9, 013 T026)
+// ──────────────────────────────────────────────
+
+/**
+ * What one day band on the canvas says about its day (FR-039).
+ *
+ * Every field is read off the same `assignStripLanes` output the canvas draws
+ * and the footer measures (constitution, "each fact has exactly one home"), so
+ * a band cannot claim a peak the grid does not show.
+ */
+export interface DaySummary {
+  day: number
+  /** Distinct competitions with at least one block on this day. */
+  events: number
+  /** The latest block end on this day, or null when nothing is on it. */
+  finish: number | null
+  /** Peak concurrent strip demand, sampled at every block start. */
+  peakStrips: number
+  /** Blocks the lane packer could not fit. */
+  unplaced: number
+  /** Undismissed validation findings whose first subject is placed on this day. */
+  findings: number
+}
+
+/**
+ * Peak concurrent strip demand on one day, sampled at every block start.
+ *
+ * Demand is a step function that only ever rises where a block begins, so the
+ * maximum is attained at one of those instants and sampling them all finds it.
+ * Bounded by construction: the outer loop runs once per block of the day and
+ * the inner once per block, never on a condition that has to converge
+ * (constitution IV). The interval is half-open — a block ending exactly where
+ * another starts is not concurrent with it, matching `assignStripLanes`'s own
+ * overlap rule.
+ */
+function peakStripsOnDay(dayBlocks: BlockPlacement[]): number {
+  let peak = 0
+  for (const sample of dayBlocks) {
+    let at = 0
+    for (const block of dayBlocks) {
+      if (block.startMinutes <= sample.startMinutes && block.endMinutes > sample.startMinutes) {
+        at += block.stripCount
+      }
+    }
+    if (at > peak) peak = at
+  }
+  return peak
+}
+
+/**
+ * Which day each undismissed validation finding belongs to.
+ *
+ * Only `validationErrors` are counted, and that is a statement about
+ * dismissal rather than about severity. `findingIdentity` gives a
+ * `ValidationError` the stable id `dismissFinding` and `state.dismissedFindings`
+ * key on; `analysis.warnings` (the bottleneck surface) has no identity function
+ * and nothing in the app can dismiss one, so counting them here would put a
+ * number in the band that no user action can ever reduce.
+ *
+ * A finding is attributed to the day its first subject is placed on — the
+ * subject is the event the rule is about, and the band is the place a reader
+ * looks for "what is wrong with this day". A finding naming no subject, or one
+ * whose subject has no placement, belongs to no day and is counted nowhere.
+ *
+ * Identities are de-duplicated per day: two errors that dismiss together are
+ * one thing a reader can act on, so they read as one.
+ */
+function findingsByDay(
+  state: StoreState,
+  findings: DerivedFindings,
+): Map<number, Set<string>> {
+  const byDay = new Map<number, Set<string>>()
+
+  for (const error of findings.validationErrors) {
+    const subject = error.subjects?.[0]
+    if (subject === undefined) continue
+    const placement = state.placements[subject]
+    if (placement === undefined) continue
+
+    const identity = findingIdentity(error)
+    if (state.dismissedFindings[identity]) continue
+
+    let identities = byDay.get(placement.day)
+    if (!identities) {
+      identities = new Set<string>()
+      byDay.set(placement.day, identities)
+    }
+    identities.add(identity)
+  }
+
+  return byDay
+}
+
+/**
+ * `scheduleDeps` plus the dismissal set.
+ *
+ * Dismissing a finding changes nothing about the schedule, so `scheduleDeps`
+ * alone would hand back the pre-dismissal summaries and the band would go on
+ * counting a finding the user has already dealt with.
+ */
+function daySummaryDeps(
+  state: StoreState,
+  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
+): unknown[] {
+  return [...scheduleDeps(state, flightingSuggestions), state.dismissedFindings]
+}
+
+function computeDaySummaries(
+  state: StoreState,
+  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
+): DaySummary[] {
+  const schedule = selectDerivedSchedule(state, flightingSuggestions)
+  const findings = selectDerivedFindings(state, flightingSuggestions)
+  const blocks = assignStripLanes(schedule.events, state.strips_total)
+  const findingIds = findingsByDay(state, findings)
+
+  const summaries: DaySummary[] = []
+  for (let day = 0; day < state.days_available; day++) {
+    const dayBlocks = blocks.filter((block) => block.day === day)
+    const events = new Set(dayBlocks.map((block) => block.competitionId)).size
+
+    let finish: number | null = null
+    for (const block of dayBlocks) {
+      if (finish === null || block.endMinutes > finish) finish = block.endMinutes
+    }
+
+    summaries.push({
+      day,
+      events,
+      finish,
+      peakStrips: peakStripsOnDay(dayBlocks),
+      unplaced: dayBlocks.filter((block) => block.overflow).length,
+      findings: findingIds.get(day)?.size ?? 0,
+    })
+  }
+
+  return summaries
+}
+
+/** One summary per day in `[0, days_available)`, day ascending (data-model.md §9). */
+export const selectDaySummaries = memoizeOnDeps(daySummaryDeps, computeDaySummaries)

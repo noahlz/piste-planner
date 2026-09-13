@@ -89,11 +89,11 @@ function compareCandidates(a: Candidate, b: Candidate): number {
 }
 
 /**
- * Whether an occupied span overlaps `[startMinutes, endMinutes)`. Duplicates
- * `windowing.ts`'s `intersectsTimeRange` rule — half-open, so a span ending
- * exactly at `startMinutes` or starting exactly at `endMinutes` does not
- * overlap — because a layout module cannot import from `components/canvas/`.
- * Inlined until T026 deletes `windowing.ts`.
+ * Whether an occupied span overlaps `[startMinutes, endMinutes)`. Half-open,
+ * so a span ending exactly at `startMinutes` or starting exactly at
+ * `endMinutes` does not overlap. This was one of two statements of the rule
+ * until 013 T026 deleted the canvas's own windowing module; it is the only one
+ * now, and `selectDaySummaries`'s peak sampling follows it.
  */
 function intersectsOccupancy(taken: Occupancy, startMinutes: number, endMinutes: number): boolean {
   return startMinutes < taken.endMinutes && endMinutes > taken.startMinutes

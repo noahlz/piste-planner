@@ -66,7 +66,9 @@ function RecomputeHost({ viewMode }: { viewMode: ViewMode }) {
         <AnalysisOutput />
       </div>
       <div data-testid="center">
-        <CenterView viewMode={viewMode} />
+        {/* 013 T025 phase-3 contract: CenterView takes the zoom state the
+            host owns (WorkbenchShell), same as viewMode above. */}
+        <CenterView viewMode={viewMode} zoom={{ zoomStep: 2, fitting: false }} />
       </div>
     </>
   )
@@ -254,9 +256,10 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     // at all — every assertion below would then read `undefined` both before
     // and after the settle.
     globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
-    // 828px of plot from 08:00 at 1 min/px spans [480, 1308), past every block
-    // the fixture places. The view stays MATRIX, which is the default.
-    saveViewState({ ...DEFAULT_VIEW_STATE, timeScroll: 480 })
+    // 013 T026: `CenterView` takes its zoom as a prop, so the stored state no
+    // longer decides what the canvas draws. The view stays MATRIX, which is
+    // the default, and that is all this seed is still for.
+    saveViewState({ ...DEFAULT_VIEW_STATE })
   })
 
   afterEach(() => {
@@ -273,7 +276,7 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
 
   it('holds the drawn blocks at their pre-edit geometry until the settle, then moves them', () => {
     const id = seedPlacedCompetitions(8)
-    render(<CenterView viewMode={ViewMode.MATRIX} />)
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
 
     const poolEndBefore = blockEnd(id, 'POOLS')
     expect(poolEndBefore, 'the canvas drew nothing to compare').not.toBeNull()
@@ -305,17 +308,6 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     expect(blockEnd(id, 'DE_ROUND_OF_16')).toBe(915)
   })
 
-  /**
-   * jsdom 26 ships no `PointerEvent` constructor, so testing-library's
-   * `pointerMove` degrades to a bare `Event` and drops the coordinates. The
-   * event name is what React dispatches on, so a `MouseEvent` carries them.
-   */
-  function firePointerMove(el: Element, clientX: number, clientY: number): void {
-    el.dispatchEvent(
-      new MouseEvent('pointermove', { clientX, clientY, bubbles: true, cancelable: true }),
-    )
-  }
-
   it('holds a block’s findings at the committed model too, not just its geometry', () => {
     // The case above covers the `schedule` prop. The findings travel by a
     // second prop and the canvas has a live subscription to fall back on when
@@ -330,19 +322,19 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     // still inside strips_total, so validateConfig raises no ERROR and the
     // center goes on committing.
     const id = seedPlacedCompetitions(8)
-    render(<CenterView viewMode={ViewMode.MATRIX} />)
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
 
     const block = document.querySelector<HTMLElement>(
       `[data-event-id="${id}"][data-phase="POOLS"]`,
     )
     if (!block) throw new Error('the canvas drew no pool block to hover')
-    const centreX = 72 + parseFloat(block.style.left) + parseFloat(block.style.width) / 2
-    const centreY = 38 + parseFloat(block.style.top) + parseFloat(block.style.height) / 2
-    const viewport = document.querySelector('[data-canvas-viewport]')
-    if (!viewport) throw new Error('the canvas rendered no viewport')
-
+    // 013 T026: the canvas scrolls natively now, so the hover is bound to the
+    // block rather than hit-tested from the container against coordinates the
+    // component would have to undo the browser's scroll offsets to read
+    // (Canvas.tsx §"Hover is bound per block"). Entering the block is what
+    // opens the tooltip; the assertions below are unchanged.
     act(() => {
-      firePointerMove(viewport, centreX, centreY)
+      fireEvent.pointerEnter(block)
     })
     const findings = (): string =>
       document.querySelector('[data-tooltip-field="findings"]')?.textContent ?? ''

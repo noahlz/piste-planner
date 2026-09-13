@@ -10,13 +10,6 @@ export const ViewMode = {
 } as const
 export type ViewMode = (typeof ViewMode)[keyof typeof ViewMode]
 
-export const RowHeightStep = {
-  COMPACT: 'compact',
-  NORMAL: 'normal',
-  TALL: 'tall',
-} as const
-export type RowHeightStep = (typeof RowHeightStep)[keyof typeof RowHeightStep]
-
 // The tool rail's five inspector panels (013 T009, ui-contract.md §Tool
 // rail). `null` means the rail is fully closed.
 export const PanelId = {
@@ -28,38 +21,55 @@ export const PanelId = {
 } as const
 export type PanelId = (typeof PanelId)[keyof typeof PanelId]
 
+/**
+ * 013 T026 (data-model §2, contracts/ui-contract.md §Footer): the canvas no
+ * longer holds a window of its own. `rowHeightStep`, `timeZoom`, `timeScroll`
+ * and `rowScroll` described a canvas that scrolled by arithmetic and sized its
+ * rows by a separate three-value control; the redesigned canvas scrolls
+ * natively (so the browser owns both scroll positions) and its row height
+ * follows the zoom rung. What is left to persist is where on the ladder the
+ * viewer is, and whether they are in fit-to-day.
+ */
 export interface ViewState {
   viewMode: ViewMode
-  rowHeightStep: RowHeightStep
-  timeZoom: number // minutes per pixel
-  timeScroll: number // minutes from midnight
-  rowScroll: number // flat row index
+  /** An index into `components/canvas/zoomLadder.ts`'s ZOOM_STEPS: 0–5. */
+  zoomStep: number
+  /** Fit-to-day: the day span is solved to the plot's width, not to a rung. */
+  fitting: boolean
   panel: PanelId | null
   panelDocked: boolean
 }
 
-// Frozen so a future accidental write (e.g. `state.timeZoom = x` instead of a
+// Frozen so a future accidental write (e.g. `state.zoomStep = x` instead of a
 // copy) throws immediately in strict mode rather than corrupting every
 // caller that shares this reference.
 export const DEFAULT_VIEW_STATE: ViewState = Object.freeze({
   // The matrix is the center's default view from T040 on (FR-023, research
   // D11) — US1 shipped SCHEDULE because the canvas did not exist yet.
   viewMode: ViewMode.MATRIX,
-  rowHeightStep: RowHeightStep.NORMAL,
-  timeZoom: 1,
-  // 08:00, where a competition day starts. Midnight is a valid scroll but it
-  // opens the matrix on eight hours of empty grid with the schedule off the
-  // right edge, which `Fit to day` then has to undo on every first load.
-  timeScroll: 480,
-  rowScroll: 0,
+  // The 100% rung (zoomLadder.ts DEFAULT_ZOOM), with fit-to-day on: the
+  // opening view shows a whole day rather than a window into one, so a fresh
+  // load needs no gesture to see what was scheduled (data-model §2).
+  zoomStep: 2,
+  fitting: true,
   panel: null,
   panelDocked: false,
 })
 
 export const VIEW_STATE_STORAGE_KEY = 'piste-planner:view-state'
 
+/**
+ * The ladder's bounds, restated rather than imported.
+ *
+ * `zoomLadder.ts` lives under `src/components/`, and a store module that
+ * imported a component module would invert the dependency the rest of the
+ * store keeps. The two are held together by `viewState.test.ts`, which pins
+ * 0–5 against the ladder's six rungs.
+ */
+const MIN_ZOOM_STEP = 0
+const MAX_ZOOM_STEP = 5
+
 const VIEW_MODES: Set<string> = new Set(Object.values(ViewMode))
-const ROW_HEIGHT_STEPS: Set<string> = new Set(Object.values(RowHeightStep))
 const PANEL_IDS: Set<string> = new Set(Object.values(PanelId))
 
 /**
@@ -75,23 +85,21 @@ function isValidViewState(value: unknown): value is ViewState {
   const v = value as Record<string, unknown>
 
   if (typeof v.viewMode !== 'string' || !VIEW_MODES.has(v.viewMode)) return false
-  if (typeof v.rowHeightStep !== 'string' || !ROW_HEIGHT_STEPS.has(v.rowHeightStep)) return false
-  // Range checks, not just typeof: a stored value out of range is as
+  // A range check, not just typeof: a stored step outside the ladder is as
   // untrustworthy as one of the wrong type, and falls back to the same
   // wholesale default rather than being clamped or merged field-by-field.
-  // Number.isFinite is required explicitly — typeof Infinity === 'number'
-  // and Infinity satisfies both `> 0` and `>= 0` bounds below.
-  if (typeof v.timeZoom !== 'number' || !Number.isFinite(v.timeZoom) || v.timeZoom <= 0) {
+  // Number.isInteger(Infinity) is false, so this excludes non-finite values
+  // without a separate Number.isFinite check — and a fractional step, which
+  // indexes no rung.
+  if (
+    typeof v.zoomStep !== 'number' ||
+    !Number.isInteger(v.zoomStep) ||
+    v.zoomStep < MIN_ZOOM_STEP ||
+    v.zoomStep > MAX_ZOOM_STEP
+  ) {
     return false
   }
-  if (typeof v.timeScroll !== 'number' || !Number.isFinite(v.timeScroll) || v.timeScroll < 0) {
-    return false
-  }
-  // Number.isInteger(Infinity) is false, so this already excludes non-finite
-  // values without a separate Number.isFinite check.
-  if (typeof v.rowScroll !== 'number' || !Number.isInteger(v.rowScroll) || v.rowScroll < 0) {
-    return false
-  }
+  if (typeof v.fitting !== 'boolean') return false
   // null is a valid value (the rail fully closed) — only a non-null value has
   // to match one of the five ids, and a missing field is `undefined`, which
   // satisfies neither branch and falls back like every other missing field.

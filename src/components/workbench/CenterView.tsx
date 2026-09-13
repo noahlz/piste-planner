@@ -8,8 +8,9 @@ import {
   type DerivedSchedule,
 } from '../../store/derived.ts'
 import { ScheduleOutput } from '../sections/ScheduleOutput.tsx'
-import { MatrixCanvas } from '../canvas/MatrixCanvas.tsx'
+import { Canvas } from '../canvas/Canvas.tsx'
 import { ViewMode } from '../../store/viewState.ts'
+import type { ZoomState } from '../canvas/zoomLadder.ts'
 import { AlertCircle } from 'lucide-react'
 
 /** How long an edit must settle before the center relayouts (FR-008). */
@@ -82,10 +83,17 @@ interface CommittedModel {
  *
  * The retired scorecard's hover highlight (FR-029) did, undebounced, so a
  * hover cue would not arrive a settle late. 013 T011a deletes it along with
- * the scorecard it lived on (research D7), and T013 removes the `highlight`
- * prop `MatrixCanvas` and `EventBlock` drew it through.
+ * the scorecard it lived on (research D7), and T013 removed the `highlight`
+ * prop the canvas and its blocks drew it through.
+ *
+ * ## Zoom is not part of the committed model
+ *
+ * `zoom` is a viewer preference `WorkbenchShell` owns, the same way `viewMode`
+ * is, and it passes straight through: changing the rung changes how the
+ * committed schedule is drawn, never which schedule is drawn, so it is not
+ * debounced and nothing about the settle applies to it.
  */
-export function CenterView({ viewMode }: { viewMode: ViewMode }) {
+export function CenterView({ viewMode, zoom }: { viewMode: ViewMode; zoom: ZoomState }) {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)
@@ -127,10 +135,11 @@ export function CenterView({ viewMode }: { viewMode: ViewMode }) {
           }`}
         >
           {showingMatrix ? (
-            <MatrixCanvas
+            <Canvas
               schedule={committed.schedule}
               findings={committed.findings}
               dayConfigs={committed.dayConfigs}
+              zoom={zoom}
             />
           ) : (
             <ScheduleOutput schedule={committed.schedule} />

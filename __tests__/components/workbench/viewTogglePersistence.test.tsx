@@ -4,6 +4,7 @@ import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell
 import { useStore } from '../../../src/store/store.ts'
 import {
   DEFAULT_VIEW_STATE,
+  PanelId,
   VIEW_STATE_STORAGE_KEY,
   loadViewState,
   saveViewState,
@@ -49,7 +50,11 @@ describe('the center view choice survives the component (research D10)', () => {
     // stored state away and falls back to DEFAULT_VIEW_STATE, silently
     // resetting the window and the row scroll, neither of which this
     // component owns.
-    saveViewState({ ...DEFAULT_VIEW_STATE, timeScroll: 900 })
+    //
+    // 013 T026: `timeScroll` is gone with the arithmetic-scrolled canvas, so
+    // the field standing in for "something else this component does not own"
+    // is now the zoom rung.
+    saveViewState({ ...DEFAULT_VIEW_STATE, zoomStep: 4 })
     render(<WorkbenchShell />)
 
     fireEvent.click(screen.getByRole('radio', { name: 'Matrix' }))
@@ -59,17 +64,19 @@ describe('the center view choice survives the component (research D10)', () => {
 
     const stored = loadViewState()
     expect(stored.viewMode).toBe('matrix')
-    expect(stored.timeScroll).toBe(900)
+    expect(stored.zoomStep).toBe(4)
   })
 
   it('leaves the view-state fields the center does not own alone', () => {
-    // The canvas owns the window and the row height: a toggle that wrote its
-    // own field over a whole default state would silently reset both.
+    // The footer's zoom toolbar owns the rung and fit mode, and the rail owns
+    // the open panel: a toggle that wrote its own field over a whole default
+    // state would silently reset all three (013 T026 — `timeScroll`,
+    // `timeZoom` and `rowScroll` are gone with the arithmetic-scrolled canvas).
     saveViewState({
       ...DEFAULT_VIEW_STATE,
-      timeScroll: 900,
-      timeZoom: 3,
-      rowScroll: 7,
+      zoomStep: 5,
+      fitting: false,
+      panel: PanelId.STRIPS,
     })
     render(<WorkbenchShell />)
 
@@ -77,8 +84,8 @@ describe('the center view choice survives the component (research D10)', () => {
 
     const stored = loadViewState()
     expect(stored.viewMode).toBe('schedule')
-    expect(stored.timeScroll).toBe(900)
-    expect(stored.timeZoom).toBe(3)
-    expect(stored.rowScroll).toBe(7)
+    expect(stored.zoomStep).toBe(5)
+    expect(stored.fitting).toBe(false)
+    expect(stored.panel).toBe(PanelId.STRIPS)
   })
 })
