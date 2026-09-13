@@ -5,7 +5,7 @@ import { formatClock } from '../../lib/time.ts'
 import { assignStripLanes, type BlockPlacement } from '../../layout/lanes.ts'
 import { useStore } from '../../store/store.ts'
 import {
-  selectDaySummaries,
+  daySummariesFromBlocks,
   type DaySummary,
   type DerivedFindings,
   type DerivedSchedule,
@@ -59,9 +59,12 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  * which for a scheduled tournament may carry the scheduler's own day axis
  * rather than clock time (contracts/day-axis.md C4, research D4/D5).
  *
- * The two store reads that remain are `selectDaySummaries` for the day bands
- * and `placements` for the pin badge — neither is expressible from the
- * committed model, and both are narrow.
+ * The day bands are computed here too, by `daySummariesFromBlocks` over this
+ * component's own `lanes` — the same committed blocks the grid draws — plus
+ * the committed `findings.validationErrors` and a live read of
+ * `dismissedFindings` (dismissal is not part of the schedule story, FR-042).
+ * The one store read that remains unexpressed from the committed model is
+ * `placements`, for the pin badge (phase 6 decides whether that stays live).
  */
 
 /** The frozen strip-label gutter (mockup line 278). */
@@ -210,7 +213,7 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
   const daysAvailable = Math.max(0, Math.floor(config.days_available))
 
   const placements = useStore((s) => s.placements)
-  const summaries = useStore(selectDaySummaries)
+  const dismissedFindings = useStore((s) => s.dismissedFindings)
 
   const [hovered, setHovered] = useState<HoveredBlock | null>(null)
   /** The measured plot width, 0 until the observer reports one. */
@@ -257,6 +260,30 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
     () => assignStripLanes(schedule.events, stripsTotal),
     [schedule.events, stripsTotal],
   )
+
+  /** `competitionId -> day`, off the same committed blocks the grid draws
+   *  (FR-042) — never `placements`, which may already describe an edit the
+   *  center has not settled into `schedule` yet. */
+  const placementDaysById = useMemo(() => {
+    const days: Record<string, { day: number }> = {}
+    for (const block of lanes) {
+      if (!(block.competitionId in days)) days[block.competitionId] = { day: block.day }
+    }
+    return days
+  }, [lanes])
+
+  const summaries = useMemo(
+    () =>
+      daySummariesFromBlocks(
+        lanes,
+        daysAvailable,
+        findings.validationErrors,
+        dismissedFindings,
+        placementDaysById,
+      ),
+    [lanes, daysAvailable, findings.validationErrors, dismissedFindings, placementDaysById],
+  )
+
   const competitionsById = useMemo(
     () => new Map(schedule.competitions.map((competition) => [competition.id, competition])),
     [schedule.competitions],

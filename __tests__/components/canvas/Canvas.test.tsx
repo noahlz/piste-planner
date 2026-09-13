@@ -11,6 +11,7 @@ import { BottleneckCause, BottleneckSeverity } from '../../../src/engine/types.t
 import { Phase } from '../../../src/engine/types.ts'
 import type { DayConfig } from '../../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
+import { installStubResizeObserver, NeverFiringResizeObserver } from '../../helpers/resizeObserver.ts'
 
 // 013 T025 (part a) — red tests for the redesigned canvas (D2, D3, FR-032 to
 // FR-043, contracts/ui-contract.md §Canvas). Canvas.tsx does not exist yet
@@ -22,51 +23,23 @@ import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../
 // row/day-group counts below are the real invariant (320 = 4 x 80) rather
 // than an artifact of a fixture built to make the number come out even.
 
-/**
- * jsdom implements no ResizeObserver. The default stub reports a fixed,
- * non-zero content width on every observe() call, exercising the real
- * measurement path (Canvas.tsx §"a ResizeObserver on the plot measures its
- * width for label-fitting") rather than routing around it.
- */
-class StubResizeObserver {
-  callback: ResizeObserverCallback
+// jsdom implements no ResizeObserver. The shared stub (__tests__/helpers/
+// resizeObserver.ts) reports a fixed, non-zero content width on every
+// observe() call, exercising the real measurement path (Canvas.tsx §"a
+// ResizeObserver on the plot measures its width for label-fitting") rather
+// than routing around it. The fit-fallback case below swaps in
+// NeverFiringResizeObserver instead, for jsdom offering no measurement at
+// all rather than a delayed one.
 
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback
-  }
-
-  observe(): void {
-    this.callback(
-      [{ contentRect: { width: 900, height: 1200 } } as ResizeObserverEntry],
-      this as unknown as ResizeObserver,
-    )
-  }
-
-  unobserve(): void {}
-  disconnect(): void {}
-}
-
-/**
- * The fit-fallback case (research D3, FIT_FALLBACK_STEP): a ResizeObserver
- * that never invokes its callback, standing in for jsdom offering no
- * measurement at all. Canvas.tsx must still draw every block, at rung 2's
- * ppm, rather than waiting forever for a measurement that never comes.
- */
-class NeverFiringResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
-}
-
-const originalResizeObserver = globalThis.ResizeObserver
+let restoreResizeObserver: () => void
 
 beforeEach(() => {
-  globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
+  restoreResizeObserver = installStubResizeObserver(900, 1200)
   useStore.setState(useStore.getInitialState())
 })
 
 afterEach(() => {
-  globalThis.ResizeObserver = originalResizeObserver
+  restoreResizeObserver()
   cleanup()
 })
 

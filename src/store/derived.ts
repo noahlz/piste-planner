@@ -8,6 +8,7 @@ import type {
   AnalysisResult,
   Competition,
   FlightingGroup,
+  Placement,
   RefDemandByDay,
   RefDemandInterval,
   RefRequirementsByDay,
@@ -388,7 +389,12 @@ export const selectPlacementCounts = memoizeOnDeps(scheduleDeps, computePlacemen
  *
  * Every field is read off the same `assignStripLanes` output the canvas draws
  * and the footer measures (constitution, "each fact has exactly one home"), so
- * a band cannot claim a peak the grid does not show.
+ * a band cannot claim a peak the grid does not show — provided the caller
+ * hands `daySummariesFromBlocks` its own committed blocks, which is what
+ * `Canvas` does. `selectDaySummaries` below is the *live* convenience
+ * wrapper: it packs the live schedule itself, so a caller that mixes it with
+ * a committed set of blocks (as `Canvas` used to) is the one place this
+ * guarantee can still be broken.
  */
 export interface DaySummary {
   day: number
@@ -443,24 +449,28 @@ function peakStripsOnDay(dayBlocks: BlockPlacement[]): number {
  * subject is the event the rule is about, and the band is the place a reader
  * looks for "what is wrong with this day". A finding naming no subject, or one
  * whose subject has no placement, belongs to no day and is counted nowhere.
+ * `placementDays` only ever needs the `day` a subject sits on, so a caller
+ * drawing from committed blocks (`Canvas`) can build it from its own blocks
+ * rather than reaching for `state.placements`, which may be a settle ahead.
  *
  * Identities are de-duplicated per day: two errors that dismiss together are
  * one thing a reader can act on, so they read as one.
  */
 function findingsByDay(
-  state: StoreState,
-  findings: DerivedFindings,
+  validationErrors: ValidationError[],
+  dismissedFindings: Record<string, true>,
+  placementDays: Record<string, Pick<Placement, 'day'>>,
 ): Map<number, Set<string>> {
   const byDay = new Map<number, Set<string>>()
 
-  for (const error of findings.validationErrors) {
+  for (const error of validationErrors) {
     const subject = error.subjects?.[0]
     if (subject === undefined) continue
-    const placement = state.placements[subject]
+    const placement = placementDays[subject]
     if (placement === undefined) continue
 
     const identity = findingIdentity(error)
-    if (state.dismissedFindings[identity]) continue
+    if (dismissedFindings[identity]) continue
 
     let identities = byDay.get(placement.day)
     if (!identities) {
@@ -487,17 +497,29 @@ function daySummaryDeps(
   return [...scheduleDeps(state, flightingSuggestions), state.dismissedFindings]
 }
 
-function computeDaySummaries(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
+/**
+ * One `DaySummary` per day in `[0, daysAvailable)`, day ascending
+ * (data-model.md §9), computed entirely from `blocks` and the finding/dismissal
+ * inputs a caller already has — no store read of its own.
+ *
+ * This is what makes the day band safe to draw from a *committed* model
+ * (FR-042, react-code-reviewer finding 1 on 05103d5ff4): `Canvas` calls this
+ * directly with the same `assignStripLanes` output it draws blocks from, so
+ * the band's numbers and the grid's blocks can never disagree about which
+ * schedule they describe. `selectDaySummaries` below is the thin live
+ * wrapper other callers use when there is no committed model to prefer.
+ */
+export function daySummariesFromBlocks(
+  blocks: BlockPlacement[],
+  daysAvailable: number,
+  validationErrors: ValidationError[],
+  dismissedFindings: Record<string, true>,
+  placementDays: Record<string, Pick<Placement, 'day'>>,
 ): DaySummary[] {
-  const schedule = selectDerivedSchedule(state, flightingSuggestions)
-  const findings = selectDerivedFindings(state, flightingSuggestions)
-  const blocks = assignStripLanes(schedule.events, state.strips_total)
-  const findingIds = findingsByDay(state, findings)
+  const findingIds = findingsByDay(validationErrors, dismissedFindings, placementDays)
 
   const summaries: DaySummary[] = []
-  for (let day = 0; day < state.days_available; day++) {
+  for (let day = 0; day < daysAvailable; day++) {
     const dayBlocks = blocks.filter((block) => block.day === day)
     const events = new Set(dayBlocks.map((block) => block.competitionId)).size
 
@@ -517,6 +539,22 @@ function computeDaySummaries(
   }
 
   return summaries
+}
+
+function computeDaySummaries(
+  state: StoreState,
+  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
+): DaySummary[] {
+  const schedule = selectDerivedSchedule(state, flightingSuggestions)
+  const findings = selectDerivedFindings(state, flightingSuggestions)
+  const blocks = assignStripLanes(schedule.events, state.strips_total)
+  return daySummariesFromBlocks(
+    blocks,
+    state.days_available,
+    findings.validationErrors,
+    state.dismissedFindings,
+    state.placements,
+  )
 }
 
 /** One summary per day in `[0, days_available)`, day ascending (data-model.md §9). */

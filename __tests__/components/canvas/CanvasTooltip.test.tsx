@@ -19,6 +19,7 @@ import {
   makeScheduleResult,
   makeStrips,
 } from '../../helpers/factories.ts'
+import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
 // 004 T030 — the tooltip contract (contracts/ui-contract.md §Tooltip contract,
 // FR-022).
@@ -60,36 +61,18 @@ const POOL_PLACEMENT: BlockPlacement = {
   overflow: false,
 }
 
-class StubResizeObserver {
-  callback: ResizeObserverCallback
-
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback
-  }
-
-  observe(): void {
-    this.callback(
-      [{ contentRect: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT } } as ResizeObserverEntry],
-      this as unknown as ResizeObserver,
-    )
-  }
-
-  unobserve(): void {}
-  disconnect(): void {}
-}
-
-const originalResizeObserver = globalThis.ResizeObserver
+let restoreResizeObserver: () => void
 
 beforeEach(() => {
   // Radix's popper measures its content through a ResizeObserver, which jsdom
   // does not implement.
-  globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
+  restoreResizeObserver = installStubResizeObserver(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
   localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
 })
 
 afterEach(() => {
-  globalThis.ResizeObserver = originalResizeObserver
+  restoreResizeObserver()
 })
 
 function makeTarget(overrides: Partial<CanvasTooltipTarget> = {}): CanvasTooltipTarget {

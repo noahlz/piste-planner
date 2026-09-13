@@ -5,6 +5,7 @@ import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import { VIEW_STATE_STORAGE_KEY, ViewMode } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
 // 004 T008 — the dimmed-invalid rule (FR-009, S2-contract.md §Center view
 // and the dimmed-invalid rule): the center never blanks. While any derived
@@ -178,6 +179,38 @@ describe('CenterView across an edit sequence', () => {
     expect(screen.getByText(id)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
     expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
+  })
+})
+
+// FR-042 (react-code-reviewer finding 1 on 05103d5ff4) — the day band is
+// drawn from the matrix's own committed blocks, the same as everything else
+// under the dimmed-invalid rule, so it must hold at its last committed value
+// while a finding is ERROR rather than reading a live recomputation.
+describe('CenterView dimmed-invalid rule (day band, FR-042)', () => {
+  let restoreResizeObserver: () => void
+
+  beforeEach(() => {
+    restoreResizeObserver = installStubResizeObserver(900, 480)
+  })
+
+  afterEach(() => {
+    restoreResizeObserver()
+  })
+
+  it('keeps the day band text at its last committed value once a finding turns ERROR', () => {
+    seedPlacedCompetition()
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+
+    const band = (): string => document.querySelector('[data-day-band="0"]')?.textContent ?? ''
+    const before = band()
+    expect(before, 'the canvas drew no day band to compare').not.toBe('')
+
+    act(() => {
+      useStore.getState().setStrips(0)
+    })
+
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
+    expect(band(), 'the band must not follow the live, now-invalid derivation').toBe(before)
   })
 })
 

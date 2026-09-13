@@ -13,6 +13,7 @@ import {
   saveViewState,
 } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
 // 004 T009 — two-tier recompute (FR-008, S2-contract.md §Center view and the
 // dimmed-invalid rule): findings follow every keystroke, the center
@@ -227,35 +228,13 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
   const VIEWPORT_WIDTH = 900
   const VIEWPORT_HEIGHT = 480
 
-  class StubResizeObserver {
-    callback: ResizeObserverCallback
-
-    constructor(callback: ResizeObserverCallback) {
-      this.callback = callback
-    }
-
-    observe(): void {
-      this.callback(
-        [
-          {
-            contentRect: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
-          } as ResizeObserverEntry,
-        ],
-        this as unknown as ResizeObserver,
-      )
-    }
-
-    unobserve(): void {}
-    disconnect(): void {}
-  }
-
-  const originalResizeObserver = globalThis.ResizeObserver
+  let restoreResizeObserver: () => void
 
   beforeEach(() => {
     // jsdom ships no ResizeObserver, and an unmeasured canvas draws no blocks
     // at all — every assertion below would then read `undefined` both before
     // and after the settle.
-    globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
+    restoreResizeObserver = installStubResizeObserver(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
     // 013 T026: `CenterView` takes its zoom as a prop, so the stored state no
     // longer decides what the canvas draws. The view stays MATRIX, which is
     // the default, and that is all this seed is still for.
@@ -263,7 +242,7 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
   })
 
   afterEach(() => {
-    globalThis.ResizeObserver = originalResizeObserver
+    restoreResizeObserver()
   })
 
   /** The last minute of one drawn block, or null when it is not drawn. */
@@ -358,4 +337,33 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
   // lived on, so the case that proved the highlight crossed the settle
   // undebounced was removed rather than ported. StatusFooter.tsx carries no
   // hover state, and T013 removes the `highlight` prop this pointed at.
+
+  it('holds the day band text at its pre-edit value until the settle, then updates it (FR-042)', () => {
+    // react-code-reviewer finding 1 on 05103d5ff4: the day band used to read
+    // `selectDaySummaries`, a live store subscription, while the blocks under
+    // it came from the committed `schedule` prop — so during the settle gap
+    // the band could describe a different schedule than the grid it sits
+    // over. It must now hold exactly like the blocks and findings above.
+    const id = seedPlacedCompetitions(8)
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+
+    const band = (): string => document.querySelector('[data-day-band="0"]')?.textContent ?? ''
+    const before = band()
+    expect(before, 'the canvas drew no day band to compare').not.toBe('')
+
+    act(() => {
+      // Same edit as the geometry case above: 8 -> 45 fencers changes the
+      // pool/DE structure and therefore day 0's finish time.
+      useStore.getState().updateCompetition(id, { fencer_count: 45 })
+    })
+
+    expect(useStore.getState().selectedCompetitions[id].fencer_count).toBe(45)
+    expect(band(), 'the band ran ahead of the committed model it sits over').toBe(before)
+
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS)
+    })
+
+    expect(band()).not.toBe(before)
+  })
 })
