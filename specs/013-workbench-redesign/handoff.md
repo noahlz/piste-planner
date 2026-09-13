@@ -218,8 +218,11 @@ it, because the fix stopped rendering the empty span.
     10 px floor, below which the block is blank. SC-005 is read as
     label-or-phase-icon and the driver comment records it. The `CanvasTooltip`
     "draws nothing" fixture moved from 27 px to 20 px to stay below the floor.
-    Product-owner note: the 5-minute DE-prelims segment itself looks like an
-    engine artefact worth a look, not a canvas one.
+    The 5-minute segment itself is the engine defect the backlog already
+    records (`docs/design/backlog.md` §DE prelims gets a sliver of its
+    bracket's time): `deBlockDurations` counts only the first round as the
+    bracket's bouts, so a 64 bracket gives prelims 1/32 of the DE time. Fix
+    sits behind the drift ledger and its own spec; not this feature's.
 11. **The day band read the live store while the grid drew the committed
     model** (react-code-reviewer on `05103d5ff4`, FR-042). During the 150 ms
     settle, and for as long as a blocking error suppressed the commit, the
