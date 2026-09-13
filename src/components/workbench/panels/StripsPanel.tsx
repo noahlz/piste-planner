@@ -68,10 +68,15 @@ function Stepper({
  * D8: `computeSuggestedStrips` only answers — it never writes `strips_total`.
  * The search runs when the panel opens and again, debounced 300ms, when any
  * of strips, video strips, days, a day's hours, type, a fencer count or a
- * pool duration changes. Each run carries a token (`searchToken`); a result
- * whose token has since been superseded is discarded, so a fast second search
- * can never be overwritten by a slow first one landing after it. **Apply**
- * is the only path that writes the suggestion into `strips_total`.
+ * pool duration changes. The previous answer is cleared the moment such an
+ * input changes, before the debounce timer is even set, so the card reads
+ * an em-dash with Apply disabled through the whole debounce window and
+ * search — a stale answer from a superseded configuration can never sit
+ * there waiting to be applied. Each run also carries a token (`searchToken`);
+ * a result whose token has since been superseded is discarded, so a fast
+ * second search can never be overwritten by a slow first one landing after
+ * it. **Apply** is the only path that writes the suggestion into
+ * `strips_total`.
  *
  * D9: referees per pool is read straight from `resolveRefsPerPool` — the same
  * factor the scheduler and `derive.ts` apply — never re-derived here.
@@ -138,6 +143,12 @@ export function StripsPanel() {
       void runSearch()
       return
     }
+    // The previous answer is cleared the moment an input changes, not when
+    // the debounced search resolves — otherwise the stale number from the
+    // prior configuration sits in the card, with Apply enabled, for the
+    // whole debounce window plus the search itself (research.md D8's
+    // intent: Apply must never write a superseded configuration's answer).
+    setSuggested(null)
     const timer = setTimeout(() => void runSearch(), SEARCH_DEBOUNCE_MS)
     debounceTimer.current = timer
     // Cleanup runs before the next dependency change (or on unmount) and

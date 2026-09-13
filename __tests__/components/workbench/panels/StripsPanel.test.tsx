@@ -232,6 +232,34 @@ describe('StripsPanel — debounced re-search', () => {
     expect(fn).toHaveBeenCalledTimes(2)
   })
 
+  it('clears the previous answer the moment an input changes, so a stale number can never be applied', async () => {
+    const { resolvers, fn } = stubSuggestStrips()
+    render(<StripsPanel />)
+
+    await act(async () => {
+      resolvers[0](18)
+    })
+    expect(document.querySelector('[data-suggested-strips]')?.textContent).toBe('18')
+    expect(screen.getByRole('button', { name: 'Apply' })).not.toBeDisabled()
+
+    act(() => {
+      useStore.getState().setStrips(9)
+    })
+    expect(document.querySelector('[data-suggested-strips]')?.textContent).toBe('—')
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
+
+    await act(async () => {
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS)
+    })
+    expect(fn).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      resolvers[1](21)
+    })
+    expect(document.querySelector('[data-suggested-strips]')?.textContent).toBe('21')
+    expect(screen.getByRole('button', { name: 'Apply' })).not.toBeDisabled()
+  })
+
   it('coalesces two changes inside the debounce window into one more search', async () => {
     const { resolvers, fn } = stubSuggestStrips()
     render(<StripsPanel />)
