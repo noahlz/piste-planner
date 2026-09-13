@@ -624,6 +624,12 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `validation.ts`, text unchanged) instead of the findings memo, the debounce
   test splits its acts, the status text is asserted exactly, and the
   video-strips-at-ROC coverage from `AdvancedPanel.test.tsx` is restored.
+  → Two more follow-ups from T023's live run: `9da51b1b15` clears the
+  suggested minimum the moment an input changes (the card kept the previous
+  template's number, Apply enabled, through the debounce and search);
+  `e4fcd29058` bumps the search token at that clear so a search already in
+  flight cannot land its stale answer, and resets the indicator. 72 files,
+  1840 passing.
 
 - [x] **T019** [US2] Red tests for the shrink ([research D7](./research.md),
   FR-062, FR-064, FR-071). In `__tests__/store/buildConfig.test.ts`: on a
