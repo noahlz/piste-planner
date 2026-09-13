@@ -487,7 +487,9 @@ const before = await schedTable.textContent()
 // fencer input's aria-label carries, so ".first()" alphabetically can land on
 // one that never renders in the schedule table — pick the first input NOT in
 // that tray instead, since that's what this assertion means to edit. The
-// fencer inputs live in the Events panel (FencerCounts.tsx, T009).
+// fencer inputs live in the Events panel (EventsPanel.tsx, T021), one per
+// selected competition, hanging off that competition's pressed chip — so the
+// set this loop scans is exactly the selected set.
 const unplacedText = await page.getByRole('region', { name: 'Unplaced events' }).textContent()
 await openPanel('Events')
 const fencerInputs = await page.getByRole('spinbutton', { name: /Fencer count for/ }).all()

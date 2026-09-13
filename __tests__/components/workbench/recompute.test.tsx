@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, act, within } from '@testing-library/react'
-import { FencerCounts } from '../../../src/components/sections/FencerCounts.tsx'
+import { EventsPanel } from '../../../src/components/workbench/panels/EventsPanel.tsx'
 import { AnalysisOutput } from '../../../src/components/sections/AnalysisOutput.tsx'
 import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
 import { useStore } from '../../../src/store/store.ts'
@@ -55,7 +55,11 @@ function RecomputeHost({ viewMode }: { viewMode: ViewMode }) {
   return (
     <>
       <div data-testid="fencer-counts">
-        <FencerCounts />
+        {/* 013 T021: the fencer input moved from `FencerCounts` (deleted) to
+            the Events panel, where it hangs off a selected competition's
+            pressed chip. Same aria-label, same commitOnChange, so the edit
+            this test drives is unchanged. */}
+        <EventsPanel />
       </div>
       <div data-testid="drawer">
         <AnalysisOutput />
@@ -87,8 +91,9 @@ function seedPlacedCompetitions(fencerCount: number): string {
   return id
 }
 
-/** The one fencer-count input belonging to `id` — FencerCounts renders one per
- *  selected competition, so the shared /Fencer count for/ regex is ambiguous here. */
+/** The one fencer-count input belonging to `id` — the Events panel renders one
+ *  per selected competition, so the shared /Fencer count for/ regex is
+ *  ambiguous here. */
 function fencerInput(id: string): HTMLElement {
   const entry = findCompetition(id)
   const label = entry ? competitionLabel(entry) : id

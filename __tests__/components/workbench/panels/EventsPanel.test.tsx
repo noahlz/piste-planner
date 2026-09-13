@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { EventsPanel } from '../../../../src/components/workbench/panels/EventsPanel.tsx'
 import { useStore } from '../../../../src/store/store.ts'
-import { CATALOGUE, ALL_VET_AGE_GROUPS } from '../../../../src/engine/catalogue.ts'
+import { CATALOGUE, ALL_VET_AGE_GROUPS, TEMPLATES, findCompetition } from '../../../../src/engine/catalogue.ts'
 import { MIN_FENCERS } from '../../../../src/engine/constants.ts'
 import { Category, EventType, Gender, Weapon } from '../../../../src/engine/types.ts'
-import { categoryDisplay, vetAgeGroupDisplay } from '../../../../src/components/competitionLabels.ts'
+import { categoryDisplay, vetAgeGroupDisplay, competitionLabel } from '../../../../src/components/competitionLabels.ts'
 
 // 013 T019 (FR-019–FR-021, ui-contract.md §Events): red first, against
 // src/components/workbench/panels/EventsPanel.tsx, which does not exist yet.
@@ -108,6 +108,19 @@ describe('EventsPanel — selection', () => {
     expect(firstChip).toHaveAttribute('aria-pressed', 'true')
   })
 
+  // 013 T021: successor to configEditing.test.tsx's CompetitionMatrix case
+  // ("renders competition toggles when template is applied"), deleted with
+  // that file. The heading case above proves the *count* the panel prints;
+  // this proves the chips themselves carry the pressed state.
+  it('presses exactly the applied template\'s chips', () => {
+    useStore.getState().applyTemplate('RYC Weekend')
+    render(<EventsPanel />)
+
+    expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(
+      TEMPLATES['RYC Weekend'].length,
+    )
+  })
+
   it('clicking a selected chip deselects it in the store', () => {
     useStore.getState().applyTemplate('RYC Weekend')
     render(<EventsPanel />)
@@ -137,6 +150,30 @@ describe('EventsPanel — fencer count', () => {
   it('an unpressed chip renders no fencer-count spinbutton', () => {
     render(<EventsPanel />)
     expect(screen.queryAllByRole('spinbutton', { name: /Fencer count for/ })).toHaveLength(0)
+  })
+
+  // 013 T021: successor to configEditing.test.tsx's two positive fencer-count
+  // cases ("entering fencer counts updates the inputs" and "changing fencer
+  // count input updates store state"), deleted with that file. Without this
+  // the panel's remaining fencer-count cases only pin what the input refuses,
+  // never that it commits at all.
+  it('a change to a valid value commits it and shows it in the field', () => {
+    // Addressed by label, not by DOM position: the panel lays chips out in
+    // catalogue-group order, which is not the sort order of the ids.
+    const id = TEMPLATES['RYC Weekend'][0]
+    useStore.getState().applyTemplate('RYC Weekend')
+    render(<EventsPanel />)
+
+    const entry = findCompetition(id)
+    expect(entry).toBeDefined()
+    const input = screen.getByRole('spinbutton', {
+      name: `Fencer count for ${competitionLabel(entry!)}`,
+    })
+    fireEvent.change(input, { target: { value: '64' } })
+
+    // commitOnChange — no blur needed for the store to see it.
+    expect(useStore.getState().selectedCompetitions[id].fencer_count).toBe(64)
+    expect((input as HTMLInputElement).value).toBe('64')
   })
 
   it('a change to a value below MIN_FENCERS commits nothing', () => {

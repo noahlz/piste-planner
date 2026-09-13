@@ -7,18 +7,17 @@ import { CenterView } from './CenterView.tsx'
 import { StatusFooter } from './StatusFooter.tsx'
 import { TournamentPanel } from './panels/TournamentPanel.tsx'
 import { StripsPanel } from './panels/StripsPanel.tsx'
-import { CompetitionMatrix } from '../sections/CompetitionMatrix.tsx'
-import { FencerCounts } from '../sections/FencerCounts.tsx'
+import { EventsPanel } from './panels/EventsPanel.tsx'
 import { AnalysisOutput } from '../sections/AnalysisOutput.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
 import { PanelId, ViewMode, loadViewState, saveViewState } from '../../store/viewState.ts'
 
 /**
  * Panel content by id — temporary (013 decision 1): phase 2 replaces each arm
- * with a purpose-built panel component. `tournament` (T016) and `strips`
- * (T018) are done; `events`, `findings` and `settings` are still the section
- * components the old collapsible rail mounted, unmodified, until their own
- * tasks land.
+ * with a purpose-built panel component. `tournament` (T016), `strips` (T018)
+ * and `events` (T021) are done; `findings` and `settings` are still the
+ * section components the old collapsible rail mounted, unmodified, until
+ * their own tasks land.
  *
  * `findings` also renders behind the rail's Findings button (T009) — its only
  * home since T011a folded the drawer into `StatusFooter`.
@@ -30,12 +29,7 @@ function panelContent(id: PanelId): ReactNode {
     case PanelId.STRIPS:
       return <StripsPanel />
     case PanelId.EVENTS:
-      return (
-        <div className="space-y-3">
-          <CompetitionMatrix />
-          <FencerCounts />
-        </div>
-      )
+      return <EventsPanel />
     case PanelId.FINDINGS:
       return <AnalysisOutput />
     case PanelId.SETTINGS:
