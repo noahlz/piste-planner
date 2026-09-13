@@ -299,9 +299,11 @@ describe('no layer of the tooltip takes the pointer (research D3)', () => {
  */
 describe('CanvasTooltip fields do not vary with what the block drew (FR-016, FR-022)', () => {
   it('names the weapon at a width where the block itself can draw nothing', () => {
-    // 27px leaves room for neither the phase icon (which needs iconPx + 26 =
-    // 48) nor the shortest name rung, the category alone (73px at this
-    // block's own namePx), so the block is a bare coloured bar.
+    // At this block's own row height, padding is clamp(rowH*0.2, 6, 11) = 6
+    // per side. 20px leaves neither the shortest name rung (the category
+    // alone) nor even a lone icon room: 20 - 2*6 = 8px is below the icon's
+    // 10px floor (T027 follow-up, SC-005), so the block is a bare coloured
+    // bar with nothing drawn at all.
     render(
       <Block
         competition={makeCompetition({ id: 'plain' })}
@@ -309,9 +311,9 @@ describe('CanvasTooltip fields do not vary with what the block drew (FR-016, FR-
         placement={POOL_PLACEMENT}
         pinned={false}
         selected={false}
-        widthPx={27}
+        widthPx={20}
         heightPx={96}
-        style={{ position: 'absolute', left: 0, top: 0, width: 27, height: 96 }}
+        style={{ position: 'absolute', left: 0, top: 0, width: 20, height: 96 }}
         findings={[]}
       />,
     )

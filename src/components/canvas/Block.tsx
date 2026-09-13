@@ -142,8 +142,12 @@ export function Block({
   const iconPx = Math.round(
     clamp(Math.min(contentHeightPx * 0.42, 22), 0, Math.max(10, contentHeightPx - 2)),
   )
+  // The inner flex's own padding (mockup: clamp(rowH*0.2, 6, 11) per side),
+  // needed again below to size an icon standing alone with no label beside it.
+  const padding = clamp(rowHeightPx * 0.2, 6, 11)
   // A pool grid is only distinguishable from a DE bracket above roughly 10px,
-  // so below that the phase channel drops to the hatch alone.
+  // so below that the phase channel drops to the hatch alone. This is the
+  // *icon-beside-name* tier: icon room plus a 9px gap plus space for the name.
   const showIcon = iconPx >= 10 && (widthPx === null || widthPx > iconPx + 26)
   // Width the furniture has already claimed, so the name is judged only
   // against the room actually left for it.
@@ -157,6 +161,23 @@ export function Block({
   if (fits(label)) labelText = label
   else if (fits(shortLabel)) labelText = shortLabel
   else if (fits(categoryLabel)) labelText = categoryLabel
+
+  // Four label tiers, not three: full name, short name, category alone, and
+  // — when even the category does not fit — the icon standing alone. A block
+  // this narrow still has the phase channel to give, so FR-035's "neither"
+  // tier is reserved for blocks too narrow even for a shrunk glyph: below a
+  // 10px floor the icon is dropped and the block goes blank.
+  let iconAlonePx = 0
+  if (!showIcon && labelText === '') {
+    if (widthPx === null) {
+      iconAlonePx = iconPx
+    } else {
+      const shrunk = Math.min(iconPx, widthPx - 2 * padding)
+      iconAlonePx = shrunk >= 10 ? shrunk : 0
+    }
+  }
+  const displayIconPx = showIcon ? iconPx : iconAlonePx
+  const renderIcon = displayIconPx > 0
 
   // The four paint channels travel as custom properties so the styles below
   // can consume them; React types style as CSSProperties, which has no index
@@ -236,11 +257,11 @@ export function Block({
         aria-hidden="true"
         className="relative flex h-full items-center justify-center gap-2 overflow-hidden px-2 leading-none"
       >
-        {showIcon && (
+        {renderIcon && (
           <span
             data-icon={kind === 'de' ? 'bracket' : 'grid'}
             className="block flex-none self-center"
-            style={{ width: iconPx, height: iconPx, lineHeight: 0 }}
+            style={{ width: displayIconPx, height: displayIconPx, lineHeight: 0 }}
           >
             {kind === 'de' ? <BracketIcon /> : <GridIcon />}
           </span>

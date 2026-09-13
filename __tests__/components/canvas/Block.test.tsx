@@ -179,6 +179,32 @@ describe('Block label degrades as room shrinks (D4, mockup fits())', () => {
     const el = renderBlock({ widthPx: null })
     expect(labelText(el)).toBe(FULL_LABEL)
   })
+
+  // T027 follow-up (SC-005): a 45px DE block at rung 5 in the live driver
+  // showed neither label nor icon. FR-035's "neither" tier is for blocks too
+  // narrow even for a shrunk glyph, not for a 45px block that has room for
+  // one — so when no label fits at all, the icon stands alone down to a 10px
+  // floor before the block goes blank.
+  const PADDING_PX = 6 // clamp(rowH*0.2, 6, 11); rowH = 96/4 = 24 -> floors to 6
+
+  it('keeps the phase icon alone when no label fits but the icon has room', () => {
+    const el = renderBlock({ widthPx: 45, placement: { ...PLACEMENT, phase: Phase.DE_PRELIMS } })
+
+    expect(labelText(el)).toBe('')
+    const icon = el.querySelector<HTMLElement>('[data-icon="bracket"]')
+    expect(icon).not.toBeNull()
+    const iconPx = Number(icon?.style.width.replace('px', ''))
+    expect(icon?.style.height.replace('px', '')).toBe(String(iconPx))
+    expect(iconPx).toBeGreaterThanOrEqual(10)
+    expect(iconPx).toBeLessThanOrEqual(45 - 2 * PADDING_PX)
+  })
+
+  it('goes blank — no label, no icon — below the 10px icon floor', () => {
+    const el = renderBlock({ widthPx: 12, placement: { ...PLACEMENT, phase: Phase.DE_PRELIMS } })
+
+    expect(labelText(el)).toBe('')
+    expect(el.querySelector('[data-icon]')).toBeNull()
+  })
 })
 
 describe('Block state badges (FR-037)', () => {
