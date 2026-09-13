@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MatrixCanvas } from '../../../src/components/canvas/MatrixCanvas.tsx'
+import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
 import { ScheduleOutput } from '../../../src/components/sections/ScheduleOutput.tsx'
-import { CenterView } from '../../../src/components/workbench/CenterView.tsx'
+import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { deriveEventSchedule } from '../../../src/engine/derive.ts'
 import type { DerivedEventSchedule } from '../../../src/engine/derive.ts'
-import type { Competition, Placement, TournamentConfig } from '../../../src/engine/types.ts'
+import type { Competition, DayConfig, Placement, TournamentConfig } from '../../../src/engine/types.ts'
 import { DeMode } from '../../../src/engine/types.ts'
-import type { DerivedSchedule } from '../../../src/store/derived.ts'
+import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import {
@@ -52,11 +52,10 @@ import {
 // "one derived model, two views" arrangement the contract is about.
 
 const VIEWPORT_WIDTH = 900
-// 1200px less the 38px day-band header is 1162px of rows, which at the 24px
-// normal step is 49 of them: flat rows 0..48. The fixture's furthest block is
-// `flighted`'s DE — day 1, 16 strips from strip 0, so flat rows 24..39 — and
-// every other block is above it. Nine rows of margin, so nothing is culled by
-// FR-021's windowing.
+// 013 T026 removed the culling these two sized the window for: every day
+// group, strip row and block is in the DOM now, whatever the viewport is.
+// They are kept because Radix's popper still measures through the stubbed
+// ResizeObserver below, and a zero-size report there is its own problem.
 const VIEWPORT_HEIGHT = 1200
 
 class StubResizeObserver {
@@ -83,9 +82,11 @@ beforeEach(() => {
   globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
   localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
-  // 828px of plot from 08:00 at 1 min/px spans [480, 1308) — past the 1030 the
-  // last block ends at.
-  seedViewState({ timeScroll: 480, timeZoom: 1, rowScroll: 0 })
+  // 013 T026: the canvas takes its zoom as a prop (CANVAS_ZOOM below), so
+  // nothing it draws depends on stored view state any more. What is still
+  // seeded here is what `WorkbenchShell` opens on — the ladder rung, off fit
+  // mode, so the shell's canvas draws in pixels like the direct renders do.
+  seedViewState({ zoomStep: 2, fitting: false })
 })
 
 afterEach(() => {
@@ -96,9 +97,21 @@ function seedViewState(overrides: Partial<ViewState>): void {
   saveViewState({ ...DEFAULT_VIEW_STATE, ...overrides })
 }
 
+// Covers every block below: the latest, `staged`'s DE_ROUND_OF_16, ends at
+// 1030 and every day shares one axis span (research.md D3), so one wide
+// clock-time window for all three days is enough.
+const CANVAS_DAY_CONFIGS: DayConfig[] = [
+  { day_start_time: 480, day_end_time: 1320 },
+  { day_start_time: 480, day_end_time: 1320 },
+  { day_start_time: 480, day_end_time: 1320 },
+]
+const CANVAS_ZOOM = { zoomStep: 2, fitting: false }
+const EMPTY_FINDINGS: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
+
 const CONFIG: TournamentConfig = makeConfig({
   days_available: 3,
   strips: makeStrips(24, 4),
+  dayConfigs: CANVAS_DAY_CONFIGS,
 })
 
 interface Shape {
@@ -274,7 +287,7 @@ function renderBothViews(model: DerivedSchedule): void {
   render(
     <>
       <ScheduleOutput schedule={model} />
-      <MatrixCanvas schedule={model} />
+      <Canvas schedule={model} findings={EMPTY_FINDINGS} dayConfigs={CANVAS_DAY_CONFIGS} zoom={CANVAS_ZOOM} />
     </>,
   )
 }
@@ -392,7 +405,7 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
 
   it('opens on the matrix, with the schedule table out of the document', () => {
     seedPlacedCompetitions()
-    render(<CenterView />)
+    render(<WorkbenchShell />)
 
     expect(screen.getByRole('radio', { name: 'Matrix' })).toBeChecked()
     expect(screen.getByRole('region', { name: 'Matrix canvas' })).toBeInTheDocument()
@@ -401,7 +414,7 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
 
   it('swaps the canvas out for the table, and back', () => {
     seedPlacedCompetitions()
-    render(<CenterView />)
+    render(<WorkbenchShell />)
 
     fireEvent.click(screen.getByRole('radio', { name: 'Schedule' }))
 
@@ -416,7 +429,7 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
 
   it('names the toggle so both views are reachable by name', () => {
     seedPlacedCompetitions()
-    render(<CenterView />)
+    render(<WorkbenchShell />)
 
     const group = screen.getByRole('radiogroup', { name: 'Center view mode' })
     expect(group).toBeInTheDocument()
@@ -424,10 +437,13 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
     expect(screen.getByRole('radio', { name: 'Schedule' })).toBeInTheDocument()
   })
 
-  it('defaults the stored view state to the matrix at an 08:00 window', () => {
-    // T040 flips both: S1 shipped SCHEDULE at midnight for US1's shell, and
-    // the matrix opening at midnight would show eight hours of empty grid.
+  it('defaults the stored view state to the matrix, fitted to the day', () => {
+    // T040 flips the view; 013 T026 replaces the 08:00 window this used to
+    // assert. `timeScroll` is gone with the arithmetic-scrolled canvas, and
+    // fit-to-day is the redesign's answer to the same problem it solved: the
+    // opening view shows a whole day rather than a window into one, so no
+    // gesture is needed to see what was scheduled (data-model.md §2).
     expect(DEFAULT_VIEW_STATE.viewMode).toBe('matrix')
-    expect(DEFAULT_VIEW_STATE.timeScroll).toBe(480)
+    expect(DEFAULT_VIEW_STATE.fitting).toBe(true)
   })
 })

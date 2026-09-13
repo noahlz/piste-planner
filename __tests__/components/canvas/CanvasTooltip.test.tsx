@@ -1,21 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, cleanup, fireEvent } from '@testing-library/react'
 import {
   CanvasTooltip,
+  releasePopperWrapper,
   type CanvasTooltipTarget,
 } from '../../../src/components/canvas/CanvasTooltip.tsx'
-import { EventBlock } from '../../../src/components/canvas/EventBlock.tsx'
-import type { BlockPlacement } from '../../../src/components/canvas/lanes.ts'
-import { MatrixCanvas } from '../../../src/components/canvas/MatrixCanvas.tsx'
-import type { DerivedSchedule } from '../../../src/store/derived.ts'
+import { Block } from '../../../src/components/canvas/Block.tsx'
+import type { BlockPlacement } from '../../../src/layout/lanes.ts'
+import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
+import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
 import { Category, Gender, Phase, Weapon } from '../../../src/engine/types.ts'
-import {
-  DEFAULT_VIEW_STATE,
-  RowHeightStep,
-  VIEW_STATE_STORAGE_KEY,
-  saveViewState,
-  type ViewState,
-} from '../../../src/store/viewState.ts'
+import type { DayConfig } from '../../../src/engine/types.ts'
+import { VIEW_STATE_STORAGE_KEY } from '../../../src/store/viewState.ts'
 import { useStore } from '../../../src/store/store.ts'
 import {
   makeCompetition,
@@ -23,6 +19,7 @@ import {
   makeScheduleResult,
   makeStrips,
 } from '../../helpers/factories.ts'
+import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
 // 004 T030 — the tooltip contract (contracts/ui-contract.md §Tooltip contract,
 // FR-022).
@@ -32,32 +29,21 @@ import {
 // rendered the wrong minute, the wrong strip range, or the wrong day, which is
 // exactly the class of defect this file exists to catch.
 //
-// The last describe block is the one research D3 turns on: ONE canvas-level
-// pointer handler against a single anchor, never a Radix trigger per block.
-// Two jsdom facts make that block work:
+// The last describe block is the one research D3 still turns on: ONE Radix
+// anchor for the whole grid, never a trigger per block.
 //
-//  - jsdom 26 ships no `PointerEvent` constructor, so
-//    `fireEvent.pointerMove(el, { clientX })` silently degrades to a bare
-//    `Event` and the coordinates never arrive. A `MouseEvent` named
-//    `pointermove` carries them and React dispatches it to `onPointerMove`.
-//  - `getBoundingClientRect()` returns zeros, so a client coordinate is a plot
-//    coordinate once the frozen gutter is added back. The canvas hit-tests
-//    against rectangles it computed itself, not against layout.
+// 013 T026 changed how the gesture reaches that anchor, not how many anchors
+// there are. The canvas scrolls natively now, so a container-level hit test
+// would have to reconstruct the browser's own scroll offsets on two axes
+// across four nested sticky layers to answer a question the DOM already
+// answers: the element under the pointer. The handler is therefore bound to
+// each block and `pointerenter` is the crossing — while the tooltip itself
+// stays a single controlled Radix instance the canvas points at.
+//
+// `getBoundingClientRect()` returns zeros in jsdom, so the anchor case below
+// stubs it on the block it hovers rather than reading a layout jsdom never
+// performs.
 
-const GUTTER_WIDTH_PX = 72
-/**
- * The block layer starts this far below the viewport's top edge. The day band
- * and the hour axis under it take no layout space at all — they are one
- * absolutely positioned `z-20` overlay — so the offset is not the band pushing
- * anything down: it is the block layer, the gutter and the SVG each being
- * positioned this far down, and made this much shorter, so the band has rows to
- * cover rather than rows to hide. A block's inline `top` is measured inside
- * that layer, so a client coordinate aimed at a block has to add the offset
- * back. Written as a literal rather than imported: an expectation computed from
- * the same constant as the implementation agrees with it by construction and
- * can never fail.
- */
-const HEADER_OFFSET_PX = 38
 const VIEWPORT_WIDTH = 900
 const VIEWPORT_HEIGHT = 480
 
@@ -75,41 +61,19 @@ const POOL_PLACEMENT: BlockPlacement = {
   overflow: false,
 }
 
-class StubResizeObserver {
-  callback: ResizeObserverCallback
-
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback
-  }
-
-  observe(): void {
-    this.callback(
-      [{ contentRect: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT } } as ResizeObserverEntry],
-      this as unknown as ResizeObserver,
-    )
-  }
-
-  unobserve(): void {}
-  disconnect(): void {}
-}
-
-const originalResizeObserver = globalThis.ResizeObserver
+let restoreResizeObserver: () => void
 
 beforeEach(() => {
   // Radix's popper measures its content through a ResizeObserver, which jsdom
   // does not implement.
-  globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
+  restoreResizeObserver = installStubResizeObserver(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
   localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
 })
 
 afterEach(() => {
-  globalThis.ResizeObserver = originalResizeObserver
+  restoreResizeObserver()
 })
-
-function seedViewState(overrides: Partial<ViewState>): void {
-  saveViewState({ ...DEFAULT_VIEW_STATE, ...overrides })
-}
 
 function makeTarget(overrides: Partial<CanvasTooltipTarget> = {}): CanvasTooltipTarget {
   return {
@@ -132,17 +96,6 @@ function field(key: string): string {
 
 function queryField(key: string): Element | null {
   return document.querySelector(`[data-tooltip-field="${key}"]`)
-}
-
-/**
- * jsdom has no PointerEvent constructor, so testing-library's `pointerMove`
- * helper drops clientX/clientY on the floor. The event name is what React
- * dispatches on, so a MouseEvent under that name delivers the coordinates.
- */
-function firePointerMove(el: Element, clientX: number, clientY: number): void {
-  el.dispatchEvent(
-    new MouseEvent('pointermove', { clientX, clientY, bubbles: true, cancelable: true }),
-  )
 }
 
 describe('CanvasTooltip contents (FR-022)', () => {
@@ -259,6 +212,85 @@ describe('CanvasTooltip findings (FR-022)', () => {
 })
 
 /**
+ * Three layers sit over the canvas when the tooltip is open, not two: the
+ * anchor, the content, and Radix's own portalled positioning wrapper between
+ * the portal and the content. The first two carry `pointer-events-none` in
+ * their class lists; the wrapper is Radix's element and takes no className, so
+ * it stayed hit-testable.
+ *
+ * That is not cosmetic. The canvas clears its hover on a block's
+ * `pointerleave`, so any element that takes the pointer over a block closes
+ * the tooltip. `side="top"` keeps the content clear of the pointer only while
+ * there is room above the block; near the top of the plot Radix's collision
+ * detection flips it to `bottom`, the wrapper's rect covers the pointer resting
+ * on the block, and the tooltip closes about 20ms after it opened — measured in
+ * Chrome, where `pointerleave` arrived with both `relatedTarget` and
+ * `elementFromPoint` reading `<div data-radix-popper-content-wrapper>`.
+ *
+ * jsdom lays nothing out and so cannot flip a side or hit-test a rect. What it
+ * can hold is the invariant the flip exposes: no layer of this tooltip takes
+ * the pointer, whatever the geometry does.
+ */
+describe('no layer of the tooltip takes the pointer (research D3)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('leaves Radix’s positioning wrapper transparent to the pointer, as the anchor and content are', () => {
+    render(<CanvasTooltip target={makeTarget()} />)
+
+    const content = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]')
+    if (!content) throw new Error('tooltip content not rendered')
+
+    const wrapper = content.parentElement
+    expect(wrapper?.hasAttribute('data-radix-popper-content-wrapper')).toBe(true)
+    expect(wrapper?.style.pointerEvents).toBe('none')
+  })
+
+  it('keeps the anchor and the content transparent too', () => {
+    render(<CanvasTooltip target={makeTarget()} />)
+
+    const anchor = document.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]')
+    const content = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]')
+    expect(anchor?.className).toContain('pointer-events-none')
+    expect(content?.className).toContain('pointer-events-none')
+  })
+
+  it('warns in dev and leaves the parent untouched when the Radix wrapper is not there to release', () => {
+    // Called directly, off a plain div rather than a rendered Radix tree: the
+    // shape `releasePopperWrapper` depends on — a parent carrying
+    // `data-radix-popper-content-wrapper` — is Radix's to change without
+    // notice, and this is the case where it has.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parent = document.createElement('div')
+    const content = document.createElement('div')
+    parent.appendChild(content)
+
+    releasePopperWrapper(content)
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[0]).toContain('CanvasTooltip')
+    expect(parent.style.pointerEvents).toBe('')
+  })
+
+  it('stays silent outside dev and leaves the parent untouched the same way', () => {
+    // import.meta.env.DEV is read inside releasePopperWrapper at call time, not
+    // cached at module load, so stubbing it here reaches the guard above.
+    vi.stubEnv('DEV', false)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parent = document.createElement('div')
+    const content = document.createElement('div')
+    parent.appendChild(content)
+
+    releasePopperWrapper(content)
+
+    expect(warn).not.toHaveBeenCalled()
+    expect(parent.style.pointerEvents).toBe('')
+  })
+})
+
+/**
  * The tooltip's fields are unconditional — it is handed no width, no row height
  * and no record of what the block managed to draw, so no row can be gated on
  * any of them. The pair below is the contrast that makes that a claim rather
@@ -266,26 +298,28 @@ describe('CanvasTooltip findings (FR-022)', () => {
  * channels and a block that drew all three, says the same thing both times.
  */
 describe('CanvasTooltip fields do not vary with what the block drew (FR-016, FR-022)', () => {
-  it('names the weapon at a width where the block itself cannot draw the mark', () => {
-    // 27px is one pixel under WEAPON_MARK_MIN_WIDTH_PX, so the block drops the
-    // weapon mark and the label text and keeps only the gender prefix.
+  it('names the weapon at a width where the block itself can draw nothing', () => {
+    // At this block's own row height, padding is clamp(rowH*0.2, 6, 11) = 6
+    // per side. 20px leaves neither the shortest name rung (the category
+    // alone) nor even a lone icon room: 20 - 2*6 = 8px is below the icon's
+    // 10px floor (T027 follow-up, SC-005), so the block is a bare coloured
+    // bar with nothing drawn at all.
     render(
-      <EventBlock
+      <Block
         competition={makeCompetition({ id: 'plain' })}
         label={DIV1_LABEL}
-        day={0}
         placement={POOL_PLACEMENT}
-        x={0}
-        y={0}
-        width={27}
-        height={96}
-        rowHeightStep={RowHeightStep.NORMAL}
+        pinned={false}
+        selected={false}
+        widthPx={20}
+        heightPx={96}
+        style={{ position: 'absolute', left: 0, top: 0, width: 20, height: 96 }}
         findings={[]}
       />,
     )
 
-    expect(document.querySelector('[data-weapon-mark]')).toBeNull()
-    expect(document.querySelector('[data-label-text]')).toBeNull()
+    expect(document.querySelector('[data-icon]')).toBeNull()
+    expect(document.querySelector('[data-label]')).toBeNull()
     cleanup()
 
     render(<CanvasTooltip target={makeTarget()} />)
@@ -297,22 +331,21 @@ describe('CanvasTooltip fields do not vary with what the block drew (FR-016, FR-
 
   it('carries the same fields at a width where the block drew all of them', () => {
     render(
-      <EventBlock
+      <Block
         competition={makeCompetition({ id: 'plain' })}
         label={DIV1_LABEL}
-        day={0}
         placement={POOL_PLACEMENT}
-        x={0}
-        y={0}
-        width={200}
-        height={96}
-        rowHeightStep={RowHeightStep.NORMAL}
+        pinned={false}
+        selected={false}
+        widthPx={200}
+        heightPx={96}
+        style={{ position: 'absolute', left: 0, top: 0, width: 200, height: 96 }}
         findings={[]}
       />,
     )
 
-    expect(document.querySelector('[data-weapon-mark]')).not.toBeNull()
-    expect(document.querySelector('[data-label-text]')).not.toBeNull()
+    expect(document.querySelector('[data-icon="grid"]')).not.toBeNull()
+    expect(document.querySelector('[data-label]')?.textContent).not.toBe('')
     cleanup()
 
     render(<CanvasTooltip target={makeTarget()} />)
@@ -367,10 +400,34 @@ function scheduleWithTwoEvents(): DerivedSchedule {
   }
 }
 
-function viewport(): HTMLElement {
-  const el = document.querySelector<HTMLElement>('[data-canvas-viewport]')
-  if (!el) throw new Error('canvas viewport not rendered')
-  return el
+/**
+ * Everything `Canvas` needs beyond the schedule. One wide clock-time window
+ * for all three days (research D3: every day shares one axis span) covers
+ * every block above, and rung 2 draws at 3.2 pixels per minute.
+ */
+const CANVAS_DAY_CONFIGS: DayConfig[] = [
+  { day_start_time: 480, day_end_time: 1320 },
+  { day_start_time: 480, day_end_time: 1320 },
+  { day_start_time: 480, day_end_time: 1320 },
+]
+const CANVAS_ZOOM = { zoomStep: 2, fitting: false }
+const EMPTY_FINDINGS: DerivedFindings = {
+  validationErrors: [],
+  analysis: { warnings: [], suggestions: [] },
+}
+/** Rung 2's pixels per minute, and the axis start every `left` is measured from. */
+const PPM = 3.2
+const AXIS_START = 480
+
+function renderCanvas(schedule: DerivedSchedule = scheduleWithTwoEvents()): void {
+  render(
+    <Canvas
+      schedule={schedule}
+      findings={EMPTY_FINDINGS}
+      dayConfigs={CANVAS_DAY_CONFIGS}
+      zoom={CANVAS_ZOOM}
+    />,
+  )
 }
 
 function blockFor(key: string): HTMLElement {
@@ -379,31 +436,17 @@ function blockFor(key: string): HTMLElement {
   return el
 }
 
-describe('one canvas-level pointer handler, not a trigger per block (research D3)', () => {
-  beforeEach(() => {
-    // No store seed: every case here passes `schedule={scheduleWithTwoEvents()}`,
-    // so the canvas draws from that config's own days and strips and the store
-    // reaches nothing rendered.
-    //
-    // 828px of plot at 1 minute per pixel from 08:00 covers every block below.
-    seedViewState({ timeScroll: 480, timeZoom: 1, rowScroll: 0 })
-  })
-
-  it('opens the tooltip for the block under the pointer', () => {
-    render(<MatrixCanvas schedule={scheduleWithTwoEvents()} />)
+describe('one tooltip anchor for the whole grid, not a trigger per block (research D3)', () => {
+  it('opens the tooltip for the block the pointer enters', () => {
+    renderCanvas()
 
     const pool = blockFor('c1:POOLS')
-    // 600 minutes is 120px into an 08:00 window at 1 min/px, and the block is
-    // 100px of the 100 minutes it runs.
-    expect(pool.style.left).toBe('120px')
-    expect(pool.style.width).toBe('100px')
+    // 600 minutes is 120 past the 08:00 axis start, at 3.2px a minute, and the
+    // block is 100 minutes wide.
+    expect(pool.style.left).toBe(`${(600 - AXIS_START) * PPM}px`)
+    expect(pool.style.width).toBe(`${100 * PPM}px`)
 
-    // Client coordinates are plot coordinates plus the frozen gutter — the row
-    // is read off the block itself, so this case pins the hit test rather than
-    // the lane assignment.
-    const top = parseFloat(pool.style.top)
-    const height = parseFloat(pool.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + top + height / 2)
+    fireEvent.pointerEnter(pool)
 
     expect(field('name')).toBe(DIV1_LABEL)
     expect(field('start')).toBe('10:00')
@@ -411,80 +454,82 @@ describe('one canvas-level pointer handler, not a trigger per block (research D3
     expect(field('phase')).toBe('Pools')
   })
 
-  it('closes the tooltip once the pointer leaves every block', () => {
-    render(<MatrixCanvas schedule={scheduleWithTwoEvents()} />)
+  it('closes the tooltip once the pointer leaves the block', () => {
+    renderCanvas()
 
     const pool = blockFor('c1:POOLS')
-    const top = parseFloat(pool.style.top)
-    const height = parseFloat(pool.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + top + height / 2)
+    fireEvent.pointerEnter(pool)
     expect(queryField('name')).not.toBeNull()
 
-    // Plot x 600 reads minute 1080 — past the 900 every block here ends by.
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 600, HEADER_OFFSET_PX + top + height / 2)
+    fireEvent.pointerLeave(pool)
 
     expect(queryField('name')).toBeNull()
   })
 
   it('follows the pointer from one block to another rather than sticking', () => {
-    render(<MatrixCanvas schedule={scheduleWithTwoEvents()} />)
+    renderCanvas()
 
-    const pool = blockFor('c1:POOLS')
-    const de = blockFor('c1:DE')
-    const poolTop = parseFloat(pool.style.top)
-    const poolHeight = parseFloat(pool.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + poolTop + poolHeight / 2)
+    fireEvent.pointerEnter(blockFor('c1:POOLS'))
     expect(field('phase')).toBe('Pools')
 
-    // The DE block runs 760-900, so plot x 300 is minute 780, inside it.
-    const deTop = parseFloat(de.style.top)
-    const deHeight = parseFloat(de.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 300, HEADER_OFFSET_PX + deTop + deHeight / 2)
+    // No intervening pointerleave: crossing straight from one block to its
+    // neighbour is what a real pointer does at a shared edge, and a handler
+    // that only ever *cleared* on leave would leave the old block showing.
+    fireEvent.pointerEnter(blockFor('c1:DE'))
 
     expect(field('phase')).toBe('DE')
     expect(field('start')).toBe('12:40')
     expect(field('end')).toBe('15:00')
   })
 
-  it('closes the tooltip when the pointer leaves the canvas without crossing empty grid', () => {
-    // The case above walks the pointer off a block and onto bare grid, which is
-    // the `blockAt() === null` path inside the viewport. A pointer that leaves
-    // the element entirely — off the edge of the canvas, or onto the drawer —
-    // fires no further move at all, so nothing but pointerleave closes it.
-    render(<MatrixCanvas schedule={scheduleWithTwoEvents()} />)
+  it('closes the tooltip when the hovered block stops being drawn, without any pointer event', () => {
+    // The cases above close it by a gesture. A block can also leave the grid
+    // under a stationary pointer — an edit removes the event, or its day goes
+    // out of range — and the hover state is primitives only so that this
+    // resolves to nothing on the next render rather than stranding a snapshot
+    // of a block that is no longer there.
+    renderCanvas()
 
-    const pool = blockFor('c1:POOLS')
-    const top = parseFloat(pool.style.top)
-    const height = parseFloat(pool.style.height)
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + top + height / 2)
+    fireEvent.pointerEnter(blockFor('c1:POOLS'))
     expect(field('phase')).toBe('Pools')
 
-    fireEvent.pointerLeave(viewport())
+    const withoutC1 = scheduleWithTwoEvents()
+    delete withoutC1.events.c1
+    cleanup()
+    renderCanvas(withoutC1)
 
+    expect(document.querySelector('[data-event-block="c1:POOLS"]')).toBeNull()
     expect(queryField('phase')).toBeNull()
   })
 
   it('anchors the tooltip at the hovered block’s own top centre', () => {
-    // jsdom lays nothing out, so getBoundingClientRect() is zeros and the
-    // viewport's origin is 0,0 — which makes these exact pixels rather than a
-    // range. The pool block is plot x 120-220 in an 08:00 window, so its centre
-    // is plot x 170: 72px of gutter puts the anchor at 242, and the block's own
-    // top of 0 plus the 38px header puts it at 38.
-    render(<MatrixCanvas schedule={scheduleWithTwoEvents()} />)
+    // jsdom lays nothing out, so the anchor is read from a stubbed rect: the
+    // claim is that the canvas takes the block's top *centre*, not its origin
+    // and not the pointer, and a rect of zeros could not tell those apart.
+    renderCanvas()
 
     const pool = blockFor('c1:POOLS')
-    expect(pool.style.left).toBe('120px')
-    expect(pool.style.top).toBe('0px')
+    vi.spyOn(pool, 'getBoundingClientRect').mockReturnValue({
+      left: 100,
+      top: 40,
+      width: 320,
+      height: 96,
+      right: 420,
+      bottom: 136,
+      x: 100,
+      y: 40,
+      toJSON: () => ({}),
+    } as DOMRect)
 
-    firePointerMove(viewport(), GUTTER_WIDTH_PX + 170, HEADER_OFFSET_PX + 48)
+    fireEvent.pointerEnter(pool)
 
     const anchor = document.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]')
-    expect(anchor?.style.left).toBe('242px')
-    expect(anchor?.style.top).toBe('38px')
+    expect(anchor?.style.left).toBe('260px')
+    expect(anchor?.style.top).toBe('40px')
   })
 
   it('mounts exactly one tooltip trigger however many blocks are on screen', () => {
-    render(<MatrixCanvas schedule={scheduleWithTwoEvents()} />)
+    renderCanvas()
 
     const blocks = Array.from(document.querySelectorAll<HTMLElement>('[data-event-block]'))
     expect(blocks.length).toBeGreaterThanOrEqual(3)

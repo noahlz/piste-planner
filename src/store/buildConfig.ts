@@ -3,7 +3,7 @@ import type {
   FlightingGroup,
   TournamentConfig,
 } from '../engine/types.ts'
-import { CutMode, DeStripRequirement, EventType, RefPolicy } from '../engine/types.ts'
+import { CutMode, DeStripRequirement, EventType } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import {
   DAY_START_MINS,
@@ -19,10 +19,19 @@ import {
   MAX_FENCERS,
   MIN_FENCERS,
   DEFAULT_DE_DURATION_TABLE,
+  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
+  ADMIN_GAP_MINS,
+  FLIGHT_BUFFER_MINS,
+  THRESHOLD_MINS,
+  SLOT_MINS,
+  DE_BOUT_DURATION,
+  YOUTH_VET_BOUT_DELTA,
+  DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
+import { defaultCutForEntry } from './competitionDefaults.ts'
 import { TYPE_DEFAULTS, resolveVideoStrips } from './typeDefaults.ts'
 import { buildStrips } from '../engine/stripBudget.ts'
 
@@ -73,17 +82,20 @@ export function buildTournamentConfig(
       day_end_time: d * DAY_AXIS_SPACING_MINS + day.day_end_time,
     })),
 
-    // Global overrides from store. SLOT_MINS lives here rather than in the
-    // "Engine constants" block below because the gears panel can retune it
-    // (FR-042) — the store seeds the slice from the same constant, so an
-    // untouched setting still arrives at its default.
-    ADMIN_GAP_MINS: state.globalOverrides.ADMIN_GAP_MINS,
-    FLIGHT_BUFFER_MINS: state.globalOverrides.FLIGHT_BUFFER_MINS,
-    THRESHOLD_MINS: state.globalOverrides.THRESHOLD_MINS,
-    SLOT_MINS: state.globalOverrides.SLOT_MINS,
-    DE_BOUT_DURATION: state.globalOverrides.DE_BOUT_DURATION,
-    YOUTH_VET_BOUT_DELTA: state.globalOverrides.YOUTH_VET_BOUT_DELTA,
-    DEFAULT_DE_STRIP_FOOTPRINT: state.globalOverrides.DEFAULT_DE_STRIP_FOOTPRINT,
+    // These seven used to come from the store's global-overrides slice, which 013 T022
+    // deleted with the panel that wrote to it (research D7): two had rows, five
+    // were carried but unreachable, and no control writes any of them now. They
+    // are ordinary engine constants again — kept in their own block only
+    // because a future setting that earns a row back would land here, and
+    // `docs/design/backlog.md` records what each would need first.
+    ADMIN_GAP_MINS,
+    FLIGHT_BUFFER_MINS,
+    THRESHOLD_MINS,
+    SLOT_MINS,
+    // Copied so no consumer spreading the config can reach the module constant.
+    DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
+    YOUTH_VET_BOUT_DELTA,
+    DEFAULT_DE_STRIP_FOOTPRINT,
 
     // Engine constants
     DAY_START_MINS,
@@ -117,15 +129,22 @@ function buildCompetitions(
 ): Competition[] {
   const competitions: Competition[] = []
 
-  // The two per-event settings whose "unset" markers resolve against the
-  // tournament type (research D5, D6). Resolution happens here, on the copy
-  // travelling to the engine — `src/engine/pools.ts` never learns about
-  // tournaments (constitution I) and the store keeps its `AUTO`s (FR-036).
+  // Every per-event field but the two the store still holds is derived here
+  // (013 research D7, data-model §4). The referee policy and DE mode come from
+  // the tournament type's defaults: the store no longer carries an `AUTO`
+  // marker to resolve because it no longer carries the settings at all, and
+  // the engine never learns about tournament types (constitution I).
   const typeDefaults = TYPE_DEFAULTS[state.tournament_type]
 
   for (const [id, overrides] of Object.entries(state.selectedCompetitions)) {
     const entry = findCompetition(id)
     if (!entry) continue
+
+    // First of the three cut rules, in the order data-model §4 states them:
+    // the catalogue default here, the regional override below, then the team
+    // coercion. `defaultConfigForId` no longer applies this — the store record
+    // has no cut pair to seed.
+    const cut = defaultCutForEntry(entry)
 
     competitions.push({
       id: entry.id,
@@ -135,21 +154,23 @@ function buildCompetitions(
       event_type: entry.event_type,
       vet_age_group: entry.vet_age_group,
 
-      // Store overrides
+      // From the store — the only two values no rule can compute.
       fencer_count: overrides.fencer_count,
-      // `AUTO` is the only value that follows the type; `ONE` and `TWO` are the
-      // organizer's own and beat the default (FR-037).
-      ref_policy:
-        overrides.ref_policy === RefPolicy.AUTO ? typeDefaults.ref_policy : overrides.ref_policy,
-      cut_mode: overrides.cut_mode,
-      cut_value: overrides.cut_value,
-      // Same rule for DE mode (research D6): the store's setting carries an
-      // `'AUTO'` the engine's `DeMode` has no member for, and resolving it here
-      // is what narrows the union — an explicit SINGLE_STAGE or STAGED passes
-      // through as itself.
-      de_mode: overrides.de_mode === 'AUTO' ? typeDefaults.de_mode : overrides.de_mode,
-      de_video_policy: overrides.de_video_policy,
-      use_single_pool_override: overrides.use_single_pool_override,
+
+      // Derived (data-model §4). The tournament type decides both policies for
+      // every event alike; no per-event control remains to depart from them.
+      ref_policy: typeDefaults.ref_policy,
+      cut_mode: cut.mode,
+      cut_value: cut.value,
+      // The one derived field the organizer can still depart from, and it
+      // departs for the whole tournament at once (013 T022, FR-029): the
+      // Settings panel writes `de_mode_override`, `null` meaning follow the
+      // type. Resolved here rather than in the store so the store keeps the
+      // organizer's intent — "follow the type" — instead of a snapshot of what
+      // the type meant when they chose it.
+      de_mode: state.de_mode_override ?? typeDefaults.de_mode,
+      de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
+      use_single_pool_override: false,
 
       // Sensible defaults
       earliest_start: 0,
@@ -162,7 +183,11 @@ function buildCompetitions(
       optional: false,
       de_round_of_16_strips: 4,
       de_round_of_16_requirement: DeStripRequirement.HARD,
-      flighted: false,
+      // The store's own flag. `flighted: true` with a null group is exactly the
+      // shape `derive.ts` splits into Flight A and Flight B, so the flag needs
+      // no further derivation (data-model §4); a group id arrives only from an
+      // accepted flighting suggestion, in the loop at the end of this function.
+      flighted: overrides.flighted,
       flighting_group_id: null,
       is_priority: false,
       // The fourth seam parity-exceptions.md names. A `0` here zeroes the DE
@@ -196,13 +221,13 @@ function buildCompetitions(
 
   // Team events never cut (R3, FR-010): coerce cut_mode to DISABLED before the
   // competition reaches the engine, mirroring the regional-cut loop above.
-  // cut_value follows to 100, the TEAM default pair competitionDefaults.ts:22
-  // already establishes — DISABLED makes the value inert either way, but a
-  // stray non-default number left behind would still read as user intent
-  // (`CompetitionOverrides.tsx`'s "user-modified" check compares against that
-  // default pair). `validation.ts`'s `cut-on-team` is a notice, not a gate
-  // (FR-011), because this coercion already makes the engine's arithmetic
-  // ignore the field (research.md D4).
+  // cut_value follows to 100, the TEAM default pair competitionDefaults.ts
+  // already establishes — DISABLED makes the value inert either way, but the
+  // pair is what the fixtures and the ledger compare against, so a stray
+  // non-default number left behind would read as a real difference.
+  // `validation.ts`'s `cut-on-team` is a notice, not a blocker (FR-011),
+  // because this coercion already makes the engine's arithmetic ignore the
+  // field (research.md D4).
   for (const comp of competitions) {
     if (comp.event_type === EventType.TEAM && comp.cut_mode !== CutMode.DISABLED) {
       comp.cut_mode = CutMode.DISABLED

@@ -12,8 +12,8 @@ import { makePlacement } from '../helpers/factories.ts'
 // 2026-09-01: the three cases that mounted `ScheduleView` were deleted with it.
 // It was the pre-workbench "Regenerate" page, unreachable from `main.tsx`, and
 // its only job here was wiring selectDerivedRefRequirements into
-// RefRequirementsReport. Both components are gone — the scorecard
-// (`__tests__/components/workbench/Scorecard.test.tsx`) carries the referee
+// RefRequirementsReport. Both components are gone — the status footer
+// (`__tests__/components/workbench/StatusFooter.test.tsx`) carries the referee
 // numbers now, and the derive-not-rerun property the deleted cases asserted is
 // covered by `__tests__/store/derived.test.ts`.
 

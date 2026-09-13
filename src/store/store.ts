@@ -1,11 +1,8 @@
 import { create } from 'zustand'
 import type {
   DayConfig,
-  TournamentType,
-  RefPolicy,
-  CutMode,
   DeMode,
-  VideoPolicy,
+  TournamentType,
   Placement,
   Weapon,
 } from '../engine/types.ts'
@@ -18,20 +15,8 @@ import type { ScenarioId } from '../data/tournaments.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
-import { selectDerivedFindings, selectScorecardMetrics } from './derived.ts'
-import type { ScorecardBaseline } from './derived.ts'
-import {
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
-  ADMIN_GAP_MINS,
-  FLIGHT_BUFFER_MINS,
-  THRESHOLD_MINS,
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
-  DEFAULT_POOL_ROUND_DURATION_TABLE,
-} from '../engine/constants.ts'
-import { defaultCutForEntry } from './competitionDefaults.ts'
+import { selectDerivedFindings } from './derived.ts'
+import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
 // Constants
@@ -54,86 +39,82 @@ export interface TournamentSlice {
    *  `buildConfig.ts`, never written back to the store. */
   video_strips_total: number | null
   pool_round_duration_table: Record<Weapon, number>
+  /** The Settings panel's Staged / Single choice (013 T022, FR-029, research
+   *  D7). `null` is the unset marker — "follow `TYPE_DEFAULTS[type].de_mode`" —
+   *  and stays `null` when the organizer picks the mode the type already
+   *  defaults to, so a later type change still moves with the type. One value
+   *  for the whole tournament: the per-competition `de_mode` the shrink retired
+   *  had no control and no successor. Resolved in `buildConfig.ts`, never
+   *  written back. Serialized. */
+  de_mode_override: DeMode | null
 
   setTournamentType: (type: TournamentType) => void
   setDays: (days: number) => void
   updateDayConfig: (dayIndex: number, partial: Partial<DayConfig>) => void
   setStrips: (total: number) => void
   setVideoStrips: (total: number | null) => void
-  suggestStrips: () => Promise<void>
+  computeSuggestedStrips: () => Promise<number | null>
   setPoolRoundDuration: (weapon: Weapon, minutes: number) => void
   resetPoolRoundDuration: (weapon: Weapon) => void
+  setDeModeOverride: (mode: DeMode | null) => void
 }
 
 /**
- * The store's DE mode *setting*: the engine's two modes plus `AUTO`, meaning
- * "follow the tournament type's default" (research D6). It lives here and not in
- * `src/engine/types.ts` because the engine cannot resolve `AUTO` — that needs
- * tournament-level context it never receives (constitution I). `buildConfig.ts`
- * resolves it, so the engine's `DeMode` keeps its two values.
- *
- * A union alias rather than an `as const` object: this file already spells these
- * settings as bare literals (`ref_policy: 'AUTO'` below), and no caller needs a
- * runtime member list. Constitution V — never an enum.
+ * Everything the organizer states per event (013 research D7, data-model §2).
+ * The five settings that used to live here — `ref_policy`, the cut pair,
+ * `de_mode`, `de_video_policy`, `use_single_pool_override` — had exactly one
+ * control between them and are now derivations in `buildConfig.ts`
+ * (data-model §4), so the record carries only what no rule can compute: how
+ * many fencers the organizer expects, and whether the event runs flighted.
  */
-export type DeModeSetting = DeMode | 'AUTO'
-
 export interface CompetitionConfig {
   fencer_count: number
-  ref_policy: RefPolicy
-  cut_mode: CutMode
-  cut_value: number
-  de_mode: DeModeSetting
-  de_video_policy: VideoPolicy
-  use_single_pool_override: boolean
+  flighted: boolean
 }
 
-/**
- * The engine settings the organizer can retune from the gears panel (FR-042).
- * Every key is spelled exactly as its `src/engine/constants.ts` export and its
- * `TournamentConfig` field, so the store key, the config field, the serialized
- * key and the constant are one traceable name.
- */
-export interface GlobalOverrides {
-  ADMIN_GAP_MINS: number
-  FLIGHT_BUFFER_MINS: number
-  THRESHOLD_MINS: number
-  SLOT_MINS: number
-  DE_BOUT_DURATION: Record<Weapon, number>
-  YOUTH_VET_BOUT_DELTA: number
-  DEFAULT_DE_STRIP_FOOTPRINT: number
-}
+// The `GlobalOverrides` slice lived here until 013 T022 (research D7): seven
+// engine constants the retired gears panel could retune. Two of them had rows,
+// the other five were carried but unreachable, and `buildConfig.ts` now reads
+// all seven from `constants.ts` directly. Retuning any of them again is engine
+// work first — see "Global settings" in `docs/design/backlog.md`.
 
 export interface CompetitionSlice {
   selectedCompetitions: Record<string, CompetitionConfig>
-  globalOverrides: GlobalOverrides
 
   selectCompetitions: (ids: string[]) => void
   addCompetition: (id: string) => void
   updateCompetition: (id: string, partial: Partial<CompetitionConfig>) => void
   removeCompetition: (id: string) => void
   applyTemplate: (templateName: string) => void
-  setGlobalOverrides: (partial: Partial<GlobalOverrides>) => void
+}
+
+/**
+ * Every template name `applyTemplate` accepts. `TEMPLATES` (`catalogue.ts`) is
+ * typed `Record<string, string[]>`, so this resolves to `string` — a template
+ * name has no narrower compile-time identity than a preset's `ScenarioId`
+ * does, but the alias still names the concept at each call site (research D17).
+ */
+export type TemplateName = keyof typeof TEMPLATES
+
+/** Either kind of thing the top bar's picker can have most recently loaded. */
+export type PresetId = ScenarioId | TemplateName
+
+/** The result of the most recent `runScheduleAll` call (research D12). Not serialized: it describes this session's last action, not tournament state. */
+export interface LastAutoRun {
+  at: number
+  placed: number
+  unplaced: number
 }
 
 export interface UiSlice {
-  /** The preset last loaded by `applyPreset`, for the top bar's picker to read back (review finding B). Not serialized. */
-  loadedPresetId: ScenarioId | null
+  /** The preset or template last loaded, for the top bar's picker to read back (review finding B). Not serialized. */
+  loadedPresetId: PresetId | null
 
-  /**
-   * The loaded preset's scorecard metrics, frozen at the moment it was first
-   * placed — what the scorecard's deltas are measured against (research D9).
-   * `null` means there is nothing to compare to and no delta renders. Not
-   * serialized: a baseline is the recipient's own frame of reference, never the
-   * sender's.
-   */
-  scorecardBaseline: ScorecardBaseline | null
+  /** The most recent `runScheduleAll` outcome, or `null` before it has ever run. Not serialized. */
+  lastAutoRun: LastAutoRun | null
 
-  /** The scorecard row the pointer or keyboard focus is on, whose blocks the canvas lights. Not serialized. */
-  hoveredMetricId: string | null
-
-  setLoadedPresetId: (id: ScenarioId | null) => void
-  setHoveredMetricId: (id: string | null) => void
+  setLoadedPresetId: (id: PresetId | null) => void
+  setLastAutoRun: (run: LastAutoRun | null) => void
 }
 
 /** Where an event sits. The only schedule state — everything else derives from it. */
@@ -207,6 +188,7 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
     video_strips_total: null,
     // Copied so store mutations never alias the engine constant
     pool_round_duration_table: { ...DEFAULT_POOL_ROUND_DURATION_TABLE },
+    de_mode_override: null,
 
     setTournamentType: (type) => {
       set({ tournament_type: type })
@@ -237,19 +219,20 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
       set({ video_strips_total: total })
     },
 
-    suggestStrips: async () => {
+    computeSuggestedStrips: async () => {
       // The search is domain math and lives in the engine (constitution I,
       // research.md D1): `stripSearch.ts` finds the smallest strip count that
       // places every event, replacing the ceiling-only rule this action used
       // to write directly. `buildTournamentConfig` is read once, up front —
       // the whole search runs against that snapshot, not against whatever the
-      // organizer might change while it's mid-flight.
+      // organizer might change while it's mid-flight. This action only answers
+      // the question — the caller writes the result through `setStrips`
+      // (research.md D8, FR-017).
       const { config, competitions } = buildTournamentConfig(get())
       const range = stripSearchRange(competitions, config)
-      // `null` is the absence of an answer, not zero (FR-010). Nothing here can
-      // be sized, so the strip field keeps whatever the organizer already has —
-      // writing 0 would look like a deliberate configuration.
-      if (range === null) return
+      // `null` is the absence of an answer, not zero (FR-010): nothing here can
+      // be sized.
+      if (range === null) return null
 
       // The scan is bounded by construction (constitution IV, `stripSearch.ts`
       // — `ceiling − floor + 1` iterations, fixed before the loop starts), so
@@ -263,13 +246,7 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
         step = scan.next()
       }
 
-      // Written once, at the end (FR-010): no candidate along the way ever
-      // reaches `strips_total`, only the search's final answer does — and a
-      // `null` answer (no count in range placed everything) leaves the field
-      // untouched, same as an absent range above.
-      if (step.value !== null) {
-        set({ strips_total: step.value })
-      }
+      return step.value
     },
 
     setPoolRoundDuration: (weapon, minutes) => {
@@ -286,18 +263,26 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
         },
       }))
     },
+
+    // `null` is a legitimate argument, not an absence: it returns the
+    // tournament to following its type's own DE mode.
+    setDeModeOverride: (mode) => {
+      set({ de_mode_override: mode })
+    },
   }
 }
 
 type FencerDefaultTable = Partial<Record<string, number>>
 
-/** Builds a default CompetitionConfig from a catalogue entry's category.
+/** Builds a default CompetitionConfig for a catalogue id. Since the record
+ *  shrank to `{ fencer_count, flighted }` (013 research D7) the entry is looked
+ *  up only to reject an unknown id and to key the template's fencer table —
+ *  every other per-event value is derived in `buildConfig.ts`.
  *  When fencerDefaults is provided (e.g. from a template), uses it to
  *  populate fencer_count instead of defaulting to 0. */
 function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): CompetitionConfig | null {
   const entry = findCompetition(id)
   if (!entry) return null
-  const cut = defaultCutForEntry(entry)
   const defaultKey =
     entry.event_type === 'TEAM'
       ? `${entry.category}:TEAM`
@@ -305,32 +290,13 @@ function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): Co
   const defaultCount = fencerDefaults?.[defaultKey] ?? 0
   return {
     fencer_count: defaultCount,
-    ref_policy: 'AUTO',
-    cut_mode: cut.mode,
-    cut_value: cut.value,
-    de_mode: 'AUTO',
-    de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
-    use_single_pool_override: false,
+    flighted: false,
   }
 }
 
 function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice {
   return {
     selectedCompetitions: {},
-    // Seeded from the constants themselves, never a repeated literal, so a
-    // default that moves in constants.ts moves here with it.
-    globalOverrides: {
-      ADMIN_GAP_MINS,
-      FLIGHT_BUFFER_MINS,
-      THRESHOLD_MINS,
-      SLOT_MINS,
-      // Copied, not aliased: `setGlobalOverrides` replaces this record whole
-      // (the merge is shallow), and a caller spreading it must not be able to
-      // mutate the module-level constant.
-      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
-      YOUTH_VET_BOUT_DELTA,
-      DEFAULT_DE_STRIP_FOOTPRINT,
-    },
 
     selectCompetitions: (ids) => {
       const map: Record<string, CompetitionConfig> = {}
@@ -380,13 +346,10 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
         const config = defaultConfigForId(id, fencerDefaults)
         if (config) map[id] = config
       }
-      set({ selectedCompetitions: map })
-    },
-
-    setGlobalOverrides: (partial) => {
-      set((state) => ({
-        globalOverrides: { ...state.globalOverrides, ...partial },
-      }))
+      // Records the template the same way setLoadedPresetId does, so a
+      // template-loaded config reads back through the picker exactly like a
+      // preset-loaded one (T006).
+      set({ selectedCompetitions: map, loadedPresetId: templateName })
     },
   }
 }
@@ -394,20 +357,15 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
 function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
     loadedPresetId: null,
-    scorecardBaseline: null,
-    hoveredMetricId: null,
+    lastAutoRun: null,
 
-    // Recording a preset re-arms the baseline rather than capturing one:
-    // `applyPreset` places nothing, so a capture here would freeze the metrics
-    // of a tournament with zero events on it and the first frame would show an
-    // enormous delta on every row. `setPlacementsFromAuto` fills the arm.
-    setLoadedPresetId: (id) => set({ loadedPresetId: id, scorecardBaseline: null }),
+    setLoadedPresetId: (id) => set({ loadedPresetId: id }),
 
-    setHoveredMetricId: (id) => set({ hoveredMetricId: id }),
+    setLastAutoRun: (run) => set({ lastAutoRun: run }),
   }
 }
 
-function createPlacementsSlice(set: SetState, get: GetState): PlacementsSlice {
+function createPlacementsSlice(set: SetState, _get: GetState): PlacementsSlice {
   return {
     placements: {},
 
@@ -416,33 +374,9 @@ function createPlacementsSlice(set: SetState, get: GetState): PlacementsSlice {
       for (const [id, placement] of Object.entries(placements)) {
         normalised[id] = { ...placement, source: PlacementSource.AUTO, pinned: false }
       }
-      // The scorecard baseline is captured here, on the first placement after a
-      // preset was recorded — boot and the picker both go `applyPreset(id)`
-      // then `runScheduleAll()`, so neither needs special-casing, and a
-      // shared-URL boot calls neither and so never captures one. The
-      // `scorecardBaseline === null` arm is what stops a later `Auto-schedule
-      // all` from re-baselining, which research D9 rejects.
-      //
-      // Computed from a **projection** of the state with the new placements,
-      // before anything is written, and committed in one `set` with them. The
-      // selector reaches `initialAnalysis` → `computePoolStructure`, which
-      // throws for `fencer_count <= 1`, and the only caller
-      // (`runActions.ts`) invokes this outside its own try — so a capture run
-      // after the write would unwind `bootstrap()` with `placements` already
-      // replaced and no baseline beside them. `dismissFinding` already holds
-      // this invariant the same way: select first, then set once. The
-      // projection is complete because `computeScorecardMetrics` reads only
-      // data fields, and memoization stays warm because `normalised` is the
-      // same reference the store ends up holding.
-      const prior = get()
-      let baseline: ScorecardBaseline | null = null
-      if (prior.loadedPresetId !== null && prior.scorecardBaseline === null) {
-        const projected: StoreState = { ...prior, placements: normalised }
-        baseline = {}
-        for (const metric of selectScorecardMetrics(projected)) baseline[metric.id] = metric.value
-      }
-
-      set(baseline === null ? { placements: normalised } : { placements: normalised, scorecardBaseline: baseline })
+      // The placements map is the only thing written — the baseline this
+      // action used to capture went with the retired scorecard (T011).
+      set({ placements: normalised })
     },
 
     updatePlacement: (id, partial) => {

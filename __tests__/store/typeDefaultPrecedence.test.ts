@@ -1,18 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
-import { TournamentType, RefPolicy, DeMode, CutMode } from '../../src/engine/types.ts'
+import { TournamentType, RefPolicy, DeMode } from '../../src/engine/types.ts'
 
 /**
- * Two precedence rules that run in opposite directions (data-model.md
- * §Resolution rules, FR-037/FR-040, SC-012):
- *
- * 1. An explicit ref_policy / de_mode / video_strips_total beats its
- *    tournament type's default — the organizer's setting survives any
- *    number of type changes, even one whose default happens to equal it.
- * 2. The regional cut override beats an explicit cut_mode / cut_value —
- *    the opposite direction, because it is a USA Fencing handbook rule
- *    rather than a convenience.
+ * One precedence rule survives 013's per-event shrink (data-model.md
+ * §Resolution rules, FR-037, SC-012): an explicit video_strips_total beats
+ * its tournament type's default — the organizer's setting survives any
+ * number of type changes, even one whose default happens to equal it.
+ * video_strips_total lives on TournamentSlice, not per-competition, so the
+ * shrink doesn't touch it. ref_policy and de_mode no longer have an
+ * "explicit" side to prove precedence over (FR-021: no per-event control for
+ * either survives) — they resolve to TYPE_DEFAULTS[type] unconditionally,
+ * covered below as plain resolution, not precedence. The regional-cut-vs-
+ * explicit-cut rule this file used to cover here is gone the same way (see
+ * the dropped-without-successor comment further down).
  *
  * The per-type default table (data-model.md §Per-type default table):
  *
@@ -39,57 +41,19 @@ import { TournamentType, RefPolicy, DeMode, CutMode } from '../../src/engine/typ
 // rule it is testing.
 const UNOVERRIDDEN_ID = 'D1A-M-EPEE-IND'
 
-// A JUNIOR individual event — JUNIOR is one of the four REGIONAL_CUT_OVERRIDES
-// categories (Y14, CADET, JUNIOR, DIV1), which is what rule 2 exercises.
-const OVERRIDDEN_CATEGORY_ID = 'JR-M-EPEE-IND'
-
 beforeEach(() => {
   useStore.setState(useStore.getInitialState(), true)
 })
 
+// 013 T019 (research D7): "ref_policy TWO survives a walk..." and "de_mode
+// STAGED survives a walk..." dropped without successor. Both proved an
+// explicit per-event value beats the type default across a type change —
+// T020's shrink removes ref_policy and de_mode from CompetitionConfig
+// entirely (FR-021: no per-event control for either survives), so there is
+// no explicit value left to set and nothing for this precedence rule to be
+// about. video_strips_total is unaffected — it lives on TournamentSlice, not
+// per-competition, and the shrink doesn't touch it.
 describe('an explicit value survives any number of type changes (FR-037, SC-012)', () => {
-  it('ref_policy TWO survives a walk that includes a type whose default is also TWO', () => {
-    useStore.getState().addCompetition(UNOVERRIDDEN_ID)
-    useStore.getState().updateCompetition(UNOVERRIDDEN_ID, { ref_policy: 'TWO' })
-
-    // ROC's default is ONE (differs) -> SJCC's default is TWO (equals, mid-walk)
-    // -> RYC's default is ONE (differs). A resolver that writes the resolved
-    // default back to the store would slip through a walk that never landed
-    // on the equals row in the middle — this one does.
-    const walk = [TournamentType.ROC, TournamentType.SJCC, TournamentType.RYC]
-    for (const type of walk) {
-      useStore.getState().setTournamentType(type)
-
-      const { competitions } = buildTournamentConfig(useStore.getState())
-      const comp = competitions.find((c) => c.id === UNOVERRIDDEN_ID)
-      expect(comp?.ref_policy, `resolved ref_policy at ${type}`).toBe('TWO')
-      expect(
-        useStore.getState().selectedCompetitions[UNOVERRIDDEN_ID].ref_policy,
-        `stored ref_policy at ${type} (must stay unresolved)`,
-      ).toBe('TWO')
-    }
-  })
-
-  it('de_mode STAGED survives a walk that includes a type whose default is also STAGED', () => {
-    useStore.getState().addCompetition(UNOVERRIDDEN_ID)
-    useStore.getState().updateCompetition(UNOVERRIDDEN_ID, { de_mode: 'STAGED' })
-
-    // ROC's default is SINGLE_STAGE (differs) -> NAC's default is STAGED
-    // (equals, mid-walk) -> RJCC's default is SINGLE_STAGE (differs).
-    const walk = [TournamentType.ROC, TournamentType.NAC, TournamentType.RJCC]
-    for (const type of walk) {
-      useStore.getState().setTournamentType(type)
-
-      const { competitions } = buildTournamentConfig(useStore.getState())
-      const comp = competitions.find((c) => c.id === UNOVERRIDDEN_ID)
-      expect(comp?.de_mode, `resolved de_mode at ${type}`).toBe('STAGED')
-      expect(
-        useStore.getState().selectedCompetitions[UNOVERRIDDEN_ID].de_mode,
-        `stored de_mode at ${type} (must stay unresolved)`,
-      ).toBe('STAGED')
-    }
-  })
-
   it('video_strips_total 0 survives a walk that includes a type whose default is also 0', () => {
     // 0 is a deliberate, legitimate value (no video strips) and must not be
     // confused with unset, which is `null` (data-model.md; T060).
@@ -119,12 +83,10 @@ describe('an explicit value survives any number of type changes (FR-037, SC-012)
  * all — these are what make FR-037 a real precedence rule instead of a
  * no-op.
  *
- * `de_mode: 'AUTO'` and `setVideoStrips(null)` do not typecheck until T060
- * widens `CompetitionConfig.de_mode` to `DeModeSetting` and
- * `video_strips_total` to `number | null`. `ref_policy: 'AUTO'` already
- * typechecks (RefPolicy already includes AUTO) but is red at runtime today:
- * buildConfig passes `overrides.ref_policy` straight through with no
- * per-type resolution.
+ * Since 013 T020 the per-event half of that sentinel is gone: neither
+ * `ref_policy` nor `de_mode` is a store field any more, so every event follows
+ * its tournament type unconditionally and `setVideoStrips(null)` is the only
+ * settable "follow the type" marker left.
  */
 describe('an AUTO / null setting resolves to the tournament type\'s default', () => {
   const PER_TYPE_DEFAULTS: Array<{
@@ -141,9 +103,12 @@ describe('an AUTO / null setting resolves to the tournament type\'s default', ()
     { type: TournamentType.RJCC, refPolicy: 'ONE', deMode: 'SINGLE_STAGE', videoStrips: 0 },
   ]
 
-  it.each(PER_TYPE_DEFAULTS)('$type: AUTO ref_policy resolves to $refPolicy', ({ type, refPolicy }) => {
+  // 013 T019 (research D7): re-targeted — ref_policy has no store override
+  // left to set to 'AUTO' post-shrink (FR-021); every competition resolves
+  // to TYPE_DEFAULTS[type].ref_policy unconditionally now, so this is the
+  // whole rule, not one half of a two-value comparison.
+  it.each(PER_TYPE_DEFAULTS)('$type: ref_policy resolves to $refPolicy', ({ type, refPolicy }) => {
     useStore.getState().addCompetition(UNOVERRIDDEN_ID)
-    useStore.getState().updateCompetition(UNOVERRIDDEN_ID, { ref_policy: 'AUTO' })
     useStore.getState().setTournamentType(type)
 
     const { competitions } = buildTournamentConfig(useStore.getState())
@@ -151,11 +116,9 @@ describe('an AUTO / null setting resolves to the tournament type\'s default', ()
     expect(comp?.ref_policy).toBe(refPolicy)
   })
 
-  it.each(PER_TYPE_DEFAULTS)('$type: AUTO de_mode resolves to $deMode', ({ type, deMode }) => {
+  // Same re-targeting, same reasoning, one field over.
+  it.each(PER_TYPE_DEFAULTS)('$type: de_mode resolves to $deMode', ({ type, deMode }) => {
     useStore.getState().addCompetition(UNOVERRIDDEN_ID)
-    // Target shape (T060 widens de_mode to DeModeSetting = 'AUTO' | DeMode) —
-    // does not typecheck yet, by design (see file header).
-    useStore.getState().updateCompetition(UNOVERRIDDEN_ID, { de_mode: 'AUTO' })
     useStore.getState().setTournamentType(type)
 
     const { competitions } = buildTournamentConfig(useStore.getState())
@@ -174,38 +137,12 @@ describe('an AUTO / null setting resolves to the tournament type\'s default', ()
   })
 })
 
-describe('the regional cut override still beats an explicit cut setting (FR-040)', () => {
-  it('overridden category at a regional type: the override replaces the explicit cut', () => {
-    useStore.getState().addCompetition(OVERRIDDEN_CATEGORY_ID)
-    useStore.getState().updateCompetition(OVERRIDDEN_CATEGORY_ID, {
-      cut_mode: CutMode.COUNT,
-      cut_value: 8,
-    })
-    useStore.getState().setTournamentType(TournamentType.ROC)
-
-    const { competitions } = buildTournamentConfig(useStore.getState())
-    const comp = competitions.find((c) => c.id === OVERRIDDEN_CATEGORY_ID)
-    // REGIONAL_CUT_OVERRIDES[JUNIOR] (src/engine/constants.ts) is
-    // { mode: DISABLED, value: 100 } — not the organizer's COUNT/8.
-    expect(comp?.cut_mode, 'cut_mode overridden at a regional type').toBe(CutMode.DISABLED)
-    expect(comp?.cut_value, 'cut_value overridden at a regional type').toBe(100)
-  })
-
-  it('the same overridden category at a non-regional type: the explicit cut survives', () => {
-    // Mirror case: same category as above, but NAC is not in
-    // REGIONAL_CUT_TOURNAMENT_TYPES, so the override must not apply here.
-    // This is what distinguishes "the override applies" from "cut_mode is
-    // always clobbered".
-    useStore.getState().addCompetition(OVERRIDDEN_CATEGORY_ID)
-    useStore.getState().updateCompetition(OVERRIDDEN_CATEGORY_ID, {
-      cut_mode: CutMode.COUNT,
-      cut_value: 8,
-    })
-    useStore.getState().setTournamentType(TournamentType.NAC)
-
-    const { competitions } = buildTournamentConfig(useStore.getState())
-    const comp = competitions.find((c) => c.id === OVERRIDDEN_CATEGORY_ID)
-    expect(comp?.cut_mode, 'cut_mode at a non-regional type').toBe(CutMode.COUNT)
-    expect(comp?.cut_value, 'cut_value at a non-regional type').toBe(8)
-  })
-})
+// 013 T019 (research D7): both cases here dropped without successor. Each
+// proved an explicit per-event cut_mode/cut_value either beaten by the
+// regional override or surviving at a non-regional type — T020's shrink
+// removes cut_mode/cut_value from CompetitionConfig entirely (FR-021: no
+// per-event cut control survives), so "explicit" cases have nothing left to
+// set. The regional override applying to the *default* cut (not an explicit
+// one) is exercised directly by buildConfig.test.ts's own "regional cut
+// overrides" describe, which T020 re-targets onto the two-field store shape
+// alongside this file.

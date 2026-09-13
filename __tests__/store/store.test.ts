@@ -1,21 +1,17 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { useStore } from '../../src/store/store.ts'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { useStore, type PresetId } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
-import { Category, TournamentType, Weapon } from '../../src/engine/types.ts'
+import { Category, DeMode, TournamentType, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
+import { runScheduleAll } from '../../src/store/runActions.ts'
+import { applyPreset } from '../../src/store/presets.ts'
+import { serializeState } from '../../src/store/serialization.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
-  ADMIN_GAP_MINS,
-  FLIGHT_BUFFER_MINS,
-  THRESHOLD_MINS,
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
 
 // Reset store to initial state before each test
@@ -104,46 +100,44 @@ describe('tournamentSlice', () => {
     })
   })
 
-  // The **Suggest** button's action (`StripSetup.tsx:25`). 012 T007 replaced
-  // the ceiling-only rule with the search from `stripSearch.ts`: the button
-  // now drives `scanStripCounts` to the smallest strip count that places every
-  // event, asynchronously so the browser can paint between candidates
-  // (research.md D5). What is pinned here is the wiring, the async contract,
-  // the single terminal write (FR-010), and the `null` cases — the search's
-  // own arithmetic belongs to `__tests__/engine/stripSearch.test.ts`.
-  describe('suggestStrips', () => {
+  // The strip search action, called from the Tournament panel (research.md
+  // D8, FR-017). 012 T007 replaced the ceiling-only rule with the search from
+  // `stripSearch.ts`; 013 T017 split writing out of it — the action now only
+  // answers the question, and the panel's Apply is what calls `setStrips` with
+  // the resolved number (FR-017). What is pinned here is the wiring, the
+  // async contract, that the field is never written by the search itself, and
+  // the `null` cases — the search's own arithmetic belongs to
+  // `__tests__/engine/stripSearch.test.ts`.
+  describe('computeSuggestedStrips', () => {
     // Shared by every test below that needs a board the search can size: 2
-    // days, one 70-fencer event selected. The `[M]` comment on the ceiling
-    // above documents what this fixture measures to — 10 strips.
+    // days, one 70-fencer event selected. The `[M]` comment below documents
+    // what this fixture measures to — 10 strips.
     function seedLargeFoilEvent() {
       useStore.getState().setDays(2)
       useStore.getState().selectCompetitions(['D1-M-FOIL-IND'])
       useStore.getState().updateCompetition('D1-M-FOIL-IND', { fencer_count: 70 })
     }
 
-    it("returns a promise that resolves with the search's own answer", async () => {
+    it("resolves to the search's own answer for the current config", async () => {
       seedLargeFoilEvent()
 
-      const pending = useStore.getState().suggestStrips()
+      const pending = useStore.getState().computeSuggestedStrips()
       expect(pending).toBeInstanceOf(Promise)
-      await pending
+      const result = await pending
 
-      // `buildTournamentConfig` is read after the promise resolves so its
-      // `strips_total` reflects the write the action just made — the search's
-      // answer does not depend on that field either way.
       const { config, competitions } = buildTournamentConfig(useStore.getState())
-      expect(useStore.getState().strips_total).toBe(searchStripCount(competitions, config))
+      expect(result).toBe(searchStripCount(competitions, config))
       // `[M]` measured directly against the fixture: 70 fencers → 10 pools is
       // the smallest count that places every event. 13 was the old rule's
       // ceiling — `suggestStripCount` sizes for the busiest day running at
       // once, not for placing everything, and asserted as the upper bound below.
-      expect(useStore.getState().strips_total).toBe(10)
+      expect(result).toBe(10)
     })
 
     it('never suggests above the old ceiling rule (FR-007)', async () => {
       seedLargeFoilEvent()
 
-      await useStore.getState().suggestStrips()
+      const result = await useStore.getState().computeSuggestedStrips()
 
       const { config, competitions } = buildTournamentConfig(useStore.getState())
       const ceiling = suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct)
@@ -151,31 +145,33 @@ describe('tournamentSlice', () => {
       // ceiling is a real number here — narrowed for `toBeLessThanOrEqual`,
       // which does not accept `number | null`.
       expect(ceiling).not.toBeNull()
-      expect(useStore.getState().strips_total).toBeLessThanOrEqual(ceiling as number)
+      expect(result).toBeLessThanOrEqual(ceiling as number)
     })
 
-    it('leaves strips_total alone when no competition is selected — never writes 0', async () => {
+    it('resolves null when no competition is selected — never writes 0', async () => {
       useStore.getState().setStrips(24)
 
-      await useStore.getState().suggestStrips()
+      const result = await useStore.getState().computeSuggestedStrips()
 
       // FR-010: the absence of an answer is not the number zero. A 0 here
       // would read as a deliberate configuration and fail validation.
+      expect(result).toBeNull()
       expect(useStore.getState().strips_total).toBe(24)
     })
 
-    it('leaves strips_total alone when every selected event has no fencers entered', async () => {
+    it('resolves null when every selected event has no fencers entered', async () => {
       useStore.getState().setStrips(24)
       // `selectCompetitions` seeds `fencer_count: 0` — the state the button is
       // in the moment an organizer picks events and has not typed counts yet.
       useStore.getState().selectCompetitions(['D1-M-FOIL-IND', 'D1-W-FOIL-IND'])
 
-      await useStore.getState().suggestStrips()
+      const result = await useStore.getState().computeSuggestedStrips()
 
+      expect(result).toBeNull()
       expect(useStore.getState().strips_total).toBe(24)
     })
 
-    it('writes strips_total exactly once, at the end (FR-010)', async () => {
+    it('never writes strips_total itself (FR-017) — the caller writes through setStrips', async () => {
       seedLargeFoilEvent()
       useStore.getState().setStrips(24)
 
@@ -187,18 +183,19 @@ describe('tournamentSlice', () => {
       // Guarded so a failing assertion below can never leak this subscription
       // into later tests — `beforeEach` resets the store but not this listener.
       try {
-        const pending = useStore.getState().suggestStrips()
-        // Checked synchronously, before any await: nothing has written yet, no
-        // matter how many candidates the search evaluates.
+        await useStore.getState().computeSuggestedStrips()
+
         expect(seen).toEqual([])
         expect(useStore.getState().strips_total).toBe(24)
-
-        await pending
-
-        expect(seen).toEqual([useStore.getState().strips_total])
       } finally {
         unsubscribe()
       }
+    })
+
+    it('setStrips is what changes strips_total', () => {
+      useStore.getState().setStrips(10)
+
+      expect(useStore.getState().strips_total).toBe(10)
     })
   })
 
@@ -235,6 +232,29 @@ describe('tournamentSlice', () => {
       expect(state.pool_round_duration_table[Weapon.FOIL]).toBe(90)
     })
   })
+
+  // 013 T022 (FR-029, research D7). The store keeps the organizer's intent,
+  // not a resolved mode: `null` is "follow the type", and `buildConfig.ts`
+  // resolves it per render. Which is why the setter has to accept `null` back
+  // — without that there is no way to return to following the type.
+  describe('setDeModeOverride', () => {
+    it('starts null, takes a mode, and takes null back', () => {
+      expect(useStore.getState().de_mode_override).toBeNull()
+
+      useStore.getState().setDeModeOverride(DeMode.SINGLE_STAGE)
+      expect(useStore.getState().de_mode_override).toBe(DeMode.SINGLE_STAGE)
+
+      useStore.getState().setDeModeOverride(null)
+      expect(useStore.getState().de_mode_override).toBeNull()
+    })
+
+    it('survives a tournament type change — an override is not re-resolved', () => {
+      useStore.getState().setDeModeOverride(DeMode.STAGED)
+      useStore.getState().setTournamentType(TournamentType.ROC)
+
+      expect(useStore.getState().de_mode_override).toBe(DeMode.STAGED)
+    })
+  })
 })
 
 describe('competitionSlice', () => {
@@ -254,65 +274,66 @@ describe('competitionSlice', () => {
       expect(state.selectedCompetitions).toEqual({})
     })
 
-    // Re-baselined by T072 (004 US5): the slice widened from three keys to the
-    // seven the gears panel exposes (FR-042), so a three-key literal no longer
-    // describes it. Asserted against the `constants.ts` exports rather than
-    // literals — the store is required to seed itself from those constants
-    // (contract §1), so a default that moves in constants.ts must move here
-    // with it, and a hardcoded 30/15/10 would hide exactly that break.
-    it('globalOverrides has default values', () => {
-      const state = useStore.getState()
-      expect(state.globalOverrides).toEqual({
-        ADMIN_GAP_MINS,
-        FLIGHT_BUFFER_MINS,
-        THRESHOLD_MINS,
-        SLOT_MINS,
-        DE_BOUT_DURATION,
-        YOUTH_VET_BOUT_DELTA,
-        DEFAULT_DE_STRIP_FOOTPRINT,
-      })
-    })
+    // Dropped without successor (013 T022, research D7): the seven-key
+    // override record this asserted the defaults of is deleted, and
+    // `buildConfig.ts` reads those seven from `constants.ts` directly.
+    // `buildConfig.test.ts` holds the successor claim — that the config
+    // tracks each constant — because the config is where they are now
+    // observable.
   })
 
   describe('selectCompetitions', () => {
-    it('adds competitions with default per-competition config derived from catalogue', () => {
+    // Since 013 T020 the store record is the two fields below and nothing else,
+    // so the cut and video-policy defaults this case used to read off the store
+    // are asserted where they now live: the competition `buildTournamentConfig`
+    // hands the engine. Cadet is not in the derivation describe's fixture
+    // template (Vet/Div1/Junior), so these two categories are checked here
+    // rather than dropped as covered.
+    it('adds competitions carrying only a fencer count and a flighted flag', () => {
       useStore.getState().selectCompetitions([CADET_MF, JUNIOR_WE])
 
       const state = useStore.getState()
+
+      for (const id of [CADET_MF, JUNIOR_WE]) {
+        const config = state.selectedCompetitions[id]
+        expect(config, id).toBeDefined()
+        expect(Object.keys(config).sort(), id).toEqual(['fencer_count', 'flighted'])
+        expect(config.fencer_count, id).toBe(0)
+        expect(config.flighted, id).toBe(false)
+      }
+    })
+
+    it('derives the cut and video-policy defaults from the catalogue on the way to the engine', () => {
+      useStore.getState().selectCompetitions([CADET_MF, JUNIOR_WE])
       const cadetEntry = findCompetition(CADET_MF)!
       const juniorEntry = findCompetition(JUNIOR_WE)!
 
-      // Cadet defaults
-      const cadetConfig = state.selectedCompetitions[CADET_MF]
-      expect(cadetConfig).toBeDefined()
-      expect(cadetConfig.fencer_count).toBe(0)
-      expect(cadetConfig.ref_policy).toBe('AUTO')
-      expect(cadetConfig.cut_mode).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].mode)
-      expect(cadetConfig.cut_value).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].value)
-      // 'AUTO', not 'SINGLE_STAGE' — a new event follows its tournament type's
-      // DE mode until an organizer picks one (research D6). buildConfig resolves it.
-      expect(cadetConfig.de_mode).toBe('AUTO')
-      expect(cadetConfig.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[cadetEntry.category])
-      expect(cadetConfig.use_single_pool_override).toBe(false)
+      const { competitions } = buildTournamentConfig(useStore.getState())
 
-      // Junior defaults
-      const juniorConfig = state.selectedCompetitions[JUNIOR_WE]
-      expect(juniorConfig).toBeDefined()
-      expect(juniorConfig.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[juniorEntry.category])
+      const cadet = competitions.find((c) => c.id === CADET_MF)!
+      expect(cadet).toBeDefined()
+      expect(cadet.cut_mode).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].mode)
+      expect(cadet.cut_value).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].value)
+      expect(cadet.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[cadetEntry.category])
+      expect(cadet.use_single_pool_override).toBe(false)
+
+      const junior = competitions.find((c) => c.id === JUNIOR_WE)!
+      expect(junior).toBeDefined()
+      expect(junior.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[juniorEntry.category])
     })
 
-    it('defaults a team competition to all-advance regardless of its category default', () => {
+    it('sends a team competition to the engine all-advance regardless of its category default', () => {
       useStore.getState().selectCompetitions([CADET_MF_TEAM])
 
-      const state = useStore.getState()
-      const teamConfig = state.selectedCompetitions[CADET_MF_TEAM]
+      const { competitions } = buildTournamentConfig(useStore.getState())
+      const team = competitions.find((c) => c.id === CADET_MF_TEAM)!
 
-      expect(teamConfig).toBeDefined()
+      expect(team).toBeDefined()
       // Cadet's own category default is PERCENTAGE/20 (asserted above for the
-      // individual entry) — the team override must win over it.
+      // individual entry) — the team rule must win over it.
       expect(DEFAULT_CUT_BY_CATEGORY[Category.CADET].mode).toBe('PERCENTAGE')
-      expect(teamConfig.cut_mode).toBe('DISABLED')
-      expect(teamConfig.cut_value).toBe(100)
+      expect(team.cut_mode).toBe('DISABLED')
+      expect(team.cut_value).toBe(100)
     })
 
     it('skips unknown catalogue IDs without error', () => {
@@ -331,8 +352,8 @@ describe('competitionSlice', () => {
 
       const state = useStore.getState()
       expect(state.selectedCompetitions[CADET_MF].fencer_count).toBe(64)
-      // Other fields remain unchanged
-      expect(state.selectedCompetitions[CADET_MF].ref_policy).toBe('AUTO')
+      // The other field remains unchanged
+      expect(state.selectedCompetitions[CADET_MF].flighted).toBe(false)
     })
   })
 
@@ -365,19 +386,22 @@ describe('competitionSlice', () => {
       const templateIds = TEMPLATES['RYC Weekend']
       expect(Object.keys(state.selectedCompetitions).sort()).toEqual([...templateIds].sort())
     })
-  })
 
-  describe('setGlobalOverrides', () => {
-    it('updates global override values', () => {
-      useStore.getState().setGlobalOverrides({ ADMIN_GAP_MINS: 20 })
+    it('records the template name as loadedPresetId, so a template-loaded config reads back like a preset-loaded one', () => {
+      useStore.getState().applyTemplate('RYC Weekend')
 
-      const state = useStore.getState()
-      expect(state.globalOverrides.ADMIN_GAP_MINS).toBe(20)
-      // Unchanged fields preserved
-      expect(state.globalOverrides.FLIGHT_BUFFER_MINS).toBe(15)
-      expect(state.globalOverrides.THRESHOLD_MINS).toBe(10)
+      expect(useStore.getState().loadedPresetId).toBe('RYC Weekend')
     })
   })
+
+  // PresetId admits both a fixture ScenarioId and a template name — a
+  // compile-time check, not a runtime assertion (T006, research D12/D17).
+  const _presetIdAdmitsBoth: PresetId[] = ['B1', 'RYC Weekend']
+  void _presetIdAdmitsBoth
+
+  // `setGlobalOverrides` was tested here until 013 T022 deleted it with its
+  // slice (research D7). Its successor is `setDeModeOverride`, which belongs
+  // to the tournament slice — its cases are with that slice above.
 })
 
 // ──────────────────────────────────────────────
@@ -413,5 +437,67 @@ describe('analysisSlice', () => {
       expect(state.flightingSuggestionStates[0]).toBe('pending')
       expect(state.flightingSuggestionStates[1]).toBe('rejected')
     })
+  })
+})
+
+// ──────────────────────────────────────────────
+// runScheduleAll's return value and lastAutoRun stamp (T006, research D12)
+// ──────────────────────────────────────────────
+
+describe('lastAutoRun', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('is null on the initial state', () => {
+    expect(useStore.getState().lastAutoRun).toBeNull()
+  })
+
+  it('is stamped with the placed/unplaced counts runScheduleAll returns', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-07T14:07:00'))
+    applyPreset('B1')
+
+    const result = runScheduleAll()
+
+    expect(result).toEqual({ placed: 24, unplaced: 0 })
+    const lastAutoRun = useStore.getState().lastAutoRun
+    expect(lastAutoRun?.at).toBe(Date.now())
+    expect(lastAutoRun).toEqual(expect.objectContaining({ placed: 24, unplaced: 0 }))
+  })
+
+  // B4 is one of drift-baseline.md's two named "has unplaced events" fixtures
+  // (the other, B5, places all 12 of its events, so it can't demonstrate this).
+  // Its scheduledCount there (17 of 30) was measured before other 013 phase-1
+  // tasks landed in this worktree; standing rule 11 says measurements win, so
+  // this pins the number this test file actually observes today (18 placed,
+  // 12 unplaced) rather than the stale baseline figure.
+  //
+  // unplaced is `competitions.length - placed`, not "entries in schedule with
+  // a null pool_start" — concurrentScheduler.ts's commitEventResult only ever
+  // writes a schedule entry once an event's terminal phase completes, so a
+  // permanently-failed event (BottleneckSeverity.ERROR, event.permanently_failed)
+  // never gets a schedule entry at all rather than getting one with a null
+  // pool_start. The latter reading would make unplaced always 0.
+  it('counts events the scheduler drops entirely as unplaced, for a preset that does not place everything', () => {
+    applyPreset('B4')
+
+    const result = runScheduleAll()
+
+    expect(result).toEqual({ placed: 18, unplaced: 12 })
+    expect(useStore.getState().lastAutoRun).toEqual(
+      expect.objectContaining({ placed: 18, unplaced: 12 }),
+    )
+  })
+})
+
+describe('runScheduleAll — serialization', () => {
+  it('never appears in the serialized wire shape', () => {
+    applyPreset('B1')
+    runScheduleAll()
+
+    const json = serializeState(useStore.getState())
+
+    expect(json).not.toContain('lastAutoRun')
   })
 })

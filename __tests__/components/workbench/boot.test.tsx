@@ -43,9 +43,9 @@ describe('bootstrap with no usable fragment', () => {
     expect(within(center).getAllByRole('row').length).toBeGreaterThan(1)
   })
 
-  // review finding B: the preset picker is a local useState in TopBar today,
-  // set only by its own change handler, so boot()'s applyPreset call never
-  // reaches it and the combobox reads blank on a normal first load.
+  // review finding B: the preset picker is a local useState in the header
+  // today, set only by its own change handler, so boot()'s applyPreset call
+  // never reaches it and the combobox reads blank on a normal first load.
   it('leaves the preset picker showing the loaded preset without any picker interaction', () => {
     bootstrap('')
     render(<WorkbenchShell />)

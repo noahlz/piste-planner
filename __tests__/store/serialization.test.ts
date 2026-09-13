@@ -9,7 +9,7 @@ import {
 import type { SerializedState } from '../../src/store/serialization.ts'
 import { useStore } from '../../src/store/store.ts'
 import type { StoreState } from '../../src/store/store.ts'
-import { PlacementSource } from '../../src/engine/types.ts'
+import { DeMode, PlacementSource } from '../../src/engine/types.ts'
 import type { Placement } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
@@ -25,14 +25,11 @@ type StoreStateWithPlacements = StoreState & {
   dismissedFindings: Record<string, true>
 }
 
-/** The v2 wire shape T010 adds to SerializedState (schemaVersion 2 plus the new keys). */
-type SerializedStateV2 = {
-  schemaVersion: 2
-  tournament: SerializedState['tournament']
-  competitions: SerializedState['competitions']
-  placements: Record<string, Placement>
-  dismissedFindings: string[]
-}
+/** The wire shape these fixtures build. Since 013 T020 it is `SerializedState`
+ *  itself — the local stand-in existed only while v2's keys ran ahead of the
+ *  exported type. `v2SerializedData` below keeps the retired shape, untyped,
+ *  because nothing accepts it any more. */
+type SerializedStateV3 = SerializedState
 
 /** deserializeState's success shape once T010 adds the lenient drop-and-report notice. */
 type DeserializeSuccess = { state: Partial<StoreStateWithPlacements>; droppedPlacements: string[] }
@@ -54,7 +51,11 @@ function populatedState(): StoreState {
   store.getState().setVideoStrips(4)
   store.getState().selectCompetitions([FIXTURE_EVENT_ID])
   store.getState().updateCompetition(FIXTURE_EVENT_ID, { fencer_count: 64 })
-  store.getState().setGlobalOverrides({ ADMIN_GAP_MINS: 20 })
+  // The admin-gap override this used to set left with its slice (013 T022).
+  // The fixture's remaining departures from the initial store — type, days,
+  // strips, video strips, one fencer count — are what make the round trip
+  // meaningful, and `de_mode_override` stays at its `null` default here so the
+  // default itself round-trips; the cases that need a set override set it.
   return store.getState()
 }
 
@@ -81,9 +82,9 @@ function populatedStateWithPlacementsAndDismissals(): StoreStateWithPlacements {
   return useStore.getState() as StoreStateWithPlacements
 }
 
-function validSerializedData(): SerializedStateV2 {
+function validSerializedData(): SerializedStateV3 {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     tournament: {
       tournament_type: 'NAC',
       days_available: 3,
@@ -94,7 +95,44 @@ function validSerializedData(): SerializedStateV2 {
       ],
       strips_total: 10,
       video_strips_total: 2,
+      // `null` is a real wire value, not an absence — a payload that omits it
+      // is tolerated, but the one this fixture stands in for was written by a
+      // current save, and a current save always states it (013 T022).
+      de_mode_override: null,
     },
+    // Flat since v3, and carrying only the two fields the per-event record
+    // still holds (013 T020, data-model §3).
+    competitions: {
+      [FIXTURE_EVENT_ID]: {
+        fencer_count: 32,
+        flighted: false,
+      },
+    },
+    // The seven-key override record that sat at the top level here left with
+    // its slice in 013 T022. A payload still carrying it is refused by the
+    // unknown-top-level-field rule, which has its own case above.
+    // Non-empty by default so 'accepts valid data' actually exercises a
+    // populated payload — the 'accepts an empty placements map' and 'accepts
+    // an empty dismissedFindings array' tests below override these to their
+    // genuinely-empty case instead of duplicating this one.
+    placements: { [FIXTURE_EVENT_ID]: validPlacement() },
+    dismissedFindings: ['same-population:D1-M-EPEE-IND+JR-M-EPEE-IND'],
+  }
+}
+
+/**
+ * The retired v2 wire shape: `schemaVersion: 2`, competitions nested under a
+ * `selectedCompetitions` key beside the retired override record, five
+ * per-event fields that no longer exist. Untyped on purpose —
+ * `SerializedState` does not describe it any more, and its one remaining use
+ * is proving `validateSchema` refuses it (data-model §3: no migration, the
+ * product is unreleased).
+ */
+function v2SerializedData(): Record<string, unknown> {
+  const v3 = validSerializedData()
+  return {
+    schemaVersion: 2,
+    tournament: v3.tournament,
     competitions: {
       selectedCompetitions: {
         [FIXTURE_EVENT_ID]: {
@@ -107,33 +145,19 @@ function validSerializedData(): SerializedStateV2 {
           use_single_pool_override: false,
         },
       },
-      // T072 (004 US5) widened GlobalOverrides to seven keys, so a three-key
-      // payload no longer satisfies the type. Spelled as literals, not imported
-      // constants, deliberately: this is a wire-format fixture standing in for
-      // bytes that arrived from a shared URL, and a decoded payload is not
-      // obliged to track whatever `constants.ts` happens to hold today. The
-      // only assertion reading it back is line 180's ADMIN_GAP_MINS.
-      globalOverrides: {
-        ADMIN_GAP_MINS: 15,
-        FLIGHT_BUFFER_MINS: 15,
-        THRESHOLD_MINS: 10,
-        SLOT_MINS: 5,
-        DE_BOUT_DURATION: { EPEE: 20, FOIL: 20, SABRE: 15 },
-        YOUTH_VET_BOUT_DELTA: -5,
-        DEFAULT_DE_STRIP_FOOTPRINT: 16,
-      },
+      // The override record v2 nested here alongside `selectedCompetitions`.
+      // Its real key name is retired vocabulary as of 013 T022, and the
+      // rejection this fixture proves turns on `schemaVersion` alone, so the
+      // stand-in name is inert.
+      settings: { ADMIN_GAP_MINS: 15, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 },
     },
-    // Non-empty by default so 'accepts valid v2 data' actually exercises a
-    // populated payload — the 'accepts an empty placements map' and 'accepts
-    // an empty dismissedFindings array' tests below override these to their
-    // genuinely-empty case instead of duplicating this one.
-    placements: { [FIXTURE_EVENT_ID]: validPlacement() },
-    dismissedFindings: ['same-population:D1-M-EPEE-IND+JR-M-EPEE-IND'],
+    placements: v3.placements,
+    dismissedFindings: v3.dismissedFindings,
   }
 }
 
 /** validSerializedData() with one placement entry for eventId (default: FIXTURE_EVENT_ID). */
-function withPlacement(overrides: Partial<Placement> = {}, eventId = FIXTURE_EVENT_ID): SerializedStateV2 {
+function withPlacement(overrides: Partial<Placement> = {}, eventId = FIXTURE_EVENT_ID): SerializedStateV3 {
   const data = validSerializedData()
   data.placements = { [eventId]: validPlacement(overrides) }
   return data
@@ -171,12 +195,12 @@ function populatedStateWithMixedTable(): StoreState {
 // ──────────────────────────────────────────────
 
 describe('serializeState', () => {
-  it('produces JSON with schemaVersion: 2 and all serializable slice data', () => {
+  it('produces JSON with schemaVersion: 3 and all serializable slice data', () => {
     const state = populatedState()
     const json = serializeState(state)
     const parsed = JSON.parse(json)
 
-    expect(parsed.schemaVersion).toBe(2)
+    expect(parsed.schemaVersion).toBe(3)
     expect(parsed.tournament).toBeDefined()
     expect(parsed.competitions).toBeDefined()
 
@@ -186,8 +210,8 @@ describe('serializeState', () => {
     expect(parsed.tournament.video_strips_total).toBe(4)
     expect(parsed.tournament.dayConfigs).toHaveLength(2)
 
-    expect(parsed.competitions.selectedCompetitions[FIXTURE_EVENT_ID].fencer_count).toBe(64)
-    expect(parsed.competitions.globalOverrides.ADMIN_GAP_MINS).toBe(20)
+    expect(parsed.competitions[FIXTURE_EVENT_ID].fencer_count).toBe(64)
+    expect(parsed.tournament.de_mode_override).toBeNull()
   })
 
   it('excludes transient state (UI, analysis, schedule) and referees', () => {
@@ -195,7 +219,11 @@ describe('serializeState', () => {
     const json = serializeState(state)
     const parsed = JSON.parse(json)
 
-    // Five top-level keys: schemaVersion + tournament + competitions + the v2 additions
+    // Five top-level keys since 013 T022 deleted the override record that was
+    // the sixth. Asserted as an exact set, not a list of absences: it is what
+    // makes a key nothing writes on purpose — a slice that outlives its panel,
+    // or a new field added without a decision about sharing it — a failure
+    // here rather than a surprise in someone's shared link.
     expect(Object.keys(parsed).sort()).toEqual(
       ['competitions', 'dismissedFindings', 'placements', 'schemaVersion', 'tournament'].sort(),
     )
@@ -255,7 +283,7 @@ describe('serializeState', () => {
 // ──────────────────────────────────────────────
 
 describe('validateSchema', () => {
-  it('accepts valid v2 data', () => {
+  it('accepts valid v3 data', () => {
     const result = validateSchema(validSerializedData())
     expect(result.valid).toBe(true)
   })
@@ -364,51 +392,30 @@ describe('validateSchema', () => {
 
   it('rejects negative fencer_count in a competition', () => {
     const data = validSerializedData()
-    data.competitions.selectedCompetitions[FIXTURE_EVENT_ID].fencer_count = -5
+    data.competitions[FIXTURE_EVENT_ID].fencer_count = -5
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
     if (!result.valid) expect(result.error).toMatch(/fencer_count/i)
   })
 
-  it('rejects an invalid de_mode value in a competition', () => {
+  // Successor to the de_mode and ref_policy validation cases the shrink retired
+  // (013 T020). The reasoning carries over unchanged: `flighted` reaches
+  // buildConfig.ts and then `derive.ts`'s Flight A / Flight B split, so a
+  // non-boolean arriving from a hand-edited link is a real hole, not a
+  // cosmetic gap.
+  it('rejects a non-boolean flighted in a competition', () => {
     const data = validSerializedData()
-    ;(data.competitions.selectedCompetitions[FIXTURE_EVENT_ID] as unknown as Record<string, unknown>).de_mode =
-      'BOGUS'
+    ;(data.competitions[FIXTURE_EVENT_ID] as unknown as Record<string, unknown>).flighted = 'yes'
     const result = validateSchema(data)
     expect(result.valid).toBe(false)
-    if (!result.valid) expect(result.error).toMatch(/de_mode/i)
+    if (!result.valid) expect(result.error).toMatch(/flighted/i)
   })
 
-  it('accepts de_mode: AUTO in a competition', () => {
+  it.each([true, false])('accepts flighted: %s in a competition', (flighted) => {
     const data = validSerializedData()
-    data.competitions.selectedCompetitions[FIXTURE_EVENT_ID].de_mode = 'AUTO'
+    data.competitions[FIXTURE_EVENT_ID].flighted = flighted
     const result = validateSchema(data)
-    expect(result.valid).toBe(true)
-  })
-
-  // 004 T068 finding 4. The same hole T064 closed for de_mode, one field over:
-  // an unrecognized ref_policy reaches buildConfig.ts's AUTO branch — where it
-  // is neither AUTO nor a resolved policy — and then the engine's referee
-  // demand scaling. In the UI it drops the `Referees for …` Select into the
-  // no-selection state T065 had to repair.
-  it('rejects an invalid ref_policy value in a competition', () => {
-    const data = validSerializedData()
-    ;(data.competitions.selectedCompetitions[FIXTURE_EVENT_ID] as unknown as Record<string, unknown>).ref_policy =
-      'BOGUS'
-    const result = validateSchema(data)
-    expect(result.valid).toBe(false)
-    if (!result.valid) expect(result.error).toMatch(/ref_policy/i)
-  })
-
-  it.each(['ONE', 'TWO', 'AUTO'])('accepts ref_policy: %s in a competition', (policy) => {
-    // AUTO is the unset marker and belongs on the wire alongside the two
-    // resolved policies (research D5) — a validator that admitted only ONE and
-    // TWO would reject every link an unset event is saved into.
-    const data = validSerializedData()
-    ;(data.competitions.selectedCompetitions[FIXTURE_EVENT_ID] as unknown as Record<string, unknown>).ref_policy =
-      policy
-    const result = validateSchema(data)
-    expect(result.valid, `ref_policy "${policy}" rejected`).toBe(true)
+    expect(result.valid, `flighted "${flighted}" rejected`).toBe(true)
   })
 
   it('rejects missing required fields', () => {
@@ -643,7 +650,7 @@ describe('deserializeState', () => {
         strips_total: 10,
         video_strips_total: 2,
       },
-      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 15, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      competitions: {},
     }
     const result = deserializeState(JSON.stringify(v1))
     expect('error' in result).toBe(true)
@@ -672,9 +679,9 @@ describe('deserializeState', () => {
     if ('error' in result) expect(result.error).toMatch(/days_available/i)
   })
 
-  it('load: legacy pod_captain_override field in tournament is silently ignored (FR-010) – nested leniency, unaffected by v2', () => {
+  it('load: legacy pod_captain_override field in tournament is silently ignored (FR-010) – nested leniency, unaffected by the schema version', () => {
     const legacy = JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       tournament: {
         tournament_type: 'NAC',
         days_available: 2,
@@ -683,7 +690,7 @@ describe('deserializeState', () => {
         video_strips_total: 4,
         pod_captain_override: 'FORCE_4',
       },
-      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      competitions: {},
       placements: {},
       dismissedFindings: [],
     })
@@ -697,9 +704,9 @@ describe('deserializeState', () => {
     }
   })
 
-  it('load: legacy de_capacity_estimation field in tournament is silently ignored (FR-010) – nested leniency, unaffected by v2', () => {
+  it('load: legacy de_capacity_estimation field in tournament is silently ignored (FR-010) – nested leniency, unaffected by the schema version', () => {
     const legacy = JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       tournament: {
         tournament_type: 'NAC',
         days_available: 2,
@@ -708,7 +715,7 @@ describe('deserializeState', () => {
         video_strips_total: 4,
         de_capacity_estimation: 'pod_packed',
       },
-      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      competitions: {},
       placements: {},
       dismissedFindings: [],
     })
@@ -862,7 +869,7 @@ describe('round-trip: serializeState → deserializeState', () => {
     expect(loaded.strips_total).toBe(original.strips_total)
     expect(loaded.video_strips_total).toBe(original.video_strips_total)
     expect(loaded.selectedCompetitions).toEqual(original.selectedCompetitions)
-    expect(loaded.globalOverrides).toEqual(original.globalOverrides)
+    expect(loaded.de_mode_override).toBe(original.de_mode_override)
   })
 
   it('restores a mixed pool_round_duration_table exactly (one override, two defaults)', () => {
@@ -928,7 +935,7 @@ describe('decodeFromUrl', () => {
 
   it('shared URL carrying legacy pod_captain_override loads successfully (FR-010)', () => {
     const legacy = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       tournament: {
         tournament_type: 'NAC',
         days_available: 2,
@@ -937,7 +944,7 @@ describe('decodeFromUrl', () => {
         video_strips_total: 4,
         pod_captain_override: 'FORCE_4',
       },
-      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      competitions: {},
       placements: {},
       dismissedFindings: [],
     }
@@ -952,7 +959,7 @@ describe('decodeFromUrl', () => {
 
   it('shared URL carrying legacy de_capacity_estimation loads successfully (FR-010)', () => {
     const legacy = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       tournament: {
         tournament_type: 'NAC',
         days_available: 2,
@@ -961,7 +968,7 @@ describe('decodeFromUrl', () => {
         video_strips_total: 4,
         de_capacity_estimation: 'pod_packed',
       },
-      competitions: { selectedCompetitions: {}, globalOverrides: { ADMIN_GAP_MINS: 30, FLIGHT_BUFFER_MINS: 15, THRESHOLD_MINS: 10 } },
+      competitions: {},
       placements: {},
       dismissedFindings: [],
     }
@@ -1052,5 +1059,137 @@ describe('URL size warning', () => {
     // The payload (after #config=) should exceed 2KB
     const payload = hash.slice('#config='.length)
     expect(payload.length).toBeGreaterThan(2048)
+  })
+})
+
+// ──────────────────────────────────────────────
+// schemaVersion 3 (013 T019/T020 — the per-event shrink, data-model.md §3)
+//
+// Both cases below were red when written: serializeState still wrote
+// schemaVersion 2, with competitions nested under `selectedCompetitions`
+// beside the override record, and validateSchema still accepted (rather than
+// refused) a v2 payload — T020 flipped both, and T022 deleted the override
+// record itself.
+// ──────────────────────────────────────────────
+
+describe('schemaVersion 3 (013 T020 target shape)', () => {
+  it('a round trip carries schemaVersion 3 and competitions as a flat Record<id, { fencer_count, flighted }>', () => {
+    const state = populatedState()
+    const json = serializeState(state)
+    const parsed = JSON.parse(json)
+
+    expect(parsed.schemaVersion).toBe(3)
+    // Flat map — no v2 nesting key survives, so the map's own keys are event
+    // ids and nothing else.
+    expect(parsed.competitions).not.toHaveProperty('selectedCompetitions')
+    expect(Object.keys(parsed.competitions)).toEqual([FIXTURE_EVENT_ID])
+
+    const entry = parsed.competitions[FIXTURE_EVENT_ID]
+    expect(entry).toBeDefined()
+    expect(Object.keys(entry).sort()).toEqual(['fencer_count', 'flighted'])
+    expect(entry.fencer_count).toBe(64)
+    expect(entry.flighted).toBe(false)
+  })
+
+  it('rejects a schemaVersion 2 payload, naming the version it saw', () => {
+    const data = v2SerializedData() // the retired wire shape, kept only for this case
+    const result = validateSchema(data)
+
+    expect(result.valid).toBe(false)
+    if (!result.valid) expect(result.error).toContain('2')
+  })
+})
+
+// ──────────────────────────────────────────────
+// de_mode_override, and the end of the override record (013 T022, research D7)
+//
+// The DE mode override is a tournament-level field: `null` means "follow
+// TYPE_DEFAULTS[type].de_mode", and it is always written, nullable, so a
+// default tournament round-trips its own `null` rather than relying on the
+// key's absence. The seven-key override record it replaces travelled at the
+// top level for exactly one task — T020 lifted it out of `competitions` so the
+// old Settings panel's share link kept working — and leaves with its slice
+// here. Its absence is asserted by the exact top-level key set in
+// 'excludes transient state' above, not by naming the retired key.
+// ──────────────────────────────────────────────
+
+describe('de_mode_override (013 T022)', () => {
+  it('round-trips a null override — the store default, not an absent key', () => {
+    const state = populatedState()
+    const parsed = JSON.parse(serializeState(state))
+
+    expect(parsed.tournament).toHaveProperty('de_mode_override')
+    expect(parsed.tournament.de_mode_override).toBeNull()
+
+    const result = deserializeState(serializeState(state))
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect(result.state.de_mode_override).toBeNull()
+  })
+
+  it('round-trips an explicit override', () => {
+    populatedState()
+    useStore.getState().setDeModeOverride(DeMode.STAGED)
+    const json = serializeState(useStore.getState())
+
+    expect(JSON.parse(json).tournament.de_mode_override).toBe(DeMode.STAGED)
+
+    const result = deserializeState(json)
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect(result.state.de_mode_override).toBe(DeMode.STAGED)
+  })
+
+  it('treats an absent de_mode_override as null, not undefined (schema leniency, research D8)', () => {
+    const data = validSerializedData() as unknown as {
+      tournament: Record<string, unknown>
+    }
+    delete data.tournament.de_mode_override
+
+    const validated = validateSchema(data)
+    expect(validated.valid).toBe(true)
+
+    const result = deserializeState(JSON.stringify(data))
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+    expect(result.state.de_mode_override).toBeNull()
+    expect(result.state.de_mode_override).not.toBeUndefined()
+  })
+
+  it('rejects a de_mode_override that is not one of the two engine modes', () => {
+    const data = validSerializedData() as unknown as { tournament: Record<string, unknown> }
+    data.tournament.de_mode_override = 'THREE_STAGE'
+    const result = validateSchema(data)
+
+    expect(result.valid).toBe(false)
+    if (!result.valid) expect(result.error).toMatch(/de_mode_override/i)
+  })
+})
+
+describe('the retired override record is gone from the payload (013 T022)', () => {
+  // Key sets, not named absences: this is what a payload holds, so a key that
+  // comes back — the retired record, or anything else added without a decision
+  // about sharing it — fails here. The engine constants those seven values
+  // stood for are read from `constants.ts` now, so there is nothing left for a
+  // share link to carry about them.
+  it('writes no settings beyond the tournament fields, even with a pool duration overridden', () => {
+    populatedState()
+    useStore.getState().setPoolRoundDuration('EPEE', 110)
+    const parsed = JSON.parse(serializeState(useStore.getState()))
+
+    expect(Object.keys(parsed).sort()).toEqual(
+      ['competitions', 'dismissedFindings', 'placements', 'schemaVersion', 'tournament'].sort(),
+    )
+    expect(Object.keys(parsed.tournament).sort()).toEqual(
+      [
+        'dayConfigs',
+        'days_available',
+        'de_mode_override',
+        'pool_round_duration_table',
+        'strips_total',
+        'tournament_type',
+        'video_strips_total',
+      ].sort(),
+    )
   })
 })

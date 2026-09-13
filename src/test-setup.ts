@@ -19,6 +19,19 @@ globalThis.IntersectionObserver = class {
   get thresholds() { return [] as number[] }
 } as unknown as typeof IntersectionObserver
 
+// jsdom does not implement ResizeObserver. Radix's Popover (and Tooltip)
+// build on @radix-ui/react-popper, which measures its content through one the
+// moment it mounts — every per-file stub in __tests__/components/canvas and
+// recompute.test.tsx exists for the same reason. A no-op is enough; nothing
+// here asserts on measured size.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
+}
+
 // jsdom does not implement Element.prototype.scrollIntoView. Radix's Select
 // calls it on the active item the moment its listbox opens
 // (@radix-ui/react-select select.tsx:590), so any test that opens a Select

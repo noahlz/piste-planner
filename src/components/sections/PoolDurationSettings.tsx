@@ -5,7 +5,6 @@ import {
   POOL_DURATION_MIN,
   POOL_DURATION_MAX,
 } from '../../engine/constants.ts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { NumberInput } from '@/components/ui/number-input'
@@ -26,23 +25,24 @@ export function PoolDurationSettings() {
   const resetPoolRoundDuration = useStore((s) => s.resetPoolRoundDuration)
 
   return (
-    // `CardTitle` renders a `<div>`, so "Pool Round Durations" carries no
-    // heading semantics (T079 finding 7). Inside the gears panel that leaves a
-    // screen-reader user meeting six spinbuttons in one region with no boundary
-    // between the gears rows and these; the named section is that boundary.
+    // The named section is the boundary a screen-reader user needs between
+    // these inputs and whatever else shares the panel (T079 finding 7). It
+    // carried a `CardTitle` reading "Pool Round Durations" until 013 T022,
+    // where the Settings panel's own "Pool durations" caption sits directly
+    // above it — the title was then the same words twice, and `CardTitle`
+    // renders a `<div>`, so it was never the heading the caption is. The rows
+    // and their behaviour are unchanged; only the container is the mockup's
+    // card now (013 T022, mockup lines 224–250).
     <section aria-label="Pool round durations">
-      <Card className="pt-0 gap-0">
-        <CardHeader className="flex flex-row items-center bg-foreground/10 rounded-t-xl py-2">
-          <CardTitle>Pool Round Durations</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-3 pb-3 space-y-2">
+      <div className="overflow-hidden rounded-[12px] border-[1.5px] border-chrome-border bg-white">
+        <div className="divide-y-[1.5px] divide-chrome-border">
           {WEAPON_ROWS.map(({ weapon, label }) => {
             const defaultMinutes = DEFAULT_POOL_ROUND_DURATION_TABLE[weapon]
             // Override state is derived by comparison against the default –
             // there is no stored flag (data-model.md).
             const isDefault = durations[weapon] === defaultMinutes
             return (
-              <div key={weapon} className="flex items-center gap-2">
+              <div key={weapon} className="flex items-center gap-2 px-3 py-2">
                 <Label htmlFor={`pool-duration-${weapon}`} className="w-12 text-xs">
                   {label}
                 </Label>
@@ -76,8 +76,8 @@ export function PoolDurationSettings() {
               </div>
             )
           })}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </section>
   )
 }

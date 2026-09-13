@@ -92,32 +92,41 @@ function templateContaining(id: string): string {
   return name
 }
 
+// 013 T019 (research D7): C2 and C3 used to read cut_mode/cut_value directly
+// off the store's CompetitionConfig — a field T020's shrink removes (the
+// store keeps only fencer_count and flighted; cut_mode/cut_value become a
+// buildConfig.ts derivation, data-model.md §4). Re-targeted to read the
+// derived value off buildTournamentConfig's output instead, so these stay
+// meaningful once that field is gone.
 describe('C2 — the team default is all-advance, in every creation route', () => {
   it.each(TEAM_IDS)('%s: selectCompetitions default is all-advance', (id) => {
     useStore.setState(useStore.getInitialState(), true)
     useStore.getState().selectCompetitions([id])
 
-    const config = useStore.getState().selectedCompetitions[id]
-    expect(config.cut_mode, `${id} via selectCompetitions: cut_mode`).toBe(CutMode.DISABLED)
-    expect(config.cut_value, `${id} via selectCompetitions: cut_value`).toBe(100)
+    const { competitions } = buildTournamentConfig(useStore.getState())
+    const comp = competitions.find((c) => c.id === id)
+    expect(comp?.cut_mode, `${id} via selectCompetitions: cut_mode`).toBe(CutMode.DISABLED)
+    expect(comp?.cut_value, `${id} via selectCompetitions: cut_value`).toBe(100)
   })
 
   it.each(TEAM_IDS)('%s: addCompetition default is all-advance', (id) => {
     useStore.setState(useStore.getInitialState(), true)
     useStore.getState().addCompetition(id)
 
-    const config = useStore.getState().selectedCompetitions[id]
-    expect(config.cut_mode, `${id} via addCompetition: cut_mode`).toBe(CutMode.DISABLED)
-    expect(config.cut_value, `${id} via addCompetition: cut_value`).toBe(100)
+    const { competitions } = buildTournamentConfig(useStore.getState())
+    const comp = competitions.find((c) => c.id === id)
+    expect(comp?.cut_mode, `${id} via addCompetition: cut_mode`).toBe(CutMode.DISABLED)
+    expect(comp?.cut_value, `${id} via addCompetition: cut_value`).toBe(100)
   })
 
   it.each(TEAM_IDS)('%s: applyTemplate default is all-advance', (id) => {
     useStore.setState(useStore.getInitialState(), true)
     useStore.getState().applyTemplate(templateContaining(id))
 
-    const config = useStore.getState().selectedCompetitions[id]
-    expect(config.cut_mode, `${id} via applyTemplate: cut_mode`).toBe(CutMode.DISABLED)
-    expect(config.cut_value, `${id} via applyTemplate: cut_value`).toBe(100)
+    const { competitions } = buildTournamentConfig(useStore.getState())
+    const comp = competitions.find((c) => c.id === id)
+    expect(comp?.cut_mode, `${id} via applyTemplate: cut_mode`).toBe(CutMode.DISABLED)
+    expect(comp?.cut_value, `${id} via applyTemplate: cut_value`).toBe(100)
   })
 })
 
@@ -128,12 +137,13 @@ describe('C3 — individual defaults are unchanged, value for value', () => {
     useStore.setState(useStore.getInitialState(), true)
     useStore.getState().selectCompetitions([id])
 
-    const config = useStore.getState().selectedCompetitions[id]
+    const { competitions } = buildTournamentConfig(useStore.getState())
+    const comp = competitions.find((c) => c.id === id)
     const entry = findCompetition(id)
     if (!entry) throw new Error(`${id}: not found in CATALOGUE`)
     const expected = DEFAULT_CUT_BY_CATEGORY[entry.category]
 
-    expect(config.cut_mode, `${id}: cut_mode`).toBe(expected.mode)
-    expect(config.cut_value, `${id}: cut_value`).toBe(expected.value)
+    expect(comp?.cut_mode, `${id}: cut_mode`).toBe(expected.mode)
+    expect(comp?.cut_value, `${id}: cut_value`).toBe(expected.value)
   })
 })

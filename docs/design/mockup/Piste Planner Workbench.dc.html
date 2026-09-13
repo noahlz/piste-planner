@@ -1,0 +1,1885 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/industry-be903eec-128a-441d-b7f3-f9f16c99586c/styles.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+<script src="_ds/industry-be903eec-128a-441d-b7f3-f9f16c99586c/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:#eeeef0}
+svg.pp-i{width:1em;height:1em;display:block;flex:none}
+@keyframes pp-rail-in{from{transform:translateY(110%);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes pp-rail-swap-a{0%{transform:translateY(0)}44%{transform:translateY(105%);opacity:.6}100%{transform:translateY(0);opacity:1}}
+@keyframes pp-rail-swap-b{0%{transform:translateY(0)}44%{transform:translateY(105%);opacity:.6}100%{transform:translateY(0);opacity:1}}
+@keyframes pp-panel-in{from{transform:translateX(-14px);opacity:0}to{transform:translateX(0);opacity:1}}
+a{color:#416180;text-decoration:none}a:hover{color:#2c455d}
+.pp-scroll::-webkit-scrollbar{width:13px;height:13px}
+.pp-scroll::-webkit-scrollbar-thumb{background:#c2c2c6;border:4px solid #f5f5f8;border-radius:99px}
+.pp-scroll::-webkit-scrollbar-track{background:#f5f5f8}
+</style>
+</helmet>
+
+<div ref="{{ rootRef }}" style="width:100%;height:100dvh;overflow:hidden;display:flex;flex-direction:column;background:#eeeef0;color:#1d1f20;font-family:Figtree,system-ui,sans-serif">
+
+  <header style="display:flex;align-items:center;gap:14px;height:44px;flex-shrink:0;min-width:0;overflow:hidden;padding:0 14px;background:#f7f7f9;border-bottom:1.5px solid #dedee2;white-space:nowrap">
+    <div style="display:flex;align-items:center;gap:9px;flex:none">
+      <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;flex:none;border-radius:8px;background:#5980a6;color:#fff;font-family:Figtree,system-ui,sans-serif;font-weight:700;font-size:15px">P</span>
+      <span style="font-family:Figtree,system-ui,sans-serif;font-weight:700;font-size:19px;letter-spacing:0;white-space:nowrap">Piste Planner</span>
+    </div>
+    <div style="width:1.5px;height:24px;flex:none;background:#dedee2;border-radius:2px"></div>
+    <button type="button" style="display:flex;align-items:center;gap:9px;flex:0 1 auto;min-width:0;overflow:hidden;height:32px;padding:0 12px;border:1.5px solid #dedee2;border-radius:10px;background:#fff;font-family:Figtree,system-ui,sans-serif;font-size:13px;color:#1d1f20;white-space:nowrap;cursor:pointer" style-hover="border-color:#94bce3;background:#f7fbff">
+      <span style="font-family:Figtree,system-ui,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;font-size:10.5px;color:#7a7a7d">Preset</span>
+      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Feb 2026 NAC — Div1/Junior</span>
+      <span style="color:#98989b;font-size:10px">▾</span>
+    </button>
+    <sc-if value="{{ showHeaderMeta }}" hint-placeholder-val="{{ false }}">
+    <span style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11.5px;color:#5d5d60;white-space:nowrap">NAC · 4 days · 15 strips</span>
+    </sc-if>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex:none">
+      <sc-if value="{{ showHeaderMeta }}" hint-placeholder-val="{{ false }}">
+      <span style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11px;color:#98989b;white-space:nowrap">last run 2 min ago</span>
+      </sc-if>
+      <button type="button" onClick="{{ runSchedule }}" style="display:flex;align-items:center;gap:8px;flex:none;height:32px;padding:0 15px;border:none;border-radius:10px;background:#5980a6;color:#fff;font-family:Figtree,system-ui,sans-serif;font-weight:700;font-size:13.5px;white-space:nowrap;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;box-shadow:0 1px 3px rgba(43,43,45,.18)" style-hover="background:#4d7295">
+        <svg class="pp-i" style="font-size:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m11 4 1.6 3.9L16.5 9.5l-3.9 1.6L11 15l-1.6-3.9L5.5 9.5l3.9-1.6L11 4z"></path><path d="M18 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z"></path><path d="M3 20h7"></path></svg>
+        Auto-assign
+      </button>
+      <button type="button" aria-label="Export" style="display:flex;align-items:center;justify-content:center;flex:none;width:32px;height:32px;border:1.5px solid #dedee2;border-radius:10px;background:#fff;color:#5d5d60;cursor:pointer" style-hover="border-color:#94bce3;color:#416180;background:#f7fbff">
+        <svg class="pp-i" style="font-size:17px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M4 21h16"></path></svg>
+      </button>
+    </div>
+  </header>
+
+
+      <div ref="{{ dockRef }}" style="{{ dockStyle }}">
+        <span style="flex:none;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;white-space:nowrap">{{ dockLabel }}</span>
+        <sc-if value="{{ dockEmpty }}" hint-placeholder-val="{{ false }}">
+          <span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;overflow:hidden;font-size:11.5px;color:#7a7a7d;white-space:nowrap;text-overflow:ellipsis">
+            <svg class="pp-i" style="font-size:13px;color:#5b8f6a" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+            {{ dockNote }}
+          </span>
+        </sc-if>
+        <div style="{{ dockChipsStyle }}">
+          <sc-for list="{{ unplaced }}" as="u" hint-placeholder-count="3">
+            <span style="{{ u.style }}">
+              <svg class="pp-i" style="font-size:12px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h.01"></path><path d="M15 5h.01"></path><path d="M9 12h.01"></path><path d="M15 12h.01"></path><path d="M9 19h.01"></path><path d="M15 19h.01"></path></svg>
+              <span style="min-width:0;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ u.label }}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:10px;opacity:.62">{{ u.need }}</span>
+            </span>
+          </sc-for>
+        </div>
+        <sc-if value="{{ showDockHint }}" hint-placeholder-val="{{ false }}">
+        <span style="flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;margin-left:auto;font-size:11.5px;color:#a3a3a6;white-space:nowrap">drag a chip onto the grid — it drops pinned</span>
+        </sc-if>
+      </div>
+
+  <div style="position:relative;display:flex;flex:1;min-height:0">
+
+    <nav aria-label="Tool rail" style="{{ railBarStyle }}">
+      <sc-for list="{{ railItems }}" as="item" hint-placeholder-count="5">
+        <button type="button" aria-label="{{ item.label }}" onClick="{{ item.onClick }}" onMouseEnter="{{ item.onHover }}" onMouseLeave="{{ hideRailTip }}" onFocus="{{ item.onHover }}" onBlur="{{ hideRailTip }}" style="{{ item.style }}">
+          <sc-if value="{{ item.indicator }}" hint-placeholder-val="{{ false }}">
+            <span style="{{ item.indicatorStyle }}"></span>
+          </sc-if>
+          <svg class="pp-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <sc-for list="{{ item.paths }}" as="p" hint-placeholder-count="3">
+              <path d="{{ p.d }}"></path>
+            </sc-for>
+          </svg>
+          <sc-if value="{{ item.showBadge }}" hint-placeholder-val="{{ false }}">
+            <span style="{{ item.badgeStyle }}">{{ item.badge }}</span>
+          </sc-if>
+          <sc-if value="{{ item.showLabel }}" hint-placeholder-val="{{ false }}">
+            <span style="{{ item.labelStyle }}">{{ item.label }}</span>
+          </sc-if>
+        </button>
+      </sc-for>
+      <span style="{{ railRuleStyle }}"></span>
+      <button type="button" aria-label="Scheduling settings" onClick="{{ openSettings }}" onMouseEnter="{{ settingsItem.onHover }}" onMouseLeave="{{ hideRailTip }}" onFocus="{{ settingsItem.onHover }}" onBlur="{{ hideRailTip }}" style="{{ settingsItem.style }}">
+        <sc-if value="{{ settingsItem.indicator }}" hint-placeholder-val="{{ false }}">
+          <span style="{{ settingsItem.indicatorStyle }}"></span>
+        </sc-if>
+        <svg class="pp-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"></path><path d="M21 5h-7"></path><path d="M8 12H3"></path><path d="M21 12h-9"></path><path d="M16 19H3"></path><path d="M21 19h-1"></path><path d="M14 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"></path><path d="M12 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"></path><path d="M20 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"></path></svg>
+        <sc-if value="{{ settingsItem.showLabel }}" hint-placeholder-val="{{ false }}">
+          <span style="{{ settingsItem.labelStyle }}">Settings</span>
+        </sc-if>
+      </button>
+    </nav>
+
+    <sc-if value="{{ railTip.show }}" hint-placeholder-val="{{ false }}">
+      <span style="{{ railTip.style }}">{{ railTip.label }}</span>
+    </sc-if>
+
+    <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ false }}">
+      <aside aria-label="Inspector panel" class="pp-scroll" style="{{ asideStyle }}">
+        <div style="position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;height:40px;padding:0 7px 0 14px;background:#f7f7f9;border-bottom:1.5px solid #dedee2">
+          <h6 style="margin:0;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">{{ panelTitle }}</h6>
+          <div style="display:flex;align-items:center;gap:2px;flex:none">
+            <button type="button" aria-label="{{ dockLabel }}" title="{{ dockLabel }}" onClick="{{ toggleDock }}" style="{{ dockButtonStyle }}"><svg class="pp-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><path d="M10 3v18"></path></svg></button>
+            <button type="button" aria-label="Close panel" title="Close panel" onClick="{{ closePanel }}" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:8px;background:transparent;color:#7a7a7d;font-size:15px;line-height:1;cursor:pointer" style-hover="background:#e7e7ea;color:#1d1f20"><svg class="pp-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+          </div>
+        </div>
+
+        <sc-if value="{{ isTournament }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:16px 14px;display:flex;flex-direction:column;gap:18px">
+            <div>
+              <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">Type</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap">
+                <span style="padding:6px 13px;border-radius:99px;background:#5980a6;color:#fff;font-size:12.5px">NAC</span>
+                <span style="padding:6px 13px;border-radius:99px;border:1.5px solid #dedee2;background:#fff;font-size:12.5px">RYC</span>
+                <span style="padding:6px 13px;border-radius:99px;border:1.5px solid #dedee2;background:#fff;font-size:12.5px">RJCC</span>
+                <span style="padding:6px 13px;border-radius:99px;border:1.5px solid #dedee2;background:#fff;font-size:12.5px">ROC</span>
+                <span style="padding:6px 13px;border-radius:99px;border:1.5px solid #dedee2;background:#fff;font-size:12.5px">SYC</span>
+              </div>
+              <p style="margin:8px 0 0;font-size:12.5px;line-height:1.5;color:#5d5d60">Sets event grouping rules, rest-day requirements and scheduling priority.</p>
+            </div>
+            <div>
+              <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">Days</div>
+              <div style="display:flex;gap:5px">
+                <span style="padding:6px 15px;border-radius:99px;border:1.5px solid #dedee2;background:#fff;font-size:12.5px">2</span>
+                <span style="padding:6px 15px;border-radius:99px;border:1.5px solid #dedee2;background:#fff;font-size:12.5px">3</span>
+                <span style="padding:6px 15px;border-radius:99px;background:#5980a6;color:#fff;font-size:12.5px">4</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">Day hours</div>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <sc-for list="{{ dayHours }}" as="d" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
+                    <span style="width:44px;color:#5d5d60">{{ d.label }}</span>
+                    <span style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1.5px solid #dedee2;border-radius:9px;background:#fff;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11.5px">{{ d.start }}<span style="color:#98989b">▾</span></span>
+                    <span style="color:#98989b">–</span>
+                    <span style="flex:1;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1.5px solid #dedee2;border-radius:9px;background:#fff;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11.5px">{{ d.end }}<span style="color:#98989b">▾</span></span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isStrips }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:16px 14px;display:flex;flex-direction:column;gap:18px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">Strips</div>
+                <div style="display:flex;align-items:center;border:1.5px solid #dedee2;border-radius:10px;background:#fff;overflow:hidden">
+                  <span style="width:30px;height:34px;display:flex;align-items:center;justify-content:center;color:#5d5d60">−</span>
+                  <span style="flex:1;text-align:center;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:13.5px">15</span>
+                  <span style="width:30px;height:34px;display:flex;align-items:center;justify-content:center;color:#5d5d60">+</span>
+                </div>
+              </div>
+              <div>
+                <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">With video</div>
+                <div style="display:flex;align-items:center;border:1.5px solid #dedee2;border-radius:10px;background:#fff;overflow:hidden">
+                  <span style="width:30px;height:34px;display:flex;align-items:center;justify-content:center;color:#5d5d60">−</span>
+                  <span style="flex:1;text-align:center;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:13.5px">12</span>
+                  <span style="width:30px;height:34px;display:flex;align-items:center;justify-content:center;color:#5d5d60">+</span>
+                </div>
+              </div>
+            </div>
+            <div style="border:1.5px solid #dedee2;border-radius:12px;background:#fff;padding:13px">
+              <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d">Suggested minimum</div>
+              <div style="display:flex;align-items:baseline;gap:9px;margin-top:3px">
+                <span style="font-family:Figtree,system-ui,sans-serif;font-size:32px;line-height:1">18</span>
+                <span style="font-size:12.5px;color:#5d5d60">strips to finish every day by 18:00</span>
+              </div>
+              <button type="button" style="margin-top:10px;padding:7px 15px;border:none;border-radius:9px;background:#5980a6;color:#fff;font-family:Figtree,system-ui,sans-serif;font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:12.5px;cursor:pointer" style-hover="background:#4d7295">Apply</button>
+            </div>
+            <div>
+              <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">Referees per pool</div>
+              <div style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:#5d5d60"><span style="padding:5px 12px;border:1.5px solid #dedee2;border-radius:9px;background:#fff;font-family:ui-monospace,Menlo,monospace;font-weight:600">2</span> default for all events</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isEvents }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:14px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+              <span style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d">Selected</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11.5px;color:#5d5d60">26 of 96</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{ eventGroups }}" as="g" hint-placeholder-count="6">
+                <div style="border:1.5px solid #dedee2;border-radius:12px;background:#fff;overflow:hidden">
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#f2f2f4;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase">
+                    <span>{{ g.label }}</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;color:#5d5d60">{{ g.count }}</span>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;padding:9px 11px 11px">
+                    <sc-for list="{{ g.chips }}" as="c" hint-placeholder-count="8">
+                      <span style="{{ c.style }}">{{ c.label }}</span>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isFindings }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ findings }}" as="f" hint-placeholder-count="2">
+              <button type="button" onClick="{{ f.onJump }}" style="{{ f.style }}" style-hover="border-color:#cfa887;background:#fbf1e9">
+                <span style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <span style="{{ f.badgeStyle }}">{{ f.severity }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:10.5px;color:#7a7a7d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.where }}</span>
+                </span>
+                <span style="display:block;margin-top:6px;font-size:12.5px;line-height:1.5;color:#1d1f20">{{ f.message }}</span>
+                <sc-if value="{{ f.hasTarget }}" hint-placeholder-val="{{ true }}">
+                  <span style="display:flex;align-items:center;gap:6px;margin-top:8px;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;color:#8a423d">
+                    Show on grid
+                    <svg class="pp-i" style="font-size:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                  </span>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:16px 14px;display:flex;flex-direction:column;gap:16px;font-size:12.5px">
+            <div>
+              <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">Pool durations</div>
+              <div style="border:1.5px solid #dedee2;border-radius:12px;background:#fff;overflow:hidden">
+                <div style="display:flex;justify-content:space-between;padding:8px 12px;color:#5d5d60;border-bottom:1.5px solid #f0f0f2">Pool of 5 <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;color:#1d1f20">50 min</span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 12px;color:#5d5d60;border-bottom:1.5px solid #f0f0f2">Pool of 6 <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;color:#1d1f20">60 min</span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 12px;color:#5d5d60">Pool of 7 <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;color:#1d1f20">75 min</span></div>
+              </div>
+            </div>
+            <div>
+              <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">DE mode</div>
+              <div style="display:flex;gap:5px">
+                <span style="padding:6px 14px;border-radius:99px;background:#5980a6;color:#fff;font-size:12.5px">Staged</span>
+                <span style="padding:6px 14px;border-radius:99px;border:1.5px solid #dedee2;background:#fff;font-size:12.5px">Single</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#7a7a7d;margin-bottom:7px">Video strips</div>
+              <div style="color:#5d5d60">8 reserved for finals</div>
+            </div>
+          </div>
+        </sc-if>
+      </aside>
+    </sc-if>
+
+    <main aria-label="Schedule matrix" style="position:relative;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;background:#eeeef0">
+
+
+      <div ref="{{ wrapperRef }}" style="position:relative;flex:1;min-height:0">
+      <div class="pp-scroll" ref="{{ scrollerRef }}" style="position:absolute;inset:0;overflow:auto" onMouseLeave="{{ clearHover }}" onClick="{{ dismissOnBackdrop }}">
+        <div style="{{ canvasStyle }}">
+
+          <div style="position:sticky;top:0;z-index:30;display:flex;height:26px;background:#eaebee;border-bottom:1.5px solid #dedee2">
+            <div style="position:sticky;left:0;z-index:2;width:58px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;background:#eaebee;border-right:1.5px solid #dedee2;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:#a3a3a6">Strip</div>
+            <div style="position:relative;flex:1;overflow:hidden">
+              <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="14">
+                <span style="{{ t.style }}">{{ t.label }}</span>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-for list="{{ days }}" as="day" hint-placeholder-count="4">
+            <div>
+              <div style="{{ day.bandStyle }}">
+                <div style="{{ day.bandInnerStyle }}">
+                  <span style="font-family:Figtree,system-ui,sans-serif;font-weight:700;font-size:16px;letter-spacing:.03em;text-transform:uppercase">{{ day.label }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11.5px;color:#5d5d60">{{ day.date }}</span>
+                  <span style="width:1.5px;height:15px;background:#d4d4d7;border-radius:2px"></span>
+                  <span style="{{ day.summaryStyle }}">{{ day.summary }}</span>
+                  <sc-if value="{{ day.hasIssue }}" hint-placeholder-val="{{ false }}">
+                    <span style="{{ day.issueStyle }}">{{ day.issueLabel }}</span>
+                  </sc-if>
+                </div>
+              </div>
+              <div style="display:flex">
+                <div style="position:sticky;left:0;z-index:20;width:58px;flex-shrink:0;background:#eaebee;border-right:1.5px solid #dedee2">
+                  <sc-for list="{{ day.strips }}" as="s" hint-placeholder-count="15">
+                    <div style="{{ s.style }}">{{ s.label }}</div>
+                  </sc-for>
+                </div>
+                <div data-day-plot="{{ day.index }}" style="{{ day.plotStyle }}">
+                  <div style="{{ day.gridStyle }}"></div>
+                  <sc-if value="{{ day.ghostShow }}" hint-placeholder-val="{{ false }}">
+                    <span style="{{ day.ghostStyle }}"></span>
+                    <span style="{{ day.ghostTimeStyle }}">{{ day.ghostTime }}</span>
+                  </sc-if>
+                  <sc-for list="{{ day.blocks }}" as="b" hint-placeholder-count="7">
+                    <div data-block-event="{{ b.eventId }}" style="{{ b.style }}" onMouseEnter="{{ b.onEnter }}" onMouseMove="{{ b.onMove }}" onClick="{{ b.onSelect }}" onPointerDown="{{ b.onDown }}" onPointerMove="{{ b.onDrag }}" onPointerUp="{{ b.onDrop }}">
+                      <sc-if value="{{ b.hatch }}" hint-placeholder-val="{{ false }}">
+                        <span style="{{ b.hatchStyle }}"></span>
+                      </sc-if>
+                      <sc-if value="{{ b.pinned }}" hint-placeholder-val="{{ false }}">
+                        <span style="{{ b.pinStyle }}">
+                          <svg class="pp-i" style="font-size:10px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>
+                        </span>
+                      </sc-if>
+                      <div style="{{ b.innerStyle }}">
+                        <sc-for list="{{ b.icons }}" as="ic" hint-placeholder-count="1">
+                          <sc-if value="{{ ic.isLucide }}" hint-placeholder-val="{{ false }}">
+                            <svg class="pp-i" style="{{ ic.style }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                              <sc-for list="{{ ic.paths }}" as="p" hint-placeholder-count="2">
+                                <path d="{{ p.d }}"></path>
+                              </sc-for>
+                            </svg>
+                          </sc-if>
+                          <sc-if value="{{ ic.isBracket }}" hint-placeholder-val="{{ false }}">
+                            <span style="{{ ic.style }}">
+                              <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h5"></path><path d="M2 9h5"></path><path d="M2 15h5"></path><path d="M2 21h5"></path><path d="M7 3v6"></path><path d="M7 15v6"></path><path d="M7 6h5"></path><path d="M7 18h5"></path><path d="M12 6v12"></path><path d="M12 12h9"></path></svg>
+                            </span>
+                          </sc-if>
+                          <sc-if value="{{ ic.isPool }}" hint-placeholder-val="{{ false }}">
+                            <span style="{{ ic.style }}">
+                              <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18"></rect><path d="M9 3v18M15 3v18M3 9h18M3 15h18"></path><path d="M3 3h6v6H3zM9 9h6v6H9zM15 15h6v6h-6z" fill="currentColor" stroke="none"></path></svg>
+                            </span>
+                          </sc-if>
+                        </sc-for>
+                        <span style="{{ b.nameStyle }}">{{ b.name }}</span>
+                        <sc-if value="{{ b.showMeta }}" hint-placeholder-val="{{ false }}">
+                          <span style="{{ b.metaStyle }}">{{ b.meta }}</span>
+                        </sc-if>
+                      </div>
+                      <sc-if value="{{ b.overflow }}" hint-placeholder-val="{{ false }}">
+                        <span style="{{ b.overflowStyle }}"></span>
+                      </sc-if>
+                      <sc-if value="{{ b.flashing }}" hint-placeholder-val="{{ false }}">
+                        <span style="{{ b.flashStyle }}"></span>
+                      </sc-if>
+                      <sc-if value="{{ b.selected }}" hint-placeholder-val="{{ false }}">
+                        <span style="{{ b.selectStyle }}"></span>
+                        <span style="{{ b.handleLeftStyle }}"></span>
+                        <span style="{{ b.handleRightStyle }}"></span>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      </div>
+
+      <sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ railStyle }}">
+          <sc-if value="{{ detailCollapsed }}" hint-placeholder-val="{{ false }}">
+            <span style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;overflow:hidden">
+              <span style="{{ sel.markStyleSmall }}"></span>
+              <span style="font-family:Figtree,system-ui,sans-serif;font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sel.name }}</span>
+            </span>
+          </sc-if>
+          <sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1 1 auto;overflow:hidden">
+            <span style="{{ sel.markStyle }}"></span>
+            <div style="display:flex;flex-direction:column;flex:1 1 auto;min-width:150px;gap:1px;overflow:hidden">
+              <span style="font-family:Figtree,system-ui,sans-serif;font-weight:700;font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sel.name }}</span>
+              <span style="display:flex;gap:11px;flex:none;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11px;color:#7a7a7d;white-space:nowrap;overflow:hidden">
+                <span style="flex:none">{{ sel.day }}</span><span style="flex:none">{{ sel.strips }}</span><span style="flex:none">{{ sel.fencers }}</span>
+              </span>
+            </div>
+            <sc-if value="{{ showPhasePills }}" hint-placeholder-val="{{ true }}">
+            <span style="width:1.5px;height:28px;background:#e4e4e8;border-radius:2px;flex:none"></span>
+            <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto;overflow:hidden">
+              <sc-for list="{{ sel.segments }}" as="s" hint-placeholder-count="2">
+                <span style="display:flex;align-items:center;gap:7px;height:28px;padding:0 11px;border-radius:99px;background:#f2f2f4;border:1.5px solid #e7e7ea;font-size:12.5px;white-space:nowrap">
+                  <span style="{{ s.swatch }}"></span>{{ s.phase }}
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11px;color:#5d5d60">{{ s.time }}</span>
+                </span>
+              </sc-for>
+            </div>
+            </sc-if>
+          </div>
+          <div style="display:flex;gap:7px;flex:none">
+            <button type="button" aria-label="Pin this placement" title="Pin this placement" style="display:flex;align-items:center;gap:7px;height:32px;padding:0 13px;border:1.5px solid #dedee2;border-radius:10px;background:#fff;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:12.5px;cursor:pointer" style-hover="background:#eef6ff;border-color:#94bce3"><svg class="pp-i" style="font-size:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>{{ sel.pinLabel }}</button>
+            <button type="button" aria-label="Move to another day" title="Move to another day" style="display:flex;align-items:center;gap:7px;height:32px;padding:0 13px;border:1.5px solid #dedee2;border-radius:10px;background:#fff;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:12.5px;cursor:pointer" style-hover="background:#eef6ff;border-color:#94bce3"><svg class="pp-i" style="font-size:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path><path d="M8 2v4"></path><path d="M16 2v4"></path><path d="M3 10h18"></path><path d="M12 13v6"></path><path d="m9 16 3 3 3-3"></path></svg><sc-if value="{{ showActionLabels }}" hint-placeholder-val="{{ true }}">Move day</sc-if></button>
+            <button type="button" aria-label="Split into flights" title="Split into flights" style="display:flex;align-items:center;gap:7px;height:32px;padding:0 13px;border:1.5px solid #dedee2;border-radius:10px;background:#fff;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:12.5px;cursor:pointer" style-hover="background:#eef6ff;border-color:#94bce3"><svg class="pp-i" style="font-size:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"></path><path d="M8 3H3v5"></path><path d="M12 22v-8.3a4 4 0 0 0-1.2-2.9L3 3"></path><path d="m15 9 6-6"></path></svg><sc-if value="{{ showActionLabels }}" hint-placeholder-val="{{ true }}">Flight</sc-if></button>
+          </div>
+          </sc-if>
+          <div style="display:flex;gap:4px;flex:none;margin-left:auto">
+            <button type="button" aria-label="{{ detailToggleLabel }}" title="{{ detailToggleLabel }}" onClick="{{ toggleDetail }}" style="{{ stripToggleStyle }}" style-hover="background:#e7e7ea;color:#1d1f20">{{ detailChevron }}</button>
+            <button type="button" aria-label="Dismiss" onClick="{{ clearSelection }}" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:1.5px solid #dedee2;border-radius:10px;background:#fff;color:#7a7a7d;font-size:15px;cursor:pointer" style-hover="background:#f0f0f2;color:#1d1f20"><svg class="pp-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+          </div>
+        </div>
+      </sc-if>
+
+
+    </main>
+  </div>
+
+  <footer style="display:flex;align-items:center;gap:0;height:32px;flex-shrink:0;min-width:0;overflow:hidden;background:#eaebee;border-top:1.5px solid #dedee2;font-size:11.5px;white-space:nowrap">
+    <button type="button" aria-label="Zoom out" title="Zoom out" onClick="{{ zoomOut }}" style="{{ iconBtnStyle }}" style-hover="background:#eef6ff;border-color:#94bce3"><svg class="pp-i" style="font-size:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path><path d="m21 21-4.3-4.3"></path><path d="M8 11h6"></path></svg></button>
+    <button type="button" aria-label="Zoom in" title="Zoom in" onClick="{{ zoomIn }}" style="{{ iconBtnStyle }}" style-hover="background:#eef6ff;border-color:#94bce3"><svg class="pp-i" style="font-size:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path><path d="m21 21-4.3-4.3"></path><path d="M11 8v6"></path><path d="M8 11h6"></path></svg></button>
+    <span style="width:46px;text-align:center;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:11px;color:#5d5d60">{{ zoomLabel }}</span>
+    <button type="button" aria-label="Reset zoom" title="Reset zoom" onClick="{{ resetZoom }}" style="{{ iconBtnStyle }}" style-hover="background:#eef6ff;border-color:#94bce3"><svg class="pp-i" style="font-size:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.4 2.6L3 8"></path><path d="M3 3v5h5"></path></svg></button>
+    <button type="button" onClick="{{ fitDay }}" style="{{ fitButtonStyle }}" style-hover="background:#eef6ff;border-color:#94bce3">Fit day</button>
+    <span style="width:1.5px;height:15px;background:#dedee2;border-radius:2px;margin:0 4px 0 10px;flex:none"></span>
+    <span style="padding:0 16px;color:#5d5d60;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis">{{ placementCounts }}</span>
+    <span style="width:1.5px;height:15px;background:#dedee2;border-radius:2px"></span>
+    <span style="padding:0 16px;display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow:hidden"><span style="color:#98989b">Finish</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:600">{{ finishLabel }}</span></span>
+    <span style="width:1.5px;height:15px;background:#dedee2;border-radius:2px"></span>
+    <span style="padding:0 16px;display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow:hidden"><span style="color:#98989b">Peak referees</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:600">{{ refereeLabel }}</span></span>
+    <span style="width:1.5px;height:15px;background:#dedee2;border-radius:2px"></span>
+    <span style="padding:0 16px;display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow:hidden"><span style="color:#98989b">Strip use</span><span style="font-family:ui-monospace,Menlo,monospace;font-weight:600">{{ stripUseLabel }}</span></span>
+    <span style="width:1.5px;height:15px;background:#dedee2;border-radius:2px"></span>
+    <sc-if value="{{ showLegend }}" hint-placeholder-val="{{ false }}">
+    <span style="display:block;margin-left:auto;padding:0 14px;flex:0 100 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:#98989b">Weapon</span><span style="display:inline-block;width:10px;height:10px;border-radius:4px;background:#d7e3ef;border:1.5px solid #8fb0cd;vertical-align:-1px;margin:0 5px 0 11px"></span>Foil<span style="display:inline-block;width:10px;height:10px;border-radius:4px;background:#d9e6da;border:1.5px solid #93b79a;vertical-align:-1px;margin:0 5px 0 11px"></span>Epee<span style="display:inline-block;width:10px;height:10px;border-radius:4px;background:#f1e0d2;border:1.5px solid #cfa887;vertical-align:-1px;margin:0 5px 0 11px"></span>Saber</span>
+    </sc-if>
+
+  </footer>
+
+  <sc-if value="{{ tip.show }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ tip.style }}">
+      <div style="font-family:Figtree,system-ui,sans-serif;font-size:15.5px;line-height:1.2">{{ tip.name }}</div>
+      <div style="font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.01em;color:#b5d9fd;margin-top:3px">{{ tip.phase }}</div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;railIconSize&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:36,&quot;max&quot;:60,&quot;step&quot;:2,&quot;default&quot;:46,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Tool rail&quot;},&quot;railVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Outlined&quot;,&quot;Filled tint&quot;,&quot;Left indicator&quot;],&quot;default&quot;:&quot;Outlined&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Tool rail&quot;},&quot;railLabels&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Tool rail&quot;},&quot;iconStroke&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:1.25,&quot;max&quot;:2.5,&quot;step&quot;:0.25,&quot;default&quot;:1.75,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Tool rail&quot;},&quot;cellRadius&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:0,&quot;max&quot;:16,&quot;step&quot;:1,&quot;default&quot;:9,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Matrix&quot;}}">
+const DAY_START = 480, DAY_END = 1290;
+
+const WEAPON = {
+  Foil:  { fill: '#d7e3ef', ink: '#2c455d', edge: '#8fb0cd', hatch: 'rgba(44,69,93,.16)', mark: 'F' },
+  Epee:  { fill: '#d9e6da', ink: '#2f4a37', edge: '#93b79a', hatch: 'rgba(47,74,55,.16)', mark: 'E' },
+  Saber: { fill: '#f1e0d2', ink: '#5a3f26', edge: '#cfa887', hatch: 'rgba(90,63,38,.16)', mark: 'S' },
+};
+
+// Overview is sized to fit the whole tournament — four day groups, sixty strip
+// rows and the axis — inside the canvas with no scrolling on either axis.
+// 4 x (24px band + 15 x 13px) + 30px axis = 906px, against ~960px of canvas.
+const TIER = {
+  overview: { band: 22 },
+  medium:   { band: 30 },
+  detail:   { band: 30 },
+};
+
+/**
+ * One zoom ladder, the way any drawing tool has one — the buttons step along
+ * it and the level of detail follows from where you are. Progressive detail is
+ * therefore a consequence of zoom rather than a separate control the user has
+ * to reason about: strip rows and minutes-per-pixel grow together, and the
+ * blocks say more as they get bigger.
+ */
+const ZOOM_STEPS = [
+  { ppm: 1.5, row: 15 },
+  { ppm: 2.2, row: 22 },
+  { ppm: 3.2, row: 34 },
+  { ppm: 4.6, row: 48 },
+  { ppm: 6.5, row: 62 },
+  { ppm: 9.0, row: 78 },
+];
+/** Reset lands here, and it is the rung that reads as 100%. */
+const DEFAULT_ZOOM = 2;
+/** The step that reads as 100%, so the readout means something. */
+const ZOOM_BASE_PPM = 3.2;
+
+/** Which detail tier a scale lands in. */
+function tierFor(ppm) {
+  if (ppm < 2.8) return 'overview';
+  if (ppm < 5.5) return 'medium';
+  return 'detail';
+}
+
+const CONFLICT = { line: '#a8544e', tint: '#fdf4f3', ink: '#8a423d' };
+
+// Hand-placed events are pinned, so the next auto-assign works around them.
+const PINNED = new Set(['v50-ms']);
+
+/** Events whose direct elimination runs on the video strips. */
+const ON_VIDEO = new Set(['d1a-mf', 'jr-wf', 'd1-me', 'd1a-ws', 'd1-wf', 'jr-ms']);
+
+const VIEWPORTS = {
+  '1920 × 1080': { w: 1920, h: 1080 },
+  '1440 × 900': { w: 1440, h: 900 },
+};
+
+/**
+ * Lucide path geometry for the icons whose *name* is chosen at runtime. The
+ * static ones are inlined in the template; these cannot be, so they travel as
+ * data and the template draws them. Nothing mutates the rendered DOM — the
+ * icon library's own createIcons() replaces the nodes React owns, which is a
+ * removeChild crash waiting to happen.
+ */
+const ICON_PATHS = {
+  'calendar-days': ['M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M8 2v4', 'M16 2v4', 'M3 10h18', 'M8 14h.01', 'M12 14h.01', 'M16 14h.01', 'M8 18h.01', 'M12 18h.01', 'M16 18h.01'],
+  'rows-3': ['M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M3 9h18', 'M3 15h18'],
+  'list-checks': ['m3 7 2 2 4-4', 'm3 17 2 2 4-4', 'M13 6h8', 'M13 12h8', 'M13 18h8'],
+  'triangle-alert': ['m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3', 'M12 9v4', 'M12 17h.01'],
+  'sliders-horizontal': ['M10 5H3', 'M21 5h-7', 'M8 12H3', 'M21 12h-9', 'M16 19H3', 'M21 19h-1', 'M14 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0z', 'M12 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z', 'M20 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'],
+  'video': ['M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z', 'm16 11 5-3v8l-5-3z'],
+};
+
+const iconPaths = (name) => (ICON_PATHS[name] ?? []).map((d, i) => ({ key: `${name}-${i}`, d }));
+
+const RAIL_ITEMS = [
+  { key: 'tournament', icon: 'calendar-days', label: 'Tournament' },
+  { key: 'strips', icon: 'rows-3', label: 'Strips' },
+  { key: 'events', icon: 'list-checks', label: 'Events' },
+  { key: 'findings', icon: 'triangle-alert', label: 'Findings' },
+];
+
+const STRIP_COUNT = 15;
+const REFS_PER_POOL = 2;
+/** Referees signed up for the weekend — the number a finding is checked against. */
+const REFS_ENTERED = 28;
+
+/** An event's whole footprint in minutes — pools through the end of the DE. */
+function spanOf(ev) {
+  return [ev.pools ? ev.pools[0] : ev.de[0], ev.de[1]];
+}
+
+/** The phases of one event, each as its own placeable thing. */
+function segmentsOfEvent(ev) {
+  const out = [];
+  if (ev.pools) out.push({ ev, phase: 'pools', start: ev.pools[0], end: ev.pools[1] });
+  out.push({ ev, phase: 'de', start: ev.de[0], end: ev.de[1] });
+  return out;
+}
+
+function stripOf(ev, phase) { return phase === 'pools' ? ev.poolsStrip : ev.deStrip; }
+function overflowOf(ev, phase) { return phase === 'pools' ? !!ev.poolsOverflow : !!ev.deOverflow; }
+function setOverflowOf(ev, phase, value) {
+  if (phase === 'pools') ev.poolsOverflow = value; else ev.deOverflow = value;
+}
+function setStripOf(ev, phase, value) {
+  if (phase === 'pools') ev.poolsStrip = value; else ev.deStrip = value;
+}
+
+/**
+ * The window one phase may be dragged into, given the other phase of the same
+ * event: a pool round has to finish before its DE starts, and a DE cannot
+ * start before its pools end. Returns the legal [earliest, latest] start.
+ */
+function legalStartRange(ev, phase) {
+  const duration = phase === 'pools' ? ev.pools[1] - ev.pools[0] : ev.de[1] - ev.de[0];
+  if (phase === 'pools') {
+    return [DAY_START, Math.min(DAY_END - duration, ev.de[0] - duration)];
+  }
+  return [ev.pools ? ev.pools[1] : DAY_START, DAY_END - duration];
+}
+
+/**
+ * First-fit strip assignment for one day, with the dragged *phase* held fixed.
+ * This is the push-aside rule at phase granularity: the block you dropped keeps
+ * the strips you dropped it on, and every other phase on that day re-flows
+ * around it in start order. One pass, no backtracking (mirrors lanes.ts).
+ */
+function reflowDay(events, day, fixedKey) {
+  const segments = events.filter((e) => e.day === day).flatMap(segmentsOfEvent);
+  const occupancy = Array.from({ length: STRIP_COUNT }, () => []);
+  const claim = (seg) => {
+    const first = stripOf(seg.ev, seg.phase);
+    for (let i = first; i < first + seg.ev.strips && i < STRIP_COUNT; i++) {
+      occupancy[i].push([seg.start, seg.end]);
+    }
+  };
+  const freeRun = (start, strips, s, e) => {
+    if (start + strips > STRIP_COUNT) return false;
+    for (let i = start; i < start + strips; i++) {
+      for (const [a, b] of occupancy[i]) if (s < b && a < e) return false;
+    }
+    return true;
+  };
+
+  const fixed = segments.find((seg) => `${seg.ev.id}:${seg.phase}` === fixedKey);
+  if (fixed) { setOverflowOf(fixed.ev, fixed.phase, false); claim(fixed); }
+
+  const rest = segments
+    .filter((seg) => seg !== fixed)
+    .sort((a, b) => a.start - b.start || a.ev.id.localeCompare(b.ev.id));
+
+  for (const seg of rest) {
+    let placed = false;
+    for (let start = 0; start + seg.ev.strips <= STRIP_COUNT; start++) {
+      if (freeRun(start, seg.ev.strips, seg.start, seg.end)) {
+        setStripOf(seg.ev, seg.phase, start);
+        placed = true;
+        break;
+      }
+    }
+    // A segment with nowhere to go is *reported*, not quietly stacked. It
+    // claims no strips either — holding room it was never granted would push
+    // every later segment out of place and turn one over-capacity day into a
+    // day of wrong ones.
+    setOverflowOf(seg.ev, seg.phase, !placed);
+    if (placed) claim(seg);
+  }
+
+  /**
+   * Verification pass, not a second algorithm: whatever first-fit produced,
+   * any pair of segments that still share both a strip and a minute is a
+   * collision, and the later one is marked as unplaced so it carries the
+   * dashed cue. A schedule that draws two events on one strip and says nothing
+   * is the one failure this workbench exists to prevent, so the invariant is
+   * checked rather than assumed.
+   */
+  const settled = events.filter((e) => e.day === day).flatMap(segmentsOfEvent);
+  settled.sort((a, b) => a.start - b.start);
+  for (let i = 0; i < settled.length; i++) {
+    for (let j = i + 1; j < settled.length; j++) {
+      const a = settled[i], b = settled[j];
+      if (a.ev === b.ev && a.phase === b.phase) continue;
+      const timeHit = a.start < b.end && b.start < a.end;
+      const aFirst = stripOf(a.ev, a.phase), bFirst = stripOf(b.ev, b.phase);
+      const stripHit = aFirst < bFirst + b.ev.strips && bFirst < aFirst + a.ev.strips;
+      if (timeHit && stripHit && `${a.ev.id}:${a.phase}` !== fixedKey) {
+        setOverflowOf(b.ev, b.phase, true);
+      } else if (timeHit && stripHit) {
+        setOverflowOf(b.ev, b.phase, true);
+      }
+    }
+  }
+}
+
+/**
+ * The dock queue: events entered but never given a slot. Each carries what
+ * the scheduler needs to place it — strips, pool and DE durations — not just
+ * a label, so auto-assign can act on them instead of describing them.
+ */
+const UNPLACED = [
+  { id: 'u1', cat: 'Vet 40', catShort: 'V40', gender: 'W', weapon: 'Foil',  type: 'Indv', strips: 3, poolMins: 115, deMins: 115, fencers: 54 },
+  { id: 'u2', cat: 'Y14',    catShort: 'Y14', gender: 'M', weapon: 'Epee',  type: 'Indv', strips: 2, poolMins: 105, deMins: 100, fencers: 61 },
+  { id: 'u3', cat: 'Div 2',  catShort: 'D2',  gender: 'M', weapon: 'Saber', type: 'Team', strips: 4, poolMins: 0,   deMins: 260, fencers: 24 },
+].map((u) => ({
+  ...u,
+  name: `${u.cat} ${u.gender === 'M' ? "Men's" : "Women's"} ${u.weapon} ${u.type}`,
+  short: `${u.catShort} ${u.gender} ${u.weapon}`,
+  need: `${u.strips} strips · ${Math.floor((u.poolMins + u.deMins + (u.poolMins ? 15 : 0)) / 60)}:${String((u.poolMins + u.deMins + (u.poolMins ? 15 : 0)) % 60).padStart(2, '0')}`,
+}));
+
+/**
+ * Earliest place a queued event fits: the first day, start time and
+ * contiguous strip run where both its phases clear everything already on the
+ * grid. First-fit over (day → start → strip run), which is the same order a
+ * scheduler reads the board in — earliest day first, earliest start next, and
+ * the lowest free strips last.
+ */
+function findSlot(events, item) {
+  const gap = item.poolMins ? 15 : 0;
+  const total = item.poolMins + gap + item.deMins;
+
+  for (let day = 0; day < DAY_META.length; day++) {
+    const taken = events.filter((e) => e.day === day).flatMap(segmentsOfEvent);
+    for (let start = DAY_START; start + total <= DAY_END; start += 5) {
+      const pools = item.poolMins ? [start, start + item.poolMins] : null;
+      const de = [start + item.poolMins + gap, start + total];
+      for (let first = 0; first + item.strips <= STRIP_COUNT; first++) {
+        const clear = taken.every((s) => {
+          const sFirst = stripOf(s.ev, s.phase);
+          const stripHit = sFirst < first + item.strips && first < sFirst + s.ev.strips;
+          if (!stripHit) return true;
+          const hits = (w) => w && s.start < w[1] && w[0] < s.end;
+          return !hits(pools) && !hits(de);
+        });
+        if (clear) return { day, firstStrip: first, pools, de };
+      }
+    }
+  }
+  return null;
+}
+
+// day, first strip (0-based), strips, pools [start,end] or null, de [start,end]
+const EVENTS = [
+  ['d1a-mf',  'Div 1A',  'D1A', 'M', 'Foil',  'Indv', 0, 0, 5, [480, 660], [675, 870], 186],
+  ['cdt-we',  'Cadet',   'CDT', 'W', 'Epee',  'Indv', 0, 6, 4, [480, 630], [645, 810], 142],
+  ['v50-ms',  'Vet 50',  'V50', 'M', 'Saber', 'Indv', 0, 11, 2, [480, 585], [600, 700], 46],
+  ['y14-wf',  'Y14',     'Y14', 'W', 'Foil',  'Indv', 0, 13, 2, [490, 620], [635, 760], 58],
+  // Moved to the afternoon: in the morning slot this day demanded 16 strips
+  // against 15 in two windows, so six segments could not be placed at all.
+  ['v60-we',  'Vet 60',  'V60', 'W', 'Epee',  'Indv', 0, 10, 3, [860, 980], [995, 1120], 62],
+  ['y12-ms',  'Y12',     'Y12', 'M', 'Saber', 'Indv', 0, 13, 2, [790, 900], [915, 1010], 54],
+  ['jr-me',   'Junior',  'JR',  'M', 'Epee',  'Indv', 0, 0, 5, [900, 1050], [1065, 1230], 154],
+  ['d2-ws',   'Div 2',   'D2',  'W', 'Saber', 'Indv', 0, 5, 4, [890, 1020], [1035, 1180], 128],
+
+  ['jr-wf',   'Junior',  'JR',  'W', 'Foil',  'Indv', 1, 0, 6, [480, 670], [685, 890], 198],
+  ['d1-me',   'Div 1',   'D1',  'M', 'Epee',  'Indv', 1, 6, 6, [480, 690], [705, 930], 214],
+  ['v40-mf',  'Vet 40',  'V40', 'M', 'Foil',  'Indv', 1, 12, 3, [480, 600], [615, 730], 72],
+  ['v70-ws',  'Vet 70',  'V70', 'W', 'Saber', 'Indv', 1, 12, 3, [760, 870], [885, 990], 38],
+  ['cdt-ms',  'Cadet',   'CDT', 'M', 'Saber', 'Indv', 1, 0, 5, [920, 1060], [1075, 1220], 136],
+  ['d3-we',   'Div 3',   'D3',  'W', 'Epee',  'Indv', 1, 5, 5, [950, 1080], [1095, 1255], 118, 'warn'],
+
+  ['d1a-ws',  'Div 1A',  'D1A', 'W', 'Saber', 'Indv', 2, 0, 6, [480, 650], [665, 860], 164],
+  ['y10-mf',  'Y10',     'Y10', 'M', 'Foil',  'Indv', 2, 6, 3, [480, 590], [605, 700], 64],
+  ['cdt-wf-t','Cadet',   'CDT', 'W', 'Foil',  'Team', 2, 9, 4, null,       [480, 780], 32],
+  ['vc-me',   'Vet Comb','VC',  'M', 'Epee',  'Indv', 2, 13, 2, [500, 620], [635, 750], 44],
+  ['jr-ms',   'Junior',  'JR',  'M', 'Saber', 'Indv', 2, 0, 5, [890, 1040], [1055, 1210], 148],
+  ['d2-mf',   'Div 2',   'D2',  'M', 'Foil',  'Indv', 2, 5, 6, [900, 1060], [1075, 1240], 172],
+
+  ['d1-wf',   'Div 1',   'D1',  'W', 'Foil',  'Indv', 3, 0, 6, [480, 680], [695, 900], 206],
+  ['jr-me-t', 'Junior',  'JR',  'M', 'Epee',  'Team', 3, 6, 4, null,       [480, 740], 28],
+  ['v80-ms',  'Vet 80',  'V80', 'M', 'Saber', 'Indv', 3, 10, 2, [480, 570], [585, 670], 22],
+  ['y8-we',   'Y8',      'Y8',  'W', 'Epee',  'Indv', 3, 12, 3, [490, 590], [605, 700], 48],
+  ['cdt-mf',  'Cadet',   'CDT', 'M', 'Foil',  'Indv', 3, 0, 5, [930, 1070], [1085, 1230], 140],
+  ['d3-ms',   'Div 3',   'D3',  'M', 'Saber', 'Indv', 3, 5, 5, [920, 1050], [1065, 1200], 112, 'warn'],
+].map(([id, cat, catShort, gender, weapon, type, day, firstStrip, strips, pools, de, fencers, warn]) => ({
+  id, cat, catShort, gender, weapon, type, day, firstStrip, strips, pools, de, fencers,
+  // Each phase owns its own strip run, so pools and the DE can be moved apart.
+  poolsStrip: firstStrip, deStrip: firstStrip,
+  warn: warn === 'warn',
+  name: `${cat} ${gender === 'M' ? "Men's" : "Women's"} ${weapon} ${type}`,
+  short: `${catShort} ${gender} ${weapon}`,
+}));
+
+/**
+ * What a day actually contains, computed from the placements rather than
+ * written down beside them. Every caption, counter and finding in the UI reads
+ * from this: a hardcoded "13 of 15 strips at peak" cannot disagree with the
+ * grid, and the moment a drag changes occupancy the numbers follow.
+ */
+function dayStats(events, day) {
+  const segments = events.filter((e) => e.day === day).flatMap(segmentsOfEvent);
+  if (segments.length === 0) return { events: 0, peak: 0, peakAt: DAY_START, finish: DAY_START, unplaced: 0 };
+
+  // Peak concurrent strip demand, sampled at every boundary — demand can only
+  // change where a segment starts or ends.
+  const bounds = [...new Set(segments.map((s) => s.start))].sort((a, b) => a - b);
+  let peak = 0;
+  let peakAt = bounds[0];
+  for (const t of bounds) {
+    const at = segments
+      .filter((s) => s.start <= t && s.end > t)
+      .reduce((n, s) => n + s.ev.strips, 0);
+    if (at > peak) { peak = at; peakAt = t; }
+  }
+
+  return {
+    events: new Set(segments.map((s) => s.ev.id)).size,
+    peak,
+    peakAt,
+    finish: Math.max(...segments.map((s) => s.end)),
+    unplaced: segments.filter((s) => overflowOf(s.ev, s.phase)).length,
+  };
+}
+
+const DAY_META = [
+  { date: 'Thu 12 Feb' },
+  { date: 'Fri 13 Feb' },
+  { date: 'Sat 14 Feb' },
+  { date: 'Sun 15 Feb' },
+];
+
+/**
+ * Findings about the tournament's inputs. Both are *checked* against the
+ * placements rather than asserted: a panel that warns about a 20:55 finish
+ * while the grid shows 19:40 is worse than no panel at all.
+ */
+function inputFindings(events) {
+  const out = [];
+  for (let day = 0; day < DAY_META.length; day++) {
+    const stat = dayStats(events, day);
+    const last = events
+      .filter((e) => e.day === day)
+      .flatMap(segmentsOfEvent)
+      .find((s) => s.end === stat.finish);
+
+    if (stat.finish > DAY_END - 45 && last) {
+      out.push({
+        severity: 'Warning',
+        day,
+        eventId: last.ev.id,
+        where: `Day ${day + 1} · ${last.ev.name}`,
+        message: `${last.phase === 'pools' ? 'Pools' : 'DE'} finishes at ${hhmm(stat.finish)}, `
+          + `${DAY_END - stat.finish} minutes before the venue closes. No slack for a delayed round.`,
+      });
+    }
+
+    const refs = stat.peak * REFS_PER_POOL;
+    if (refs > REFS_ENTERED) {
+      // Aimed at the widest event running at the busiest moment: the one a
+      // scheduler would move first, and a real target for "Show on grid".
+      const driver = events
+        .filter((e) => e.day === day)
+        .flatMap(segmentsOfEvent)
+        .filter((s) => s.start <= stat.peakAt && s.end > stat.peakAt)
+        .sort((a, b) => b.ev.strips - a.ev.strips)[0];
+      out.push({
+        severity: 'Warning',
+        day,
+        eventId: driver ? driver.ev.id : null,
+        where: `Day ${day + 1} · Referees`,
+        message: `Peak demand of ${refs} referees at ${hhmm(stat.peakAt)} on day ${day + 1} exceeds the `
+          + `${REFS_ENTERED} entered`
+          + (driver ? `; ${driver.ev.name} holds ${driver.ev.strips} strips across that moment.` : '.'),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The findings list: the input warnings above plus one per segment the
+ * scheduler could not place. Derived, so a block flagged on the grid always
+ * has a matching row in the panel and a matching count on the rail badge —
+ * previously the two could not be reconciled, since one was computed and the
+ * other written by hand.
+ */
+function buildFindings(events) {
+  const unplaced = [];
+  for (const ev of events) {
+    for (const phase of ['pools', 'de']) {
+      if (phase === 'pools' && !ev.pools) continue;
+      if (!overflowOf(ev, phase)) continue;
+      unplaced.push({
+        severity: 'Unplaced',
+        day: ev.day,
+        eventId: ev.id,
+        where: `Day ${ev.day + 1} · ${phase === 'pools' ? 'Pools' : 'DE'}`,
+        message: `${ev.name} needs ${ev.strips} strip${ev.strips === 1 ? '' : 's'} and the day has none free for that window. It is drawn where it was, over the events that hold those strips.`,
+      });
+    }
+  }
+  return [...unplaced, ...inputFindings(events)];
+}
+
+const GROUPS = [
+  ["Women's Foil", ['Y10', 'Y12', 'Y14', 'Cadet', 'Junior', 'Div 1', 'Div 1A', 'Div 2'], ['Junior', 'Div 1A', 'Div 1']],
+  ["Women's Epee", ['Y8', 'Y10', 'Y12', 'Cadet', 'Junior', 'Div 1', 'Div 3', 'V60'], ['Cadet', 'Div 3', 'V60']],
+  ["Women's Saber", ['Y12', 'Y14', 'Cadet', 'Junior', 'Div 1A', 'Div 2', 'V70'], ['Div 1A', 'Div 2', 'V70']],
+  ["Men's Foil", ['Y10', 'Y12', 'Y14', 'Cadet', 'Junior', 'Div 1', 'Div 1A', 'Div 2', 'V40'], ['Div 1A', 'Div 2', 'Cadet', 'Y10', 'V40']],
+  ["Men's Epee", ['Y10', 'Y12', 'Cadet', 'Junior', 'Div 1', 'Div 2', 'V Comb'], ['Junior', 'Div 1', 'V Comb']],
+  ["Men's Saber", ['Y10', 'Y12', 'Cadet', 'Junior', 'Div 1A', 'Div 3', 'V50', 'V80'], ['Y12', 'Cadet', 'Junior', 'Div 3', 'V50', 'V80']],
+];
+
+const PANEL_TITLES = {
+  tournament: 'Tournament',
+  strips: 'Strips & referees',
+  events: 'Events',
+  findings: 'Findings',
+  settings: 'Scheduling settings',
+};
+
+/** Wall-clock, the way a tournament programme prints it. */
+function clock12(m) {
+  const h24 = Math.floor(m / 60), mm = m % 60;
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h}:${String(mm).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`;
+}
+
+function hhmm(m) {
+  const h = Math.floor(m / 60), mm = m % 60;
+  return `${h}:${String(mm).padStart(2, '0')}`;
+}
+
+class Component extends DCLogic {
+  state = {
+    zoom: DEFAULT_ZOOM,
+    // Fit-to-day is its own mode rather than a ladder step: it solves for the
+    // scale that shows one whole day, which depends on the window. It is also
+    // the opening view — a planner arrives wanting the shape of the day, not a
+    // fragment of it at an arbitrary scale.
+    fitting: true,
+    // Nothing open on load: the canvas is the point of the workbench.
+    panel: null,
+    panelDocked: false,
+    detailCollapsed: false,
+    // Nothing selected on load, so the strip's first appearance is a slide-up
+    // rather than something already sitting there taking canvas height.
+    selected: null,
+    tip: null,
+    drag: null,
+    findingCursor: 0,
+    flash: null,
+    // Observer cache only. The live measurement happens in renderVals, and
+    // componentDidMount forces the one render that can see it — a `window`
+    // read here is dead code, because the logic class is evaluated where
+    // `window` is not defined.
+    size: { w: 0, h: 0 },
+    frameW: 0,
+    railTip: null,
+    // 'in' on first appearance, then alternating swaps so the animation-name
+    // changes on every switch and the strip re-plays.
+    railAnim: 'in',
+    events: (() => {
+      const seeded = EVENTS.map((e) => ({ ...e, pools: e.pools && [...e.pools], de: [...e.de] }));
+      for (let day = 0; day < DAY_META.length; day++) reflowDay(seeded, day, null);
+      return seeded;
+    })(),
+    pinned: ['v50-ms'],
+    // The dock is state, because auto-assign empties it.
+    queue: UNPLACED,
+    dockH: 32,
+    runNote: null,
+  };
+
+  scroller = React.createRef();
+  rootRef = React.createRef();
+  wrapperRef = React.createRef();
+  dockRef = React.createRef();
+
+  /**
+   * Everything about the layout is derived from the shell's measured size, and
+   * measuring it is the whole difficulty: the template streams, so this hook
+   * runs before its DOM exists — every ref is null here — and the first render
+   * happens with no readable `document` at all. So nothing that can be missing
+   * is depended upon. A short retry chain re-renders until the shell can be
+   * measured, attaching the observer at the moment it appears, and a window
+   * resize listener covers everything after that.
+   */
+  componentDidMount() {
+    this.settle(0);
+    this.onWindowResize = () => this.remeasure();
+    window.addEventListener('resize', this.onWindowResize);
+  }
+
+  /** The shell's own box if it exists, else the document's. */
+  remeasure() {
+    const shell = this.rootRef.current;
+    const dock = this.dockRef.current;
+    const dockH = dock ? Math.round(dock.getBoundingClientRect().height) : 0;
+    if (dockH > 0 && dockH !== this.state.dockH) this.setState({ dockH });
+    const doc = typeof document === 'undefined' ? null : document.documentElement;
+    const w = (shell && shell.clientWidth) || (doc && doc.clientWidth) || 0;
+    const h = (shell && shell.clientHeight) || (doc && doc.clientHeight) || 0;
+    if (w > 0) this.setState({ size: { w, h } });
+    return w > 0;
+  }
+
+  /**
+   * Re-render until the shell is measurable, then observe it. Both halves are
+   * needed: the retry is what corrects the streamed first paint, and the
+   * observer is what keeps the fit true when the shell changes size for a
+   * reason the window did not (a docked panel, a collapsing strip, an
+   * embedding page).
+   */
+  settle(attempt) {
+    const measured = this.remeasure();
+    if (measured && this.rootRef.current && !this.observer) {
+      if (typeof ResizeObserver !== 'undefined') {
+        this.observer = new ResizeObserver(() => this.remeasure());
+        this.observer.observe(this.rootRef.current);
+        // The dock is observed too: it wraps on width, which the shell's own
+        // box does not report.
+        if (this.dockRef.current) this.observer.observe(this.dockRef.current);
+      }
+      return;
+    }
+    if (attempt < 30) requestAnimationFrame(() => this.settle(attempt + 1));
+  }
+
+  componentWillUnmount() {
+    if (this.observer) this.observer.disconnect();
+    if (this.onWindowResize) window.removeEventListener('resize', this.onWindowResize);
+  }
+
+  /**
+   * Selecting an event, with the detail strip's entrance decided here.
+   *
+   * Nothing selected before means the strip is arriving, so it slides up once.
+   * Switching between events means it is *changing*, so it drops out and comes
+   * back with the new event — and because the strip stays mounted through that
+   * (its content has to update), the replay is driven by alternating two
+   * identical keyframes: an animation only restarts when its name changes.
+   */
+  selectEvent(id) {
+    this.setState((s) => ({
+      selected: id,
+      detailCollapsed: false,
+      tip: null,
+      railAnim: !s.selected || s.selected === id
+        ? 'in'
+        : s.railAnim === 'swap-a' ? 'swap-b' : 'swap-a',
+    }));
+  }
+
+  /**
+   * Brings one event to the middle of the canvas. The two scroll positions are
+   * set on the container directly rather than asking the element to scroll
+   * itself, so the sticky gutter and day bands are never scrolled out from
+   * under the grid they belong to.
+   */
+  revealEvent(id) {
+    // The block is found in the document and its scroll container derived from
+    // it, rather than going through a ref: the template streams, so a ref may
+    // be null exactly when a jump is requested — which made this a silent
+    // no-op.
+    const el = typeof document === 'undefined'
+      ? null
+      : document.querySelector(`[data-block-event="${id}"]`);
+    if (!el) return;
+    const scroller = el.closest('.pp-scroll');
+    if (!scroller) return;
+    const box = el.getBoundingClientRect();
+    const view = scroller.getBoundingClientRect();
+    scroller.scrollTop += box.top - view.top - view.height / 2 + box.height / 2;
+    scroller.scrollLeft += box.left - view.left - view.width / 2 + box.width / 2;
+    this.flashBlocks(id);
+  }
+
+  /**
+   * The flash is applied to the elements directly rather than through state.
+   * A state-driven flash never appeared: these blocks take their geometry from
+   * a whole-value style hole, and that hole is not patched after mount — the
+   * ring simply never reached the DOM. An outline set here does, and it also
+   * puts the cue in the same place as the scroll that motivates it.
+   */
+  flashBlocks(id) {
+    if (typeof document === 'undefined') return;
+    const nodes = [...document.querySelectorAll(`[data-block-event="${id}"]`)];
+    for (const node of nodes) {
+      node.style.outline = `3px solid ${CONFLICT.line}`;
+      node.style.outlineOffset = '2px';
+    }
+    const token = (this.flashToken || 0) + 1;
+    this.flashToken = token;
+    setTimeout(() => {
+      if (this.flashToken !== token) return;
+      for (const node of nodes) {
+        node.style.outline = '';
+        node.style.outlineOffset = '';
+      }
+    }, 1600);
+  }
+
+  /**
+   * A finding is a "take me to it" control: it selects the offending event,
+   * centres it on the canvas, opens the detail strip and flashes the block —
+   * so a warning in the list is never more than one click from its cause.
+   */
+  /**
+   * Auto-assign: place everything in the dock, then settle the days it
+   * touched. Queued events are placed one at a time against the board as it
+   * stands — so the second placement sees the first — and each is pinned on
+   * arrival, matching what a hand drag does. Anything with nowhere to go
+   * stays in the dock and is named in the note rather than being dropped
+   * somewhere it does not fit.
+   */
+  runSchedule() {
+    this.setState((s) => {
+      const events = s.events.map((e) => ({ ...e, pools: e.pools && [...e.pools], de: [...e.de] }));
+      const pinned = [...s.pinned];
+      const stuck = [];
+      const touched = new Set();
+      let placed = 0;
+
+      for (const item of s.queue) {
+        const slot = findSlot(events, item);
+        if (!slot) { stuck.push(item); continue; }
+        events.push({
+          id: item.id,
+          cat: item.cat, catShort: item.catShort, gender: item.gender,
+          weapon: item.weapon, type: item.type,
+          name: item.name, short: item.short,
+          day: slot.day, firstStrip: slot.firstStrip,
+          poolsStrip: slot.firstStrip, deStrip: slot.firstStrip,
+          strips: item.strips, pools: slot.pools, de: slot.de,
+          fencers: item.fencers, warn: false,
+        });
+        pinned.push(item.id);
+        touched.add(slot.day);
+        placed++;
+      }
+
+      // No reflow pass here: findSlot has already proven each placement clear
+      // against the board as it stood, and re-running first-fit over the day
+      // discarded that proof — it moved the events it had just placed and
+      // reintroduced a collision.
+      return {
+        events,
+        pinned,
+        queue: stuck,
+        runNote: placed === 0
+          ? 'No free slot for any queued event — free strips or extend a day.'
+          : `Placed ${placed} event${placed === 1 ? '' : 's'}${stuck.length ? `; ${stuck.length} still without a slot` : ' and pinned them'}.`,
+      };
+    });
+  }
+
+  jumpToFinding(index) {
+    const list = this.findingsList || [];
+    if (list.length === 0) return;
+    const at = index ?? this.state.findingCursor % list.length;
+    const finding = list[at];
+    // Nothing to reveal: advance the cursor, leave the canvas alone rather
+    // than deselecting whatever the user was looking at.
+    if (!finding.eventId) {
+      this.setState({ findingCursor: at + 1 });
+      return;
+    }
+    // One write, not two: the flash was previously set in a second setState
+    // and never survived to the render that draws it.
+    this.setState((s) => ({
+      selected: finding.eventId,
+      detailCollapsed: false,
+      tip: null,
+      railAnim: !s.selected || s.selected === finding.eventId
+        ? 'in'
+        : s.railAnim === 'swap-a' ? 'swap-b' : 'swap-a',
+      findingCursor: at + 1,
+      flash: finding.eventId,
+    }));
+    // Two frames: one for the state to commit, one for the layout it changes
+    // (the detail strip opening shortens the canvas) to settle.
+    // Attempted immediately and again after the layout the state change causes
+    // (the detail strip opening shortens the canvas) has settled.
+    this.revealEvent(finding.eventId);
+    setTimeout(() => this.revealEvent(finding.eventId), 90);
+  }
+
+
+
+  /** Where the drag currently wants to land, resolved against whichever day
+   *  group the pointer is over — that is what allows a cross-day drop. */
+  handleDragMove(e) {
+    const drag = this.state.drag;
+    if (!drag) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const plot = el && el.closest && el.closest('[data-day-plot]');
+    if (!plot) return;
+
+    const { rowH, fitPct } = this.geom;
+    const rect = plot.getBoundingClientRect();
+    // In fit mode the scale is whatever the browser resolved, so read it off
+    // the plot rather than trusting an estimate.
+    const ppm = fitPct ? rect.width / (DAY_END - DAY_START) : this.geom.ppm;
+    const day = Number(plot.getAttribute('data-day-plot'));
+    const ev = this.state.events.find((x) => x.id === drag.id);
+    if (!ev) return;
+
+    let minute = DAY_START + (e.clientX - rect.left) / ppm - drag.grabMinutes;
+    minute = Math.round(minute / 5) * 5;
+
+    // Ordering is enforced while dragging, not on release: the ghost simply
+    // will not go anywhere the phase is not allowed to be, so the constraint
+    // reads as a wall rather than as a rejected drop.
+    const [earliest, latest] = drag.day === ev.day || day === ev.day
+      ? legalStartRange(ev, drag.phase)
+      : [DAY_START, DAY_END - (drag.phase === 'pools' ? ev.pools[1] - ev.pools[0] : ev.de[1] - ev.de[0])];
+    const wanted = minute;
+    minute = Math.max(earliest, Math.min(latest, minute));
+
+    let strip = Math.round((e.clientY - rect.top) / rowH - drag.grabStrips);
+    strip = Math.max(0, Math.min(STRIP_COUNT - ev.strips, strip));
+
+    const clamped = wanted !== minute;
+    if (drag.day === day && drag.startMinute === minute && drag.firstStrip === strip && drag.clamped === clamped) return;
+    this.setState({ drag: { ...drag, day, startMinute: minute, firstStrip: strip, clamped }, tip: null });
+  }
+
+  /** Release: the event takes the drop, gets pinned, and the day re-flows. */
+  handleDrop() {
+    const drag = this.state.drag;
+    if (!drag) return;
+    const events = this.state.events.map((e) => ({ ...e, pools: e.pools && [...e.pools], de: [...e.de] }));
+    const ev = events.find((x) => x.id === drag.id);
+    if (!ev) { this.setState({ drag: null }); return; }
+
+    const fromDay = ev.day;
+    // Only the dragged phase moves. The other phase of the same event stays
+    // exactly where it was — that is the whole point of dragging them apart.
+    const segment = drag.phase === 'pools' ? ev.pools : ev.de;
+    const duration = segment[1] - segment[0];
+    segment[0] = drag.startMinute;
+    segment[1] = drag.startMinute + duration;
+    setStripOf(ev, drag.phase, drag.firstStrip);
+    ev.day = drag.day;
+
+    const fixedKey = `${ev.id}:${drag.phase}`;
+    reflowDay(events, drag.day, fixedKey);
+    if (fromDay !== drag.day) reflowDay(events, fromDay, null);
+
+    const pinned = this.state.pinned.includes(ev.id) ? this.state.pinned : [...this.state.pinned, ev.id];
+    this.setState({ events, pinned, drag: null, selected: ev.id, tip: null });
+  }
+
+  segmentsOf(ev) {
+    const segs = [];
+    if (ev.pools) segs.push({ phase: 'Pools', start: ev.pools[0], end: ev.pools[1], de: false });
+    segs.push({ phase: ev.type === 'Team' ? 'Direct elimination' : 'DE', start: ev.de[0], end: ev.de[1], de: true });
+    return segs;
+  }
+
+  buildBlocks(day, ppm, rowH, radius, fitPct) {
+    // Derived from the scale, never read from state: the zoom ladder replaced
+    // the tier control, so `state.tier` no longer exists and reading it left
+    // every block rendering the detail branch at every zoom.
+    const tier = tierFor(ppm);
+    const blocks = [];
+    for (const ev of this.state.events.filter((e) => e.day === day)) {
+      const w = WEAPON[ev.weapon];
+      // Overview merges an event into one block only while its two phases sit
+      // on the same strips. Once they have been dragged apart, showing one
+      // block would claim strips a phase no longer holds, so it splits.
+      const merged = tier === 'overview' && ev.poolsStrip === ev.deStrip;
+      const spans = merged
+        ? [{ phase: null, start: ev.pools ? ev.pools[0] : ev.de[0], end: ev.de[1], de: false, strip: ev.poolsStrip }]
+        : this.segmentsOf(ev).map((s) => ({ ...s, strip: stripOf(ev, s.de ? 'de' : 'pools') }));
+
+      spans.forEach((seg, i) => {
+        const blockStrip = seg.strip;
+        const segOverflow = merged
+          ? overflowOf(ev, 'pools') || overflowOf(ev, 'de')
+          : overflowOf(ev, seg.de ? 'de' : 'pools');
+        // Two coordinate systems, one geometry. When fitting, positions are
+        // percentages of the day span, so the browser solves the fit and it
+        // cannot be wrong at any width — no measurement involved. On the zoom
+        // ladder they are pixels, because there the canvas deliberately
+        // scrolls. `width` stays a pixel estimate either way, for the label
+        // decisions below.
+        const x = (seg.start - DAY_START) * ppm;
+        const width = (seg.end - seg.start) * ppm;
+        const xCss = fitPct
+          ? `${((seg.start - DAY_START) / (DAY_END - DAY_START) * 100).toFixed(4)}%`
+          : `${x}px`;
+        const wCss = fitPct
+          ? `calc(${((seg.end - seg.start) / (DAY_END - DAY_START) * 100).toFixed(4)}% - 3px)`
+          : `${Math.max(6, width - 3)}px`;
+        const y = blockStrip * rowH;
+        const height = ev.strips * rowH;
+        const selected = this.state.selected === ev.id;
+        const key = `${ev.id}:${i}`;
+        const phaseLabel = seg.phase || (ev.pools ? 'Pools + DE' : 'Direct elimination');
+
+        /**
+         * Content scale follows the block, not the tier. Fixed per-tier sizes
+         * meant a zoomed-out block kept a full-size chip, icon and name while
+         * the box around them shrank — so wide blocks truncated their names
+         * for want of room that the furniture had taken. Everything is derived
+         * from the row height, then capped by this block's own height.
+         */
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const contentH = Math.max(0, height - 8);
+        // Driven by the block's own interior, with row height only as the
+        // floor for single-strip slivers. Sizing from rowH alone meant a
+        // 60px-tall block drew the same 10px type as a 16px sliver.
+        const namePx = clamp(Math.max(rowH * 0.46, Math.min(contentH * 0.34, 19)), 10, 20);
+        // Phase is the thing the icon must convey, and a pool grid is only
+        // distinguishable from a DE bracket above roughly 14px, so the glyph
+        // is sized from the interior it actually has: a multi-strip block gets
+        // 16–22px, a sliver keeps whatever its height allows.
+        const iconPx = Math.round(clamp(Math.min(contentH * 0.42, 22), 0, Math.max(10, contentH - 2)));
+        const metaPx = clamp(namePx * 0.68, 9, 12.5);
+        const roomForIcon = iconPx >= 10;
+
+        // Progressive labelling: the wider the block, the more it says.
+        let name = '', meta = '', showMeta = false, centred = tier === 'overview';
+        // Width the furniture has already claimed, so a label is only judged
+        // to fit against the space actually left for it.
+        const showIcon = roomForIcon && width > iconPx + 26;
+        const taken = (showIcon ? iconPx + 9 : 0) + 22;
+        const fits = (text, size) => width > text.length * size * 0.54 + taken;
+        if (tier === 'overview') {
+          if (fits(ev.name, namePx)) name = ev.name;
+          else if (fits(ev.short, namePx)) name = ev.short;
+          else if (fits(ev.catShort, namePx)) name = ev.catShort;
+        } else if (tier === 'medium') {
+          if (fits(ev.name, namePx)) name = ev.name;
+          else if (fits(ev.short, namePx)) name = ev.short;
+          meta = `${hhmm(seg.start)}–${hhmm(seg.end)}`;
+          showMeta = width > name.length * namePx * 0.54 + meta.length * metaPx * 0.62 + taken;
+        } else {
+          name = fits(ev.name, namePx) ? ev.name : ev.short;
+          const stripLabel = segOverflow
+            ? `Unplaced, needs ${ev.strips} strip${ev.strips === 1 ? '' : 's'}`
+            : ev.strips === 1 ? `Strip ${blockStrip + 1}` : `Strips ${blockStrip + 1}–${blockStrip + ev.strips}`;
+          meta = `${seg.phase} · ${hhmm(seg.start)}–${hhmm(seg.end)} · ${stripLabel} · ${ev.fencers} fencers`;
+          showMeta = height >= 44 && width > 150;
+        }
+
+        // A flagged block keeps a solid edge in the conflict colour; only an
+        // unplaced one goes dashed, so the two states stop reading alike.
+        const border = ev.warn && !segOverflow
+          ? `2px solid ${CONFLICT.line}`
+          : `1.5px solid ${w.edge}`;
+        const iconStyle = `flex:none;display:block;align-self:center;line-height:0;`
+          + `width:${iconPx}px;height:${iconPx}px;font-size:${iconPx}px`;
+        const pinned = this.state.pinned.includes(ev.id);
+        const dragging = this.state.drag && this.state.drag.id === ev.id;
+
+        const flashing = this.state.flash === ev.id;
+
+        blocks.push({
+          key,
+          eventId: ev.id,
+          name,
+          meta,
+          showMeta,
+          // Phase reads from the icon: a bout chart for a pool round, a
+          // bracket for a DE, plus a camera when that phase runs on the video
+          // strips. It leads the block now that the weapon letter is gone —
+          // weapon is already carried by fill and edge colour, so the letter
+          // was a third encoding of something the eye had twice.
+          icons: showIcon
+            ? [
+                seg.de
+                  ? { key: 'bracket', isLucide: false, isBracket: true, isPool: false, style: iconStyle }
+                  : { key: 'pool', isLucide: false, isBracket: false, isPool: true, style: iconStyle },
+                ...(seg.de && ON_VIDEO.has(ev.id)
+                  ? [{ key: 'video', isLucide: true, isBracket: false, isPool: false, paths: iconPaths('video'), style: iconStyle }]
+                  : []),
+              ]
+            : [],
+          selected,
+          flashing,
+          overflow: segOverflow,
+          overflowStyle: `position:absolute;inset:0;z-index:7;border-radius:${radius}px;pointer-events:none;`
+            + `border:2px dashed ${CONFLICT.line};background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(168,84,78,.14) 6px 12px)`,
+          // Drawn as a child rather than as a shadow on the block: a
+          // whole-value style hole on the block is not patched after mount,
+          // so a state-driven shadow there never appeared.
+          flashStyle: `position:absolute;inset:-3px;z-index:8;border-radius:${radius + 3}px;pointer-events:none;`
+            + `border:3px solid ${CONFLICT.line};box-shadow:0 0 0 4px rgba(168,84,78,.22)`,
+          pinned: pinned && height > 20,
+          pinStyle: `position:absolute;top:4px;right:5px;z-index:2;display:flex;align-items:center;justify-content:center;`
+            + `width:15px;height:15px;border-radius:5px;background:${w.edge};color:#fff`,
+          hatch: seg.de,
+          style: `position:absolute;left:${xCss};top:${y + 3}px;width:${wCss};height:${height - 6}px;`
+            + `box-sizing:border-box;border-radius:${radius}px;background:${w.fill};border:${border};color:${w.ink};`
+            + `overflow:hidden;cursor:${dragging ? 'grabbing' : 'grab'};touch-action:none;`
+            + 'box-shadow:0 1px 2px rgba(43,43,45,.07);',
+          hatchStyle: `position:absolute;inset:0;pointer-events:none;background-image:repeating-linear-gradient(45deg,transparent 0 5px,${w.hatch} 5px 10px)`,
+          innerStyle: `position:relative;display:flex;height:100%;box-sizing:border-box;line-height:1;`
+            + (centred
+              ? 'align-items:center;justify-content:center;text-align:center;padding:0 10px;gap:8px;'
+              : `flex-direction:${tier === 'detail' && showMeta ? 'column' : 'row'};align-items:${tier === 'detail' && showMeta ? 'flex-start' : 'center'};justify-content:center;gap:${tier === 'detail' && showMeta ? '3px' : `${Math.round(clamp(rowH * 0.16, 4, 9))}px`};padding:0 ${Math.round(clamp(rowH * 0.2, 6, 11))}px;`),
+          nameStyle: `font-family:Figtree,system-ui,sans-serif;`
+            + `font-size:${namePx.toFixed(1)}px;font-weight:${tier === 'overview' ? 600 : 700};`
+            + `line-height:1;align-self:center;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis`,
+          metaStyle: `align-self:center;line-height:1;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:${metaPx.toFixed(1)}px;letter-spacing:.02em;opacity:.74;white-space:nowrap;overflow:hidden;text-overflow:ellipsis`,
+          selectStyle: `position:absolute;inset:-1.5px;border-radius:${radius + 1}px;border:2.5px solid #416180;pointer-events:none`,
+          handleLeftStyle: `position:absolute;left:-3px;top:50%;transform:translateY(-50%);width:7px;height:${Math.min(34, Math.max(16, height - 20))}px;border-radius:99px;background:#416180;border:2px solid #fff;cursor:ew-resize`,
+          handleRightStyle: `position:absolute;right:-3px;top:50%;transform:translateY(-50%);width:7px;height:${Math.min(34, Math.max(16, height - 20))}px;border-radius:99px;background:#416180;border:2px solid #fff;cursor:ew-resize`,
+          onEnter: (e) => {
+            if (this.state.drag) return;
+            this.setState({
+              tip: { name: ev.name, phase: `${phaseLabel} ${clock12(seg.start)}`, x: e.clientX, y: e.clientY },
+            });
+          },
+          onMove: (e) => this.setState((s) => (s.tip && !s.drag ? { tip: { ...s.tip, x: e.clientX, y: e.clientY } } : null)),
+          // Stops the click reaching the grid backdrop, which dismisses.
+          onSelect: (e) => { e.stopPropagation(); this.selectEvent(ev.id); },
+          // The grab offset is captured in the event's own units — minutes from
+          // the start of its whole span, strips from its first strip — so the
+          // block never jumps to centre itself on the cursor.
+          onDown: (e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            // Grab offsets are in minutes, so they need the scale the block is
+            // actually drawn at — measured, not estimated, when fitting.
+            const liveScale = fitPct && width > 0 ? rect.width / (seg.end - seg.start) : ppm;
+            if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+            this.setState({
+              selected: ev.id,
+              tip: null,
+              drag: {
+                id: ev.id,
+                phase: tier === 'overview' ? (seg.de ? 'de' : 'pools') : (seg.de ? 'de' : 'pools'),
+                day: ev.day,
+                startMinute: seg.start,
+                firstStrip: blockStrip,
+                clamped: false,
+                grabMinutes: (e.clientX - rect.left) / liveScale,
+                grabStrips: (e.clientY - rect.top) / rowH,
+              },
+            });
+          },
+          onDrag: (e) => this.handleDragMove(e),
+          onDrop: () => this.handleDrop(),
+        });
+      });
+    }
+    return blocks;
+  }
+
+  renderVals() {
+    const { panel, panelDocked, selected, tip, drag } = this.state;
+
+    /**
+     * Measured at render time, not seeded into state by a lifecycle hook.
+     *
+     * Every width decision below — which bands drop their secondary content,
+     * and what "fit the day" solves for — has to be right on the *first*
+     * paint. A value written by componentDidMount or a ResizeObserver arrives
+     * after that paint, so the first render fell back to a 1440 design width
+     * and a 924px window got a 1363px canvas and three clipped bands. Reading
+     * the document box here cannot be late. The observers below still write to
+     * state, but only to force a re-render when the window actually changes.
+     */
+    const fallback = VIEWPORTS[this.props.viewport] ?? VIEWPORTS['1440 × 900'];
+    const shell = this.rootRef.current;
+    const doc = typeof document === 'undefined' ? null : document.documentElement;
+    const vp = {
+      // The shell's own box first: it is the box the layout actually occupies,
+      // which the document's is not when the page pads or embeds it.
+      w: (shell && shell.clientWidth) || (doc && doc.clientWidth) || this.state.size.w || fallback.w,
+      h: (shell && shell.clientHeight) || (doc && doc.clientHeight) || this.state.size.h || fallback.h,
+    };
+    const iconSize = this.props.railIconSize ?? 46;
+    const railVariant = this.props.railVariant ?? 'Outlined';
+    const railLabels = this.props.railLabels ?? false;
+    const radius = this.props.cellRadius ?? 9;
+    const railW = railLabels ? Math.max(iconSize + 26, 76) : iconSize + 16;
+    // A docked panel takes real width, so the matrix re-fits around it.
+    const chromeW = railW + (panel !== null && panelDocked ? 324 : 0);
+
+    // Both bottom strips are docked, so they are chrome: they take real height
+    // and the canvas fits inside what is left rather than being covered.
+    const hasSel = this.state.events.some((e) => e.id === selected);
+    const detailH = !hasSel ? 0 : this.state.detailCollapsed ? 30 : 58;
+
+    // Height the canvas actually has: the shell less its header, the unplaced
+    // dock, the status strip (which now carries the zoom controls too), the
+    // time axis and the detail strip. Every fit decision below is made against
+    // this rather than against an assumed screen.
+    const CHROME_H = 44 + (this.state.dockH || 32) + 32 + 26 + detailH;
+    const canvasH = Math.max(140, vp.h - CHROME_H);
+
+    const GUTTER_W = 58;
+
+    /**
+     * Fit-to-day solves for the scale that shows one whole competition day
+     * across the canvas — the only place the layout is solved rather than
+     * stepped; every other zoom is a rung on the ladder.
+     *
+     * Horizontally it fits exactly. Vertically it shrinks rows as far as the
+     * legibility floor allows and then stops: four day groups of fifteen
+     * strips need ~748px at the floor, so on any normal window the canvas
+     * still scrolls to reach day four. That is deliberate — an 8px row would
+     * fit the height and show nothing.
+     */
+    // Measured wrapper width, less the gutter and the canvas's own vertical
+    // scrollbar (13px, set by this page's own scrollbar rule) — the scrollbar
+    // is always there, because four day groups never fit the height.
+    const SCROLLBAR_W = 13;
+    // Derived arithmetically from the shell width, not measured from a node.
+    // The canvas frame is exactly the shell less the rail and any docked
+    // panel, so there is nothing to measure — and a measurement here needed a
+    // ref that is null on the streamed first paint, which is what kept the
+    // opening view at a fallback width.
+    const usableW = (vp.w - chromeW) - GUTTER_W - SCROLLBAR_W - 2;
+    const fitPpm = usableW / (DAY_END - DAY_START);
+    const fitRowH = Math.max(11, Math.min(30,
+      Math.floor((canvasH - 4 * TIER.overview.band) / (4 * STRIP_COUNT))));
+
+    const step = ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, this.state.zoom))];
+    // In fit mode the browser owns the horizontal solve: the canvas is 100%
+    // wide and every position is a percentage of the day span. `fitPpm` is
+    // then only an estimate, used for label-fitting decisions and as a
+    // fallback for hit-testing — never for geometry.
+    const fitPct = this.state.fitting;
+    const ppm = fitPct ? fitPpm : step.ppm;
+    const rowH = fitPct ? fitRowH : step.row;
+    const tier = tierFor(ppm);
+    // All four days are always present; the canvas scrolls to reach them.
+    const shownDays = [0, 1, 2, 3];
+    const plotW = (DAY_END - DAY_START) * ppm;
+    this.geom = { ppm, rowH, fitPct };
+
+    const tickStep = tier === 'detail' ? 30 : 60;
+    const ticks = [];
+    for (let m = DAY_START; m < DAY_END; m += tickStep) {
+      // The final label is anchored by its right edge and pulled inside the
+      // plot. Left-anchored it ran past the edge and the row's clip — which
+      // the horizontal fit needs — cut it to "21:0", a different time.
+      const isLast = m + tickStep >= DAY_END;
+      ticks.push({
+        label: hhmm(m),
+        anchorRight: isLast,
+        style: `position:absolute;${isLast
+          ? 'right:5px;'
+          : `left:${fitPct
+            ? `calc(${((m - DAY_START) / (DAY_END - DAY_START) * 100).toFixed(4)}% + 5px)`
+            : `${(m - DAY_START) * ppm + 7}px`};`}top:6px;font-family:ui-monospace,Menlo,monospace;font-weight:600;`
+          + `font-size:10.5px;color:${m % 60 === 0 ? '#5d5d60' : '#a3a3a6'}`,
+      });
+    }
+
+    const band = TIER[tier].band;
+
+    // One computation, read by the captions, the counters and the findings.
+    const findingsList = buildFindings(this.state.events);
+    this.findingsList = findingsList;
+    const stats = [0, 1, 2, 3].map((d) => dayStats(this.state.events, d));
+
+    const days = shownDays.map((d) => {
+      const meta = DAY_META[d];
+      const stat = stats[d];
+      const dayFindings = findingsList.filter((x) => x.day === d).length;
+      // A finding marks the strip rows it lands on, in the frozen gutter — so a
+      // problem is visible at the edge of the screen even when the block that
+      // caused it is scrolled out of the time window.
+      const flagged = new Set();
+      for (const ev of this.state.events) {
+        if (ev.day !== d || !ev.warn) continue;
+        for (const phase of ['pools', 'de']) {
+          if (phase === 'pools' && !ev.pools) continue;
+          const first = stripOf(ev, phase);
+          for (let s = first; s < first + ev.strips; s++) flagged.add(s);
+        }
+      }
+      const ghost = drag && drag.day === d ? drag : null;
+      const ghostEvent = ghost && this.state.events.find((e) => e.id === ghost.id);
+      const ghostSeg = ghostEvent && (ghost.phase === 'pools' ? ghostEvent.pools : ghostEvent.de);
+      const ghostW = ghostSeg ? (ghostSeg[1] - ghostSeg[0]) * ppm : 0;
+      const ghostX = ghost ? (ghost.startMinute - DAY_START) * ppm : 0;
+      const ghostY = ghost ? ghost.firstStrip * rowH : 0;
+      return {
+      key: `day-${d}`,
+      index: d,
+      label: `Day ${d + 1}`,
+      ghostShow: !!ghost,
+      ghostStyle: ghost
+        ? `position:absolute;left:${fitPct ? `${((ghost.startMinute - DAY_START) / (DAY_END - DAY_START) * 100).toFixed(4)}%` : `${ghostX}px`};top:${ghostY + 3}px;`
+          + `width:${fitPct ? `calc(${((ghostSeg[1] - ghostSeg[0]) / (DAY_END - DAY_START) * 100).toFixed(4)}% - 3px)` : `${Math.max(8, ghostW - 3)}px`};`
+          + `height:${ghostEvent.strips * rowH - 6}px;z-index:6;box-sizing:border-box;border-radius:${radius}px;`
+          + `border:2.5px dashed ${ghost.clamped ? CONFLICT.line : '#416180'};`
+          + `background:${ghost.clamped ? 'rgba(168,84,78,.12)' : 'rgba(65,97,128,.12)'};pointer-events:none`
+        : 'display:none',
+      ghostTime: ghost
+        ? `${ghost.phase === 'pools' ? 'Pools' : 'DE'} ${clock12(ghost.startMinute)}`
+          + ` · ${ghostEvent.strips === 1 ? `Strip ${ghost.firstStrip + 1}` : `Strips ${ghost.firstStrip + 1}–${ghost.firstStrip + ghostEvent.strips}`}`
+          + (ghost.clamped ? (ghost.phase === 'pools' ? ' · blocked by its DE' : ' · blocked by its pools') : '')
+        : '',
+      ghostTimeStyle: ghost
+        ? `position:absolute;left:${fitPct ? `${((ghost.startMinute - DAY_START) / (DAY_END - DAY_START) * 100).toFixed(4)}%` : `${ghostX}px`};top:${Math.max(0, ghostY - 21)}px;z-index:7;padding:2px 9px;border-radius:99px;`
+          + `background:${ghost.clamped ? CONFLICT.line : '#416180'};color:#fff;font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:10.5px;`
+          + `white-space:nowrap;pointer-events:none`
+        : 'display:none',
+      date: meta.date,
+      summary: `${stat.events} events · finishes ${hhmm(stat.finish)} · ${stat.peak} of ${STRIP_COUNT} strips at peak`
+        + (stat.unplaced > 0 ? ` · ${stat.unplaced} unplaced` : ''),
+      hasIssue: dayFindings > 0,
+      issueLabel: `${dayFindings} finding${dayFindings === 1 ? '' : 's'}`,
+      issueStyle: `padding:1px 9px;border-radius:99px;background:#f6e3e0;color:${CONFLICT.ink};`
+        + `font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase`,
+      bandStyle: `position:relative;height:${band}px;background:#f2f2f4;border-top:1.5px solid #dedee2;border-bottom:1.5px solid #dedee2`,
+      // `max-content` is what let the band — chrome — widen the plot and
+      // reintroduce horizontal overflow whenever its summary was long (the
+      // two days carrying a findings chip). Capped to the canvas, with the
+      // summary as the part that gives way.
+      bandInnerStyle: `position:sticky;left:0;width:max-content;max-width:100%;box-sizing:border-box;`
+        + `display:flex;align-items:center;gap:13px;height:${band - 2}px;padding:0 16px;overflow:hidden`,
+      summaryStyle: 'flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+        + 'font-size:12.5px;color:#5d5d60',
+      strips: Array.from({ length: 15 }, (_, i) => {
+        const bad = flagged.has(i);
+        return {
+        key: `s-${d}-${i}`,
+        // Below ~15px of row the type would have to go under 10px to fit, so
+        // the labels thin out instead of shrinking: every fifth strip, plus
+        // any strip carrying a finding. A legible number on one row in five
+        // answers "which strip is this?"; an 8px one on every row does not.
+        label: rowH >= 15 || i === 0 || (i + 1) % 5 === 0 || flagged.has(i) ? `${i + 1}` : '',
+        style: `display:flex;align-items:center;justify-content:flex-end;height:${rowH}px;padding-right:8px;`
+          + `font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:${Math.max(10, Math.min(11, rowH - 3))}px;`
+          + (bad
+            ? `color:${CONFLICT.ink};background:${CONFLICT.tint};box-shadow:inset 3px 0 0 ${CONFLICT.line};`
+            // #5d5d60 on the chrome ground clears AA for small text; the
+            // lighter grey did not.
+            : 'color:#5d5d60;')
+          + `border-bottom:1px solid ${i === 14 ? 'transparent' : '#eaeaee'}`,
+      }; }),
+      plotStyle: fitPct
+        ? `position:relative;flex:1;min-width:0;height:${15 * rowH}px;background:#fdfdfe`
+        : `position:relative;width:${plotW}px;height:${15 * rowH}px;flex-shrink:0;background:#fdfdfe`,
+      gridStyle: `position:absolute;inset:0;background-image:`
+        + `repeating-linear-gradient(to right,#e4e4e8 0 1px,transparent 1px ${fitPct ? `calc(100% / ${((DAY_END - DAY_START) / 60).toFixed(3)})` : `${60 * ppm}px`}),`
+        + `repeating-linear-gradient(to bottom,#eaeaee 0 1px,transparent 1px ${rowH}px)`,
+      blocks: this.buildBlocks(d, ppm, rowH, radius, fitPct),
+    }; });
+
+    /**
+     * Rail buttons read as buttons at rest, the way VS Code's activity bar and
+     * Teams' app rail do: a real border and a real corner radius on every one,
+     * not a bare glyph that only becomes an object once you hover it. The three
+     * variants differ only in how the active one is marked.
+     */
+    const railItem = (key, icon, label) => {
+      const active = panel === key;
+      const box = `position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;`
+        + `width:${iconSize}px;height:${railLabels ? iconSize + 14 : iconSize}px;border-radius:${Math.round(iconSize * 0.28)}px;`
+        + `font-size:${Math.round(iconSize * 0.44)}px;cursor:pointer;`;
+      let skin;
+      if (railVariant === 'Filled tint') {
+        skin = active
+          ? 'border:1.5px solid #5980a6;background:#5980a6;color:#fff;'
+          : 'border:1.5px solid #e4e4e8;background:#fff;color:#5d5d60;';
+      } else if (railVariant === 'Left indicator') {
+        skin = active
+          ? 'border:1.5px solid #cfe0ef;background:#eef6ff;color:#2c455d;'
+          : 'border:1.5px solid #e4e4e8;background:#fff;color:#5d5d60;';
+      } else {
+        skin = active
+          ? 'border:1.5px solid #5980a6;background:#eef6ff;color:#2c455d;box-shadow:0 1px 3px rgba(43,43,45,.1);'
+          : 'border:1.5px solid #dedee2;background:#fff;color:#5d5d60;box-shadow:0 1px 2px rgba(43,43,45,.05);';
+      }
+      // Findings carry their count on the rail button, so the status is
+      // visible without a panel or a floating chip taking canvas space.
+      const badge = key === 'findings' ? findingsList.length : 0;
+      return {
+        key,
+        icon,
+        paths: iconPaths(icon),
+        label,
+        showLabel: railLabels,
+        badge: String(badge),
+        showBadge: badge > 0,
+        badgeStyle: `position:absolute;top:-5px;right:-5px;display:flex;align-items:center;justify-content:center;`
+          + `min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:${CONFLICT.line};color:#fff;`
+          + `border:2px solid #f7f7f9;font-family:Figtree,system-ui,sans-serif;font-weight:700;font-size:10.5px;line-height:1`,
+        // The anchor is the button's own vertical centre, read at hover time —
+        // the rail scrolls with nothing, so a measured y stays true.
+        onHover: (e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          this.setState({ railTip: { label, y: box.top + box.height / 2 } });
+        },
+        indicator: railVariant === 'Left indicator' && active,
+        indicatorStyle: `position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:3.5px;height:${Math.round(iconSize * 0.5)}px;border-radius:99px;background:#5980a6`,
+        labelStyle: `font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:9.5px;letter-spacing:.02em;line-height:1`,
+        style: box + skin,
+        onClick: () => this.setState((s) => ({ panel: s.panel === key ? null : key })),
+      };
+    };
+
+    const ev = this.state.events.find((e) => e.id === selected);
+    const sel = ev && {
+      pinLabel: this.state.pinned.includes(ev.id) ? 'Pinned' : 'Pin',
+      markStyle: `flex:none;width:20px;height:34px;border-radius:7px;`
+        + `background:${WEAPON[ev.weapon].fill};border:1.5px solid ${WEAPON[ev.weapon].edge}`,
+      // The collapsed rail's swatch — this hole had no value at all before, so
+      // the strip showed a bare letter with no chip around it.
+      markStyleSmall: `flex:none;width:14px;height:14px;border-radius:5px;`
+        + `background:${WEAPON[ev.weapon].fill};border:1.5px solid ${WEAPON[ev.weapon].edge}`,
+      name: ev.name,
+      day: `Day ${ev.day + 1}`,
+      strips: ev.strips === 1 ? `Strip ${ev.firstStrip + 1}` : `Strips ${ev.firstStrip + 1}–${ev.firstStrip + ev.strips}`,
+      fencers: `${ev.fencers} fencers`,
+      segments: this.segmentsOf(ev).map((s, i) => ({
+        key: `seg-${i}`,
+        phase: s.phase,
+        time: `${hhmm(s.start)}–${hhmm(s.end)}`,
+        swatch: `width:13px;height:13px;border-radius:4px;background:${WEAPON[ev.weapon].fill};border:1.5px solid ${WEAPON[ev.weapon].edge};`
+          + (s.de ? `background-image:repeating-linear-gradient(45deg,transparent 0 3px,${WEAPON[ev.weapon].hatch} 3px 6px)` : ''),
+      })),
+    };
+
+    return {
+      rootRef: this.rootRef,
+      // Width thresholds, measured rather than assumed: below each one the
+      // band drops its least load-bearing content instead of wrapping and
+      // pushing the layout past the window.
+      /**
+       * A panel is either docked or floating, and the difference is whether it
+       * takes layout. Floating is the default because the canvas is what the
+       * workbench is for — but a floating panel covers the grid it describes,
+       * so docking pushes the canvas across instead and the two coexist. The
+       * canvas width below already accounts for a docked panel, so the matrix
+       * re-fits rather than being overlapped.
+       */
+      asideStyle: panelDocked
+        ? 'position:relative;flex:none;width:324px;overflow-y:auto;background:#f7f7f9;border-right:1.5px solid #dedee2'
+        : 'position:absolute;left:58px;top:0;bottom:0;z-index:50;width:324px;overflow-y:auto;background:#f7f7f9;'
+          + 'border-right:1.5px solid #dedee2;box-shadow:7px 0 24px rgba(43,43,45,.13);'
+          + 'animation:pp-panel-in .18s cubic-bezier(.2,.8,.3,1) both',
+      dockLabel: panelDocked ? 'Float panel over the grid' : 'Dock panel beside the grid',
+      dockButtonStyle: 'display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;'
+        + `border-radius:8px;cursor:pointer;font-size:15px;${panelDocked
+          ? 'background:#e2edf8;color:#2c455d;'
+          : 'background:transparent;color:#7a7a7d;'}`,
+      toggleDock: () => this.setState((s) => ({ panelDocked: !s.panelDocked })),
+      /**
+       * Read from measured state, deliberately NOT from the live document.
+       *
+       * These gate content that is nice to have, and the failure modes are
+       * asymmetric: showing it when there is no room clips a word in half,
+       * while hiding it for one frame costs nothing. `state.size.w` is 0 until
+       * the shell has actually been measured, so the streamed first paint
+       * hides all three and they appear a frame later if the window is wide
+       * enough. The ellipsis styling on each covers the in-between widths.
+       */
+      showHeaderMeta: (this.state.size.w || 0) >= 1180,
+      showDockHint: this.state.queue.length > 0 && vp.w > 1200,
+      showLegend: (this.state.size.w || 0) >= 1240,
+      railBarStyle: `width:${railW}px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:7px;`
+        + `padding:11px 0;background:#f7f7f9;border-right:1.5px solid #dedee2`,
+      railRuleStyle: `width:${Math.round(railW * 0.5)}px;height:1.5px;background:#dedee2;border-radius:2px;margin:3px 0`,
+      railTip: {
+        show: !!this.state.railTip,
+        label: this.state.railTip ? this.state.railTip.label : '',
+        style: this.state.railTip
+          ? `position:fixed;left:${railW + 8}px;top:${this.state.railTip.y}px;transform:translateY(-50%);z-index:80;`
+            + 'padding:5px 10px;border-radius:8px;background:#2b2b2d;color:#fff;'
+            + 'font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:12.5px;white-space:nowrap;'
+            + 'box-shadow:0 4px 14px rgba(43,43,45,.28);pointer-events:none'
+          : 'display:none',
+      },
+      hideRailTip: () => this.setState((s) => (s.railTip ? { railTip: null } : null)),
+      railItems: RAIL_ITEMS.map((it) => railItem(it.key, it.icon, it.label)),
+      settingsItem: railItem('settings', 'sliders-horizontal', 'Settings'),
+      canvasStyle: fitPct ? 'width:100%;min-width:0' : `width:${GUTTER_W + plotW}px;min-width:100%`,
+      ticks,
+      days,
+      /**
+       * Counted, not written down. "Unplaced" means both senses the matrix
+       * shows: events never given a slot (the dock chips) and segments the
+       * scheduler could not fit (the dashed blocks). Hardcoding it let the
+       * footer claim 3 while the grid flagged 6.
+       */
+      finishLabel: hhmm(Math.max(...stats.map((s) => s.finish))),
+      // Two referees per pool on every strip a pool occupies at the busiest
+      // moment. A concrete model beats an invented number: it moves when the
+      // schedule moves, and the finding below is checked against it.
+      refereeLabel: `${Math.max(...stats.map((s) => s.peak)) * REFS_PER_POOL}`,
+      stripUseLabel: `${(
+        this.state.events
+          .flatMap(segmentsOfEvent)
+          .reduce((sum, s) => sum + (s.end - s.start) * s.ev.strips, 0)
+        / (STRIP_COUNT * (DAY_END - DAY_START) * DAY_META.length) * 100
+      ).toFixed(1)}%`,
+      placementCounts: (() => {
+        const failed = new Set();
+        for (const ev of this.state.events) {
+          if (overflowOf(ev, 'pools') || overflowOf(ev, 'de')) failed.add(ev.id);
+        }
+        const placed = this.state.events.length - failed.size;
+        const unplaced = failed.size + this.state.queue.length;
+        return `${placed} placed · ${unplaced} unplaced · ${this.state.pinned.length} pinned`;
+      })(),
+      // Every chip is present and each one shrinks; the row is what runs out
+      // of space, and it says so in CSS. Counting chips against a measured
+      // width meant the streamed first paint guessed wrong and clipped one
+      // mid-word.
+      runSchedule: () => this.runSchedule(),
+      /**
+       * The dock grows to a second row rather than clipping or scrolling
+       * sideways: an event you cannot see is an event you will not place.
+       * It stops at two rows — beyond that the queue is a panel's job, not a
+       * strip's, and the matrix should not keep giving up height for it.
+       */
+      dockRef: this.dockRef,
+      dockStyle: 'display:flex;align-items:flex-start;gap:10px;flex-shrink:0;padding:5px 14px;'
+        + 'min-height:32px;max-height:64px;box-sizing:border-box;'
+        + 'background:#f7f7f9;border-bottom:1.5px solid #dedee2;overflow-y:auto',
+      dockChipsStyle: 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex:1;min-width:0',
+      dockLabel: this.state.queue.length
+        ? `Unplaced · ${this.state.queue.length}`
+        : 'Unplaced',
+      dockEmpty: this.state.queue.length === 0,
+      dockNote: this.state.runNote || 'Every event has a slot.',
+      unplaced: this.state.queue.map((u) => ({
+        key: u.id,
+        label: u.name,
+        need: u.need,
+        style: `display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 11px;border-radius:99px;cursor:grab;`
+          + `background:${WEAPON[u.weapon].fill};border:1.5px solid ${WEAPON[u.weapon].edge};color:${WEAPON[u.weapon].ink};`
+          + 'font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;white-space:nowrap;'
+          + 'flex:0 1 auto;min-width:0;overflow:hidden',
+      })),
+      panelOpen: panel !== null,
+      panelTitle: PANEL_TITLES[panel] ?? '',
+      isTournament: panel === 'tournament',
+      isStrips: panel === 'strips',
+      isEvents: panel === 'events',
+      isFindings: panel === 'findings',
+      isSettings: panel === 'settings',
+      dayHours: DAY_META.map((m, i) => ({ key: `dh-${i}`, label: `Day ${i + 1}`, start: '8:00 AM', end: i === 3 ? '8:00 PM' : '9:30 PM' })),
+      eventGroups: GROUPS.map(([label, chips, on]) => ({
+        key: label,
+        label,
+        count: on.length,
+        chips: chips.map((c) => ({
+          key: `${label}-${c}`,
+          label: c,
+          style: `padding:4px 10px;border-radius:99px;font-size:11.5px;`
+            + (on.includes(c)
+              ? 'background:#5980a6;color:#fff;'
+              : 'background:#f5f5f8;border:1.5px solid #e7e7ea;color:#5d5d60;'),
+        })),
+      })),
+      findings: findingsList.map((f, i) => ({
+        key: `f-${i}`,
+        severity: f.severity,
+        // No target, no affordance: a row that cannot move the grid must not
+        // offer a control that says it will.
+        hasTarget: !!f.eventId,
+        where: f.where,
+        message: f.message,
+        // Each row is the "take me to it" control: selects the event, centres
+        // it on the canvas and flashes it.
+        onJump: () => this.jumpToFinding(i),
+        style: 'display:block;width:100%;text-align:left;border:1.5px solid #ecd9c9;border-radius:12px;'
+          + 'background:#fdf7f2;padding:11px 12px;cursor:pointer;font-family:inherit',
+        badgeStyle: `padding:2px 9px;border-radius:99px;background:#f1e0d2;color:#5a3f26;`
+          + `font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase`,
+      })),
+      scrollerRef: this.scroller,
+      // The rail floats over the grid rather than taking layout from it: the
+      // canvas keeps its full height, and the inspector is present only while
+      // something is selected. It re-mounts on nothing — selecting another
+      // event updates it in place, so the slide-up plays on appearance only.
+      /**
+       * Both strips sit in the flow at the bottom of the content pane rather
+       * than floating over it. A floating inspector covers the grid it
+       * describes — and the grid is what the workbench is for — so each takes
+       * real height and collapses to a summary bar when the room is wanted
+       * back.
+       */
+      railStyle: `display:flex;align-items:center;gap:14px;flex:none;height:${detailH}px;padding:0 12px;`
+        + 'background:#eaebee;border-top:1.5px solid #dedee2;overflow:hidden;'
+        + `animation:pp-rail-${this.state.railAnim} ${this.state.railAnim === 'in' ? '.22s' : '.34s'} cubic-bezier(.2,.8,.3,1) both`,
+      zoomLabel: this.state.fitting ? 'Fit' : `${Math.round((ppm / ZOOM_BASE_PPM) * 100)}%`,
+      iconBtnStyle: 'display:flex;align-items:center;justify-content:center;flex:none;width:26px;height:24px;margin-left:5px;'
+        + 'border:1.5px solid #dedee2;border-radius:7px;background:#fff;color:#5d5d60;cursor:pointer',
+      fitButtonStyle: 'height:24px;padding:0 11px;margin-left:6px;flex:none;border:1.5px solid #dedee2;border-radius:7px;'
+        + `font-family:Figtree,system-ui,sans-serif;font-weight:600;font-size:11.5px;color:#416180;cursor:pointer;`
+        + (this.state.fitting ? 'background:#eef6ff;border-color:#94bce3;' : 'background:#fff;'),
+      zoomIn: () => this.setState((s) => ({
+        fitting: false,
+        zoom: Math.min(ZOOM_STEPS.length - 1, (s.fitting ? 1 : s.zoom) + 1),
+      })),
+      zoomOut: () => this.setState((s) => ({
+        fitting: false,
+        zoom: Math.max(0, (s.fitting ? 1 : s.zoom) - 1),
+      })),
+      // Reset returns to the opening view, which is fit-to-day.
+      resetZoom: () => this.setState({ fitting: true, zoom: DEFAULT_ZOOM }),
+      fitDay: () => this.setState({ fitting: true }),
+      detailOpen: !this.state.detailCollapsed,
+      detailCollapsed: this.state.detailCollapsed,
+      detailToggleLabel: this.state.detailCollapsed ? 'Show event detail' : 'Collapse event detail',
+      detailChevron: this.state.detailCollapsed ? '⌃' : '⌄',
+      toggleDetail: () => this.setState((s) => ({ detailCollapsed: !s.detailCollapsed })),
+      stripToggleStyle: 'display:flex;align-items:center;justify-content:center;flex:none;width:30px;height:26px;'
+        + 'margin-left:auto;border:none;border-radius:8px;background:transparent;color:#7a7a7d;'
+        + 'font-size:13px;line-height:1;cursor:pointer',
+      showPhasePills: vp.w >= 1080,
+      showActionLabels: vp.w >= 1000,
+      // Clicking empty grid clears the selection and closes a *floating*
+      // panel. A docked panel stays: it is not covering anything, so a click
+      // on the canvas is not a request to be rid of it.
+      dismissOnBackdrop: () => this.setState((s) => {
+        const next = {};
+        if (s.selected) { next.selected = null; next.railAnim = 'in'; }
+        if (s.panel !== null && !s.panelDocked) next.panel = null;
+        return Object.keys(next).length ? next : null;
+      }),
+      hasSelection: !!sel,
+      noSelection: !sel,
+      sel: sel ?? { name: '', day: '', strips: '', fencers: '', segments: [], markStyle: 'display:none', markStyleSmall: 'display:none', pinLabel: 'Pin' },
+
+      tip: {
+        show: !!tip,
+        name: tip?.name ?? '',
+        phase: tip?.phase ?? '',
+        style: tip
+          ? `position:fixed;left:${Math.min(tip.x + 16, 1920 - 300)}px;top:${tip.y + 18}px;z-index:80;max-width:280px;`
+            + 'padding:9px 13px;border-radius:11px;background:#2b2b2d;color:#fff;box-shadow:0 6px 20px rgba(43,43,45,.3);pointer-events:none'
+          : 'display:none',
+      },
+      clearHover: () => this.setState({ tip: null }),
+      clearSelection: () => this.setState({ selected: null, railAnim: 'in' }),
+      closePanel: () => this.setState({ panel: null }),
+      openTournament: () => this.setState((s) => ({ panel: s.panel === 'tournament' ? null : 'tournament' })),
+      openStrips: () => this.setState((s) => ({ panel: s.panel === 'strips' ? null : 'strips' })),
+      openEvents: () => this.setState((s) => ({ panel: s.panel === 'events' ? null : 'events' })),
+      openFindings: () => this.setState((s) => ({ panel: s.panel === 'findings' ? null : 'findings' })),
+      openSettings: () => this.setState((s) => ({ panel: s.panel === 'settings' ? null : 'settings' })),
+    };
+  }
+}
+</script>
+</body>
+</html>

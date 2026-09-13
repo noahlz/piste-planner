@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, act, within } from '@testing-library/react'
-import { FencerCounts } from '../../../src/components/sections/FencerCounts.tsx'
+import { EventsPanel } from '../../../src/components/workbench/panels/EventsPanel.tsx'
 import { AnalysisOutput } from '../../../src/components/sections/AnalysisOutput.tsx'
 import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
-import { Scorecard } from '../../../src/components/workbench/Scorecard.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES, findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/components/competitionLabels.ts'
@@ -14,6 +13,7 @@ import {
   saveViewState,
 } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
 // 004 T009 — two-tier recompute (FR-008, S2-contract.md §Center view and the
 // dimmed-invalid rule): findings follow every keystroke, the center
@@ -44,34 +44,32 @@ beforeEach(() => {
   vi.useFakeTimers()
 })
 
-/** Puts the center on the schedule table, whose cells are the two tiers'
- *  evidence in the first two cases below. On T040's default matrix view those
- *  cases could not tell a deferred relayout from no relayout at all: with no
- *  ResizeObserver the canvas measures 0x0, draws nothing, and its textContent
- *  is the toolbar's — constant across every edit, so the "has not relayouted
- *  yet" half would pass without the debounce existing. The third case installs
- *  an observer and asserts on the matrix instead. */
-function showScheduleTable(): void {
-  saveViewState({ ...DEFAULT_VIEW_STATE, viewMode: ViewMode.SCHEDULE })
-}
-
 afterEach(() => {
   vi.useRealTimers()
 })
 
 /** The rail's fencer-count edit, the drawer's findings, and the center — each
- *  wrapped so a before/after textContent snapshot can be scoped to one region. */
-function RecomputeHost() {
+ *  wrapped so a before/after textContent snapshot can be scoped to one region.
+ *  013 T011a — CenterView no longer owns its view mode, so the host takes one
+ *  and hands it straight through. */
+function RecomputeHost({ viewMode }: { viewMode: ViewMode }) {
   return (
     <>
       <div data-testid="fencer-counts">
-        <FencerCounts />
+        {/* 013 T021: the fencer input moved from the retired fencer-count
+            section to
+            the Events panel, where it hangs off a selected competition's
+            pressed chip. Same aria-label, same commitOnChange, so the edit
+            this test drives is unchanged. */}
+        <EventsPanel />
       </div>
       <div data-testid="drawer">
         <AnalysisOutput />
       </div>
       <div data-testid="center">
-        <CenterView />
+        {/* 013 T025 phase-3 contract: CenterView takes the zoom state the
+            host owns (WorkbenchShell), same as viewMode above. */}
+        <CenterView viewMode={viewMode} zoom={{ zoomStep: 2, fitting: false }} />
       </div>
     </>
   )
@@ -97,8 +95,9 @@ function seedPlacedCompetitions(fencerCount: number): string {
   return id
 }
 
-/** The one fencer-count input belonging to `id` — FencerCounts renders one per
- *  selected competition, so the shared /Fencer count for/ regex is ambiguous here. */
+/** The one fencer-count input belonging to `id` — the Events panel renders one
+ *  per selected competition, so the shared /Fencer count for/ regex is
+ *  ambiguous here. */
 function fencerInput(id: string): HTMLElement {
   const entry = findCompetition(id)
   const label = entry ? competitionLabel(entry) : id
@@ -116,11 +115,10 @@ function centerRowCells(id: string): string[] {
 
 describe('two-tier recompute', () => {
   it('a fencer-count keystroke moves the drawer immediately; the center follows only after CENTER_SETTLE_MS', () => {
-    showScheduleTable()
     // 8 fencers -> 1 pool, and 9 for the companion: 10 pools on day 1, under
     // the 12 strips seeded below, so no capacity warning yet.
     const id = seedPlacedCompetitions(8)
-    render(<RecomputeHost />)
+    render(<RecomputeHost viewMode={ViewMode.SCHEDULE} />)
 
     const drawer = screen.getByTestId('drawer')
     const center = screen.getByTestId('center')
@@ -174,9 +172,8 @@ describe('two-tier recompute', () => {
   })
 
   it('restarts the settle timer on a second edit rather than relayouting at the first deadline', () => {
-    showScheduleTable()
     const id = seedPlacedCompetitions(8)
-    render(<RecomputeHost />)
+    render(<RecomputeHost viewMode={ViewMode.SCHEDULE} />)
 
     const center = screen.getByTestId('center')
     const centerBefore = center.textContent
@@ -231,42 +228,21 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
   const VIEWPORT_WIDTH = 900
   const VIEWPORT_HEIGHT = 480
 
-  class StubResizeObserver {
-    callback: ResizeObserverCallback
-
-    constructor(callback: ResizeObserverCallback) {
-      this.callback = callback
-    }
-
-    observe(): void {
-      this.callback(
-        [
-          {
-            contentRect: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
-          } as ResizeObserverEntry,
-        ],
-        this as unknown as ResizeObserver,
-      )
-    }
-
-    unobserve(): void {}
-    disconnect(): void {}
-  }
-
-  const originalResizeObserver = globalThis.ResizeObserver
+  let restoreResizeObserver: () => void
 
   beforeEach(() => {
     // jsdom ships no ResizeObserver, and an unmeasured canvas draws no blocks
     // at all — every assertion below would then read `undefined` both before
     // and after the settle.
-    globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
-    // 828px of plot from 08:00 at 1 min/px spans [480, 1308), past every block
-    // the fixture places. The view stays MATRIX, which is the default.
-    saveViewState({ ...DEFAULT_VIEW_STATE, timeScroll: 480 })
+    restoreResizeObserver = installStubResizeObserver(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+    // 013 T026: `CenterView` takes its zoom as a prop, so the stored state no
+    // longer decides what the canvas draws. The view stays MATRIX, which is
+    // the default, and that is all this seed is still for.
+    saveViewState({ ...DEFAULT_VIEW_STATE })
   })
 
   afterEach(() => {
-    globalThis.ResizeObserver = originalResizeObserver
+    restoreResizeObserver()
   })
 
   /** The last minute of one drawn block, or null when it is not drawn. */
@@ -279,7 +255,7 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
 
   it('holds the drawn blocks at their pre-edit geometry until the settle, then moves them', () => {
     const id = seedPlacedCompetitions(8)
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
 
     const poolEndBefore = blockEnd(id, 'POOLS')
     expect(poolEndBefore, 'the canvas drew nothing to compare').not.toBeNull()
@@ -311,17 +287,6 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     expect(blockEnd(id, 'DE_ROUND_OF_16')).toBe(915)
   })
 
-  /**
-   * jsdom 26 ships no `PointerEvent` constructor, so testing-library's
-   * `pointerMove` degrades to a bare `Event` and drops the coordinates. The
-   * event name is what React dispatches on, so a `MouseEvent` carries them.
-   */
-  function firePointerMove(el: Element, clientX: number, clientY: number): void {
-    el.dispatchEvent(
-      new MouseEvent('pointermove', { clientX, clientY, bubbles: true, cancelable: true }),
-    )
-  }
-
   it('holds a block’s findings at the committed model too, not just its geometry', () => {
     // The case above covers the `schedule` prop. The findings travel by a
     // second prop and the canvas has a live subscription to fall back on when
@@ -336,19 +301,19 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     // still inside strips_total, so validateConfig raises no ERROR and the
     // center goes on committing.
     const id = seedPlacedCompetitions(8)
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
 
     const block = document.querySelector<HTMLElement>(
       `[data-event-id="${id}"][data-phase="POOLS"]`,
     )
     if (!block) throw new Error('the canvas drew no pool block to hover')
-    const centreX = 72 + parseFloat(block.style.left) + parseFloat(block.style.width) / 2
-    const centreY = 38 + parseFloat(block.style.top) + parseFloat(block.style.height) / 2
-    const viewport = document.querySelector('[data-canvas-viewport]')
-    if (!viewport) throw new Error('the canvas rendered no viewport')
-
+    // 013 T026: the canvas scrolls natively now, so the hover is bound to the
+    // block rather than hit-tested from the container against coordinates the
+    // component would have to undo the browser's scroll offsets to read
+    // (Canvas.tsx §"Hover is bound per block"). Entering the block is what
+    // opens the tooltip; the assertions below are unchanged.
     act(() => {
-      firePointerMove(viewport, centreX, centreY)
+      fireEvent.pointerEnter(block)
     })
     const findings = (): string =>
       document.querySelector('[data-tooltip-field="findings"]')?.textContent ?? ''
@@ -367,75 +332,38 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     expect(findings()).toContain('10 pools but only 9 strips available')
   })
 
-  /**
-   * T050 — the scorecard's hover highlight crosses the same two tiers, and is
-   * the one thing here that must *not* wait for the second one (FR-029,
-   * S6 design brief §2).
-   *
-   * The scorecard is drawer-side and follows the live store per keystroke,
-   * while the canvas draws a model committed CENTER_SETTLE_MS behind it. A
-   * highlight routed through that committed model would leave the pointer
-   * resting on a metric row with nothing lit for a settle — a hover cue that
-   * arrives 150ms after the hover is not a hover cue. The resolution is that
-   * the key set travels undebounced and is matched against whatever blocks the
-   * canvas has actually committed, so the worst a settle can cost is *fewer*
-   * blocks lit, never a wrong one.
-   */
-  it('lights a hovered metric’s blocks at once, without waiting for the settle (FR-029)', () => {
-    // `strips:utilization` lives in the expanded tier and its driving set is
-    // every in-range placed block, so this case turns on the wiring rather than
-    // on which of the two seeded competitions happens to be some argmax.
-    saveViewState({ ...DEFAULT_VIEW_STATE, timeScroll: 480, scorecardExpanded: true })
+  // T011a (013) — the retired scorecard's hover highlight (FR-029) had no
+  // successor: research D7 deletes the hover along with the scorecard it
+  // lived on, so the case that proved the highlight crossed the settle
+  // undebounced was removed rather than ported. StatusFooter.tsx carries no
+  // hover state, and T013 removes the `highlight` prop this pointed at.
+
+  it('holds the day band text at its pre-edit value until the settle, then updates it (FR-042)', () => {
+    // react-code-reviewer finding 1 on 05103d5ff4: the day band used to read
+    // `selectDaySummaries`, a live store subscription, while the blocks under
+    // it came from the committed `schedule` prop — so during the settle gap
+    // the band could describe a different schedule than the grid it sits
+    // over. It must now hold exactly like the blocks and findings above.
     const id = seedPlacedCompetitions(8)
-    render(
-      <>
-        <Scorecard />
-        <CenterView />
-      </>,
-    )
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
 
-    /** Re-queried every time: React may swap the node out across a render. */
-    function poolBlock(): HTMLElement {
-      const el = document.querySelector<HTMLElement>(
-        `[data-event-id="${id}"][data-phase="POOLS"]`,
-      )
-      if (!el) throw new Error('the canvas drew no pool block to highlight')
-      return el
-    }
-
-    expect(poolBlock().dataset.highlighted).toBeUndefined()
-
-    // Start a settle the center has NOT committed yet. Without this the
-    // committed model already equals the live one at the moment of the hover,
-    // and a highlight routed *through* the committed model would be
-    // indistinguishable from one that bypasses it — the case would pass
-    // against exactly the behaviour it exists to forbid. The edit is this
-    // file's own documented WARN-not-ERROR one (8 -> 40 fencers on a 12-strip
-    // day), so the center is not dimmed and the frozen-invalid rule stays out
-    // of the way.
-    act(() => {
-      useStore.getState().updateCompetition(id, { fencer_count: 40 })
-    })
-
-    const row = document.querySelector<HTMLElement>('[data-metric="strips:utilization"]')
-    if (!row) throw new Error('the scorecard rendered no strip-utilization row')
+    const band = (): string => document.querySelector('[data-day-band="0"]')?.textContent ?? ''
+    const before = band()
+    expect(before, 'the canvas drew no day band to compare').not.toBe('')
 
     act(() => {
-      // React 19 synthesises onPointerEnter/onPointerLeave from delegated
-      // pointerover/pointerout, and jsdom 26 ships no PointerEvent constructor
-      // — a dispatched `pointerenter` would fire nothing at all here.
-      row.dispatchEvent(new MouseEvent('pointerover', { bubbles: true, relatedTarget: null }))
+      // Same edit as the geometry case above: 8 -> 45 fencers changes the
+      // pool/DE structure and therefore day 0's finish time.
+      useStore.getState().updateCompetition(id, { fencer_count: 45 })
     })
 
-    // Not one timer advanced between the hover and this assertion.
-    expect(useStore.getState().hoveredMetricId).toBe('strips:utilization')
-    expect(poolBlock().dataset.highlighted).toBe('true')
+    expect(useStore.getState().selectedCompetitions[id].fencer_count).toBe(45)
+    expect(band(), 'the band ran ahead of the committed model it sits over').toBe(before)
 
     act(() => {
-      row.dispatchEvent(new MouseEvent('pointerout', { bubbles: true, relatedTarget: null }))
+      vi.advanceTimersByTime(CENTER_SETTLE_MS)
     })
 
-    expect(useStore.getState().hoveredMetricId).toBeNull()
-    expect(poolBlock().dataset.highlighted).toBeUndefined()
+    expect(band()).not.toBe(before)
   })
 })

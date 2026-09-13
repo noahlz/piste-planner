@@ -3,13 +3,9 @@ import { render, screen, within, act } from '@testing-library/react'
 import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
-import {
-  DEFAULT_VIEW_STATE,
-  VIEW_STATE_STORAGE_KEY,
-  ViewMode,
-  saveViewState,
-} from '../../../src/store/viewState.ts'
+import { VIEW_STATE_STORAGE_KEY, ViewMode } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
 // 004 T008 — the dimmed-invalid rule (FR-009, S2-contract.md §Center view
 // and the dimmed-invalid rule): the center never blanks. While any derived
@@ -26,19 +22,17 @@ import { makePlacement } from '../../helpers/factories.ts'
 // same in either view — the dim marker, the overlay and the suppressed commit
 // all sit outside the view switch — but the evidence a case reads differs:
 // a case that proves content is *held* by reading schedule rows needs the
-// table, and says so by calling showScheduleTable(). The cases that read only
-// the dim marker or the overlay stay on the default matrix view, and so cover
-// both views between them.
+// table, so it passes `viewMode={ViewMode.SCHEDULE}` to CenterView. The cases
+// that read only the dim marker or the overlay stay on the default matrix
+// view, and so cover both views between them.
+//
+// 013 T011a — CenterView no longer owns its view mode (StatusFooter's toggle
+// does, via WorkbenchShell). Every render below names its view explicitly.
 
 beforeEach(() => {
   localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
 })
-
-/** Puts the center on the schedule table, for a case whose evidence is a row. */
-function showScheduleTable(): void {
-  saveViewState({ ...DEFAULT_VIEW_STATE, viewMode: ViewMode.SCHEDULE })
-}
 
 /** Config with no hard validation errors: strips set, no competitions to over-subscribe them. */
 function seedValidConfig(): void {
@@ -67,9 +61,8 @@ describe('CenterView valid state', () => {
   it('is not dimmed and shows no blocking-findings overlay', () => {
     // The undimmed content is read as the row bearing the competition id, so
     // this case wants the table.
-    showScheduleTable()
     const id = seedPlacedCompetition()
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
 
     expect(screen.getByText(id)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
@@ -80,7 +73,7 @@ describe('CenterView valid state', () => {
 describe('CenterView with only a WARN finding', () => {
   it('stays undimmed with no blocking-findings overlay — WARN never blocks', () => {
     seedPlacedCompetition()
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
 
     // days_available=5 is outside the recommended 2-4 day range: a WARN, not
     // an ERROR, so it must never trip the dimmed-invalid rule.
@@ -98,7 +91,6 @@ describe('CenterView cold boot into an already-invalid config (FR-009)', () => {
     const id = TEMPLATES['RYC Weekend'][0]
     // The fallback content is a schedule row, and its absence would be
     // ScheduleOutput's own empty state: both live in the table.
-    showScheduleTable()
     // strips_total stays at the initial store's 0 — an ERROR — so there is no
     // prior valid layout for the center to fall back to on mount. Mirrors a
     // shared URL landing straight on an invalid config.
@@ -106,7 +98,7 @@ describe('CenterView cold boot into an already-invalid config (FR-009)', () => {
     useStore.getState().updateCompetition(id, { fencer_count: 30 })
     useStore.getState().setPlacementsFromAuto({ [id]: makePlacement({ strip_count: 5 }) })
 
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
 
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
     expect(screen.getByText(id)).toBeInTheDocument()
@@ -117,9 +109,8 @@ describe('CenterView cold boot into an already-invalid config (FR-009)', () => {
 describe('CenterView dimmed-invalid rule', () => {
   it('dims the center but keeps the previous rows on screen once a finding turns ERROR', () => {
     // "keeps the previous rows" is literally a row assertion.
-    showScheduleTable()
     const id = seedPlacedCompetition()
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
     expect(screen.getByText(id)).toBeInTheDocument()
 
     act(() => {
@@ -143,7 +134,7 @@ describe('CenterView dimmed-invalid rule', () => {
 
   it('lists one line per ERROR finding when more than one is present at once', () => {
     seedPlacedCompetition()
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
 
     act(() => {
       useStore.getState().setStrips(0)
@@ -170,9 +161,8 @@ describe('CenterView dimmed-invalid rule', () => {
 describe('CenterView across an edit sequence', () => {
   it('holds content at every step of valid -> invalid -> valid, and never blanks', () => {
     // The held content is the id's row, checked at each of the three steps.
-    showScheduleTable()
     const id = seedPlacedCompetition()
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
 
     expect(screen.getByText(id)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
@@ -189,6 +179,38 @@ describe('CenterView across an edit sequence', () => {
     expect(screen.getByText(id)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
     expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
+  })
+})
+
+// FR-042 (react-code-reviewer finding 1 on 05103d5ff4) — the day band is
+// drawn from the matrix's own committed blocks, the same as everything else
+// under the dimmed-invalid rule, so it must hold at its last committed value
+// while a finding is ERROR rather than reading a live recomputation.
+describe('CenterView dimmed-invalid rule (day band, FR-042)', () => {
+  let restoreResizeObserver: () => void
+
+  beforeEach(() => {
+    restoreResizeObserver = installStubResizeObserver(900, 480)
+  })
+
+  afterEach(() => {
+    restoreResizeObserver()
+  })
+
+  it('keeps the day band text at its last committed value once a finding turns ERROR', () => {
+    seedPlacedCompetition()
+    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+
+    const band = (): string => document.querySelector('[data-day-band="0"]')?.textContent ?? ''
+    const before = band()
+    expect(before, 'the canvas drew no day band to compare').not.toBe('')
+
+    act(() => {
+      useStore.getState().setStrips(0)
+    })
+
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
+    expect(band(), 'the band must not follow the live, now-invalid derivation').toBe(before)
   })
 })
 
@@ -218,9 +240,8 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
   it('still shows the pre-edit row after the settle timer elapses, not the ERROR-state one', () => {
     // rowCells compares the pre-edit and post-settle cell strings, which the
     // table is the only view that renders.
-    showScheduleTable()
     const id = seedPlacedCompetition()
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
 
     const before = rowCells(id)
     expect(before[3]).toBe('9:45') // pool end at strips_total=12
@@ -252,9 +273,8 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
 
   it('catches up once the config is valid again, so the freeze above is not permanent', () => {
     // Same cell-by-cell evidence as the case above.
-    showScheduleTable()
     const id = seedPlacedCompetition()
-    render(<CenterView />)
+    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
 
     const before = rowCells(id)
 

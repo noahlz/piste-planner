@@ -30,11 +30,10 @@ export const TYPE_DEFAULTS: Record<TournamentTypeValue, TypeDefaults> = {
  * survive rather than resolve to a NAC's 8.
  *
  * The rule's only home. `buildConfig.ts` resolves it for the engine, and the
- * rail's two panels — `StripSetup`'s count field and `AdvancedPanel`'s summary
- * — both display it, so a second copy anywhere is a second answer to one
- * question (constitution §Planning Artifacts). Nothing here writes back to the
- * store (FR-036): a later tournament type change re-resolves the same `null`
- * against the new type.
+ * Strips & referees panel's video-strips field displays it, so a second copy
+ * anywhere is a second answer to one question (constitution §Planning
+ * Artifacts). Nothing here writes back to the store (FR-036): a later
+ * tournament type change re-resolves the same `null` against the new type.
  */
 export function resolveVideoStrips(
   videoStripsTotal: number | null,

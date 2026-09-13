@@ -57,7 +57,6 @@ export type DeStripRequirement = (typeof DeStripRequirement)[keyof typeof DeStri
 export const VideoPolicy = {
   REQUIRED: 'REQUIRED',
   BEST_EFFORT: 'BEST_EFFORT',
-  FINALS_ONLY: 'FINALS_ONLY',
 } as const
 export type VideoPolicy = (typeof VideoPolicy)[keyof typeof VideoPolicy]
 

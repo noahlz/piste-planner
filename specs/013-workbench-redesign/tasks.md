@@ -76,6 +76,16 @@
     reach a predicted number.
 12. **Every time shown is 24-hour** (FR-041). No affordance suggests a block
     drags (FR-043). No new dependency (plan.md §Technical Context).
+13. **Every surface is styled to the mockup as it is built** (T015 verdict,
+    `handoff.md` §Verdicts). The reference is `docs/design/mockup/` – the
+    Claude Design file and its design-system CSS. Phase 2's panels, phase 3's
+    canvas, phase 4's detail strip, phase 5's findings panel and phase 7's
+    schedule view take their colour, type, spacing, radius and button variants
+    from the tokens in `src/index.css`, named as the mockup names them, never
+    from ad-hoc Tailwind colour classes. Styling only: where the mockup and
+    the alignment record's §9 disagree on structure, §9 wins (D6 keeps the
+    Matrix ⇄ Schedule toggle). A polish task never changes an accessible name,
+    role, `data-*` attribute or DOM order.
 
 ## Decisions made while writing this file
 
@@ -125,7 +135,7 @@ by what the code shows. None changes what is built.
 **Purpose**: the workspace, the drift instrument, and the two structural moves
 every story reads. Nothing is deleted in this phase.
 
-- [ ] **T001** Create the workspace. From the main checkout run
+- [x] **T001** Create the workspace. From the main checkout run
   `git worktree add /Users/noahlz/projects/piste-planner-013-workbench-redesign -b 013-workbench-redesign 3cee79e1e8`,
   then `pnpm install` in the worktree. If `specs/013-workbench-redesign/tasks.md`
   is uncommitted in the main checkout, copy it into the worktree and leave the
@@ -133,8 +143,12 @@ every story reads. Nothing is deleted in this phase.
   Record `pnpm test` file and test counts, `tsc -b` and `lint` status as the
   branch's starting numbers. Commit as the branch's first commit
   *(subagent commits)*
+  → Measured 2026-09-07: cut from `1ab0d15c79` (main HEAD, child of `3cee79e1e8`,
+  carries tasks.md) instead of `3cee79e1e8`, so tasks.md was already present in
+  the worktree and no copy was needed. `pnpm test`: 68 files, 1848 tests, 0
+  skipped. `tsc -b` clean. `lint` clean.
 
-- [ ] **T002** Write `specs/013-workbench-redesign/drift-baseline.md` before any
+- [x] **T002** Write `specs/013-workbench-redesign/drift-baseline.md` before any
   `src/engine/` edit (plan.md §The drift instrument). Run the ledger and record
   per B1–B8 scenario: the scheduled count, the ERROR and WARN counts, and the
   `stripRecommendation` value, all read from
@@ -144,8 +158,11 @@ every story reads. Nothing is deleted in this phase.
   `scripts/smoke.mjs:367`, `:786`, `:863` and `:912` – NAC Youth's is expected
   to read 63 here and 66 after phase 2 ([research D14](./research.md))
   *(subagent commits)*
+  → Recorded 2026-09-07: B1–B8 scheduled counts 24/24/24/17/12/45/18/52,
+    snapshot SHA-256 5483c40c1349…, parity passes. Driver Suggest counts
+    15/63/80/48.
 
-- [ ] **T003** Move the two shared layout modules to `src/layout/`
+- [x] **T003** Move the two shared layout modules to `src/layout/`
   ([research D6](./research.md)). Red first: move
   `__tests__/components/canvas/geometry.test.ts` to
   `__tests__/layout/segments.test.ts` and `__tests__/components/canvas/lanes.test.ts`
@@ -164,14 +181,16 @@ every story reads. Nothing is deleted in this phase.
   trimmed `__tests__/components/canvas/geometry.test.ts` until T027. Delete
   `src/components/canvas/lanes.ts`. Neither new module imports React or the
   store
+  → Done 2026-09-07: 14 files (3 created, 1 moved, 1 deleted, 9 edited) / 69 test files / 1848 tests, tsc and lint clean; intersectsTimeRange inlined in layout/lanes.ts until T026.
 
-- [ ] **T004** Extend the select wrapper ([research D12](./research.md)). Red
+- [x] **T004** Extend the select wrapper ([research D12](./research.md)). Red
   first: `src/components/ui/__tests__/select.test.tsx` renders a select with
   two groups and asserts each group's label is in the document and each option
   sits under its group. Run: fails because `SelectGroup` and `SelectLabel` are
   not exported. Then add both to `src/components/ui/select.tsx` over Radix's
   `Select.Group` and `Select.Label`, already in the `radix-ui` package, and
   export them at `select.tsx:142`
+  → Done 2026-09-07: 2 files (1 test created, select.tsx edited: SelectGroup/SelectLabel added and exported) / 70 test files / 1849 tests (+1 case), tsc and lint clean.
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green at T001's counts plus
 T004's cases, and the two layout files pass from `__tests__/layout/`
@@ -190,7 +209,7 @@ new panel host until phase 2 replaces them (decision 1).
 second copy of type, days or strips anywhere. The screenshot the product owner
 reviews (FR-069).
 
-- [ ] **T005** [P] [US1] **(drift)** The dock's need. Red first:
+- [x] **T005** [P] [US1] **(drift)** The dock's need. Red first:
   `__tests__/engine/footprint.test.ts` asserts `estimateEventFootprint(competition, config)`
   returns `{ strips, poolMinutes, deMinutes }` equal to what
   `deriveEventSchedule` yields for a synthetic placement at day 0, the day's
@@ -200,8 +219,9 @@ reviews (FR-069).
   with `deriveEventSchedule` too ([research D10](./research.md)). Run: fails
   because the export is missing. Then add it to `src/engine/derive.ts` with no
   new arithmetic. Ledger expected to show nothing moved – nothing reads it yet
+  → Done 2026-09-07: 5 cases; ledger and parity pass before and after, snapshot SHA-256 unchanged (`5483c40c1349…`). Staged DE reads `de_prelims_start ?? de_round_of_16_start` as the DE start. Day start falls back to `config.DAY_START_MINS` (`TournamentConfig` has no `day_start_time`)
 
-- [ ] **T006** [P] [US1] The last run and the preset id. Red first, in
+- [x] **T006** [P] [US1] The last run and the preset id. Red first, in
   `__tests__/store/store.test.ts`: (1) `runScheduleAll` returns
   `{ placed, unplaced }` and writes `lastAutoRun: { at, placed, unplaced }` on
   the `UiSlice`, where `placed` counts events the run gave a pool start and
@@ -212,8 +232,9 @@ reviews (FR-069).
   want of the field and the wider type. Then implement in `src/store/store.ts`
   (`UiSlice` at `:119`, `loadedPresetId` at `:121`, `applyTemplate` at `:375`)
   and `src/store/runActions.ts:14`
+  → Done 2026-09-07: 4 cases. `unplaced` is `competitions.length − placed` – a permanently failed event has no `schedule` entry at all, so "no pool start" within `schedule` is always empty. Measured B1 24/0, B4 18/12 (18 is the recorded app-path parity exception against the ledger's 17, not drift). `applyTemplate` recording the preset broke `Scorecard.test.tsx`'s `loadWithoutPreset` fixture; re-pointed at `selectCompetitions` (orchestrator, 1-line)
 
-- [ ] **T007** [P] [US1] Export plumbing without a popover (FR-009). Red first:
+- [x] **T007** [P] [US1] Export plumbing without a popover (FR-009). Red first:
   `__tests__/store/exportActions.test.ts` covers save to file (a JSON blob of
   `serializeState`), load from file (parses, rejects an invalid payload with
   an error, reports whether the load would drop placements so a caller can
@@ -223,16 +244,18 @@ reviews (FR-069).
   handlers out of `src/components/sections/SaveLoadShare.tsx`, leave that
   component rendering over the new module until T011 deletes it, and confirm
   `__tests__/components/saveLoadShare.test.tsx` still passes
+  → Done 2026-09-07: 14 cases; `saveLoadShare.test.tsx` passes unchanged (12). Parse and apply are separate (`parseTournamentFile` / `applyLoadedState`) so a caller can warn about dropped placements first. jsdom has no `File.text()`, so the module reads through `FileReader`
 
-- [ ] **T008** [P] [US1] The error boundary ([research D15](./research.md)).
+- [x] **T008** [P] [US1] The error boundary ([research D15](./research.md)).
   Red first: `__tests__/components/ErrorBoundary.test.tsx` renders a child
   that throws and asserts a message and a `button` "Reload" appear instead of
   nothing, and that a child that does not throw renders through. Run: fails
   because `src/components/ErrorBoundary.tsx` does not exist. Then write it as a
   class component with state initialised as a field – no parameter property –
   and wrap `<WorkbenchShell />` with it in `src/App.tsx:24`
+  → Done 2026-09-07: 3 cases. `onReload` prop defaults to `window.location.reload` so the test can inject a spy; no parameter property
 
-- [ ] **T009** [US1] The rail and the panel host. Red first:
+- [x] **T009** [US1] The rail and the panel host. Red first:
   `__tests__/components/workbench/ToolRail.test.tsx` – a `nav` "Tool rail" with
   five `button`s "Tournament", "Strips & referees", "Events", "Findings",
   "Settings", the open one `aria-pressed="true"`, pressing an open one closes
@@ -249,8 +272,9 @@ reviews (FR-069).
   inside the host (decision 1). `src/components/workbench/WorkbenchShell.tsx`
   mounts the rail and host in place of `<Rail />` (`:24`). Delete `Rail.tsx`
   and `RailPanel.tsx` *(subagent commits)*
+  → Done 2026-09-07: 74 files / 1890 tests, tsc and lint clean. `PanelId` lives in `viewState.ts`; `AdvancedPanel` unwrapped into a `<section aria-label="Advanced">`, summary always rendered (`RailPanel`'s summary-slot cases have no successor — no collapsible remains — and are recorded here); `InspectorPanel.tsx` exports `PANEL_TITLES` with an `eslint-disable-next-line react-refresh/only-export-components` (precedent: `EventBlock.tsx`'s `blockChannels`), keeping the map beside the component whose header it labels rather than splitting it out. `WorkbenchShell.test.tsx`'s two top-bar cases scoped to the banner because the rail has its own "Settings" button until T010 deletes the top bar
 
-- [ ] **T010** [US1] The header ([research D12](./research.md), FR-004 to
+- [x] **T010** [US1] The header ([research D12](./research.md), FR-004 to
   FR-008). Red first: `__tests__/components/workbench/Header.test.tsx` – a
   `header` "Header" with the brand, `combobox` "Preset" listing eight
   tournaments under "Tournaments" and ten templates under "Templates –
@@ -273,8 +297,37 @@ reviews (FR-069).
   at `src/App.tsx:18–23` with its badge. The top bar's Settings popover goes
   with it – the old `SettingsPanel` is already behind the rail's Settings
   button (T009) *(subagent commits)*
+  → Done 2026-09-07: 8 files created (`popover.tsx`, `PresetPicker.tsx`,
+  `ExportPopover.tsx`, `Header.tsx`, `Header.test.tsx`, `ExportPopover.test.tsx`,
+  `__tests__/lib/time.test.ts`), 5 edited (`test-setup.ts` gained a
+  `ResizeObserver` stub – none existed, Radix's Popover needs one the same way
+  Tooltip does; `time.ts` gained `formatClock`; `WorkbenchShell.tsx`, `App.tsx`,
+  `SettingsPanel.tsx`'s now-stale mounting comment), 3 deleted (`TopBar.tsx`,
+  `SaveLoadShare.tsx`, `saveLoadShare.test.tsx`). `WorkbenchShell.test.tsx`'s
+  dead "top bar strip count" describe (TopBar's own duplicate spinbutton, not
+  StripSetup's differently-named "Number of strips" control) was removed
+  rather than re-targeted – no equivalent survives, and `number-input.test.tsx`
+  already covers `commitOnChange` generically. 76 files / 1903 tests, tsc and
+  lint clean, grep for stale references clean (remaining hits are historical
+  comments explaining what T010 replaced).
+  → Follow-up 2026-09-07 (React review of T007): `ExportPopover.handleLoad`
+  now wraps `parseTournamentFile` in try/catch – `readFileText`'s `FileReader`
+  `onerror` path rejected uncaught before this, an unhandled rejection no
+  error boundary could reach. The catch routes into the existing `role="alert"`
+  as "Could not read the file: …"; a new `errorMessage` helper reads `.message`
+  structurally rather than assuming `instanceof Error`, since `DOMException`
+  (what `reader.error` actually is) doesn't reliably satisfy that check. One
+  new test stubs the global `FileReader` to fail `readAsText` and asserts the
+  alert appears with nothing written to the store. 76 files / 1904 tests, tsc
+  and lint clean.
+  → Review fixes folded in before T011 (committed with T011): templates now run
+  Auto-assign (D12); ToolRail reads PANEL_TITLES; footprint test gained two
+  hand-derived literal cases; exportActions non-mutation case made
+  non-vacuous; lastAutoRun clock pinned; ExportPopover catches a failed read.
+  T010 was written green-first, not red-first – recorded as a process
+  deviation.
 
-- [ ] **T011** [US1] The footer, and the center loses its chrome (FR-049,
+- [x] **T011** [US1] The footer, and the center loses its chrome (FR-049,
   FR-050, [research D7, D18](./research.md)). Red first:
   `__tests__/components/workbench/StatusFooter.test.tsx` re-targets
   `Scorecard.test.tsx` (deleted here) – a `footer` "Status bar" with
@@ -305,8 +358,19 @@ reviews (FR-069).
   `Drawer.tsx` and `Scorecard.tsx` and the two fields from `viewState.ts`.
   `AnalysisOutput` is mounted only behind the rail's Findings button from
   here (decision 2) *(subagent commits)*
+  → Done 2026-09-07 in two halves: 75 files / 1854 tests, tsc and lint clean.
+  Footer reads `selectFooterMetrics` (three ids kept) and
+  `selectPlacementCounts`; `recompute.test.tsx`'s FR-029 hover case removed
+  with the hover (D7); `scorecardMetrics` cases for per-day finish, sabre
+  peak, balance spread, findings counts and block keys dropped with their
+  subjects. `viewMode` is owned by the shell and passed to the center and
+  footer. Measured: B5's baseline `selectPlacementCounts` is
+  `{ placed: 12, unplaced: 3, pinned: 0 }` – the lane packer's first fit
+  cannot place 3 of 24 drawn segments the scheduler placed; two packers over
+  the same strips do not always agree. Recorded, not corrected.
+  → Review fix before T014: selectPlacementCounts counts overflowing events once and excludes them from placed (data-model §10's "whatever the store says"), so placed + unplaced equals the selected count; B5 re-measured as { placed: 9, unplaced: 3, pinned: 0 }. Header.test's tournament case now drives the real picker; its export case renders the header.
 
-- [ ] **T012** [US1] The dock (FR-010, FR-011). Red first:
+- [x] **T012** [US1] The dock (FR-010, FR-011). Red first:
   `__tests__/components/workbench/UnplacedDock.test.tsx` re-targets
   `UnplacedTray.test.tsx` (deleted here) – a `section` "Unplaced events",
   identifiable when empty, one `button` chip per event with no placement
@@ -317,8 +381,14 @@ reviews (FR-069).
   component does not exist. Then build `src/components/workbench/UnplacedDock.tsx`,
   mount it in `WorkbenchShell.tsx` in place of `<UnplacedTray />` (`:26`), and
   delete `UnplacedTray.tsx`. The chip's click handler is wired in T030
+  → Done 2026-09-07: 3 files (UnplacedDock.tsx created, UnplacedTray.tsx and
+  UnplacedTray.test.tsx deleted, UnplacedDock.test.tsx created,
+  WorkbenchShell.tsx edited) / 1856 tests, tsc and lint clean. Need text from
+  estimateEventFootprint via selectDerivedSchedule's config; chips with
+  fencer_count < 2 render without a need rather than throwing. Run note
+  measured on B4: Placed 18, 12 could not be placed.
 
-- [ ] **T013** [US1] The shell, whole. Red first: rewrite
+- [x] **T013** [US1] The shell, whole. Red first: rewrite
   `__tests__/components/workbench/WorkbenchShell.test.tsx` – exactly one
   `header` "Header", one `section` "Unplaced events", one `nav` "Tool rail",
   at most one `aside` "Inspector panel", one `main` "Center view", one
@@ -333,8 +403,27 @@ reviews (FR-069).
   `SaveLoadShare`, `RailPanel`, `scorecardBaseline`, `hoveredMetricId`,
   `data-highlighted` – over `src/` and `__tests__/`; it must return nothing
   *(subagent commits)*
+  → Done 2026-09-07: rewrote `WorkbenchShell.test.tsx` around the six regions
+  (exactly one each of Header/Unplaced events/Tool rail/Center view/Status
+  bar, at most one Inspector panel), no retired surface, single source of
+  type/day/strip controls, one panel open at a time, and floating-vs-docked
+  surviving a remount. Finished `WorkbenchShell.tsx`'s middle row with
+  `min-h-0` and rewrote its doc comment around the six regions with no
+  retired name. Phase 1 grep returns nothing over `src/` and `__tests__/`.
+  Removed the `highlight`/`highlighted` prop and `data-highlighted` from
+  `MatrixCanvas.tsx` and `EventBlock.tsx` (D7) with their 5 (`MatrixCanvas
+  highlight (FR-029)`) and 15 (`EventBlock highlight cue (FR-029)`) cases;
+  `MatrixCanvas.test.tsx`'s existing overflow-cue case at `:586-596` still
+  covers `data-overflow-cue` end to end, so no coverage gap. Reworded every
+  other grep hit's prose (`Drawer.tsx`, `TopBar`, `RailPanel`,
+  `SaveLoadShare`, the scorecard) across 12 files without changing behavior;
+  trimmed 3 StatusFooter.test.tsx and WorkbenchShell.test.tsx assertions that
+  named the retired regions by role, since naming them is itself what the
+  grep bans and no component by either name exists anywhere to regress into.
+  75 files / 1837 tests green (1856→1837: the 20 deleted highlight cases less
+  1 net new WorkbenchShell case), tsc and lint clean.
 
-- [ ] **T014** [US1] **(dispatched)** Re-point `scripts/smoke.mjs` for phase 1,
+- [x] **T014** [US1] **(dispatched)** Re-point `scripts/smoke.mjs` for phase 1,
   in place ([research D14](./research.md)): `button` "Save / Share" at `:181`,
   `:547`, `:559`, `:685`, `:692` → `button` "Export", then "Generate Link" and
   `input[readonly]` as before; the scorecard steps at `:210–279` → read
@@ -352,8 +441,32 @@ reviews (FR-069).
   `radio` "Matrix" / "Schedule" steps stay, now inside the footer. Run the
   driver twice; report SMOKE PASS/FAIL for both, every Suggest count read, and
   the console error count, which must be 0 *(subagent commits)*
+  → Done 2026-09-07: SMOKE PASS twice, identical both runs. Suggest counts —
+  ROC Div1A/Vet 15, NAC Youth 63, NAC Vet/Div1/Junior 80, NAC Cadet/Junior 48.
+  Boot placed 24/24 on the schedule table vs the footer's `19 placed / 5
+  unplaced / 0 pinned` (logged, not asserted equal — the lane packer and the
+  scheduler can disagree). Console errors: 0 both runs. First run hit a real
+  defect, not a locator: the FR-022 tooltip opened then closed ~20ms later on
+  every hover after any preset switch (reproduced 15/15 attempts, isolated to
+  Radix's Popper wrapper being hit-testable and intercepting the viewport's
+  `onPointerLeave`) — fixed in `CanvasTooltip.tsx` by an Opus debugger and
+  carried on this same checkpoint, not by this task. Also found and fixed:
+  page3 (the Admin-gap share round-trip) shares `ctx`'s `localStorage` with
+  `page`, so `viewState.ts`'s `panel` was already "settings" on load and an
+  unconditional `Settings` click closed it instead of opening it — `openPanel`
+  now takes an optional target page so page3 gets the same aria-pressed guard.
+  Deleted assertions: the scorecard's expanded/collapsed row-id lists and the
+  FR-029 hover-highlight block (both retired by D7, no footer equivalent to
+  assert). Changed: the strip-count delta assertion now bumps strips through
+  the Strips & referees panel and reads the footer's `strips` metric plus the
+  header's `data-summary`, instead of a scorecard `[data-metric-delta]`; the
+  Settings mutual-exclusion assertion against "Save / Share" was kept, reworded
+  for Export's Popover-dismisses-on-outside-click behavior, since it still
+  holds. Added a `closePanel()` helper: the floating Inspector panel overlaps
+  the canvas's left edge and intercepted the tooltip hover before it was
+  closed first.
 
-- [ ] **T015** [US1] **(user judges)** The product owner's screenshot (FR-069,
+- [x] **T015** [US1] **(user judges)** The product owner's screenshot (FR-069,
   SC-001, quickstart §3). Dispatch the `live-smoke` skill to run the app, load
   B1 at 80 strips, and save full-window screenshots at 1440×900 and 1920×1080
   under `scripts/smoke-shots/`. Send both to the product owner and **stop**.
@@ -362,9 +475,62 @@ reviews (FR-069).
   board at 100%. Record the verdict in `handoff.md` §Verdicts. **A "no" halts
   phase 3 until the look is revised**, and the revision is a re-plan – record
   it, hand back a resume prompt, stop (constitution §Orchestration)
+  → Done 2026-09-07: `scripts/screenshot.mjs` added as a repo artifact (reuses
+  the driver's Chrome discovery, viewport shots per size in its `SIZES`
+  list); B1 shots at 1440×900 and 1920×1080 sent, 0 console errors. Verdict:
+  **yes, with a polish pass** – recorded in `handoff.md` §Verdicts with the
+  decisions taken (chrome now and everything at close-out; styling only; the
+  mockup copied into `docs/design/mockup/`). The polish pass is the re-plan
+  that follows: T015a, T015b, T044 and standing rule 13, added by the session
+  that recorded the verdict, which then stopped.
+
+- [x] **T015a** [US1] Chrome polish against the mockup (styling only, standing
+  rule 13). Reference: `docs/design/mockup/Piste Planner Workbench.dc.html`
+  and `docs/design/mockup/ds-styles.css`. Port the design-system tokens the
+  four chrome regions use – colour, type scale, radius, spacing, the button
+  variants – into `src/index.css` as CSS variables named as the mockup names
+  them, and restyle `Header.tsx`, `ToolRail.tsx`, `UnplacedDock.tsx` and
+  `StatusFooter.tsx` (and `PresetPicker.tsx`, `ExportPopover.tsx`'s trigger,
+  `InspectorPanel.tsx`'s chrome) to the mockup's look, including the Export
+  button, which today renders white-on-white. Delete every ad-hoc Tailwind
+  colour class a token replaces in the same commit (rule 4). No accessible
+  name, role, `data-*` attribute or DOM order changes – `scripts/smoke.mjs`
+  must pass without a locator edit, and that is the assertion this task is
+  held to. Existing component tests stay green; any test that pinned a phase-1
+  class string is re-targeted at the token in the same task; no new test is
+  written for a colour. `tsc -b` and `lint` clean *(subagent commits)*
+  → Decided 2026-09-07 (handoff.md §Verdicts): type is a system-font stack
+  carrying the mockup's sizes, weights, letter-spacing and line heights – no
+  font file vendored or linked (plan.md: no new dependency).
+  → Done 2026-09-07: 8 files changed (src/index.css and Header, PresetPicker,
+  ExportPopover, ToolRail, UnplacedDock, StatusFooter, InspectorPanel). Shadcn
+  core variables re-pointed to the mockup's palette so every primitive
+  re-skins at once; Industry ramps --accent-100…900/--neutral-100…900 added
+  and mapped in @theme inline, replacing Tailwind's default neutral-100…900
+  (grep neutral- found no prior use); chrome roles --chrome/--chrome-border/
+  --chrome-deep/--hover-tint/--ok added; the twelve --weapon-* tokens added
+  now with the mockup's values so T024 finds them present and only writes
+  weaponTokens.ts. Export, the five rail buttons, and the panel's Dock/Float/
+  Close became icon-only with aria-label+title carrying the byte-identical
+  names. tsc clean, lint clean, 75 files / 1842 tests. SMOKE PASS, 0 console
+  errors, no driver edit; Suggest 15/63/80/48.
+
+- [x] **T015b** [US1] **(dispatched, user judges)** Prove the polish changed
+  nothing but paint. Run `scripts/smoke.mjs` once – SMOKE PASS, 0 console
+  errors, no driver edit – then `scripts/screenshot.mjs` and send both shots to
+  the product owner. They judge against the mockup at a glance; a "no" is not
+  a halt but a list of what still differs, recorded under the T015 verdict in
+  `handoff.md` §Verdicts and carried into T044's scope
+  → Run 2026-09-07 at 785327a42f: SMOKE PASS, 0 console errors, no driver
+  edit, Suggest 15/63/80/48; both shots sent to the product owner. Re-look
+  verdict pending – recorded and ticked in the next session (sessions/S4.md).
+  → Recorded 2026-09-07: SMOKE PASS, 0 console errors, no driver edit, and
+  the product owner's re-look verdict is "matches" – nothing carried into
+  T044 (handoff.md §Verdicts).
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. US1 is the MVP: the
-shell stands on the old panels and every old chrome surface is gone.
+shell stands on the old panels and every old chrome surface is gone, and the
+chrome wears the mockup's tokens.
 
 ---
 
@@ -380,7 +546,7 @@ summary, canvas and footer follow. No input exists for referees available,
 admin gap, flight buffer, per-event cut, DE mode, video policy or referee
 policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
 
-- [ ] **T016** [P] [US2] Tournament panel (FR-013 to FR-015). Red first:
+- [x] **T016** [P] [US2] Tournament panel (FR-013 to FR-015). Red first:
   `__tests__/components/workbench/panels/TournamentPanel.test.tsx` takes the
   type, day-count and day-hours cases from `__tests__/components/configEditing.test.tsx`
   – `radiogroup` "Tournament type" with six `radio`s NAC, RYC, RJCC, ROC, SYC,
@@ -395,8 +561,13 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   delete `TournamentSetup.tsx`, and re-point the driver's type step at
   `scripts/smoke.mjs:1053` to `radio` "ROC" in that radiogroup. The events
   cases in `configEditing.test.tsx` wait for T020
+  → Done 2026-09-07 (committed with T018, `1e730723b7`): 7 cases; Radix
+  RadioGroup from the umbrella package. The "existing out-of-range notice" is
+  the engine's `days-available-range` rule (`validation.ts:421`), read from
+  the derived findings rather than re-worded. `TIME_OPTIONS` in `lib/time.ts`;
+  AM/PM `formatTime` deleted with `TournamentSetup`.
 
-- [ ] **T017** [P] [US2] The search returns instead of writing
+- [x] **T017** [P] [US2] The search returns instead of writing
   ([research D8](./research.md), FR-017). Red first, in
   `__tests__/store/store.test.ts`: `describe('suggestStrips')` becomes
   `describe('computeSuggestedStrips')` – it resolves to the search's answer for
@@ -407,8 +578,12 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   (`src/store/store.ts:63`, `:240–273`) into `computeSuggestedStrips():
   Promise<number | null>` with the same bounded scan and macrotask yield, and
   delete `suggestStrips`
+  → Done 2026-09-07 (committed with T018, `1e730723b7`): 6 cases, red on
+  "computeSuggestedStrips is not a function"; the subscribe case sees no
+  `strips_total` write during the search. No `suggestStrips` under `src/` or
+  `__tests__/`.
 
-- [ ] **T018** [US2] Strips & referees panel (FR-016 to FR-018,
+- [x] **T018** [US2] Strips & referees panel (FR-016 to FR-018,
   [research D8, D9](./research.md)). Red first:
   `__tests__/components/workbench/panels/StripsPanel.test.tsx` re-targets
   `__tests__/components/sections/StripSetup.test.tsx` and
@@ -435,8 +610,28 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   callers unchanged); the Advanced steps at `:978–1001` read
   `data-refs-per-pool` and press the video revert in this panel
   *(subagent commits)*
+  → Done 2026-09-07, `1e730723b7`: 24 cases; 75 files / 1849 tests, tsc and
+  lint clean. Reveal timers held in a `Set`, not one ref – the mount search
+  and a debounced search can overlap (the stale-token case proves it).
+  Dropped without successor: AdvancedPanel's per-event referee Default-badge
+  case (no per-event control remains) and its DE-mode summary assertions
+  (T022 re-homes DE mode). Driver: `pressSuggest` opens the panel, waits for
+  `data-suggested-strips`, presses Apply; the per-event `Referees for` steps
+  are untouched until T020 deletes them, so the driver is not runnable
+  between this commit and T020's.
+  → Review follow-up 2026-09-13 at `8f670eba53`: `runSearch` catches,
+  `TournamentPanel` reads `daysAvailableRangeMessage` (exported from
+  `validation.ts`, text unchanged) instead of the findings memo, the debounce
+  test splits its acts, the status text is asserted exactly, and the
+  video-strips-at-ROC coverage from `AdvancedPanel.test.tsx` is restored.
+  → Two more follow-ups from T023's live run: `9da51b1b15` clears the
+  suggested minimum the moment an input changes (the card kept the previous
+  template's number, Apply enabled, through the debounce and search);
+  `e4fcd29058` bumps the search token at that clear so a search already in
+  flight cannot land its stale answer, and resets the indicator. 72 files,
+  1840 passing.
 
-- [ ] **T019** [US2] Red tests for the shrink ([research D7](./research.md),
+- [x] **T019** [US2] Red tests for the shrink ([research D7](./research.md),
   FR-062, FR-064, FR-071). In `__tests__/store/buildConfig.test.ts`: on a
   default store `buildTournamentConfig` derives, per competition, `ref_policy`
   from `TYPE_DEFAULTS[type]`, `cut_mode` and `cut_value` from
@@ -459,8 +654,16 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `typeDefaultPrecedence.test.ts` and `competitionDefaults.test.ts` wherever
   they set a retired per-event field. Run: the shrink cases fail on the extra
   fields and the version, the panel cases because it does not exist
+  → Done 2026-09-08 at `1e730723b7`, uncommitted (T020 commits): red on
+  `flighted` (`buildConfig.test.ts:681`), v3 round trip and v2 refusal
+  (`serialization.test.ts:1075`, `:1091`), and the missing `EventsPanel.tsx`
+  (11 cases). Pre-shrink baseline captured to
+  `__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json` from
+  the code, not by hand. Dropped without successor: explicit per-event
+  `ref_policy`/`de_mode` survival (typeDefaults ×2, precedence ×2) and the
+  regional-cut-beats-explicit-cut describe (×2). Details in sessions/S5.md.
 
-- [ ] **T020** [US2] The per-event record shrinks. `CompetitionConfig`
+- [x] **T020** [US2] The per-event record shrinks. `CompetitionConfig`
   (`src/store/store.ts:81`) becomes `{ fencer_count, flighted }`,
   `defaultConfigForId` (`:297`) and `updateCompetition` follow,
   `src/store/buildConfig.ts` derives the six fields per data-model §4,
@@ -474,8 +677,13 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `__tests__/store/appPathParity.test.ts`: it must pass unedited – this is the
   check that the shrink changed nothing the engine sees on a default store
   *(subagent commits)*
+  → Done 2026-09-13 at `a85e14f5f5`. `appPathParity.test.ts` passed unedited
+  (17 cases). 75 files, 1848 passing, only `EventsPanel.test.tsx` red on its
+  missing module (T021). `globalOverrides` moved to a temporary top-level
+  payload key that T022 removes. Team-cut coercion in `buildConfig.ts` is now
+  a backstop behind `defaultCutForEntry`; no test can prove it fires.
 
-- [ ] **T021** [US2] Events panel (FR-019 to FR-021, [research D15](./research.md)).
+- [x] **T021** [US2] Events panel (FR-019 to FR-021, [research D15](./research.md)).
   Build `src/components/workbench/panels/EventsPanel.tsx` so T019's panel
   cases go green, mount it under the Events button in place of
   `CompetitionMatrix` and `FencerCounts`, delete
@@ -484,6 +692,17 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   and T019), and re-point the driver's `spinbutton` /Fencer count for/ step at
   `scripts/smoke.mjs:524` to open the Events panel and read the pressed
   chips' inputs *(subagent commits)*
+  → Done 2026-09-13 at `c956bde6bb`. 74 files, 1858 passing, tsc and lint
+  clean. Fencer input sits inline after its pressed chip. Two successor gaps
+  from `configEditing.test.tsx` closed in `EventsPanel.test.tsx` (the input
+  commits; pressed count equals the template's length). `recompute.test.tsx`
+  mounts `EventsPanel` in place of `FencerCounts`. Driver step unchanged but
+  for its comment; not run until T023.
+  → Review follow-up 2026-09-13 at `df977bf487` (T020–T022 bundle): chips
+  are a memoised `EventChip` subscribing per entry, so a fencer keystroke no
+  longer re-renders all 120 (render-count test, red before the fix); absent
+  `de_mode_override` key round-trips to null; two fixture comments corrected;
+  the cut-ordering case is marked ordering-only. 72 files, 1837 passing.
 
 - [ ] **T022** [US2] Settings panel and the last two store changes (FR-029 to
   FR-031, FR-063, [research D7](./research.md)). Red first:
@@ -511,8 +730,16 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `:696–706` are deleted and replaced by one step that sets DE mode to Single,
   generates a link, opens it and reads the radio back, and one that changes a
   pool duration and confirms the schedule moves *(subagent commits)*
+  → Done 2026-09-13 at `260be6b22f`. 72 files, 1835 passing, tsc and lint
+  clean, `appPathParity.test.ts` unedited. Phase grep returns nothing after
+  comment-only rewording in six files. Radix `onValueChange` skips a press on
+  the checked pill, so each pill also writes on click; the Default marker
+  reads `de_mode_override`, never a value comparison. Two flags for handoff:
+  no control returns `de_mode_override` to null (spec names only two pills),
+  and the driver's leftover state is now a Single DE-mode override on NAC
+  that `applyTemplate` carries into NAC Youth's Suggest count (T023 records).
 
-- [ ] **T023** [US2] **(dispatched)** Run the driver twice. **Record NAC
+- [x] **T023** [US2] **(dispatched)** Run the driver twice. **Record NAC
   Youth's count** at `scripts/smoke.mjs:786` in the driver's own comment and
   in `handoff.md` §Verdicts – expected 66 now that the Admin gap step is gone
   ([research D14](./research.md)); a different value is recorded, not
@@ -522,6 +749,15 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `CompetitionOverrides`, `StripSetup`, `TournamentSetup`, `globalOverrides`,
   `FINALS_ONLY`, `deModeLabels`, `suggestStrips` – over `src/` and
   `__tests__/`; it must return nothing *(subagent commits)*
+  → Done 2026-09-13 at `9da51b1b15`. The first run tripped SC-008 (a hard,
+  unrelated assertion) on a leak from T022's DE-mode round-trip step, then a
+  UI display race in `StripsPanel` (fixed separately at `9da51b1b15`, not by
+  this task) — both diagnosed and recorded in `handoff.md` finding 8. Once
+  fixed, both runs: SMOKE PASS, 0 console errors, Suggest 15/66/80/48, boot
+  24 rows / 19·5·0. Grep returns nothing. 72 files / 1838 tests, tsc and lint
+  clean. The driver gained one structural line (restoring DE mode to Staged
+  after the T022 round-trip) beyond the dispatched comment edit — recorded
+  as finding 8, not folded in silently.
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. Every input has one
 home. Phases 0–2 are the MVP.
@@ -540,7 +776,7 @@ bands and gutter sticky, zoom stops at both ends with the button disabled, Fit
 day refits on resize, every block keeps fill, hatch and label at the closest
 rung.
 
-- [ ] **T024** [P] [US3] The ladder and the tokens ([research D3, D4](./research.md),
+- [x] **T024** [P] [US3] The ladder and the tokens ([research D3, D4](./research.md),
   data-model §7, §8). Red first: `__tests__/components/canvas/zoomLadder.test.ts`
   re-targets `zoom.test.ts` – six rungs with the exact `ppm` and `row` values,
   `DEFAULT_ZOOM = 2`, readout as a percentage of rung 2 (`47%`, `69%`, `100%`,
@@ -554,8 +790,11 @@ rung.
   twelve weapon tokens to `src/index.css`. `zoom.ts`, `palette.ts`, the
   `--cat-*` block and the two old test files are deleted in T026, when their
   last readers go
+  → 2026-09-13, committed with T026 at `05103d5ff4`. Red on missing modules,
+  then 24 + 42 tests. The twelve `--weapon-*` tokens already existed in
+  `index.css` from T015a and matched §8; nothing was added there.
 
-- [ ] **T025** [US3] Red tests for the canvas. `__tests__/components/canvas/Canvas.test.tsx`
+- [x] **T025** [US3] Red tests for the canvas. `__tests__/components/canvas/Canvas.test.tsx`
   re-targets `MatrixCanvas.test.tsx` – for B1 at 80 strips and four days,
   exactly 320 `data-strip-row` elements are in the document with no
   windowing, `data-canvas-scroller` is the one scrolling container, the axis
@@ -586,8 +825,15 @@ rung.
   boundaries, `unplaced` and `findings`. Run: everything fails for want of
   `Canvas.tsx`, `Block.tsx`, the selector and the view-state fields.
   `windowing.test.ts` has no successor and is deleted in T026
+  → 2026-09-13, two parallel red dispatches, committed with T026 at
+  `05103d5ff4`. Every file failed on the missing module, field or export it
+  predicted. `daySummaries.test.ts` counts `validationErrors` only: analysis
+  warnings have no `findingIdentity` and cannot be dismissed, so the
+  dismissal case can only be written against a validation finding.
+  `viewTogglePersistence.test.tsx` was re-pointed in T026 too – it spread the
+  deleted fields.
 
-- [ ] **T026** [US3] **(Opus)** The canvas ([research D2, D3, D4, D18](./research.md),
+- [x] **T026** [US3] **(Opus)** The canvas ([research D2, D3, D4, D18](./research.md),
   FR-032 to FR-043). Build `src/components/canvas/Canvas.tsx` – one natively
   scrolling container, a sticky time axis picking tick density from the rung,
   one group per day with a sticky band reading `selectDaySummaries`, a sticky
@@ -610,8 +856,19 @@ rung.
   Re-point the driver: `button` "Fit to day" at `scripts/smoke.mjs:463` →
   footer `button` "Fit day", and any toolbar locator → the footer's `toolbar`
   "Zoom" *(subagent commits)*
+  → 2026-09-13, `05103d5ff4`; review follow-up `01765a3087`. Suite 72 files /
+  1840 → 71 / 1663 (the six deleted SVG-canvas test files were 2,967 lines),
+  then 1666 after the follow-up. Drift ledger and parity unchanged. Two test
+  literals moved by measurement (handoff §T026). Tick ladder is
+  15/30/60/120/180/360 min at a 72 px gap – the dispatched 60–360 at 48 px
+  gave every rung 60-minute ticks. The "Fit to day" driver step was at
+  `smoke.mjs:430`, not 463; it now presses "Zoom in" first because the app
+  boots in fit mode. Review found the day band read the live store while the
+  grid drew the committed model (FR-042); fixed by `daySummariesFromBlocks`
+  over the canvas's own lanes. Finding 1 re-measured: the packer and the
+  counter agree (19 + 5 overflow = 24), see handoff finding 9.
 
-- [ ] **T027** [US3] **(dispatched)** Run the driver twice and add the SC-005
+- [x] **T027** [US3] **(dispatched)** Run the driver twice and add the SC-005
   read to the live check: step zoom in until "Zoom in" disables, count
   `[data-event-block]` and confirm every one still carries `data-weapon` and
   its label or icon, then "Reset zoom". Report SMOKE PASS/FAIL ×2, the rung
@@ -619,6 +876,19 @@ rung.
   for `MatrixCanvas`, `EventBlock`, `blockLabels`, `palette\.ts`, `windowing`,
   `canvas/zoom`, `--cat-`, `rowHeightStep`, `timeZoom` over `src/` and
   `__tests__/`; it must return nothing *(subagent commits)*
+  → 2026-09-13, `b9f9ad46b8` after the SC-005 read found a live defect: a
+  5-minute DE-prelims block 45 px wide at rung 5 drew neither label nor icon.
+  Fixed in the app at `41dfe0e31f` (icon shown alone, shrinking to a 10 px
+  floor), review follow-up `ce540ffd56` (padding and gap applied inline as
+  the mockup does, empty label span not rendered), driver re-pointed at
+  `2eda25bc66` (absent label read as empty). PASS ×2 at `b9f9ad46b8` and ×2
+  at `2eda25bc66`: 0 console errors, boot 24 rows / `19 placed · 5 unplaced
+  · 0 pinned`, Suggest 15 / 66 / 80 / 48, readout 281% after two presses
+  from the driver's rung 3, 30 blocks all with weapon and label-or-icon.
+  SC-005's "label" is read as label-or-phase-icon (FR-035 lets a block
+  choose); the driver comment names the block that set it. Grep clean apart
+  from `canvas/zoomLadder` paths and the three negative `--cat-` assertions
+  in `weaponTokens.test.ts`; ten prose mentions reworded.
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. 320 rows, six rungs,
 weapon fills, five cues, view equivalence holds.
@@ -853,6 +1123,20 @@ placed event once at the canvas's times, and printing yields four pages.
 
 ## Phase 8: Close-out
 
+- [ ] **T044** Close-out polish against the mockup (styling only, standing
+  rule 13; the second half of the T015 verdict). With every surface built,
+  walk the mockup region by region – header, rail, each of the five panels,
+  the dock, the canvas and its blocks, the detail strip, the findings panel,
+  the footer, the Schedule view – and bring each to the mockup's tokens,
+  type, spacing and radius where a phase left it short, plus whatever T015b's
+  verdict listed. Delete the ad-hoc colour classes each change replaces. Same
+  holds as T015a: no accessible name, role, `data-*` or DOM-order change, the
+  driver passes without a locator edit, existing tests stay green, `tsc -b`
+  and `lint` clean. End by running `scripts/screenshot.mjs` and sending the
+  shots to the product owner; their verdict goes in `handoff.md` §Verdicts
+  beside T015's. Runs before T039 so the live smoke validates it
+  *(subagent commits)*
+
 - [ ] **T037** [P] Design-document edits (FR-070). In
   `docs/design/competition-planner-workbench.md`: §Virtualization (`:161`)
   records that 013 removed windowing deliberately – native scrolling and
@@ -925,7 +1209,7 @@ placed event once at the canvas's times, and printing yields four pages.
 ```
 T001 → T002 → T003 → T004
                        ↓
-[US1: T005 ‖ T006 ‖ T007 ‖ T008 → T009 → T010 → T011 → T012 → T013 → T014 → T015 (user judges)]
+[US1: T005 ‖ T006 ‖ T007 ‖ T008 → T009 → T010 → T011 → T012 → T013 → T014 → T015 (user judges) → T015a → T015b (user judges)]
                        ↓
 [US2: T016 ‖ T017 → T018 → T019 → T020 → T021 → T022 → T023]
                        ↓  (blocked by T015 = "yes")
@@ -939,7 +1223,7 @@ T001 → T002 → T003 → T004
                        ↓
 [US7: T036]
                        ↓
-T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043
+T044 (user judges) → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043
 ```
 
 Stories run in this order and do not interleave (plan.md §Why this order):
@@ -956,6 +1240,8 @@ Every drift-bearing task (T005, T034, T035) is the only change in its diff.
 |---|---|---|
 | T026, T031, T034, T035 | Opus | The canvas rewrite, the unified findings selector, the engine change and the ledger review are the places a wrong call stays green (plan.md §Constitution Check, Orchestration) |
 | T014, T023, T027, T039 | either, dispatched | Locator repair iterates |
+| T015b | Sonnet, dispatched | Runs the driver and the screenshot script; the judgment is the product owner's |
+| T015a, T044 | Sonnet | Styling to a reference the file names; the driver passing unchanged is the check |
 | T038 | orchestrator | Read-only grep |
 | T015, T041 | the product owner | Screenshot and print are human judgments |
 | all others | Sonnet | The decisions are in this file, the research and the contracts; the work is carrying them out |
@@ -968,6 +1254,9 @@ Every drift-bearing task (T005, T034, T035) is the only change in its diff.
 - `appPathParity.test.ts` failing after T020 or T022, which means the shrink
   changed what a default store sends the engine.
 - A "no" from the product owner in T015, which halts phase 3.
+- A polish task (T015a, T044) that changes an accessible name, role, `data-*`
+  attribute or DOM order, or that needs a driver locator edited to pass
+  (standing rule 13).
 - A retired name surviving its phase's grep (standing rule 4).
 - A driver locator repaired by rewriting the driver rather than re-pointing
   it, or a `pressSuggest` call lost (FR-067).

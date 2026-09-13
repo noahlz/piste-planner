@@ -2,8 +2,71 @@ import type { Competition } from '../../engine/types.ts'
 import { formatMinutes } from '../../lib/time.ts'
 import { GENDER_DISPLAY, WEAPON_DISPLAY, categoryDisplay } from '../competitionLabels.ts'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx'
-import { phaseDisplay, stripAssignmentLabel } from './blockLabels.ts'
-import type { BlockPlacement } from './lanes.ts'
+import { Phase } from '../../engine/types.ts'
+import type { BlockPlacement } from '../../layout/lanes.ts'
+
+/**
+ * How a block names itself in words — the phase and the strips it runs on.
+ *
+ * Two surfaces read the same block: `Block`'s accessible name and this
+ * tooltip's field rows. They must agree exactly, so the strings have one home,
+ * and this is it — 013 T026 folded the old label helper in here when its
+ * other reader was deleted. `competitionLabels.ts` is the same rule
+ * applied to a competition's own vocabulary (weapon, category, gender); this is
+ * the part of a block's description that comes from its placement instead.
+ *
+ * Only the six phases `eventTimeSegments` emits can reach a block, so
+ * `phaseDisplay`'s fallback is unreachable rather than lenient — it exists
+ * because `BlockPlacement.phase` is the whole `Phase` union.
+ */
+const PHASE_DISPLAY: Partial<Record<Phase, string>> = {
+  [Phase.POOLS]: 'Pools',
+  [Phase.FLIGHT_A]: 'Flight A',
+  [Phase.FLIGHT_B]: 'Flight B',
+  [Phase.DE_PRELIMS]: 'DE prelims',
+  [Phase.DE_ROUND_OF_16]: 'DE round of 16',
+  [Phase.DE]: 'DE',
+}
+
+// These are the block vocabulary, not components, and `Block.tsx` imports them
+// from here. Splitting them out to satisfy fast refresh would put the strings
+// and the two surfaces that must agree on them in three files.
+// eslint-disable-next-line react-refresh/only-export-components
+export function phaseDisplay(phase: Phase): string {
+  return PHASE_DISPLAY[phase] ?? phase
+}
+
+/**
+ * The strips a block occupies, 1-based for a reader. A single strip reads as
+ * one strip rather than as a range of one, and a run uses an en dash the way
+ * every other range in the UI does.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function stripRangeLabel(firstStrip: number, stripCount: number): string {
+  const first = firstStrip + 1
+  const last = firstStrip + stripCount
+  return first === last ? `Strip ${first}` : `Strips ${first}–${last}`
+}
+
+/**
+ * What a block says about its strips, overflow included.
+ *
+ * An overflowed block was granted no run at all: `assignStripLanes` reports it
+ * at `firstStrip: 0` so it has somewhere to draw, and records no occupancy for
+ * it. Reading that 0 as a placement makes both surfaces claim strips the block
+ * was never given — "Strips 1–4" over a day that had no room for it, which is
+ * fiction on exactly the over-capacity day an organizer opened the tool to
+ * find. So the count is reported without a range, and the failure is named.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function stripAssignmentLabel(
+  firstStrip: number,
+  stripCount: number,
+  overflow: boolean,
+): string {
+  if (!overflow) return stripRangeLabel(firstStrip, stripCount)
+  return stripCount === 1 ? 'Unplaced, needs 1 strip' : `Unplaced, needs ${stripCount} strips`
+}
 
 /**
  * The canvas tooltip — FR-022, contracts/ui-contract.md §Tooltip contract.
@@ -12,10 +75,11 @@ import type { BlockPlacement } from './lanes.ts'
  *
  * This is a *controlled* Radix tooltip on a zero-size anchor (research D3):
  * `open` is `target !== null` and the anchor is placed at whatever viewport
- * coordinates `MatrixCanvas` resolved. There is no trigger per block and no
- * listener per block — a hundred visible blocks mount exactly this one trigger,
- * which is what keeps hover off the per-block cost and what survives a future
- * move to `<canvas>` rendering, where there are no block elements to bind to.
+ * coordinates `Canvas` resolved. There is still exactly one Radix trigger for
+ * the whole grid; 013 T026 moved the *gesture* onto the blocks themselves,
+ * because the redesigned canvas scrolls natively and a scroller-relative
+ * hit-test would have to undo the browser's own scroll offsets on both axes to
+ * find a block the DOM already knows the pointer is over.
  *
  * Radix earns its place here rather than a new dependency: `TooltipPrimitive`
  * portals its content, so the tooltip escapes the canvas's `overflow-hidden`
@@ -24,19 +88,26 @@ import type { BlockPlacement } from './lanes.ts'
  *
  * ## The tooltip is the fallback channel, not a repeat of the block
  *
- * `EventBlock` drops its label text, then its weapon mark, then its gender
- * prefix as a block narrows (FR-016). At 27px a block is a coloured bar with a
- * single letter, and this is the only surface that still says which event it is.
+ * `Block` drops the event type, then the weapon, then the gender as a block
+ * narrows (FR-035). At its narrowest a block is a coloured bar with an icon,
+ * and this is the only surface that still says which event it is.
  * So every field is **unconditional**: the tooltip is handed no width, no row
  * height and no record of what the block drew, and therefore cannot gate a row
  * on any of them. A tooltip whose contents changed with the zoom would make the
  * organizer zoom to read it.
  *
- * ## Neither layer takes the pointer
+ * ## No layer takes the pointer — and there are three of them
  *
  * The anchor and the content are both `pointer-events: none`. The anchor sits
  * under the pointer by construction, and Radix's own hover handling on either
  * would fight the canvas handler that actually owns the gesture.
+ *
+ * Between the portal and the content sits a third layer this file does not
+ * render: Radix's positioning wrapper, `div[data-radix-popper-content-wrapper]`.
+ * It takes no `className` and `@radix-ui/react-popper@1.2.8` exposes no prop
+ * for it, so it stayed hit-testable while the two layers around it did not —
+ * see `releasePopperWrapper` below for why that closed the tooltip it had just
+ * opened.
  */
 
 /** Everything the tooltip shows, resolved by the canvas for one hovered block. */
@@ -52,6 +123,58 @@ export interface CanvasTooltipTarget {
   /** Where the anchor sits, in viewport-relative pixels. */
   anchorX: number
   anchorY: number
+}
+
+/**
+ * Takes Radix's positioning wrapper out of hit testing.
+ *
+ * `Canvas` owns the hover gesture and clears it on the block's own
+ * `pointerleave`, so *any* element that takes the pointer over the block
+ * closes the tooltip. `side="top"` keeps the content itself clear of the
+ * pointer only while there is room above the block: near the top of the plot
+ * Radix's collision detection flips the content to `bottom`, and the wrapper's
+ * rect then covers the pointer resting on the block it describes. The viewport
+ * gets `pointerleave` with `relatedTarget` reading
+ * `<div data-radix-popper-content-wrapper>`, `hovered` goes to null, and the
+ * tooltip closes about 20ms after it opened — with the pointer never having
+ * moved.
+ *
+ * Written imperatively because the wrapper is Radix's own element: it accepts
+ * no `className` and no `style`, and the only handle on it is the content ref
+ * React runs once the content is in the DOM. Radix (`@radix-ui/react-popper@1.2.8`)
+ * never puts `pointer-events` in that wrapper's style object on the open path,
+ * so React's style diffing has nothing here to overwrite.
+ *
+ * That survives only because `TooltipContent` below never passes
+ * `hideWhenDetached`. With it true, `@radix-ui/react-popper@1.2.8` writes
+ * `pointerEvents` into the wrapper's own style object once the anchor goes
+ * off-screen (`react-popper`'s `index.mjs:161-164`), and React's style diffing
+ * then clears that key the next time the anchor is back on-screen — wiping
+ * this override along with it. Anyone adding that prop reintroduces the
+ * closing bug.
+ *
+ * Exported for its own test: the DOM shape it depends on — a wrapper carrying
+ * `data-radix-popper-content-wrapper` — is Radix's to change without notice,
+ * so a change of shape warns in dev rather than silently leaving the tooltip
+ * closable again.
+ */
+// The ref callback belongs with the component whose content ref it runs on,
+// and the test above imports it from here. Splitting it out to satisfy fast
+// refresh would put the Radix workaround and the markup it governs in two files.
+// eslint-disable-next-line react-refresh/only-export-components
+export function releasePopperWrapper(content: HTMLDivElement | null): void {
+  const wrapper = content?.parentElement
+  if (content && !wrapper?.hasAttribute('data-radix-popper-content-wrapper')) {
+    if (import.meta.env.DEV) {
+      console.warn(
+        '[CanvasTooltip] expected the tooltip content\'s parent to be Radix\'s ' +
+          '`div[data-radix-popper-content-wrapper]`, but it was not found. The ' +
+          'tooltip may close under the pointer.',
+      )
+    }
+    return
+  }
+  wrapper?.style.setProperty('pointer-events', 'none')
 }
 
 export function CanvasTooltip({ target }: { target: CanvasTooltipTarget | null }) {
@@ -76,6 +199,7 @@ export function CanvasTooltip({ target }: { target: CanvasTooltipTarget | null }
             — the content would stay out of the DOM even if `open` were stuck
             true. */}
         <TooltipContent
+          ref={releasePopperWrapper}
           side="top"
           align="center"
           className="pointer-events-none block max-w-sm items-start text-left"

@@ -1,16 +1,15 @@
-import type { StoreState, CompetitionConfig, GlobalOverrides, DeModeSetting } from './store.ts'
-import type { DayConfig, TournamentType, Weapon as WeaponType, Placement } from '../engine/types.ts'
-import { TournamentType as TT, Weapon, PlacementSource, DeMode, RefPolicy } from '../engine/types.ts'
+import type { StoreState, CompetitionConfig } from './store.ts'
+import type {
+  DayConfig,
+  DeMode as DeModeType,
+  TournamentType,
+  Weapon as WeaponType,
+  Placement,
+} from '../engine/types.ts'
+import { DeMode, TournamentType as TT, Weapon, PlacementSource } from '../engine/types.ts'
 import {
   POOL_DURATION_MIN,
   POOL_DURATION_MAX,
-  ADMIN_GAP_MINS,
-  FLIGHT_BUFFER_MINS,
-  THRESHOLD_MINS,
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../engine/constants.ts'
 
@@ -19,7 +18,7 @@ import {
 // ──────────────────────────────────────────────
 
 export interface SerializedState {
-  schemaVersion: 2
+  schemaVersion: 3
   tournament: {
     tournament_type: TournamentType
     days_available: number
@@ -36,27 +35,27 @@ export interface SerializedState {
     // research D3). Present means at least one weapon departs, and a present
     // table is always complete.
     pool_round_duration_table?: Record<WeaponType, number>
+    // Always written, `null` included – unlike the two optional keys above,
+    // whose absence *is* their default. `null` here is a real choice ("follow
+    // the tournament type", research D7) and the type that resolves it can
+    // change after the link is made, so the payload states it rather than
+    // leaving a reader to infer it from a missing key.
+    de_mode_override: DeModeType | null
   }
-  competitions: {
-    selectedCompetitions: Record<string, CompetitionConfig>
-    // Overrides-only (FR-045): a key travels only when its value departs from
-    // its `constants.ts` default. A fully default store still writes `{}` –
-    // the key itself is required, just empty.
-    globalOverrides: Partial<GlobalOverrides>
-  }
+  /** v3: the flat map itself, no `selectedCompetitions` nesting, and only the
+   *  two fields the record still carries (data-model §3). */
+  competitions: Record<string, CompetitionConfig>
   placements: Record<string, Placement>
   dismissedFindings: string[]
 }
 
-/** The seven weapon-agnostic numeric keys of `GlobalOverrides` – every key but `DE_BOUT_DURATION`. */
-const NUMERIC_OVERRIDE_KEYS = [
-  'ADMIN_GAP_MINS',
-  'FLIGHT_BUFFER_MINS',
-  'THRESHOLD_MINS',
-  'SLOT_MINS',
-  'YOUTH_VET_BOUT_DELTA',
-  'DEFAULT_DE_STRIP_FOOTPRINT',
-] as const satisfies readonly (keyof Omit<GlobalOverrides, 'DE_BOUT_DURATION'>)[]
+// The seven-key override record travelled at the top level for exactly one
+// task: 013 T020
+// lifted it out of `competitions` so the retired Settings panel's share link
+// kept round-tripping until T022 deleted the slice. Gone from the payload,
+// from `VALID_TOP_LEVEL_KEYS` and from validation, so a URL still carrying it
+// is refused as an unknown field like any other stale key — the product is
+// unreleased and carries no compatibility (data-model §3).
 
 const VALID_TOP_LEVEL_KEYS = [
   'schemaVersion',
@@ -66,42 +65,7 @@ const VALID_TOP_LEVEL_KEYS = [
   'dismissedFindings',
 ] as const
 const VALID_TOURNAMENT_TYPES = new Set(Object.values(TT))
-// The engine's two DE modes plus the store's 'AUTO' setting (research D6) – de_mode
-// reaches buildConfig.ts and then the engine's de_mode branch, so an unvalidated
-// string in this position is a real hole, not a cosmetic gap.
-const VALID_DE_MODES = new Set<string>([...Object.values(DeMode), 'AUTO'])
-// Same reasoning one field over: ref_policy reaches buildConfig.ts's AUTO branch
-// and then the engine's referee demand scaling, so an unrecognized string here
-// is a real hole too. No spread-plus-literal — `RefPolicy` already carries AUTO
-// as the unset marker (research D5) alongside the two resolved policies.
-const VALID_REF_POLICIES = new Set<string>(Object.values(RefPolicy))
-
-/**
- * Only the settings that depart from their `constants.ts` default travel
- * (FR-045). `DE_BOUT_DURATION` departs as a whole record – if any weapon
- * differs from its default the whole record is written, never a per-weapon
- * partial, because the panel's revert-to-default acts on the whole row.
- */
-function overridesOnly(overrides: GlobalOverrides): Partial<GlobalOverrides> {
-  const written: Partial<GlobalOverrides> = {}
-  const defaults: Record<(typeof NUMERIC_OVERRIDE_KEYS)[number], number> = {
-    ADMIN_GAP_MINS,
-    FLIGHT_BUFFER_MINS,
-    THRESHOLD_MINS,
-    SLOT_MINS,
-    YOUTH_VET_BOUT_DELTA,
-    DEFAULT_DE_STRIP_FOOTPRINT,
-  }
-  for (const key of NUMERIC_OVERRIDE_KEYS) {
-    if (overrides[key] !== defaults[key]) {
-      written[key] = overrides[key]
-    }
-  }
-  if (Object.values(Weapon).some((weapon) => overrides.DE_BOUT_DURATION[weapon] !== DE_BOUT_DURATION[weapon])) {
-    written.DE_BOUT_DURATION = overrides.DE_BOUT_DURATION
-  }
-  return written
-}
+const VALID_DE_MODES = new Set<unknown>(Object.values(DeMode))
 
 // ──────────────────────────────────────────────
 // Serialize
@@ -110,27 +74,25 @@ function overridesOnly(overrides: GlobalOverrides): Partial<GlobalOverrides> {
 /** Serialize current store state to JSON string. Only serializable slices are included. */
 export function serializeState(state: StoreState): string {
   const serialized: SerializedState = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     tournament: {
       tournament_type: state.tournament_type,
       days_available: state.days_available,
       dayConfigs: state.dayConfigs,
       strips_total: state.strips_total,
       video_strips_total: state.video_strips_total,
-      // Overrides-only, like globalOverrides one line below (FR-045): the table
-      // travels only when a weapon departs from DEFAULT_POOL_ROUND_DURATION_TABLE.
-      // Whole-table-or-absent, never a per-weapon partial – validateSchema
-      // rejects a present table that is missing a weapon.
+      // Overrides-only (FR-045): the table travels only when a weapon departs
+      // from DEFAULT_POOL_ROUND_DURATION_TABLE. Whole-table-or-absent, never a
+      // per-weapon partial – validateSchema rejects a present table that is
+      // missing a weapon.
       ...(Object.values(Weapon).every(
         (weapon) => state.pool_round_duration_table[weapon] === DEFAULT_POOL_ROUND_DURATION_TABLE[weapon],
       )
         ? {}
         : { pool_round_duration_table: state.pool_round_duration_table }),
+      de_mode_override: state.de_mode_override,
     },
-    competitions: {
-      selectedCompetitions: state.selectedCompetitions,
-      globalOverrides: overridesOnly(state.globalOverrides),
-    },
+    competitions: state.selectedCompetitions,
     placements: state.placements,
     dismissedFindings: Object.keys(state.dismissedFindings),
   }
@@ -160,9 +122,12 @@ export function validateSchema(
     }
   }
 
-  // schemaVersion
-  if (obj.schemaVersion !== 2) {
-    return { valid: false, error: 'schemaVersion must be 2' }
+  // schemaVersion. No migration and no leniency for an earlier version – the
+  // product is unreleased (data-model §3), so a v2 payload is refused, and the
+  // error names the version it saw so the refusal is diagnosable from the
+  // message alone.
+  if (obj.schemaVersion !== 3) {
+    return { valid: false, error: `schemaVersion must be 3, got ${String(obj.schemaVersion)}` }
   }
 
   // tournament
@@ -195,6 +160,23 @@ export function validateSchema(
       t.video_strips_total > (t.strips_total as number))
   ) {
     return { valid: false, error: 'video_strips_total must be null, or >= 0 and <= strips_total' }
+  }
+
+  // de_mode_override – `null` is the store's own default and has to survive a
+  // round trip, so it is accepted alongside the two engine modes. Anything else
+  // reaches `buildConfig.ts` as a competition's `de_mode` and then the engine's
+  // own branch on it, so a stray string is refused here rather than scheduled.
+  // Absent is tolerated (schema leniency, research D8) and deserializeState
+  // leaves the store's `null` in place.
+  if (
+    t.de_mode_override !== null &&
+    t.de_mode_override !== undefined &&
+    !VALID_DE_MODES.has(t.de_mode_override)
+  ) {
+    return {
+      valid: false,
+      error: `de_mode_override must be null, or one of ${Object.values(DeMode).join(', ')} – got "${String(t.de_mode_override)}"`,
+    }
   }
 
   // pool_round_duration_table – absent is valid (schema leniency), present must be complete and in range
@@ -233,53 +215,20 @@ export function validateSchema(
   if (obj.competitions == null || typeof obj.competitions !== 'object') {
     return { valid: false, error: 'Missing required field: competitions' }
   }
-  const c = obj.competitions as Record<string, unknown>
-
-  if (c.selectedCompetitions != null && typeof c.selectedCompetitions === 'object') {
-    const comps = c.selectedCompetitions as Record<string, Record<string, unknown>>
-    for (const [id, config] of Object.entries(comps)) {
-      if (typeof config.fencer_count !== 'number' || config.fencer_count < 0) {
-        return { valid: false, error: `fencer_count must be >= 0 for competition "${id}"` }
-      }
-      if (!VALID_DE_MODES.has(config.de_mode as DeModeSetting)) {
-        return {
-          valid: false,
-          error: `de_mode must be one of SINGLE_STAGE, STAGED, AUTO for competition "${id}"`,
-        }
-      }
-      if (!VALID_REF_POLICIES.has(config.ref_policy as RefPolicy)) {
-        return {
-          valid: false,
-          error: `ref_policy must be one of ONE, TWO, AUTO for competition "${id}"`,
-        }
-      }
+  // The v3 map is flat, and each entry carries only the two surviving fields
+  // (data-model §3). The five retired fields had their own validation here;
+  // they are gone because nothing writes or reads them any more – every value
+  // they carried is derived in buildConfig.ts.
+  const comps = obj.competitions as Record<string, Record<string, unknown>>
+  for (const [id, config] of Object.entries(comps)) {
+    if (config == null || typeof config !== 'object') {
+      return { valid: false, error: `competition "${id}" must be an object` }
     }
-  }
-
-  // globalOverrides – overrides-only (FR-045), so every key is optional; a
-  // present key still reaches buildConfig.ts and then the engine, so it is
-  // validated the same way de_mode/ref_policy are above.
-  if (c.globalOverrides != null && typeof c.globalOverrides === 'object') {
-    const go = c.globalOverrides as Record<string, unknown>
-    for (const key of NUMERIC_OVERRIDE_KEYS) {
-      if (key in go && typeof go[key] !== 'number') {
-        return { valid: false, error: `${key} must be a number` }
-      }
+    if (typeof config.fencer_count !== 'number' || config.fencer_count < 0) {
+      return { valid: false, error: `fencer_count must be >= 0 for competition "${id}"` }
     }
-    if ('DE_BOUT_DURATION' in go) {
-      const table = go.DE_BOUT_DURATION
-      if (table == null || typeof table !== 'object') {
-        return { valid: false, error: 'DE_BOUT_DURATION must be an object' }
-      }
-      const tableObj = table as Record<string, unknown>
-      for (const [weapon, v] of Object.entries(tableObj)) {
-        if (!Object.values(Weapon).includes(weapon as WeaponType)) {
-          return { valid: false, error: `Unknown weapon "${weapon}" in DE_BOUT_DURATION` }
-        }
-        if (typeof v !== 'number') {
-          return { valid: false, error: `DE_BOUT_DURATION.${weapon} must be a number` }
-        }
-      }
+    if (typeof config.flighted !== 'boolean') {
+      return { valid: false, error: `flighted must be a boolean for competition "${id}"` }
     }
   }
 
@@ -339,27 +288,10 @@ export function validateSchema(
   return { valid: true, data: obj as unknown as SerializedState }
 }
 
-/**
- * Merge the overrides-only payload onto the `constants.ts` defaults, read
- * live at load time – an omitted key tracks whatever the constant currently
- * exports, not a value frozen at save time (FR-045).
- */
-function mergeOntoDefaults(partial: Partial<GlobalOverrides>): GlobalOverrides {
-  return {
-    ADMIN_GAP_MINS: partial.ADMIN_GAP_MINS ?? ADMIN_GAP_MINS,
-    FLIGHT_BUFFER_MINS: partial.FLIGHT_BUFFER_MINS ?? FLIGHT_BUFFER_MINS,
-    THRESHOLD_MINS: partial.THRESHOLD_MINS ?? THRESHOLD_MINS,
-    SLOT_MINS: partial.SLOT_MINS ?? SLOT_MINS,
-    // Merged onto the defaults per weapon, not replaced wholesale: no UI writes
-    // a partial record, but validateSchema does not require this one to be
-    // complete (unlike pool_round_duration_table), so a hand-edited URL naming
-    // one weapon must not load the other two as `undefined` – that reaches
-    // capacity.ts's `boutDurations[weapon]` and yields NaN strip-hours.
-    DE_BOUT_DURATION: { ...DE_BOUT_DURATION, ...partial.DE_BOUT_DURATION },
-    YOUTH_VET_BOUT_DELTA: partial.YOUTH_VET_BOUT_DELTA ?? YOUTH_VET_BOUT_DELTA,
-    DEFAULT_DE_STRIP_FOOTPRINT: partial.DEFAULT_DE_STRIP_FOOTPRINT ?? DEFAULT_DE_STRIP_FOOTPRINT,
-  }
-}
+// `mergeOntoDefaults` lived here until 013 T022: it merged an overrides-only
+// override payload onto the `constants.ts` exports at load time. With
+// the slice deleted, the constants are the only source and there is nothing to
+// merge onto them.
 
 // ──────────────────────────────────────────────
 // Deserialize
@@ -394,8 +326,12 @@ export function deserializeState(
     days_available: data.tournament.days_available,
     dayConfigs: data.tournament.dayConfigs,
     strips_total: data.tournament.strips_total,
-    selectedCompetitions: data.competitions.selectedCompetitions,
-    globalOverrides: mergeOntoDefaults(data.competitions.globalOverrides ?? {}),
+    selectedCompetitions: data.competitions,
+    // Assigned as-is: `null` is a real stored choice, not an absence. The
+    // `?? null` covers the absent key only — `undefined` would clobber the
+    // store's own `null` default through the setState merge, the same trap
+    // video_strips_total is guarded against below.
+    de_mode_override: data.tournament.de_mode_override ?? null,
   }
   // Only assign when present – a key set to undefined would clobber the store's
   // seeded defaults through the useStore.setState merge (research D3). This
@@ -411,7 +347,7 @@ export function deserializeState(
 
   // Lenient load: a placement whose event id isn't selected is dropped and reported,
   // not an error (contract "Acceptance rules").
-  const knownIds = new Set(Object.keys(data.competitions.selectedCompetitions))
+  const knownIds = new Set(Object.keys(data.competitions))
   const placements: Record<string, Placement> = {}
   const droppedPlacements: string[] = []
   for (const [id, placement] of Object.entries(data.placements)) {

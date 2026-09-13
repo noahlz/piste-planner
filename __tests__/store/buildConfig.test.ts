@@ -1,15 +1,21 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
+import { TYPE_DEFAULTS } from '../../src/store/typeDefaults.ts'
+import { defaultCutForEntry } from '../../src/store/competitionDefaults.ts'
+import { findCompetition } from '../../src/engine/catalogue.ts'
 import type { Strip, Competition, FlightingGroup } from '../../src/engine/types.ts'
 import {
   DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
+  ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS, THRESHOLD_MINS,
   SLOT_MINS, DAY_LENGTH_MINS, DE_REFS,
   SAME_TIME_WINDOW_MINS, INDIV_TEAM_MIN_GAP_MINS,
   EARLY_START_THRESHOLD, MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS, MIN_FENCERS,
   DEFAULT_POOL_ROUND_DURATION_TABLE, DEFAULT_DE_DURATION_TABLE,
   DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA, DEFAULT_DE_STRIP_FOOTPRINT,
+  DEFAULT_VIDEO_POLICY_BY_CATEGORY, REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../../src/engine/constants.ts'
 import {
   Category, Gender, Weapon, EventType,
@@ -41,28 +47,12 @@ function minimalState(): Partial<StoreState> {
     selectedCompetitions: {
       'D1-M-FOIL-IND': {
         fencer_count: 64,
-        ref_policy: RefPolicy.AUTO,
-        cut_mode: CutMode.PERCENTAGE,
-        cut_value: 20,
-        de_mode: DeMode.SINGLE_STAGE,
-        de_video_policy: VideoPolicy.REQUIRED,
-        use_single_pool_override: false,
+        flighted: false,
       },
     },
-    globalOverrides: {
-      ADMIN_GAP_MINS: 20,
-      FLIGHT_BUFFER_MINS: 10,
-      THRESHOLD_MINS: 5,
-      // T072 (004 US5) widened the slice to seven keys. These four carry the
-      // constants' own values because this fixture exercises the three above,
-      // not them — and `SLOT_MINS` especially: buildConfig now reads it from
-      // the slice rather than importing it, so seeding it from the constant is
-      // what keeps every config this file builds identical to its pre-T072 self.
-      SLOT_MINS,
-      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
-      YOUTH_VET_BOUT_DELTA,
-      DEFAULT_DE_STRIP_FOOTPRINT,
-    },
+    // The seven-key override record this fixture seeded left with its slice
+    // (013 T022): `buildConfig` reads those constants from `constants.ts` now,
+    // so there is nothing for a fixture to state.
     flightingSuggestionStates: [],
   }
 }
@@ -159,18 +149,20 @@ describe('buildTournamentConfig', () => {
       expect(comp.event_type).toBe(EventType.INDIVIDUAL)
       expect(comp.vet_age_group).toBeNull()
 
-      // From store overrides
+      // From the store — the two fields the record still carries
       expect(comp.fencer_count).toBe(64)
-      // Stored as AUTO (line 43), resolved on the way out: after T061 the
-      // engine never receives `AUTO`, and this fixture's type is NAC, whose
-      // default is TWO. The resolution contract itself — every type's default,
-      // explicit values beating it, and nothing written back to the store —
-      // belongs to buildConfig.typeDefaults.test.ts; this line only records
-      // that the pass-through is gone.
+      expect(comp.flighted).toBe(false)
+
+      // Derived here, not carried (013 T020, data-model §4). The fixture's type
+      // is NAC, so ref_policy and de_mode read the NAC row of TYPE_DEFAULTS;
+      // the cut pair and the video policy read DIV1's rows of the two default
+      // tables. The rules themselves are pinned by the derivation describe at
+      // the end of this file and by buildConfig.typeDefaults.test.ts — these
+      // lines record that nothing passes through from the store any more.
       expect(comp.ref_policy).toBe(RefPolicy.TWO)
       expect(comp.cut_mode).toBe(CutMode.PERCENTAGE)
       expect(comp.cut_value).toBe(20)
-      expect(comp.de_mode).toBe(DeMode.SINGLE_STAGE)
+      expect(comp.de_mode).toBe(DeMode.STAGED)
       expect(comp.de_video_policy).toBe(VideoPolicy.REQUIRED)
       expect(comp.use_single_pool_override).toBe(false)
     })
@@ -218,12 +210,7 @@ describe('buildTournamentConfig', () => {
         selectedCompetitions: {
           'BOGUS-ID': {
             fencer_count: 10,
-            ref_policy: RefPolicy.AUTO,
-            cut_mode: CutMode.DISABLED,
-            cut_value: 100,
-            de_mode: DeMode.SINGLE_STAGE,
-            de_video_policy: VideoPolicy.BEST_EFFORT,
-            use_single_pool_override: false,
+            flighted: false,
           },
         },
       })
@@ -237,21 +224,11 @@ describe('buildTournamentConfig', () => {
         selectedCompetitions: {
           'D1-M-FOIL-IND': {
             fencer_count: 64,
-            ref_policy: RefPolicy.AUTO,
-            cut_mode: CutMode.PERCENTAGE,
-            cut_value: 20,
-            de_mode: DeMode.SINGLE_STAGE,
-            de_video_policy: VideoPolicy.REQUIRED,
-            use_single_pool_override: false,
+            flighted: false,
           },
           'CDT-W-EPEE-IND': {
             fencer_count: 32,
-            ref_policy: RefPolicy.ONE,
-            cut_mode: CutMode.DISABLED,
-            cut_value: 100,
-            de_mode: DeMode.SINGLE_STAGE,
-            de_video_policy: VideoPolicy.BEST_EFFORT,
-            use_single_pool_override: false,
+            flighted: false,
           },
         } as const,
       })
@@ -263,14 +240,67 @@ describe('buildTournamentConfig', () => {
     })
   })
 
-  describe('global overrides', () => {
-    it('applies global overrides from competitionSlice', () => {
+  // Re-baselined by 013 T022 (research D7, data-model §4). This describe used
+  // to assert the three values `minimalState()` seeded into the store's
+  // global-overrides slice — 20/10/5 rather than the constants' 30/15/10 —
+  // which is what made it a test of the slice. The slice is deleted, no
+  // control writes any of these seven any more, and `buildConfig` reads them
+  // from `constants.ts` directly: the assertion is now that the config tracks
+  // the constant rather than a frozen literal, so a retuned constant moves the
+  // config with it instead of silently disagreeing.
+  describe('the seven retuned settings come from constants.ts (013 T022)', () => {
+    it('reads each one from its constants.ts export, with no store indirection', () => {
       const state = storeWith(minimalState())
       const { config } = buildTournamentConfig(state)
 
-      expect(config.ADMIN_GAP_MINS).toBe(20)
-      expect(config.FLIGHT_BUFFER_MINS).toBe(10)
-      expect(config.THRESHOLD_MINS).toBe(5)
+      expect(config.ADMIN_GAP_MINS).toBe(ADMIN_GAP_MINS)
+      expect(config.FLIGHT_BUFFER_MINS).toBe(FLIGHT_BUFFER_MINS)
+      expect(config.THRESHOLD_MINS).toBe(THRESHOLD_MINS)
+      expect(config.SLOT_MINS).toBe(SLOT_MINS)
+      expect(config.DE_BOUT_DURATION).toEqual(DE_BOUT_DURATION)
+      expect(config.YOUTH_VET_BOUT_DELTA).toBe(YOUTH_VET_BOUT_DELTA)
+      expect(config.DEFAULT_DE_STRIP_FOOTPRINT).toBe(DEFAULT_DE_STRIP_FOOTPRINT)
+    })
+  })
+
+  // The tournament-level override the Settings panel writes (T022, FR-029).
+  // A different mechanism from the per-competition `de_mode` the shrink
+  // retired (T019): one value applied to every competition alike, with `null`
+  // meaning "follow the type".
+  describe('de_mode from the tournament-level override (013 T022)', () => {
+    it('follows the tournament type when the override is null (NAC → STAGED)', () => {
+      const state = storeWith({
+        ...minimalState(),
+        tournament_type: TournamentType.NAC,
+        de_mode_override: null,
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      expect(competitions[0].de_mode).toBe(TYPE_DEFAULTS[TournamentType.NAC].de_mode)
+      expect(competitions[0].de_mode).toBe(DeMode.STAGED)
+    })
+
+    it('follows a different type when the override is null (ROC → SINGLE_STAGE)', () => {
+      const state = storeWith({
+        ...minimalState(),
+        tournament_type: TournamentType.ROC,
+        de_mode_override: null,
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      expect(competitions[0].de_mode).toBe(DeMode.SINGLE_STAGE)
+    })
+
+    it('an explicit override beats the type default (STAGED on ROC)', () => {
+      const state = storeWith({
+        ...minimalState(),
+        tournament_type: TournamentType.ROC,
+        de_mode_override: DeMode.STAGED,
+      })
+      const { competitions } = buildTournamentConfig(state)
+
+      expect(TYPE_DEFAULTS[TournamentType.ROC].de_mode).toBe(DeMode.SINGLE_STAGE)
+      expect(competitions[0].de_mode).toBe(DeMode.STAGED)
     })
   })
 
@@ -316,31 +346,24 @@ describe('buildTournamentConfig', () => {
   })
 
   describe('regional cut overrides', () => {
-    function regionalCutState(
-      tournamentType: TournamentType,
-      compId: string,
-      cutMode: string,
-      cutValue: number,
-    ): Partial<StoreState> {
+    // No cut arguments since 013 T020: the store record carries no cut pair, so
+    // the competition reaches this loop holding `defaultCutForEntry`'s answer
+    // for its category and the only variable left is the tournament type.
+    function regionalCutState(tournamentType: TournamentType, compId: string): Partial<StoreState> {
       return {
         ...minimalState(),
         tournament_type: tournamentType,
         selectedCompetitions: {
           [compId]: {
             fencer_count: 40,
-            ref_policy: RefPolicy.AUTO,
-            cut_mode: cutMode as CutMode,
-            cut_value: cutValue,
-            de_mode: DeMode.SINGLE_STAGE,
-            de_video_policy: VideoPolicy.BEST_EFFORT,
-            use_single_pool_override: false,
+            flighted: false,
           },
         },
       }
     }
 
     it('overrides cut to DISABLED/100 for JUNIOR at ROC tournament', () => {
-      const state = storeWith(regionalCutState(TournamentType.ROC, 'JR-M-FOIL-IND', 'PERCENTAGE', 20))
+      const state = storeWith(regionalCutState(TournamentType.ROC, 'JR-M-FOIL-IND'))
       const { competitions } = buildTournamentConfig(state)
       const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
 
@@ -349,8 +372,10 @@ describe('buildTournamentConfig', () => {
       expect(comp!.cut_value).toBe(100)
     })
 
+    // The discriminating pair: JUNIOR's catalogue default is PERCENTAGE/20, so
+    // the ROC case above can only read DISABLED/100 if the override loop fired.
     it('does NOT override cut for JUNIOR at NAC tournament', () => {
-      const state = storeWith(regionalCutState(TournamentType.NAC, 'JR-M-FOIL-IND', 'PERCENTAGE', 20))
+      const state = storeWith(regionalCutState(TournamentType.NAC, 'JR-M-FOIL-IND'))
       const { competitions } = buildTournamentConfig(state)
       const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
 
@@ -359,31 +384,39 @@ describe('buildTournamentConfig', () => {
       expect(comp!.cut_value).toBe(20)
     })
 
-    it('does NOT override cut for VETERAN at ROC tournament (category not in REGIONAL_CUT_OVERRIDES)', () => {
-      const state = storeWith(regionalCutState(TournamentType.ROC, 'VET-M-FOIL-IND-V40', 'PERCENTAGE', 20))
+    // VETERAN is not in REGIONAL_CUT_OVERRIDES, and its catalogue default is
+    // already DISABLED/100 — as is every category the override table omits. So
+    // this case records the value a veteran band reaches the engine with at a
+    // regional type, and no longer distinguishes "untouched" from "overridden":
+    // with the store's explicit cut gone (013 T020) the two answers coincide.
+    // The ordering itself is pinned by the derivation describe at the end of
+    // this file, across all 66 competitions of the fixture template.
+    it('leaves VETERAN at its catalogue default at a ROC tournament (category not in REGIONAL_CUT_OVERRIDES)', () => {
+      const state = storeWith(regionalCutState(TournamentType.ROC, 'VET-M-FOIL-IND-V40'))
       const { competitions } = buildTournamentConfig(state)
       const comp = competitions.find((c: Competition) => c.id === 'VET-M-FOIL-IND-V40')
 
       expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.PERCENTAGE)
-      expect(comp!.cut_value).toBe(20)
+      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
+      expect(comp!.cut_value).toBe(100)
     })
   })
 
+  // Since 013 T020 the pair arrives from `defaultCutForEntry`, which already
+  // answers DISABLED/100 for a TEAM entry, so the coercion loop is a backstop
+  // rather than the producer and this case can no longer prove it fires. What
+  // it still proves is the behavior FR-010 and the engine's `cut-on-team` rule
+  // need: a team event reaches the engine with its cut disabled, by whichever
+  // of the two rules got there first.
   describe('team event cut_mode coercion (R3, cut-on-team, FR-010)', () => {
-    it('coerces a TEAM competition cut_mode to DISABLED before it reaches the engine', () => {
+    it('a TEAM competition reaches the engine with cut_mode DISABLED', () => {
       const state = storeWith({
         ...minimalState(),
         tournament_type: TournamentType.NAC,
         selectedCompetitions: {
           'JR-M-FOIL-TEAM': {
             fencer_count: 40,
-            ref_policy: RefPolicy.AUTO,
-            cut_mode: CutMode.PERCENTAGE,
-            cut_value: 20,
-            de_mode: DeMode.SINGLE_STAGE,
-            de_video_policy: VideoPolicy.BEST_EFFORT,
-            use_single_pool_override: false,
+            flighted: false,
           },
         },
       })
@@ -402,21 +435,11 @@ describe('buildTournamentConfig', () => {
         selectedCompetitions: {
           'D1-M-FOIL-IND': {
             fencer_count: 64,
-            ref_policy: RefPolicy.AUTO,
-            cut_mode: CutMode.PERCENTAGE,
-            cut_value: 20,
-            de_mode: DeMode.SINGLE_STAGE,
-            de_video_policy: VideoPolicy.REQUIRED,
-            use_single_pool_override: false,
+            flighted: false,
           },
           'CDT-W-EPEE-IND': {
             fencer_count: 32,
-            ref_policy: RefPolicy.ONE,
-            cut_mode: CutMode.DISABLED,
-            cut_value: 100,
-            de_mode: DeMode.SINGLE_STAGE,
-            de_video_policy: VideoPolicy.BEST_EFFORT,
-            use_single_pool_override: false,
+            flighted: false,
           },
         } as const,
       }
@@ -545,6 +568,138 @@ describe('buildTournamentConfig', () => {
       const { competitions: compsRejected } = buildTournamentConfig(stateRejected, [accepted])
       const priorityRejected = compsRejected.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
       expect(priorityRejected!.flighted).toBe(false)
+    })
+  })
+
+  // 013 T019 (research D7, FR-062/FR-064/FR-071): once the per-event record
+  // shrinks to { fencer_count, flighted } (T020), every field a control used
+  // to set becomes a pure derivation off the catalogue entry and the
+  // tournament type. This describe pins that derivation two ways: a frozen
+  // pre-shrink baseline (must stay byte-identical through the refactor — a
+  // drift guard, not a red case) and per-field assertions against the
+  // derivation rules themselves (data-model.md §4). Only the `flighted` case
+  // is red today — everything else already matches because the store's
+  // current per-event defaults (all `AUTO`, all `defaultCutForEntry`, all
+  // `DEFAULT_VIDEO_POLICY_BY_CATEGORY`) happen to equal what T020 hard-codes;
+  // no UI has ever set them to anything else.
+  describe('the per-event shrink (T020) — derivation, not override', () => {
+    const FIXTURE_TEMPLATE = 'NAC Vet/Div1/Junior' // DIV1 + JUNIOR individual/team, veteran bands + team
+    const FIXTURE_FENCER_COUNT = 40
+
+    /** The pre-shrink baseline JSON captured by __tests__/fixtures — see that
+     *  file's header comment (now deleted) for how it was generated: a
+     *  one-off vitest test at this same HEAD that called buildTournamentConfig
+     *  on this fixture and wrote its `competitions` array to disk. `Infinity`
+     *  has no JSON form, so the capture replaced it with the sentinel string
+     *  below — `liveCompetitions` applies the same substitution before the
+     *  deep-equal so both sides compare like for like. */
+    const FIXTURE: { NAC: Competition[]; ROC: Competition[] } = JSON.parse(
+      readFileSync(
+        `${process.cwd()}/__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json`,
+        'utf-8',
+      ),
+    )
+
+    function liveCompetitions(type: TournamentType): Competition[] {
+      useStore.setState(useStore.getInitialState(), true)
+      useStore.getState().applyTemplate(FIXTURE_TEMPLATE)
+      useStore.getState().setTournamentType(type)
+      for (const id of Object.keys(useStore.getState().selectedCompetitions)) {
+        useStore.getState().updateCompetition(id, { fencer_count: FIXTURE_FENCER_COUNT })
+      }
+      const { competitions } = buildTournamentConfig(useStore.getState())
+      const sorted = [...competitions].sort((a, b) => a.id.localeCompare(b.id))
+      return JSON.parse(
+        JSON.stringify(sorted, (_key, value) => (value === Infinity ? '__Infinity__' : value)),
+      )
+    }
+
+    it('matches the pre-shrink baseline at NAC', () => {
+      expect(liveCompetitions(TournamentType.NAC)).toEqual(FIXTURE.NAC)
+    })
+
+    it('matches the pre-shrink baseline at a regional type (ROC)', () => {
+      expect(liveCompetitions(TournamentType.ROC)).toEqual(FIXTURE.ROC)
+    })
+
+    describe('per-field derivation, asserted directly against every fixture competition', () => {
+      function derivedState(type: TournamentType): StoreState {
+        useStore.setState(useStore.getInitialState(), true)
+        useStore.getState().applyTemplate(FIXTURE_TEMPLATE)
+        useStore.getState().setTournamentType(type)
+        return useStore.getState()
+      }
+
+      it.each([TournamentType.NAC, TournamentType.ROC])(
+        'ref_policy is TYPE_DEFAULTS[type].ref_policy for every competition at %s',
+        (type) => {
+          const { competitions } = buildTournamentConfig(derivedState(type))
+          for (const comp of competitions) {
+            expect(comp.ref_policy, comp.id).toBe(TYPE_DEFAULTS[type].ref_policy)
+          }
+        },
+      )
+
+      // `expected` below calls defaultCutForEntry, the same function
+      // production calls, so this case proves the three rules apply in the
+      // stated order — it cannot catch a wrong value returned by
+      // defaultCutForEntry itself. The cut table's actual values are pinned
+      // elsewhere: the frozen pre-shrink fixture deep-equal
+      // (__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json)
+      // and the explicit JUNIOR-at-ROC/NAC literal cases earlier in this file.
+      it.each([TournamentType.NAC, TournamentType.ROC])(
+        'cut_mode/cut_value follow defaultCutForEntry, then the regional override, then the team coercion, at %s',
+        (type) => {
+          const { competitions } = buildTournamentConfig(derivedState(type))
+          for (const comp of competitions) {
+            const entry = findCompetition(comp.id)
+            if (!entry) throw new Error(`${comp.id}: not found in CATALOGUE`)
+
+            let expected = defaultCutForEntry(entry)
+            if (REGIONAL_CUT_TOURNAMENT_TYPES.has(type)) {
+              const override = REGIONAL_CUT_OVERRIDES[entry.category]
+              if (override) expected = override
+            }
+            if (entry.event_type === EventType.TEAM) {
+              expected = { mode: CutMode.DISABLED, value: 100 }
+            }
+
+            expect(comp.cut_mode, `${comp.id}: cut_mode`).toBe(expected.mode)
+            expect(comp.cut_value, `${comp.id}: cut_value`).toBe(expected.value)
+          }
+        },
+      )
+
+      it('de_video_policy is DEFAULT_VIDEO_POLICY_BY_CATEGORY[category] for every competition', () => {
+        const { competitions } = buildTournamentConfig(derivedState(TournamentType.NAC))
+        for (const comp of competitions) {
+          expect(comp.de_video_policy, comp.id).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[comp.category])
+        }
+      })
+
+      it('use_single_pool_override, flighting_group_id and is_priority default false/null/false for every competition', () => {
+        const { competitions } = buildTournamentConfig(derivedState(TournamentType.NAC))
+        for (const comp of competitions) {
+          expect(comp.use_single_pool_override, comp.id).toBe(false)
+          expect(comp.flighting_group_id, comp.id).toBeNull()
+          expect(comp.is_priority, comp.id).toBe(false)
+        }
+      })
+
+      it("flighted mirrors the store's flag, set through updateCompetition", () => {
+        useStore.setState(useStore.getInitialState(), true)
+        useStore.getState().applyTemplate(FIXTURE_TEMPLATE)
+        const [firstId] = Object.keys(useStore.getState().selectedCompetitions).sort()
+
+        useStore.getState().updateCompetition(firstId, { flighted: true })
+
+        const { competitions } = buildTournamentConfig(useStore.getState())
+        const flaggedOn = competitions.find((c) => c.id === firstId)
+        const flaggedOff = competitions.find((c) => c.id !== firstId)
+
+        expect(flaggedOn?.flighted, firstId).toBe(true)
+        expect(flaggedOff?.flighted, flaggedOff?.id).toBe(false)
+      })
     })
   })
 })

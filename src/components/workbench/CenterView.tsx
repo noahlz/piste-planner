@@ -1,17 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../../store/store.ts'
 import type { DayConfig } from '../../engine/types.ts'
 import {
   selectDerivedFindings,
   selectDerivedSchedule,
-  selectScorecardMetrics,
   type DerivedFindings,
   type DerivedSchedule,
 } from '../../store/derived.ts'
 import { ScheduleOutput } from '../sections/ScheduleOutput.tsx'
-import { MatrixCanvas } from '../canvas/MatrixCanvas.tsx'
-import { ViewMode, loadViewState, saveViewState } from '../../store/viewState.ts'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Canvas } from '../canvas/Canvas.tsx'
+import { ViewMode } from '../../store/viewState.ts'
+import type { ZoomState } from '../canvas/zoomLadder.ts'
 import { AlertCircle } from 'lucide-react'
 
 /** How long an edit must settle before the center relayouts (FR-008). */
@@ -47,7 +46,10 @@ interface CommittedModel {
  * Which view is showing is a viewer preference, so it persists through
  * `viewState.ts` to `localStorage` and never to the URL (research D10). The
  * matrix is the default (FR-023); US1 shipped with the table because the canvas
- * did not exist yet (research D11).
+ * did not exist yet (research D11). Since 013 T011a the center no longer owns
+ * that choice — `WorkbenchShell` does, the same way it owns `panel` — and
+ * hands it down as the `viewMode` prop; the toggle that changes it moved to
+ * `StatusFooter`.
  *
  * The committed model also carries the store's `dayConfigs` (contracts/
  * day-axis.md C4) alongside `schedule`/`findings`, for the same reason: the
@@ -77,20 +79,21 @@ interface CommittedModel {
  * Both rules apply to whichever view is up: the toggle chooses how the
  * committed model is drawn, never which model is drawn.
  *
- * ## The one thing that crosses the settle without waiting for it
+ * ## What used to cross the settle without waiting for it
  *
- * The scorecard's hover highlight (FR-029). The scorecard is drawer-side and
- * follows the live store per keystroke; the canvas draws the committed model.
- * A highlight routed through `committed` would leave the pointer resting on a
- * metric row with nothing lit for `CENTER_SETTLE_MS`, which is not a hover cue.
- * So the block-key set is resolved live here and handed to the canvas
- * undebounced (S6 design §2). The canvas matches the keys against the blocks it
- * has actually committed, and a `${competitionId}:${phase}` key names the same
- * block wherever it currently sits — so mid-settle the worst case is *fewer*
- * blocks lit, never a wrong one. Rule 2 is untouched by this: an invalid config
- * still commits nothing and the highlight lands on the last valid layout.
+ * The retired scorecard's hover highlight (FR-029) did, undebounced, so a
+ * hover cue would not arrive a settle late. 013 T011a deletes it along with
+ * the scorecard it lived on (research D7), and T013 removed the `highlight`
+ * prop the canvas and its blocks drew it through.
+ *
+ * ## Zoom is not part of the committed model
+ *
+ * `zoom` is a viewer preference `WorkbenchShell` owns, the same way `viewMode`
+ * is, and it passes straight through: changing the rung changes how the
+ * committed schedule is drawn, never which schedule is drawn, so it is not
+ * debounced and nothing about the settle applies to it.
  */
-export function CenterView() {
+export function CenterView({ viewMode, zoom }: { viewMode: ViewMode; zoom: ZoomState }) {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)
@@ -103,20 +106,6 @@ export function CenterView() {
     findings: liveFindings,
     dayConfigs: liveDayConfigs,
   }))
-  const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewState().viewMode)
-
-  // FR-029. The scorecard names the blocks; this only resolves the hovered id
-  // against them and hands the result on. Memoized so a keystroke that leaves
-  // both inputs alone cannot reconcile every block on the canvas with a fresh
-  // Set — and returning the same `undefined` while nothing is hovered, which is
-  // the case the canvas is in almost all of the time.
-  const hoveredMetricId = useStore((s) => s.hoveredMetricId)
-  const metrics = useStore(selectScorecardMetrics)
-  const highlight = useMemo<ReadonlySet<string> | undefined>(() => {
-    if (hoveredMetricId === null) return undefined
-    const hovered = metrics.find((metric) => metric.id === hoveredMetricId)
-    return hovered && new Set(hovered.blockKeys)
-  }, [hoveredMetricId, metrics])
 
   useEffect(() => {
     // An invalid config commits nothing at all — rule 2 above. The last valid
@@ -130,39 +119,10 @@ export function CenterView() {
     return () => clearTimeout(timer)
   }, [live, liveFindings, liveDayConfigs, hasBlocking])
 
-  /** One discrete choice, so it stores at once — as the canvas's own buttons
-   *  do. Merged into the stored state rather than written over it, so the
-   *  window and row height this component does not own survive. */
-  function chooseView(next: ViewMode): void {
-    setViewMode(next)
-    saveViewState({ ...loadViewState(), viewMode: next })
-  }
-
   const showingMatrix = viewMode === ViewMode.MATRIX
 
   return (
     <main aria-label="Center view" className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1">
-        <ToggleGroup
-          type="single"
-          // Radix's Root is role="group"; the two items are already role="radio"
-          // in single mode, so the group they belong to is a radiogroup. The
-          // name differs from the <main> landmark's own "Center view" — one
-          // accessible name shared by two things makes both ambiguous.
-          role="radiogroup"
-          aria-label="Center view mode"
-          variant="outline"
-          size="sm"
-          value={viewMode}
-          // Radix reports '' when the pressed item is the selected one. There
-          // is no "no view" state to fall into, so that clears nothing.
-          onValueChange={(next) => next && chooseView(next as ViewMode)}
-        >
-          <ToggleGroupItem value={ViewMode.MATRIX}>Matrix</ToggleGroupItem>
-          <ToggleGroupItem value={ViewMode.SCHEDULE}>Schedule</ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
       {/* The view fills this region absolutely rather than sizing to its
           content: the canvas measures its own viewport through a
           ResizeObserver and needs a height that does not depend on what it
@@ -175,12 +135,11 @@ export function CenterView() {
           }`}
         >
           {showingMatrix ? (
-            <MatrixCanvas
+            <Canvas
               schedule={committed.schedule}
               findings={committed.findings}
               dayConfigs={committed.dayConfigs}
-              // Live, deliberately — the one prop here that is not committed.
-              highlight={highlight}
+              zoom={zoom}
             />
           ) : (
             <ScheduleOutput schedule={committed.schedule} />

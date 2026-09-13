@@ -1,16 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
-import {
-  SLOT_MINS,
-  DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
-  DEFAULT_DE_STRIP_FOOTPRINT,
-} from '../../src/engine/constants.ts'
+import { SLOT_MINS } from '../../src/engine/constants.ts'
 import type { DayConfig } from '../../src/engine/types.ts'
-import {
-  CutMode, DeMode, VideoPolicy, RefPolicy, TournamentType,
-} from '../../src/engine/types.ts'
+import { TournamentType } from '../../src/engine/types.ts'
 
 /**
  * Assertions for contracts/day-axis.md C1: the config handed to `scheduleAll`
@@ -45,27 +38,14 @@ function stateWithDayConfigs(dayConfigs: DayConfig[]): Partial<StoreState> {
     selectedCompetitions: {
       'D1-M-FOIL-IND': {
         fencer_count: 64,
-        ref_policy: RefPolicy.AUTO,
-        cut_mode: CutMode.PERCENTAGE,
-        cut_value: 20,
-        de_mode: DeMode.SINGLE_STAGE,
-        de_video_policy: VideoPolicy.REQUIRED,
-        use_single_pool_override: false,
+        flighted: false,
       },
     },
-    globalOverrides: {
-      ADMIN_GAP_MINS: 20,
-      FLIGHT_BUFFER_MINS: 10,
-      THRESHOLD_MINS: 5,
-      // T072 (004 US5): the four keys the slice gained, at the constants' own
-      // values. This file asserts on day-window arithmetic, and `SLOT_MINS` —
-      // which buildConfig now reads from the slice instead of importing — has
-      // to stay the constant or every snapped boundary here would shift.
-      SLOT_MINS,
-      DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
-      YOUTH_VET_BOUT_DELTA,
-      DEFAULT_DE_STRIP_FOOTPRINT,
-    },
+    // The seven-key override record this fixture seeded left with its slice
+    // (013 T022). This file's snapped-boundary assertions depend on
+    // `SLOT_MINS` from `constants.ts`, never on the removed keys, so removing
+    // them changes no expected value below — several of the removed keys did
+    // not in fact match constants.ts.
     flightingSuggestionStates: [],
   }
 }

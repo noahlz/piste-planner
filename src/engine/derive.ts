@@ -13,7 +13,7 @@
  * are scheduler diagnostics about contention, not geometry.
  */
 
-import { DeMode, Phase, tailEstimateMins } from './types.ts'
+import { DeMode, Phase, PlacementSource, tailEstimateMins } from './types.ts'
 import type { Competition, Placement, ScheduleResult, TournamentConfig } from './types.ts'
 import { snapToSlot } from './resources.ts'
 import {
@@ -245,5 +245,52 @@ export function deriveEventSchedule(
   return {
     result,
     day_out_of_range: placement.day < 0 || placement.day >= config.days_available,
+  }
+}
+
+/** A competition's estimated size before it has a placement — the dock's chip. */
+export interface EventFootprint {
+  strips: number
+  poolMinutes: number
+  deMinutes: number
+}
+
+/**
+ * Estimates a competition's footprint with no placement yet: the strips its
+ * pool round would draw, how long the pool block runs, and how long the DE
+ * block runs after it. Built by deriving a synthetic placement — day 0, the
+ * day's clock start, one strip per pool — through the same
+ * `deriveEventSchedule` the canvas uses once an event is actually placed, so
+ * the dock's chip and the canvas's block are never computed by two different
+ * formulas that could disagree.
+ *
+ * `deMinutes` is `de_total_end − de_start` for a single-stage DE. Staged DE
+ * never populates `de_start` (see the branch above); its DE start is the
+ * first staged phase instead, `de_prelims_start` when the bracket stages
+ * prelims, else `de_round_of_16_start`.
+ */
+export function estimateEventFootprint(
+  competition: Competition,
+  config: TournamentConfig,
+): EventFootprint {
+  const poolStructure = computePoolStructure(
+    competition.fencer_count,
+    competition.use_single_pool_override,
+  )
+  const placement: Placement = {
+    day: 0,
+    start_time: config.dayConfigs[0]?.day_start_time ?? config.DAY_START_MINS,
+    strip_count: poolStructure.n_pools,
+    strips: null,
+    source: PlacementSource.AUTO,
+    pinned: false,
+  }
+  const { result } = deriveEventSchedule(placement, competition, config)
+  const deStart = result.de_start ?? result.de_prelims_start ?? result.de_round_of_16_start
+
+  return {
+    strips: result.pool_strip_count,
+    poolMinutes: (result.pool_end ?? 0) - (result.pool_start ?? 0),
+    deMinutes: (result.de_total_end ?? 0) - (deStart ?? 0),
   }
 }

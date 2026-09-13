@@ -15,17 +15,19 @@
 // Exit 0 with "SMOKE PASS" on the last line, or exit 1 naming the failed step.
 //
 // Locators are the fragile part. Every selector here was corrected against the
-// real DOM at least once — the template picker is a ToggleGroup not a select,
-// and now sits behind a "Presets…" collapsible trigger in the rail's Events
-// panel (Radix unmounts closed content, so the trigger must be clicked first);
-// "Number of strips" matches three elements unless scoped by role; the share
-// button reads "Generate Link" and lives behind the top bar's "Save / Share"
-// collapsible, also closed by default; and the page has several tables. The
-// auto-scheduler can also leave a competition unplaced when strips run short
-// (no pool_start → no placement, src/store/runActions.ts), so the fencer-edit
-// step must pick an input for a placed competition, not just the first one
-// alphabetically — the Unplaced tray names the ones to skip. Fix locators here
-// rather than rediscovering them in a scratch file.
+// real DOM at least once — the template picker is a Radix Select behind the
+// header's "Preset" combobox (its options grouped under "Tournaments" and
+// "Templates – invented figures"); "Number of strips" matches three elements
+// unless scoped by role and only exists once its panel is open in the tool
+// rail; the share control reads "Generate Link" and lives behind the header's
+// "Export" popover trigger (Radix unmounts closed popover content, so the
+// trigger must be clicked first, and a popover closes on any outside
+// pointer-down); and the page has several tables. The auto-scheduler can also
+// leave a competition unplaced when strips run short (no pool_start → no
+// placement, src/store/runActions.ts), so the fencer-edit step must pick an
+// input for a placed competition, not just the first one alphabetically — the
+// Unplaced tray names the ones to skip. Fix locators here rather than
+// rediscovering them in a scratch file.
 //
 // T041: the matrix canvas is now the center's default view (FR-023), so every
 // step that reads the schedule table has to click the "Schedule" radio in the
@@ -61,27 +63,26 @@
 // count unchanged. The block-count and row-count floors below (T018) are set
 // to the numbers actually measured now, not to "non-empty".
 //
-// T052: the scorecard block runs at boot, on B1, before the template picker
-// touches anything. The trap it is built around is that the baseline is frozen
-// from the very auto-schedule that boot performs, so on the first frame every
-// `[data-metric-delta]` reads zero — an assertion that a delta *element* is
-// present passes on an app whose deltas never move. So the driver captures a
-// delta's text, changes the top bar's strip count, and requires the text to
-// have changed to a non-zero magnitude. It varies strips and never a fencer
-// count: `computePoolStructure` throws for `fencerCount <= 1`.
+// T052 (rewritten 013 T014): the status-bar block runs at boot, on B1, before
+// the template picker touches anything. D7 retired the collapsible
+// scorecard's per-metric delta in favor of three plain footer metrics with no
+// captured baseline, so the trap moved: an assertion that a footer metric
+// *has a value* passes on an app whose metrics never move. The driver bumps
+// the header's strip count instead and requires the footer's strip metric
+// text to change alongside it. It varies strips and never a fencer count:
+// `computePoolStructure` throws for `fencerCount <= 1`.
 //
-// T066: the last block drives US4's clarification — a tournament type change
-// re-resolves what follows a default and leaves a hand-set value alone. Every
-// locator it needed matched the real DOM first try; the corrections it does
-// encode are two name-matching ones, since Playwright's `name` is a
-// case-insensitive *substring* by default. The top bar's "Tournament type"
-// needs `exact` because the rail's Tournament panel holds a second control
-// over the same store field whose accessible name is its <Label>, "Type", and
-// a competition's name is a prefix of its siblings', so `Referees for …`
-// needs it too. The summary element is reached through the trigger's
-// `aria-describedby` id rather than by text, and that id comes from React's
-// `useId` — ":r7:" and the like — so it is quoted into an attribute selector
-// rather than written as `#id`, which those colons are not valid in.
+// T066 (rewritten 013 T014): the last block drives US4's clarification — a
+// tournament type change re-resolves what follows a default and leaves a
+// hand-set value alone. Every locator it needed matched the real DOM first
+// try; the corrections it does encode are two name-matching ones, since
+// Playwright's `name` is a case-insensitive *substring* by default. The
+// Tournament panel's "Type" combobox needs `exact` since a competition's name
+// is a prefix of its siblings', so `Referees for …` needs it too. The retired
+// top bar's own "Tournament type" control and the Advanced trigger's
+// `aria-describedby` summary link are both gone (013 T009/T010) —
+// AdvancedPanel no longer collapses, so its FR-035 summary is read straight
+// off the section's first always-rendered `div` instead.
 
 import { chromium } from 'playwright-core'
 import { homedir } from 'node:os'
@@ -153,32 +154,85 @@ function geometryChanged(before, after) {
   return false
 }
 
-// 012 T007/T013 made suggestStrips asynchronous (research.md D5) and the
-// Suggest button `disabled` while it runs; the reveal indicator ("Searching
-// for…") is not a signal because a board that finishes inside the 100ms
-// reveal delay never shows it. "Number of strips" also matches three elements
-// unless scoped to the spinbutton role. This presses Suggest and polls,
-// bounded, until the button re-enables and the field's value has moved off
-// its pre-press reading, rather than racing the action with a fixed wait.
-async function pressSuggest(stepName) {
-  const field = page.getByRole('spinbutton', { name: 'Number of strips' })
-  const before = await field.inputValue()
-  await page.getByRole('button', { name: 'Suggest' }).first().click()
-  for (let i = 0; i < 60; i++) {
-    const button = page.getByRole('button', { name: 'Suggest' }).first()
-    const [disabled, value] = await Promise.all([button.isDisabled(), field.inputValue()])
-    if (!disabled && value !== before) return value
-    await page.waitForTimeout(50)
+// 013 T009: one inspector panel is open at a time, behind the tool rail's five
+// named buttons ("Tournament", "Strips & referees", "Events", "Findings",
+// "Settings"), each with `aria-pressed`. Pressing the open one closes it;
+// pressing another switches to it — so this only clicks when the panel is not
+// already the open one, and then waits for the `aside` "Inspector panel" it
+// mounts.
+//
+// `panel` is persisted to `viewState.ts`'s `localStorage`, which every page in
+// this driver's shared `ctx` reads on mount — so a fresh `page2`/`page3`
+// navigated from a share link does *not* boot with no panel open, it boots
+// with whatever panel this function (or a real user) last left open anywhere
+// in the context. `pg` defaults to the long-lived `page`; page3's Settings
+// round-trip below passes its own page explicitly so this aria-pressed check
+// runs against the right one, rather than assuming a "fresh page" with no
+// panel state, which cost a 30s timeout the first time this was measured
+// against the running app: page3 booted with Settings already open from the
+// `page` steps above and the unconditional click on page3 closed it.
+async function openPanel(name, pg = page) {
+  const button = pg.getByRole('button', { name })
+  if ((await button.getAttribute('aria-pressed')) !== 'true') {
+    await button.click()
   }
-  throw new Error(`${stepName}: Suggest did not finish within 3s (button never re-enabled or the field never changed from ${before})`)
+  await pg.getByRole('complementary', { name: 'Inspector panel' }).waitFor()
+}
+
+// The inspector panel floats over the canvas by default (undocked, T009) and
+// intercepts pointer events on whatever it covers underneath — measured
+// against the running app when a hover on a strip-1 matrix block timed out
+// with "aside … intercepts pointer events". `InspectorPanel`'s own "Close
+// panel" button closes whichever one is open and unmounts the `aside`
+// entirely (`WorkbenchShell`'s `panel !== null &&` guard), so this closes it
+// before the driver hovers or clicks anything the panel might be covering.
+async function closePanel() {
+  const aside = page.getByRole('complementary', { name: 'Inspector panel' })
+  if (await aside.isVisible().catch(() => false)) {
+    await aside.getByRole('button', { name: 'Close panel' }).click()
+    await aside.waitFor({ state: 'hidden' })
+  }
+}
+
+// The template picker is a Radix Select behind the header's "Preset"
+// combobox (PresetPicker.tsx), grouped under "Tournaments" (B1-B8) and
+// "Templates – invented figures" (the ten template names) — not the retired
+// rail's "Presets…" ToggleGroup. Choosing an option re-runs the auto-scheduler
+// itself (PresetPicker's `handleChange`), and the Select always closes on a
+// choice, so no "is the list already visible" guard is needed the way the old
+// collapsible needed one.
+async function choosePreset(name) {
+  await page.getByRole('combobox', { name: 'Preset' }).click()
+  await page.getByRole('option', { name, exact: true }).click()
+}
+
+// 013 T018 replaced the Suggest button with a search that runs on open and on
+// a debounce, answering into a "Suggested minimum" card the organizer applies
+// by hand (research.md D8) — the strip field itself never moves until Apply
+// is pressed. This opens the panel, polls (bounded) for
+// `[data-suggested-strips]` to hold a number rather than the panel's initial
+// em-dash, presses Apply, and returns the stepper's resulting value.
+async function pressSuggest(stepName) {
+  await openPanel('Strips & referees')
+  const suggested = page.locator('[data-suggested-strips]')
+  for (let i = 0; i < 60; i++) {
+    const text = (await suggested.textContent())?.trim() ?? ''
+    if (text !== '' && text !== '—' && !Number.isNaN(Number(text))) break
+    await page.waitForTimeout(50)
+    if (i === 59) {
+      throw new Error(`${stepName}: no suggested strip count appeared within 3s (last read "${text}")`)
+    }
+  }
+  await page.getByRole('button', { name: 'Apply' }).click()
+  return page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
 }
 
 // ── Workbench shell ──
 await page.goto(BASE)
 // The workbench is the only layout and boots directly — no tab to select.
-// The top bar's "Save / Share" trigger proves the shell (and its top bar)
-// mounted; the rail's panels render statically regardless of store data.
-await page.getByRole('button', { name: 'Save / Share' }).waitFor()
+// The header's "Export" trigger proves the shell (and its header) mounted;
+// the rail's panels render statically regardless of store data.
+await page.getByRole('button', { name: 'Export' }).waitFor()
 await shot('01-initial')
 
 // The matrix is the center's default view (FR-023) — it must be what greets a
@@ -207,149 +261,61 @@ log('boot places 24 of 24 events')
 await page.getByRole('radio', { name: 'Matrix' }).click()
 await page.waitForTimeout(200)
 
-// ── Scorecard (T052, US3) ──
-// Read here, at boot on B1, before the template picker below changes the
-// tournament. The baseline is frozen from the same auto-schedule the boot
-// count above asserts (research D9), so on this frame every delta is zero —
-// which is exactly why "a [data-metric-delta] element exists" proves nothing,
-// and why the strip-count step below is the one that has to make a delta
-// actually move.
-const scorecard = page.getByRole('region', { name: 'Scorecard' })
-await scorecard.waitFor()
+// ── Status bar (T011a/T014, D7) ──
+// The retired scorecard's disclosure, deltas, and hover highlight are gone
+// (research D7) — replaced by the always-visible footer's three metrics and
+// its `data-counts` triple. Read here, at boot on B1, before the template
+// picker below changes the tournament.
+const footer = page.getByRole('contentinfo', { name: 'Status bar' })
+await footer.waitFor()
 
-/** Every metric row id currently in the scorecard's DOM, in render order. */
-const metricIds = () =>
-  scorecard
-    .locator('li[data-metric]')
-    .evaluateAll((els) => els.map((el) => el.getAttribute('data-metric')))
+const countsText = (await footer.locator('[data-counts]').textContent()) ?? ''
+const countsMatch = countsText.match(/^(\d+) placed · (\d+) unplaced · (\d+) pinned$/)
+if (!countsMatch) throw new Error(`could not parse footer counts: "${countsText}"`)
+const [footerPlaced, footerUnplaced, footerPinned] = countsMatch.slice(1).map(Number)
+// Logged beside the schedule-table boot count above, not asserted equal to
+// it — the lane packer (footer) and the scheduler (schedule table) can
+// legitimately disagree about what counts as "placed".
+log('boot placed count: schedule table', bootPlacedCount, 'vs footer', footerPlaced, 'placed /', footerUnplaced, 'unplaced /', footerPinned, 'pinned')
 
-// Collapsed shows the two collapsed-tier rows and nothing else. The list is
-// compared whole and in order, not as a subset: that is what makes this an
-// assertion that the expanded rows are *absent from the DOM* rather than
-// merely invisible — a hidden row would still satisfy a subset check, and
-// jsdom's inability to tell those apart is precisely the gap this driver
-// exists to cover.
-const details = page.getByRole('button', { name: 'Scorecard details' })
-if ((await details.getAttribute('aria-expanded')) !== 'false') {
-  throw new Error('scorecard did not boot collapsed (viewState default scorecardExpanded=false)')
+for (const metric of ['finish', 'refs', 'strips']) {
+  const value = (await footer.locator(`[data-metric="${metric}"] > span`).last().textContent())?.trim()
+  if (!value || value === '—') throw new Error(`footer metric ${metric} read no value at boot: "${value}"`)
 }
-const collapsedIds = await metricIds()
-if (collapsedIds.join(',') !== 'finish:tournament,refs:peak-total') {
-  throw new Error(
-    `collapsed scorecard rows: expected finish:tournament,refs:peak-total, got ${collapsedIds.join(',')}`,
-  )
-}
-for (const id of collapsedIds) {
-  const value = (await scorecard.locator(`li[data-metric="${id}"] [data-metric-value]`).textContent())?.trim()
-  if (!value) throw new Error(`collapsed metric ${id} rendered no value`)
-}
-log('scorecard collapsed:', collapsedIds.join(', '))
+log('footer metrics all present at boot')
 
-// Expanded renders the full set selectScorecardMetrics assembles, in its
-// order, with one `finish:day:<d>` row per day. The day count is read off the
-// top bar rather than typed here, so the drawer and the top bar are checked
-// against each other — the same app-against-app rule the matrix/schedule
-// comparison below follows, not a literal that would need editing whenever
-// the default preset changes.
-await details.click()
-if ((await details.getAttribute('aria-expanded')) !== 'true') {
-  throw new Error('Scorecard details did not report aria-expanded=true after the click')
-}
-const dayCountText = (await page.getByRole('combobox', { name: 'Day count' }).textContent()) ?? ''
-const dayCount = Number(dayCountText.match(/\d+/)?.[0])
-if (!dayCount) throw new Error(`could not read the top bar day count (got "${dayCountText}")`)
-const expectedMetricIds = [
-  'finish:tournament',
-  'refs:peak-total',
-  ...Array.from({ length: dayCount }, (_, d) => `finish:day:${d}`),
-  'refs:peak-sabre',
-  'strips:utilization',
-  'days:balance-spread',
-  'findings:ERROR',
-  'findings:WARN',
-  'findings:INFO',
-]
-const expandedIds = await metricIds()
-if (expandedIds.join(',') !== expectedMetricIds.join(',')) {
-  throw new Error(
-    `expanded scorecard rows:\n  expected ${expectedMetricIds.join(',')}\n  got      ${expandedIds.join(',')}`,
-  )
-}
-log('scorecard expanded:', expandedIds.length, 'rows over', dayCount, 'days')
+const summaryAtBoot = (await page.locator('[data-summary]').textContent()) ?? ''
+const dayCount = Number(summaryAtBoot.match(/(\d+) days/)?.[1])
+if (!dayCount) throw new Error(`could not read the header day count (got "${summaryAtBoot}")`)
+log('header summary at boot:', summaryAtBoot)
 await shot('01b-scorecard')
 
-// FR-029: hovering a metric lights the blocks that drive it. "Strip
-// utilization" is the metric to hover — its driving set is every in-range
-// placed block, so whatever the canvas has in its window is in it. A metric
-// with a narrower set (a day finish, a findings count) can legitimately name
-// only blocks that are scrolled out of the window, and would make this
-// assertion flaky rather than strict.
-const blocksAtBoot = await page.locator('[data-event-block]').count()
-if (blocksAtBoot === 0) throw new Error('no matrix blocks at boot to check the metric highlight against')
-if ((await page.locator('[data-event-block][data-highlighted="true"]').count()) !== 0) {
-  throw new Error('a block was already highlighted before any metric was hovered')
-}
-await scorecard.locator('li[data-metric="strips:utilization"]').hover()
-await page.waitForTimeout(150)
-// Equality, not "at least one": the canvas draws a block only for an in-range
-// placed segment (lanes.ts) and this metric's driving set is exactly those, so
-// every block on screen has to light. "At least one" would still pass on a
-// selector that named only an event's first segment.
-const litCount = await page.locator('[data-event-block][data-highlighted="true"]').count()
-if (litCount !== blocksAtBoot) {
-  throw new Error(
-    `hovering Strip utilization lit ${litCount} of the ${blocksAtBoot} blocks on screen; every one drives it (FR-029)`,
-  )
-}
-// The cue has to *paint*, not merely exist. jsdom reads the inline value back
-// verbatim, so the unit suite can pin the declaration but not that it resolves
-// — the two chrome tokens are the one paint on the canvas that does not come
-// from palette.ts, and an unresolved var() would leave FR-029's cue invisible
-// with everything above still green.
-const cueShadow = await page
-  .locator('[data-event-block][data-highlighted="true"] [data-highlight-cue]')
-  .first()
-  .evaluate((el) => getComputedStyle(el).boxShadow)
-if (!cueShadow.includes('inset') || !cueShadow.includes('rgb')) {
-  throw new Error(`the highlight cue resolved to no ring at all: box-shadow "${cueShadow}"`)
-}
-await shot('01c-highlight')
-// And it clears when the pointer leaves — the cue is a hover state, not a
-// latch. Same corner the tooltip step below moves to.
-await page.mouse.move(5, 5)
-await page.waitForTimeout(150)
-const litAfterLeave = await page.locator('[data-event-block][data-highlighted="true"]').count()
-if (litAfterLeave !== 0) {
-  throw new Error(`${litAfterLeave} blocks stayed highlighted after the pointer left the metric row`)
-}
-log('metric hover lit', litCount, 'of', blocksAtBoot, 'blocks, and cleared')
-
-// A delta has to *move*, not merely exist. Strip utilization's denominator is
-// strips_total × the day windows, so the top bar's strip count moves it for
-// certain. It is a strip count and never a fencer count: computePoolStructure
-// (src/engine/pools.ts) throws for fencerCount <= 1 and initialAnalysis calls
-// it for every selected competition, so shrinking a fencer count breaks the
-// app rather than testing it.
-const utilDelta = scorecard.locator('li[data-metric="strips:utilization"] [data-metric-delta]')
-if ((await utilDelta.count()) === 0) {
-  throw new Error('strip utilization carries no delta at boot — the preset baseline was never captured')
-}
-const deltaBefore = (await utilDelta.textContent())?.trim()
-const stripInput = page.getByRole('spinbutton', { name: 'Strip count' })
+// A metric has to *move*, not merely exist. Strip use's denominator is
+// strips_total × the day windows, so the header's strip count moves it for
+// certain — bumping it through the Strips & referees panel, the only place
+// that field lives now (T009). It is a strip count and never a fencer count:
+// computePoolStructure (src/engine/pools.ts) throws for fencerCount <= 1 and
+// initialAnalysis calls it for every selected competition, so shrinking a
+// fencer count breaks the app rather than testing it.
+await openPanel('Strips & referees')
+const stripInput = page.getByRole('spinbutton', { name: 'Number of strips' })
 const stripsAtBoot = await stripInput.inputValue()
 const stripsBumped = Number(stripsAtBoot) + 4
+const stripsMetricBefore = (await footer.locator('[data-metric="strips"] > span').last().textContent())?.trim()
 await stripInput.fill(String(stripsBumped))
 await stripInput.blur()
 await page.waitForTimeout(400)
-const deltaAfter = (await utilDelta.textContent())?.trim()
-// The minus is U+2212, not a hyphen — formatDelta signs with '+' / '−'.
-const deltaMagnitude = Number((deltaAfter ?? '').replace(/[+−\-%]/g, ''))
-if (deltaAfter === deltaBefore || !(deltaMagnitude > 0)) {
+const stripsMetricAfter = (await footer.locator('[data-metric="strips"] > span').last().textContent())?.trim()
+const summaryAfterBump = (await page.locator('[data-summary]').textContent()) ?? ''
+if (stripsMetricAfter === stripsMetricBefore) {
   throw new Error(
-    `strip utilization delta did not move off zero: "${deltaBefore}" -> "${deltaAfter}" (strips ${stripsAtBoot} -> ${stripsBumped})`,
+    `footer strip-use metric did not move: "${stripsMetricBefore}" -> "${stripsMetricAfter}" (strips ${stripsAtBoot} -> ${stripsBumped})`,
   )
 }
-log('strips', stripsAtBoot, '->', stripsBumped, 'moved the utilization delta', deltaBefore, '->', deltaAfter)
+if (!summaryAfterBump.includes(`${stripsBumped} strips`)) {
+  throw new Error(`header summary did not reflect the bumped strip count: "${summaryAfterBump}"`)
+}
+log('strips', stripsAtBoot, '->', stripsBumped, 'moved the footer strip-use metric', stripsMetricBefore, '->', stripsMetricAfter)
 
 // Put the strip count back so the template steps below start from the state
 // the boot left them, exactly as they did before this block existed.
@@ -357,37 +323,38 @@ await stripInput.fill(stripsAtBoot)
 await stripInput.blur()
 await page.waitForTimeout(400)
 
-// Template picker is a ToggleGroup, not a select, and now sits behind the
-// rail's "Presets…" collapsible trigger (CompetitionMatrix, Events panel,
-// open by default) — Radix unmounts closed content, so click it first.
-await page.getByRole('button', { name: 'Presets…' }).click()
-await page.getByText('ROC Div1A/Vet', { exact: true }).click()
+await choosePreset('ROC Div1A/Vet')
 log('template applied')
 
 const strips = await pressSuggest('ROC Div1A/Vet')
 log('suggested strips =', strips)
 await shot('02-configured')
 
-const gen = page.getByRole('button', { name: 'Auto-schedule all' })
+const gen = page.getByRole('button', { name: 'Auto-assign' })
 if (await gen.isDisabled()) {
   await shot('02b-generate-disabled')
-  throw new Error('Auto-schedule all disabled — read smoke-shots/02b for the blocking findings')
+  throw new Error('Auto-assign disabled — read smoke-shots/02b for the blocking findings')
 }
 await gen.click()
 await page.waitForTimeout(300)
 await shot('03-matrix')
 
+// The Strips & referees panel is still open (floating) from `pressSuggest`
+// above and covers the left edge of the canvas underneath it — close it
+// before touching any matrix block.
+await closePanel()
+
 // ── Matrix canvas (T041) ──
-// Still on the default view: everything below through "Fit to day" reads the
+// Still on the default view: everything below through "Fit day" reads the
 // matrix, not the schedule table.
 
 // Blocks render. ROC Div1A/Vet at the Suggested strip count now places all
 // 12 of its 12 competitions (re-measured after 006's day-axis fix — see the
-// header comment; the Unplaced tray is empty). The canvas still windows by
+// header comment; the Unplaced tray is empty). The canvas still culled by
 // viewport, not by placement count, so not all 12 placed events have a block
 // in the DOM at the default scroll position. The schedule table below is the
 // locator that reads the true placed count; this floor only guards against the
-// canvas windowing away everything.
+// canvas culling away everything.
 //
 // 011 T013: this floor moved from 11 to 8. `applyTemplate` never touches
 // `days_available`, so it stays at boot's B1 value of 4 throughout this whole
@@ -407,14 +374,21 @@ await shot('03-matrix')
 // this to 15 strips (baseline.md §5), down from 23. Matrix event blocks
 // measured at 14 at that count, still above this floor of 8, so the floor
 // below needs no change.
+//
+// `[M]` 013 T026, 2026-09-13: the canvas no longer culls by viewport — every day group,
+// strip row and block is in the DOM inside one native scroller (research D2),
+// so the count above is now every placed block rather than the subset a
+// viewport happened to show. That can only raise it, so the floor of 8 still
+// holds and stays as measured.
 const blockCount = await page.locator('[data-event-block]').count()
 log('matrix event blocks =', blockCount)
 if (blockCount < 8) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
 
-// Captured now, before "Fit to day" below can scroll a block out of the
-// window and drop its DOM node (windowing culls what is off-window rather
-// than hiding it — see the "blocks the window actually shows" comment in
-// MatrixCanvas.tsx). Restricted to phase POOLS — see the header comment.
+// Captured now, before the zoom actions below change any geometry. 013 T026
+// removed the viewport culling that used to drop a scrolled-out block's DOM node, so
+// this is no longer load-bearing against culling — it still reads the blocks
+// before the zoom so the table cross-check below compares like with like.
+// Restricted to phase POOLS — see the header comment.
 const poolBlocks = await page.$$eval('[data-event-block][data-phase="POOLS"]', (els) =>
   els.slice(0, 5).map((el) => ({
     id: el.getAttribute('data-event-id'),
@@ -451,22 +425,86 @@ log('tooltip reads', tooltipName, tooltipStart, '-', tooltipEnd)
 await shot('03c-tooltip')
 
 // The hovered block is Strip 1 at the top of the grid, so its tooltip (side
-// "top") pops into the toolbar row above it and intercepts a click there
-// until it closes. Move off the canvas and let Radix's exit transition finish
-// before touching the toolbar.
+// "top") pops over whatever is above it and intercepts a click there until it
+// closes. Move off the canvas and let Radix's exit transition finish before
+// touching the footer.
 await page.mouse.move(5, 5)
 await page.waitForTimeout(200)
 
-// A zoom action does something: block geometry before and after "Fit to day"
+// A zoom action does something: block geometry before and after "Fit day"
 // must differ somewhere, or the click did nothing.
+//
+// 013 T026: the app boots *in* fit mode (DEFAULT_VIEW_STATE.fitting is true),
+// so pressing "Fit day" from the opening view would change nothing and this
+// check would pass on a dead button. "Zoom in" leaves fit mode for a rung
+// first — which is itself a geometry change, percentages to pixels — and
+// "Fit day" then has a state to come back from. Both transitions are
+// asserted, so the step proves more than it did before, not less. The zoom
+// controls live in the footer's `toolbar` "Zoom" now, not in a canvas toolbar.
+const zoomToolbar = page.getByRole('toolbar', { name: 'Zoom' })
 const beforeGeometry = await blockGeometrySnapshot()
-await page.getByRole('button', { name: 'Fit to day' }).click()
+await zoomToolbar.getByRole('button', { name: 'Zoom in' }).click()
+await page.waitForTimeout(100)
+const rungGeometry = await blockGeometrySnapshot()
+if (!geometryChanged(beforeGeometry, rungGeometry)) {
+  throw new Error('Zoom in did not change any block geometry')
+}
+log('Zoom in changed block geometry')
+
+await zoomToolbar.getByRole('button', { name: 'Fit day' }).click()
 await page.waitForTimeout(100)
 const afterGeometry = await blockGeometrySnapshot()
-if (!geometryChanged(beforeGeometry, afterGeometry)) {
-  throw new Error('Fit to day did not change any block geometry')
+if (!geometryChanged(rungGeometry, afterGeometry)) {
+  throw new Error('Fit day did not change any block geometry')
 }
-log('Fit to day changed block geometry')
+log('Fit day changed block geometry')
+
+// SC-005: step to the top of the ladder from fit mode. "Zoom in" clears
+// fitting and advances zoomStep by one each press (zoomLadder.stepZoom); the
+// button self-disables once zoomStep reaches MAX_ZOOM_STEP (rung 5, ppm 9.0,
+// a 281% readout against the rung-2 100% base). Bounded at 6 presses — a
+// button still enabled after that is a defect, not a slow ladder.
+const zoomInButton = zoomToolbar.getByRole('button', { name: 'Zoom in' })
+const zoomReadoutLocator = page.locator('[data-zoom-readout]')
+let zoomInPresses = 0
+while (!(await zoomInButton.isDisabled())) {
+  if (zoomInPresses >= 6) throw new Error('"Zoom in" did not disable within 6 presses')
+  await zoomInButton.click()
+  await page.waitForTimeout(100)
+  zoomInPresses += 1
+}
+const maxReadout = (await zoomReadoutLocator.textContent())?.trim()
+if (maxReadout !== '281%') {
+  throw new Error(`"Zoom in" disabled at readout ${maxReadout}, expected 281% (rung 5)`)
+}
+
+// SC-005's "label" is read here as label-or-phase-icon: FR-035 lets a block
+// choose either, and D1A-M-SABRE-IND:DE_PRELIMS in B1 (12 strips, 45px wide
+// at rung 5) is the case that set it — too narrow for even its category
+// label, it draws its phase icon alone instead (Block.tsx, 41dfe0e31f).
+const zoomedBlocks = page.locator('[data-event-block]')
+const zoomedBlockCount = await zoomedBlocks.count()
+for (let i = 0; i < zoomedBlockCount; i += 1) {
+  const block = zoomedBlocks.nth(i)
+  const weapon = await block.getAttribute('data-weapon')
+  if (!weapon) throw new Error(`block ${i} at max zoom has no data-weapon`)
+  const labelLocator = block.locator('[data-label]')
+  const labelText =
+    (await labelLocator.count()) > 0 ? (await labelLocator.textContent())?.trim() : ''
+  const hasIcon = (await block.locator('[data-icon]').count()) > 0
+  if (!labelText && !hasIcon) {
+    throw new Error(`block ${i} at max zoom has neither a label nor an icon`)
+  }
+}
+log('SC-005: zoom in disabled after', zoomInPresses, 'presses at rung 5,', maxReadout, ',', zoomedBlockCount, 'blocks all carry weapon + label/icon')
+
+await zoomToolbar.getByRole('button', { name: 'Reset zoom' }).click()
+await page.waitForTimeout(100)
+const resetReadout = (await zoomReadoutLocator.textContent())?.trim()
+if (resetReadout !== '100%') {
+  throw new Error(`"Reset zoom" left readout at ${resetReadout}, expected 100%`)
+}
+log('Reset zoom returned to 100%')
 
 // ── Schedule table ──
 // The two views agree (FR-023): the schedule table must describe the same
@@ -519,8 +557,12 @@ const before = await schedTable.textContent()
 // predates this feature). The Unplaced tray names those by the same label the
 // fencer input's aria-label carries, so ".first()" alphabetically can land on
 // one that never renders in the schedule table — pick the first input NOT in
-// that tray instead, since that's what this assertion means to edit.
+// that tray instead, since that's what this assertion means to edit. The
+// fencer inputs live in the Events panel (EventsPanel.tsx, T021), one per
+// selected competition, hanging off that competition's pressed chip — so the
+// set this loop scans is exactly the selected set.
 const unplacedText = await page.getByRole('region', { name: 'Unplaced events' }).textContent()
+await openPanel('Events')
 const fencerInputs = await page.getByRole('spinbutton', { name: /Fencer count for/ }).all()
 let fencerInput
 for (const input of fencerInputs) {
@@ -541,10 +583,10 @@ log('derived table followed the edit')
 await shot('05-after-edit')
 
 // Share URL round-trip: a shared link must reproduce the same schedule.
-// "Save / Share" is a closed-by-default collapsible over the unmodified
-// <SaveLoadShare /> — its contents (including "Generate Link") are not in
-// the DOM until the trigger is clicked.
-await page.getByRole('button', { name: 'Save / Share' }).click()
+// "Export" is a Radix Popover trigger over the unmodified <SaveLoadShare />
+// logic — its contents (including "Generate Link") are not in the DOM until
+// the trigger is clicked, since Radix unmounts closed popover content.
+await page.getByRole('button', { name: 'Export' }).click()
 await page.getByRole('button', { name: 'Generate Link' }).click()
 const shareUrl = await page.locator('input[readonly]').first().inputValue()
 log('share url length =', shareUrl.length)
@@ -556,7 +598,7 @@ await page2.goto(shareUrl)
 // viewMode persists to localStorage (research D10, viewState.ts), which this
 // context already shares from page1's toggle above, so page2 also opens on
 // Schedule and needs no toggle click of its own.
-await page2.getByRole('button', { name: 'Save / Share' }).waitFor()
+await page2.getByRole('button', { name: 'Export' }).waitFor()
 await page2.waitForTimeout(300)
 const rows2 = await page2.locator('[data-schedule-row]').count()
 log('round-trip rows:', rowsNow, 'vs', rows2)
@@ -565,35 +607,34 @@ if (rows2 !== rowsNow) throw new Error(`share round-trip row mismatch ${rowsNow}
 await page2.close()
 
 // ── Gears panel (US5, T077) ──
-// Same closed-by-default Collapsible as Save / Share (see the header
-// comment) — SettingsPanel's contents are not in the DOM until "Settings" is
-// clicked. Placed here, on ROC Div1A/Vet's just-verified schedule, and not
-// later in the file: the NAC Cadet/Junior + tournament-type-change block
-// below ends with the center dimmed-invalid (confirmed by reading
-// `[data-dimmed]` there) — a blocking validation finding from that block's
-// own edits freezes the committed schedule regardless of what a setting
-// change here would do, so "the schedule follows" cannot be asserted once
-// past that point. `schedTable` above is still in scope and still valid.
+// Rendered inside the tool rail's Settings panel (T009, InspectorPanel.tsx)
+// instead of the retired top bar's gears disclosure. Placed here, on ROC
+// Div1A/Vet's just-verified schedule, and not later in the file: the NAC
+// Cadet/Junior + tournament-type-change block below ends with the center
+// dimmed-invalid (confirmed by reading `[data-dimmed]` there) — a blocking
+// validation finding from that block's own edits freezes the committed
+// schedule regardless of what a setting change here would do, so "the
+// schedule follows" cannot be asserted once past that point. `schedTable`
+// above is still in scope and still valid.
 //
-// Save / Share is still open from the round-trip above. Its trigger sits right
-// next to the gears trigger and the two panels are sibling `absolute right-0
-// z-50` overlays in the same header, so they occupy the same space. The top
-// bar holds one open-panel slot rather than two booleans (T079 finding 2), and
-// opening either closes the other — asserted immediately below. Until that
-// fix this step clicked Save / Share shut first, which was the driver
-// absorbing the overlap defect rather than recording a DOM correction: a real
-// user got no such note and simply could not click the gears panel.
-await page.getByRole('button', { name: 'Settings' }).click()
-const settingsRegion = page.getByRole('region', { name: 'Settings' })
+// Export is still open from the round-trip above. It is a Radix Popover,
+// which dismisses on any outside pointer-down — so opening the rail's
+// Settings panel (a click outside the popover content) closes it, the same
+// mutual exclusion the retired top bar's two sibling overlays once needed
+// their own rule for (T079 finding 2).
+await openPanel('Settings')
+const settingsRegion = page
+  .getByRole('complementary', { name: 'Inspector panel' })
+  .getByRole('region', { name: 'Settings' })
 await settingsRegion.waitFor()
-const saveShareStillOpen = await page
+const exportStillOpen = await page
   .getByRole('button', { name: 'Generate Link' })
   .isVisible()
   .catch(() => false)
-if (saveShareStillOpen) {
-  throw new Error('opening Settings left Save / Share open — the top bar panels are not mutually exclusive')
+if (exportStillOpen) {
+  throw new Error('opening the Settings panel left Export open — outside pointer-down did not dismiss the popover')
 }
-log('opening Settings closed Save / Share — top bar panels are mutually exclusive')
+log('opening the Settings panel closed Export — the popover dismisses on outside click')
 
 // FR-041/SC-009: the panel is reachable, and every row reads its default on
 // first open — nothing above this point in the driver touches an engine
@@ -605,18 +646,27 @@ log('opening Settings closed Save / Share — top bar panels are mutually exclus
 // `DE strip footprint`, was cut afterward for a different reason — it moves
 // the schedule, but off `de_duration_table` durations calibrated against it,
 // so an override desyncs the two rather than doing nothing.
+// 4 markers, not 5, since 013 T022: the two gears rows left with the
+// global-overrides slice, and the DE mode pills gained one marker of their own
+// (it reads Default while the tournament type decides the mode). So the count
+// is PoolDurationSettings' 3 weapons plus DE mode's 1. The read is kept rather
+// than deleted with the rows it used to count — it is what catches a panel
+// that renders but reads every setting as overridden on first open.
 const settingsDefaultCount = () => settingsRegion.getByText('Default', { exact: true }).count()
-if ((await settingsDefaultCount()) !== 5) {
+if ((await settingsDefaultCount()) !== 4) {
   throw new Error(
-    `gears panel: expected 5 rows reading Default on first open, got ${await settingsDefaultCount()}`,
+    `Settings panel: expected 4 settings reading Default on first open, got ${await settingsDefaultCount()}`,
   )
 }
-log('gears panel opened, all 5 settings read Default')
+log('Settings panel opened, all 4 settings read Default')
 await shot('09-gears-default')
 
 // FR-046: a setting change must move the schedule with no explicit re-run.
-// Two settings were tried and rejected before this one, both measured at
-// this exact point in the driver (ROC Div1A/Vet, NAC type, Suggested strips,
+// This was the Admin gap row until 013 T022 deleted it with the
+// global-overrides slice; the claim is unchanged and a pool duration now
+// carries it. The rejected candidates are kept because each records a trap a
+// future re-pointing would otherwise walk back into, all measured at this
+// exact point in the driver (ROC Div1A/Vet, NAC type, Suggested strips,
 // fencer count of 99 on the edited competition):
 //   - DEFAULT_DE_STRIP_FOOTPRINT: T069 measured that an override only moves
 //     anything once it drops below the DE strip grant max_de_strip_pct
@@ -631,89 +681,125 @@ await shot('09-gears-default')
 //     the committed schedule at its last valid state — confirmed by reading
 //     `[data-dimmed]`, which flipped to "true" while the table never moved
 //     even though the store had genuinely changed.
-// A *decrease* only relaxes that sum, so it can never trigger the same
-// freeze — kept here for that reason.
-const adminGapInput = settingsRegion.getByRole('spinbutton', { name: 'Admin gap' })
-const adminGapDefault = Number(await adminGapInput.inputValue())
-const adminGapChanged = adminGapDefault - 15
-const scheduleBeforeGap = await schedTable.textContent()
-await adminGapInput.fill(String(adminGapChanged))
-await adminGapInput.blur()
+// Epee's pool duration sits in that same day-length sum as the first term, so
+// the direction rule the Admin gap step settled on carries over unchanged: a
+// *decrease* only relaxes the sum and can never trigger the freeze. The
+// template is ROC Div1A/Vet, which selects all three weapons across both
+// genders, so epee events are on the board for the change to move.
+const epeeDurationInput = settingsRegion.getByRole('spinbutton', { name: 'Epee pool round duration' })
+const epeeDurationDefault = Number(await epeeDurationInput.inputValue())
+const epeeDurationChanged = epeeDurationDefault - 15
+const scheduleBeforeDuration = await schedTable.textContent()
+await epeeDurationInput.fill(String(epeeDurationChanged))
+await epeeDurationInput.blur()
 await page.waitForTimeout(400)
-const scheduleAfterGap = await schedTable.textContent()
-if (scheduleBeforeGap === scheduleAfterGap) {
-  throw new Error('changing Admin gap did not move the schedule table (FR-046)')
+const scheduleAfterDuration = await schedTable.textContent()
+if (scheduleBeforeDuration === scheduleAfterDuration) {
+  throw new Error('changing the epee pool duration did not move the schedule table (FR-046)')
 }
 if ((await page.locator('[data-dimmed]').getAttribute('data-dimmed')) === 'true') {
-  throw new Error('Admin gap change left the center dimmed-invalid — the "after" read was not a real committed schedule')
+  throw new Error('epee pool duration change left the center dimmed-invalid — the "after" read was not a real committed schedule')
 }
-log('Admin gap', adminGapDefault, '->', adminGapChanged, 'moved the schedule')
+log('Epee pool duration', epeeDurationDefault, '->', epeeDurationChanged, 'moved the schedule')
 await shot('10-gears-changed')
 
 // FR-044: the revert control actually resets, not just relabels. Cheap once
 // the panel is open — nothing else in this driver exercises one.
-await settingsRegion.getByRole('button', { name: 'Revert Admin gap to default' }).click()
+await settingsRegion.getByRole('button', { name: 'Revert Epee to default' }).click()
 await page.waitForTimeout(400)
-if (Number(await adminGapInput.inputValue()) !== adminGapDefault) {
-  throw new Error('Revert Admin gap to default did not restore the default value (FR-044)')
+if (Number(await epeeDurationInput.inputValue()) !== epeeDurationDefault) {
+  throw new Error('Revert Epee to default did not restore the default value (FR-044)')
 }
-if ((await settingsDefaultCount()) !== 5) {
-  throw new Error('Revert Admin gap to default did not restore its Default badge (FR-044)')
+if ((await settingsDefaultCount()) !== 4) {
+  throw new Error('Revert Epee to default did not restore its Default badge (FR-044)')
 }
-if ((await schedTable.textContent()) !== scheduleBeforeGap) {
-  throw new Error('Revert Admin gap to default did not restore the schedule table (FR-044)')
+if ((await schedTable.textContent()) !== scheduleBeforeDuration) {
+  throw new Error('Revert Epee to default did not restore the schedule table (FR-044)')
 }
-log('Revert Admin gap to default restored the default value, badge, and schedule')
+log('Revert Epee to default restored the default value, badge, and schedule')
 
-// FR-045/SC-007: the override round-trips through a share link, and reads as
-// an override on the far side — not merely equal to the default by
-// coincidence. Re-apply the change just reverted so there is an override to
-// carry. Opening Settings closed Save / Share (the mutual exclusion asserted
-// above), so its trigger has to be clicked again — which in turn closes
-// Settings, after the fill below has already used it. The visibility check is
-// kept rather than an unconditional click so the step survives either state,
-// the same defensive shape the NAC Cadet/Junior template step below uses for
-// its own already-open collapsible.
-await adminGapInput.fill(String(adminGapChanged))
-await adminGapInput.blur()
+// FR-045/SC-007: a setting round-trips through a share link and reads as an
+// override on the far side — not merely equal to the default by coincidence.
+// The carried setting is DE mode since 013 T022: it is the one setting left
+// that a share link can disagree with the tournament type about, which makes
+// it the one where "arrived as an override" and "arrived as a default" are
+// genuinely different states. Set it to Single on NAC, whose own default is
+// Staged, so the far side reading Single proves the payload decided it.
+// Opening the Settings panel closed Export (the mutual exclusion asserted
+// above), so its trigger has to be clicked again — which in turn closes the
+// Settings panel, after the click below has already used it. The visibility
+// check is kept rather than an unconditional click so the step survives
+// either state, the same defensive shape `openPanel` uses for a panel that
+// may already be open.
+const deModeGroup = settingsRegion.getByRole('radiogroup', { name: 'DE mode' })
+await deModeGroup.getByRole('radio', { name: 'Single' }).click()
 await page.waitForTimeout(400)
 const generateLinkVisible = await page
   .getByRole('button', { name: 'Generate Link' })
   .isVisible()
   .catch(() => false)
 if (!generateLinkVisible) {
-  await page.getByRole('button', { name: 'Save / Share' }).click()
+  await page.getByRole('button', { name: 'Export' }).click()
 }
 await page.getByRole('button', { name: 'Generate Link' }).click()
 const gearShareUrl = await page.locator('input[readonly]').first().inputValue()
 const page3 = await ctx.newPage()
 page3.on('pageerror', (e) => errors.push('p3: ' + e))
 await page3.goto(gearShareUrl)
-await page3.getByRole('button', { name: 'Save / Share' }).waitFor()
-await page3.getByRole('button', { name: 'Settings' }).click()
-const settingsRegion3 = page3.getByRole('region', { name: 'Settings' })
+await page3.getByRole('button', { name: 'Export' }).waitFor()
+// NOT a fresh-page click: `panel` is persisted to `localStorage` (viewState.ts)
+// and this driver's pages share one context, so page3 boots with Settings
+// already open (left there by the `page` steps above) — an unconditional
+// click here closes it instead of opening it. `openPanel` handles either
+// state, the same guard it gives the long-lived `page`.
+await openPanel('Settings', page3)
+const settingsRegion3 = page3
+  .getByRole('complementary', { name: 'Inspector panel' })
+  .getByRole('region', { name: 'Settings' })
 await settingsRegion3.waitFor()
-const adminGapInput3 = settingsRegion3.getByRole('spinbutton', { name: 'Admin gap' })
-const adminGapOnLoad = Number(await adminGapInput3.inputValue())
-if (adminGapOnLoad !== adminGapChanged) {
+const deModeGroup3 = settingsRegion3.getByRole('radiogroup', { name: 'DE mode' })
+const singleChecked = await deModeGroup3
+  .getByRole('radio', { name: 'Single' })
+  .getAttribute('aria-checked')
+if (singleChecked !== 'true') {
   throw new Error(
-    `share round-trip lost the Admin gap override: expected ${adminGapChanged}, got ${adminGapOnLoad}`,
+    `share round-trip lost the DE mode override: expected Single checked, got aria-checked=${singleChecked}`,
   )
 }
-// The marker, not the value — an implementation that round-tripped the
-// number but forgot to mark it non-default would still pass the check above.
-const revertVisibleOnLoad = await settingsRegion3
-  .getByRole('button', { name: 'Revert Admin gap to default' })
-  .isVisible()
-  .catch(() => false)
-if (!revertVisibleOnLoad) {
+// The marker, not the checked pill — a payload that carried nothing would
+// still show Single checked on a tournament type that defaults to it, and
+// would read as Default while doing so. NAC defaults to Staged, so this is
+// doubly covered, and the marker is the half that generalises.
+const defaultMarkersOnLoad = await settingsRegion3
+  .getByText('Default', { exact: true })
+  .count()
+if (defaultMarkersOnLoad !== 3) {
   throw new Error(
-    'Admin gap round-tripped its value but not its override marker — the far side reads it as Default (FR-045)',
+    `DE mode round-tripped its value but not its override marker: expected 3 Default markers (the pool durations only), got ${defaultMarkersOnLoad} (FR-045)`,
   )
 }
-log('share round-trip: Admin gap', adminGapChanged, 'arrived marked as an override, not a default')
+log('share round-trip: DE mode Single arrived marked as an override, not a default')
 await page3.screenshot({ path: `${SHOTS}11-gears-roundtrip.png`, fullPage: FULLPAGE })
 await page3.close()
+
+// ── Restore isolation: no control returns `de_mode_override` to null ──
+// (handoff.md finding 6), so the Single override set above for the round-trip
+// leaks into every template applied after this point — `applyTemplate` keeps
+// it across a switch the same way it keeps `days_available`. Clicking Staged
+// here writes an explicit STAGED override rather than clearing it, but NAC's
+// type default is Staged, so the resolved DE mode every later Suggest sees is
+// the same one a fresh store would compute; only the (absent) Default marker
+// differs, and nothing after this point reads that marker. 013 T023 measured
+// the leak before this step existed: NAC Vet/Div1/Junior's SC-008 read 69
+// instead of its fresh-store 80, and NAC Youth read 50 instead of 66. This is
+// driver hygiene under D14 (re-point, never rewrite), not an app fix.
+await deModeGroup.getByRole('radio', { name: 'Staged' }).click()
+await page.waitForTimeout(400)
+const stagedChecked = await deModeGroup.getByRole('radio', { name: 'Staged' }).getAttribute('aria-checked')
+if (stagedChecked !== 'true') {
+  throw new Error(`restoring DE mode to Staged after the round-trip did not check the Staged radio: aria-checked=${stagedChecked}`)
+}
+log('DE mode restored to Staged after the round-trip, isolating later templates from the leftover Single override')
 
 // ── NAC Div1/Junior (010 R1) ──
 // Before R1, indiv-team-same-day blocked D1-M-EPEE-IND + D1-M-EPEE-TEAM's
@@ -722,18 +808,13 @@ await page3.close()
 // 12 video is the column baseline.md's after-R1 table measured clean through
 // the engine (24/24, no ERROR); this is the same claim through the browser.
 // Still under tournament type NAC — nothing above this point has changed it.
-const div1JuniorVisible = await page
-  .getByText('NAC Div1/Junior', { exact: true })
-  .isVisible()
-  .catch(() => false)
-if (!div1JuniorVisible) {
-  await page.getByRole('button', { name: 'Presets…' }).click()
-}
-await page.getByText('NAC Div1/Junior', { exact: true }).click()
+await choosePreset('NAC Div1/Junior')
 log('NAC Div1/Junior template applied')
 
 // Video strips' max is the live strip count, so strips has to commit first —
 // filling video to 12 while strips was still ROC's 15 would clamp it to 15.
+// Both fields live in the Strips & referees panel (T009).
+await openPanel('Strips & referees')
 const div1JuniorStrips = page.getByRole('spinbutton', { name: 'Number of strips' })
 await div1JuniorStrips.fill('80')
 await div1JuniorStrips.blur()
@@ -743,10 +824,10 @@ await div1JuniorVideo.fill('12')
 await div1JuniorVideo.blur()
 await page.waitForTimeout(200)
 
-const div1JuniorGen = page.getByRole('button', { name: 'Auto-schedule all' })
+const div1JuniorGen = page.getByRole('button', { name: 'Auto-assign' })
 if (await div1JuniorGen.isDisabled()) {
   await shot('06b-div1junior-generate-disabled')
-  throw new Error('Auto-schedule all disabled for NAC Div1/Junior — read smoke-shots/06b for the blocking findings')
+  throw new Error('Auto-assign disabled for NAC Div1/Junior — read smoke-shots/06b for the blocking findings')
 }
 await div1JuniorGen.click()
 await page.waitForTimeout(300)
@@ -769,27 +850,17 @@ await shot('06-div1junior-schedule')
 // ran (baseline.md §1). US1 (R5) demoted that finding to a WARN and US2 (L5)
 // replaced the largest-event rule with one sized for the busiest day's summed
 // pool demand, so this step presses the same button on the same template and
-// checks the board is no longer empty. The "Presets…" panel stays open from
-// the steps above, so click the trigger only if the list is not already
-// showing — same defensive shape as the NAC Div1/Junior and NAC Cadet/Junior
-// steps.
-const nacYouthVisible = await page
-  .getByText('NAC Youth', { exact: true })
-  .isVisible()
-  .catch(() => false)
-if (!nacYouthVisible) {
-  await page.getByRole('button', { name: 'Presets…' }).click()
-}
-await page.getByText('NAC Youth', { exact: true }).click()
+// checks the board is no longer empty.
+await choosePreset('NAC Youth')
 log('NAC Youth template applied')
 
 const nacYouthStrips = await pressSuggest('NAC Youth')
 log('NAC Youth suggested strips =', nacYouthStrips)
 
-const nacYouthGen = page.getByRole('button', { name: 'Auto-schedule all' })
+const nacYouthGen = page.getByRole('button', { name: 'Auto-assign' })
 if (await nacYouthGen.isDisabled()) {
   await shot('06c-nacyouth-generate-disabled')
-  throw new Error('Auto-schedule all disabled for NAC Youth — read smoke-shots/06c for the blocking findings')
+  throw new Error('Auto-assign disabled for NAC Youth — read smoke-shots/06c for the blocking findings')
 }
 await nacYouthGen.click()
 await page.waitForTimeout(300)
@@ -823,6 +894,25 @@ log('NAC Youth schedule table rows =', nacYouthRowCount)
 // 53/197. Verdict: not a defect. A gears-panel override is a tournament-wide
 // setting, so this step's count is the busiest-day search at a 15-minute
 // admin gap; the assertion stays non-zero by design (see above).
+//
+// 013 T022 deleted that Admin gap step, so the 63 above no longer has its
+// cause. The session state reaching here now carries a different tournament-
+// wide leftover instead — the share-link step sets DE mode to Single and
+// nothing restores it, `applyTemplate` keeping it the same way it kept the
+// admin gap. T023 runs the driver and records whatever count that produces.
+// The assertion below is unchanged and stays non-zero by design.
+//
+// `[M]` 013 T023, 2026-09-13: two runs both read 66, agreeing with D14's
+// fresh-store expectation. This session's earlier readings (50, then 49
+// after adding the Staged-restore step above) were never a config leftover —
+// fresh-store probes at `df977bf487` computed 66 through both today's search
+// and the pre-T017 one, so the engine was correct the whole time. The stale
+// numbers were `pressSuggest` reading `[data-suggested-strips]` before
+// `StripsPanel`'s 300ms debounce had replaced the *previous* template's
+// answer with this one's — nothing marked the display stale in between.
+// Fixed at `9da51b1b15`: the panel now clears the card to `—` (Apply
+// disabled) the instant any of its search inputs change, so a read here can
+// only ever be this template's own answer.
 if (nacYouthRowCount === 0) {
   throw new Error('SC-005: NAC Youth placed 0 events at its Suggest count — the feasibility-strip-hours demotion or the busiest-day suggestion regressed')
 }
@@ -847,16 +937,15 @@ await shot('06c-nacyouth-schedule')
 // build (tasks.md §One decision), so a different video count is a different
 // board — 80 is correct for the config this driver hands it, not a
 // regression against baseline.md's 85.
-const vetTemplateVisible = await page
-  .getByText('NAC Vet/Div1/Junior', { exact: true })
-  .isVisible()
-  .catch(() => false)
-if (!vetTemplateVisible) {
-  await page.getByRole('button', { name: 'Presets…' }).click()
-}
-await page.getByText('NAC Vet/Div1/Junior', { exact: true }).click()
+//
+// `[M]` 013 T023, 2026-09-13: two runs both read 80, holding this assertion.
+// The 69 and then 66 read earlier this session were both stale reads of
+// `[data-suggested-strips]`, not a config change — see the `[M]` note on the
+// NAC Youth step above for the mechanism and the fix (`9da51b1b15`).
+await choosePreset('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior template applied')
 
+await openPanel('Strips & referees')
 const vetVideoStrips = await page.getByRole('spinbutton', { name: 'Number of video strips' }).inputValue()
 log('NAC Vet/Div1/Junior video strips before Suggest =', vetVideoStrips)
 
@@ -867,10 +956,10 @@ if (Number(vetStrips) !== 80) {
   throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 80 at ${vetVideoStrips} video strips (tmp/probe-t014-video.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
 }
 
-const vetGen = page.getByRole('button', { name: 'Auto-schedule all' })
+const vetGen = page.getByRole('button', { name: 'Auto-assign' })
 if (await vetGen.isDisabled()) {
   await shot('06d-vet-generate-disabled')
-  throw new Error('Auto-schedule all disabled for NAC Vet/Div1/Junior — read smoke-shots/06d for the blocking findings')
+  throw new Error('Auto-assign disabled for NAC Vet/Div1/Junior — read smoke-shots/06d for the blocking findings')
 }
 await vetGen.click()
 await page.waitForTimeout(300)
@@ -896,26 +985,16 @@ await shot('06d-vet-schedule')
 // to DISABLED/100 (src/store/competitionDefaults.ts). Nothing above this
 // point touches a team event, so a SMOKE PASS without this step proves
 // nothing about that fix.
-// The "Presets…" panel the ROC step opened above stays open (nothing closes
-// it on selection), so click the trigger only if the template list is not
-// already showing.
-const teamTemplateVisible = await page
-  .getByText('NAC Cadet/Junior', { exact: true })
-  .isVisible()
-  .catch(() => false)
-if (!teamTemplateVisible) {
-  await page.getByRole('button', { name: 'Presets…' }).click()
-}
-await page.getByText('NAC Cadet/Junior', { exact: true }).click()
+await choosePreset('NAC Cadet/Junior')
 log('NAC Cadet/Junior template applied')
 
 const teamStrips = await pressSuggest('NAC Cadet/Junior')
 log('NAC Cadet/Junior suggested strips =', teamStrips)
 
-const teamGen = page.getByRole('button', { name: 'Auto-schedule all' })
+const teamGen = page.getByRole('button', { name: 'Auto-assign' })
 if (await teamGen.isDisabled()) {
   await shot('07b-team-generate-disabled')
-  throw new Error('Auto-schedule all disabled for NAC Cadet/Junior — read smoke-shots/07b for the blocking findings')
+  throw new Error('Auto-assign disabled for NAC Cadet/Junior — read smoke-shots/07b for the blocking findings')
 }
 await teamGen.click()
 await page.waitForTimeout(300)
@@ -925,7 +1004,7 @@ await page.waitForTimeout(200)
 const teamRowCount = await page.locator('[data-schedule-row]').count()
 log('NAC Cadet/Junior schedule table rows =', teamRowCount)
 // Measured against the running app by running this file's exact sequence
-// (Presets… → NAC Cadet/Junior → Suggest → Auto-schedule all → Schedule radio
+// (Preset combobox → NAC Cadet/Junior → Suggest → Auto-assign → Schedule radio
 // → count [data-schedule-row]). This count is measured at this point in the
 // driver's accumulated session state — after the ROC template, the
 // fencer-count edit to 99, and the share round-trip — not from a fresh boot,
@@ -973,117 +1052,58 @@ await shot('07-team-schedule')
 //
 // Runs last, on the 24 events NAC Cadet/Junior just selected, with the type
 // still at the NAC that B1's boot preset set. NAC → ROC is the pair that moves
-// all three defaults at once (src/store/typeDefaults.ts): referees 2 → 1, video
-// strips 8 → 0, DE mode "Staged DE Blocks" → "Single Block".
-const advanced = page.getByRole('button', { name: 'Advanced' })
-await advanced.click()
+// referees 2 → 1 and video strips 8 → 0 (src/store/typeDefaults.ts). DE mode's
+// own summary moved to the Settings panel in T022 and is asserted there, not
+// here.
+// 013 T018 replaced the old Advanced section's collapsed-into-one-`div`
+// summary with the Strips & referees panel's own controls — no region named
+// "Advanced" exists any more, so these reads are scoped to the open
+// "Inspector panel" aside instead.
+await openPanel('Strips & referees')
+const stripsAside = page.getByRole('complementary', { name: 'Inspector panel' })
+const refsPerPool = () => stripsAside.locator('[data-refs-per-pool]').textContent()
+const videoField = stripsAside.getByRole('spinbutton', { name: 'Number of video strips' })
 
-// FR-035's summary sits outside CollapsibleContent (Radix unmounts the content
-// on close) and the trigger points at it with aria-describedby. Read it through
-// that id rather than by its text: the assertion then also fails if the tie
-// between trigger and summary is ever dropped, which is the half of FR-035 a
-// text locator cannot see. The id comes from React's useId (":r7:" and the
-// like), so it is quoted into an attribute selector — those colons are not
-// valid in a bare `#id` selector.
-const summaryId = await advanced.getAttribute('aria-describedby')
-if (!summaryId) throw new Error('the Advanced trigger describes no summary element (FR-035)')
-const summaryText = async () => ((await page.locator(`[id="${summaryId}"]`).textContent()) ?? '').trim()
-
-const nacSummary = await summaryText()
-if (!nacSummary.includes('Referees per pool: 2') || !nacSummary.includes('DE mode: Staged DE Blocks')) {
-  throw new Error(`Advanced summary at a NAC did not read the NAC row of TYPE_DEFAULTS: "${nacSummary}"`)
+if ((await refsPerPool())?.trim() !== '2') {
+  throw new Error(`Referees per pool at a NAC did not read the NAC row of TYPE_DEFAULTS: "${await refsPerPool()}"`)
 }
 
 // B1's preset wrote an explicit 12 video strips (applyPreset → setVideoStrips),
 // so the count is *not* following the type default yet and the type change
 // below would correctly leave it alone. Revert it first (FR-038's control, the
 // only way back to the stored null) so it becomes a value that has to move.
-await page.getByRole('button', { name: 'Revert video strips to default' }).click()
+await stripsAside.getByRole('button', { name: 'Revert video strips to default' }).click()
 await page.waitForTimeout(200)
-const revertedSummary = await summaryText()
-if (!revertedSummary.includes('Video strips: 8')) {
-  throw new Error(`reverting video strips did not fall back to the NAC default of 8: "${revertedSummary}"`)
+if ((await videoField.inputValue()) !== '8') {
+  throw new Error(`reverting video strips did not fall back to the NAC default of 8: "${await videoField.inputValue()}"`)
 }
-log('advanced summary at a NAC:', revertedSummary.replace(/\s+/g, ' '))
+log('referees per pool at a NAC:', (await refsPerPool())?.trim(), 'video strips:', await videoField.inputValue())
 
-// Two events: the first gets a hand-set referee count, the second is left
-// following the default. Both start at the store's AUTO marker, which the
-// option list names by the count it resolves to.
-const refSelects = await page.getByRole('combobox', { name: /^Referees for / }).all()
-if (refSelects.length < 2) {
-  throw new Error(`the Advanced table offered ${refSelects.length} referee controls; two are needed`)
-}
-const [handSet, following] = refSelects
-const handSetName = await handSet.getAttribute('aria-label')
-const followingName = await following.getAttribute('aria-label')
-const refText = async (sel) => ((await sel.textContent()) ?? '').trim()
-if ((await refText(handSet)) !== 'Auto (2)' || (await refText(following)) !== 'Auto (2)') {
-  throw new Error(
-    `a fresh event did not start on the type default: "${await refText(handSet)}" / "${await refText(following)}"`,
-  )
-}
-
-// Exact names throughout: a competition label is a prefix of its Team sibling's
-// ("… Épée" vs "… Épée Team"), so the default substring match makes both the
-// combobox and the cell lookups below strict-mode violations.
-await handSet.click()
-await page.getByRole('option', { name: '1 referee', exact: true }).click()
-await page.waitForTimeout(200)
-if ((await refText(handSet)) !== '1 referee') {
-  throw new Error(`setting an explicit referee count did not stick: "${await refText(handSet)}"`)
-}
-
-// FR-039's marker is the stored AUTO, never a comparison against the resolved
-// count — the cell's `Default` badge is where that shows.
-const refCell = (name) => page.locator('td').filter({ has: page.getByRole('combobox', { name, exact: true }) })
-const defaultBadges = (name) => refCell(name).getByText('Default', { exact: true }).count()
-if ((await defaultBadges(handSetName)) !== 0) {
-  throw new Error(`${handSetName} still reads Default after being set by hand`)
-}
-if ((await defaultBadges(followingName)) !== 1) {
-  throw new Error(`${followingName} lost its Default badge without being touched`)
-}
-log('hand-set:', handSetName, '→ 1 referee; following the default:', followingName)
-await shot('08-advanced-nac')
-
-// The type change. The top bar's control, named "Tournament type" — the rail's
-// Tournament panel has a second control over the same store field whose
-// accessible name is just "Type" (its <Label>), and only an exact match keeps
-// "Type" from also matching this one.
-await page.getByRole('combobox', { name: 'Tournament type', exact: true }).click()
-await page.getByRole('option', { name: 'ROC', exact: true }).click()
+// The type change. The retired top bar's own "Tournament type" control is
+// gone (013 T010), and TournamentSetup's dropdown is gone too (013 T016) —
+// the Tournament panel's type control is now the "Tournament type" radiogroup
+// of pills, and clicking a pill commits immediately (no separate option step).
+await openPanel('Tournament')
+await page
+  .getByRole('radiogroup', { name: 'Tournament type' })
+  .getByRole('radio', { name: 'ROC', exact: true })
+  .click()
 await page.waitForTimeout(400)
 
-// Half one — everything that was following a default moved to the ROC row.
-const rocSummary = await summaryText()
-for (const expected of ['Referees per pool: 1', 'Video strips: 0', 'DE mode: Single Block']) {
-  if (!rocSummary.includes(expected)) {
-    throw new Error(`NAC → ROC did not re-resolve a default: expected "${expected}" in "${rocSummary}"`)
-  }
-}
-if ((await refText(following)) !== 'Auto (1)') {
-  throw new Error(
-    `${followingName} was following the NAC default and did not follow ROC's: "${await refText(following)}"`,
-  )
-}
+// Both readings below live in the Strips & referees panel, which the
+// Tournament panel above just replaced — reopen it before reading either.
+await openPanel('Strips & referees')
 
-// Half two — the hand-set count survived (FR-036). And it still reads as *not*
-// default: ROC's own default is 1 referee, so an implementation that derived
-// the badge by comparing the resolved counts would call this event's explicit
-// ONE a default here, which is the exact trap data-model.md §Settings override
-// state describes.
-if ((await refText(handSet)) !== '1 referee') {
-  throw new Error(
-    `FR-036 violated: the tournament type change destroyed ${handSetName}'s hand-set referee count ("${await refText(handSet)}")`,
-  )
+// Everything that follows the tournament type moved to the ROC row. Since the
+// per-event record shrank (013 T020) that is every event: referee policy is
+// derived in buildConfig.ts and no per-event control remains to depart from it.
+if ((await refsPerPool())?.trim() !== '1') {
+  throw new Error(`NAC → ROC did not re-resolve referees per pool: "${await refsPerPool()}"`)
 }
-if ((await defaultBadges(handSetName)) !== 0) {
-  throw new Error(`${handSetName} reads Default at a ROC — the badge is comparing values, not reading the stored marker`)
+if ((await videoField.inputValue()) !== '0') {
+  throw new Error(`NAC → ROC did not re-resolve video strips: "${await videoField.inputValue()}"`)
 }
-if ((await defaultBadges(followingName)) !== 1) {
-  throw new Error(`${followingName} lost its Default badge across the type change`)
-}
-log('type NAC → ROC: defaults re-resolved,', handSetName, 'kept its hand-set 1 referee')
+log('type NAC → ROC: referees per pool and video strips re-resolved')
 await shot('08b-advanced-roc')
 
 await browser.close()
