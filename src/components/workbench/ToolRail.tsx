@@ -3,6 +3,8 @@ import { Trophy, Rows3, CalendarDays, AlertTriangle, Settings as SettingsIcon } 
 import { cn } from '@/lib/utils'
 import { PanelId } from '../../store/viewState.ts'
 import { PANEL_TITLES } from './InspectorPanel.tsx'
+import { useStore } from '../../store/store.ts'
+import { selectFindings } from '../../store/derived.ts'
 
 interface ToolRailButtonSpec {
   id: PanelId
@@ -38,8 +40,16 @@ interface ToolRailProps {
  * other opens it. A decorative rule (`aria-hidden`) separates Settings from
  * the four panel buttons above it — a styling addition, not a DOM-order
  * change of any control.
+ *
+ * The Findings button also carries the unified findings count (013 T032,
+ * contract §5, mockup lines 1609-1622): `data-badge` always, on every render,
+ * so a status is readable without opening the panel; a visible pill only once
+ * the count is positive, since a "0" pill would just be noise on a clean
+ * board. The accessible name stays `Findings` either way.
  */
 export function ToolRail({ panel, onSelect }: ToolRailProps) {
+  const findingsCount = useStore((s) => selectFindings(s).length)
+
   return (
     <nav
       aria-label="Tool rail"
@@ -48,6 +58,7 @@ export function ToolRail({ panel, onSelect }: ToolRailProps) {
       {BUTTONS.map(({ id, icon: Icon }, index) => {
         const pressed = panel === id
         const label = PANEL_TITLES[id]
+        const isFindings = id === PanelId.FINDINGS
         return (
           <Fragment key={id}>
             {index === BUTTONS.length - 1 && (
@@ -58,14 +69,23 @@ export function ToolRail({ panel, onSelect }: ToolRailProps) {
               aria-pressed={pressed}
               aria-label={label}
               title={label}
+              data-badge={isFindings ? String(findingsCount) : undefined}
               onClick={() => onSelect(pressed ? null : id)}
               className={cn(
-                'flex h-[46px] w-[46px] items-center justify-center rounded-[13px] border-[1.5px] border-chrome-border bg-secondary text-neutral-700 shadow-[0_1px_2px_rgba(43,43,45,.05)] hover:border-accent-400 hover:bg-hover-tint',
+                'relative flex h-[46px] w-[46px] items-center justify-center rounded-[13px] border-[1.5px] border-chrome-border bg-secondary text-neutral-700 shadow-[0_1px_2px_rgba(43,43,45,.05)] hover:border-accent-400 hover:bg-hover-tint',
                 pressed &&
                   'border-primary bg-accent-100 text-accent-800 shadow-[0_1px_3px_rgba(43,43,45,.1)] hover:border-primary hover:bg-accent-100',
               )}
             >
               <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+              {isFindings && findingsCount > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-[5px] -right-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-[99px] border-2 border-chrome bg-rail-badge px-[5px] text-[10.5px] font-bold text-white"
+                >
+                  {findingsCount}
+                </span>
+              )}
             </button>
           </Fragment>
         )

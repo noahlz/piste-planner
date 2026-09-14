@@ -3,11 +3,10 @@ import type { DerivedEventSchedule } from '../engine/derive.ts'
 import { validateConfig } from '../engine/validation.ts'
 import { initialAnalysis } from '../engine/analysis.ts'
 import { computeRefRequirements } from '../engine/refs.ts'
-import { ValidationMode } from '../engine/types.ts'
+import { BottleneckSeverity, ValidationMode } from '../engine/types.ts'
 import type {
   AnalysisResult,
   Competition,
-  Placement,
   RefDemandByDay,
   RefDemandInterval,
   RefRequirementsByDay,
@@ -22,6 +21,13 @@ import type {
 import { assignStripLanes } from '../layout/lanes.ts'
 import type { BlockPlacement } from '../layout/lanes.ts'
 import { findingIdentity } from '../engine/validation.ts'
+// Pure string helpers, no React and no store read. They lived under
+// `src/components/` until 013 T031 moved them to `src/lib/`: the store may not
+// import from the component tree (research D6 fixes the direction as
+// store → layout/lib ← components), and `selectFindings` needs both.
+import { phaseDisplay } from '../lib/blockLabels.ts'
+import { competitionLabel } from '../lib/competitionLabels.ts'
+import { formatClock } from '../lib/time.ts'
 import { buildTournamentConfig } from './buildConfig.ts'
 import type { StoreState } from './store.ts'
 
@@ -353,6 +359,273 @@ function computePlacementCounts(state: StoreState): PlacementCounts {
 export const selectPlacementCounts = memoizeOnDeps(scheduleDeps, computePlacementCounts)
 
 // ──────────────────────────────────────────────
+// The unified findings list (data-model.md §5, research D6, 013 T031)
+// ──────────────────────────────────────────────
+
+/**
+ * How loudly a row speaks. `Unplaced` is its own severity rather than a
+ * `Warning` with a flag: it is the one finding the organizer can act on by
+ * moving something, and the panel and the tool rail both style it apart.
+ * Its underlying engine severity is still WARN, which is what makes it
+ * dismissable (§2.2).
+ */
+export const FindingSeverity = {
+  BLOCKING: 'Blocking',
+  WARNING: 'Warning',
+  NOTE: 'Note',
+  UNPLACED: 'Unplaced',
+} as const
+export type FindingSeverity = (typeof FindingSeverity)[keyof typeof FindingSeverity]
+
+/**
+ * How close to the day's close a finish has to be before it is worth saying
+ * (data-model.md §5). A UI constant, not an engine one: the engine has no
+ * opinion about slack, and nothing in `src/engine/` reads this.
+ */
+export const LATE_FINISH_WINDOW_MINS = 45
+
+/** One row of the Findings panel — every surface that shows a finding reads this shape. */
+export interface Finding {
+  /** Stable across recomputes of the same condition, so a dismissal keeps matching. */
+  id: string
+  severity: FindingSeverity
+  /** Where the reader should look: "Day 2 · Pools", "strips_total", "Venue". */
+  where: string
+  /** 0-based store day, or null when the row belongs to no drawn day. */
+  day: number | null
+  message: string
+  /** Competition id when the row names one, for the canvas jump and the gutter flag. */
+  target: string | null
+}
+
+/** ERROR → Blocking, WARN → Warning, INFO → Note (contract §1.1, shared by §1.2). */
+function severityOf(severity: BottleneckSeverity): FindingSeverity {
+  if (severity === BottleneckSeverity.ERROR) return FindingSeverity.BLOCKING
+  if (severity === BottleneckSeverity.WARN) return FindingSeverity.WARNING
+  return FindingSeverity.NOTE
+}
+
+/**
+ * The order the panel reads in: what stops the tournament, then what is not
+ * drawn, then what is merely tight, then what is only worth knowing.
+ */
+const SEVERITY_RANK: Record<FindingSeverity, number> = {
+  [FindingSeverity.BLOCKING]: 0,
+  [FindingSeverity.UNPLACED]: 1,
+  [FindingSeverity.WARNING]: 2,
+  [FindingSeverity.NOTE]: 3,
+}
+
+/**
+ * Every row the current inputs raise, dismissed ones included.
+ *
+ * Four sources, appended in a fixed order (contract §1.6) and then stably
+ * sorted by severity, so within a severity group the source order survives:
+ * validation errors, then bottleneck warnings, then the lane packer's
+ * overflow and out-of-range events, then one late-finish row per day.
+ *
+ * Bounded by construction (constitution IV): every loop runs once over a list
+ * whose length is already fixed — the errors, the warnings, the blocks, the
+ * days. Nothing here retries and nothing converges.
+ */
+function computeAllFindings(state: StoreState): Finding[] {
+  const schedule = selectDerivedSchedule(state)
+  const derivedFindings = selectDerivedFindings(state)
+  const competitionsById = new Map(schedule.competitions.map((c) => [c.id, c]))
+
+  /** A subject is a target only when it names a competition the board actually has. */
+  function resolveTarget(id: string | undefined): string | null {
+    if (id === undefined || id === '') return null
+    return competitionsById.has(id) ? id : null
+  }
+
+  function labelOf(target: string): string {
+    const competition = competitionsById.get(target)
+    return competition ? competitionLabel(competition) : target
+  }
+
+  /**
+   * The store day a target sits on, or null when it has no placement or an
+   * out-of-range one. `state.placements` and `state.days_available` — the
+   * store's own day axis, never `config.days_available`, which carries the
+   * scheduler's compacted one (research D4/D5).
+   */
+  function dayOf(target: string): number | null {
+    const placement = state.placements[target]
+    if (placement === undefined) return null
+    if (placement.day < 0 || placement.day >= state.days_available) return null
+    return placement.day
+  }
+
+  /** Contract §1.5, shared by the validation and bottleneck rows. */
+  function whereOf(target: string | null, day: number | null, fallback: string): string {
+    if (target === null) return fallback
+    if (day === null) return labelOf(target)
+    return `Day ${day + 1} · ${labelOf(target)}`
+  }
+
+  const rows: Finding[] = []
+
+  // ── §1.1 validation errors ──
+  for (const error of derivedFindings.validationErrors) {
+    const target = resolveTarget(error.subjects?.[0])
+    const day = target === null ? null : dayOf(target)
+    rows.push({
+      id: findingIdentity(error),
+      severity: severityOf(error.severity),
+      where: whereOf(target, day, error.field),
+      day,
+      message: error.message,
+      target,
+    })
+  }
+
+  // ── §1.2 bottleneck warnings ──
+  //
+  // `Bottleneck` carries no id, so one is built from cause + competition_id
+  // plus an ordinal among the rows sharing those two (research D6). The
+  // ordinal is what keeps two venue-level warnings of the same cause — both
+  // with an empty `competition_id` — distinct and separately dismissable.
+  const ordinalPerKey = new Map<string, number>()
+  for (const warning of derivedFindings.analysis.warnings) {
+    const key = `${warning.cause}:${warning.competition_id}`
+    const ordinal = ordinalPerKey.get(key) ?? 0
+    ordinalPerKey.set(key, ordinal + 1)
+
+    const target = resolveTarget(warning.competition_id)
+    const day = target === null ? null : dayOf(target)
+    rows.push({
+      id: `analysis:${key}:${ordinal}`,
+      severity: severityOf(warning.severity),
+      where: whereOf(target, day, 'Venue'),
+      day,
+      message: warning.message,
+      target,
+    })
+  }
+
+  // ── §1.3 Unplaced: one row per overflowing block ──
+  //
+  // The same `assignStripLanes` call the canvas draws from and the footer
+  // measures, so a row can never claim an overflow the grid does not show.
+  const blocks = assignStripLanes(schedule.events, state.strips_total)
+  for (const block of blocks) {
+    if (!block.overflow) continue
+    const phase = phaseDisplay(block.phase)
+    const strips = `${block.stripCount} strip${block.stripCount === 1 ? '' : 's'}`
+    rows.push({
+      id: `unplaced:${block.competitionId}:${block.phase}`,
+      severity: FindingSeverity.UNPLACED,
+      where: `Day ${block.day + 1} · ${phase}`,
+      day: block.day,
+      message:
+        `${labelOf(block.competitionId)} needs ${strips} for ${phase} on Day ${block.day + 1} ` +
+        `and none are free for ${formatClock(block.startMinutes)}–${formatClock(block.endMinutes)}. ` +
+        'It is drawn at strip 1, over the events that hold those strips.',
+      target: block.competitionId,
+    })
+  }
+
+  // ── §1.3 Unplaced: one row per stranded event (FR-060) ──
+  //
+  // `assignStripLanes` skips these outright — there is no day row to draw them
+  // on — so they raise no overflow row and would otherwise be invisible.
+  // `day` is null for the same reason: no band can carry the count.
+  for (const [id, derived] of Object.entries(schedule.events)) {
+    if (!derived.day_out_of_range) continue
+    const assignedDay = derived.result.assigned_day
+    rows.push({
+      id: `unplaced:${id}:day`,
+      severity: FindingSeverity.UNPLACED,
+      where: `Day ${assignedDay + 1} out of range`,
+      day: null,
+      message:
+        `${labelOf(id)} is placed on Day ${assignedDay + 1}, which the tournament no longer has. ` +
+        'The next Auto-assign places it afresh.',
+      target: id,
+    })
+  }
+
+  // ── §1.4 Late finish: at most one row per day ──
+  //
+  // `finish` is the maximum block end on the day — the same number the day
+  // band prints, never `de_total_end`, which is the footer's tournament-wide
+  // fact and would let the panel warn about a time the grid does not show.
+  // `close` is `state.dayConfigs`, the store's clock-time day hours.
+  //
+  // This is the only row a hand move past the day's close can raise: it is a
+  // Warning, so the Blocking count — and therefore Auto-assign's disabled
+  // state — is untouched by the move (FR-025). Nothing here compares referees
+  // needed against referees available either (FR-026).
+  for (let day = 0; day < state.days_available; day++) {
+    const dayBlocks = blocks.filter((block) => block.day === day)
+    if (dayBlocks.length === 0) continue
+    const dayConfig = state.dayConfigs[day]
+    if (dayConfig === undefined) continue
+
+    const close = dayConfig.day_end_time
+    let finish = dayBlocks[0].endMinutes
+    for (const block of dayBlocks) {
+      if (block.endMinutes > finish) finish = block.endMinutes
+    }
+    if (finish <= close - LATE_FINISH_WINDOW_MINS) continue
+
+    // Ties go to the lowest competition id so the row names the same event
+    // between two renders of the same board.
+    let culprit = null as BlockPlacement | null
+    for (const block of dayBlocks) {
+      if (block.endMinutes !== finish) continue
+      if (culprit === null || block.competitionId < culprit.competitionId) culprit = block
+    }
+    if (culprit === null) continue
+
+    const phase = phaseDisplay(culprit.phase)
+    const message =
+      finish > close
+        ? `${phase} finishes at ${formatClock(finish)}, ${finish - close} minutes past the day's close at ${formatClock(close)}.`
+        : `${phase} finishes at ${formatClock(finish)}, ${close - finish} minutes before the day closes at ${formatClock(close)}. No slack for a delayed round.`
+
+    rows.push({
+      id: `late-finish:day:${day}`,
+      severity: FindingSeverity.WARNING,
+      where: `Day ${day + 1} · ${labelOf(culprit.competitionId)}`,
+      day,
+      message,
+      target: culprit.competitionId,
+    })
+  }
+
+  // `Array.prototype.sort` is stable, so rows keep their source order inside a
+  // severity group — which is the whole of §1.6's within-group rule.
+  return rows.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
+}
+
+/**
+ * Every row, dismissed ones included — what `dismissFinding` decides against
+ * (contract §2.2). Memoised on `scheduleDeps` alone: a dismissal changes which
+ * rows are *shown*, never which rows exist.
+ */
+export const selectAllFindings = memoizeOnDeps(scheduleDeps, computeAllFindings)
+
+/**
+ * `scheduleDeps` plus the dismissal set.
+ *
+ * Dismissing a finding changes nothing about the schedule, so `scheduleDeps`
+ * alone would hand back the pre-dismissal rows and both the panel and the day
+ * band would go on showing a finding the user has already dealt with.
+ */
+function daySummaryDeps(state: StoreState): unknown[] {
+  return [...scheduleDeps(state), state.dismissedFindings]
+}
+
+function computeFindings(state: StoreState): Finding[] {
+  return selectAllFindings(state).filter((row) => !state.dismissedFindings[row.id])
+}
+
+/** The rows the UI shows: every current finding the user has not waved off, severity-ordered. */
+export const selectFindings = memoizeOnDeps(daySummaryDeps, computeFindings)
+
+// ──────────────────────────────────────────────
 // Day summaries (data-model.md §9, 013 T026)
 // ──────────────────────────────────────────────
 
@@ -378,7 +651,7 @@ export interface DaySummary {
   peakStrips: number
   /** Blocks the lane packer could not fit. */
   unplaced: number
-  /** Undismissed validation findings whose first subject is placed on this day. */
+  /** Undismissed `selectFindings` rows whose `day` is this day (contract §1.7). */
   findings: number
 }
 
@@ -408,68 +681,15 @@ function peakStripsOnDay(dayBlocks: BlockPlacement[]): number {
 }
 
 /**
- * Which day each undismissed validation finding belongs to.
- *
- * Only `validationErrors` are counted, and that is a statement about
- * dismissal rather than about severity. `findingIdentity` gives a
- * `ValidationError` the stable id `dismissFinding` and `state.dismissedFindings`
- * key on; `analysis.warnings` (the bottleneck surface) has no identity function
- * and nothing in the app can dismiss one, so counting them here would put a
- * number in the band that no user action can ever reduce.
- *
- * A finding is attributed to the day its first subject is placed on — the
- * subject is the event the rule is about, and the band is the place a reader
- * looks for "what is wrong with this day". A finding naming no subject, or one
- * whose subject has no placement, belongs to no day and is counted nowhere.
- * `placementDays` only ever needs the `day` a subject sits on, so a caller
- * drawing from committed blocks (`Canvas`) can build it from its own blocks
- * rather than reaching for `state.placements`, which may be a settle ahead.
- *
- * Identities are de-duplicated per day: two errors that dismiss together are
- * one thing a reader can act on, so they read as one.
- */
-function findingsByDay(
-  validationErrors: ValidationError[],
-  dismissedFindings: Record<string, true>,
-  placementDays: Record<string, Pick<Placement, 'day'>>,
-): Map<number, Set<string>> {
-  const byDay = new Map<number, Set<string>>()
-
-  for (const error of validationErrors) {
-    const subject = error.subjects?.[0]
-    if (subject === undefined) continue
-    const placement = placementDays[subject]
-    if (placement === undefined) continue
-
-    const identity = findingIdentity(error)
-    if (dismissedFindings[identity]) continue
-
-    let identities = byDay.get(placement.day)
-    if (!identities) {
-      identities = new Set<string>()
-      byDay.set(placement.day, identities)
-    }
-    identities.add(identity)
-  }
-
-  return byDay
-}
-
-/**
- * `scheduleDeps` plus the dismissal set.
- *
- * Dismissing a finding changes nothing about the schedule, so `scheduleDeps`
- * alone would hand back the pre-dismissal summaries and the band would go on
- * counting a finding the user has already dealt with.
- */
-function daySummaryDeps(state: StoreState): unknown[] {
-  return [...scheduleDeps(state), state.dismissedFindings]
-}
-
-/**
  * One `DaySummary` per day in `[0, daysAvailable)`, day ascending
- * (data-model.md §9), computed entirely from `blocks` and the finding/dismissal
- * inputs a caller already has — no store read of its own.
+ * (data-model.md §9), computed entirely from `blocks` and the findings rows a
+ * caller already has — no store read of its own.
+ *
+ * 013 T031 replaced the old `validationErrors` + `dismissedFindings` +
+ * `placementDays` triple with the finished `Finding[]`. The band's count is
+ * now literally "rows the Findings panel shows against this day", so the two
+ * surfaces cannot disagree, and the per-day identity de-duplication the triple
+ * needed is gone with it: a `Finding` id is already unique per row.
  *
  * This is what makes the day band safe to draw from a *committed* model
  * (FR-042, react-code-reviewer finding 1 on 05103d5ff4): `Canvas` calls this
@@ -481,11 +701,14 @@ function daySummaryDeps(state: StoreState): unknown[] {
 export function daySummariesFromBlocks(
   blocks: BlockPlacement[],
   daysAvailable: number,
-  validationErrors: ValidationError[],
-  dismissedFindings: Record<string, true>,
-  placementDays: Record<string, Pick<Placement, 'day'>>,
+  findings: Finding[],
 ): DaySummary[] {
-  const findingIds = findingsByDay(validationErrors, dismissedFindings, placementDays)
+  // One pass over the rows rather than a filter per day (constitution IV).
+  const findingsOnDay = new Map<number, number>()
+  for (const finding of findings) {
+    if (finding.day === null) continue
+    findingsOnDay.set(finding.day, (findingsOnDay.get(finding.day) ?? 0) + 1)
+  }
 
   const summaries: DaySummary[] = []
   for (let day = 0; day < daysAvailable; day++) {
@@ -503,7 +726,7 @@ export function daySummariesFromBlocks(
       finish,
       peakStrips: peakStripsOnDay(dayBlocks),
       unplaced: dayBlocks.filter((block) => block.overflow).length,
-      findings: findingIds.get(day)?.size ?? 0,
+      findings: findingsOnDay.get(day) ?? 0,
     })
   }
 
@@ -512,15 +735,8 @@ export function daySummariesFromBlocks(
 
 function computeDaySummaries(state: StoreState): DaySummary[] {
   const schedule = selectDerivedSchedule(state)
-  const findings = selectDerivedFindings(state)
   const blocks = assignStripLanes(schedule.events, state.strips_total)
-  return daySummariesFromBlocks(
-    blocks,
-    state.days_available,
-    findings.validationErrors,
-    state.dismissedFindings,
-    state.placements,
-  )
+  return daySummariesFromBlocks(blocks, state.days_available, selectFindings(state))
 }
 
 /** One summary per day in `[0, days_available)`, day ascending (data-model.md §9). */

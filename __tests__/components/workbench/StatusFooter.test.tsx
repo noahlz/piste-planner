@@ -6,7 +6,7 @@ import { selectFooterMetrics, selectPlacementCounts } from '../../../src/store/d
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
 import { formatClock } from '../../../src/lib/time.ts'
-import { WEAPON_DISPLAY } from '../../../src/components/competitionLabels.ts'
+import { WEAPON_DISPLAY } from '../../../src/lib/competitionLabels.ts'
 import { Weapon } from '../../../src/engine/types.ts'
 import { ViewMode } from '../../../src/store/viewState.ts'
 

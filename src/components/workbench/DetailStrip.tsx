@@ -3,11 +3,11 @@ import { ChevronDown, ChevronUp, Pin as PinIcon, Split, X } from 'lucide-react'
 import { useStore } from '../../store/store.ts'
 import type { DerivedSchedule } from '../../store/derived.ts'
 import { findCompetition } from '../../engine/catalogue.ts'
-import { competitionLabel } from '../competitionLabels.ts'
+import { competitionLabel } from '../../lib/competitionLabels.ts'
 import { estimateEventFootprint } from '../../engine/derive.ts'
 import { assignStripLanes } from '../../layout/lanes.ts'
 import { eventTimeSegments } from '../../layout/segments.ts'
-import { phaseDisplay, stripRangeLabel, stripAssignmentLabel } from '../canvas/CanvasTooltip.tsx'
+import { phaseDisplay, stripRangeLabel, stripAssignmentLabel } from '../../lib/blockLabels.ts'
 import { formatClock, formatMinutes } from '../../lib/time.ts'
 import { Phase } from '../../engine/types.ts'
 import { weaponVar, WeaponTokenPart } from '../canvas/weaponTokens.ts'
@@ -58,8 +58,9 @@ const ICON_BUTTON =
  *
  * ## The same helpers the block and the tooltip use, not new arithmetic
  *
- * `stripRangeLabel`/`stripAssignmentLabel`/`phaseDisplay` are `Block`'s and
- * `CanvasTooltip`'s own vocabulary, and `assignStripLanes` is the exact call
+ * `stripRangeLabel`/`stripAssignmentLabel`/`phaseDisplay` are the shared block
+ * vocabulary in `src/lib/blockLabels.ts` that `Block` and `CanvasTooltip` also
+ * read, and `assignStripLanes` is the exact call
  * `Canvas.tsx` makes over the same committed `schedule.events` — so the strip
  * can never describe a placement or a strip run the canvas draws differently.
  */
@@ -96,8 +97,8 @@ export function DetailStrip({
       // assignStripLanes (lanes.ts:148) skips a day_out_of_range event outright —
       // there is no strip run to report because the block's day does not exist,
       // not because it overflowed a day that does. Naming the count would claim
-      // strips the event was never given, the same fiction CanvasTooltip's
-      // stripAssignmentLabel docblock rules out for an overflowed block.
+      // strips the event was never given, the same fiction
+      // `stripAssignmentLabel`'s docblock rules out for an overflowed block.
       stripsLabel = 'Unplaced, day out of range'
     } else {
       const lanes = assignStripLanes(schedule.events, Math.max(0, Math.floor(schedule.config.strips_total)))

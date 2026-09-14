@@ -3,9 +3,9 @@ import type { Competition } from '../../engine/types.ts'
 import { Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
 import type { BlockPlacement } from '../../layout/lanes.ts'
-import { GENDER_DISPLAY, categoryDisplay, vetAgeGroupDisplay } from '../competitionLabels.ts'
+import { GENDER_DISPLAY, categoryDisplay, vetAgeGroupDisplay } from '../../lib/competitionLabels.ts'
 import { WeaponTokenPart, weaponVar } from './weaponTokens.ts'
-import { phaseDisplay, stripAssignmentLabel } from './CanvasTooltip.tsx'
+import { phaseDisplay, stripAssignmentLabel } from '../../lib/blockLabels.ts'
 
 /**
  * One block on the canvas — FR-035 to FR-037, FR-043,
@@ -263,6 +263,23 @@ export function Block({
           data-ring
           aria-hidden="true"
           className="pointer-events-none absolute -inset-[1.5px] rounded-[6px] border-[2.5px] border-accent-700"
+        />
+      )}
+
+      {/* A Findings jump's flash (013 T032 follow-up, contract §4.4). Drawn as
+          a child rather than a shadow on the block itself, the same reason
+          the selection ring is a child: `blockStyle` is a whole-value style
+          hole assembled once per render, so a shadow toggled there would
+          never repaint after mount (mockup comment above `flashBlocks`). */}
+      {flash && (
+        <span
+          data-flash-ring
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-[3px] z-[3] rounded-[8px]"
+          style={{
+            border: '3px solid var(--flash)',
+            boxShadow: '0 0 0 4px color-mix(in srgb, var(--flash) 22%, transparent)',
+          }}
         />
       )}
 

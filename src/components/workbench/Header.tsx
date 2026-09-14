@@ -1,5 +1,5 @@
 import { useStore } from '../../store/store.ts'
-import { selectDerivedFindings } from '../../store/derived.ts'
+import { FindingSeverity, selectFindings } from '../../store/derived.ts'
 import { runScheduleAll } from '../../store/runActions.ts'
 import { formatClock } from '../../lib/time.ts'
 import { PresetPicker } from './PresetPicker.tsx'
@@ -20,8 +20,11 @@ export function Header() {
   const stripsTotal = useStore((s) => s.strips_total)
   const lastAutoRun = useStore((s) => s.lastAutoRun)
 
-  const { validationErrors } = useStore(selectDerivedFindings)
-  const hasHardErrors = validationErrors.some((e) => e.severity === 'ERROR')
+  // 013 T032, contract §6: Auto-assign reads the unified findings list rather
+  // than validationErrors directly, so its disabled state agrees with what
+  // the Findings panel and the rail badge show.
+  const findings = useStore(selectFindings)
+  const hasBlockingFinding = findings.some((f) => f.severity === FindingSeverity.BLOCKING)
 
   return (
     <header
@@ -53,7 +56,7 @@ export function Header() {
         <Button
           type="button"
           onClick={() => runScheduleAll()}
-          disabled={hasHardErrors}
+          disabled={hasBlockingFinding}
           className="h-8 gap-2 rounded-[10px] px-[15px] text-[13.5px] font-bold tracking-[.03em] uppercase shadow-sm hover:bg-accent-hover"
         >
           <Sparkles className="h-4 w-4" strokeWidth={1.75} />

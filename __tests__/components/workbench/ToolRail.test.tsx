@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within, fireEvent } from '@testing-library/react'
 import { ToolRail } from '../../../src/components/workbench/ToolRail.tsx'
 import { PanelId } from '../../../src/store/viewState.ts'
+import { useStore, type StoreState } from '../../../src/store/store.ts'
+import * as derivedModule from '../../../src/store/derived.ts'
 
 // 013 T009 — re-targets the retired collapsible rail's own "Rail panel
 // order" test file (deleted here). The collapsible rail's five headings
@@ -10,6 +12,18 @@ import { PanelId } from '../../../src/store/viewState.ts'
 
 const NAMES = ['Tournament', 'Strips & referees', 'Events', 'Findings', 'Settings']
 const IDS = [PanelId.TOURNAMENT, PanelId.STRIPS, PanelId.EVENTS, PanelId.FINDINGS, PanelId.SETTINGS]
+
+// 013 T030, contract §5. `selectFindings` (derived.ts) does not exist yet —
+// read through a `* as module` cast (dismissals.test.ts's `findingIdentity`
+// pattern) so tsc stays clean about this symbol and the red is a runtime
+// throw, not a compile error.
+function selectFindingsCount(state: StoreState): number {
+  const mod = derivedModule as unknown as { selectFindings?: (s: StoreState) => unknown[] }
+  if (!mod.selectFindings) {
+    throw new Error('derived.ts does not yet export selectFindings (013 T030)')
+  }
+  return mod.selectFindings(state).length
+}
 
 describe('ToolRail', () => {
   it('holds exactly five buttons in the stated visual order', () => {
@@ -88,5 +102,54 @@ describe('ToolRail', () => {
         .filter((b) => b.getAttribute('aria-pressed') === 'true')
       expect(pressed.length).toBeLessThanOrEqual(1)
     }
+  })
+})
+
+describe('ToolRail findings badge (013 T030, contract §5)', () => {
+  beforeEach(() => {
+    useStore.setState(useStore.getInitialState())
+  })
+
+  it('carries data-badge equal to the findings count, shown as text, when at least one Blocking row exists', () => {
+    useStore.getState().setStrips(0)
+    render(<ToolRail panel={null} onSelect={() => {}} />)
+
+    const rail = screen.getByRole('navigation', { name: 'Tool rail' })
+    const findingsButton = within(rail).getByRole('button', { name: 'Findings' })
+
+    const count = selectFindingsCount(useStore.getState())
+    expect(count).toBeGreaterThanOrEqual(1)
+    expect(findingsButton).toHaveAttribute('data-badge', String(count))
+    expect(findingsButton).toHaveTextContent(String(count))
+  })
+
+  it('carries data-badge="0" on a clean seeded store', () => {
+    useStore.getState().setDays(3)
+    useStore.getState().setStrips(12)
+    useStore.getState().setVideoStrips(2)
+    render(<ToolRail panel={null} onSelect={() => {}} />)
+
+    const rail = screen.getByRole('navigation', { name: 'Tool rail' })
+    const findingsButton = within(rail).getByRole('button', { name: 'Findings' })
+
+    expect(findingsButton).toHaveAttribute('data-badge', '0')
+  })
+
+  it('gives the other four buttons no data-badge', () => {
+    useStore.getState().setStrips(0)
+    render(<ToolRail panel={null} onSelect={() => {}} />)
+
+    const rail = screen.getByRole('navigation', { name: 'Tool rail' })
+    for (const name of NAMES.filter((n) => n !== 'Findings')) {
+      expect(within(rail).getByRole('button', { name })).not.toHaveAttribute('data-badge')
+    }
+  })
+
+  it('keeps the accessible name exactly "Findings"', () => {
+    useStore.getState().setStrips(0)
+    render(<ToolRail panel={null} onSelect={() => {}} />)
+
+    const rail = screen.getByRole('navigation', { name: 'Tool rail' })
+    expect(within(rail).getByRole('button', { name: 'Findings' })).toBeInTheDocument()
   })
 })

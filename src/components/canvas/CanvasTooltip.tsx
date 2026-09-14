@@ -1,72 +1,9 @@
 import type { Competition } from '../../engine/types.ts'
 import { formatMinutes } from '../../lib/time.ts'
-import { GENDER_DISPLAY, WEAPON_DISPLAY, categoryDisplay } from '../competitionLabels.ts'
+import { phaseDisplay, stripAssignmentLabel } from '../../lib/blockLabels.ts'
+import { GENDER_DISPLAY, WEAPON_DISPLAY, categoryDisplay } from '../../lib/competitionLabels.ts'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx'
-import { Phase } from '../../engine/types.ts'
 import type { BlockPlacement } from '../../layout/lanes.ts'
-
-/**
- * How a block names itself in words — the phase and the strips it runs on.
- *
- * Two surfaces read the same block: `Block`'s accessible name and this
- * tooltip's field rows. They must agree exactly, so the strings have one home,
- * and this is it — 013 T026 folded the old label helper in here when its
- * other reader was deleted. `competitionLabels.ts` is the same rule
- * applied to a competition's own vocabulary (weapon, category, gender); this is
- * the part of a block's description that comes from its placement instead.
- *
- * Only the six phases `eventTimeSegments` emits can reach a block, so
- * `phaseDisplay`'s fallback is unreachable rather than lenient — it exists
- * because `BlockPlacement.phase` is the whole `Phase` union.
- */
-const PHASE_DISPLAY: Partial<Record<Phase, string>> = {
-  [Phase.POOLS]: 'Pools',
-  [Phase.FLIGHT_A]: 'Flight A',
-  [Phase.FLIGHT_B]: 'Flight B',
-  [Phase.DE_PRELIMS]: 'DE prelims',
-  [Phase.DE_ROUND_OF_16]: 'DE round of 16',
-  [Phase.DE]: 'DE',
-}
-
-// These are the block vocabulary, not components, and `Block.tsx` imports them
-// from here. Splitting them out to satisfy fast refresh would put the strings
-// and the two surfaces that must agree on them in three files.
-// eslint-disable-next-line react-refresh/only-export-components
-export function phaseDisplay(phase: Phase): string {
-  return PHASE_DISPLAY[phase] ?? phase
-}
-
-/**
- * The strips a block occupies, 1-based for a reader. A single strip reads as
- * one strip rather than as a range of one, and a run uses an en dash the way
- * every other range in the UI does.
- */
-// eslint-disable-next-line react-refresh/only-export-components
-export function stripRangeLabel(firstStrip: number, stripCount: number): string {
-  const first = firstStrip + 1
-  const last = firstStrip + stripCount
-  return first === last ? `Strip ${first}` : `Strips ${first}–${last}`
-}
-
-/**
- * What a block says about its strips, overflow included.
- *
- * An overflowed block was granted no run at all: `assignStripLanes` reports it
- * at `firstStrip: 0` so it has somewhere to draw, and records no occupancy for
- * it. Reading that 0 as a placement makes both surfaces claim strips the block
- * was never given — "Strips 1–4" over a day that had no room for it, which is
- * fiction on exactly the over-capacity day an organizer opened the tool to
- * find. So the count is reported without a range, and the failure is named.
- */
-// eslint-disable-next-line react-refresh/only-export-components
-export function stripAssignmentLabel(
-  firstStrip: number,
-  stripCount: number,
-  overflow: boolean,
-): string {
-  if (!overflow) return stripRangeLabel(firstStrip, stripCount)
-  return stripCount === 1 ? 'Unplaced, needs 1 strip' : `Unplaced, needs ${stripCount} strips`
-}
 
 /**
  * The canvas tooltip — FR-022, contracts/ui-contract.md §Tooltip contract.

@@ -1,17 +1,32 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { Header } from '../../../src/components/workbench/Header.tsx'
-import { useStore } from '../../../src/store/store.ts'
+import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
 import { PresetPicker } from '../../../src/components/workbench/PresetPicker.tsx'
 import { SCENARIO_IDS, SCENARIOS } from '../../../src/data/tournaments.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
+import * as derivedModule from '../../../src/store/derived.ts'
 
 // 013 T010 — the header replacing the retired top bar and App.tsx's
 // standalone <header> (ui-contract.md §Header, FR-004–FR-009): brand, preset
 // picker, a read-only summary, the last auto-run time, Auto-assign, and
 // Export.
+
+// 013 T030, contract §6. `selectFindings` (derived.ts) does not exist yet —
+// read through a `* as module` cast (dismissals.test.ts's `findingIdentity`
+// pattern) so tsc stays clean about this symbol and the red is a runtime
+// throw, not a compile error.
+function hasBlockingFinding(state: StoreState): boolean {
+  const mod = derivedModule as unknown as {
+    selectFindings?: (s: StoreState) => { severity: string }[]
+  }
+  if (!mod.selectFindings) {
+    throw new Error('derived.ts does not yet export selectFindings (013 T030)')
+  }
+  return mod.selectFindings(state).some((f) => f.severity === 'Blocking')
+}
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
@@ -118,17 +133,19 @@ describe('Header last run', () => {
 })
 
 describe('Header Auto-assign', () => {
-  it('is enabled on a valid store and disabled once an ERROR finding exists', () => {
+  it('is enabled on a valid store and disabled once a Blocking finding exists (contract §6, 013 T030 — reads Blocking rows from the unified findings list, not validationErrors directly)', () => {
     seedValidConfig()
     render(<Header />)
 
     expect(screen.getByRole('button', { name: 'Auto-assign' })).toBeEnabled()
+    expect(hasBlockingFinding(useStore.getState())).toBe(false)
 
     // strips_total === 0 is a structural ERROR under BINDING mode (WorkbenchShell.test.tsx precedent).
     act(() => {
       useStore.getState().setStrips(0)
     })
     expect(screen.getByRole('button', { name: 'Auto-assign' })).toBeDisabled()
+    expect(hasBlockingFinding(useStore.getState())).toBe(true)
   })
 })
 

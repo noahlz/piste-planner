@@ -287,7 +287,13 @@ function renderBothViews(model: DerivedSchedule): void {
   render(
     <>
       <ScheduleOutput schedule={model} />
-      <Canvas schedule={model} findings={EMPTY_FINDINGS} dayConfigs={CANVAS_DAY_CONFIGS} zoom={CANVAS_ZOOM} />
+      <Canvas
+        schedule={model}
+        findings={EMPTY_FINDINGS}
+        findingRows={[]}
+        dayConfigs={CANVAS_DAY_CONFIGS}
+        zoom={CANVAS_ZOOM}
+      />
     </>,
   )
 }

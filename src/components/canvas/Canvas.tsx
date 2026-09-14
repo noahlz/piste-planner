@@ -9,8 +9,9 @@ import {
   type DaySummary,
   type DerivedFindings,
   type DerivedSchedule,
+  type Finding,
 } from '../../store/derived.ts'
-import { competitionLabel } from '../competitionLabels.ts'
+import { competitionLabel } from '../../lib/competitionLabels.ts'
 import { Block } from './Block.tsx'
 import { CanvasTooltip, type CanvasTooltipTarget } from './CanvasTooltip.tsx'
 import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
@@ -61,12 +62,14 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  *
  * The day bands are computed here too, by `daySummariesFromBlocks` over this
  * component's own `lanes` — the same committed blocks the grid draws — plus
- * the committed `findings.validationErrors` and a live read of
- * `dismissedFindings` (dismissal is not part of the schedule story, FR-042).
- * Two store reads remain unexpressed from the committed model: `placements`,
- * for the pin badge, and `selectedCompetitionId` (013 T029), for the
- * selection ring — a click selects the event immediately, and waiting for the
- * next settle to ring it would make the click feel unacknowledged.
+ * `findingRows`, a fourth prop `CenterView` commits alongside the other three
+ * on the same settle (013 T032, contract §4.3). Two store reads remain
+ * unexpressed from the committed model: `placements`, for the pin badge, and
+ * `selectedCompetitionId` (013 T029), for the selection ring — a click
+ * selects the event immediately, and waiting for the next settle to ring it
+ * would make the click feel unacknowledged. `jumpNonce` (013 T032, contract
+ * §4.4) is read live for the same reason: a Findings jump should scroll and
+ * flash the instant it is pressed, not a settle later.
  */
 
 /** The frozen strip-label gutter (mockup line 278). */
@@ -100,7 +103,10 @@ const MIN_TICK_GAP_PX = 72
 
 export interface CanvasProps {
   schedule: DerivedSchedule
+  /** Still feeds the tooltip's per-block messages (`findingsForBlock`). */
   findings: DerivedFindings
+  /** The unified findings list (contract §1), committed with the other three (§4.1). */
+  findingRows: Finding[]
   /** The store's clock-time day hours, committed with `schedule` (C4). */
   dayConfigs: DayConfig[]
   zoom: ZoomState
@@ -156,17 +162,23 @@ function findingsForBlock(
   return messages
 }
 
-/** Every competition any finding names — the same mapping `findingsForBlock` uses. */
-function flaggedCompetitions(findings: DerivedFindings): Set<string> {
+/**
+ * Every competition a `findingRows` row names (013 T032, contract §4.2).
+ * Replaces the old `flaggedCompetitions(findings)`, which read the raw
+ * `DerivedFindings` pair directly — the gutter now flags exactly what the
+ * Findings panel lists, dismissed rows excluded, rather than a superset the
+ * panel has already waved off.
+ */
+function flaggedTargets(findingRows: Finding[]): Set<string> {
   const flagged = new Set<string>()
-  for (const error of findings.validationErrors) {
-    for (const subject of error.subjects ?? []) flagged.add(subject)
-  }
-  for (const warning of findings.analysis.warnings) {
-    if (warning.competition_id) flagged.add(warning.competition_id)
+  for (const row of findingRows) {
+    if (row.target !== null) flagged.add(row.target)
   }
   return flagged
 }
+
+/** How long a jump's flash stays on a block before clearing (013 T032, contract §4.4). */
+const FLASH_MS = 900
 
 /**
  * The tick interval for a scale: the finest candidate whose spacing clears
@@ -209,20 +221,72 @@ const EMPTY_SUMMARY: Omit<DaySummary, 'day'> = {
   findings: 0,
 }
 
-export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
+export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom }: CanvasProps) {
   const { config } = schedule
   const stripsTotal = Math.max(0, Math.floor(config.strips_total))
   const daysAvailable = Math.max(0, Math.floor(config.days_available))
 
   const placements = useStore((s) => s.placements)
-  const dismissedFindings = useStore((s) => s.dismissedFindings)
   const selectedCompetitionId = useStore((s) => s.selectedCompetitionId)
   const selectCompetition = useStore((s) => s.selectCompetition)
+  // Read live rather than off the committed model (013 T032, contract §4.4):
+  // a Findings jump should scroll and flash the instant it is pressed.
+  const jumpNonce = useStore((s) => s.jumpNonce)
 
   const [hovered, setHovered] = useState<HoveredBlock | null>(null)
   /** The measured plot width, 0 until the observer reports one. */
   const [plotWidthPx, setPlotWidthPx] = useState(0)
   const plotRef = useRef<HTMLDivElement>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
+
+  /** The event currently flashing from a jump, or null between jumps. */
+  const [flashId, setFlashId] = useState<string | null>(null)
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /**
+   * The nonce this effect last acted on, seeded from the first render's value
+   * rather than a boolean flipped by the first call.
+   *
+   * StrictMode double-invokes an effect on mount — run, cleanup, run again —
+   * both calls closing over the same `jumpNonce`. A boolean skip flag is set
+   * true by the first call and stays true, so the second call falls through
+   * the guard and jumps on every mount where a competition is already
+   * selected (013 T032 follow-up). Seeding the ref to the mount's own nonce
+   * means both calls compare that nonce against itself and skip alike; only a
+   * later nonce that actually differs from what this ref last recorded runs
+   * the jump.
+   */
+  const lastHandledNonceRef = useRef(jumpNonce)
+
+  useEffect(() => {
+    if (jumpNonce === lastHandledNonceRef.current) return
+    lastHandledNonceRef.current = jumpNonce
+
+    const scroller = scrollerRef.current
+    const targetId = selectedCompetitionId
+    const el =
+      scroller && targetId
+        ? scroller.querySelector<HTMLElement>(
+            `[data-event-block][data-event-id="${targetId}"]`,
+          )
+        : null
+
+    if (el) {
+      if (typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'center', inline: 'center' })
+      }
+      setFlashId(targetId)
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+      flashTimerRef.current = setTimeout(() => setFlashId(null), FLASH_MS)
+    }
+
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+    }
+    // jumpNonce alone is the trigger (contract §4.4); selectedCompetitionId
+    // is read from the same `set()` call that bumped it, so it is already
+    // current by the time this effect runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpNonce])
 
   useEffect(() => {
     const el = plotRef.current
@@ -265,27 +329,9 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
     [schedule.events, stripsTotal],
   )
 
-  /** `competitionId -> day`, off the same committed blocks the grid draws
-   *  (FR-042) — never `placements`, which may already describe an edit the
-   *  center has not settled into `schedule` yet. */
-  const placementDaysById = useMemo(() => {
-    const days: Record<string, { day: number }> = {}
-    for (const block of lanes) {
-      if (!(block.competitionId in days)) days[block.competitionId] = { day: block.day }
-    }
-    return days
-  }, [lanes])
-
   const summaries = useMemo(
-    () =>
-      daySummariesFromBlocks(
-        lanes,
-        daysAvailable,
-        findings.validationErrors,
-        dismissedFindings,
-        placementDaysById,
-      ),
-    [lanes, daysAvailable, findings.validationErrors, dismissedFindings, placementDaysById],
+    () => daySummariesFromBlocks(lanes, daysAvailable, findingRows),
+    [lanes, daysAvailable, findingRows],
   )
 
   const competitionsById = useMemo(
@@ -305,7 +351,7 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
     })
   }
 
-  const flagged = flaggedCompetitions(findings)
+  const flagged = flaggedTargets(findingRows)
   /** Per day, the strip rows a flagged event has a block on. */
   const flaggedRowsByDay = new Map<number, Set<number>>()
   for (const { placement } of drawn) {
@@ -381,6 +427,7 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
   return (
     <section aria-label="Matrix canvas" className="relative h-full w-full min-w-0 flex-1">
       <div
+        ref={scrollerRef}
         data-canvas-scroller="true"
         style={{ position: 'absolute', inset: 0, overflow: 'auto', background: 'var(--chrome)' }}
       >
@@ -538,6 +585,7 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
                         placement={block.placement}
                         pinned={placements[block.placement.competitionId]?.pinned ?? false}
                         selected={selectedCompetitionId === block.placement.competitionId}
+                        flash={flashId === block.placement.competitionId}
                         widthPx={
                           (block.placement.endMinutes - block.placement.startMinutes) *
                           pixelsPerMinute

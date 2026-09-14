@@ -6,8 +6,7 @@ import type {
   Placement,
   Weapon,
 } from '../engine/types.ts'
-import { BottleneckSeverity, PlacementSource } from '../engine/types.ts'
-import { findingIdentity } from '../engine/validation.ts'
+import { PlacementSource } from '../engine/types.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { stripSearchRange, scanStripCounts } from '../engine/stripSearch.ts'
 import { buildTournamentConfig } from './buildConfig.ts'
@@ -15,7 +14,7 @@ import type { ScenarioId } from '../data/tournaments.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
-import { selectDerivedFindings } from './derived.ts'
+import { FindingSeverity, selectAllFindings } from './derived.ts'
 import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
@@ -116,9 +115,18 @@ export interface UiSlice {
   /** The competition the detail strip describes, or null. Not serialized. */
   selectedCompetitionId: string | null
 
+  /**
+   * Incremented by a Findings jump so the canvas scrolls and flashes once per
+   * press — a nonce rather than a boolean, because jumping twice to the event
+   * already selected must still be two jumps. Not serialized.
+   */
+  jumpNonce: number
+
   setLoadedPresetId: (id: PresetId | null) => void
   setLastAutoRun: (run: LastAutoRun | null) => void
   selectCompetition: (id: string | null) => void
+  /** Selects `id` and asks the canvas to scroll to it, in one update. */
+  jumpToCompetition: (id: string) => void
 }
 
 /** Where an event sits. The only schedule state — everything else derives from it. */
@@ -347,12 +355,18 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
     loadedPresetId: null,
     lastAutoRun: null,
     selectedCompetitionId: null,
+    jumpNonce: 0,
 
     setLoadedPresetId: (id) => set({ loadedPresetId: id }),
 
     setLastAutoRun: (run) => set({ lastAutoRun: run }),
 
     selectCompetition: (id) => set({ selectedCompetitionId: id }),
+
+    // One `set()`, so the canvas's jump effect never sees the new nonce
+    // against the old selection and scrolls to the event the user just left.
+    jumpToCompetition: (id) =>
+      set((state) => ({ selectedCompetitionId: id, jumpNonce: state.jumpNonce + 1 })),
   }
 }
 
@@ -407,16 +421,29 @@ function createDismissalsSlice(set: SetState, get: GetState): DismissalsSlice {
     dismissedFindings: {},
 
     // Advisory-only guard (data-model.md §Dismissals, spec clarification
-    // 2026-08-28): an id only takes effect when it currently matches a
-    // WARN-severity finding on the derived findings surface. ERROR ids and
-    // unknown ids are silent no-ops — no state change.
+    // 2026-08-28, widened by 013 T031 / research D6): an id only takes effect
+    // when it currently matches a row of the findings list whose underlying
+    // engine severity is WARN — Warning and Unplaced rows. Blocking and Note
+    // rows and unknown ids are silent no-ops, no state change.
+    //
+    // The guard reads `selectAllFindings`, the *unfiltered* list, because
+    // `selectFindings` has already dropped every dismissed row: reading the
+    // filtered list would make the guard's answer depend on the dismissal
+    // state it is about to write, which is the one input it must not consult.
+    // Re-dismissing an id is then handled directly, as an early return rather
+    // than a rewrite, so a repeat press cannot hand `dismissedFindings` a new
+    // object identity and invalidate every selector memoised on it.
     dismissFinding: (id) => {
-      const { validationErrors } = selectDerivedFindings(get())
-      const isCurrentWarn = validationErrors.some(
-        (finding) => finding.severity === BottleneckSeverity.WARN && findingIdentity(finding) === id,
+      const state = get()
+      if (state.dismissedFindings[id]) return
+      const isCurrentWarn = selectAllFindings(state).some(
+        (finding) =>
+          finding.id === id &&
+          (finding.severity === FindingSeverity.WARNING ||
+            finding.severity === FindingSeverity.UNPLACED),
       )
       if (!isCurrentWarn) return
-      set((state) => ({ dismissedFindings: { ...state.dismissedFindings, [id]: true } }))
+      set((current) => ({ dismissedFindings: { ...current.dismissedFindings, [id]: true } }))
     },
 
     undismissFinding: (id) => {
