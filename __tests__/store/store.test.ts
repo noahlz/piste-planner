@@ -405,42 +405,6 @@ describe('competitionSlice', () => {
 })
 
 // ──────────────────────────────────────────────
-// analysisSlice — accept/reject intent only, the suggestions themselves derive
-// ──────────────────────────────────────────────
-
-describe('analysisSlice', () => {
-  describe('initial state', () => {
-    it('has no recorded accept/reject intent', () => {
-      expect(useStore.getState().flightingSuggestionStates).toEqual([])
-    })
-  })
-
-  describe('acceptFlightingSuggestion', () => {
-    it('marks the suggestion at that index accepted, leaving its neighbour alone', () => {
-      useStore.setState({ flightingSuggestionStates: ['pending', 'pending'] })
-
-      useStore.getState().acceptFlightingSuggestion(0)
-
-      const state = useStore.getState()
-      expect(state.flightingSuggestionStates[0]).toBe('accepted')
-      expect(state.flightingSuggestionStates[1]).toBe('pending')
-    })
-  })
-
-  describe('rejectFlightingSuggestion', () => {
-    it('marks the suggestion at that index rejected, leaving its neighbour alone', () => {
-      useStore.setState({ flightingSuggestionStates: ['pending', 'pending'] })
-
-      useStore.getState().rejectFlightingSuggestion(1)
-
-      const state = useStore.getState()
-      expect(state.flightingSuggestionStates[0]).toBe('pending')
-      expect(state.flightingSuggestionStates[1]).toBe('rejected')
-    })
-  })
-})
-
-// ──────────────────────────────────────────────
 // runScheduleAll's return value and lastAutoRun stamp (T006, research D12)
 // ──────────────────────────────────────────────
 

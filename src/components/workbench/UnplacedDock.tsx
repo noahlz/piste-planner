@@ -22,8 +22,8 @@ const NEUTRAL_CHIP_TOKENS = 'border-neutral-400 bg-neutral-200 text-foreground'
 
 /**
  * Every selected competition with no placement, docked above the center
- * (FR-010, FR-011, ui-contract.md §Unplaced dock). Each chip is a button —
- * T030 wires its click to selection — carrying the event's label and its
+ * (FR-010, FR-011, ui-contract.md §Unplaced dock). Each chip is a button
+ * whose click selects the event (013 T029), carrying the event's label and its
  * estimated footprint from `estimateEventFootprint`, the same helper the
  * canvas block's placed geometry derives from (research D10, D17), so the
  * chip's need and a placed block's geometry never disagree.
@@ -35,6 +35,7 @@ export function UnplacedDock() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
   const placements = useStore((s) => s.placements)
   const lastAutoRun = useStore((s) => s.lastAutoRun)
+  const selectCompetition = useStore((s) => s.selectCompetition)
   const { config, competitions } = useStore(selectDerivedSchedule)
 
   const unplacedIds = Object.keys(selectedCompetitions)
@@ -75,6 +76,7 @@ export function UnplacedDock() {
                   data-unplaced-chip
                   data-event-id={id}
                   data-weapon={entry?.weapon}
+                  onClick={() => selectCompetition(id)}
                   className={cn(
                     'inline-flex h-[26px] shrink-0 items-center gap-[7px] rounded-full border-[1.5px] px-[11px] text-[11.5px] font-semibold whitespace-nowrap',
                     chipTokens,

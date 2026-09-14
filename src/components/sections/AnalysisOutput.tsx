@@ -3,9 +3,7 @@ import { selectDerivedFindings } from '../../store/derived.ts'
 import type { ValidationError } from '../../engine/types.ts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { AlertCircle, AlertTriangle, Info, Check, X } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
 const SEVERITY_ORDER = { ERROR: 0, WARN: 1, INFO: 2 } as const
 
@@ -30,14 +28,10 @@ function groupBySeverity(errors: ValidationError[]): ValidationError[] {
 
 export function AnalysisOutput() {
   const { validationErrors, analysis } = useStore(selectDerivedFindings)
-  const suggestionStates = useStore((s) => s.flightingSuggestionStates)
-  const acceptSuggestion = useStore((s) => s.acceptFlightingSuggestion)
-  const rejectSuggestion = useStore((s) => s.rejectFlightingSuggestion)
 
-  const { warnings, suggestions } = analysis
+  const { warnings } = analysis
 
-  const hasContent =
-    validationErrors.length > 0 || warnings.length > 0 || suggestions.length > 0
+  const hasContent = validationErrors.length > 0 || warnings.length > 0
 
   if (!hasContent) {
     return (
@@ -106,55 +100,6 @@ export function AnalysisOutput() {
                 )
               })}
             </div>
-          </div>
-        )}
-
-        {suggestions.length > 0 && (
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-card-foreground">
-              Flighting Suggestions
-            </h3>
-            <ul className="space-y-2">
-              {suggestions.map((s, i) => {
-                const state = suggestionStates[i] ?? 'pending'
-                return (
-                  <li
-                    key={i}
-                    className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  >
-                    <span className="flex-1 text-foreground">{s}</span>
-                    {state === 'pending' ? (
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="success"
-                          onClick={() => acceptSuggestion(i)}
-                        >
-                          <Check className="h-3 w-3" />
-                          Accept
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => rejectSuggestion(i)}
-                        >
-                          <X className="h-3 w-3" />
-                          Reject
-                        </Button>
-                      </div>
-                    ) : (
-                      <Badge
-                        variant={state === 'accepted' ? 'secondary' : 'destructive'}
-                      >
-                        {state === 'accepted' ? 'Accepted' : 'Rejected'}
-                      </Badge>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
           </div>
         )}
       </CardContent>

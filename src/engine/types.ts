@@ -408,7 +408,6 @@ export interface Placement {
 export interface AnalysisResult {
   warnings: Bottleneck[]
   suggestions: string[]
-  flightingSuggestions?: FlightingGroup[]
 }
 
 export interface CatalogueEntry {

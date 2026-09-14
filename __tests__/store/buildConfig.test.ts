@@ -5,7 +5,7 @@ import { useStore, type StoreState } from '../../src/store/store.ts'
 import { TYPE_DEFAULTS } from '../../src/store/typeDefaults.ts'
 import { defaultCutForEntry } from '../../src/store/competitionDefaults.ts'
 import { findCompetition } from '../../src/engine/catalogue.ts'
-import type { Strip, Competition, FlightingGroup } from '../../src/engine/types.ts'
+import type { Strip, Competition } from '../../src/engine/types.ts'
 import {
   DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
   ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS, THRESHOLD_MINS,
@@ -53,7 +53,6 @@ function minimalState(): Partial<StoreState> {
     // The seven-key override record this fixture seeded left with its slice
     // (013 T022): `buildConfig` reads those constants from `constants.ts` now,
     // so there is nothing for a fixture to state.
-    flightingSuggestionStates: [],
   }
 }
 
@@ -428,7 +427,7 @@ describe('buildTournamentConfig', () => {
     })
   })
 
-  describe('flighting suggestions', () => {
+  describe('flighted defaults (no suggestions engine)', () => {
     function twoCompState() {
       return {
         ...minimalState(),
@@ -445,9 +444,9 @@ describe('buildTournamentConfig', () => {
       }
     }
 
-    it('leaves competitions unflighted when no suggestions are passed in', () => {
-      const state = storeWith({ ...twoCompState(), flightingSuggestionStates: [] })
-      const { competitions } = buildTournamentConfig(state, [])
+    it('leaves competitions unflighted', () => {
+      const state = storeWith(twoCompState())
+      const { competitions } = buildTournamentConfig(state)
 
       for (const comp of competitions) {
         expect(comp.flighted).toBe(false)
@@ -470,104 +469,6 @@ describe('buildTournamentConfig', () => {
       const thirtyTwo = competitions.find((c: Competition) => c.id === 'CDT-W-EPEE-IND')
       expect(sixtyFour!.strips_allocated).toBe(10)
       expect(thirtyTwo!.strips_allocated).toBe(5)
-    })
-
-    it('leaves competitions unflighted when suggestion state is pending', () => {
-      const suggestion: FlightingGroup = {
-        priority_competition_id: 'D1-M-FOIL-IND',
-        flighted_competition_id: 'CDT-W-EPEE-IND',
-        strips_for_priority: 6,
-        strips_for_flighted: 4,
-      }
-      const state = storeWith({
-        ...twoCompState(),
-        flightingSuggestionStates: ['pending'],
-      })
-      const { competitions } = buildTournamentConfig(state, [suggestion])
-
-      for (const comp of competitions) {
-        expect(comp.flighted).toBe(false)
-      }
-    })
-
-    it('leaves competitions unflighted when suggestion state is rejected', () => {
-      const suggestion: FlightingGroup = {
-        priority_competition_id: 'D1-M-FOIL-IND',
-        flighted_competition_id: 'CDT-W-EPEE-IND',
-        strips_for_priority: 6,
-        strips_for_flighted: 4,
-      }
-      const state = storeWith({
-        ...twoCompState(),
-        flightingSuggestionStates: ['rejected'],
-      })
-      const { competitions } = buildTournamentConfig(state, [suggestion])
-
-      for (const comp of competitions) {
-        expect(comp.flighted).toBe(false)
-      }
-    })
-
-    it('applies accepted flighting suggestion to both competitions', () => {
-      const suggestion: FlightingGroup = {
-        priority_competition_id: 'D1-M-FOIL-IND',
-        flighted_competition_id: 'CDT-W-EPEE-IND',
-        strips_for_priority: 6,
-        strips_for_flighted: 4,
-      }
-      const state = storeWith({
-        ...twoCompState(),
-        flightingSuggestionStates: ['accepted'],
-      })
-      const { competitions } = buildTournamentConfig(state, [suggestion])
-
-      const expectedGroupId = 'D1-M-FOIL-IND+CDT-W-EPEE-IND'
-      const priority = competitions.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
-      const flighted = competitions.find((c: Competition) => c.id === 'CDT-W-EPEE-IND')
-
-      // The two strips_allocated assertions below pin the override, and since
-      // T061a they do real work: the accepted suggestion's 6 and 4 must beat
-      // the pre-allocated defaults these same fixtures would otherwise carry
-      // (10 for 64 fencers, 5 for 32). Both differ from their default, so
-      // either would fail if the flighting loop stopped winning — under the
-      // old uniform `0` default only the fact of a non-zero value was pinned.
-      expect(priority).toBeDefined()
-      expect(priority!.flighted).toBe(true)
-      expect(priority!.is_priority).toBe(true)
-      expect(priority!.flighting_group_id).toBe(expectedGroupId)
-      expect(priority!.strips_allocated).toBe(6)
-
-      expect(flighted).toBeDefined()
-      expect(flighted!.flighted).toBe(true)
-      expect(flighted!.is_priority).toBe(false)
-      expect(flighted!.flighting_group_id).toBe(expectedGroupId)
-      expect(flighted!.strips_allocated).toBe(4)
-    })
-
-    it('only applies accepted suggestions, leaving rejected ones unchanged', () => {
-      const accepted: FlightingGroup = {
-        priority_competition_id: 'D1-M-FOIL-IND',
-        flighted_competition_id: 'CDT-W-EPEE-IND',
-        strips_for_priority: 6,
-        strips_for_flighted: 4,
-      }
-      const state = storeWith({
-        ...twoCompState(),
-        flightingSuggestionStates: ['accepted'],
-      })
-      const { competitions } = buildTournamentConfig(state, [accepted])
-
-      const priority = competitions.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
-      expect(priority!.flighted).toBe(true)
-
-      // A second scenario: same suggestions but both rejected
-      const stateRejected = storeWith({
-        ...twoCompState(),
-        flightingSuggestionStates: ['rejected'],
-      })
-      const { competitions: compsRejected } = buildTournamentConfig(stateRejected, [accepted])
-      const priorityRejected = compsRejected.find((c: Competition) => c.id === 'D1-M-FOIL-IND')
-      expect(priorityRejected!.flighted).toBe(false)
     })
   })
 

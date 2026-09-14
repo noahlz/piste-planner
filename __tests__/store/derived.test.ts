@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import type { FlightingGroup, Placement } from '../../src/engine/types.ts'
+import type { Placement } from '../../src/engine/types.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makePlacement } from '../helpers/factories.ts'
 import {
@@ -123,26 +123,6 @@ describe('memoization', () => {
 
     expect(second).not.toBe(first)
     expect(second.events['JR-M-EPEE-IND'].result.entry_fencer_count).toBe(40)
-  })
-
-  it('recomputes when a flighting suggestion is accepted', () => {
-    setupB5()
-    // buildCompetitions only reads flightingSuggestionStates when a real
-    // suggestions list is passed — the memo must treat that state as a dep.
-    const suggestions: FlightingGroup[] = [{
-      priority_competition_id: 'JR-M-EPEE-IND',
-      flighted_competition_id: 'JR-W-EPEE-IND',
-      strips_for_priority: 8,
-      strips_for_flighted: 4,
-    }]
-    const first = selectDerivedSchedule(useStore.getState(), suggestions)
-    expect(first.competitions.find((c) => c.id === 'JR-M-EPEE-IND')?.flighted).toBe(false)
-
-    useStore.getState().acceptFlightingSuggestion(0)
-    const second = selectDerivedSchedule(useStore.getState(), suggestions)
-
-    expect(second).not.toBe(first)
-    expect(second.competitions.find((c) => c.id === 'JR-M-EPEE-IND')?.flighted).toBe(true)
   })
 
   it('memoizes selectDerivedFindings and selectDerivedRefRequirements independently of each other', () => {

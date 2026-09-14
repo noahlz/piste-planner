@@ -113,8 +113,12 @@ export interface UiSlice {
   /** The most recent `runScheduleAll` outcome, or `null` before it has ever run. Not serialized. */
   lastAutoRun: LastAutoRun | null
 
+  /** The competition the detail strip describes, or null. Not serialized. */
+  selectedCompetitionId: string | null
+
   setLoadedPresetId: (id: PresetId | null) => void
   setLastAutoRun: (run: LastAutoRun | null) => void
+  selectCompetition: (id: string | null) => void
 }
 
 /** Where an event sits. The only schedule state — everything else derives from it. */
@@ -138,25 +142,9 @@ export interface DismissalsSlice {
   undismissFinding: (id: string) => void
 }
 
-const SuggestionState = {
-  PENDING: 'pending',
-  ACCEPTED: 'accepted',
-  REJECTED: 'rejected',
-} as const
-type SuggestionState = (typeof SuggestionState)[keyof typeof SuggestionState]
-
-/** Accept/reject intent only — the suggestions themselves derive from current inputs. */
-export interface AnalysisSlice {
-  flightingSuggestionStates: SuggestionState[]
-
-  acceptFlightingSuggestion: (index: number) => void
-  rejectFlightingSuggestion: (index: number) => void
-}
-
 export type StoreState = TournamentSlice &
   UiSlice &
   CompetitionSlice &
-  AnalysisSlice &
   PlacementsSlice &
   DismissalsSlice
 
@@ -358,10 +346,13 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
     loadedPresetId: null,
     lastAutoRun: null,
+    selectedCompetitionId: null,
 
     setLoadedPresetId: (id) => set({ loadedPresetId: id }),
 
     setLastAutoRun: (run) => set({ lastAutoRun: run }),
+
+    selectCompetition: (id) => set({ selectedCompetitionId: id }),
   }
 }
 
@@ -437,28 +428,6 @@ function createDismissalsSlice(set: SetState, get: GetState): DismissalsSlice {
   }
 }
 
-function createAnalysisSlice(set: SetState, _get: GetState): AnalysisSlice {
-  return {
-    flightingSuggestionStates: [],
-
-    acceptFlightingSuggestion: (index) => {
-      set((state) => {
-        const updated = [...state.flightingSuggestionStates]
-        updated[index] = SuggestionState.ACCEPTED
-        return { flightingSuggestionStates: updated }
-      })
-    },
-
-    rejectFlightingSuggestion: (index) => {
-      set((state) => {
-        const updated = [...state.flightingSuggestionStates]
-        updated[index] = SuggestionState.REJECTED
-        return { flightingSuggestionStates: updated }
-      })
-    },
-  }
-}
-
 // ──────────────────────────────────────────────
 // Combined store
 // ──────────────────────────────────────────────
@@ -467,7 +436,6 @@ export const useStore = create<StoreState>()((set, get) => ({
   ...createTournamentSlice(set as SetState, get as GetState),
   ...createCompetitionSlice(set as SetState, get as GetState),
   ...createUiSlice(set as SetState, get as GetState),
-  ...createAnalysisSlice(set as SetState, get as GetState),
   ...createPlacementsSlice(set as SetState, get as GetState),
   ...createDismissalsSlice(set as SetState, get as GetState),
 }))

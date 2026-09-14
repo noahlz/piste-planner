@@ -197,19 +197,20 @@ describe('scheduleSlice removal', () => {
   })
 })
 
-describe('analysisSlice shrink', () => {
-  it('drops analysis result fields and actions while keeping flighting accept/reject intent', () => {
+describe('analysisSlice removal', () => {
+  it('drops analysis result fields and actions; selectedCompetitionId takes their place in the UiSlice', () => {
     const state = useStore.getState()
     expect('validationErrors' in state).toBe(false)
     expect('warnings' in state).toBe(false)
     expect('suggestions' in state).toBe(false)
-    expect('flightingSuggestions' in state).toBe(false)
     expect('setAnalysisResults' in state).toBe(false)
     expect('clearAnalysis' in state).toBe(false)
-    // Accept/reject intent for flighting suggestions is user intent, not derived — it stays.
-    expect('flightingSuggestionStates' in state).toBe(true)
-    expect('acceptFlightingSuggestion' in state).toBe(true)
-    expect('rejectFlightingSuggestion' in state).toBe(true)
+    // Flighting suggestions and their accept/reject intent are gone entirely
+    // (FR-028). Their absence is proved by quickstart §2's grep and by tsc -b
+    // once T029 deletes AnalysisSlice from StoreState — not by an `in` check
+    // here, which would have to name the retired keys as string literals and
+    // permanently blind that grep to a reintroduced reference.
+    expect('selectedCompetitionId' in state).toBe(true)
   })
 })
 

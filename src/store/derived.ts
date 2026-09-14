@@ -7,7 +7,6 @@ import { ValidationMode } from '../engine/types.ts'
 import type {
   AnalysisResult,
   Competition,
-  FlightingGroup,
   Placement,
   RefDemandByDay,
   RefDemandInterval,
@@ -33,11 +32,6 @@ import type { StoreState } from './store.ts'
  * source of truth (never `scheduleAll`), so a hand-edited placement shows up
  * immediately. Nothing here is written back to state.
  */
-
-// Stable default so callers that omit flightingSuggestions get the same
-// reference on every call — a fresh `[]` literal per call would defeat the
-// memoization below even when nothing actually changed.
-const EMPTY_FLIGHTING: FlightingGroup[] = []
 
 export interface DerivedSchedule {
   config: TournamentConfig
@@ -80,10 +74,7 @@ function memoizeOnDeps<TArgs extends unknown[], TResult>(
   }
 }
 
-function scheduleDeps(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
-): unknown[] {
+function scheduleDeps(state: StoreState): unknown[] {
   return [
     state.placements,
     state.selectedCompetitions,
@@ -97,18 +88,11 @@ function scheduleDeps(
     // seven values are constants again, so nothing about them can change
     // between two renders. This is the one setting left that can.
     state.de_mode_override,
-    // Read inside buildCompetitions when applying accepted suggestions, so an
-    // accept/reject click must invalidate even though nothing here touches it.
-    state.flightingSuggestionStates,
-    flightingSuggestions,
   ]
 }
 
-function computeDerivedSchedule(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
-): DerivedSchedule {
-  const { config, competitions } = buildTournamentConfig(state, flightingSuggestions)
+function computeDerivedSchedule(state: StoreState): DerivedSchedule {
+  const { config, competitions } = buildTournamentConfig(state)
 
   const events: Record<string, DerivedEventSchedule> = {}
   for (const competition of competitions) {
@@ -123,11 +107,8 @@ function computeDerivedSchedule(
 /** Derived schedule view model: per-event `ScheduleResult` + `day_out_of_range`, from placements. */
 export const selectDerivedSchedule = memoizeOnDeps(scheduleDeps, computeDerivedSchedule)
 
-function computeDerivedFindings(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
-): DerivedFindings {
-  const { config, competitions } = buildTournamentConfig(state, flightingSuggestions)
+function computeDerivedFindings(state: StoreState): DerivedFindings {
+  const { config, competitions } = buildTournamentConfig(state)
 
   // initialAnalysis needs a day per competition. A placed event uses its
   // placement's day; an unplaced one falls back to a round-robin spread
@@ -212,11 +193,8 @@ function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDeman
   return byDay
 }
 
-function computeDerivedRefRequirements(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
-): RefRequirementsByDay[] {
-  const schedule = selectDerivedSchedule(state, flightingSuggestions)
+function computeDerivedRefRequirements(state: StoreState): RefRequirementsByDay[] {
+  const schedule = selectDerivedSchedule(state)
   const demandByDay = buildRefDemandByDay(schedule)
   return computeRefRequirements(demandByDay, schedule.config.days_available)
 }
@@ -261,12 +239,9 @@ function peakRow(
   return best
 }
 
-function computeFooterMetrics(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
-): FooterMetric[] {
-  const schedule = selectDerivedSchedule(state, flightingSuggestions)
-  const refRows = selectDerivedRefRequirements(state, flightingSuggestions)
+function computeFooterMetrics(state: StoreState): FooterMetric[] {
+  const schedule = selectDerivedSchedule(state)
+  const refRows = selectDerivedRefRequirements(state)
 
   // ── Finish: the latest de_total_end, tournament-wide ──
 
@@ -341,10 +316,7 @@ export interface PlacementCounts {
   pinned: number
 }
 
-function computePlacementCounts(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
-): PlacementCounts {
+function computePlacementCounts(state: StoreState): PlacementCounts {
   // An event the packer could not fit is unplaced from the canvas's point of
   // view even though its own placement is in range (data-model.md §10: "an
   // event the packer could not fit is unplaced whatever the store says") — so
@@ -352,7 +324,7 @@ function computePlacementCounts(
   // A single event can emit up to three segments (`eventTimeSegments`), so
   // this is keyed by competition id, not block count, or one event with two
   // overflowing segments would count twice.
-  const schedule = selectDerivedSchedule(state, flightingSuggestions)
+  const schedule = selectDerivedSchedule(state)
   const overflowing = new Set(
     assignStripLanes(schedule.events, state.strips_total)
       .filter((block) => block.overflow)
@@ -490,11 +462,8 @@ function findingsByDay(
  * alone would hand back the pre-dismissal summaries and the band would go on
  * counting a finding the user has already dealt with.
  */
-function daySummaryDeps(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
-): unknown[] {
-  return [...scheduleDeps(state, flightingSuggestions), state.dismissedFindings]
+function daySummaryDeps(state: StoreState): unknown[] {
+  return [...scheduleDeps(state), state.dismissedFindings]
 }
 
 /**
@@ -541,12 +510,9 @@ export function daySummariesFromBlocks(
   return summaries
 }
 
-function computeDaySummaries(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = EMPTY_FLIGHTING,
-): DaySummary[] {
-  const schedule = selectDerivedSchedule(state, flightingSuggestions)
-  const findings = selectDerivedFindings(state, flightingSuggestions)
+function computeDaySummaries(state: StoreState): DaySummary[] {
+  const schedule = selectDerivedSchedule(state)
+  const findings = selectDerivedFindings(state)
   const blocks = assignStripLanes(schedule.events, state.strips_total)
   return daySummariesFromBlocks(
     blocks,

@@ -38,6 +38,8 @@ export interface ViewState {
   fitting: boolean
   panel: PanelId | null
   panelDocked: boolean
+  /** The detail strip is collapsed to one line. */
+  detailCollapsed: boolean
 }
 
 // Frozen so a future accidental write (e.g. `state.zoomStep = x` instead of a
@@ -54,6 +56,7 @@ export const DEFAULT_VIEW_STATE: ViewState = Object.freeze({
   fitting: true,
   panel: null,
   panelDocked: false,
+  detailCollapsed: false,
 })
 
 export const VIEW_STATE_STORAGE_KEY = 'piste-planner:view-state'
@@ -107,6 +110,7 @@ function isValidViewState(value: unknown): value is ViewState {
     return false
   }
   if (typeof v.panelDocked !== 'boolean') return false
+  if (typeof v.detailCollapsed !== 'boolean') return false
 
   return true
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import { AnalysisOutput } from '../../src/components/sections/AnalysisOutput.tsx'
 import { useStore } from '../../src/store/store.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
@@ -88,37 +88,5 @@ describe('AnalysisOutput', () => {
     render(<AnalysisOutput />)
 
     expect(screen.getByRole('heading', { name: 'Warnings' })).toBeInTheDocument()
-  })
-
-  it('shows Flighting Suggestions heading with Accept/Reject buttons', () => {
-    seedStripDeficit()
-
-    render(<AnalysisOutput />)
-
-    expect(screen.getByRole('heading', { name: 'Flighting Suggestions' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
-  })
-
-  it('clicking Accept changes suggestion state to Accepted', () => {
-    seedStripDeficit()
-
-    render(<AnalysisOutput />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
-
-    expect(screen.getByText('Accepted')).toBeInTheDocument()
-    expect(useStore.getState().flightingSuggestionStates[0]).toBe('accepted')
-  })
-
-  it('clicking Reject changes suggestion state to Rejected', () => {
-    seedStripDeficit()
-
-    render(<AnalysisOutput />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
-
-    expect(screen.getByText('Rejected')).toBeInTheDocument()
-    expect(useStore.getState().flightingSuggestionStates[0]).toBe('rejected')
   })
 })

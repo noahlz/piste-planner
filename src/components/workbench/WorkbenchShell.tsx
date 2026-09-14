@@ -72,6 +72,9 @@ export function WorkbenchShell() {
     const stored = loadViewState()
     return { zoomStep: stored.zoomStep, fitting: stored.fitting }
   })
+  const [detailCollapsed, setDetailCollapsed] = useState<boolean>(
+    () => loadViewState().detailCollapsed,
+  )
 
   function selectPanel(id: PanelId | null): void {
     setPanel(id)
@@ -100,6 +103,12 @@ export function WorkbenchShell() {
     saveViewState({ ...loadViewState(), zoomStep: next.zoomStep, fitting: next.fitting })
   }
 
+  function toggleDetailCollapsed(): void {
+    const next = !detailCollapsed
+    setDetailCollapsed(next)
+    saveViewState({ ...loadViewState(), detailCollapsed: next })
+  }
+
   return (
     <div className="flex h-screen flex-col bg-background">
       <Header />
@@ -113,7 +122,12 @@ export function WorkbenchShell() {
           )}
           <div className="flex flex-1 flex-col overflow-hidden">
             <UnplacedDock />
-            <CenterView viewMode={viewMode} zoom={zoom} />
+            <CenterView
+              viewMode={viewMode}
+              zoom={zoom}
+              detailCollapsed={detailCollapsed}
+              onToggleDetailCollapsed={toggleDetailCollapsed}
+            />
           </div>
         </div>
       </div>

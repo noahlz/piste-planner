@@ -1,6 +1,5 @@
 import type {
   Competition,
-  FlightingGroup,
   TournamentConfig,
 } from '../engine/types.ts'
 import { CutMode, DeStripRequirement, EventType } from '../engine/types.ts'
@@ -46,15 +45,8 @@ export const DAY_AXIS_SPACING_MINS = 1440
 /**
  * Bridges the Zustand store shape to the engine's TournamentConfig + Competition[] interfaces.
  * Pure function — takes store state as parameter for testability.
- *
- * Flighting suggestions are passed in rather than read from the store: they are
- * derived from current inputs, and the store keeps only the user's accept/reject
- * intent against them (positionally, via `flightingSuggestionStates`).
  */
-export function buildTournamentConfig(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[] = [],
-): {
+export function buildTournamentConfig(state: StoreState): {
   config: TournamentConfig
   competitions: Competition[]
 } {
@@ -118,15 +110,12 @@ export function buildTournamentConfig(
     max_de_strip_pct: 0.80,
   }
 
-  const competitions = buildCompetitions(state, flightingSuggestions)
+  const competitions = buildCompetitions(state)
 
   return { config, competitions }
 }
 
-function buildCompetitions(
-  state: StoreState,
-  flightingSuggestions: FlightingGroup[],
-): Competition[] {
+function buildCompetitions(state: StoreState): Competition[] {
   const competitions: Competition[] = []
 
   // Every per-event field but the two the store still holds is derived here
@@ -185,8 +174,8 @@ function buildCompetitions(
       de_round_of_16_requirement: DeStripRequirement.HARD,
       // The store's own flag. `flighted: true` with a null group is exactly the
       // shape `derive.ts` splits into Flight A and Flight B, so the flag needs
-      // no further derivation (data-model §4); a group id arrives only from an
-      // accepted flighting suggestion, in the loop at the end of this function.
+      // no further derivation (data-model §4). `flighting_group_id` stays null:
+      // the accept/reject flow that used to fill it in was retired (FR-028).
       flighted: overrides.flighted,
       flighting_group_id: null,
       is_priority: false,
@@ -197,8 +186,7 @@ function buildCompetitions(
       // feasibility estimate and the gate at src/engine/validation.ts:405
       // never fired on the app path. This is the ledger factory's own
       // pre-allocation (`__tests__/helpers/scenarios.ts:69`) — a default, not
-      // a decision: the accepted-flighting loop below overwrites it with the
-      // organizer's explicit allocation.
+      // a decision.
       strips_allocated: Math.max(2, Math.ceil(overrides.fencer_count / 7)),
 
       // Per-event strip budget overrides — always null until UI exposes them
@@ -232,30 +220,6 @@ function buildCompetitions(
     if (comp.event_type === EventType.TEAM && comp.cut_mode !== CutMode.DISABLED) {
       comp.cut_mode = CutMode.DISABLED
       comp.cut_value = 100
-    }
-  }
-
-  // Apply accepted flighting suggestions, mutating the competition objects already in the array.
-  for (let i = 0; i < flightingSuggestions.length; i++) {
-    if (state.flightingSuggestionStates[i] !== 'accepted') continue
-
-    const group = flightingSuggestions[i]
-    const groupId = `${group.priority_competition_id}+${group.flighted_competition_id}`
-
-    const priority = competitions.find((c) => c.id === group.priority_competition_id)
-    if (priority) {
-      priority.flighted = true
-      priority.is_priority = true
-      priority.flighting_group_id = groupId
-      priority.strips_allocated = group.strips_for_priority
-    }
-
-    const flighted = competitions.find((c) => c.id === group.flighted_competition_id)
-    if (flighted) {
-      flighted.flighted = true
-      flighted.is_priority = false
-      flighted.flighting_group_id = groupId
-      flighted.strips_allocated = group.strips_for_flighted
     }
   }
 

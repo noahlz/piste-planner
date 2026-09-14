@@ -872,6 +872,19 @@ describe('round-trip: serializeState → deserializeState', () => {
     expect(loaded.de_mode_override).toBe(original.de_mode_override)
   })
 
+  it('carries a competition\'s flighted flag through the round trip (013 T028)', () => {
+    // populatedState() leaves flighted at its false default — the round trip
+    // above can't distinguish "the flag survived" from "it was never set".
+    // This sets it true so the assertion actually exercises the field.
+    populatedState()
+    useStore.getState().updateCompetition(FIXTURE_EVENT_ID, { flighted: true })
+    const result = deserializeState(serializeState(useStore.getState()))
+    expect('state' in result).toBe(true)
+    if (!('state' in result)) return
+
+    expect(result.state.selectedCompetitions?.[FIXTURE_EVENT_ID]?.flighted).toBe(true)
+  })
+
   it('restores a mixed pool_round_duration_table exactly (one override, two defaults)', () => {
     const original = populatedStateWithMixedTable()
     const result = deserializeState(serializeState(original))

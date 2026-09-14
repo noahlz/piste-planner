@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within, act } from '@testing-library/react'
+import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { UnplacedDock } from '../../../src/components/workbench/UnplacedDock.tsx'
-import { useStore } from '../../../src/store/store.ts'
+import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { selectDerivedSchedule } from '../../../src/store/derived.ts'
 import { TEMPLATES, findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/components/competitionLabels.ts'
@@ -20,6 +20,19 @@ import { makePlacement } from '../../helpers/factories.ts'
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
 })
+
+// 013 T028 (part b) — selection (contract §7). selectedCompetitionId/
+// selectCompetition are not yet on the store (T029 adds them); this cast is a
+// deliberate, typed reference to a slice that does not exist yet — the same
+// pattern __tests__/store/placements.test.ts uses.
+interface SelectionSlice {
+  selectedCompetitionId: string | null
+  selectCompetition: (id: string | null) => void
+}
+type FutureState = StoreState & SelectionSlice
+function futureState(): FutureState {
+  return useStore.getState() as unknown as FutureState
+}
 
 function needText(id: string): string {
   const { config, competitions } = selectDerivedSchedule(useStore.getState())
@@ -108,6 +121,20 @@ describe('UnplacedDock populated state', () => {
     expect(
       within(region).getByText('Placed 18 events, 12 could not be placed.'),
     ).toBeInTheDocument()
+  })
+
+  it('sets selectedCompetitionId to the clicked chip\'s event id (013 T028, contract §7)', () => {
+    useStore.getState().applyTemplate('RYC Weekend')
+
+    render(<UnplacedDock />)
+
+    const chip = screen.getAllByRole('button')[0]
+    const eventId = chip.getAttribute('data-event-id')
+    if (!eventId) throw new Error('chip has no data-event-id')
+
+    fireEvent.click(chip)
+
+    expect(futureState().selectedCompetitionId).toBe(eventId)
   })
 
   it('renders a chip without need text, and does not throw, for a fencer_count of 1', () => {
