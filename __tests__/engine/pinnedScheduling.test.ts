@@ -132,20 +132,23 @@ describe('pinned scheduling (T033)', () => {
     }
   })
 
-  // Case 4 — read literally, this cannot go red today. `scheduleAllWithPins`
-  // ignores its third argument entirely, so calling it with pins built from
-  // `scheduleAll`'s own (no-pins) output is definitionally the same call as
-  // `scheduleAll(comps, config)` again: the "with-pins" result IS the
-  // no-pins result, and the pins were copied from that exact result, so
-  // "the with-pins result carries every pin's day and start" holds by
-  // construction regardless of whether pinning is implemented. This is
-  // reported to the dispatcher rather than reshaped — see the final report.
+  // Case 4 pins every B1 event from a *different* config's natural
+  // placement (4 days / 48 strips / 7 video, tournamentConfig(4, 48, 7, …) —
+  // the same board case 5 uses, which places all 24 with zero ERROR
+  // bottlenecks [M]), then runs the pinned call at the usual (4, 80, 12)
+  // board. Reading the pins off that config's own output rather than the
+  // pinned run's own no-pins result means a pass can only mean the pin was
+  // honored: 19 of 24 ids land on a different (day, pool_start) pair between
+  // the two boards [M], e.g. D1-W-EPEE-IND day 0 / 330 vs day 0 / 0, and
+  // D1-W-SABRE-IND day 2 / 1845 vs day 0 / 165. With the third argument
+  // discarded this case fails (verified by mutation — see final report).
   it('case 4: every event pinned holds every pin\'s day and start, same scheduled set', () => {
     const { comps, config } = b1()
-    const natural = scheduleAll(comps, config)
+    const sourceConfig = tournamentConfig(4, 48, 7, SCENARIOS.B1.tournamentType)
+    const source = scheduleAll(comps, sourceConfig)
 
     const pins: PinnedPlacement[] = comps.map((c) => {
-      const sr = natural.schedule[c.id]
+      const sr = source.schedule[c.id]
       return {
         competition_id: c.id,
         day: sr.assigned_day,
@@ -153,7 +156,7 @@ describe('pinned scheduling (T033)', () => {
         strip_count: sr.pool_strip_count,
       }
     })
-    // [M] all 24 B1 events place with a non-null pool_start under (4, 80, 12).
+    // [M] all 24 B1 events place with a non-null pool_start under (4, 48, 7).
     expect(pins.every(p => p.start_time !== null)).toBe(true)
 
     const withPins = scheduleAllWithPins(comps, config, pins)
@@ -162,10 +165,11 @@ describe('pinned scheduling (T033)', () => {
       expect(sr?.assigned_day, `${pin.competition_id} day`).toBe(pin.day)
       expect(sr?.pool_start, `${pin.competition_id} start`).toBe(pin.start_time)
     }
-    // DE phases may differ once pinning changes day-assignment mechanics
-    // (contract §4) — day, start and the scheduled id set are the only
-    // things this case reads as "nothing else changes".
-    expect(new Set(Object.keys(withPins.schedule))).toEqual(new Set(Object.keys(natural.schedule)))
+    // [M] all 24 hold day/start at (4, 80, 12) even though three
+    // (JR-W-EPEE-IND POOLS, VET-W-FOIL-IND-VCMB DE, D1-W-FOIL-IND POOLS)
+    // carry a PINNED_UNCLAIMED warning — guarantee 1 (day/start from the
+    // seed) does not require the phase to have claimed strips.
+    expect(new Set(Object.keys(withPins.schedule))).toEqual(new Set(comps.map(c => c.id)))
   })
 
   it('case 5: two pins whose combined strips exceed the board — the second is PINNED_UNCLAIMED', () => {
@@ -252,18 +256,29 @@ describe('pinned scheduling (T033)', () => {
     }
   })
 
-  // Case 7 — same caveat as case 4: with the third argument ignored,
-  // `scheduleAllWithPins(comps, config, pins)` is `scheduleAll(comps, config)`
-  // regardless of `pins`, and `scheduleAll` is already deterministic (the
-  // drift ledger snapshots depend on it), so two calls are trivially equal
-  // today. Reported rather than reshaped — see the final report.
+  // Case 7 reuses case 1's six pins, which already diverge from B1's
+  // natural placement, so a pass cannot come from the ignored-argument path:
+  // it asserts the pins actually landed at their day/start in the first
+  // result (case 1 already proves that; re-asserting it here is what makes
+  // this case's own pass meaningful) and only then that two calls with the
+  // same pins agree.
   it('case 7: two calls with the same pins return equal results', () => {
     const { comps, config } = b1()
     const pins: PinnedPlacement[] = [
-      { competition_id: 'D1-M-EPEE-IND', day: 0, start_time: dayStart(0, config) + 60, strip_count: 20 },
-      { competition_id: 'JR-M-FOIL-IND', day: 2, start_time: dayStart(2, config) + 120, strip_count: 20 },
+      { competition_id: 'D1-M-EPEE-IND', day: 0, start_time: dayStart(0, config) + 60, strip_count: 4 },
+      { competition_id: 'D1-W-SABRE-IND', day: 0, start_time: dayStart(0, config) + 300, strip_count: 4 },
+      { competition_id: 'D1-M-FOIL-IND', day: 1, start_time: dayStart(1, config) + 0, strip_count: 4 },
+      { competition_id: 'VET-M-FOIL-TEAM', day: 1, start_time: dayStart(1, config) + 180, strip_count: 4 },
+      { competition_id: 'JR-M-EPEE-IND', day: 2, start_time: dayStart(2, config) + 0, strip_count: 4 },
+      { competition_id: 'JR-W-EPEE-IND', day: 2, start_time: dayStart(2, config) + 240, strip_count: 4 },
     ]
     const first = scheduleAllWithPins(comps, config, pins)
+    for (const pin of pins) {
+      const sr = first.schedule[pin.competition_id]
+      expect(sr.assigned_day, `${pin.competition_id} day`).toBe(pin.day)
+      expect(sr.pool_start, `${pin.competition_id} start`).toBe(pin.start_time)
+    }
+
     const second = scheduleAllWithPins(comps, config, pins)
     expect(second).toEqual(first)
   })

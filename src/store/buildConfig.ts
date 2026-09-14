@@ -135,6 +135,12 @@ export function buildPinnedPlacements(state: StoreState): PinnedPlacement[] {
   for (const [id, placement] of Object.entries(state.placements)) {
     if (!placement.pinned) continue
     if (state.selectedCompetitions[id] === undefined) continue
+    // Same existence test `buildCompetitions` applies below: a selected id
+    // with no catalogue entry (a hand-edited or corrupted save can carry one
+    // past `deserializeState`, which checks shape, not catalogue membership)
+    // must not reach the pinned list, or `attempted = competitions.length -
+    // pinned.length` in runActions.ts undercounts by one.
+    if (!findCompetition(id)) continue
     if (placement.day < 0 || placement.day >= state.days_available) continue
     pinned.push({
       competition_id: id,

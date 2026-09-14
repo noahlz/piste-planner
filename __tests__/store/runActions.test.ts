@@ -13,6 +13,7 @@ import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { DAY_AXIS_SPACING_MINS } from '../../src/store/buildConfig.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
+import { PlacementSource } from '../../src/engine/types.ts'
 
 vi.mock('../../src/engine/scheduler.ts', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../src/engine/scheduler.ts')>()
@@ -158,6 +159,45 @@ describe('runScheduleAll — pinned placements', () => {
     const totalCompetitions = Object.keys(useStore.getState().selectedCompetitions).length
     expect(result.placed + result.unplaced).toBe(totalCompetitions - pinIds.length)
     expect(useStore.getState().lastAutoRun).toEqual(expect.objectContaining(result))
+  })
+
+  it('drops a pinned placement for an id with no catalogue entry, and does not undercount attempted', () => {
+    // No store action reaches this state — selectCompetitions/addCompetition
+    // both go through defaultConfigForId, which already refuses an unknown
+    // id. `deserializeState` does not: `validateSchema`'s "competitions"
+    // check validates shape (fencer_count, flighted) only, never catalogue
+    // membership (src/store/serialization.ts, "competitions" block), so a
+    // hand-edited or corrupted save can carry an unknown id into
+    // `selectedCompetitions` with a pinned placement attached. This
+    // reproduces that state directly via setState rather than a full
+    // serialize/deserialize round trip.
+    applyPreset('B1')
+    const before = useStore.getState()
+    const totalCompetitions = Object.keys(before.selectedCompetitions).length
+
+    useStore.setState({
+      selectedCompetitions: {
+        ...before.selectedCompetitions,
+        'NO-SUCH-ID': { fencer_count: 10, flighted: false },
+      },
+      placements: {
+        ...before.placements,
+        'NO-SUCH-ID': {
+          day: 0, start_time: 0, strip_count: 4, strips: null,
+          source: PlacementSource.MANUAL, pinned: true,
+        },
+      },
+    })
+
+    vi.mocked(scheduleAll).mockClear()
+    const result = runScheduleAll()
+
+    const pinnedArg = thirdArgOfCall(0)
+    expect(pinnedArg?.some((p) => p.competition_id === 'NO-SUCH-ID')).toBe(false)
+    // buildCompetitions also drops the unknown id (buildConfig.ts), so the
+    // real B1 competitions are the only ones attempted — undercounting would
+    // read one lower than this.
+    expect(result.placed + result.unplaced).toBe(totalCompetitions)
   })
 
   it('returns 0 placed and 0 unplaced when every event is pinned', () => {
