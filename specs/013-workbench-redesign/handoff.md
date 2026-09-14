@@ -233,6 +233,68 @@ it, because the fix stopped rendering the empty span.
     fixed: the pin badge reads `placements` live (a boolean per block; phase 6
     owns pinning).
 
+### T028–T029 – phase 4, the selection and the detail strip (FR-044 to FR-048, FR-028)
+
+Committed at `5ea2ec5c1c`, review follow-up `be7e50dd0b`. Both reviews ran on
+the first commit: `test-quality-reviewer` found nothing to block on and
+verified two suspect case shapes by mutating the component and watching them
+go red; `react-code-reviewer` found findings 12 and 13 below.
+
+The phase ran on a pinned contract file (session scratchpad, `phase4-contract.md`)
+naming every store field, prop, `data-*` attribute and string before a line was
+written — phase 3's pattern, and again the red tests and the implementation
+agreed on first contact. The one place the contract was silent, the tests
+decided: `data-selected-*` sit on the root `section`, not on the spans that
+display them, because that is where `DetailStrip.test.tsx` reads them.
+
+12. **The detail strip lied about an event whose day fell out of range**
+    (react-code-reviewer on `5ea2ec5c1c`). `assignStripLanes` skips a placement
+    outside `days_available` (`src/layout/lanes.ts:148`), but the strip decides
+    "placed" from `schedule.events[id]` existing, so after an organizer shrank
+    Days available a still-selected event kept its full placed shape — a day,
+    real clock times — while `data-selected-strips` silently vanished. Fixed at
+    `be7e50dd0b`, and deliberately **not** by reclassifying it as unplaced: the
+    event is placed, and Move day is the exact control that repairs it, so
+    taking Pin and Move day away from the one event that needs moving would be
+    perverse. The day text reads `Day N out of range` (`ScheduleOutput.tsx:115`'s
+    own words for the same fact) and the strips fact always renders, reading
+    `Unplaced, day out of range` — parallel to `stripAssignmentLabel`'s
+    "Unplaced, needs N strips", and for the reason `CanvasTooltip.tsx:51–59`
+    already gives: never claim strips the block was not granted.
+13. **Selecting a placed event is mouse-only** (react-code-reviewer, carried,
+    owner decision). `Block`'s root is `role="img"` with an `aria-label`, pinned
+    by `ui-contract.md` §Canvas because that is how a block's facts reach a
+    screen reader at all. T029 added `onClick` to it, so a keyboard or AT user
+    can select an **unplaced** event (the dock's chips are real `button`s) and
+    cannot select a **placed** one. Changing the role, or adding `tabIndex` and
+    a key handler to a `role="img"` element, are both contract changes and
+    neither was made here. Options are in the review: leave it, add keyboard
+    handling under the pinned role, or change the role in the contract.
+14. **A test that asserts a retired name is absent blinds the grep that proves
+    it.** `placements.test.ts` asserted `'flightingSuggestionStates' in state
+    === false`, which requires naming the identifier as a string literal, which
+    makes quickstart §2's `grep -rn "flightingSuggestion"` — SC-002's own proof
+    the surface is gone — permanently unable to return nothing. The assertions
+    were deleted, the grep kept: once `AnalysisSlice` leaves `StoreState`,
+    `tsc -b` proves the fields are gone at every call site, which is stronger
+    than one `in` check on one state object. A pre-existing
+    `'flightingSuggestions' in state` assertion was the same defect one phase
+    older, and is why this grep had never run clean. **Standing rule: no test
+    names a retired identifier to assert its absence.**
+
+Two smaller corrections, both from the test-quality pass and both fixed at
+`be7e50dd0b`: `CenterView`'s `detailCollapsed` and `onToggleDetailCollapsed`
+arrived optional with no-op defaults (so dropping them from `WorkbenchShell`
+would have compiled, passed, and left the Collapse button inert) and are now
+required, with the 13 mounts in `invalidState.test.tsx` and `recompute.test.tsx`
+updated; and the strip-range string had no case pinning it against a
+hand-computed literal — every case recomputed it the way the component does, so
+a conceptual error shared by both would have passed. One synthetic fixture now
+proves `Strips 12–16` by arithmetic.
+
+Still open from phase 2: **finding 6** — no control returns `de_mode_override`
+to null. Phase 4 touched no Settings surface, so it is carried unchanged.
+
 ## Measurements
 
 | Where | Value | When |
@@ -262,3 +324,6 @@ it, because the fix stopped rendering the empty span.
 | SC-005: readout when "Zoom in" disables, blocks at rung 5 | 281%, 30 all with weapon and label-or-icon | T027, all four runs |
 | Console errors, four smoke runs | 0 | T027 |
 | Unit suite at `2eda25bc66` | 71 files / 1671 tests, tsc and lint clean | phase 3 checkpoint |
+| Unit suite at `5ea2ec5c1c` (selection, detail strip, AnalysisSlice deleted) | 73 files / 1683 tests, tsc and lint clean | T029 |
+| Unit suite at `be7e50dd0b` | 73 files / 1685 tests, tsc and lint clean | phase 4 checkpoint, verified twice |
+| `grep -rn "flightingSuggestion" src/ __tests__/ scripts/` | no output | phase 4 checkpoint (quickstart §2) |
