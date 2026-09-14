@@ -62,7 +62,14 @@ describe('CenterView valid state', () => {
     // The undimmed content is read as the row bearing the competition id, so
     // this case wants the table.
     const id = seedPlacedCompetition()
-    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.SCHEDULE}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     expect(screen.getByText(id)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
@@ -73,7 +80,14 @@ describe('CenterView valid state', () => {
 describe('CenterView with only a WARN finding', () => {
   it('stays undimmed with no blocking-findings overlay — WARN never blocks', () => {
     seedPlacedCompetition()
-    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     // days_available=5 is outside the recommended 2-4 day range: a WARN, not
     // an ERROR, so it must never trip the dimmed-invalid rule.
@@ -98,7 +112,14 @@ describe('CenterView cold boot into an already-invalid config (FR-009)', () => {
     useStore.getState().updateCompetition(id, { fencer_count: 30 })
     useStore.getState().setPlacementsFromAuto({ [id]: makePlacement({ strip_count: 5 }) })
 
-    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.SCHEDULE}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
     expect(screen.getByText(id)).toBeInTheDocument()
@@ -110,7 +131,14 @@ describe('CenterView dimmed-invalid rule', () => {
   it('dims the center but keeps the previous rows on screen once a finding turns ERROR', () => {
     // "keeps the previous rows" is literally a row assertion.
     const id = seedPlacedCompetition()
-    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.SCHEDULE}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
     expect(screen.getByText(id)).toBeInTheDocument()
 
     act(() => {
@@ -134,7 +162,14 @@ describe('CenterView dimmed-invalid rule', () => {
 
   it('lists one line per ERROR finding when more than one is present at once', () => {
     seedPlacedCompetition()
-    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     act(() => {
       useStore.getState().setStrips(0)
@@ -162,7 +197,14 @@ describe('CenterView across an edit sequence', () => {
   it('holds content at every step of valid -> invalid -> valid, and never blanks', () => {
     // The held content is the id's row, checked at each of the three steps.
     const id = seedPlacedCompetition()
-    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.SCHEDULE}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     expect(screen.getByText(id)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
@@ -199,7 +241,14 @@ describe('CenterView dimmed-invalid rule (day band, FR-042)', () => {
 
   it('keeps the day band text at its last committed value once a finding turns ERROR', () => {
     seedPlacedCompetition()
-    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     const band = (): string => document.querySelector('[data-day-band="0"]')?.textContent ?? ''
     const before = band()
@@ -241,7 +290,14 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
     // rowCells compares the pre-edit and post-settle cell strings, which the
     // table is the only view that renders.
     const id = seedPlacedCompetition()
-    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.SCHEDULE}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     const before = rowCells(id)
     expect(before[3]).toBe('9:45') // pool end at strips_total=12
@@ -274,7 +330,14 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
   it('catches up once the config is valid again, so the freeze above is not permanent', () => {
     // Same cell-by-cell evidence as the case above.
     const id = seedPlacedCompetition()
-    render(<CenterView viewMode={ViewMode.SCHEDULE} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.SCHEDULE}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     const before = rowCells(id)
 

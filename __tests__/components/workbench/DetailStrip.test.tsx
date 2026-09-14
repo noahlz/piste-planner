@@ -13,7 +13,7 @@ import { estimateEventFootprint } from '../../../src/engine/derive.ts'
 import { phaseDisplay, stripRangeLabel, stripAssignmentLabel } from '../../../src/components/canvas/CanvasTooltip.tsx'
 import { formatClock, formatMinutes } from '../../../src/lib/time.ts'
 import { Phase, PlacementSource } from '../../../src/engine/types.ts'
-import { makeCompetition, makeConfig } from '../../helpers/factories.ts'
+import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 
 // 013 T028 (part b) — red tests for the detail strip (contract §4,
 // phase4-contract.md). DetailStrip.tsx does not exist yet (T029 writes it),
@@ -127,6 +127,94 @@ describe('DetailStrip facts (contract §4 Facts)', () => {
     expect(section).toHaveAttribute('data-selected-fencers', String(competition.fencer_count))
     expect(section).toHaveTextContent(`${competition.fencer_count} fencers`)
   })
+
+  // test-quality review note: every other case above recomputes its expected
+  // strips string with the same assignStripLanes/stripRangeLabel formula the
+  // component calls, so a conceptual mistake shared by both would pass
+  // unnoticed. This fixture is built so the answer is provable by hand
+  // instead, and the assertion below is the literal, not the formula.
+  it('reads "Strips 12–16" for a block packed behind an 11-strip blocker at the same start time', () => {
+    const config = makeConfig({ strips: makeStrips(20, 0) })
+    const blocker = makeCompetition({ id: 'aaa-blocker', fencer_count: 24 })
+    const selected = makeCompetition({ id: 'bbb-selected', fencer_count: 24 })
+    const schedule: DerivedSchedule = {
+      config,
+      competitions: [blocker, selected],
+      events: {
+        [blocker.id]: {
+          result: { ...makeScheduleResult(blocker.id, 0), pool_start: 480, pool_end: 600, pool_strip_count: 11 },
+          day_out_of_range: false,
+        },
+        [selected.id]: {
+          result: { ...makeScheduleResult(selected.id, 0), pool_start: 480, pool_end: 600, pool_strip_count: 5 },
+          day_out_of_range: false,
+        },
+      },
+    }
+    useStore.setState({
+      selectedCompetitions: {
+        [blocker.id]: { fencer_count: blocker.fencer_count, flighted: blocker.flighted },
+        [selected.id]: { fencer_count: selected.fencer_count, flighted: selected.flighted },
+      },
+    })
+    futureState().selectCompetition(selected.id)
+
+    render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    const section = screen.getByRole('region', { name: 'Selected event' })
+    // By hand: both events start at the same minute on the same day, so
+    // compareCandidates orders them by id — "aaa-blocker" first. firstFit packs
+    // it into 0-based strips 0-10 (11 strips), leaving "bbb-selected"'s 5-strip
+    // run to start at 0-based strip 11 and run through 15, i.e. 1-based 12-16.
+    expect(section).toHaveAttribute('data-selected-strips', 'Strips 12–16')
+    expect(section).toHaveTextContent('Strips 12–16')
+  })
+})
+
+describe('DetailStrip, a placed event on a day outside the tournament (react review finding 1)', () => {
+  it('keeps Pin, Move day and Flight, and names the out-of-range day and strips honestly', () => {
+    const schedule = b1Board()
+    // The scenario the finding names: an organizer shrinks Days available
+    // after auto-scheduling, so a placement's day survives unchanged while the
+    // tournament around it gets smaller. setDays (not updatePlacement) is the
+    // realistic trigger — it leaves the placement itself, still AUTO and
+    // unpinned, exactly as runScheduleAll committed it.
+    const lastDay = Math.max(...Object.values(schedule.events).map((e) => e.result.assigned_day))
+    const id = Object.keys(schedule.events).find(
+      (eventId) => schedule.events[eventId].result.assigned_day === lastDay,
+    )
+    if (!id) throw new Error('no event placed on the last day')
+    futureState().selectCompetition(id)
+    expect(useStore.getState().placements[id]?.pinned).toBe(false)
+
+    useStore.getState().setDays(lastDay)
+    const outOfRangeSchedule = selectDerivedSchedule(useStore.getState())
+    expect(outOfRangeSchedule.events[id].day_out_of_range).toBe(true)
+    expect(useStore.getState().placements[id]?.pinned).toBe(false)
+
+    render(<DetailStrip schedule={outOfRangeSchedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    const section = screen.getByRole('region', { name: 'Selected event' })
+
+    // The event is still placed (schedule.events[id] exists), and Move day is
+    // the control that repairs an out-of-range day, so it stays alongside Pin
+    // and Flight rather than being withdrawn.
+    expect(screen.getByRole('button', { name: 'Pin' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Move day' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Flight' })).toBeInTheDocument()
+
+    // data-selected-day still carries the 1-based day number (contract §4),
+    // but the visible text names the condition, matching how ScheduleOutput
+    // words the same fact ("Day N out of range", ScheduleOutput.tsx:115).
+    expect(section).toHaveAttribute('data-selected-day', String(lastDay + 1))
+    expect(section).toHaveTextContent(`Day ${lastDay + 1} out of range`)
+
+    // data-selected-strips must always render for a placed event, and must not
+    // claim strips assignStripLanes never granted it — it skips a
+    // day_out_of_range event outright (lanes.ts:148).
+    expect(section).toHaveAttribute('data-selected-strips', 'Unplaced, day out of range')
+    expect(section).toHaveTextContent('Unplaced, day out of range')
+  })
 })
 
 describe('DetailStrip phase pills, placed (contract §4 Phase pills)', () => {
@@ -174,7 +262,10 @@ describe('DetailStrip Move day (contract §4 Actions, FR-047)', () => {
   it('offers every other day and moves the placement, manual and pinned, at the same start time', () => {
     const schedule = b1Board()
     // Day 3 (index 2) must be one of the "other" days offered, so the
-    // selected event cannot itself already be on day index 2.
+    // selected event cannot itself already be on day index 2. This implicitly
+    // depends on B1 running more than two days — if B1 ever shrinks to two,
+    // excludeDay: 2 stops excluding anything and this case fails loudly rather
+    // than silently proving nothing.
     const id = placedEventId(schedule, { excludeDay: 2 })
     futureState().selectCompetition(id)
 

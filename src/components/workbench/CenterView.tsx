@@ -97,17 +97,13 @@ interface CommittedModel {
 export function CenterView({
   viewMode,
   zoom,
-  // Optional, defaulting closed with a no-op toggle: several pre-013 T029
-  // tests mount `CenterView` alone to probe the settle and the dimmed-invalid
-  // rule, with no selection ever made and so no reason to know about the
-  // strip that describes one.
-  detailCollapsed = false,
-  onToggleDetailCollapsed = () => {},
+  detailCollapsed,
+  onToggleDetailCollapsed,
 }: {
   viewMode: ViewMode
   zoom: ZoomState
-  detailCollapsed?: boolean
-  onToggleDetailCollapsed?: () => void
+  detailCollapsed: boolean
+  onToggleDetailCollapsed: () => void
 }) {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)

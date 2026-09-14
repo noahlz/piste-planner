@@ -92,17 +92,26 @@ export function DetailStrip({
 
   let stripsLabel: string | null = null
   if (placed) {
-    const lanes = assignStripLanes(schedule.events, Math.max(0, Math.floor(schedule.config.strips_total)))
-    const blocks = lanes.filter((b) => b.competitionId === id)
-    if (blocks.length > 0) {
-      const overflowed = blocks.some((b) => b.overflow)
-      stripsLabel = overflowed
-        ? stripAssignmentLabel(0, Math.max(...blocks.map((b) => b.stripCount)), true)
-        : stripRangeLabel(
-            Math.min(...blocks.map((b) => b.firstStrip)),
-            Math.max(...blocks.map((b) => b.firstStrip + b.stripCount)) -
+    if (derived.day_out_of_range) {
+      // assignStripLanes (lanes.ts:148) skips a day_out_of_range event outright —
+      // there is no strip run to report because the block's day does not exist,
+      // not because it overflowed a day that does. Naming the count would claim
+      // strips the event was never given, the same fiction CanvasTooltip's
+      // stripAssignmentLabel docblock rules out for an overflowed block.
+      stripsLabel = 'Unplaced, day out of range'
+    } else {
+      const lanes = assignStripLanes(schedule.events, Math.max(0, Math.floor(schedule.config.strips_total)))
+      const blocks = lanes.filter((b) => b.competitionId === id)
+      if (blocks.length > 0) {
+        const overflowed = blocks.some((b) => b.overflow)
+        stripsLabel = overflowed
+          ? stripAssignmentLabel(0, Math.max(...blocks.map((b) => b.stripCount)), true)
+          : stripRangeLabel(
               Math.min(...blocks.map((b) => b.firstStrip)),
-          )
+              Math.max(...blocks.map((b) => b.firstStrip + b.stripCount)) -
+                Math.min(...blocks.map((b) => b.firstStrip)),
+            )
+      }
     }
   }
 
@@ -173,7 +182,13 @@ export function DetailStrip({
           <div className="flex min-w-[150px] flex-1 flex-col gap-px overflow-hidden">
             <span className="truncate text-[17px] leading-tight font-bold text-foreground">{name}</span>
             <span className="flex gap-[11px] font-mono text-[11px] font-semibold whitespace-nowrap text-neutral-600">
-              {placed && <span>{`Day ${derived.result.assigned_day + 1}`}</span>}
+              {placed && (
+                <span>
+                  {derived.day_out_of_range
+                    ? `Day ${derived.result.assigned_day + 1} out of range`
+                    : `Day ${derived.result.assigned_day + 1}`}
+                </span>
+              )}
               {stripsLabel !== null && <span>{stripsLabel}</span>}
               <span>{`${competition.fencer_count} fencers`}</span>
             </span>
