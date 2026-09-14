@@ -9,6 +9,7 @@ on:
       - '**/*.json'
       - '**/*.css'
       - 'pnpm-lock.yaml'
+      - '.github/workflows/pr-checks.yml'
       - '!.claude/**'
 
 jobs:
@@ -27,5 +28,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm exec tsc -b --noEmit
+
+      - run: pnpm lint
 
       - run: pnpm test:coverage -- --coverage.thresholds.lines=70 --coverage.thresholds.functions=70 --coverage.thresholds.branches=70 --coverage.thresholds.statements=70
