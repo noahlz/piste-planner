@@ -9,6 +9,7 @@ import {
 } from '../../store/derived.ts'
 import { ScheduleOutput } from '../sections/ScheduleOutput.tsx'
 import { Canvas } from '../canvas/Canvas.tsx'
+import { DetailStrip } from './DetailStrip.tsx'
 import { ViewMode } from '../../store/viewState.ts'
 import type { ZoomState } from '../canvas/zoomLadder.ts'
 import { AlertCircle } from 'lucide-react'
@@ -93,7 +94,17 @@ interface CommittedModel {
  * committed schedule is drawn, never which schedule is drawn, so it is not
  * debounced and nothing about the settle applies to it.
  */
-export function CenterView({ viewMode, zoom }: { viewMode: ViewMode; zoom: ZoomState }) {
+export function CenterView({
+  viewMode,
+  zoom,
+  detailCollapsed,
+  onToggleDetailCollapsed,
+}: {
+  viewMode: ViewMode
+  zoom: ZoomState
+  detailCollapsed: boolean
+  onToggleDetailCollapsed: () => void
+}) {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)
@@ -167,6 +178,12 @@ export function CenterView({ viewMode, zoom }: { viewMode: ViewMode; zoom: ZoomS
           </section>
         )}
       </div>
+
+      <DetailStrip
+        schedule={committed.schedule}
+        detailCollapsed={detailCollapsed}
+        onToggleDetailCollapsed={onToggleDetailCollapsed}
+      />
     </main>
   )
 }

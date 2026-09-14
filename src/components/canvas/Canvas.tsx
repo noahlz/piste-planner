@@ -63,8 +63,10 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  * component's own `lanes` — the same committed blocks the grid draws — plus
  * the committed `findings.validationErrors` and a live read of
  * `dismissedFindings` (dismissal is not part of the schedule story, FR-042).
- * The one store read that remains unexpressed from the committed model is
- * `placements`, for the pin badge (phase 6 decides whether that stays live).
+ * Two store reads remain unexpressed from the committed model: `placements`,
+ * for the pin badge, and `selectedCompetitionId` (013 T029), for the
+ * selection ring — a click selects the event immediately, and waiting for the
+ * next settle to ring it would make the click feel unacknowledged.
  */
 
 /** The frozen strip-label gutter (mockup line 278). */
@@ -214,6 +216,8 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
 
   const placements = useStore((s) => s.placements)
   const dismissedFindings = useStore((s) => s.dismissedFindings)
+  const selectedCompetitionId = useStore((s) => s.selectedCompetitionId)
+  const selectCompetition = useStore((s) => s.selectCompetition)
 
   const [hovered, setHovered] = useState<HoveredBlock | null>(null)
   /** The measured plot width, 0 until the observer reports one. */
@@ -533,8 +537,7 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
                         label={block.label}
                         placement={block.placement}
                         pinned={placements[block.placement.competitionId]?.pinned ?? false}
-                        // Selection is phase 4 (T028); nothing sets it yet.
-                        selected={false}
+                        selected={selectedCompetitionId === block.placement.competitionId}
                         widthPx={
                           (block.placement.endMinutes - block.placement.startMinutes) *
                           pixelsPerMinute
@@ -544,6 +547,7 @@ export function Canvas({ schedule, findings, dayConfigs, zoom }: CanvasProps) {
                         findings={block.findings}
                         onPointerEnter={(e) => handleEnter(block, e)}
                         onPointerLeave={() => setHovered(null)}
+                        onClick={() => selectCompetition(block.placement.competitionId)}
                       />
                     ))}
                   </div>

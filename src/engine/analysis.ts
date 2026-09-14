@@ -159,11 +159,11 @@ export function initialAnalysis(
 
   // ── Pass 2: flighting group suggestions ──────────────────────────────────
   const globalPoolStripCap = computeStripCap(config.strips_total, config.max_pool_strip_pct)
-  const flightingSuggestions = suggestFlightingGroups(competitions, config.strips_total, dayAssignments, globalPoolStripCap)
-  for (const b of flightingSuggestions.bottlenecks) {
+  const flightingGroups = suggestFlightingGroups(competitions, config.strips_total, dayAssignments, globalPoolStripCap)
+  for (const b of flightingGroups.bottlenecks) {
     warnings.push(b)
   }
-  for (const group of flightingSuggestions.suggestions) {
+  for (const group of flightingGroups.suggestions) {
     suggestions.push(
       `Flighting group suggested: ${group.priority_competition_id} (priority, ${group.strips_for_priority} strips) + ${group.flighted_competition_id} (flighted, ${group.strips_for_flighted} strips)`,
     )
@@ -223,7 +223,7 @@ export function initialAnalysis(
 
   // ── Pass 5: flighting group video conflict ────────────────────────────────
   // If both competitions in a flighting group require video, warn about combined demand.
-  for (const group of flightingSuggestions.suggestions) {
+  for (const group of flightingGroups.suggestions) {
     const pri = competitions.find((c: Competition) => c.id === group.priority_competition_id)
     const flt = competitions.find((c: Competition) => c.id === group.flighted_competition_id)
     if (!pri || !flt) continue
@@ -257,5 +257,5 @@ export function initialAnalysis(
     })
   }
 
-  return { warnings, suggestions, flightingSuggestions: flightingSuggestions.suggestions }
+  return { warnings, suggestions }
 }

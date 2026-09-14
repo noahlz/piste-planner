@@ -56,7 +56,6 @@ function minimalState(overrides: {
     // (013 T022). Nothing here changes: this file's assertions never read
     // those keys, so removing them changes no expected value below —
     // several of the removed keys did not in fact match constants.ts.
-    flightingSuggestionStates: [],
   }
 }
 

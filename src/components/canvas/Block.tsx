@@ -1,4 +1,4 @@
-import type { CSSProperties, PointerEvent } from 'react'
+import type { CSSProperties, MouseEvent, PointerEvent } from 'react'
 import type { Competition } from '../../engine/types.ts'
 import { Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
@@ -99,6 +99,7 @@ export interface BlockProps {
   findings: string[]
   onPointerEnter?: (e: PointerEvent<HTMLDivElement>) => void
   onPointerLeave?: (e: PointerEvent<HTMLDivElement>) => void
+  onClick?: (e: MouseEvent<HTMLDivElement>) => void
 }
 
 export function Block({
@@ -114,6 +115,7 @@ export function Block({
   findings,
   onPointerEnter,
   onPointerLeave,
+  onClick,
 }: BlockProps) {
   const kind = phaseKind(placement.phase)
 
@@ -231,6 +233,7 @@ export function Block({
       style={blockStyle}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
+      onClick={onClick}
     >
       {kind === 'de' && (
         <span

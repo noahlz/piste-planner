@@ -38,6 +38,9 @@ function sampleViewState(): ViewState {
     // a round trip that dropped either field would not coincidentally match.
     panel: PanelId.EVENTS,
     panelDocked: true,
+    // true, distinct from DEFAULT_VIEW_STATE.detailCollapsed (false, 013
+    // phase4-contract.md §2).
+    detailCollapsed: true,
   }
 }
 
@@ -131,6 +134,11 @@ describe('viewState defaults', () => {
   it('defaults to zoomStep 2 (the 100% rung) and fitting true', () => {
     expect(DEFAULT_VIEW_STATE.zoomStep).toBe(2)
     expect(DEFAULT_VIEW_STATE.fitting).toBe(true)
+  })
+
+  // 013 T028 (phase4-contract.md §2): the detail strip opens expanded.
+  it('defaults to detailCollapsed false', () => {
+    expect(DEFAULT_VIEW_STATE.detailCollapsed).toBe(false)
   })
 })
 
@@ -362,6 +370,34 @@ describe('viewState round trip keeps zoomStep and fitting', () => {
     const read = loadViewState()
     expect(read.zoomStep).toBe(5)
     expect(read.fitting).toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────
+// 013 T028 (phase4-contract.md §2): detailCollapsed
+// ──────────────────────────────────────────────
+
+describe('viewState round trip keeps detailCollapsed', () => {
+  it('reads back the same detailCollapsed that was written', () => {
+    const written = { ...DEFAULT_VIEW_STATE, detailCollapsed: true }
+    saveViewState(written)
+    expect(loadViewState().detailCollapsed).toBe(true)
+  })
+})
+
+describe('viewState detailCollapsed validation', () => {
+  it('returns defaults wholesale when detailCollapsed is not a boolean', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), detailCollapsed: 'yes' }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  it('returns defaults wholesale when detailCollapsed is missing entirely', () => {
+    const { detailCollapsed: _detailCollapsed, ...partial } = sampleViewState()
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify(partial))
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })
 })
 

@@ -905,7 +905,7 @@ scenario 4 (the late-finish finding on a move past close) is met by phase 5.
 **Independent test**: select a block, press each button, confirm the change in
 the store, on the canvas, in the Schedule view and in the share link.
 
-- [ ] **T028** [US4] Red tests. `__tests__/store/selection.test.ts`:
+- [x] **T028** [US4] Red tests. `__tests__/store/selection.test.ts`:
   `selectedCompetitionId` defaults null, `selectCompetition(id)` sets it and
   `selectCompetition(null)` clears it, it is absent from `serializeState`, and
   `setPinned(id, false)` flips `pinned` without touching `source` (decision
@@ -930,8 +930,14 @@ the store, on the canvas, in the Schedule view and in the share link.
   `__tests__/store/serialization.test.ts` asserts `flighted` survives the
   round trip. Run: fail for want of the slice fields, the component and the
   narrowed signatures
+  → 2026-09-13, three parallel red dispatches on disjoint files against a
+  pinned contract (store cases, component cases, the flighting sweep), none
+  committing; committed with T029 at `5ea2ec5c1c`. Every case red for its
+  predicted reason. The sweep found that an "is this key absent" assertion
+  blinds quickstart §2's own grep — the assertions went, the grep stayed
+  (handoff finding 14)
 
-- [ ] **T029** [US4] The selection and the strip (FR-044 to FR-048, FR-028).
+- [x] **T029** [US4] The selection and the strip (FR-044 to FR-048, FR-028).
   Add `selectedCompetitionId`, `selectCompetition` and `setPinned` to
   `src/store/store.ts`, `detailCollapsed` to `src/store/viewState.ts`. Build
   `src/components/workbench/DetailStrip.tsx` and mount it under the canvas in
@@ -944,9 +950,19 @@ the store, on the canvas, in the Schedule view and in the share link.
   `src/components/sections/AnalysisOutput.tsx:33–151`. `flighting_group_id`
   is always null. T028 green. Move day performs no crossover check (FR-047)
   *(subagent commits)*
+  → 2026-09-13, `5ea2ec5c1c`, review follow-up `be7e50dd0b`. Two dispatches:
+  the store and the deletion sweep, then the strip and its wiring, one commit
+  for both. The deletion reached further than this line names — the grep also
+  hits `AnalysisResult.flightingSuggestions` and a local in
+  `src/engine/analysis.ts`, so both went: a rename and an unread output, no
+  engine math touched, `suggestFlightingGroups` still feeding its warnings.
+  Reviews found the out-of-range strip (handoff finding 12, fixed) and
+  mouse-only block selection (finding 13, owner's call)
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. Run the quickstart
 §2 grep for `flightingSuggestion` over `src/` and `__tests__/`; nothing.
+→ Met at `be7e50dd0b`: tsc and lint clean, 73 files / 1685 tests, grep silent.
+Run by the implementer and again by the orchestrator.
 
 ---
 

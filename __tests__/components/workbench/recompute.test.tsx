@@ -69,7 +69,12 @@ function RecomputeHost({ viewMode }: { viewMode: ViewMode }) {
       <div data-testid="center">
         {/* 013 T025 phase-3 contract: CenterView takes the zoom state the
             host owns (WorkbenchShell), same as viewMode above. */}
-        <CenterView viewMode={viewMode} zoom={{ zoomStep: 2, fitting: false }} />
+        <CenterView
+          viewMode={viewMode}
+          zoom={{ zoomStep: 2, fitting: false }}
+          detailCollapsed={false}
+          onToggleDetailCollapsed={() => {}}
+        />
       </div>
     </>
   )
@@ -255,7 +260,14 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
 
   it('holds the drawn blocks at their pre-edit geometry until the settle, then moves them', () => {
     const id = seedPlacedCompetitions(8)
-    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     const poolEndBefore = blockEnd(id, 'POOLS')
     expect(poolEndBefore, 'the canvas drew nothing to compare').not.toBeNull()
@@ -301,7 +313,14 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     // still inside strips_total, so validateConfig raises no ERROR and the
     // center goes on committing.
     const id = seedPlacedCompetitions(8)
-    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     const block = document.querySelector<HTMLElement>(
       `[data-event-id="${id}"][data-phase="POOLS"]`,
@@ -345,7 +364,14 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     // the band could describe a different schedule than the grid it sits
     // over. It must now hold exactly like the blocks and findings above.
     const id = seedPlacedCompetitions(8)
-    render(<CenterView viewMode={ViewMode.MATRIX} zoom={{ zoomStep: 2, fitting: false }} />)
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
 
     const band = (): string => document.querySelector('[data-day-band="0"]')?.textContent ?? ''
     const before = band()

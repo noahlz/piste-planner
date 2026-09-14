@@ -46,7 +46,6 @@ function stateWithDayConfigs(dayConfigs: DayConfig[]): Partial<StoreState> {
     // `SLOT_MINS` from `constants.ts`, never on the removed keys, so removing
     // them changes no expected value below — several of the removed keys did
     // not in fact match constants.ts.
-    flightingSuggestionStates: [],
   }
 }
 

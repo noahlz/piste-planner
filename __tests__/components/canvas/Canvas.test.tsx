@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
-import { useStore } from '../../../src/store/store.ts'
+import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
 import { selectDerivedSchedule, selectDerivedFindings } from '../../../src/store/derived.ts'
@@ -44,6 +44,19 @@ afterEach(() => {
 })
 
 const DEFAULT_ZOOM = { zoomStep: 2, fitting: false }
+
+// 013 T028 (part b) — selection (contract §6). selectedCompetitionId/
+// selectCompetition are not yet on the store (T029 adds them), so this cast
+// is a deliberate, typed reference to a slice that does not exist yet — the
+// same pattern __tests__/store/placements.test.ts uses.
+interface SelectionSlice {
+  selectedCompetitionId: string | null
+  selectCompetition: (id: string | null) => void
+}
+type FutureState = StoreState & SelectionSlice
+function futureState(): FutureState {
+  return useStore.getState() as unknown as FutureState
+}
 
 /** Preset B1, run through the auto-scheduler, read back as the committed model. */
 function b1Board(): { schedule: DerivedSchedule; findings: DerivedFindings; dayConfigs: DayConfig[] } {
@@ -222,6 +235,35 @@ describe('Canvas zoom (FR-034, D3)', () => {
     )
 
     expect(eventBlocks()).toHaveLength(expectedBlocks)
+  })
+})
+
+describe('Canvas selection (013 T028, contract §6)', () => {
+  it('calls selectCompetition with the clicked block\'s competition id', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+
+    const block = eventBlocks()[0]
+    const competitionId = block.dataset.eventId
+    if (!competitionId) throw new Error('block has no data-event-id')
+
+    fireEvent.click(block)
+
+    expect(futureState().selectedCompetitionId).toBe(competitionId)
+  })
+
+  it('marks every block of the selected event data-selected="true" and every other block "false"', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    const selectedId = schedule.competitions[0].id
+    futureState().selectCompetition(selectedId)
+
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+
+    const blocks = eventBlocks()
+    expect(blocks.some((block) => block.dataset.eventId === selectedId)).toBe(true)
+    for (const block of blocks) {
+      expect(block.dataset.selected).toBe(block.dataset.eventId === selectedId ? 'true' : 'false')
+    }
   })
 })
 
