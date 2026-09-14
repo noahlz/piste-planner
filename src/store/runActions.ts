@@ -1,5 +1,5 @@
 import { useStore, type StoreState } from './store.ts'
-import { buildTournamentConfig, DAY_AXIS_SPACING_MINS } from './buildConfig.ts'
+import { buildTournamentConfig, buildPinnedPlacements, DAY_AXIS_SPACING_MINS } from './buildConfig.ts'
 import { scheduleAll } from '../engine/scheduler.ts'
 import { PlacementSource, type Placement, type ScheduleResult } from '../engine/types.ts'
 
@@ -29,21 +29,30 @@ export interface AutoRunCounts {
 export function runScheduleAll(state: StoreState = useStore.getState()): AutoRunCounts {
   const { config, competitions } = buildTournamentConfig(state)
 
+  // The events the organizer has fixed. The engine schedules around them, and
+  // they never count as work this run attempted (013 FR-054, FR-061).
+  const pinned = buildPinnedPlacements(state)
+  const pinnedIds = new Set(pinned.map((p) => p.competition_id))
+  const attempted = competitions.length - pinned.length
+
   let schedule: Record<string, ScheduleResult>
   try {
-    schedule = scheduleAll(competitions, config).schedule
+    schedule = scheduleAll(competitions, config, pinned).schedule
   } catch {
     // Existing placements are left alone (the comment above), but the run
     // still happened and still gets stamped — nothing placed, everything
     // attempted counts as unplaced — so the top bar can say a run failed
     // rather than silently doing nothing.
-    const counts: AutoRunCounts = { placed: 0, unplaced: competitions.length }
+    const counts: AutoRunCounts = { placed: 0, unplaced: attempted }
     state.setLastAutoRun({ at: Date.now(), ...counts })
     return counts
   }
 
   const placements: Record<string, Placement> = {}
   for (const [id, result] of Object.entries(schedule)) {
+    // A pinned event's placement is the organizer's, not this run's output:
+    // `setPlacementsFromAuto` carries the existing one over verbatim below.
+    if (pinnedIds.has(id)) continue
     // A Placement has no way to say "somewhere on this day, time unknown", so an
     // event the scheduler left without a pool start simply gets no placement.
     if (result.pool_start === null) continue
@@ -62,11 +71,15 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
     }
   }
 
-  state.setPlacementsFromAuto(placements)
+  state.setPlacementsFromAuto(placements, pinnedIds)
 
+  const placed = Object.keys(placements).length
   const counts: AutoRunCounts = {
-    placed: Object.keys(placements).length,
-    unplaced: competitions.length - Object.keys(placements).length,
+    placed,
+    // Against `attempted`, not `competitions.length`: a pin was not attempted,
+    // so counting it as unplaced would report failure for an event sitting
+    // exactly where the organizer put it. Every event pinned reads `{0, 0}`.
+    unplaced: attempted - placed,
   }
   state.setLastAutoRun({ at: Date.now(), ...counts })
   return counts

@@ -1,6 +1,7 @@
 import type {
   Competition,
   TournamentConfig,
+  PinnedPlacement,
 } from '../engine/types.ts'
 import { CutMode, DeStripRequirement, EventType } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
@@ -113,6 +114,50 @@ export function buildTournamentConfig(state: StoreState): {
   const competitions = buildCompetitions(state)
 
   return { config, competitions }
+}
+
+/**
+ * The pins the engine schedules around (013 FR-054, FR-060, research D1).
+ *
+ * Three conditions, all of them the caller's job rather than the engine's: the
+ * placement is pinned, its event is still selected, and its day is inside the
+ * current range. A pin on a day the organizer has since removed is **left
+ * out**, so the run re-places that event afresh and unpinned (FR-060) rather
+ * than fixing it to a day that no longer exists.
+ *
+ * `start_time` crosses to the scheduler axis here — `day × DAY_AXIS_SPACING_MINS
+ * + clock start`, the exact inverse of the conversion `runActions.ts` applies
+ * when a result comes back. This is the only bridge (constitution I): the
+ * engine never converts.
+ */
+export function buildPinnedPlacements(state: StoreState): PinnedPlacement[] {
+  const pinned: PinnedPlacement[] = []
+  for (const [id, placement] of Object.entries(state.placements)) {
+    if (!placement.pinned) continue
+    if (state.selectedCompetitions[id] === undefined) continue
+    // Same existence test `buildCompetitions` applies below: a selected id
+    // with no catalogue entry (a hand-edited or corrupted save can carry one
+    // past `deserializeState`, which checks shape, not catalogue membership)
+    // must not reach the pinned list, or `attempted = competitions.length -
+    // pinned.length` in runActions.ts undercounts by one.
+    if (!findCompetition(id)) continue
+    if (placement.day < 0 || placement.day >= state.days_available) continue
+    pinned.push({
+      competition_id: id,
+      day: placement.day,
+      start_time: placement.day * DAY_AXIS_SPACING_MINS + placement.start_time,
+      strip_count: placement.strip_count,
+    })
+  }
+  // Sorted here as well as inside the engine's pre-claim pass, so the list the
+  // store hands over reads the same way the engine walks it.
+  pinned.sort(
+    (a, b) =>
+      a.day - b.day ||
+      a.start_time - b.start_time ||
+      a.competition_id.localeCompare(b.competition_id),
+  )
+  return pinned
 }
 
 function buildCompetitions(state: StoreState): Competition[] {

@@ -9,7 +9,7 @@ import type {
 import { PlacementSource } from '../engine/types.ts'
 import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { stripSearchRange, scanStripCounts } from '../engine/stripSearch.ts'
-import { buildTournamentConfig } from './buildConfig.ts'
+import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import type { ScenarioId } from '../data/tournaments.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
@@ -23,6 +23,9 @@ import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../engine/constants.ts'
 
 const DAY_START = 480 // 8:00 AM in minutes from midnight
 const DAY_END = 1320 // 10:00 PM in minutes from midnight
+
+/** The default `keep` for `setPlacementsFromAuto` — every one-argument caller. */
+const EMPTY_KEEP: ReadonlySet<string> = new Set<string>()
 
 // ──────────────────────────────────────────────
 // Slice types
@@ -133,8 +136,16 @@ export interface UiSlice {
 export interface PlacementsSlice {
   placements: Record<string, Placement>
 
-  /** Replaces the whole map. Every entry lands as auto and unpinned. */
-  setPlacementsFromAuto: (placements: Record<string, Placement>) => void
+  /**
+   * Replaces the whole map. Every entry lands as auto and unpinned, except the
+   * ids in `keep`: those are carried over verbatim from the current map — day,
+   * start, strip count, strips, source and pinned all untouched — and override
+   * any same-id entry in `placements` (013 FR-059). An id in neither is dropped.
+   */
+  setPlacementsFromAuto: (
+    placements: Record<string, Placement>,
+    keep?: ReadonlySet<string>,
+  ) => void
   /** Merges a partial into an existing entry, marking it manual and pinned. */
   updatePlacement: (id: string, partial: Partial<Placement>) => void
   removePlacement: (id: string) => void
@@ -225,6 +236,10 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
       // the question — the caller writes the result through `setStrips`
       // (research.md D8, FR-017).
       const { config, competitions } = buildTournamentConfig(get())
+      // The same pins `runScheduleAll` hands the engine (013 research D1), so
+      // the count this answers with is the smallest one that places every event
+      // around them — not one at which the pinned board overflows.
+      const pinned = buildPinnedPlacements(get())
       const range = stripSearchRange(competitions, config)
       // `null` is the absence of an answer, not zero (FR-010): nothing here can
       // be sized.
@@ -235,7 +250,7 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
       // this loop always terminates. Yielding a macrotask between candidates
       // is what makes this action asynchronous at all: it hands the browser a
       // paint turn so the in-progress indicator can render (research.md D5).
-      const scan = scanStripCounts(competitions, config, range)
+      const scan = scanStripCounts(competitions, config, range, pinned)
       let step = scan.next()
       while (!step.done) {
         await yieldToBrowser()
@@ -374,14 +389,23 @@ function createPlacementsSlice(set: SetState, _get: GetState): PlacementsSlice {
   return {
     placements: {},
 
-    setPlacementsFromAuto: (placements) => {
-      const normalised: Record<string, Placement> = {}
-      for (const [id, placement] of Object.entries(placements)) {
-        normalised[id] = { ...placement, source: PlacementSource.AUTO, pinned: false }
-      }
-      // The placements map is the only thing written — the baseline this
-      // action used to capture went with the retired scorecard (T011).
-      set({ placements: normalised })
+    setPlacementsFromAuto: (placements, keep = EMPTY_KEEP) => {
+      set((state) => {
+        const normalised: Record<string, Placement> = {}
+        for (const [id, placement] of Object.entries(placements)) {
+          normalised[id] = { ...placement, source: PlacementSource.AUTO, pinned: false }
+        }
+        // A kept id is the organizer's own decision about where an event goes,
+        // so it survives the run exactly as it was — including a manual source
+        // and its `pinned` flag, which the normalisation above would erase.
+        for (const id of keep) {
+          const existing = state.placements[id]
+          if (existing) normalised[id] = existing
+        }
+        // The placements map is the only thing written — the baseline this
+        // action used to capture went with the retired scorecard (T011).
+        return { placements: normalised }
+      })
     },
 
     updatePlacement: (id, partial) => {

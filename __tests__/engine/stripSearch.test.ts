@@ -9,7 +9,8 @@ import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { buildStrips } from '../../src/engine/stripBudget.ts'
 import { makeConfig, makeCompetition } from '../helpers/factories.ts'
 import { buildCompetitions, tournamentConfig, SCENARIOS } from '../helpers/scenarios.ts'
-import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
+import { dayStart } from '../../src/engine/types.ts'
+import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
 // Fixtures
@@ -216,5 +217,88 @@ describe('searchStripCount', () => {
     const first = searchStripCount(comps, config)
     const second = searchStripCount(comps, config)
     expect(first).toBe(second)
+  })
+})
+
+// ──────────────────────────────────────────────
+// T033 (dispatch D) — the search threading a `pinned` argument (phase6-contract
+// §8). `searchStripCount` and `scanStripCounts` now take the argument for real
+// (T034), so the casts the red version needed are gone.
+//
+// What the search counts as placed changed with them, and the change is what
+// this case measures. A pin keeps its day and start whether or not it finds
+// free strips, so its `pool_start` is never null and a pinned overflow is
+// invisible to the old rule — worse, a pin that claims nothing consumes
+// nothing, so the same board reads as *cheaper* with pins on it than without.
+// `scanStripCounts` therefore subtracts every pin carrying a
+// `PINNED_UNCLAIMED` bottleneck (research D1: "the smallest count that places
+// every event around the pins").
+// ──────────────────────────────────────────────
+
+describe('search and schedule threading pins (T033)', () => {
+  it('the answer accounts for the pins, and every pin lands at its own day and start', () => {
+    const { comps, config } = minBoard()
+
+    // [M] measured directly against this worktree, never predicted. The
+    // no-pins answer on this board is 48. These two events' natural placement
+    // there is D1-M-EPEE-IND day0@0 and D1-M-FOIL-IND day1@840, so neither is
+    // at day0@300 and pinning both there genuinely relocates both.
+    //
+    // Their pool asks are 45 and 38 strips — `strips_allocated` and `n_pools`
+    // agree here, since the ledger factory sizes both from the fencer count
+    // (310 and 260 fencers). Pinned to the same minute they want 45 + 38 = 83
+    // strips at once, well past the 48 the unpinned board needs, and [M] 83 is
+    // exactly what the search returns: at 83 the pool cap is floor(0.8 × 83) =
+    // 66, so neither ask is capped and the two fit the board exactly. At 82 the
+    // board is one strip short and the later pin in (day, start, id) order —
+    // FOIL, since 'D1-M-EPEE-IND' < 'D1-M-FOIL-IND' — cannot claim its pools.
+    //
+    // Four pins were tried first and can never have an answer: 45 + 38 + 30 +
+    // 32 = 145 strips at one minute against a ceiling of 135.
+    const pinDay = 0
+    const pinOffset = 300 // multiple of SLOT_MINS (5)
+    const pinStart = dayStart(pinDay, config) + pinOffset
+    const pinnedIds = ['D1-M-EPEE-IND', 'D1-M-FOIL-IND']
+    const pins: PinnedPlacement[] = pinnedIds.map(id => {
+      const comp = comps.find(c => c.id === id)!
+      return { competition_id: id, day: pinDay, start_time: pinStart, strip_count: comp.strips_allocated }
+    })
+    expect(pins.map(p => p.strip_count)).toEqual([45, 38])
+
+    const noPinsAnswer = searchStripCount(comps, config)
+    expect(noPinsAnswer).toBe(48)
+
+    const n = searchStripCount(comps, config, pins)
+    expect(typeof n).toBe('number')
+    expect(n!).toBeGreaterThanOrEqual(noPinsAnswer!)
+
+    const cfgAtN: TournamentConfig = {
+      ...config, strips_total: n!, strips: buildStrips(n!, config.video_strips_total),
+    }
+    const atN = scheduleAll(comps, cfgAtN, pins)
+    for (const comp of comps) {
+      expect(atN.schedule[comp.id]!.pool_start).not.toBeNull()
+    }
+    for (const pin of pins) {
+      const result = atN.schedule[pin.competition_id]!
+      expect(result.assigned_day).toBe(pin.day)
+      expect(result.pool_start).toBe(pin.start_time)
+    }
+    // Every pin claimed every phase — that is what makes `n` the count the
+    // organizer can actually apply.
+    expect(atN.bottlenecks.filter(b => b.cause === 'PINNED_UNCLAIMED')).toEqual([])
+
+    const floor = stripSearchRange(comps, config)!.floor
+    if (n! - 1 >= floor) {
+      const cfgAtNMinusOne: TournamentConfig = {
+        ...config, strips_total: n! - 1, strips: buildStrips(n! - 1, config.video_strips_total),
+      }
+      const atNMinusOne = scheduleAll(comps, cfgAtNMinusOne, pins)
+      const placedCount = comps.filter(c => atNMinusOne.schedule[c.id]!.pool_start !== null).length
+      const unclaimed = atNMinusOne.bottlenecks.filter(b => b.cause === 'PINNED_UNCLAIMED')
+      // One strip fewer and the count stops working — either an event loses its
+      // pool start, or a pin can no longer claim at its own time.
+      expect(placedCount < comps.length || unclaimed.length > 0).toBe(true)
+    }
   })
 })

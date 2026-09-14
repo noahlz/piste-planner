@@ -139,6 +139,13 @@ export const BottleneckCause = {
   RESOURCE_RECOMMENDATION: 'RESOURCE_RECOMMENDATION',
   DAY_RESOURCE_SUMMARY: 'DAY_RESOURCE_SUMMARY',
   NO_WINDOW_DIAGNOSTIC: 'NO_WINDOW_DIAGNOSTIC',
+  /**
+   * A pinned phase kept its day and start but found no free strips there
+   * (013 FR-057, research D1). The phase is still recorded — the pin's
+   * geometry is fixed by the caller — so the collision is reported rather
+   * than resolved by moving the event.
+   */
+  PINNED_UNCLAIMED: 'PINNED_UNCLAIMED',
 } as const
 export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCause]
 
@@ -403,6 +410,23 @@ export interface Placement {
   strips: number[] | null
   source: PlacementSource
   pinned: boolean
+}
+
+/**
+ * One event the caller has fixed in place (013 FR-054–FR-061, research D1).
+ *
+ * `start_time` is an **absolute scheduler-axis minute**, not a clock time: the
+ * caller computes `dayStart(day, config) + (clock start − that day's clock
+ * start)` and the engine never converts. `day` is the caller's to keep inside
+ * `[0, days_available)` — the engine only drops a pin naming a competition it
+ * is not scheduling. `strip_count` is the pin's pool strip budget, advisory in
+ * the same way any event's is: the strip cap still applies.
+ */
+export interface PinnedPlacement {
+  competition_id: string
+  day: number
+  start_time: number
+  strip_count: number
 }
 
 export interface AnalysisResult {
