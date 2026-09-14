@@ -433,6 +433,54 @@ keep)` carrying pinned ids verbatim, and `runScheduleAll` returning
     fixture in finding 22 and nothing checks that they agree in general
     (T042 records it).
 
+### T036 – phase 7, the Schedule view (FR-051 to FR-053)
+
+Committed at `4f6204d41a` on `013-phase7-schedule` (cut from main
+`851e8ccdce`), smoke re-point `51df2e7795`, review follow-up `3d35a84e65`.
+The phase ran on a pinned contract (`phase7-contract.md` in the session
+scratchpad). Both reviews ran on the first commit: `test-quality-reviewer`
+found nothing to block on and mutation-checked cases 2 (the sort) and 8
+(the print-hidden regions); `react-code-reviewer` found finding 28.
+`scripts/smoke.mjs` ran twice: PASS, 0 console errors, Suggest 15/66/80/48,
+boot 24 rows and `19 placed · 5 unplaced · 0 pinned`, all unchanged.
+
+What shipped: `ScheduleOutput` is a `section` "Schedule" holding a Print
+button (`window.print`) and one `section` "Day N" per day that has events,
+each with an `h3`, the destructive "Day N out of range" badge when flagged,
+and a seven-column table (the Day column and `data-cell="day"` are gone,
+replaced by `data-day-section="N"` on the section and `data-out-of-range`
+on the row). Print is a stylesheet (research D11): `@media print` in
+`src/index.css` with `print-hidden` on the six chrome regions and the Print
+button, `print-page` (`break-after: page`, last child excepted) on each day
+section, and `print-unclip` on the seven wrappers that clip the center.
+
+26. **The contract missed three consumers of the Day column** (implementer
+    halt, correct). `viewEquivalence.test.tsx:360` asserted the `day` cell
+    by name, and `recompute.test.tsx` and `invalidState.test.tsx` read row
+    cells positionally under the eight-column layout, so deleting the
+    column shifted every index by one. The implementer halted rather than
+    edit a test outside the contract's list; the orchestrator authorized
+    the three re-points (one helper swap, index shifts, doc comments – no
+    expected value changed) and they are in `4f6204d41a`'s body under
+    "Contract miss". Rule for the next contract: grep `data-cell` and
+    `getAllByRole('cell')` before deleting a column.
+27. **The per-day split broke a second driver locator** (smoke run).
+    `schedTable` at `scripts/smoke.mjs:555` filtered `table` by its "Pool
+    Start" header, unique when the view was one table and a four-way
+    strict-mode violation once each day had its own. Re-pointed in place at
+    `region` "Schedule", whose text still covers every day for the
+    before/after comparisons. tasks.md named only the `:525` day read.
+28. **The shadcn `Table` container clips inside a day section**
+    (react-code-reviewer). `ui/table.tsx` wraps every `<table>` in an
+    `overflow-x-auto` div the wrapper classes do not reach; one
+    `[data-slot="table-container"]` rule in the print block un-clips it
+    (`3d35a84e65`). Not reachable by any current fixture – the columns are
+    short – but the one link in the chain that was open.
+
+Still open, unchanged by this phase: findings 6 and 13 (owner decisions),
+finding 25 (`Canvas.tsx` reads `placements` live for the pin badge). The
+human print check (quickstart §8, SC-008) is T041's, recorded in T043.
+
 ## Measurements
 
 | Where | Value | When |
@@ -475,3 +523,8 @@ keep)` carrying pinned ids verbatim, and `runScheduleAll` returning
 | Case 5 fixture, B1 at 48 strips / 7 video: second pin's unclaimed phases | POOLS and DE_ROUND_OF_16 | T034, finding 21 |
 | Unit suite at `29f95362f9` | 76 files / 1738 tests, tsc and lint clean | T034 |
 | Unit suite at `f072d754b5` (review follow-up) | 76 files / 1739 tests, tsc and lint clean; ledger and parity unchanged | phase 6 checkpoint, verified twice |
+| Unit suite at `4f6204d41a` (Schedule view) | 76 files / 1747 tests, tsc and lint clean | T036 |
+| Boot, B1, schedule rows and footer | 24 rows, 19 placed · 5 unplaced · 0 pinned | T036 smoke, both runs, `51df2e7795` |
+| Suggest: ROC Div1A/Vet, NAC Youth, NAC Vet/Div1/Junior, NAC Cadet/Junior | 15 / 66 / 80 / 48 | T036 smoke, both runs |
+| Console errors, two smoke runs | 0 | T036 smoke |
+| Unit suite at `3d35a84e65` (review follow-up) | 76 files / 1747 tests, tsc and lint clean | phase 7 checkpoint, verified twice |

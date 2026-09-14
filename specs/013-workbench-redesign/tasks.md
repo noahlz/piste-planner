@@ -1177,7 +1177,7 @@ and a print stylesheet that leaves nothing but the schedule.
 **Independent test**: B1 in Schedule view shows four day sections with every
 placed event once at the canvas's times, and printing yields four pages.
 
-- [ ] **T036** [US7] Red first: `__tests__/components/scheduleOutput.test.tsx`
+- [x] **T036** [US7] Red first: `__tests__/components/scheduleOutput.test.tsx`
   gains ([research D11](./research.md), FR-051 to FR-053) – one `section`
   "Day N" per day with a heading, rows inside each in pool-start order, no
   Day column (`src/components/sections/ScheduleOutput.tsx:87` goes), every
@@ -1194,8 +1194,21 @@ placed event once at the canvas's times, and printing yields four pages.
   inside `[data-schedule-row]` at `scripts/smoke.mjs:486`, re-point it at the
   section heading. The human print check (quickstart §8) is recorded in T043
   *(subagent commits)*
+  → Done 2026-09-14 at `4f6204d41a` on `013-phase7-schedule`, smoke re-point
+  `51df2e7795`, review follow-up `3d35a84e65`. Nine cases added (seven red as
+  predicted, cases 2 and 4 green as predicted and mutation-checked by the
+  test review); `@media print` in `src/index.css`, no Tailwind `print:`
+  variant. The driver's `:525` day read re-pointed at `section[data-day-section]`
+  and passed first run; a second locator (`schedTable`, `:555`) matched four
+  tables after the per-day split and was re-pointed at `region` "Schedule".
+  SMOKE PASS ×2, 0 console errors, Suggest 15/66/80/48, boot 24 rows /
+  `19 placed · 5 unplaced · 0 pinned`. Contract miss (handoff finding 26):
+  three test files read the Day column positionally and were re-pointed
+  after a halt. 76 files / 1747 tests, tsc and lint clean.
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green.
+  → Verified 2026-09-14 at `3d35a84e65`: tsc and lint clean, 76 files / 1747
+  tests, run by the implementer and again by the orchestrator.
 
 ---
 
