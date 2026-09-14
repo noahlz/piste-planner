@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { EventsPanel } from '../../../src/components/workbench/panels/EventsPanel.tsx'
-import { AnalysisOutput } from '../../../src/components/sections/AnalysisOutput.tsx'
+import { FindingsPanel } from '../../../src/components/workbench/panels/FindingsPanel.tsx'
 import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES, findCompetition } from '../../../src/engine/catalogue.ts'
-import { competitionLabel } from '../../../src/components/competitionLabels.ts'
+import { competitionLabel } from '../../../src/lib/competitionLabels.ts'
 import {
   DEFAULT_VIEW_STATE,
   VIEW_STATE_STORAGE_KEY,
@@ -64,7 +64,11 @@ function RecomputeHost({ viewMode }: { viewMode: ViewMode }) {
         <EventsPanel />
       </div>
       <div data-testid="drawer">
-        <AnalysisOutput />
+        {/* 013 T032: AnalysisOutput retired for FindingsPanel, reading the
+            unified findings list (contract §1) instead of raw validation
+            errors/warnings. Same claim under test — a findings surface
+            follows an edit immediately, with no Auto-assign run. */}
+        <FindingsPanel />
       </div>
       <div data-testid="center">
         {/* 013 T025 phase-3 contract: CenterView takes the zoom state the

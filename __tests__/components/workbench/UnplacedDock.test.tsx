@@ -4,7 +4,7 @@ import { UnplacedDock } from '../../../src/components/workbench/UnplacedDock.tsx
 import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { selectDerivedSchedule } from '../../../src/store/derived.ts'
 import { TEMPLATES, findCompetition } from '../../../src/engine/catalogue.ts'
-import { competitionLabel } from '../../../src/components/competitionLabels.ts'
+import { competitionLabel } from '../../../src/lib/competitionLabels.ts'
 import { estimateEventFootprint } from '../../../src/engine/derive.ts'
 import { formatMinutes } from '../../../src/lib/time.ts'
 import { applyPreset } from '../../../src/store/presets.ts'

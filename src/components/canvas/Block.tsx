@@ -3,9 +3,9 @@ import type { Competition } from '../../engine/types.ts'
 import { Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
 import type { BlockPlacement } from '../../layout/lanes.ts'
-import { GENDER_DISPLAY, categoryDisplay, vetAgeGroupDisplay } from '../competitionLabels.ts'
+import { GENDER_DISPLAY, categoryDisplay, vetAgeGroupDisplay } from '../../lib/competitionLabels.ts'
 import { WeaponTokenPart, weaponVar } from './weaponTokens.ts'
-import { phaseDisplay, stripAssignmentLabel } from './CanvasTooltip.tsx'
+import { phaseDisplay, stripAssignmentLabel } from '../../lib/blockLabels.ts'
 
 /**
  * One block on the canvas — FR-035 to FR-037, FR-043,

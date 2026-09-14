@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
+import type { StoreState } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { makePlacement } from '../helpers/factories.ts'
@@ -7,6 +8,7 @@ import { assignStripLanes } from '../../src/layout/lanes.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
 import { DeMode } from '../../src/engine/types.ts'
 import { selectDaySummaries, selectDerivedSchedule, selectDerivedFindings } from '../../src/store/derived.ts'
+import * as derivedModule from '../../src/store/derived.ts'
 import type { DaySummary } from '../../src/store/derived.ts'
 
 /**
@@ -16,18 +18,31 @@ import type { DaySummary } from '../../src/store/derived.ts'
  * (constitution, "each fact has exactly one home") — never a private
  * re-flattening of the schedule.
  *
- * `findings` counts only `validationErrors`, not `analysis.warnings`
- * (bottlenecks). `findingIdentity` (src/engine/validation.ts, T021) gives
- * every `ValidationError` a stable id that `dismissFinding` and
- * `state.dismissedFindings` already key on — see `dismissFinding` in
- * src/store/store.ts:422, which only ever matches against
- * `validationErrors`. `analysis.warnings` (the bottleneck surface) has no
- * such identity function and nothing in the app can dismiss one, so a
- * bottleneck can never appear in `dismissedFindings` and "undismissed
- * bottleneck" is just "every bottleneck" — there is no dismissal behavior to
- * assert against it. This file counts `validationErrors` only, keyed by
- * `findingIdentity` and each finding's first subject's placement day.
+ * `findings` counts `selectFindings(state)` rows whose `day` equals that day
+ * (013 T030, phase5-contract.md §1.7) — the unified list spanning validation
+ * errors, bottleneck warnings, Unplaced overflow/stranded rows and Late
+ * finish rows, already filtered to undismissed. This supersedes the earlier
+ * "validationErrors only" contract: `daySummariesFromBlocks` now takes the
+ * findings list directly rather than re-deriving it from `validationErrors` +
+ * `dismissedFindings` + `placementDays`.
  */
+
+/** Shape of a row from `selectFindings` (013 T030, phase5-contract.md §1) — only the fields this file reads. */
+interface Finding {
+  id: string
+  severity: string
+  day: number | null
+}
+
+/**
+ * `selectFindings` — the unified findings selector T030 adds to
+ * src/store/derived.ts (phase5-contract.md §1). Cast through `unknown` so
+ * this file compiles clean before the export exists — the TDD failure is a
+ * runtime "is not a function" TypeError here, not a tsc error.
+ */
+function selectFindings(state: StoreState): Finding[] {
+  return (derivedModule as unknown as { selectFindings: (s: StoreState) => Finding[] }).selectFindings(state)
+}
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState())
@@ -176,41 +191,54 @@ describe('selectDaySummaries — per-day fields, derived from assignStripLanes',
   })
 })
 
-describe('selectDaySummaries — findings, keyed by validationErrors + findingIdentity', () => {
-  it('counts an undismissed validation finding on the day its subject competition is placed, and drops it after dismissFinding', () => {
+describe('selectDaySummaries — findings, re-pointed to selectFindings (013 T030, contract §1.7)', () => {
+  it('matches selectFindings filtered by day, and drops exactly one after dismissFinding', () => {
     twoJuniorEpeeOnSeparateDays()
     const state = useStore.getState()
 
-    const findings = selectDerivedFindings(state)
-    const jrM = findings.validationErrors.find(
+    const derivedFindings = selectDerivedFindings(state)
+    const jrM = derivedFindings.validationErrors.find(
       (e) => e.rule === 'video-dead-config' && e.subjects?.includes('JR-M-EPEE-IND'),
     )
-    const jrW = findings.validationErrors.find(
-      (e) => e.rule === 'video-dead-config' && e.subjects?.includes('JR-W-EPEE-IND'),
-    )
     expect(jrM, 'expected a video-dead-config finding for JR-M-EPEE-IND').toBeDefined()
-    expect(jrW, 'expected a video-dead-config finding for JR-W-EPEE-IND').toBeDefined()
+    const jrMId = findingIdentity(jrM!)
 
     const before = selectDaySummaries(useStore.getState())
-    // JR-M-EPEE-IND is placed on day 0, JR-W-EPEE-IND on day 1 — each day
-    // carries the findings of the event placed on it, and there are two of
-    // them per event, not one: alongside `video-dead-config` this fixture
-    // also raises `r16-over-cap` (src/engine/validation.ts), because
-    // `de_round_of_16_strips` is 4 against the DE cap of 3 that 4 strips
-    // allow. Measured, not predicted (tasks.md standing rule 11) — T025 wrote
-    // these as 1 from the one rule it had reasoned about.
-    expect(before[0].findings).toBe(2)
-    expect(before[1].findings).toBe(2)
-    expect(before[2].findings).toBe(0)
+    const findingsBefore = selectFindings(useStore.getState())
+    // JR-M-EPEE-IND is placed on day 0, JR-W-EPEE-IND on day 1 — a
+    // cross-selector check against `selectFindings`, not the literals
+    // T025 measured against the narrower validationErrors-only column.
+    for (let day = 0; day < 3; day++) {
+      expect(before[day].findings, `day ${day}`).toBe(
+        findingsBefore.filter((f) => f.day === day).length,
+      )
+    }
+    expect(findingsBefore.some((f) => f.id === jrMId), 'expected the video-dead-config row in selectFindings').toBe(true)
 
-    useStore.getState().dismissFinding(findingIdentity(jrM!))
+    useStore.getState().dismissFinding(jrMId)
 
     const after = selectDaySummaries(useStore.getState())
-    // One dismissal drops exactly one: JR-M's `r16-over-cap` is a separate
-    // identity and stays counted.
-    expect(after[0].findings).toBe(1)
+    const findingsAfter = selectFindings(useStore.getState())
+    for (let day = 0; day < 3; day++) {
+      expect(after[day].findings, `day ${day}`).toBe(
+        findingsAfter.filter((f) => f.day === day).length,
+      )
+    }
+    // One dismissal drops exactly one, on the day the dismissed row belongs to.
+    expect(after[0].findings).toBe(before[0].findings - 1)
     // Dismissing JR-M's finding does not touch JR-W's — a separate identity
     // (distinct subject), on a separate day.
-    expect(after[1].findings).toBe(2)
+    expect(after[1].findings).toBe(before[1].findings)
+  })
+
+  it('counts an Unplaced row on the day its overflowing block sits on', () => {
+    threeEventsOverlappingOnDayZero()
+    const summaries = selectDaySummaries(useStore.getState())
+    const findings = selectFindings(useStore.getState())
+
+    const day0Findings = findings.filter((f) => f.day === 0)
+    expect(day0Findings.some((f) => f.severity === 'Unplaced'), 'expected an Unplaced row on day 0').toBe(true)
+    expect(summaries[0].findings).toBeGreaterThanOrEqual(1)
+    expect(summaries[0].findings).toBe(day0Findings.length)
   })
 })

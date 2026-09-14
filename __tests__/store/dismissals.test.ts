@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
+import type { StoreState } from '../../src/store/store.ts'
 import { selectDerivedFindings } from '../../src/store/derived.ts'
+import * as derivedModule from '../../src/store/derived.ts'
 import { serializeState, deserializeState } from '../../src/store/serialization.ts'
 import * as validationEngine from '../../src/engine/validation.ts'
-import { BottleneckSeverity } from '../../src/engine/types.ts'
+import { BottleneckSeverity, DeMode } from '../../src/engine/types.ts'
 import type { ValidationError } from '../../src/engine/types.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
+import { makePlacement } from '../helpers/factories.ts'
 
 // This file supersedes the "dismissalsSlice" block in placements.test.ts,
 // which pins T008's unguarded dismissFinding/undismissFinding (any id
@@ -56,6 +59,50 @@ function currentErrorFinding(): ValidationError | undefined {
   return selectDerivedFindings(useStore.getState()).validationErrors.find(
     f => f.severity === BottleneckSeverity.ERROR,
   )
+}
+
+/** Shape of a row from `selectFindings` (013 T030, phase5-contract.md §1) — only the fields this file reads. */
+interface Finding {
+  id: string
+  severity: string
+}
+
+/**
+ * `selectFindings` — the unified findings selector T030 adds to
+ * src/store/derived.ts (phase5-contract.md §1). Cast through `unknown` so
+ * this file compiles clean before the export exists (same pattern as
+ * `findingIdentity` above) — the TDD failure is a runtime "is not a
+ * function" TypeError here, not a tsc error.
+ */
+function selectFindings(state: StoreState): Finding[] {
+  return (derivedModule as unknown as { selectFindings: (s: StoreState) => Finding[] }).selectFindings(state)
+}
+
+/**
+ * Copied from __tests__/store/daySummaries.test.ts's
+ * `threeEventsOverlappingOnDayZero` (phase5-contract.md §8 fixture notes) —
+ * NAC, 3 days, 4 strips: JR-M-EPEE-IND day 0 @480, JR-W-EPEE-IND day 1 @480,
+ * JR-M-FOIL-IND day 0 @500, 8 fencers each, SINGLE_STAGE. Measured blocks:
+ * JR-M-EPEE-IND pool 480-704 (1 strip), DE 735-780 (3 strips, overflow);
+ * JR-M-FOIL-IND pool 500-696, DE 730-775 (3 strips). Day 0 finish 780.
+ */
+function threeEventsOverlappingOnDayZero(): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(3)
+  s.setStrips(4)
+  s.setVideoStrips(0)
+  s.selectCompetitions(['JR-M-EPEE-IND', 'JR-W-EPEE-IND', 'JR-M-FOIL-IND'])
+  for (const id of ['JR-M-EPEE-IND', 'JR-W-EPEE-IND', 'JR-M-FOIL-IND']) {
+    s.updateCompetition(id, { fencer_count: 8 })
+  }
+  s.setDeModeOverride(DeMode.SINGLE_STAGE)
+  s.setPlacementsFromAuto({
+    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 1 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 1, start_time: 480, strip_count: 1 }),
+    'JR-M-FOIL-IND': makePlacement({ day: 0, start_time: 500, strip_count: 1 }),
+  })
 }
 
 beforeEach(() => {
@@ -168,5 +215,48 @@ describe('dismissedFindings serialization round-trip (contracts/serialization-v2
     useStore.setState(result.state)
 
     expect(useStore.getState().dismissedFindings).toEqual({ 'no-such-rule:UNKNOWN-EVENT-ID': true })
+  })
+})
+
+describe('dismissFinding — widened to the unified findings list (013 T030, contract §2.2)', () => {
+  it('dismissing an Unplaced row id records it and removes it from selectFindings', () => {
+    threeEventsOverlappingOnDayZero()
+    const unplaced = selectFindings(useStore.getState()).find((f) => f.severity === 'Unplaced')
+    expect(unplaced, 'expected an Unplaced finding from the overflowing DE block').toBeDefined()
+    // Located by severity, then the id is asserted as a literal — a fixture
+    // drift reports as a wrong id here rather than a missing row.
+    expect(unplaced!.id).toBe('unplaced:JR-M-EPEE-IND:DE')
+
+    useStore.getState().dismissFinding(unplaced!.id)
+
+    expect(useStore.getState().dismissedFindings[unplaced!.id]).toBe(true)
+    expect(selectFindings(useStore.getState()).some((f) => f.id === unplaced!.id)).toBe(false)
+  })
+
+  it('dismissing a Late finish row id records it and filters it', () => {
+    threeEventsOverlappingOnDayZero()
+    useStore.getState().updateDayConfig(0, { day_end_time: 810 })
+    const lateFinish = selectFindings(useStore.getState()).find((f) => f.id === 'late-finish:day:0')
+    expect(lateFinish, 'expected a Late finish finding for day 0').toBeDefined()
+
+    useStore.getState().dismissFinding('late-finish:day:0')
+
+    expect(useStore.getState().dismissedFindings['late-finish:day:0']).toBe(true)
+    expect(selectFindings(useStore.getState()).some((f) => f.id === 'late-finish:day:0')).toBe(false)
+  })
+
+  it('dismissing a Blocking row id is a no-op', () => {
+    // The existing "rejects dismissing an ERROR-severity finding id" case
+    // above already proves this through `findingIdentity`. This asserts the
+    // same guard through the row's id as read off `selectFindings`.
+    setupB5()
+    useStore.getState().setStrips(0) // structural ERROR in every mode
+    const blocking = selectFindings(useStore.getState()).find((f) => f.severity === 'Blocking')
+    expect(blocking, 'expected a Blocking finding from strips_total=0').toBeDefined()
+
+    useStore.getState().dismissFinding(blocking!.id)
+
+    expect(useStore.getState().dismissedFindings).toEqual({})
+    expect(selectFindings(useStore.getState()).some((f) => f.id === blocking!.id)).toBe(true)
   })
 })

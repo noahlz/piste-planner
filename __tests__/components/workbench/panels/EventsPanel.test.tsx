@@ -5,7 +5,7 @@ import { useStore } from '../../../../src/store/store.ts'
 import { CATALOGUE, ALL_VET_AGE_GROUPS, TEMPLATES, findCompetition } from '../../../../src/engine/catalogue.ts'
 import { MIN_FENCERS } from '../../../../src/engine/constants.ts'
 import { Category, EventType, Gender, Weapon } from '../../../../src/engine/types.ts'
-import { categoryDisplay, vetAgeGroupDisplay, competitionLabel } from '../../../../src/components/competitionLabels.ts'
+import { categoryDisplay, vetAgeGroupDisplay, competitionLabel } from '../../../../src/lib/competitionLabels.ts'
 
 // Perf review on T020-T022: EventsPanel used to subscribe to the whole
 // selectedCompetitions record, so committing one fencer count re-rendered

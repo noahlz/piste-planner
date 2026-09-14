@@ -10,7 +10,7 @@ import {
   vetAgeGroupDisplay,
   GENDER_DISPLAY,
   WEAPON_DISPLAY,
-} from '../../competitionLabels.ts'
+} from '../../../lib/competitionLabels.ts'
 import { NumberInput } from '@/components/ui/number-input'
 import { cn } from '@/lib/utils'
 

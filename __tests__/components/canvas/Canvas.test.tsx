@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
 import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
@@ -97,7 +97,7 @@ function eventBlocks(): HTMLElement[] {
 describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
   it('renders every strip row of every day, with no culling', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
 
     expect(allStripRows()).toHaveLength(320)
     for (const day of [0, 1, 2, 3]) {
@@ -107,7 +107,7 @@ describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
 
   it('scrolls from exactly one native container', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
 
     const scrollers = document.querySelectorAll<HTMLElement>('[data-canvas-scroller]')
     expect(scrollers).toHaveLength(1)
@@ -116,7 +116,7 @@ describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
 
   it('pins the time axis, every day band and every gutter, and labels ticks 24-hour', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
 
     const axis = document.querySelector<HTMLElement>('[data-time-axis]')
     if (!axis) throw new Error('no time axis rendered')
@@ -141,7 +141,7 @@ describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
 
   it('removes every retired region and control', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
 
     expect(document.querySelector('[data-canvas-viewport]')).toBeNull()
     expect(document.querySelector('[data-block-layer]')).toBeNull()
@@ -157,7 +157,7 @@ describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
 describe('Canvas day bands (FR-039)', () => {
   it('states each day band as Day N, events, finish, peak strips and findings, with no date', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
 
     const bandFormat = /^Day \d · \d+ events · finishes (\d\d:\d\d|—) · \d+ of 80 strips at peak · \d+ findings$/
     for (const day of [0, 1, 2, 3]) {
@@ -173,13 +173,13 @@ describe('Canvas zoom (FR-034, D3)', () => {
     const { schedule, findings, dayConfigs } = b1Board()
 
     render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 0, fitting: false }} />,
+      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 0, fitting: false }} findingRows={[]} />,
     )
     const rung0Ticks = hourTicks().length
     cleanup()
 
     render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 5, fitting: false }} />,
+      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 5, fitting: false }} findingRows={[]} />,
     )
     const rung5Ticks = hourTicks().length
 
@@ -191,7 +191,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
     const { schedule, findings, dayConfigs } = b1Board()
 
     render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: true }} />,
+      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: true }} findingRows={[]} />,
     )
     const fittingBlocks = eventBlocks()
     expect(fittingBlocks.length).toBeGreaterThan(0)
@@ -202,7 +202,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
     cleanup()
 
     render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: false }} />,
+      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: false }} findingRows={[]} />,
     )
     const laddderBlocks = eventBlocks()
     expect(laddderBlocks.length).toBeGreaterThan(0)
@@ -231,7 +231,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
     const expectedBlocks = assignStripLanes(schedule.events, config.strips_total).length
 
     render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: true }} />,
+      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: true }} findingRows={[]} />,
     )
 
     expect(eventBlocks()).toHaveLength(expectedBlocks)
@@ -241,7 +241,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
 describe('Canvas selection (013 T028, contract §6)', () => {
   it('calls selectCompetition with the clicked block\'s competition id', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
 
     const block = eventBlocks()[0]
     const competitionId = block.dataset.eventId
@@ -257,7 +257,7 @@ describe('Canvas selection (013 T028, contract §6)', () => {
     const selectedId = schedule.competitions[0].id
     futureState().selectCompetition(selectedId)
 
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
 
     const blocks = eventBlocks()
     expect(blocks.some((block) => block.dataset.eventId === selectedId)).toBe(true)
@@ -267,16 +267,29 @@ describe('Canvas selection (013 T028, contract §6)', () => {
   })
 })
 
-describe('Canvas gutter flags (FR-037)', () => {
-  it('flags the strip row a finding targets, and leaves an uninvolved row alone', () => {
+// 013 T030 — local mirror of contract phase5-contract.md §1's Finding shape.
+// src/store/derived.ts does not export it until T032; the literal below only
+// needs to satisfy CanvasProps.findingRows's element type once T032 adds it.
+interface Finding {
+  id: string
+  severity: 'Blocking' | 'Warning' | 'Note' | 'Unplaced'
+  where: string
+  day: number | null
+  message: string
+  target: string | null
+}
+
+describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
+  /** One event on two of four strips, so the day also has rows with no
+   *  block on them at all — the "another row is not flagged" half of both
+   *  cases below. */
+  function flaggedFixture(): { schedule: DerivedSchedule; findings: DerivedFindings; dayConfigs: DayConfig[] } {
     const config = makeConfig({ days_available: 1, strips: makeStrips(4, 0) })
     const schedule: DerivedSchedule = {
       config,
       competitions: [makeCompetition({ id: 'flagged' })],
       events: {
         flagged: {
-          // Two strips of four, so the day has rows with no block on them at
-          // all — the "another row is not flagged" half of this case.
           result: { ...makeScheduleResult('flagged', 0), pool_start: 600, pool_end: 700, pool_strip_count: 2 },
           day_out_of_range: false,
         },
@@ -299,8 +312,22 @@ describe('Canvas gutter flags (FR-037)', () => {
       },
     }
     const dayConfigs: DayConfig[] = [{ day_start_time: 480, day_end_time: 1320 }]
+    return { schedule, findings, dayConfigs }
+  }
 
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} />)
+  const row: Finding = {
+    id: 'analysis:STRIP_CONTENTION:flagged:0',
+    severity: 'Warning',
+    where: 'Day 1 · flagged',
+    day: 0,
+    message: 'flagged waited for strips',
+    target: 'flagged',
+  }
+
+  it('flags the strip row a findingRows entry targets, and leaves an uninvolved row alone', () => {
+    const { schedule, findings, dayConfigs } = flaggedFixture()
+
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[row]} />)
 
     // assignStripLanes gives the only candidate firstStrip 0 over 2 strips, so
     // rows are located by document position (strip index order) rather than
@@ -312,5 +339,115 @@ describe('Canvas gutter flags (FR-037)', () => {
     expect(rows[1].dataset.flagged).toBe('true')
     expect(rows[2].dataset.flagged).not.toBe('true')
     expect(rows[3].dataset.flagged).not.toBe('true')
+  })
+
+  it('flags nothing from findings alone once findingRows no longer names the target (red: today\'s flaggedCompetitions(findings) still flags it)', () => {
+    const { schedule, findings, dayConfigs } = flaggedFixture()
+
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
+
+    const rows = stripRowsInDay(0)
+    expect(rows).toHaveLength(4)
+    expect(rows[0].dataset.flagged).not.toBe('true')
+    expect(rows[1].dataset.flagged).not.toBe('true')
+    expect(rows[2].dataset.flagged).not.toBe('true')
+    expect(rows[3].dataset.flagged).not.toBe('true')
+  })
+})
+
+// 013 T030 — jump (contract §4.4). jumpNonce/jumpToCompetition are not yet on
+// the store (T032 adds them, per §2.1), so FutureState below is a deliberate,
+// typed reference to a slice that does not exist yet, same pattern as
+// SelectionSlice above.
+interface JumpSlice {
+  jumpNonce: number
+  jumpToCompetition: (id: string) => void
+}
+type JumpFutureState = FutureState & JumpSlice
+function jumpFutureState(): JumpFutureState {
+  return useStore.getState() as unknown as JumpFutureState
+}
+
+describe('Canvas jump (013 T030, contract §4.4)', () => {
+  let scrollIntoViewMock: ReturnType<typeof vi.fn>
+  let originalScrollIntoView: typeof Element.prototype.scrollIntoView
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    originalScrollIntoView = Element.prototype.scrollIntoView
+    scrollIntoViewMock = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoViewMock as unknown as typeof Element.prototype.scrollIntoView
+  })
+
+  afterEach(() => {
+    Element.prototype.scrollIntoView = originalScrollIntoView
+    vi.useRealTimers()
+  })
+
+  it("scrolls the target's block into view and flashes every block of that event once", () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
+
+    const targetId = schedule.competitions[0].id
+    act(() => {
+      jumpFutureState().jumpToCompetition(targetId)
+    })
+
+    expect(scrollIntoViewMock).toHaveBeenCalledTimes(1)
+    const scrolledEl = scrollIntoViewMock.mock.contexts[0] as HTMLElement
+    expect(scrolledEl.dataset.eventId).toBe(targetId)
+
+    for (const block of eventBlocks()) {
+      expect(block.dataset.flash).toBe(block.dataset.eventId === targetId ? 'true' : 'false')
+    }
+
+    act(() => {
+      vi.advanceTimersByTime(900)
+    })
+
+    for (const block of eventBlocks()) {
+      expect(block.dataset.flash).not.toBe('true')
+    }
+  })
+
+  it('flashes again on the next jump', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
+
+    const targetId = schedule.competitions[0].id
+    act(() => {
+      jumpFutureState().jumpToCompetition(targetId)
+    })
+    act(() => {
+      vi.advanceTimersByTime(900)
+    })
+    act(() => {
+      jumpFutureState().jumpToCompetition(targetId)
+    })
+
+    expect(scrollIntoViewMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('a jump to an event with no drawn block scrolls nothing', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
+
+    act(() => {
+      jumpFutureState().jumpToCompetition('NOT-ON-THE-BOARD')
+    })
+
+    expect(scrollIntoViewMock).not.toHaveBeenCalled()
+    for (const block of eventBlocks()) {
+      expect(block.dataset.flash).not.toBe('true')
+    }
+  })
+
+  it('mounting with a nonzero nonce does not scroll', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    useStore.setState({ jumpNonce: 3 } as unknown as Partial<StoreState>)
+
+    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
+
+    expect(scrollIntoViewMock).not.toHaveBeenCalled()
   })
 })

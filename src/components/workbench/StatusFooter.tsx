@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { useStore } from '../../store/store.ts'
 import { selectFooterMetrics, selectPlacementCounts } from '../../store/derived.ts'
 import { formatClock } from '../../lib/time.ts'
-import { WEAPON_DISPLAY } from '../competitionLabels.ts'
+import { WEAPON_DISPLAY } from '../../lib/competitionLabels.ts'
 import { Weapon } from '../../engine/types.ts'
 import { ViewMode } from '../../store/viewState.ts'
 import {
@@ -43,8 +43,8 @@ const LEGEND: { weapon: Weapon; swatchClass: string }[] = [
  * `selectFooterMetrics` with no delta against a baseline and no hover: D7
  * drops both along with the retired scorecard's disclosure and its expanded
  * tier.
- * `AnalysisOutput` is already mounted behind the rail's Findings button
- * (T009), so this is not a second home for it.
+ * `FindingsPanel` is already mounted behind the rail's Findings button
+ * (T009, T032), so this is not a second home for it.
  *
  * The view toggle moved here verbatim from `CenterView.tsx` — the center no
  * longer owns which view is showing, only how it draws whichever one is

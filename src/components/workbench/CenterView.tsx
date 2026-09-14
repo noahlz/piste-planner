@@ -4,8 +4,10 @@ import type { DayConfig } from '../../engine/types.ts'
 import {
   selectDerivedFindings,
   selectDerivedSchedule,
+  selectFindings,
   type DerivedFindings,
   type DerivedSchedule,
+  type Finding,
 } from '../../store/derived.ts'
 import { ScheduleOutput } from '../sections/ScheduleOutput.tsx'
 import { Canvas } from '../canvas/Canvas.tsx'
@@ -21,6 +23,13 @@ export const CENTER_SETTLE_MS = 150
 interface CommittedModel {
   schedule: DerivedSchedule
   findings: DerivedFindings
+  /**
+   * The unified findings list (`selectFindings`, contract §1), committed
+   * alongside `schedule`/`findings`/`dayConfigs` (013 T032, contract §4.1,
+   * FR-042, finding 11) so the day bands and the gutter flags the matrix
+   * draws from it can never run a settle ahead of the blocks they describe.
+   */
+  findingRows: Finding[]
   /**
    * The store's clock-time day hours (contracts/day-axis.md C4), committed in
    * the same settle as `schedule`/`findings` so the matrix's axis and "Fit to
@@ -107,6 +116,7 @@ export function CenterView({
 }) {
   const live = useStore(selectDerivedSchedule)
   const liveFindings = useStore(selectDerivedFindings)
+  const liveFindingRows = useStore(selectFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)
 
   const blocking = liveFindings.validationErrors.filter((e) => e.severity === 'ERROR')
@@ -115,6 +125,7 @@ export function CenterView({
   const [committed, setCommitted] = useState<CommittedModel>(() => ({
     schedule: live,
     findings: liveFindings,
+    findingRows: liveFindingRows,
     dayConfigs: liveDayConfigs,
   }))
 
@@ -124,11 +135,17 @@ export function CenterView({
     if (hasBlocking) return
 
     const timer = setTimeout(
-      () => setCommitted({ schedule: live, findings: liveFindings, dayConfigs: liveDayConfigs }),
+      () =>
+        setCommitted({
+          schedule: live,
+          findings: liveFindings,
+          findingRows: liveFindingRows,
+          dayConfigs: liveDayConfigs,
+        }),
       CENTER_SETTLE_MS,
     )
     return () => clearTimeout(timer)
-  }, [live, liveFindings, liveDayConfigs, hasBlocking])
+  }, [live, liveFindings, liveFindingRows, liveDayConfigs, hasBlocking])
 
   const showingMatrix = viewMode === ViewMode.MATRIX
 
@@ -149,6 +166,7 @@ export function CenterView({
             <Canvas
               schedule={committed.schedule}
               findings={committed.findings}
+              findingRows={committed.findingRows}
               dayConfigs={committed.dayConfigs}
               zoom={zoom}
             />

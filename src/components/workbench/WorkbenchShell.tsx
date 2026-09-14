@@ -8,17 +8,18 @@ import { StatusFooter } from './StatusFooter.tsx'
 import { TournamentPanel } from './panels/TournamentPanel.tsx'
 import { StripsPanel } from './panels/StripsPanel.tsx'
 import { EventsPanel } from './panels/EventsPanel.tsx'
-import { AnalysisOutput } from '../sections/AnalysisOutput.tsx'
+import { FindingsPanel } from './panels/FindingsPanel.tsx'
 import { SettingsPanel } from './panels/SettingsPanel.tsx'
 import { PanelId, ViewMode, loadViewState, saveViewState } from '../../store/viewState.ts'
 import type { ZoomState } from '../canvas/zoomLadder.ts'
 
 /**
- * Panel content by id — temporary (013 decision 1): phase 2 replaces each arm
- * with a purpose-built panel component. `tournament` (T016), `strips` (T018),
- * `events` (T021) and `settings` (T022) are done; `findings` is still the
- * section component the old collapsible rail mounted, unmodified, until its
- * own task lands.
+ * Panel content by id (013 decision 1, now complete): every arm is its own
+ * phase-2/5 panel component. `tournament` (T016), `strips` (T018), `events`
+ * (T021) and `settings` (T022) shipped first; `findings` (T032) replaces the
+ * retired collapsible rail's `AnalysisOutput` section with `FindingsPanel`,
+ * reading the unified findings list (contract §1) rather than raw validation
+ * errors and bottleneck warnings.
  *
  * `findings` also renders behind the rail's Findings button (T009) — its only
  * home since T011a folded the drawer into `StatusFooter`.
@@ -32,7 +33,7 @@ function panelContent(id: PanelId): ReactNode {
     case PanelId.EVENTS:
       return <EventsPanel />
     case PanelId.FINDINGS:
-      return <AnalysisOutput />
+      return <FindingsPanel />
     case PanelId.SETTINGS:
       return <SettingsPanel />
   }

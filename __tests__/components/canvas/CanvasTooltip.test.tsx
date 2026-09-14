@@ -424,6 +424,7 @@ function renderCanvas(schedule: DerivedSchedule = scheduleWithTwoEvents()): void
     <Canvas
       schedule={schedule}
       findings={EMPTY_FINDINGS}
+      findingRows={[]}
       dayConfigs={CANVAS_DAY_CONFIGS}
       zoom={CANVAS_ZOOM}
     />,

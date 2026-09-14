@@ -66,6 +66,16 @@
   --chrome-deep: #eaebee;
   --hover-tint: #f7fbff;
   --ok: #5b8f6a;
+
+  /* Findings panel and rail badge (013 T032, mockup lines 1609-1622,
+     1792-1807) — the mockup's own warm finding palette, not yet tokens
+     before this task. */
+  --finding-bg: #fdf7f2;
+  --finding-border: #ecd9c9;
+  --finding-badge: #f1e0d2;
+  --finding-badge-text: #5a3f26;
+  --finding-link: #8a423d;
+  --rail-badge: #a8544e;
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, Menlo, Monaco, Consolas, monospace;
 
@@ -168,6 +178,12 @@ button:not(:disabled) {
   --color-chrome-deep: var(--chrome-deep);
   --color-hover-tint: var(--hover-tint);
   --color-ok: var(--ok);
+  --color-finding-bg: var(--finding-bg);
+  --color-finding-border: var(--finding-border);
+  --color-finding-badge: var(--finding-badge);
+  --color-finding-badge-text: var(--finding-badge-text);
+  --color-finding-link: var(--finding-link);
+  --color-rail-badge: var(--rail-badge);
   --color-weapon-foil-fill: var(--weapon-foil-fill);
   --color-weapon-foil-ink: var(--weapon-foil-ink);
   --color-weapon-foil-edge: var(--weapon-foil-edge);
