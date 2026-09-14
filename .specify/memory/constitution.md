@@ -70,7 +70,7 @@ checkable work), and `research.md` when decisions need their reasoning recorded.
 
 ## Git Ownership
 
-**The user owns what lands.** No agent, subagent, or skill step runs `git push`,
+**The user owns what merges into `main`.** No agent, subagent, or skill step runs `git push`,
 `merge`, `rebase`, `reset --hard`, or branch deletion, and none makes the commit
 that closes a feature.
 
@@ -87,31 +87,32 @@ Each feature picks one flow and names it in its `plan.md`:
 
 | Flow | Subagents commit | The user's `commit-with-costs` runs on |
 |---|---|---|
-| Worktree | yes, on the worktree branch | the merge commit that lands the branch in `main` |
+| Worktree | yes, on the worktree branch | the merge commit that merges the branch into `main` |
 | Root | no | each `tasks.md` checkpoint |
 
-The two do not mix within one feature. Branches land in `main` by true merge,
-never squash – the full worktree commit history is part of the record. The
+The two do not mix within one feature. Every branch merges into `main` as a
+true merge, never a squash – the full worktree commit history is part of the
+record. The
 user runs `git merge --no-ff --no-commit <branch>` and then `commit-with-costs`
 completes the pending merge, so the cost trailers ride the merge commit while
 every branch commit survives.
 
-### The merge is gated, not just the branch
+### The merge is checked too, not just the branch
 
-Every feature's final gate runs on its own branch, which proves the branch
-agrees with itself and proves nothing about the tree it lands in. **Before the
+Every feature's final check runs on its own branch, which proves the branch
+agrees with itself and proves nothing about the tree it merges into. Before the
 pending merge is committed, the merged working tree runs `tsc -b`, `lint`, and
-the full test suite.** A red merge belongs to the session making it, is fixed
+the full test suite. A red merge belongs to the session making it, is fixed
 before the merge commit is written, and the repair is named in that commit's
 message.
 
-Two branches that each pass their own gate can still merge red, because a test
+Two branches that each pass their own checks can still merge red, because a test
 is written against the behavior of the tree it was written in. A fixture that
 borrows a condition from elsewhere in the codebase – a preset that fails, a
 count that happens to be zero, a value another feature is fixing – silently
 depends on that condition surviving. The branch that removes it never runs the
-test, and the branch that holds the test never sees it removed. Neither gate can
-catch it and the merge is the first moment both halves exist.
+test, and the branch that holds the test never sees it removed. Neither
+branch's check catches it, and the merge is the first moment both halves exist.
 
 A handoff predicting the collision is not a check. When a session records that
 another feature will invalidate something it relies on, the prediction is
@@ -152,7 +153,7 @@ session later against a halting hook.
 ## Governance
 
 This constitution governs every feature under `specs/`. Evaluate `plan.md`'s
-Constitution Check gate against these principles before design work and again
+Constitution Check against these principles before design work and again
 after it. Record any violation in that plan's Complexity Tracking table with the
 simpler alternative that was rejected and why.
 
@@ -182,8 +183,8 @@ cover.
   session that re-plans mid-implementation halts and hands off rather than
   building against its own revision.
 
-- 1.6.0 (2026-08-31): the merge is gated, not just the branch. §Git Ownership
-  gains a post-merge gate – the merged tree runs `tsc -b`, `lint`, and the full
+- 1.6.0 (2026-08-31): the merge is checked too, not just the branch. §Git Ownership
+  gains a post-merge check – the merged tree runs `tsc -b`, `lint`, and the full
   suite before the pending merge commit is written, and a red merge is the
   merging session's to fix. Drawn from 004×008: both branches closed green and
   their merge was red, because two US3 scorecard tests used "preset B2 schedules
