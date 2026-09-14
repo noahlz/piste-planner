@@ -40,6 +40,7 @@ import type {
   RefRequirementsByDay,
   RefDemandByDay,
   StripAllocation,
+  PinnedPlacement,
 } from './types.ts'
 import {
   createGlobalState,
@@ -196,9 +197,14 @@ const PER_EVENT_ERROR_RULES: ReadonlySet<string> = new Set([
   'video-r16-strip-shortfall',
 ])
 
+/** Shared empties, so the no-pins path allocates nothing new (013 FR-058). */
+const NO_PINS: readonly PinnedPlacement[] = Object.freeze([])
+const NO_PINNED_IDS: ReadonlySet<string> = new Set<string>()
+
 export function scheduleAllConcurrent(
   competitions: Competition[],
   config: TournamentConfig,
+  pinned: readonly PinnedPlacement[] = NO_PINS,
 ): ScheduleAllResult {
   const state = createGlobalState(config)
 
@@ -265,9 +271,18 @@ export function scheduleAllConcurrent(
     })
   }
 
+  // A pin naming a competition this run is not scheduling — one the validation
+  // pass above excluded, or one that was never in the set — is dropped. Day
+  // range is the caller's to enforce (research D1).
+  let activePins = pinned
+  if (pinned.length > 0) {
+    const remainingIds = new Set(remaining.map(c => c.id))
+    activePins = pinned.filter(p => remainingIds.has(p.competition_id))
+  }
+
   // Day assignment via DSatur graph coloring.
   const graph = buildConstraintGraph(remaining)
-  const { dayMap, relaxations, violations } = assignDaysByColoring(graph, remaining, config)
+  const { dayMap, relaxations, violations } = assignDaysByColoring(graph, remaining, config, activePins)
 
   // Build per-event state & phase nodes.
   const events = buildEventStates(remaining, dayMap, config)
@@ -275,8 +290,18 @@ export function scheduleAllConcurrent(
   // Wire cross-event dependency edges (indv→team, Vet sibling order).
   applyCrossEventEdges(events, config)
 
+  // Pinned events claim their strip-time before the loop opens, at the day and
+  // start the caller fixed, and are then kept out of the loop's seed so nothing
+  // can defer, retry or move them (013 FR-054–FR-057, research D1).
+  const pinnedIds = activePins.length > 0
+    ? new Set(activePins.map(p => p.competition_id))
+    : NO_PINNED_IDS
+  if (activePins.length > 0) {
+    preclaimPinnedEvents(activePins, events, state, config)
+  }
+
   // Run the priority-queue loop.
-  runConcurrentLoop(events, state, config)
+  runConcurrentLoop(events, state, config, pinnedIds)
 
   // Materialize successful events into state.schedule. Already done inside the
   // loop after each event's terminal phase succeeds — see `commitEventResult`.
@@ -684,6 +709,106 @@ function vetAgeWeight(g: VetAgeGroup): number {
 }
 
 // ──────────────────────────────────────────────
+// Pinned events (013 US6)
+// ──────────────────────────────────────────────
+
+/**
+ * Claims strip-time for every pinned event before the loop opens, at exactly
+ * the day and start the caller fixed (013 FR-054–FR-057, research D1).
+ *
+ * **Bounded before entry** (constitution IV): the pin list is sorted once, and
+ * the pass then makes exactly one `tryAllocate` call per phase node per pin —
+ * `Σ event.phases.length` over the pinned events, a number fixed before the
+ * first iteration. There is no defer, no retry and no second pass, so a pin
+ * that cannot claim strips still terminates the walk.
+ *
+ * A phase that finds no free strips keeps its time anyway: the pin's geometry
+ * is the caller's (`derive.ts` draws the block from `strip_count`), so a
+ * narrower or later claim would describe a block the caller does not draw. The
+ * phase claims all or nothing, and the miss is reported as one WARN.
+ */
+function preclaimPinnedEvents(
+  pinned: readonly PinnedPlacement[],
+  events: EventState[],
+  state: GlobalState,
+  config: TournamentConfig,
+): void {
+  // Sorted once, by (day, start_time, id), so two pins contending for the same
+  // strips always resolve the same way (research D1, determinism).
+  const ordered = [...pinned].sort(
+    (a, b) =>
+      a.day - b.day ||
+      a.start_time - b.start_time ||
+      a.competition_id.localeCompare(b.competition_id),
+  )
+
+  for (const pin of ordered) {
+    const event = findEventState(events, pin.competition_id)
+    if (event === null) continue
+
+    let prev: PhaseNode | null = null
+    for (const node of event.phases) {
+      if (prev === null) {
+        // The pinned start, unsnapped — the caller already put it on a slot
+        // boundary, and snapping here would move the pin.
+        node.ready_time = pin.start_time
+      } else {
+        // The loop's own successor rule (`runConcurrentLoop`, the 'ok' branch).
+        let readyTime = snapToSlot(prev.end_time + config.ADMIN_GAP_MINS)
+        if (prev.kind === PhaseKind.FLIGHT_A) {
+          readyTime = Math.max(
+            readyTime,
+            snapToSlot(prev.end_time + config.FLIGHT_BUFFER_MINS),
+          )
+        }
+        node.ready_time = readyTime
+      }
+
+      // The pool ask is the pin's own strip budget, split across flights the
+      // way `derive.ts`'s `grantedStrips` splits it, so the engine and the
+      // caller's geometry agree on how wide the block is. DE nodes keep the
+      // counts `buildPhaseNodes` gave them.
+      if (node.kind === PhaseKind.POOLS) {
+        node.desired_strip_count = Math.min(node.desired_strip_count, pin.strip_count)
+      } else if (node.kind === PhaseKind.FLIGHT_A) {
+        node.desired_strip_count = Math.min(
+          node.desired_strip_count,
+          Math.ceil(pin.strip_count / 2),
+        )
+      } else if (node.kind === PhaseKind.FLIGHT_B) {
+        node.desired_strip_count = Math.min(
+          node.desired_strip_count,
+          Math.floor(pin.strip_count / 2),
+        )
+      }
+
+      const allocated = tryAllocate(node, event, state, config)
+      if (allocated.outcome !== 'ok') {
+        // Nothing claimed, but the phase still happened as far as the result is
+        // concerned: same start, same duration, same strip count it asked for.
+        const cappedCount = cappedStripCount(node, event, config)
+        node.state = PhaseState.RUNNING
+        node.end_time = node.ready_time + computePhaseDuration(node, cappedCount, event)
+        onPhaseAllocated(node, event, cappedCount, state, config)
+        state.bottlenecks.push({
+          competition_id: pin.competition_id,
+          phase: node.phase_label,
+          cause: BottleneckCause.PINNED_UNCLAIMED,
+          severity: BottleneckSeverity.WARN,
+          delay_mins: 0,
+          message: `${pin.competition_id} ${node.phase_label}: pinned phase could not claim strips at its time`,
+          attempt_id: 1,
+        })
+      }
+      prev = node
+    }
+
+    // Recorded whatever happened — a pin is never deferred, retried or dropped.
+    commitEventResult(event, state, config)
+  }
+}
+
+// ──────────────────────────────────────────────
 // Main loop
 // ──────────────────────────────────────────────
 
@@ -691,13 +816,20 @@ function runConcurrentLoop(
   events: EventState[],
   state: GlobalState,
   config: TournamentConfig,
+  pinnedIds: ReadonlySet<string> = NO_PINNED_IDS,
 ): void {
   // Seed the ready queue with each event's first phase node. Initial
   // ready_time = max(dayStart, earliest_start). Cross-event predecessors are
   // resolved lazily inside the loop (the predecessor may not be RUNNING yet
   // when we seed).
+  //
+  // A pinned event is already committed by `preclaimPinnedEvents`, so none of
+  // its nodes enters `ready` — which is what keeps `handlePhaseFailure`, the
+  // defer bump and the attempt-2 retry from ever seeing a pin. An empty
+  // `pinnedIds` leaves the seed exactly as it was (FR-058).
   const ready: PhaseNode[] = []
   for (const event of events) {
+    if (pinnedIds.has(event.competition.id)) continue
     const first = event.phases[0]
     first.ready_time = Math.max(
       dayStart(event.assigned_day, config),
@@ -942,17 +1074,16 @@ type AllocateOutcome =
  * `next_ready_time`. On an unrecoverable miss (no slot before dayHardEnd)
  * returns `fail`.
  */
-function tryAllocate(
+/**
+ * The strip count a phase node actually gets: its ask, held down by the
+ * cap its kind answers to, never below 1. Extracted from `tryAllocate` so the
+ * pre-claim pass can compute the same number for a phase that claimed nothing.
+ */
+function cappedStripCount(
   node: PhaseNode,
   event: EventState,
-  state: GlobalState,
   config: TournamentConfig,
-): AllocateOutcome {
-  const day = event.assigned_day
-  // Day-window cap is the tighter of dayEnd and the event's latest_end constraint.
-  const dayHardEnd = Math.min(dayEnd(day, config), event.competition.latest_end)
-
-  // Strip cap.
+): number {
   const cap =
     node.cap_kind === 'POOL'
       ? computeStripCap(
@@ -965,7 +1096,21 @@ function tryAllocate(
           config.max_de_strip_pct,
           event.competition.max_de_strip_pct_override,
         )
-  const cappedCount = Math.max(1, Math.min(node.desired_strip_count, cap))
+  return Math.max(1, Math.min(node.desired_strip_count, cap))
+}
+
+function tryAllocate(
+  node: PhaseNode,
+  event: EventState,
+  state: GlobalState,
+  config: TournamentConfig,
+): AllocateOutcome {
+  const day = event.assigned_day
+  // Day-window cap is the tighter of dayEnd and the event's latest_end constraint.
+  const dayHardEnd = Math.min(dayEnd(day, config), event.competition.latest_end)
+
+  // Strip cap.
+  const cappedCount = cappedStripCount(node, event, config)
 
   // Duration depends on phase kind.
   const duration = computePhaseDuration(node, cappedCount, event)

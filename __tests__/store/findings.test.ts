@@ -543,3 +543,71 @@ describe('selectFindings — severity order (contract §1.6)', () => {
     expect(Math.max(...blockingIndices)).toBeLessThan(Math.min(...nonBlockingIndices))
   })
 })
+
+/**
+ * 013 T033 (phase6-contract.md §9, FR-054-FR-061) — a pinned collision must
+ * survive `runScheduleAll`. Today `runScheduleAll` (`runActions.ts:34`) calls
+ * the two-argument `scheduleAll` and the one-argument `setPlacementsFromAuto`,
+ * so every pin is dropped and every placement is rewritten by the ordinary
+ * auto-scheduler (§10's predicted reason for this dispatch). Once T034 wires
+ * `buildPinnedPlacements` and the `keep` set through, both events here are
+ * pinned, so neither reaches the ordinary scheduling loop at all — the engine
+ * preclaims each one exactly where it was pinned (§6) and
+ * `setPlacementsFromAuto(placements, pinnedIds)` carries both placements back
+ * verbatim (§9.2), reproducing the same collision this case measures below
+ * against `state.placements` alone, before any run.
+ */
+describe('selectFindings — a pinned collision survives Auto-assign, naming the second pin (013 T033, phase6-contract §9)', () => {
+  it('keeps both pins in place after a run and flags only the greater-id pin as Unplaced', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    const s = useStore.getState()
+    s.setTournamentType('NAC')
+    s.setDays(1)
+    s.setStrips(3)
+    s.setVideoStrips(0)
+    s.selectCompetitions(['JR-M-EPEE-IND', 'JR-W-EPEE-IND'])
+    // [M] measured (throwaway scratch script, not predicted): computePoolStructure
+    // (pools.ts:33) gives n_pools = 2 for both 10 and 14 fencers. The pool cap
+    // (buildConfig.ts:109, 0.80 of strips_total) floors 3 strips to 2, so each
+    // event's granted pool_strip_count (derive.ts's grantedStrips) is 2 — pinning
+    // both to the same day and start puts 2 + 2 = 4 strips against 3 physical
+    // ones, a real collision rather than a shared minute that happens to fit.
+    // The two fencer counts (10 vs 14) are close enough to share the same pool
+    // cap but different enough that the two events' DE blocks land clear of each
+    // other (measured 590-658 vs 680-890), so only the Pools phase collides.
+    s.updateCompetition('JR-M-EPEE-IND', { fencer_count: 10 })
+    s.updateCompetition('JR-W-EPEE-IND', { fencer_count: 14 })
+    s.setDeModeOverride(DeMode.SINGLE_STAGE)
+    s.setPlacementsFromAuto({
+      'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 3 }),
+      'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 3 }),
+    })
+    s.setPinned('JR-M-EPEE-IND', true)
+    s.setPinned('JR-W-EPEE-IND', true)
+
+    runScheduleAll()
+    const state = useStore.getState()
+
+    const mPlacement = state.placements['JR-M-EPEE-IND']
+    const wPlacement = state.placements['JR-W-EPEE-IND']
+    expect(mPlacement, 'expected JR-M-EPEE-IND to still have a placement after the run').toBeDefined()
+    expect(mPlacement?.pinned).toBe(true)
+    expect(mPlacement?.day).toBe(0)
+    expect(mPlacement?.start_time).toBe(480)
+    expect(wPlacement, 'expected JR-W-EPEE-IND to still have a placement after the run').toBeDefined()
+    expect(wPlacement?.pinned).toBe(true)
+    expect(wPlacement?.day).toBe(0)
+    expect(wPlacement?.start_time).toBe(480)
+
+    const rows = selectFindings(state)
+    const unplacedRows = rows.filter((r) => r.severity === 'Unplaced')
+    // The packer's own tie order — day, then start minute, then competition id
+    // (lanes.ts:84-89) — gives the lower id (JR-M-EPEE-IND) the strip run first,
+    // so the greater id (JR-W-EPEE-IND) is the one left over.
+    expect(unplacedRows).toHaveLength(1)
+    expect(unplacedRows[0]?.target).toBe('JR-W-EPEE-IND')
+    expect(
+      rows.some((r) => r.severity === 'Unplaced' && r.target === 'JR-M-EPEE-IND'),
+    ).toBe(false)
+  })
+})

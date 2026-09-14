@@ -35,7 +35,7 @@
  *   - Graph coloring concepts: https://www.youtube.com/watch?v=h9wxtqoa1jY
  */
 
-import type { Competition, TournamentConfig } from './types.ts'
+import type { Competition, TournamentConfig, PinnedPlacement } from './types.ts'
 import { Category, EventType, VetAgeGroup } from './types.ts'
 import { saberPileupPenalty } from './dayAssignment.ts'
 import type { ConstraintGraph } from './constraintGraph.ts'
@@ -440,6 +440,12 @@ export type HardEdgeViolation = { id: string; targetId: string }
  * When `loadBalance` is true, `colorPenalty` adds per-event fullness costs so
  * events spread evenly across used days. When false, the algorithm minimizes
  * chromatic number without caring about balance.
+ *
+ * `seed` fixes colours the caller has already decided — the pinned events
+ * (013 research D1). Seeded ids start coloured and never enter `uncolored`,
+ * so saturation, blocked colours, the Vet co-day rule and the soft penalties
+ * all see them as already-coloured neighbours. An empty seed leaves the loop
+ * exactly as it was (FR-058).
  */
 function dsaturLoop(
   graph: ConstraintGraph,
@@ -450,17 +456,22 @@ function dsaturLoop(
   loadBalance: boolean,
   stripHoursMap: Map<string, number>,
   dayCapacity: number,
+  seed: ReadonlyMap<string, number>,
 ): {
   coloring: Map<string, number>
   relaxations: Map<string, number>
   violations: HardEdgeViolation[]
 } {
-  const coloring = new Map<string, number>()
+  const coloring = new Map<string, number>(seed)
   const relaxations = new Map<string, number>()
   const violations: HardEdgeViolation[] = []
 
-  // All competition IDs that need coloring
-  const uncolored = new Set<string>(competitions.map(c => c.id))
+  // All competition IDs that need coloring. A seeded id is already coloured.
+  const uncolored = new Set<string>(
+    seed.size > 0
+      ? competitions.filter(c => !seed.has(c.id)).map(c => c.id)
+      : competitions.map(c => c.id),
+  )
 
   // Max iterations = number of competitions (bounded, no infinite loop)
   const maxIter = competitions.length
@@ -633,6 +644,7 @@ export function assignDaysByColoring(
   graph: ConstraintGraph,
   competitions: Competition[],
   config: TournamentConfig,
+  pinned: readonly PinnedPlacement[] = [],
 ): {
   dayMap: Map<string, number>
   relaxations: Map<string, number>
@@ -664,11 +676,20 @@ export function assignDaysByColoring(
 
   const dayCapacity = config.strips_total * (config.DAY_LENGTH_MINS / 60)
 
+  // The pins, as a colouring both passes start from. Empty when there are no
+  // pins, which is what keeps the no-pins path identical (013 FR-058).
+  const seed = new Map<string, number>()
+  let maxPinnedDay = -1
+  for (const pin of pinned) {
+    seed.set(pin.competition_id, pin.day)
+    if (pin.day > maxPinnedDay) maxPinnedDay = pin.day
+  }
+
   // Phase 1: find minimum days (no load balancing). Passes stripHoursMap +
   // dayCapacity for signature uniformity but they're unused when loadBalance=false.
   const phase1 = dsaturLoop(
     graph, competitions, config.days_available, compMap, packingFootprint,
-    false, stripHoursMap, dayCapacity,
+    false, stripHoursMap, dayCapacity, seed,
   )
   const chromaticN = new Set(phase1.coloring.values()).size
 
@@ -682,18 +703,31 @@ export function assignDaysByColoring(
   const expansionCap = Math.min(config.days_available, MAX_EXPANDED_DAYS)
   const effectiveDays = Math.max(chromaticN, Math.min(capacityDays, expansionCap))
 
-  // Phase 2: rebalance with capacity-aware fill-ratio penalty.
+  // Phase 2: rebalance with capacity-aware fill-ratio penalty. A pin on day 3
+  // needs four colours to exist even when the packer would have used two, so
+  // with pins the pass runs at `max(effectiveDays, maxPinnedDay + 1)`.
+  const phase2Days = pinned.length > 0
+    ? Math.max(effectiveDays, maxPinnedDay + 1)
+    : effectiveDays
   const phase2 = dsaturLoop(
-    graph, competitions, effectiveDays, compMap, packingFootprint,
-    true, stripHoursMap, dayCapacity,
+    graph, competitions, phase2Days, compMap, packingFootprint,
+    true, stripHoursMap, dayCapacity, seed,
   )
 
-  // Compact day assignments to contiguous 0..k-1
-  const dayRemap = new Map<number, number>()
   const sortedUsed = [...new Set(phase2.coloring.values())].sort((a, b) => a - b)
-  for (let i = 0; i < sortedUsed.length; i++) dayRemap.set(sortedUsed[i], i)
-  const dayMap = new Map<string, number>()
-  for (const [id, day] of phase2.coloring) dayMap.set(id, dayRemap.get(day)!)
+  let dayMap: Map<string, number>
+  if (pinned.length > 0) {
+    // Compaction renumbers days, which would move a pin off the day the caller
+    // fixed it to — the one thing a pin must not do. The colouring stands as
+    // phase 2 produced it (research D1).
+    dayMap = new Map(phase2.coloring)
+  } else {
+    // Compact day assignments to contiguous 0..k-1
+    const dayRemap = new Map<number, number>()
+    for (let i = 0; i < sortedUsed.length; i++) dayRemap.set(sortedUsed[i], i)
+    dayMap = new Map<string, number>()
+    for (const [id, day] of phase2.coloring) dayMap.set(id, dayRemap.get(day)!)
+  }
 
   // Phase 1's coloring is discarded — only its chromatic number survives, and
   // it runs at `days_available` rather than `effectiveDays`, so its breaks

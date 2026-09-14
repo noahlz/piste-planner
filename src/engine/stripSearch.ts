@@ -33,7 +33,8 @@ import { scheduleAll } from './scheduler.ts'
 import { aggregateStripHours } from './capacity.ts'
 import { buildStrips } from './stripBudget.ts'
 import { suggestStripCount } from './analysis.ts'
-import type { Competition, TournamentConfig } from './types.ts'
+import { BottleneckCause } from './types.ts'
+import type { Competition, TournamentConfig, PinnedPlacement } from './types.ts'
 
 /** The inclusive bounds of one search, both necessary conditions on the answer. */
 export interface StripSearchRange {
@@ -47,7 +48,20 @@ export interface StripSearchRange {
 export interface StripCandidate {
   /** The strip count evaluated. */
   count: number
-  /** Schedule entries with a non-null `pool_start` — the app's own rule (`runActions.ts:28`). */
+  /**
+   * Schedule entries with a non-null `pool_start` — the app's own rule
+   * (`runActions.ts:28`) — **minus** every pinned competition carrying a
+   * `PINNED_UNCLAIMED` bottleneck at this count.
+   *
+   * A pin keeps its day and start whether or not it finds free strips, so its
+   * `pool_start` is non-null either way and the first rule alone cannot see a
+   * pinned board overflow. Worse, a pin that claims nothing consumes nothing,
+   * so counting it as placed makes a crowded board look *cheaper* than the
+   * same board with no pins on it. Research D1 asks this search for "the
+   * smallest count that places every event *around the pins* … without it the
+   * card could name a count at which the pinned board overflows", and a
+   * `PINNED_UNCLAIMED` warning is exactly that overflow.
+   */
   placed: number
   /**
    * Competitions inside `MIN_FENCERS`–`MAX_FENCERS`, the filter
@@ -92,11 +106,17 @@ export function stripSearchRange(
  * replaced, every other field held, so the search evaluates exactly the config
  * `buildTournamentConfig` would produce at that count. Neither argument is
  * mutated.
+ *
+ * `pinned` rides through to every candidate (013 research D1), so the answer is
+ * the smallest count that places every event *around the pins* — the count the
+ * organizer will be judged by once they apply it. Without it the card could
+ * name a count at which the pinned board overflows.
  */
 export function* scanStripCounts(
   competitions: Competition[],
   config: TournamentConfig,
   range: StripSearchRange,
+  pinned: readonly PinnedPlacement[] = [],
 ): Generator<StripCandidate, number | null, void> {
   // Written as `!(floor <= ceiling)` rather than `floor > ceiling` so a
   // non-finite bound fails here too. A backwards or NaN range is an arithmetic
@@ -122,8 +142,20 @@ export function* scanStripCounts(
       strips_total: count,
       strips: buildStrips(count, config.video_strips_total),
     }
-    const { schedule } = scheduleAll(competitions, candidateConfig)
-    const placed = Object.values(schedule).filter(r => r.pool_start !== null).length
+    const { schedule, bottlenecks } = scheduleAll(competitions, candidateConfig, pinned)
+    let placed = Object.values(schedule).filter(r => r.pool_start !== null).length
+    if (pinned.length > 0) {
+      // Guarded, so the no-pins path runs the same statements it did before
+      // this feature — with no pins the engine emits no `PINNED_UNCLAIMED` at
+      // all, so the guard changes no number, only which statements execute.
+      const overflowed = new Set<string>()
+      for (const b of bottlenecks) {
+        if (b.cause !== BottleneckCause.PINNED_UNCLAIMED) continue
+        if (schedule[b.competition_id]?.pool_start === null) continue
+        overflowed.add(b.competition_id)
+      }
+      placed -= overflowed.size
+    }
     const placesAll = placed === required
 
     yield { count, placed, required, placesAll }
@@ -145,11 +177,12 @@ export function* scanStripCounts(
 export function searchStripCount(
   competitions: Competition[],
   config: TournamentConfig,
+  pinned: readonly PinnedPlacement[] = [],
 ): number | null {
   const range = stripSearchRange(competitions, config)
   if (range === null) return null
 
-  const scan = scanStripCounts(competitions, config, range)
+  const scan = scanStripCounts(competitions, config, range, pinned)
   let step = scan.next()
   while (!step.done) step = scan.next()
   return step.value
