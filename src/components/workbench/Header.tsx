@@ -29,7 +29,7 @@ export function Header() {
   return (
     <header
       aria-label="Header"
-      className="flex h-11 shrink-0 items-center gap-3.5 border-b bg-chrome px-3.5 text-foreground"
+      className="print-hidden flex h-11 shrink-0 items-center gap-3.5 border-b bg-chrome px-3.5 text-foreground"
     >
       <div className="flex flex-none items-center gap-[9px]">
         <span className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg bg-primary text-[15px] font-bold text-primary-foreground">

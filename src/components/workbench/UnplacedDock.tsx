@@ -45,7 +45,7 @@ export function UnplacedDock() {
   return (
     <section
       aria-label="Unplaced events"
-      className="flex max-h-16 min-h-8 shrink-0 items-start gap-2.5 overflow-y-auto border-b-[1.5px] border-chrome-border bg-chrome px-3.5 py-[5px]"
+      className="print-hidden flex max-h-16 min-h-8 shrink-0 items-start gap-2.5 overflow-y-auto border-b-[1.5px] border-chrome-border bg-chrome px-3.5 py-[5px]"
     >
       <h2 className="shrink-0 text-[11px] font-semibold tracking-[.06em] whitespace-nowrap text-neutral-600 uppercase">
         Unplaced events

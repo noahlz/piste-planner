@@ -522,8 +522,13 @@ if (rowCount !== 12) throw new Error(`schedule table rendered ${rowCount} rows, 
 
 for (const b of poolBlocks) {
   const row = page.locator(`[data-schedule-row="${b.id}"]`)
-  const dayText = (await row.locator('[data-cell="day"]').textContent()) ?? ''
-  const rowDay = Number(dayText.match(/\d+/)?.[0]) - 1
+  // Day moved from a table column to the enclosing day section's heading
+  // (013 T036, phase7-contract.md §4) — read it off `data-day-section` on
+  // the section that contains this row, not a `day` cell.
+  const section = page.locator('section[data-day-section]', {
+    has: page.locator(`[data-schedule-row="${b.id}"]`),
+  })
+  const rowDay = Number(await section.getAttribute('data-day-section')) - 1
   const poolStartText = (await row.locator('[data-cell="poolStart"]').textContent())?.trim()
   const poolEndText = (await row.locator('[data-cell="poolEnd"]').textContent())?.trim()
   if (rowDay !== b.day) {

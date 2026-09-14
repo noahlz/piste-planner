@@ -180,6 +180,14 @@ function cellText(rowId: string, cell: string): string {
   return el.textContent ?? ''
 }
 
+/** The 0-based day a schedule row sits under, read off its enclosing day section. */
+function rowDay(rowId: string): number {
+  const row = document.querySelector(`[data-schedule-row="${rowId}"]`)
+  const section = row?.closest('[data-day-section]')
+  if (!section) throw new Error(`no day section for schedule row ${rowId}`)
+  return Number((section as HTMLElement).dataset.daySection) - 1
+}
+
 function tableRowIds(): string[] {
   return Array.from(document.querySelectorAll<HTMLElement>('[data-schedule-row]')).map(
     (el) => el.dataset.scheduleRow ?? '',
@@ -192,7 +200,7 @@ function tableTuples(): string[] {
     .map((id) =>
       tuple(
         id,
-        Number(cellText(id, 'day').replace(/\D+/g, '')) - 1,
+        rowDay(id),
         minutesFromClock(cellText(id, 'poolStart')),
         minutesFromClock(cellText(id, 'poolEnd')),
         minutesFromClock(cellText(id, 'deStart')),
@@ -349,7 +357,7 @@ describe('the matrix and the schedule table cannot disagree (FR-023)', () => {
     renderBothViews(derivedModel(SHAPES))
 
     expect(cellText('plain', 'competition')).toBe('plain')
-    expect(cellText('plain', 'day')).toBe('1')
+    expect(rowDay('plain')).toBe(0)
     expect(cellText('plain', 'poolStart')).toBe('8:00')
     expect(cellText('plain', 'poolEnd')).toBe('9:45')
     expect(cellText('plain', 'deStart')).toBe('10:15')

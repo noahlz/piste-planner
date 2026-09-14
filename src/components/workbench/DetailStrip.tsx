@@ -161,7 +161,7 @@ export function DetailStrip({
       data-collapsed={detailCollapsed ? 'true' : 'false'}
       {...factAttrs}
       className={cn(
-        'flex shrink-0 items-center gap-3.5 border-t-[1.5px] border-chrome-border bg-chrome-deep px-3',
+        'print-hidden flex shrink-0 items-center gap-3.5 border-t-[1.5px] border-chrome-border bg-chrome-deep px-3',
         detailCollapsed ? 'h-[30px]' : 'h-[58px]',
       )}
     >

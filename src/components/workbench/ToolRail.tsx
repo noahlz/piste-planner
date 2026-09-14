@@ -53,7 +53,7 @@ export function ToolRail({ panel, onSelect }: ToolRailProps) {
   return (
     <nav
       aria-label="Tool rail"
-      className="flex w-[62px] shrink-0 flex-col items-center gap-[7px] border-r-[1.5px] border-chrome-border bg-chrome py-[11px]"
+      className="print-hidden flex w-[62px] shrink-0 flex-col items-center gap-[7px] border-r-[1.5px] border-chrome-border bg-chrome py-[11px]"
     >
       {BUTTONS.map(({ id, icon: Icon }, index) => {
         const pressed = panel === id

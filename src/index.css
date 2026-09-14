@@ -222,3 +222,40 @@ button:not(:disabled) {
     @apply bg-background text-foreground;
   }
 }
+
+/* Print (FR-051, FR-052; phase7-contract.md §2). Chrome that has no place on
+   paper — header, docks, rail, panels, footer, the Print button itself — is
+   hidden outright rather than styled around. Each day section becomes its
+   own page; `:last-child` skips the trailing page break so N days print N
+   pages, not N+1. The wrappers that clip the center view to the viewport
+   (WorkbenchShell/CenterView) have to un-clip so a day's full table can flow
+   onto paper instead of being cut at screen height. All of this applies only
+   under `@media print` — on screen these classes are inert. */
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
+
+  .print-page {
+    break-after: page;
+  }
+
+  .print-page:last-child {
+    break-after: auto;
+  }
+
+  .print-unclip {
+    overflow: visible !important;
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex: none !important;
+  }
+
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+    background: #fff;
+  }
+}
