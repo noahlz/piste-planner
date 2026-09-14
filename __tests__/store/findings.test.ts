@@ -22,17 +22,19 @@ import { phaseDisplay } from '../../src/lib/blockLabels.ts'
  * `dismissals.test.ts`'s `findingIdentity` wrapper), keeping this file
  * tsc-clean ahead of the export.
  *
- * Two contract-required sub-cases are not written here, both confirmed by
- * research before this file was written, not assumed:
- * - §1.1's INFO → Note mapping: `src/engine/validation.ts` never constructs
- *   a `BottleneckSeverity.INFO` finding (grep confirms no such literal in
- *   the file) and a scan of every B1-B8 preset via `runScheduleAll` turned
- *   up no INFO-severity `validationErrors` row either. There is no real row
- *   to assert against, and the contract's own instruction is to drop the
- *   case rather than fabricate one.
- * - §2.2's "Note rows are undismissable" sub-case of dismissal filtering,
- *   for the same reason — no INFO/Note row exists on any fixture in this
- *   codebase to dismiss.
+ * Correction (013 T032 review follow-up): the paragraph this replaces claimed
+ * no INFO/Note row exists anywhere in this codebase and dropped both the
+ * §1.1/§1.2 INFO → Note mapping case and §2.2's "Note rows are undismissable"
+ * case on that basis. Half of that claim held and half did not:
+ * - `src/engine/validation.ts`'s `ValidationError` rows (§1.1) are indeed
+ *   always ERROR or WARN — `err`/`structural`/`notice`/`policy` never
+ *   construct `BottleneckSeverity.INFO` — so §1.1 alone has no INFO witness.
+ * - But `src/engine/analysis.ts`'s `Bottleneck` rows (§1.2) do: Pass 6 (cut
+ *   summary, `analysis.ts:245-258`) emits one `BottleneckSeverity.INFO`
+ *   warning per cut-enabled competition, unconditionally. `threeEventsOverlappingOnDayZero`
+ *   below is JUNIOR-category and cut-enabled by default, so it already raises
+ *   three of them — `analysis:CUT_SUMMARY:<id>:0` per competition. Both cases
+ *   are written below against that row rather than dropped.
  */
 
 beforeEach(() => {
@@ -111,6 +113,34 @@ function threeEventsOverlappingOnDayZero(): void {
     'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 1 }),
     'JR-W-EPEE-IND': makePlacement({ day: 1, start_time: 480, strip_count: 1 }),
     'JR-M-FOIL-IND': makePlacement({ day: 0, start_time: 500, strip_count: 1 }),
+  })
+}
+
+/**
+ * Two individual epee events, same fencer count, same day, same start
+ * minute and strip request, gender the only difference — for the late-finish
+ * tie-break (contract §1.4, `derived.ts:573-579`). Pool/DE duration is a pure
+ * function of weapon, category and fencer count, not gender, so both events'
+ * phases land on identical minutes: measured (throwaway script, not
+ * predicted) at pools 480-704 (1 strip each) and DE 735-769 (4 strips each).
+ * 8 strips covers the DE phase's simultaneous demand (4 + 4) without either
+ * event overflowing.
+ */
+function tiedEpeeEventsOnDayZero(): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(1)
+  s.setStrips(8)
+  s.setVideoStrips(0)
+  s.selectCompetitions(['JR-M-EPEE-IND', 'JR-W-EPEE-IND'])
+  for (const id of ['JR-M-EPEE-IND', 'JR-W-EPEE-IND']) {
+    s.updateCompetition(id, { fencer_count: 8 })
+  }
+  s.setDeModeOverride(DeMode.SINGLE_STAGE)
+  s.setPlacementsFromAuto({
+    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 1 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 1 }),
   })
 }
 
@@ -260,6 +290,22 @@ describe('selectFindings — bottleneck ids disambiguate duplicate cause+competi
   })
 })
 
+describe('selectFindings — INFO bottleneck maps to a Note row (contract §1.2, corrected header comment above)', () => {
+  it('reads the cut-summary INFO warning as a Note row at the analysis:CUT_SUMMARY id', () => {
+    threeEventsOverlappingOnDayZero()
+    const state = useStore.getState()
+    const warnings = selectDerivedFindings(state).analysis.warnings
+    const cutSummaries = warnings.filter((w) => w.cause === 'CUT_SUMMARY')
+    expect(cutSummaries.length).toBe(3)
+    expect(cutSummaries.every((w) => w.severity === 'INFO')).toBe(true)
+
+    const rows = selectFindings(state)
+    const row = rows.find((r) => r.id === 'analysis:CUT_SUMMARY:JR-M-EPEE-IND:0')
+    expect(row).toBeDefined()
+    expect(row?.severity).toBe('Note')
+  })
+})
+
 describe('selectFindings — Unplaced rows from lane overflow (contract §1.3)', () => {
   it('emits one Unplaced row per overflowing block, naming the strip count from the block itself', () => {
     threeEventsOverlappingOnDayZero()
@@ -350,18 +396,60 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
   })
 })
 
+describe('selectFindings — late finish tie-break picks the lower competition id (contract §1.4, derived.ts:573-579)', () => {
+  it('names JR-M-EPEE-IND over JR-W-EPEE-IND when both blocks reach the same finish', () => {
+    tiedEpeeEventsOnDayZero()
+    const preState = useStore.getState()
+    const preSchedule = selectDerivedSchedule(preState)
+    const preBlocks = assignStripLanes(preSchedule.events, preState.strips_total)
+    const day0Blocks = preBlocks.filter((b) => b.day === 0)
+    const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
+
+    // Confirm the tie actually exists before trusting the target assertion
+    // below — both events' blocks must reach the measured finish, and
+    // neither may have overflowed (an overflowing block is drawn at strip 0
+    // regardless of its real timing, which would make this fixture prove
+    // nothing about the tie-break itself).
+    const mBlock = day0Blocks.find((b) => b.competitionId === 'JR-M-EPEE-IND' && b.endMinutes === finish)
+    const wBlock = day0Blocks.find((b) => b.competitionId === 'JR-W-EPEE-IND' && b.endMinutes === finish)
+    expect(mBlock, 'expected JR-M-EPEE-IND to reach the measured finish').toBeDefined()
+    expect(wBlock, 'expected JR-W-EPEE-IND to reach the measured finish too — the tie this case pins').toBeDefined()
+    expect(mBlock?.overflow).toBe(false)
+    expect(wBlock?.overflow).toBe(false)
+
+    useStore.getState().updateDayConfig(0, { day_end_time: finish + 20 })
+    const state = useStore.getState()
+
+    const rows = selectFindings(state)
+    const row = rows.find((r) => r.id === 'late-finish:day:0')
+    expect(row, 'expected a late-finish row once the day is shortened past the tied finish').toBeDefined()
+    expect(row?.target).toBe('JR-M-EPEE-IND')
+  })
+})
+
 describe('selectFindings — late finish overrun via a hand move, Blocking count unchanged (FR-025)', () => {
   it('reports minutes past close after a move pushes the finish beyond it, without adding a Blocking row', () => {
     threeEventsOverlappingOnDayZero()
+    // A real Blocking witness (013 T032 review follow-up): STAGED de mode
+    // plus the fixture's default video_strips_total of 0 trips
+    // video-r16-strip-shortfall (validation.ts, structural/ERROR) for every
+    // JUNIOR competition, whose REQUIRED video policy needs R16 video strips
+    // that do not exist. Measured (throwaway script, not predicted) to leave
+    // placements and lanes intact — 6 blocks still drawn — unlike
+    // strips_total = 0, which empties the lanes and would prove nothing
+    // about a move happening "without adding a Blocking row".
+    useStore.getState().setDeModeOverride(DeMode.STAGED)
     useStore.getState().updateDayConfig(0, { day_end_time: 810 })
     const beforeState = useStore.getState()
     const blockingBefore = selectFindings(beforeState).filter((r) => r.severity === 'Blocking').length
+    expect(blockingBefore, 'expected the video-r16-strip-shortfall rows to already be Blocking').toBeGreaterThanOrEqual(1)
 
     useStore.getState().updatePlacement('JR-M-EPEE-IND', { start_time: 600 })
     const state = useStore.getState()
 
     const schedule = selectDerivedSchedule(state)
     const blocks = assignStripLanes(schedule.events, state.strips_total)
+    expect(blocks.length, 'expected the move to leave the lanes populated, not emptied').toBeGreaterThan(0)
     const day0Blocks = blocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
     const close = state.dayConfigs[0].day_end_time
@@ -373,6 +461,7 @@ describe('selectFindings — late finish overrun via a hand move, Blocking count
     expect(row?.message).toContain(`${finish - close} minutes past`)
 
     const blockingAfter = rows.filter((r) => r.severity === 'Blocking').length
+    expect(blockingAfter).toBeGreaterThanOrEqual(1)
     expect(blockingAfter).toBe(blockingBefore)
   })
 })
@@ -421,6 +510,21 @@ describe('selectFindings — dismissal filtering (contract §2.2)', () => {
 
     const after = selectFindings(useStore.getState())
     expect(after.some((r) => r.id === blockingId)).toBe(true)
+    expect(useStore.getState().dismissedFindings).toEqual({})
+  })
+
+  it('leaves a Note row in the list and records no dismissal for it (guard no-op, corrected header comment above)', () => {
+    threeEventsOverlappingOnDayZero()
+    const noteId = 'analysis:CUT_SUMMARY:JR-M-EPEE-IND:0'
+    const before = selectFindings(useStore.getState())
+    const noteRow = before.find((r) => r.id === noteId)
+    expect(noteRow).toBeDefined()
+    expect(noteRow?.severity).toBe('Note')
+
+    useStore.getState().dismissFinding(noteId)
+
+    const after = selectFindings(useStore.getState())
+    expect(after.some((r) => r.id === noteId)).toBe(true)
     expect(useStore.getState().dismissedFindings).toEqual({})
   })
 })

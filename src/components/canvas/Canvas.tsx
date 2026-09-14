@@ -242,14 +242,24 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom }: Ca
   /** The event currently flashing from a jump, or null between jumps. */
   const [flashId, setFlashId] = useState<string | null>(null)
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** Nonce 0 is the mount value, not a press — the first real jump is nonce 1. */
-  const skippedInitialJump = useRef(false)
+  /**
+   * The nonce this effect last acted on, seeded from the first render's value
+   * rather than a boolean flipped by the first call.
+   *
+   * StrictMode double-invokes an effect on mount — run, cleanup, run again —
+   * both calls closing over the same `jumpNonce`. A boolean skip flag is set
+   * true by the first call and stays true, so the second call falls through
+   * the guard and jumps on every mount where a competition is already
+   * selected (013 T032 follow-up). Seeding the ref to the mount's own nonce
+   * means both calls compare that nonce against itself and skip alike; only a
+   * later nonce that actually differs from what this ref last recorded runs
+   * the jump.
+   */
+  const lastHandledNonceRef = useRef(jumpNonce)
 
   useEffect(() => {
-    if (!skippedInitialJump.current) {
-      skippedInitialJump.current = true
-      return
-    }
+    if (jumpNonce === lastHandledNonceRef.current) return
+    lastHandledNonceRef.current = jumpNonce
 
     const scroller = scrollerRef.current
     const targetId = selectedCompetitionId

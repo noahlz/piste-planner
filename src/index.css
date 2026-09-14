@@ -76,6 +76,11 @@
   --finding-badge-text: #5a3f26;
   --finding-link: #8a423d;
   --rail-badge: #a8544e;
+  /** A jump's flash ring and glow (013 T032 follow-up, mockup lines
+   * 1020-1033 and 1325). The mockup's CONFLICT.line is the same hex as
+   * --rail-badge, so this reuses that token rather than restating the
+   * literal. */
+  --flash: var(--rail-badge);
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, Menlo, Monaco, Consolas, monospace;
 
@@ -184,6 +189,7 @@ button:not(:disabled) {
   --color-finding-badge-text: var(--finding-badge-text);
   --color-finding-link: var(--finding-link);
   --color-rail-badge: var(--rail-badge);
+  --color-flash: var(--flash);
   --color-weapon-foil-fill: var(--weapon-foil-fill);
   --color-weapon-foil-ink: var(--weapon-foil-ink);
   --color-weapon-foil-edge: var(--weapon-foil-edge);

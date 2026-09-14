@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
@@ -444,10 +445,38 @@ describe('Canvas jump (013 T030, contract §4.4)', () => {
 
   it('mounting with a nonzero nonce does not scroll', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    useStore.setState({ jumpNonce: 3 } as unknown as Partial<StoreState>)
+    // A real, drawn competition so an unguarded implementation has something
+    // to scroll to — the prior version of this case left
+    // selectedCompetitionId null, so no element could ever match and the
+    // assertion passed regardless of whether the guard worked.
+    const targetId = schedule.competitions[0].id
+    useStore.setState({
+      jumpNonce: 3,
+      selectedCompetitionId: targetId,
+    } as unknown as Partial<StoreState>)
 
     render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />)
 
     expect(scrollIntoViewMock).not.toHaveBeenCalled()
+  })
+
+  it('mounting under StrictMode with a nonzero nonce does not scroll or flash (013 T032 follow-up)', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    const targetId = schedule.competitions[0].id
+    useStore.setState({
+      jumpNonce: 3,
+      selectedCompetitionId: targetId,
+    } as unknown as Partial<StoreState>)
+
+    render(
+      <StrictMode>
+        <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} />
+      </StrictMode>,
+    )
+
+    expect(scrollIntoViewMock).not.toHaveBeenCalled()
+    for (const block of eventBlocks()) {
+      expect(block.dataset.flash).not.toBe('true')
+    }
   })
 })
