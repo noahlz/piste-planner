@@ -64,7 +64,7 @@ function RecomputeHost({ viewMode }: { viewMode: ViewMode }) {
         <EventsPanel />
       </div>
       <div data-testid="drawer">
-        {/* 013 T032: AnalysisOutput retired for FindingsPanel, reading the
+        {/* 013 T032: the analysis-output section retired for FindingsPanel, reading the
             unified findings list (contract §1) instead of raw validation
             errors/warnings. Same claim under test — a findings surface
             follows an edit immediately, with no Auto-assign run. */}

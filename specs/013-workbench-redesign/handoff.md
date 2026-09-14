@@ -295,6 +295,78 @@ proves `Strips 12–16` by arithmetic.
 Still open from phase 2: **finding 6** — no control returns `de_mode_override`
 to null. Phase 4 touched no Settings surface, so it is carried unchanged.
 
+### T030–T032 – phase 5, the unified findings list (FR-022 to FR-027, FR-060)
+
+Committed at `3b3e53504c`, review follow-up `10568db330`, four comment
+rewordings by the orchestrator in the bookkeeping commit. Both reviews ran on
+the first commit: `test-quality-reviewer` found one vacuous case and confirmed
+the two defects T031's implementer had already reported; `react-code-reviewer`
+found findings 17 and 18. The phase ran on a pinned contract again
+(`phase5-contract.md` in the session scratchpad) and the four red-test
+dispatches and the implementation agreed on first contact.
+
+What the list is: `selectFindings(state)` is one severity-ordered array of
+`Finding` rows (Blocking, Unplaced, Warning, Note) built from validation
+errors, bottleneck warnings, the lane packer's overflow blocks, out-of-range
+placements (FR-060) and a per-day late-finish check, with dismissed rows
+filtered out. The rail badge is its length, the Findings panel renders it, the
+day bands count it per day, the gutter flags read its targets, and Auto-assign
+disables on a Blocking row. `CenterView` commits the rows with the schedule so
+nothing on the canvas reads findings live (FR-042).
+
+15. **The INFO → Note map was written off on a false premise, and the
+    late-finish tie-break was pinned to the wrong rule** (T031's implementer,
+    confirmed by the test review). T030's `findings.test.ts` claimed no
+    INFO-severity finding exists anywhere and dropped the Note cases; that is
+    true of `ValidationError` only — `analysis.ts` emits `CUT_SUMMARY` at
+    INFO per cut-enabled competition, three Note rows on the fixture. The
+    same file picked the late-finish culprit by lane order where the contract
+    and `derived.ts` pick the lowest competition id on a tie. Both fixed at
+    `10568db330`: Note map and Note-undismissable cases against the
+    `CUT_SUMMARY` row, and a measured tie fixture (`JR-M-EPEE-IND` and
+    `JR-W-EPEE-IND` at 8 fencers both finish DE at 769 on day 0).
+16. **Late finish reads the day band's number, not the footer's** (decision).
+    `finish(d)` is the maximum block end over the day's lanes — the value the
+    band prints as "finishes HH:MM" — not `de_total_end`, which the footer's
+    tournament finish uses and which carries the unscheduled medal-bout tail.
+    A panel that warned about a time the grid does not show would be worse
+    than no panel (the mockup's own comment). Recorded here because
+    data-model §9 words `finish` as `de_total_end`; the implementation has
+    read block ends since T026.
+17. **The flash had no paint** (react-code-reviewer on `3b3e53504c`).
+    `Canvas` built the whole flash state and `Block` wrote it out as
+    `data-flash`, which nothing styled; the tests asserted the attribute and
+    passed. Fixed at `10568db330`: a `--flash` token (aliased to
+    `--rail-badge`, the mockup's `CONFLICT.line`) drawn as a ring-and-glow
+    sibling span the way the selection ring already is. No test for a colour
+    (T015a precedent).
+18. **The mount-skip guard broke under StrictMode** (react-code-reviewer). A
+    boolean "have I run" ref is flipped by StrictMode's first synthetic effect
+    call, so the second falls through and jumps on every mount where an event
+    is already selected — dev only, and the same hazard `App.tsx` already
+    guards for `bootstrap()`. Fixed at `10568db330` with a last-handled-nonce
+    ref initialised from the first render; a StrictMode test case pins it,
+    and the mount-skip case that was vacuous (it never seeded a selected
+    event) now seeds one.
+19. **Label helpers moved out of `components/`** (T031). `derived.ts` must
+    not import from `src/components/` (research D6 fixed the direction in
+    phase 0), so `competitionLabels.ts` moved wholesale to `src/lib/` and
+    `phaseDisplay`, `stripRangeLabel` and `stripAssignmentLabel` moved from
+    `CanvasTooltip.tsx` into `src/lib/blockLabels.ts` as one vocabulary,
+    retiring three `react-refresh/only-export-components` suppressions.
+20. **Carried finding 13 gets a partial answer.** "Show on grid" is a real
+    button, so a keyboard user can now reach a placed event's block through
+    the panel; the block itself is still `role="img"` and not operable. Owner
+    decision unchanged.
+
+Measured on `threeEventsOverlappingOnDayZero` (the phase's fixture): 10 rows —
+1 Unplaced, 6 Warning, 3 Note, 0 Blocking; the day summaries' `findings`
+column reads `[7, 3, 0]`. `daySummaries.test.ts`'s own fixture moved from the
+literals `[2, 2, 0]` to `[3, 3, 0]`, the rise being one `CUT_SUMMARY` row per
+event that the validation-only column never counted. FR-025's witness is now a
+real Blocking row (`video-r16-strip-shortfall` under a STAGED override with no
+video strips) that survives the hand move unchanged, no longer 0 → 0.
+
 ## Measurements
 
 | Where | Value | When |
@@ -327,3 +399,7 @@ to null. Phase 4 touched no Settings surface, so it is carried unchanged.
 | Unit suite at `5ea2ec5c1c` (selection, detail strip, AnalysisSlice deleted) | 73 files / 1683 tests, tsc and lint clean | T029 |
 | Unit suite at `be7e50dd0b` | 73 files / 1685 tests, tsc and lint clean | phase 4 checkpoint, verified twice |
 | `grep -rn "flightingSuggestion" src/ __tests__/ scripts/` | no output | phase 4 checkpoint (quickstart §2) |
+| Unit suite at `3b3e53504c` (findings list, panel, badge, jump) | 74 files / 1718 tests, tsc and lint clean | T032 |
+| Unit suite at `10568db330` (review follow-up) | 74 files / 1722 tests, tsc and lint clean; drift ledger and parity unchanged | phase 5 checkpoint, verified twice |
+| `threeEventsOverlappingOnDayZero` rows by severity | 1 Unplaced / 6 Warning / 3 Note / 0 Blocking; day findings `[7, 3, 0]` | T031 |
+| `grep -rn "AnalysisOutput" src/ __tests__/` | no output | phase 5 checkpoint (quickstart §2) |

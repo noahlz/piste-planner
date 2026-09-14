@@ -6,8 +6,8 @@ import * as derivedModule from '../../../../src/store/derived.ts'
 import { DeMode } from '../../../../src/engine/types.ts'
 import { makePlacement } from '../../../helpers/factories.ts'
 
-// 013 T030, re-targets __tests__/components/analysisOutput.test.tsx (deleted
-// in T032 alongside AnalysisOutput.tsx), contract §3. `FindingsPanel.tsx`
+// 013 T030, re-targets the retired analysis-output section's test (deleted
+// in T032 alongside its component), contract §3. `FindingsPanel.tsx`
 // does not exist yet (T032 writes it), so every case here fails on that
 // missing module. `selectFindings` (derived.ts, contract §1) does not exist
 // yet either; it is read through a `* as module` cast (dismissals.test.ts's

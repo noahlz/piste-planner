@@ -17,7 +17,7 @@ import type { ZoomState } from '../canvas/zoomLadder.ts'
  * Panel content by id (013 decision 1, now complete): every arm is its own
  * phase-2/5 panel component. `tournament` (T016), `strips` (T018), `events`
  * (T021) and `settings` (T022) shipped first; `findings` (T032) replaces the
- * retired collapsible rail's `AnalysisOutput` section with `FindingsPanel`,
+ * retired collapsible rail's analysis-output section with `FindingsPanel`,
  * reading the unified findings list (contract §1) rather than raw validation
  * errors and bottleneck warnings.
  *

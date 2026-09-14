@@ -23,7 +23,7 @@ const BADGE_CLASSES: Record<FindingSeverity, string> = {
 
 /**
  * The Findings inspector panel (013 T032, ui-contract.md §Findings, contract
- * §3, FR-022–FR-027, FR-060). Replaces `AnalysisOutput`: rather than two
+ * §3, FR-022–FR-027, FR-060). Replaces the retired analysis-output section: rather than two
  * grouped lists over raw validation errors and bottleneck warnings, one
  * `selectFindings` row per list item, whatever its source and severity
  * (contract §1) — Blocking, Unplaced, Warning and Note in that order.

@@ -976,7 +976,7 @@ scrolls and flashes, a badge on the rail, and `AnalysisOutput` deleted.
 blocking finding shows all three with the right badge, offers Show on grid for
 the two that name an event, and the jump reaches the block.
 
-- [ ] **T030** [US5] Red tests. `__tests__/store/findings.test.ts` for
+- [x] **T030** [US5] Red tests. `__tests__/store/findings.test.ts` for
   `selectFindings` (data-model §5): every row has `id`, `severity` in
   Blocking / Warning / Note / Unplaced, `where`, `day`, `message`, `target`; a
   `ValidationError` maps ERROR → Blocking, WARN → Warning, INFO → Note with
@@ -1006,8 +1006,15 @@ the two that name an event, and the jump reaches the block.
   `selectFindings`. `Header.test.tsx`'s Auto-assign case reads Blocking rows
   from `selectFindings`. Run: fail for want of the selector, the panel and the
   nonce
+  → 2026-09-14, four parallel red dispatches on disjoint files against a
+  pinned contract (session scratchpad `phase5-contract.md`), none committing;
+  committed with T032 at `3b3e53504c`. 31 new or rewritten cases, every one
+  red for its predicted reason. Two gaps the review caught and the follow-up
+  closed: the INFO → Note map went unasserted on a false premise (INFO exists
+  on `CUT_SUMMARY` bottlenecks, not on `ValidationError`s), and the
+  late-finish tie-break was pinned to lane order (handoff finding 15).
 
-- [ ] **T031** [US5] **(Opus)** The unified list ([research D6](./research.md),
+- [x] **T031** [US5] **(Opus)** The unified list ([research D6](./research.md),
   FR-022, FR-024 to FR-026). Add `selectFindings`, `FindingSeverity` as an
   `as const` object, and `LATE_FINISH_WINDOW_MINS = 45` (a UI constant, not
   an engine one) to `src/store/derived.ts`, reading the lane packer for
@@ -1015,8 +1022,17 @@ the two that name an event, and the jump reaches the block.
   (`src/store/store.ts:488`) to "a current row whose underlying severity is
   WARN". Re-point `selectDaySummaries.findings` at the list. Add `jumpNonce`
   and `jumpToCompetition` to the `UiSlice`. T030's store cases green
+  → 2026-09-14, committed with T032 at `3b3e53504c`. `selectAllFindings`
+  (unfiltered, `scheduleDeps`) under `selectFindings` (dismissals filtered,
+  `daySummaryDeps`); `dismissFinding` reads the unfiltered list and
+  early-returns on an already-dismissed id so a repeat press writes nothing.
+  Late finish reads the day band's block end, not `de_total_end` (finding 16).
+  `competitionLabel` and `phaseDisplay` moved to `src/lib/` so the store never
+  imports from `components/` (D6). `daySummariesFromBlocks` now takes
+  `Finding[]`; the interim live read it needed in `Canvas` broke FR-042's band
+  test until T032's committed prop, never in committed history.
 
-- [ ] **T032** [US5] The panel, the badge, the jump (FR-023, FR-027). Build
+- [x] **T032** [US5] The panel, the badge, the jump (FR-023, FR-027). Build
   `src/components/workbench/panels/FindingsPanel.tsx`, add the badge to
   `ToolRail.tsx`, make `Canvas.tsx` scroll the target into view and set
   `data-flash` on each `jumpNonce` change (a timer clears it, no loop), point
@@ -1026,9 +1042,22 @@ the two that name an event, and the jump reaches the block.
   `__tests__/components/analysisOutput.test.tsx`. T030 green. Run the
   quickstart §2 grep for `AnalysisOutput` over `src/` and `__tests__/`;
   nothing *(subagent commits)*
+  → 2026-09-14, `3b3e53504c`; review follow-up `10568db330`. `Canvas` gains a
+  committed `findingRows` prop (FR-042) for the gutter flags and the day
+  bands; the jump is a last-handled-nonce ref (the first boolean guard broke
+  under StrictMode's double-invoke, finding 18) with one `FLASH_MS = 900`
+  timer. Reviews found the flash had no paint (finding 17, fixed with a
+  `--flash` token) and a vacuous mount-skip test (fixed and given a StrictMode
+  sibling). Tokens added: `--finding-bg/-border/-badge/-badge-text/-link`,
+  `--rail-badge`, `--flash`. 73 files / 1685 → 74 / 1718 → 74 / 1722 after
+  the follow-up. Grep silent after the orchestrator reworded four comments.
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. Every finding has a
 severity, a where and a message, and the jump reaches the block.
+→ Met at `10568db330` plus the comment rewording: tsc and lint clean, 74 files
+/ 1722 tests, `grep -rn "AnalysisOutput" src/ __tests__/` silent, drift ledger
+and parity unchanged. Run by the follow-up implementer and again by the
+orchestrator.
 
 ---
 
