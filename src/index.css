@@ -252,6 +252,13 @@ button:not(:disabled) {
     flex: none !important;
   }
 
+  /* shadcn's Table wraps every <table> in an overflow-x-auto container
+     (ui/table.tsx) — the one clipping link inside a day section that the
+     wrapper classes above do not reach (T036 React review, finding 2). */
+  [data-slot="table-container"] {
+    overflow: visible !important;
+  }
+
   html,
   body {
     height: auto;
