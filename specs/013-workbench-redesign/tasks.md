@@ -1071,7 +1071,7 @@ seed, and **no B1–B8 count moves on the no-pins path**.
 start while the other eighteen are placed. The ledger with no pins is
 unmoved on every scenario.
 
-- [ ] **T033** [US6] Red tests ([contracts/engine-contract.md](./contracts/engine-contract.md)).
+- [x] **T033** [US6] Red tests ([contracts/engine-contract.md](./contracts/engine-contract.md)).
   `__tests__/engine/pinnedScheduling.test.ts` on B1 from
   `__tests__/helpers/scenarios.ts`, with `start_time` computed on the
   scheduler axis as `dayStart(day, config) + (clock start − that day's clock
@@ -1100,8 +1100,20 @@ unmoved on every scenario.
   count at which every event places around them, and one fewer does not.
   Run: (1)–(5) and (7) fail because the third argument is ignored and
   `PINNED_UNCLAIMED` does not exist, (6) passes already and stays
+  → 2026-09-14, four parallel Sonnet dispatches on disjoint files against a
+  pinned contract (session scratchpad `phase6-contract.md`), none committing;
+  committed with T034 at `29f95362f9`. 12 red / 32 green on first run. Two
+  prediction misses, not halts: cases (4) and (7) were green by construction
+  (pins copied from the no-pins result; determinism already held) and were
+  reshaped in the review follow-up `f072d754b5` to pins that diverge from the
+  natural placement, proven red by mutation. Case (5)'s "one WARN" met a
+  second, independent miss on the video round of 16 (4 + 4 video strips
+  against 7, measured) and now asserts the POOLS warning per phase (handoff
+  finding 21). The strip-search fixture's four pins asked 145 strips against
+  a 135 ceiling and could never have an answer; re-measured to two pins,
+  N = 83 (finding 22).
 
-- [ ] **T034** [US6] **(Opus)** **(drift)** Implement
+- [x] **T034** [US6] **(Opus)** **(drift)** Implement
   ([research D1](./research.md), FR-054 to FR-061). `PinnedPlacement` and
   `BottleneckCause.PINNED_UNCLAIMED` in `src/engine/types.ts:110`; the third
   parameter `pinned = []` on both `ScheduleAllResult` entry points
@@ -1119,8 +1131,18 @@ unmoved on every scenario.
   same list. Every new branch guarded on `pinned.length > 0`. T033 green.
   Ledger expected to show **nothing moved**; the commit carries the eight
   counts before and after *(subagent commits)*
+  → 2026-09-14, `29f95362f9`; review follow-up `f072d754b5`. Ledger before
+  and after 24/24/24/17/12/45/18/52, snapshot SHA-256 `5483c40c1349…` both
+  times, parity 17, **nothing moved**. Two decisions the contract did not
+  state, recorded in the commit and handoff findings 21–22: one
+  `PINNED_UNCLAIMED` WARN per phase node, and the strip search counts a pin
+  carrying that WARN as unplaced (without it four pins at one minute made
+  B1's answer fall 48 → 45). `cappedStripCount` extracted from `tryAllocate`
+  (pure); `setPlacementsFromAuto(placements, keep)` carries kept ids
+  verbatim; `buildPinnedPlacements` lives in `buildConfig.ts` (the one
+  bridge). 74 / 1722 → 76 / 1738 → 76 / 1739 after the follow-up.
 
-- [ ] **T035** [US6] **(Opus)** **(drift)** The ledger review (FR-058, FR-068,
+- [x] **T035** [US6] **(Opus)** **(drift)** The ledger review (FR-058, FR-068,
   SC-003). A second reader, not T034's implementer. Run the ledger and
   `appPathParity.test.ts`. Compare every B1–B8 scheduled count, ERROR count,
   WARN count and `stripRecommendation` against `drift-baseline.md`, and the
@@ -1130,9 +1152,20 @@ unmoved on every scenario.
   and every line is either explained in the commit message with the source
   line that produced it or is a halt. Append the after-table to
   `drift-baseline.md` §After phase 6 *(subagent commits)*
+  → 2026-09-14, `dc1a1b073b`, a second Opus reader on `29f95362f9`. Every
+  cell of the after-table equals the branch-point table, SHA equal, snapshot
+  diff against `71180db6e7` empty, parity 17. All six contract guarantees
+  cited to a line; the "not guaranteed" list neither contradicted nor
+  accidentally guaranteed. One defect found and fixed in `f072d754b5`:
+  `buildPinnedPlacements` admitted an id with no catalogue entry that
+  `buildCompetitions` drops (finding 23).
 
 **Checkpoint**: `tsc -b`, `lint` and the full suite green. Six pins hold, no
 ledger count moved, the diff is explained.
+→ Met at `f072d754b5`: tsc and lint clean, 76 files / 1739 tests, none
+skipped, ledger and parity 35 passed, SHA `5483c40c1349…` unchanged, no
+React or store import under `src/engine/`. Run by the follow-up implementer
+and again by the orchestrator.
 
 ---
 

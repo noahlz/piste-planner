@@ -367,6 +367,72 @@ event that the validation-only column never counted. FR-025's witness is now a
 real Blocking row (`video-r16-strip-shortfall` under a STAGED override with no
 video strips) that survives the hand move unchanged, no longer 0 → 0.
 
+### T033–T035 – phase 6, Auto-assign schedules around pins (FR-054 to FR-061)
+
+Committed at `29f95362f9` (T034, on branch `013-phase6-pins` cut from main
+`71180db6e7`), ledger review `dc1a1b073b` (T035), review follow-up
+`f072d754b5`. The one engine change of the feature and its only
+drift-bearing phase: **nothing moved** – B1–B8 scheduled 24/24/24/17/12/45/18/52
+before and after, snapshot SHA-256 `5483c40c1349…` unchanged, parity 17. The
+phase ran on a pinned contract again (`phase6-contract.md` in the session
+scratchpad) and the four red dispatches and the implementation agreed on
+first contact everywhere the contract spoke. T035 was a second Opus reader;
+`test-quality-reviewer` ran on the first commit and found one defect. No
+`.tsx` changed, so no React review.
+
+What shipped: `scheduleAll(competitions, config, pinned = [])` on both entry
+points, `PinnedPlacement` and `BottleneckCause.PINNED_UNCLAIMED`, the
+seeded DSatur passes with compaction skipped only when pins exist, the
+pre-claim pass (one `tryAllocate` per phase node per pin, in `(day, start,
+id)` order), the loop seed skipping pins, `stripSearch` threading pins,
+`buildPinnedPlacements` in `buildConfig.ts`, `setPlacementsFromAuto(placements,
+keep)` carrying pinned ids verbatim, and `runScheduleAll` returning
+`{ placed, unplaced }` over the unpinned events only.
+
+21. **One `PINNED_UNCLAIMED` warning per phase node, not per event**
+    (decision, T034). tasks.md T033 said "one WARN"; the engine contract's
+    item 4 says "naming the event and phase", which is per phase. Measured on
+    case 5's fixture (B1 at 48 strips, 7 video): the second pin misses its
+    pools **and** its video round of 16 – both Division 1 events need 4
+    video strips for R16, the windows overlap on 635–645, and 4 + 4 exceeds
+    7. One warning per event would have hidden the second fact. The test
+    asserts the pools warning specifically.
+22. **The strip search counts an unclaimed pin as unplaced** (decision,
+    T034). A pin keeps its `pool_start` whether or not it claimed strips, so
+    a `placed` rule of "non-null pool_start" made pins cost nothing: four
+    pins at one minute moved B1's answer from 48 down to 45. Research D1
+    wants "the smallest count that places every event around the pins",
+    so `scanStripCounts` now subtracts every pinned competition carrying a
+    `PINNED_UNCLAIMED` bottleneck, guarded on `pinned.length > 0`; the
+    ledger's `stripRecommendation` row is unmoved on all eight. The T033
+    fixture that exposed this asked 145 pool strips at one minute against a
+    135-strip ceiling and could never have an answer; re-measured to two
+    pins (45 + 38), N = 83 against the no-pins 48, and 82 loses the later
+    pin's pools.
+23. **`buildPinnedPlacements` admitted an id with no catalogue entry** that
+    `buildCompetitions` drops (T035's reader), so `attempted =
+    competitions − pins` could undercount. `selectCompetitions` and
+    `addCompetition` refuse unknown ids, but `deserializeState` checks the
+    per-competition shape and never catalogue membership, so a hand-edited
+    save is a real path. Fixed at `f072d754b5` with the same `findCompetition`
+    existence check, and a test that reaches it through `setState`.
+24. **Two red tests were green by construction** (T033, confirmed by the
+    test review's mutation). Case 4 copied its pins from the no-pins result
+    and case 7 relied on determinism the ledger already proves. Both were
+    reshaped in `f072d754b5` to pins that diverge from the natural
+    placement (19 of 24 B1 ids differ between the 48- and 80-strip boards)
+    and are red when the third argument is discarded. Recorded because
+    tasks.md predicted (7) red, and the contract predicted both.
+25. **Not built in this phase, still open**: `Canvas.tsx` reads
+    `placements` live for the pin badge (finding 11's remainder, FR-042) –
+    no phase 6 task named it; finding 6 (no control returns
+    `de_mode_override` to null) and finding 13 (a placed block is
+    mouse-only) are unchanged owner decisions. The engine's `Bottleneck`
+    for a pin collision is invisible to the UI, which reads the lane
+    packer's Unplaced row instead (FR-059) – the two surfaces agree on the
+    fixture in finding 22 and nothing checks that they agree in general
+    (T042 records it).
+
 ## Measurements
 
 | Where | Value | When |
@@ -403,3 +469,9 @@ video strips) that survives the hand move unchanged, no longer 0 → 0.
 | Unit suite at `10568db330` (review follow-up) | 74 files / 1722 tests, tsc and lint clean; drift ledger and parity unchanged | phase 5 checkpoint, verified twice |
 | `threeEventsOverlappingOnDayZero` rows by severity | 1 Unplaced / 6 Warning / 3 Note / 0 Blocking; day findings `[7, 3, 0]` | T031 |
 | `grep -rn "AnalysisOutput" src/ __tests__/` | no output | phase 5 checkpoint (quickstart §2) |
+| Drift ledger B1–B8 scheduled, before and after the engine change | 24/24/24/17/12/45/18/52 both; SHA `5483c40c1349…` both; parity 17 | T034 `29f95362f9`, T035 `dc1a1b073b` |
+| B1 strip search with four pins at one minute, before finding 22's rule | 45 (below the no-pins 48) | T034 |
+| B1 strip search with two Division 1 pins at day 0 offset 300 | 83 (82 loses the later pin's pools) | T034, `stripSearch.test.ts` |
+| Case 5 fixture, B1 at 48 strips / 7 video: second pin's unclaimed phases | POOLS and DE_ROUND_OF_16 | T034, finding 21 |
+| Unit suite at `29f95362f9` | 76 files / 1738 tests, tsc and lint clean | T034 |
+| Unit suite at `f072d754b5` (review follow-up) | 76 files / 1739 tests, tsc and lint clean; ledger and parity unchanged | phase 6 checkpoint, verified twice |
