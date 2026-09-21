@@ -279,7 +279,7 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
     vi.useRealTimers()
   })
 
-  /** The row's cells in table order: id, day, pool start, pool end, DE start, DE end, strips. */
+  /** The row's cells in table order: id, pool start, pool end, DE start, DE end, strips. */
   function rowCells(id: string): string[] {
     const row = screen.getByText(id).closest('tr')
     if (!row) throw new Error(`no <tr> found for ${id}`)
@@ -300,8 +300,8 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
     )
 
     const before = rowCells(id)
-    expect(before[3]).toBe('9:45') // pool end at strips_total=12
-    expect(before[6]).toBe('5') // pool_strip_count at strips_total=12
+    expect(before[2]).toBe('9:45') // pool end at strips_total=12
+    expect(before[5]).toBe('5') // pool_strip_count at strips_total=12
 
     act(() => {
       // strips_total 12 -> 3: n_pools (5) > strips_total raises
@@ -364,7 +364,7 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
 
     const after = rowCells(id)
     expect(after).not.toEqual(before)
-    expect(after[3]).toBe('11:30') // pool end at strips_total=6
-    expect(after[6]).toBe('4') // pool_strip_count at strips_total=6
+    expect(after[2]).toBe('11:30') // pool end at strips_total=6
+    expect(after[5]).toBe('4') // pool_strip_count at strips_total=6
   })
 })

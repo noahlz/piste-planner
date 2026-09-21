@@ -150,15 +150,15 @@ export function CenterView({
   const showingMatrix = viewMode === ViewMode.MATRIX
 
   return (
-    <main aria-label="Center view" className="flex min-h-0 flex-1 flex-col">
+    <main aria-label="Center view" className="print-unclip flex min-h-0 flex-1 flex-col">
       {/* The view fills this region absolutely rather than sizing to its
           content: the canvas measures its own viewport through a
           ResizeObserver and needs a height that does not depend on what it
           draws, while the table keeps its own scroll inside the same box. */}
-      <div className="relative min-h-0 flex-1">
+      <div className="print-unclip relative min-h-0 flex-1">
         <div
           data-dimmed={hasBlocking ? 'true' : 'false'}
-          className={`absolute inset-0 ${showingMatrix ? 'flex flex-col' : 'overflow-auto p-4'} ${
+          className={`print-unclip absolute inset-0 ${showingMatrix ? 'flex flex-col' : 'overflow-auto p-4'} ${
             hasBlocking ? 'opacity-40 pointer-events-none' : ''
           }`}
         >

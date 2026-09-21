@@ -71,7 +71,7 @@ export function StatusFooter({
   return (
     <footer
       aria-label="Status bar"
-      className="flex h-8 shrink-0 items-center gap-0 overflow-hidden border-t-[1.5px] border-chrome-border bg-chrome-deep text-[11.5px] whitespace-nowrap"
+      className="print-hidden flex h-8 shrink-0 items-center gap-0 overflow-hidden border-t-[1.5px] border-chrome-border bg-chrome-deep text-[11.5px] whitespace-nowrap"
     >
       <span data-counts className="px-4 text-neutral-700">
         {`${counts.placed} placed · ${counts.unplaced} unplaced · ${counts.pinned} pinned`}

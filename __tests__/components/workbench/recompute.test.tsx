@@ -113,7 +113,7 @@ function fencerInput(id: string): HTMLElement {
   return screen.getByRole('spinbutton', { name: `Fencer count for ${label}` })
 }
 
-/** `id`'s row in the center's schedule table: id, day, pool start, pool end,
+/** `id`'s row in the center's schedule table: id, pool start, pool end,
  *  DE start, DE end, strips, finish — the same cell order CenterView's own
  *  suite reads. */
 function centerRowCells(id: string): string[] {
@@ -160,8 +160,8 @@ describe('two-tier recompute', () => {
     // (pool end 12:06, DE 12:40-15:15, 5 strips, up from 1 at 8 fencers).
     expect(center.textContent).not.toBe(centerBefore)
     const cells = centerRowCells(id)
-    expect(cells[3]).toBe('12:06') // pool end
-    expect(cells[4]).toBe('12:40') // DE start, now de_prelims_start
+    expect(cells[2]).toBe('12:06') // pool end
+    expect(cells[3]).toBe('12:40') // DE start, now de_prelims_start
     // T040 split the old single DE End column in two: de_end, the last minute
     // the scheduler actually places, and de_total_end with the 30-minute medal
     // tail on top of it.
@@ -175,9 +175,9 @@ describe('two-tier recompute', () => {
     // SINGLE_STAGE on this same fixture — with T061a's pre-allocated
     // strips_allocated left in place — reproduces DE 760-967 and de_total_end
     // 997 exactly, the pre-US4 16:07/16:37. T061a moves nothing here.
-    expect(cells[5]).toBe('15:15') // DE end, now de_round_of_16_end
-    expect(cells[6]).toBe('5') // pool_strip_count
-    expect(cells[7]).toBe('15:45') // finish, de_total_end
+    expect(cells[4]).toBe('15:15') // DE end, now de_round_of_16_end
+    expect(cells[5]).toBe('5') // pool_strip_count
+    expect(cells[6]).toBe('15:45') // finish, de_total_end
   })
 
   it('restarts the settle timer on a second edit rather than relayouting at the first deadline', () => {
@@ -215,11 +215,11 @@ describe('two-tier recompute', () => {
     // first case lands on — never the first edit's (40) intermediate one.
     expect(center.textContent).not.toBe(centerBefore)
     const cells = centerRowCells(id)
-    expect(cells[3]).toBe('12:06') // pool end
-    expect(cells[4]).toBe('12:40') // DE start
-    expect(cells[5]).toBe('15:15') // DE end, as above
-    expect(cells[6]).toBe('5') // pool_strip_count
-    expect(cells[7]).toBe('15:45') // finish, de_total_end
+    expect(cells[2]).toBe('12:06') // pool end
+    expect(cells[3]).toBe('12:40') // DE start
+    expect(cells[4]).toBe('15:15') // DE end, as above
+    expect(cells[5]).toBe('5') // pool_strip_count
+    expect(cells[6]).toBe('15:45') // finish, de_total_end
   })
 })
 

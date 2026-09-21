@@ -522,8 +522,13 @@ if (rowCount !== 12) throw new Error(`schedule table rendered ${rowCount} rows, 
 
 for (const b of poolBlocks) {
   const row = page.locator(`[data-schedule-row="${b.id}"]`)
-  const dayText = (await row.locator('[data-cell="day"]').textContent()) ?? ''
-  const rowDay = Number(dayText.match(/\d+/)?.[0]) - 1
+  // Day moved from a table column to the enclosing day section's heading
+  // (013 T036, phase7-contract.md §4) — read it off `data-day-section` on
+  // the section that contains this row, not a `day` cell.
+  const section = page.locator('section[data-day-section]', {
+    has: page.locator(`[data-schedule-row="${b.id}"]`),
+  })
+  const rowDay = Number(await section.getAttribute('data-day-section')) - 1
   const poolStartText = (await row.locator('[data-cell="poolStart"]').textContent())?.trim()
   const poolEndText = (await row.locator('[data-cell="poolEnd"]').textContent())?.trim()
   if (rowDay !== b.day) {
@@ -546,10 +551,15 @@ for (const w of ['stale', 'outdated', 'out of date', 'Run Validate']) {
 log('no staleness text')
 
 // Editing a fencer count must move the derived table with no explicit re-run.
-// Scope to the schedule table by a column header — the page has several tables.
-const schedTable = page
-  .locator('table')
-  .filter({ has: page.getByRole('columnheader', { name: 'Pool Start' }) })
+// 013 T036 split the one schedule table into one `<table>` per
+// `section[data-day-section]` (day moved from a column to the section
+// heading, ScheduleOutput.tsx), so a `table` locator filtered by a "Pool
+// Start" columnheader now matches one table per day instead of one table on
+// the page — a strict-mode violation, not a real ambiguity. Scope to the
+// enclosing `aria-label="Schedule"` region instead: its text covers every
+// day's table, and it stays a single element whether the view renders zero,
+// one, or several day sections.
+const schedTable = page.getByRole('region', { name: 'Schedule' })
 const before = await schedTable.textContent()
 
 // The auto-scheduler can leave a competition unplaced when strip capacity runs

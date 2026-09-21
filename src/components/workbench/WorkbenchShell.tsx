@@ -111,17 +111,17 @@ export function WorkbenchShell() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="print-unclip flex h-screen flex-col bg-background">
       <Header />
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="print-unclip flex flex-1 min-h-0 overflow-hidden">
         <ToolRail panel={panel} onSelect={selectPanel} />
-        <div className="relative flex flex-1 overflow-hidden">
+        <div className="print-unclip relative flex flex-1 overflow-hidden">
           {panel !== null && (
             <InspectorPanel panel={panel} docked={panelDocked} onToggleDocked={toggleDocked} onClose={closePanel}>
               {panelContent(panel)}
             </InspectorPanel>
           )}
-          <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="print-unclip flex flex-1 flex-col overflow-hidden">
             <UnplacedDock />
             <CenterView
               viewMode={viewMode}
