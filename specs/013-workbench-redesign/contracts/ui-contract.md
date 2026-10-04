@@ -115,7 +115,9 @@ severity badge as text, `where`, the message, and, when a target exists,
 
 `<section aria-label="Pool round durations">` **kept** with its per-weapon
 inputs and revert buttons **kept**. `radiogroup` "DE mode" with `radio`s
-"Staged" and "Single", plus the Default marker when following the type.
+"Default", "Staged" and "Single"; "Default" is checked while `de_mode_override`
+is `null` and pressing it writes `null`; a hint `{type} default: {Staged|Single}`
+describes the Default radio. (T045, finding 6.)
 
 ---
 

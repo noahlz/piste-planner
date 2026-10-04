@@ -555,7 +555,8 @@ shows. Print to PDF and confirm the output holds only the schedule.
   override and reset pattern.
 - **FR-030**: DE mode MUST be a tournament-level choice of Staged or Single that
   overrides the type's default, MUST be serialized, and MUST replace the
-  per-event DE mode.
+  per-event DE mode. A third choice, Default, returns the tournament to its
+  type's default (owner decision 2026-10-04, handoff finding 6).
 - **FR-031**: Settings MUST NOT carry a row for admin gap, flight buffer or
   video strips.
 

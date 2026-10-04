@@ -4,6 +4,7 @@ import { SettingsPanel } from '../../../../src/components/workbench/panels/Setti
 import { useStore } from '../../../../src/store/store.ts'
 import { TYPE_DEFAULTS } from '../../../../src/store/typeDefaults.ts'
 import { DeMode, TournamentType } from '../../../../src/engine/types.ts'
+import { buildTournamentConfig } from '../../../../src/store/buildConfig.ts'
 import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../../../../src/engine/constants.ts'
 
 // 013 T022 (FR-029–FR-031, FR-063, research D7). Re-targets
@@ -37,14 +38,6 @@ function poolDurations(): HTMLElement {
 
 function deModeGroup(): HTMLElement {
   return screen.getByRole('radiogroup', { name: 'DE mode' })
-}
-
-/** The Default marker, wherever the panel puts it (one badge, for DE mode's
- *  followed default) — scoped to the DE mode group's own container so the
- *  three pool-duration badges cannot satisfy it. */
-function deModeDefaultMarkers(): HTMLElement[] {
-  const container = deModeGroup().parentElement as HTMLElement
-  return within(container).queryAllByText('Default')
 }
 
 beforeEach(() => {
@@ -83,59 +76,100 @@ describe('SettingsPanel — pool durations', () => {
 // ──────────────────────────────────────────────
 
 describe('SettingsPanel — DE mode', () => {
-  it('renders a radiogroup with exactly the two engine modes', () => {
+  function radio(name: string): HTMLElement {
+    return screen.getByRole('radio', { name })
+  }
+
+  it('renders a radiogroup with Default, Staged and Single, in that order', () => {
     render(<SettingsPanel />)
 
-    expect(within(deModeGroup()).getAllByRole('radio')).toHaveLength(2)
-    expect(screen.getByRole('radio', { name: 'Staged' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Single' })).toBeInTheDocument()
+    const radios = within(deModeGroup()).getAllByRole('radio')
+    expect(radios.map((r) => r.textContent)).toEqual(['Default', 'Staged', 'Single'])
+    expect(radio('Default')).toBeInTheDocument()
+    expect(radio('Staged')).toBeInTheDocument()
+    expect(radio('Single')).toBeInTheDocument()
   })
 
-  it('with no override, checks the tournament type’s own default and marks it Default (NAC → Staged)', () => {
+  it('with no override, checks Default and names what it resolves to (NAC → Staged)', () => {
     useStore.getState().setTournamentType(TournamentType.NAC)
     render(<SettingsPanel />)
 
     expect(TYPE_DEFAULTS[TournamentType.NAC].de_mode).toBe(DeMode.STAGED)
     expect(useStore.getState().de_mode_override).toBeNull()
-    expect(screen.getByRole('radio', { name: 'Staged' })).toHaveAttribute('aria-checked', 'true')
-    expect(deModeDefaultMarkers()).toHaveLength(1)
+    expect(radio('Default')).toHaveAttribute('aria-checked', 'true')
+    expect(radio('Staged')).toHaveAttribute('aria-checked', 'false')
+    expect(radio('Single')).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText('NAC default: Staged')).toBeInTheDocument()
   })
 
   it('follows a tournament type change while the override is null (ROC → Single)', () => {
     render(<SettingsPanel />)
-    expect(screen.getByRole('radio', { name: 'Staged' })).toHaveAttribute('aria-checked', 'true')
+    expect(radio('Default')).toHaveAttribute('aria-checked', 'true')
 
     act(() => {
       useStore.getState().setTournamentType(TournamentType.ROC)
     })
 
     expect(TYPE_DEFAULTS[TournamentType.ROC].de_mode).toBe(DeMode.SINGLE_STAGE)
-    expect(screen.getByRole('radio', { name: 'Single' })).toHaveAttribute('aria-checked', 'true')
-    expect(deModeDefaultMarkers()).toHaveLength(1)
+    expect(radio('Default')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('ROC default: Single')).toBeInTheDocument()
   })
 
-  it('choosing a mode writes de_mode_override and drops the Default marker', () => {
+  it('choosing Single writes de_mode_override and unchecks Default', () => {
     useStore.getState().setTournamentType(TournamentType.NAC)
     render(<SettingsPanel />)
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Single' }))
+    fireEvent.click(radio('Single'))
 
     expect(useStore.getState().de_mode_override).toBe(DeMode.SINGLE_STAGE)
-    expect(screen.getByRole('radio', { name: 'Single' })).toHaveAttribute('aria-checked', 'true')
-    expect(deModeDefaultMarkers()).toHaveLength(0)
+    expect(radio('Single')).toHaveAttribute('aria-checked', 'true')
+    expect(radio('Default')).toHaveAttribute('aria-checked', 'false')
   })
 
   // An override equal to the type's own default is still an override — it
-  // survives a later type change, where a `null` would not. The marker has to
-  // read the field, not compare the resolved mode against the type default.
-  it('marks an override that happens to equal the type default as an override, not a default', () => {
+  // survives a later type change, where a `null` would not. Default must read
+  // the field, not compare the resolved mode against the type default.
+  it('treats an override that happens to equal the type default as an override, not Default', () => {
     useStore.getState().setTournamentType(TournamentType.NAC)
     render(<SettingsPanel />)
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Staged' }))
+    fireEvent.click(radio('Staged'))
 
     expect(useStore.getState().de_mode_override).toBe(DeMode.STAGED)
-    expect(deModeDefaultMarkers()).toHaveLength(0)
+    expect(radio('Staged')).toHaveAttribute('aria-checked', 'true')
+    expect(radio('Default')).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('pressing Default after an override writes null, and the type default then wins again', () => {
+    useStore.getState().setTournamentType(TournamentType.NAC)
+    useStore.getState().applyTemplate('NAC Vet/Div1/Junior')
+    render(<SettingsPanel />)
+
+    fireEvent.click(radio('Single'))
+    fireEvent.click(radio('Default'))
+
+    expect(useStore.getState().de_mode_override).toBeNull()
+    expect(radio('Default')).toHaveAttribute('aria-checked', 'true')
+
+    act(() => {
+      useStore.getState().setTournamentType(TournamentType.ROC)
+    })
+
+    const { competitions } = buildTournamentConfig(useStore.getState())
+    expect(competitions.length).toBeGreaterThan(0)
+    for (const c of competitions) {
+      expect(c.de_mode).toBe(TYPE_DEFAULTS[TournamentType.ROC].de_mode)
+    }
+  })
+
+  it('describes the Default radio with the hint', () => {
+    render(<SettingsPanel />)
+
+    const describedBy = radio('Default').getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(describedBy as string)).toHaveTextContent('NAC default: Staged')
+    expect(radio('Staged')).not.toHaveAttribute('aria-describedby')
+    expect(radio('Single')).not.toHaveAttribute('aria-describedby')
   })
 })
 
