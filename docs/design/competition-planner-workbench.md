@@ -160,12 +160,16 @@ the weapon instead.
 
 **Virtualization**
 
-80 strips × 4 days is 320 rows, roughly 7000px tall at normal row height. The
-canvas is plain SVG built by the component itself – no charting library is a
-dependency (research D1 (specs/004-p3-workbench-shell/research.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/research.md)) – so
-the component renders only the visible row window and the visible time window
-itself. This changes the component's structure rather than being a later
-optimization, so it belongs in the first implementation.
+80 strips × 4 days is 320 rows, roughly 7000px tall at normal row height. This
+document first called windowing load-bearing, with the SVG canvas rendering
+only the visible row and time windows itself. Feature 013 removed windowing on
+purpose. The canvas is now HTML on the mockup's DOM model, with native
+scrolling and sticky positioning for the axis, the strip gutter, and the day
+bands. The three recorded canvas defects all stemmed from the SVG viewport
+owning its own scroll and zoom, and the HTML canvas closes them. Every strip row
+of every day is in the document, which at 320 rows and roughly 50–130 blocks is
+well inside what a browser lays out. See research D2 (../../specs/013-workbench-redesign/research.md,
+"D2 – The canvas is HTML on the mockup's DOM model, with no windowing").
 
 **Tooltip**
 
