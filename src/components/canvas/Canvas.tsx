@@ -186,6 +186,13 @@ function flaggedTargets(findingRows: Finding[]): Set<string> {
   return flagged
 }
 
+/** The severities that draw a block's solid findings edge. Notes do not. */
+const WARNED_SEVERITIES: ReadonlySet<Finding['severity']> = new Set([
+  FindingSeverity.WARNING,
+  FindingSeverity.UNPLACED,
+  FindingSeverity.BLOCKING,
+])
+
 /**
  * Every competition a committed Warning, Unplaced or Blocking row names (013
  * T048). Notes alone do not count: most blocks carry one, so a border for them
@@ -193,18 +200,7 @@ function flaggedTargets(findingRows: Finding[]): Set<string> {
  * the gutter, never the live store.
  */
 function warnedTargets(findingRows: Finding[]): Set<string> {
-  const warned = new Set<string>()
-  for (const row of findingRows) {
-    if (row.target === null) continue
-    if (
-      row.severity === FindingSeverity.WARNING ||
-      row.severity === FindingSeverity.UNPLACED ||
-      row.severity === FindingSeverity.BLOCKING
-    ) {
-      warned.add(row.target)
-    }
-  }
-  return warned
+  return flaggedTargets(findingRows.filter((row) => WARNED_SEVERITIES.has(row.severity)))
 }
 
 /** How long a jump's flash stays on a block before clearing (013 T032, contract §4.4). */

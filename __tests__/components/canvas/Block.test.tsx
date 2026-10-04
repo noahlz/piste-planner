@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, fireEvent, cleanup } from '@testing-library/react'
 import { Block } from '../../../src/components/canvas/Block.tsx'
 import type { BlockProps } from '../../../src/components/canvas/Block.tsx'
@@ -283,26 +283,56 @@ describe('Block state badges (FR-037)', () => {
   })
 })
 
+function edgeOf(el: HTMLElement): { width: string; style: string; color: string } {
+  return { width: el.style.borderWidth, style: el.style.borderStyle, color: el.style.borderColor }
+}
+
 describe('Block findings edge (013 T048, ui-contract Encoding contract)', () => {
   it('draws a solid 2px flash edge on a warned placed block', () => {
     const el = renderBlock({ warned: true })
 
     expect(el.dataset.warned).toBe('true')
-    expect(el.style.getPropertyValue('border')).toBe('2px solid var(--flash)')
+    expect(edgeOf(el)).toEqual({ width: '2px', style: 'solid', color: 'var(--flash)' })
   })
 
   it('keeps the dashed flash edge on a warned overflow block and does not mark it warned', () => {
     const el = renderBlock({ warned: true, placement: { ...PLACEMENT, overflow: true } })
 
     expect(el.dataset.warned).toBe('false')
-    expect(el.style.getPropertyValue('border')).toBe('2px dashed var(--flash)')
+    expect(edgeOf(el)).toEqual({ width: '2px', style: 'dashed', color: 'var(--flash)' })
   })
 
   it('keeps the ordinary block edge when not warned', () => {
     const el = renderBlock({ warned: false })
 
     expect(el.dataset.warned).toBe('false')
-    expect(el.style.getPropertyValue('border')).toBe('1.5px solid var(--block-edge)')
+    expect(edgeOf(el)).toEqual({ width: '1.5px', style: 'solid', color: 'var(--block-edge)' })
+  })
+
+  it('re-renders warned false to true and back without a React style warning', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const props: BlockProps = {
+        competition: COMPETITION,
+        label: FULL_LABEL,
+        placement: PLACEMENT,
+        pinned: false,
+        warned: false,
+        selected: false,
+        widthPx: 200,
+        heightPx: 96,
+        style: { position: 'absolute', left: 0, top: 0, width: 200, height: 96 },
+        findings: [],
+      }
+      const { rerender } = render(<Block {...props} />)
+      rerender(<Block {...props} warned />)
+      expect(block().dataset.warned).toBe('true')
+      rerender(<Block {...props} />)
+      expect(block().dataset.warned).toBe('false')
+      expect(errors).not.toHaveBeenCalled()
+    } finally {
+      errors.mockRestore()
+    }
   })
 })
 

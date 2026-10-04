@@ -11,7 +11,7 @@ import { phaseDisplay, stripAssignmentLabel } from '../../lib/blockLabels.ts'
  * One block on the canvas — FR-035 to FR-037, FR-043,
  * contracts/ui-contract.md §Canvas encoding contract.
  *
- * ## Five channels, and none of them is the age category
+ * ## Six channels, and none of them is the age category
  *
  * | Channel | Carries |
  * |---|---|
@@ -199,6 +199,10 @@ export function Block({
   const displayIconPx = showIcon ? iconPx : iconAlonePx
   const renderIcon = displayIconPx > 0
 
+  // One value drives both the drawn edge and `data-warned`, so the attribute is
+  // "true" exactly when the solid findings border is drawn.
+  const warnedEdge = warned && !placement.overflow
+
   // The four paint channels travel as custom properties so the styles below
   // can consume them; React types style as CSSProperties, which has no index
   // signature for custom properties.
@@ -210,14 +214,14 @@ export function Block({
     '--block-hatch': weaponVar(competition.weapon, WeaponTokenPart.HATCH),
     background: 'var(--block-fill)',
     color: 'var(--block-ink)',
-    // An unplaced block goes dashed; a placed one keeps a solid edge, so the
-    // two states never read alike (mockup line 1287).
-    border: placement.overflow
-      ? '2px dashed var(--flash)'
-      : warned
-        ? '2px solid var(--flash)'
-        : '1.5px solid var(--block-edge)',
+    // An unplaced block goes dashed in the flash colour. A placed one keeps a
+    // solid edge, which turns flash-coloured and 2px when its event carries a
+    // Warning, Unplaced or Blocking finding (mockup lines 1283 and 1287). Written
+    // as longhands: a `border` shorthand beside `borderStyle` makes React warn
+    // whenever only one of them changes between renders.
+    borderWidth: placement.overflow || warnedEdge ? 2 : 1.5,
     borderStyle: placement.overflow ? 'dashed' : 'solid',
+    borderColor: placement.overflow || warnedEdge ? 'var(--flash)' : 'var(--block-edge)',
     borderRadius: 9,
     boxSizing: 'border-box',
     overflow: 'hidden',
@@ -240,7 +244,7 @@ export function Block({
       data-overflow={placement.overflow ? 'true' : 'false'}
       data-weapon={competition.weapon}
       data-pinned={pinned ? 'true' : 'false'}
-      data-warned={warned && !placement.overflow ? 'true' : 'false'}
+      data-warned={warnedEdge ? 'true' : 'false'}
       data-selected={selected ? 'true' : 'false'}
       data-flash={flash ? 'true' : 'false'}
       style={blockStyle}
