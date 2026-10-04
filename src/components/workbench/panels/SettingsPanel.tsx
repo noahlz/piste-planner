@@ -4,6 +4,7 @@ import { useStore } from '../../../store/store.ts'
 import { DeMode } from '../../../engine/types.ts'
 import { TYPE_DEFAULTS } from '../../../store/typeDefaults.ts'
 import { PoolDurationSettings } from '../../sections/PoolDurationSettings.tsx'
+import { SectionCaption } from '../../common/SectionCaption.tsx'
 
 /** Standing rule 13 pill, matching TournamentPanel's — one pill shape per panel. */
 const PILL_CLASSES =
@@ -17,15 +18,6 @@ const FOLLOW_TYPE = 'FOLLOW_TYPE'
 const DE_MODE_LABELS: Record<DeMode, string> = {
   [DeMode.STAGED]: 'Staged',
   [DeMode.SINGLE_STAGE]: 'Single',
-}
-
-/** Section caption above each field group (standing rule 13, as TournamentPanel). */
-function SectionCaption({ children }: { children: string }) {
-  return (
-    <div className="mb-[7px] text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">
-      {children}
-    </div>
-  )
 }
 
 /**

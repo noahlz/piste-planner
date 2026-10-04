@@ -6,6 +6,7 @@ import { resolveRefsPerPool } from '../../../engine/pools.ts'
 import { Button } from '@/components/ui/button'
 import { NumberInput } from '@/components/ui/number-input'
 import { DefaultLabel } from '../../common/DefaultLabel.tsx'
+import { SectionCaption } from '../../common/SectionCaption.tsx'
 
 // 012 T013 (research.md D5, FR-008), carried over from the retired strips
 // section: the search yields to the browser between candidates, so a real
@@ -18,16 +19,6 @@ export const SUGGEST_INDICATOR_DELAY_MS = 100
 // research.md D8: 012 measured 13-230ms per template. 300ms keeps a held
 // stepper from queueing a run per tick.
 const SEARCH_DEBOUNCE_MS = 300
-
-/** Section caption above each Strips panel field group (standing rule 13,
- *  same convention as TournamentPanel's own local copy). */
-function SectionCaption({ children }: { children: string }) {
-  return (
-    <div className="mb-[7px] text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">
-      {children}
-    </div>
-  )
-}
 
 /** A strips-style stepper: NumberInput restyled through descendant arbitrary
  *  variants (the pattern `button.tsx`/`select.tsx`/`table.tsx` already use)

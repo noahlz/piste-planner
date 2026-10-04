@@ -5,6 +5,7 @@ import { daysAvailableRangeMessage } from '../../../engine/validation.ts'
 import { TIME_OPTIONS, formatClock } from '../../../lib/time.ts'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { SectionCaption } from '../../common/SectionCaption.tsx'
 
 const TOURNAMENT_TYPE_LABELS: Record<TournamentType, string> = {
   [TournamentType.NAC]: 'NAC',
@@ -22,15 +23,6 @@ const PILL_CLASSES =
   'rounded-full px-[13px] py-1.5 text-[12.5px] border-[1.5px] border-chrome-border bg-secondary ' +
   'data-[state=checked]:border-transparent data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground ' +
   'disabled:cursor-not-allowed disabled:opacity-60'
-
-/** Section caption above each Tournament panel field group (standing rule 13). */
-function SectionCaption({ children }: { children: string }) {
-  return (
-    <div className="mb-[7px] text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">
-      {children}
-    </div>
-  )
-}
 
 function DayHoursSelect({
   ariaLabel,

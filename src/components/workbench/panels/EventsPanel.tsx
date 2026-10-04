@@ -13,6 +13,7 @@ import {
 } from '../../../lib/competitionLabels.ts'
 import { NumberInput } from '@/components/ui/number-input'
 import { cn } from '@/lib/utils'
+import { CAPTION_CLASS } from '../../common/caption.ts'
 
 // ──────────────────────────────────────────────
 // Catalogue grouping (ported from the retired competition-matrix section)
@@ -167,7 +168,7 @@ export function EventsPanel() {
   return (
     <div className="flex flex-col gap-2.5">
       <h3 className="flex items-baseline justify-between">
-        <span className="text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">
+        <span className={CAPTION_CLASS}>
           Selected
         </span>
         <span className="font-mono text-[11.5px] font-semibold text-neutral-700">

@@ -523,7 +523,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                     fontWeight: 600,
                     fontSize: 10.5,
                     color:
-                      minutes % 60 === 0 ? 'var(--neutral-700)' : 'var(--tick-minor)',
+                      minutes % 60 === 0 ? 'var(--neutral-800)' : 'var(--tick-minor)',
                   }}
                 >
                   {formatClock(minutes)}

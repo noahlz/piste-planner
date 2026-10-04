@@ -4,6 +4,7 @@ import type { DerivedSchedule } from '../../store/derived.ts'
 import type { DerivedEventSchedule } from '../../engine/derive.ts'
 import { formatMinutes } from '../../lib/time.ts'
 import type { ScheduleResult } from '../../engine/types.ts'
+import { CAPTION_CLASS } from '../common/caption.ts'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -14,7 +15,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-const HEAD = 'text-[11.5px] font-semibold tracking-[.06em] text-neutral-700 uppercase'
 
 /**
  * The DE's first scheduled minute. A single-piece DE carries it in `de_start`;
@@ -130,13 +130,13 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
             <Table>
               <TableHeader>
                 <TableRow className="border-row-line">
-                  <TableHead className={HEAD}>Competition</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>Pool Start</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>Pool End</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>DE Start</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>DE End</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>Strips</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>Finish</TableHead>
+                  <TableHead className={CAPTION_CLASS}>Competition</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>Pool Start</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>Pool End</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>DE Start</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>DE End</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>Strips</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>Finish</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
