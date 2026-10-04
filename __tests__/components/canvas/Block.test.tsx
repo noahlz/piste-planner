@@ -37,6 +37,7 @@ function renderBlock(overrides: Partial<BlockProps> = {}): HTMLElement {
     label: FULL_LABEL,
     placement: PLACEMENT,
     pinned: false,
+    warned: false,
     selected: false,
     widthPx: 200,
     heightPx: 96,
@@ -279,6 +280,29 @@ describe('Block state badges (FR-037)', () => {
     const unselected = renderBlock({ selected: false })
     expect(unselected.dataset.selected).toBe('false')
     expect(unselected.querySelector('[data-ring]')).toBeNull()
+  })
+})
+
+describe('Block findings edge (013 T048, ui-contract Encoding contract)', () => {
+  it('draws a solid 2px flash edge on a warned placed block', () => {
+    const el = renderBlock({ warned: true })
+
+    expect(el.dataset.warned).toBe('true')
+    expect(el.style.getPropertyValue('border')).toBe('2px solid var(--flash)')
+  })
+
+  it('keeps the dashed flash edge on a warned overflow block and does not mark it warned', () => {
+    const el = renderBlock({ warned: true, placement: { ...PLACEMENT, overflow: true } })
+
+    expect(el.dataset.warned).toBe('false')
+    expect(el.style.getPropertyValue('border')).toBe('2px dashed var(--flash)')
+  })
+
+  it('keeps the ordinary block edge when not warned', () => {
+    const el = renderBlock({ warned: false })
+
+    expect(el.dataset.warned).toBe('false')
+    expect(el.style.getPropertyValue('border')).toBe('1.5px solid var(--block-edge)')
   })
 })
 

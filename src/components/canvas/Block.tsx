@@ -20,6 +20,7 @@ import { phaseDisplay, stripAssignmentLabel } from '../../lib/blockLabels.ts'
  * | Name text | Category and gender, at whatever length the room allows |
  * | Pin badge | Pinned |
  * | Dashed edge / ring | Overflow / selection |
+ * | Solid flash edge | A Warning, Unplaced or Blocking finding (not Notes, never on overflow) |
  *
  * 004's block component painted the age category across sixteen fills and put the
  * weapon in a one-letter chip. Research D4 inverts that: weapon is the thing a
@@ -76,6 +77,12 @@ export interface BlockProps {
   label: string
   placement: BlockPlacement
   pinned: boolean
+  /**
+   * The block's event has a committed Warning, Unplaced or Blocking finding row
+   * (not a Note). Required so a dropped prop fails `tsc -b` instead of silently
+   * drawing no border. An overflow block never draws the solid edge.
+   */
+  warned: boolean
   selected: boolean
   flash?: boolean
   /**
@@ -107,6 +114,7 @@ export function Block({
   label,
   placement,
   pinned,
+  warned,
   selected,
   flash = false,
   widthPx,
@@ -204,7 +212,11 @@ export function Block({
     color: 'var(--block-ink)',
     // An unplaced block goes dashed; a placed one keeps a solid edge, so the
     // two states never read alike (mockup line 1287).
-    border: placement.overflow ? '2px dashed var(--flash)' : '1.5px solid var(--block-edge)',
+    border: placement.overflow
+      ? '2px dashed var(--flash)'
+      : warned
+        ? '2px solid var(--flash)'
+        : '1.5px solid var(--block-edge)',
     borderStyle: placement.overflow ? 'dashed' : 'solid',
     borderRadius: 9,
     boxSizing: 'border-box',
@@ -228,6 +240,7 @@ export function Block({
       data-overflow={placement.overflow ? 'true' : 'false'}
       data-weapon={competition.weapon}
       data-pinned={pinned ? 'true' : 'false'}
+      data-warned={warned && !placement.overflow ? 'true' : 'false'}
       data-selected={selected ? 'true' : 'false'}
       data-flash={flash ? 'true' : 'false'}
       style={blockStyle}

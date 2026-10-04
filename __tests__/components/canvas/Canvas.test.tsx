@@ -484,6 +484,89 @@ describe('Canvas jump (013 T030, contract §4.4)', () => {
   })
 })
 
+describe('Canvas findings edge (FR-042, 013 T048)', () => {
+  function findingRow(severity: Finding['severity'], target: string): Finding {
+    return {
+      id: `test:${severity}:${target}`,
+      severity,
+      where: `Day 1 · ${target}`,
+      day: 0,
+      message: `${severity} for ${target}`,
+      target,
+    }
+  }
+
+  function blocksOf(id: string): HTMLElement[] {
+    return eventBlocks().filter((b) => b.dataset.eventId === id)
+  }
+
+  function placedBlocksOf(id: string): HTMLElement[] {
+    return blocksOf(id).filter((b) => b.dataset.overflow !== 'true')
+  }
+
+  it.each(['Warning', 'Unplaced', 'Blocking'] as const)(
+    'marks every placed block of the event a committed %s row targets, and no other event',
+    (severity) => {
+      const { schedule, findings, dayConfigs } = b1Board()
+      const targetId = schedule.competitions[0].id
+      const otherId = schedule.competitions[1].id
+
+      renderCanvas({ schedule, findings, dayConfigs }, { findingRows: [findingRow(severity, targetId)] })
+
+      const targeted = placedBlocksOf(targetId)
+      const other = blocksOf(otherId)
+      expect(targeted.length).toBeGreaterThan(0)
+      expect(other.length).toBeGreaterThan(0)
+      expect(targeted.every((b) => b.dataset.warned === 'true')).toBe(true)
+      expect(other.every((b) => b.dataset.warned === 'false')).toBe(true)
+    },
+  )
+
+  it('leaves the event alone when only a Note targets it', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    const targetId = schedule.competitions[0].id
+
+    renderCanvas({ schedule, findings, dayConfigs }, { findingRows: [findingRow('Note', targetId)] })
+
+    const targeted = blocksOf(targetId)
+    expect(targeted.length).toBeGreaterThan(0)
+    expect(targeted.every((b) => b.dataset.warned === 'false')).toBe(true)
+  })
+
+  it('follows the committed findingRows prop, not the store', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    const targetId = schedule.competitions[0].id
+
+    const { rerender } = renderCanvas({ schedule, findings, dayConfigs }, { findingRows: [] })
+    expect(blocksOf(targetId).every((b) => b.dataset.warned === 'false')).toBe(true)
+
+    // The store holds the same findings throughout, so only the prop can flip it.
+    rerender(
+      <Canvas
+        schedule={schedule}
+        findings={findings}
+        dayConfigs={dayConfigs}
+        zoom={DEFAULT_ZOOM}
+        findingRows={[findingRow('Warning', targetId)]}
+        pinnedIds={NO_PINS}
+      />,
+    )
+    expect(placedBlocksOf(targetId).every((b) => b.dataset.warned === 'true')).toBe(true)
+
+    rerender(
+      <Canvas
+        schedule={schedule}
+        findings={findings}
+        dayConfigs={dayConfigs}
+        zoom={DEFAULT_ZOOM}
+        findingRows={[]}
+        pinnedIds={NO_PINS}
+      />,
+    )
+    expect(blocksOf(targetId).every((b) => b.dataset.warned === 'false')).toBe(true)
+  })
+})
+
 describe('Canvas pin badge (FR-042, 013 T046)', () => {
   it('reads the pinned set it is handed, not the store’s placements', () => {
     const { schedule, findings, dayConfigs } = b1Board()

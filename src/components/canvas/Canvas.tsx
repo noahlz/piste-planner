@@ -10,6 +10,7 @@ import {
   type DerivedFindings,
   type DerivedSchedule,
   type Finding,
+  FindingSeverity,
 } from '../../store/derived.ts'
 import { competitionLabel } from '../../lib/competitionLabels.ts'
 import { Block } from './Block.tsx'
@@ -183,6 +184,27 @@ function flaggedTargets(findingRows: Finding[]): Set<string> {
     if (row.target !== null) flagged.add(row.target)
   }
   return flagged
+}
+
+/**
+ * Every competition a committed Warning, Unplaced or Blocking row names (013
+ * T048). Notes alone do not count: most blocks carry one, so a border for them
+ * would mark nearly everything. Read from the same committed `findingRows` as
+ * the gutter, never the live store.
+ */
+function warnedTargets(findingRows: Finding[]): Set<string> {
+  const warned = new Set<string>()
+  for (const row of findingRows) {
+    if (row.target === null) continue
+    if (
+      row.severity === FindingSeverity.WARNING ||
+      row.severity === FindingSeverity.UNPLACED ||
+      row.severity === FindingSeverity.BLOCKING
+    ) {
+      warned.add(row.target)
+    }
+  }
+  return warned
 }
 
 /** How long a jump's flash stays on a block before clearing (013 T032, contract §4.4). */
@@ -359,6 +381,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
   }
 
   const flagged = flaggedTargets(findingRows)
+  const warned = warnedTargets(findingRows)
   /** Per day, the strip rows a flagged event has a block on. */
   const flaggedRowsByDay = new Map<number, Set<number>>()
   for (const { placement } of drawn) {
@@ -605,6 +628,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                         label={block.label}
                         placement={block.placement}
                         pinned={pinnedIds.has(block.placement.competitionId)}
+                        warned={warned.has(block.placement.competitionId)}
                         selected={selectedCompetitionId === block.placement.competitionId}
                         flash={flashId === block.placement.competitionId}
                         widthPx={

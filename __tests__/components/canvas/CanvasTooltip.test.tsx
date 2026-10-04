@@ -311,6 +311,7 @@ describe('CanvasTooltip fields do not vary with what the block drew (FR-016, FR-
         label={DIV1_LABEL}
         placement={POOL_PLACEMENT}
         pinned={false}
+        warned={false}
         selected={false}
         widthPx={20}
         heightPx={96}
@@ -337,6 +338,7 @@ describe('CanvasTooltip fields do not vary with what the block drew (FR-016, FR-
         label={DIV1_LABEL}
         placement={POOL_PLACEMENT}
         pinned={false}
+        warned={false}
         selected={false}
         widthPx={200}
         heightPx={96}
