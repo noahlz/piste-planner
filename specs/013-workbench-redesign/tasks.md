@@ -1218,11 +1218,19 @@ placed event once at the canvas's times, and printing yields four pages.
   `docs/design/competition-planner-workbench.md` §Roadmap). Order is now
   T047 → T045 → T046 → T044 → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043.
 
-- [ ] **T047** Delete the team-event cut coercion loop in
+- [x] **T047** Delete the team-event cut coercion loop in
   `src/store/buildConfig.ts` (handoff finding 7, owner decision: delete). It is
   unreachable under current constants and no test exercises it. Expected: no
   test changes, `tsc -b`, lint and the full suite green, drift ledger and
   parity unmoved *(subagent commits)*
+  → Done 2026-10-04 at `3c2d298d5d` on `013-phase8-closeout` (cut from main
+  `27e505b1a2`, which carries the phase 7 merge). Ledger and parity pass
+  before and after, snapshot SHA `5483c40c1349…` unchanged, nothing moved.
+  Two test names in `buildConfig.test.ts` reworded from "coercion" to
+  "invariant"; the it.each's team expected step stays as the guard a future
+  regional override would trip. Stale "coerces" comments reworded in
+  `competitionDefaults.ts`, `validation.ts`, `validation.test.ts` and
+  data-model §4. 76 files / 1747 tests, tsc and lint clean.
 
 - [ ] **T045** A third "Default" pill in the Settings panel's DE mode group
   (handoff finding 6, owner decision). Pressing it sets `de_mode_override` to
