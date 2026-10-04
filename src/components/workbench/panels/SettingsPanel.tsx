@@ -76,19 +76,12 @@ export function SettingsPanel() {
             }
             className="flex flex-wrap gap-[5px]"
           >
-            {/* `onClick` as well as the group's `onValueChange`, because the
-                two fire in different cases and both are a real choice here.
-                Radix raises `onValueChange` only when the value *changes*, so
-                pressing the pill that is already checked would otherwise do
-                nothing. That matters for Staged or Single when the type
-                resolves to it – the organizer who means "staged, and stay
-                staged if I change the type later" has no other way to say it –
-                and Default is covered the same way. Clicking any pill writes
-                its value; the writes agree, so the two handlers firing
-                together is idempotent. */}
+            {/* No per-pill `onClick`: the group's value is `deModeOverride ??
+                FOLLOW_TYPE`, so the checked pill always equals the stored
+                value and re-pressing it would write what is already stored.
+                `onValueChange` covers every real change, mouse or arrow key. */}
             <RadioGroupPrimitive.Item
               value={FOLLOW_TYPE}
-              onClick={() => setDeModeOverride(null)}
               aria-describedby={hintId}
               className={PILL_CLASSES}
             >
@@ -96,14 +89,12 @@ export function SettingsPanel() {
             </RadioGroupPrimitive.Item>
             <RadioGroupPrimitive.Item
               value={DeMode.STAGED}
-              onClick={() => setDeModeOverride(DeMode.STAGED)}
               className={PILL_CLASSES}
             >
               Staged
             </RadioGroupPrimitive.Item>
             <RadioGroupPrimitive.Item
               value={DeMode.SINGLE_STAGE}
-              onClick={() => setDeModeOverride(DeMode.SINGLE_STAGE)}
               className={PILL_CLASSES}
             >
               Single
@@ -111,7 +102,7 @@ export function SettingsPanel() {
           </RadioGroupPrimitive.Root>
           {/* Sibling of the group, never inside a pill: text inside an item
               would join that radio's accessible name and rename it. */}
-          <p id={hintId} className="text-[11.5px] text-neutral-600">
+          <p id={hintId} className="text-[11.5px] text-neutral-700">
             {`${tournamentType} default: ${DE_MODE_LABELS[TYPE_DEFAULTS[tournamentType].de_mode]}`}
           </p>
         </div>

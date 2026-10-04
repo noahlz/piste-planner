@@ -103,6 +103,7 @@ describe('SettingsPanel — DE mode', () => {
   })
 
   it('follows a tournament type change while the override is null (ROC → Single)', () => {
+    useStore.getState().setTournamentType(TournamentType.NAC)
     render(<SettingsPanel />)
     expect(radio('Default')).toHaveAttribute('aria-checked', 'true')
 
@@ -124,6 +125,7 @@ describe('SettingsPanel — DE mode', () => {
     expect(useStore.getState().de_mode_override).toBe(DeMode.SINGLE_STAGE)
     expect(radio('Single')).toHaveAttribute('aria-checked', 'true')
     expect(radio('Default')).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText('NAC default: Staged')).toBeInTheDocument()
   })
 
   // An override equal to the type's own default is still an override — it
@@ -145,7 +147,8 @@ describe('SettingsPanel — DE mode', () => {
     useStore.getState().applyTemplate('NAC Vet/Div1/Junior')
     render(<SettingsPanel />)
 
-    fireEvent.click(radio('Single'))
+    fireEvent.click(radio('Staged'))
+    expect(useStore.getState().de_mode_override).toBe(DeMode.STAGED)
     fireEvent.click(radio('Default'))
 
     expect(useStore.getState().de_mode_override).toBeNull()
@@ -163,11 +166,10 @@ describe('SettingsPanel — DE mode', () => {
   })
 
   it('describes the Default radio with the hint', () => {
+    useStore.getState().setTournamentType(TournamentType.NAC)
     render(<SettingsPanel />)
 
-    const describedBy = radio('Default').getAttribute('aria-describedby')
-    expect(describedBy).toBeTruthy()
-    expect(document.getElementById(describedBy as string)).toHaveTextContent('NAC default: Staged')
+    expect(radio('Default')).toHaveAccessibleDescription('NAC default: Staged')
     expect(radio('Staged')).not.toHaveAttribute('aria-describedby')
     expect(radio('Single')).not.toHaveAttribute('aria-describedby')
   })

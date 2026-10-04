@@ -406,10 +406,10 @@ describe('buildTournamentConfig', () => {
   // `cut-on-team` rule need: a team event reaches the engine with its cut
   // disabled.
   describe('team event cut_mode invariant (R3, cut-on-team, FR-010)', () => {
-    it('a TEAM competition reaches the engine with cut_mode DISABLED', () => {
+    it.each([TournamentType.NAC, TournamentType.ROC])('a TEAM competition reaches the engine with cut_mode DISABLED, at %s', (type) => {
       const state = storeWith({
         ...minimalState(),
-        tournament_type: TournamentType.NAC,
+        tournament_type: type,
         selectedCompetitions: {
           'JR-M-FOIL-TEAM': {
             fencer_count: 40,
@@ -559,7 +559,8 @@ describe('buildTournamentConfig', () => {
               const override = REGIONAL_CUT_OVERRIDES[entry.category]
               if (override) expected = override
             }
-            // Guard: fails if a regional override ever gives a team category a cut.
+            // Guard: fails if a regional override ever gives a cut to a category
+            // that has a team event in this fixture (Div1, Junior).
             if (entry.event_type === EventType.TEAM) {
               expected = { mode: CutMode.DISABLED, value: 100 }
             }
