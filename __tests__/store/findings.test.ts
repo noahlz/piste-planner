@@ -11,7 +11,7 @@ import { selectDerivedSchedule, selectDerivedFindings } from '../../src/store/de
 import * as derivedModule from '../../src/store/derived.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { competitionLabel } from '../../src/lib/competitionLabels.ts'
-import { phaseDisplay } from '../../src/lib/blockLabels.ts'
+import { phaseDisplay } from '../../src/lib/placementLabels.ts'
 
 /**
  * 013 T030 (phase-5 contract, contracts/phase5-contract.md §1) — the unified

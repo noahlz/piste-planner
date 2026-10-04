@@ -25,7 +25,7 @@ import { findingIdentity } from '../engine/validation.ts'
 // `src/components/` until 013 T031 moved them to `src/lib/`: the store may not
 // import from the component tree (research D6 fixes the direction as
 // store → layout/lib ← components), and `selectFindings` needs both.
-import { phaseDisplay } from '../lib/blockLabels.ts'
+import { phaseDisplay } from '../lib/placementLabels.ts'
 import { competitionLabel } from '../lib/competitionLabels.ts'
 import { formatClock } from '../lib/time.ts'
 import { buildTournamentConfig } from './buildConfig.ts'

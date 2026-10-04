@@ -5,7 +5,7 @@ import { formatClock } from '../../lib/time.ts'
 import type { BlockPlacement } from '../../layout/lanes.ts'
 import { GENDER_DISPLAY, categoryDisplay, vetAgeGroupDisplay } from '../../lib/competitionLabels.ts'
 import { WeaponTokenPart, weaponVar } from './weaponTokens.ts'
-import { phaseDisplay, stripAssignmentLabel } from '../../lib/blockLabels.ts'
+import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts'
 
 /**
  * One block on the canvas — FR-035 to FR-037, FR-043,

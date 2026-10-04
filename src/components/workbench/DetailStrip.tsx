@@ -7,7 +7,7 @@ import { competitionLabel } from '../../lib/competitionLabels.ts'
 import { estimateEventFootprint } from '../../engine/derive.ts'
 import { assignStripLanes } from '../../layout/lanes.ts'
 import { eventTimeSegments } from '../../layout/segments.ts'
-import { phaseDisplay, stripRangeLabel, stripAssignmentLabel } from '../../lib/blockLabels.ts'
+import { phaseDisplay, stripRangeLabel, stripAssignmentLabel } from '../../lib/placementLabels.ts'
 import { formatClock, formatMinutes } from '../../lib/time.ts'
 import { Phase } from '../../engine/types.ts'
 import { weaponVar, WeaponTokenPart } from '../canvas/weaponTokens.ts'
@@ -65,7 +65,7 @@ const ICON_BUTTON =
  * ## The same helpers the block and the tooltip use, not new arithmetic
  *
  * `stripRangeLabel`/`stripAssignmentLabel`/`phaseDisplay` are the shared block
- * vocabulary in `src/lib/blockLabels.ts` that `Block` and `CanvasTooltip` also
+ * vocabulary in `src/lib/placementLabels.ts` that `Block` and `CanvasTooltip` also
  * read, and `assignStripLanes` is the exact call
  * `Canvas.tsx` makes over the same committed `schedule.events` — so the strip
  * can never describe a placement or a strip run the canvas draws differently.
