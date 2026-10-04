@@ -13,6 +13,45 @@ feature directory is created for one only when it is assigned a phase.
 > git history at `0ab5bd2dc9` preserves them, and each shipped feature's own
 > `specs/` handoff records what it deliberately did not fix.
 
+## What 013 deliberately left unfixed
+
+*Recorded by 013 T042, 2026-10-04. Each bullet points at its entry. The roadmap
+feature that owns it is in [`competition-planner-workbench.md`](./competition-planner-workbench.md)
+§Roadmap.*
+
+- Sequencing onto a pin, and crossover between pins or through Move day (the
+  design alignment's E3) –
+  [§Auto-assign does not hold an unpinned predecessor before a pinned successor](#auto-assign-does-not-hold-an-unpinned-predecessor-before-a-pinned-successor)
+  and
+  [§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph).
+  Feature 016.
+- The referee model divergence (E5) –
+  [§The scorecard's peak-referee row reads higher than the scheduler's own](#the-scorecards-peak-referee-row-reads-higher-than-the-schedulers-own).
+  Feature 016.
+- The engine and the store both reporting a pin collision –
+  [§The engine and the store both report a pin collision](#the-engine-and-the-store-both-report-a-pin-collision).
+  Feature 017.
+- `Bottleneck`'s missing second subject –
+  [§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject).
+  Feature 014.
+- The two dead constants and the unwired `daySequencing.ts` –
+  [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
+  Feature 021.
+- The lane-packer overflow, including the two "Unplaced, needs N strips"
+  figures for one event –
+  [§The canvas calls events unplaced that the engine placed](#the-canvas-calls-events-unplaced-that-the-engine-placed).
+  Feature 017.
+- Blocks that cannot be selected from the keyboard –
+  [§A placed block cannot be selected from the keyboard](#a-placed-block-cannot-be-selected-from-the-keyboard).
+  Feature 017.
+- The mockup's remaining visual gaps –
+  [§The mockup's remaining visual gaps](#the-mockups-remaining-visual-gaps).
+- Small text still below WCAG AA –
+  [§Small text still below WCAG AA](#small-text-still-below-wcag-aa).
+
+Fact, not work: `src/store/derived.ts` no longer imports from `components/`
+(013 handoff finding 19).
+
 ## `Bottleneck` has no structured field for a second subject
 
 *Found by 010's test-quality review of T010 (R7), 2026-09-05. Recorded, not
@@ -426,6 +465,9 @@ the tree on purpose.*
   file now would discard the evidence for answering that. `saberPileupPenalty`
   in the sibling `dayAssignment.ts` is live (`dayColoring.ts:40`) and documented
   (§Saber Pileup) – that file stays regardless.
+- **`SAME_TIME_WINDOW_MINS` and `MAX_RESCHEDULE_ATTEMPTS`** are threaded through
+  the config and read by no engine code (013 research D1). Roadmap feature 021
+  deletes them with `daySequencing.ts`. Pins are wired into none of the three.
 - **Every unused *export*** flagged by `fallow dead-code --production` stays.
   The list is mostly the faithful-but-dead implementations tabulated above, and
   deleting them would destroy the evidence that the engine once matched its
@@ -899,6 +941,12 @@ packer may split a block across non-contiguous strips. The first edits
 **Cost if ignored**: every organizer's first impression is a board with five
 phantom unplaced events and Findings rows they cannot act on.
 
+The same overflow shows one event two different figures (013 handoff finding
+33). B1's Div 1 Women's Epee reads "Unplaced, needs 32 strips" in the detail
+strip and "needs 16 strips" in the DE-prelims tooltip, each being that phase's
+own need under the packer, beside a dock that says "Every event has a slot."
+One strip model removes it.
+
 ## A placed block cannot be selected from the keyboard
 
 *013 handoff findings 13 and 20. Owner decision 2026-10-04: blocks become
@@ -911,6 +959,88 @@ buttons) and can reach a placed one only through Findings → "Show on grid".
 The fix changes the role to `button` in the contract, keeps the accessible
 name, adds a visible focus ring, and re-checks the smoke driver's block
 locators in the same task.
+
+## Auto-assign does not hold an unpinned predecessor before a pinned successor
+
+*013 research D1 and the engine contract's "not guaranteed" list. Recorded, not
+fixed. Same family as the crossover gap in
+[§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph),
+which is the design alignment's E3.*
+
+`applyCrossEventEdges` (`src/engine/concurrentScheduler.ts`, around `:620–671`)
+makes a team event wait for its individual counterpart and a Vet sibling wait
+for the previous one. A pinned *successor* is committed in the pre-claim pass
+before its unpinned predecessor is placed, so the engine does not hold the
+predecessor before the pin, and the loop may place it after. Crossover between
+two pins, and between a pin and an event moved through Move day, is unchecked
+for the same reason.
+
+**What it needs**: `Competition.latest_end` is the mechanism the research names
+for expressing "this must finish before that pin". It belongs with roadmap
+feature 016, which already owns the crossover check on current placements.
+
+**Cost if ignored**: Auto-assign around pins can return a board where a team
+event precedes its individual event or a Vet sibling runs out of order, with no
+finding.
+
+## The engine and the store both report a pin collision
+
+*013 handoff finding 25. Recorded, not fixed.*
+
+When a pin cannot claim its strips, the engine emits a `PINNED_UNCLAIMED`
+bottleneck (one per phase node, finding 21). The UI never reads it: the Findings
+list shows the lane packer's Unplaced row instead (FR-059). The two surfaces
+agree on the fixture in finding 22 and nothing checks that they agree in
+general, so a pin the engine could not seat and a pin the packer could not seat
+can differ.
+
+**What it needs**: one reporter. Feature 017's single strip model is the natural
+point, and 014's structured `Bottleneck` makes `PINNED_UNCLAIMED` consumable
+without message-text matching.
+
+**Cost if ignored**: the same pin can be reported twice, or by only one surface,
+and the organizer cannot tell which to trust.
+
+## The mockup's remaining visual gaps
+
+*013 handoff finding 31, ruled 2026-10-04: these stay out of 013. The gap list
+is in the T044 commits.*
+
+- Day-band spans, the overflow stripe, block meta text, the detail strip's pill
+  internals, the rail tooltip and the panel title level. Each needs a new
+  element, not restyling.
+- The mockup's +3 / −6 block inset was applied and reverted. `Block.tsx`'s label
+  fit assumes +2 / −4, so adopting the mockup's inset means re-deriving the fit.
+
+**Cost if ignored**: cosmetic. The shell matches the mockup's look and not every
+element of it.
+
+## Small text still below WCAG AA
+
+*013 T049 measured this after raising only the panel captions and the canvas's
+off-hour ticks, an owner decision. Line numbers as of commit `e8c6f2db90`.*
+
+`neutral-600` `#7a7a7d` is 4.28:1 on white, 4.00 on `--chrome` `#f7f7f9`, 3.83
+on `--chrome-soft` `#f2f2f4` and 3.59 on `--chrome-deep` `#eaebee`.
+`neutral-500` `#98989b` is 2.88 on white, 2.69 on chrome and 2.41 on
+chrome-deep. Ratios are against the nearest known background, not each element's
+stacked background.
+
+- `neutral-600` small text: `UnplacedDock.tsx:50` h2 11px (and the p lines at 54
+  and 61, 11.5px), `PresetPicker.tsx:58` 10.5px caption, `DetailStrip.tsx:191`
+  mono 11px, `FindingsPanel.tsx:49` 12.5px, `FindingsPanel.tsx:86` mono 10.5px,
+  `ScheduleOutput.tsx:87` 12.5px, `PoolDurationSettings.tsx:58` and `:62`
+  text-xs.
+- `neutral-500` small text: `Header.tsx:51` mono 11px on chrome (2.69),
+  `StripsPanel.tsx:226` role=status 11px, `StatusFooter.tsx:81`, `89`, `96` and
+  `104` labels at 11.5px on chrome-deep (2.41), `TournamentPanel.tsx:140` the
+  en-dash glyph (2.69, decorative, likely exempt).
+- Icon-only buttons using `neutral-600` are non-text contrast (3:1 threshold) and
+  pass at 4.00.
+
+**Cost if ignored**: low-vision users cannot read captions and status labels the
+app relies on. Raising the tokens moves the shell's look, so it is an owner
+call.
 
 ## A shared URL with a fencer count of 0 or 1 may reach unguarded pool math
 
