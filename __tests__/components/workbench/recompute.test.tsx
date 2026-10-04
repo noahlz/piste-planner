@@ -13,6 +13,7 @@ import {
   saveViewState,
 } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { pinBadges } from '../../helpers/canvasQueries.ts'
 import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
 // 004 T009 — two-tier recompute (FR-008, S2-contract.md §Center view and the
@@ -314,12 +315,9 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
       />,
     )
 
-    const badges = (): (string | undefined)[] =>
-      Array.from(document.querySelectorAll<HTMLElement>(`[data-event-id="${id}"]`)).map(
-        (el) => el.dataset.pinned,
-      )
-    expect(badges().length, 'the canvas drew no blocks for the event').toBeGreaterThan(0)
-    expect(badges().every((p) => p === 'false')).toBe(true)
+    const before = pinBadges(id)
+    expect(before.length, 'the canvas drew no blocks for the event').toBeGreaterThan(0)
+    expect(before).toEqual(before.map(() => 'false'))
 
     act(() => {
       useStore.getState().setPinned(id, true)
@@ -327,12 +325,14 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
 
     // The write landed, so the held badge below is the hold and not a missed write.
     expect(useStore.getState().placements[id]?.pinned).toBe(true)
-    expect(badges().every((p) => p === 'false')).toBe(true)
+    expect(pinBadges(id)).toEqual(before.map(() => 'false'))
 
     act(() => {
       vi.advanceTimersByTime(CENTER_SETTLE_MS)
     })
-    expect(badges().every((p) => p === 'true')).toBe(true)
+    expect(pinBadges(id)).toEqual(before.map(() => 'true'))
+    // The commit effect must not re-arm itself in a loop once settled.
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('holds a block’s findings at the committed model too, not just its geometry', () => {

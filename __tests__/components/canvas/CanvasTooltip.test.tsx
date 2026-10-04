@@ -20,6 +20,7 @@ import {
   makeStrips,
 } from '../../helpers/factories.ts'
 import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
+import { NO_PINS } from '../../helpers/canvasQueries.ts'
 
 // 004 T030 — the tooltip contract (contracts/ui-contract.md §Tooltip contract,
 // FR-022).
@@ -410,7 +411,6 @@ const CANVAS_DAY_CONFIGS: DayConfig[] = [
   { day_start_time: 480, day_end_time: 1320 },
   { day_start_time: 480, day_end_time: 1320 },
 ]
-const NO_PINS: ReadonlySet<string> = new Set()
 const CANVAS_ZOOM = { zoomStep: 2, fitting: false }
 const EMPTY_FINDINGS: DerivedFindings = {
   validationErrors: [],

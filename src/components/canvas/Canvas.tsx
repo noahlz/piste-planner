@@ -65,12 +65,12 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  * `findingRows`, a fourth prop `CenterView` commits alongside the other three
  * on the same settle (013 T032, contract §4.3). The pin badge reads
  * `pinnedIds`, the pinned set committed with the schedule since 013 T046
- * (FR-042), so it cannot describe a schedule the grid is not drawing. One
- * store read remains unexpressed from the committed model:
+ * (FR-042), so it cannot describe a schedule the grid is not drawing. Two
+ * live reads remain unexpressed from the committed model:
  * `selectedCompetitionId` (013 T029), for the selection ring — a click
  * selects the event immediately, and waiting for the next settle to ring it
- * would make the click feel unacknowledged. `jumpNonce` (013 T032, contract
- * §4.4) is read live for the same reason: a Findings jump should scroll and
+ * would make the click feel unacknowledged – and `jumpNonce` (013 T032, contract
+ * §4.4), read live for the same reason: a Findings jump should scroll and
  * flash the instant it is pressed, not a settle later.
  */
 

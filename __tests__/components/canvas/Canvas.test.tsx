@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, type ComponentProps } from 'react'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
@@ -13,6 +13,7 @@ import { Phase } from '../../../src/engine/types.ts'
 import type { DayConfig } from '../../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 import { installStubResizeObserver, NeverFiringResizeObserver } from '../../helpers/resizeObserver.ts'
+import { NO_PINS } from '../../helpers/canvasQueries.ts'
 
 // 013 T025 (part a) — red tests for the redesigned canvas (D2, D3, FR-032 to
 // FR-043, contracts/ui-contract.md §Canvas). Canvas.tsx does not exist yet
@@ -45,7 +46,18 @@ afterEach(() => {
 })
 
 const DEFAULT_ZOOM = { zoomStep: 2, fitting: false }
-const NO_PINS: ReadonlySet<string> = new Set()
+
+type CanvasProps = ComponentProps<typeof Canvas>
+
+/** Mounts the Canvas with the file's usual props; `overrides` replaces any of them. */
+function renderCanvas(
+  board: Pick<CanvasProps, 'schedule' | 'findings' | 'dayConfigs'>,
+  overrides: Partial<CanvasProps> = {},
+) {
+  return render(
+    <Canvas zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} {...board} {...overrides} />,
+  )
+}
 
 // 013 T028 (part b) — selection (contract §6). selectedCompetitionId/
 // selectCompetition are not yet on the store (T029 adds them), so this cast
@@ -99,7 +111,7 @@ function eventBlocks(): HTMLElement[] {
 describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
   it('renders every strip row of every day, with no culling', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     expect(allStripRows()).toHaveLength(320)
     for (const day of [0, 1, 2, 3]) {
@@ -109,7 +121,7 @@ describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
 
   it('scrolls from exactly one native container', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     const scrollers = document.querySelectorAll<HTMLElement>('[data-canvas-scroller]')
     expect(scrollers).toHaveLength(1)
@@ -118,7 +130,7 @@ describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
 
   it('pins the time axis, every day band and every gutter, and labels ticks 24-hour', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     const axis = document.querySelector<HTMLElement>('[data-time-axis]')
     if (!axis) throw new Error('no time axis rendered')
@@ -143,7 +155,7 @@ describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
 
   it('removes every retired region and control', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     expect(document.querySelector('[data-canvas-viewport]')).toBeNull()
     expect(document.querySelector('[data-block-layer]')).toBeNull()
@@ -159,7 +171,7 @@ describe('Canvas scrolling and structure (FR-032, FR-033, D2)', () => {
 describe('Canvas day bands (FR-039)', () => {
   it('states each day band as Day N, events, finish, peak strips and findings, with no date', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     const bandFormat = /^Day \d · \d+ events · finishes (\d\d:\d\d|—) · \d+ of 80 strips at peak · \d+ findings$/
     for (const day of [0, 1, 2, 3]) {
@@ -174,15 +186,11 @@ describe('Canvas zoom (FR-034, D3)', () => {
   it('coarsens tick density at the bottom rung relative to the top rung', () => {
     const { schedule, findings, dayConfigs } = b1Board()
 
-    render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 0, fitting: false }} findingRows={[]} pinnedIds={NO_PINS} />,
-    )
+    renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 0, fitting: false } })
     const rung0Ticks = hourTicks().length
     cleanup()
 
-    render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 5, fitting: false }} findingRows={[]} pinnedIds={NO_PINS} />,
-    )
+    renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 5, fitting: false } })
     const rung5Ticks = hourTicks().length
 
     expect(rung0Ticks).toBeGreaterThan(0)
@@ -192,9 +200,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
   it('positions blocks in percent under fitting and in pixels on the ladder', () => {
     const { schedule, findings, dayConfigs } = b1Board()
 
-    render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: true }} findingRows={[]} pinnedIds={NO_PINS} />,
-    )
+    renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 2, fitting: true } })
     const fittingBlocks = eventBlocks()
     expect(fittingBlocks.length).toBeGreaterThan(0)
     for (const block of fittingBlocks) {
@@ -203,9 +209,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
     }
     cleanup()
 
-    render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: false }} findingRows={[]} pinnedIds={NO_PINS} />,
-    )
+    renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 2, fitting: false } })
     const laddderBlocks = eventBlocks()
     expect(laddderBlocks.length).toBeGreaterThan(0)
     for (const block of laddderBlocks) {
@@ -232,9 +236,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
     const dayConfigs: DayConfig[] = [{ day_start_time: 480, day_end_time: 1320 }]
     const expectedBlocks = assignStripLanes(schedule.events, config.strips_total).length
 
-    render(
-      <Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={{ zoomStep: 2, fitting: true }} findingRows={[]} pinnedIds={NO_PINS} />,
-    )
+    renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 2, fitting: true } })
 
     expect(eventBlocks()).toHaveLength(expectedBlocks)
   })
@@ -243,7 +245,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
 describe('Canvas selection (013 T028, contract §6)', () => {
   it('calls selectCompetition with the clicked block\'s competition id', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     const block = eventBlocks()[0]
     const competitionId = block.dataset.eventId
@@ -259,7 +261,7 @@ describe('Canvas selection (013 T028, contract §6)', () => {
     const selectedId = schedule.competitions[0].id
     futureState().selectCompetition(selectedId)
 
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     const blocks = eventBlocks()
     expect(blocks.some((block) => block.dataset.eventId === selectedId)).toBe(true)
@@ -329,7 +331,7 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
   it('flags the strip row a findingRows entry targets, and leaves an uninvolved row alone', () => {
     const { schedule, findings, dayConfigs } = flaggedFixture()
 
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[row]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs }, { findingRows: [row] })
 
     // assignStripLanes gives the only candidate firstStrip 0 over 2 strips, so
     // rows are located by document position (strip index order) rather than
@@ -346,7 +348,7 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
   it('flags nothing from findings alone once findingRows no longer names the target (red: today\'s flaggedCompetitions(findings) still flags it)', () => {
     const { schedule, findings, dayConfigs } = flaggedFixture()
 
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     const rows = stripRowsInDay(0)
     expect(rows).toHaveLength(4)
@@ -388,7 +390,7 @@ describe('Canvas jump (013 T030, contract §4.4)', () => {
 
   it("scrolls the target's block into view and flashes every block of that event once", () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     const targetId = schedule.competitions[0].id
     act(() => {
@@ -414,7 +416,7 @@ describe('Canvas jump (013 T030, contract §4.4)', () => {
 
   it('flashes again on the next jump', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     const targetId = schedule.competitions[0].id
     act(() => {
@@ -432,7 +434,7 @@ describe('Canvas jump (013 T030, contract §4.4)', () => {
 
   it('a jump to an event with no drawn block scrolls nothing', () => {
     const { schedule, findings, dayConfigs } = b1Board()
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     act(() => {
       jumpFutureState().jumpToCompetition('NOT-ON-THE-BOARD')
@@ -456,7 +458,7 @@ describe('Canvas jump (013 T030, contract §4.4)', () => {
       selectedCompetitionId: targetId,
     } as unknown as Partial<StoreState>)
 
-    render(<Canvas schedule={schedule} findings={findings} dayConfigs={dayConfigs} zoom={DEFAULT_ZOOM} findingRows={[]} pinnedIds={NO_PINS} />)
+    renderCanvas({ schedule, findings, dayConfigs })
 
     expect(scrollIntoViewMock).not.toHaveBeenCalled()
   })
@@ -487,19 +489,12 @@ describe('Canvas pin badge (FR-042, 013 T046)', () => {
     const { schedule, findings, dayConfigs } = b1Board()
     const pinnedId = schedule.competitions[0].id
     const otherId = schedule.competitions[1].id
-    // The store pins nothing, so only the prop can be what marks a block.
-    expect(Object.values(useStore.getState().placements).some((p) => p.pinned)).toBe(false)
+    // The store pins `otherId` while the prop pins only `pinnedId`, so a Canvas
+    // that reads the store at all marks the wrong block.
+    useStore.getState().setPinned(otherId, true)
+    expect(useStore.getState().placements[otherId]?.pinned).toBe(true)
 
-    render(
-      <Canvas
-        schedule={schedule}
-        findings={findings}
-        dayConfigs={dayConfigs}
-        zoom={DEFAULT_ZOOM}
-        findingRows={[]}
-        pinnedIds={new Set([pinnedId])}
-      />,
-    )
+    renderCanvas({ schedule, findings, dayConfigs }, { pinnedIds: new Set([pinnedId]) })
 
     const pinnedBlocks = eventBlocks().filter((b) => b.dataset.eventId === pinnedId)
     const otherBlocks = eventBlocks().filter((b) => b.dataset.eventId === otherId)

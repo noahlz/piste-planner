@@ -6,6 +6,7 @@ import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import { VIEW_STATE_STORAGE_KEY, ViewMode } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
 import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
+import { pinBadges } from '../../helpers/canvasQueries.ts'
 
 // 004 T008 — the dimmed-invalid rule (FR-009, S2-contract.md §Center view
 // and the dimmed-invalid rule): the center never blanks. While any derived
@@ -263,9 +264,14 @@ describe('CenterView dimmed-invalid rule (day band, FR-042)', () => {
   })
 })
 
-// FR-042, finding 25 (T046) — the pin badge commits with the schedule, so
-// while a finding is ERROR it holds at the last committed pinned set.
-describe('CenterView holds the pin badge while blocking (FR-042, T046)', () => {
+// The suite above proves the dim and the overlay, both of which are driven by
+// *live* findings and land synchronously. The suppression rule itself — that
+// the CENTER_SETTLE_MS timer never replaces `committed` while a finding is
+// ERROR — only shows up once that timer is given a chance to fire, which
+// needs fake timers: on real timers the debounce simply never
+// elapses inside the test, so a version of CenterView with the suppression
+// guard deleted would pass every case above unnoticed.
+describe('CenterView suppresses the settle-timer commit while blocking (FR-009)', () => {
   let restoreResizeObserver: () => void
 
   beforeEach(() => {
@@ -276,55 +282,6 @@ describe('CenterView holds the pin badge while blocking (FR-042, T046)', () => {
   afterEach(() => {
     vi.useRealTimers()
     restoreResizeObserver()
-  })
-
-  it('keeps the badge unpinned after a pin lands during an ERROR, however long the wait', () => {
-    const id = seedPlacedCompetition()
-    render(
-      <CenterView
-        viewMode={ViewMode.MATRIX}
-        zoom={{ zoomStep: 2, fitting: false }}
-        detailCollapsed={false}
-        onToggleDetailCollapsed={() => {}}
-      />,
-    )
-    const badges = (): (string | undefined)[] =>
-      Array.from(document.querySelectorAll<HTMLElement>(`[data-event-id="${id}"]`)).map(
-        (el) => el.dataset.pinned,
-      )
-    expect(badges().length, 'the canvas drew no blocks for the event').toBeGreaterThan(0)
-
-    act(() => {
-      useStore.getState().setStrips(0)
-    })
-    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
-
-    act(() => {
-      useStore.getState().setPinned(id, true)
-    })
-    act(() => {
-      vi.advanceTimersByTime(CENTER_SETTLE_MS * 4)
-    })
-
-    expect(useStore.getState().placements[id]?.pinned).toBe(true)
-    expect(badges().every((p) => p === 'false')).toBe(true)
-  })
-})
-
-// The suite above proves the dim and the overlay, both of which are driven by
-// *live* findings and land synchronously. The suppression rule itself — that
-// the CENTER_SETTLE_MS timer never replaces `committed` while a finding is
-// ERROR — only shows up once that timer is given a chance to fire, which
-// needs fake timers: on real timers (as above) the debounce simply never
-// elapses inside the test, so a version of CenterView with the suppression
-// guard deleted would pass every case above unnoticed.
-describe('CenterView suppresses the settle-timer commit while blocking (FR-009)', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   /** The row's cells in table order: id, pool start, pool end, DE start, DE end, strips. */
@@ -414,5 +371,49 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
     expect(after).not.toEqual(before)
     expect(after[2]).toBe('11:30') // pool end at strips_total=6
     expect(after[5]).toBe('4') // pool_strip_count at strips_total=6
+  })
+
+  it('holds the pin badge at the committed pinned set while blocking, then lands it once valid (FR-042, T046)', () => {
+    // The pin badge commits with the schedule, so a pin made during an ERROR
+    // stays off the badge however long the wait, until the config is valid
+    // and a settle passes.
+    const id = seedPlacedCompetition()
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
+    const before = pinBadges(id)
+    expect(before.length, 'the canvas drew no blocks for the event').toBeGreaterThan(0)
+
+    act(() => {
+      useStore.getState().setStrips(0)
+    })
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
+
+    act(() => {
+      useStore.getState().setPinned(id, true)
+    })
+    act(() => {
+      // Several settles' worth, to show the hold is not just a slow timer.
+      vi.advanceTimersByTime(CENTER_SETTLE_MS * 4)
+    })
+
+    expect(useStore.getState().placements[id]?.pinned).toBe(true)
+    expect(pinBadges(id)).toEqual(before.map(() => 'false'))
+
+    act(() => {
+      // Back to the seeded valid strip count: the ERROR clears.
+      useStore.getState().setStrips(12)
+    })
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS)
+    })
+
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
+    expect(pinBadges(id)).toEqual(before.map(() => 'true'))
   })
 })

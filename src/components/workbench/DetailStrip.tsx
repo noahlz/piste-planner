@@ -47,6 +47,10 @@ const ICON_BUTTON =
  * plus the two setters and `setPinned`/`updatePlacement`/`updateCompetition`)
  * come from the live store. A button that named a fact three keystrokes stale
  * would tell the organizer they had already pinned something they had not.
+ * The Pin button reads the store live on purpose (a control acknowledges a
+ * press at once), while the canvas badge follows the committed model (FR-042,
+ * T046), so the two can disagree for one settle, or for as long as a blocking
+ * ERROR holds the commit – this is deliberate.
  *
  * ## Placed vs unplaced is `schedule.events`, not `placements`
  *

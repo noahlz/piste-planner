@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../../store/store.ts'
-import type { DayConfig } from '../../engine/types.ts'
+import type { DayConfig, Placement } from '../../engine/types.ts'
 import {
   selectDerivedFindings,
   selectDerivedSchedule,
@@ -18,6 +18,19 @@ import { AlertCircle } from 'lucide-react'
 
 /** How long an edit must settle before the center relayouts (FR-008). */
 export const CENTER_SETTLE_MS = 150
+
+/**
+ * The ids of the pinned placements. Pure and called from the state initializer
+ * and the settle timer, so the set is built from the same render's placements
+ * as the schedule it commits with and no memo identity is relied upon.
+ */
+function pinnedIdsOf(placements: Record<string, Placement>): ReadonlySet<string> {
+  return new Set(
+    Object.entries(placements)
+      .filter(([, placement]) => placement.pinned)
+      .map(([id]) => id),
+  )
+}
 
 /** The derived model the center is currently drawing, whichever view is up. */
 interface CommittedModel {
@@ -40,7 +53,7 @@ interface CommittedModel {
    * The ids of the competitions pinned when this model committed (FR-042,
    * finding 25, 013 T046), so the pin badge on a block can never describe a
    * schedule the grid is not drawing – a pin lands on the next settle with the
-   * blocks, and not at all while a blocking ERROR suppresses the commit.
+   * blocks, or once a blocking ERROR clears and the next settle passes.
    */
   pinnedIds: ReadonlySet<string>
 }
@@ -125,17 +138,6 @@ export function CenterView({
   const liveFindingRows = useStore(selectFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)
   const livePlacements = useStore((s) => s.placements)
-  // Memoised so the set's identity only changes with `placements`, keeping the
-  // commit effect below from re-arming on every render.
-  const livePinnedIds = useMemo<ReadonlySet<string>>(
-    () =>
-      new Set(
-        Object.entries(livePlacements)
-          .filter(([, placement]) => placement.pinned)
-          .map(([id]) => id),
-      ),
-    [livePlacements],
-  )
 
   const blocking = liveFindings.validationErrors.filter((e) => e.severity === 'ERROR')
   const hasBlocking = blocking.length > 0
@@ -145,7 +147,7 @@ export function CenterView({
     findings: liveFindings,
     findingRows: liveFindingRows,
     dayConfigs: liveDayConfigs,
-    pinnedIds: livePinnedIds,
+    pinnedIds: pinnedIdsOf(livePlacements),
   }))
 
   useEffect(() => {
@@ -160,12 +162,12 @@ export function CenterView({
           findings: liveFindings,
           findingRows: liveFindingRows,
           dayConfigs: liveDayConfigs,
-          pinnedIds: livePinnedIds,
+          pinnedIds: pinnedIdsOf(livePlacements),
         }),
       CENTER_SETTLE_MS,
     )
     return () => clearTimeout(timer)
-  }, [live, liveFindings, liveFindingRows, liveDayConfigs, livePinnedIds, hasBlocking])
+  }, [live, liveFindings, liveFindingRows, liveDayConfigs, livePlacements, hasBlocking])
 
   const showingMatrix = viewMode === ViewMode.MATRIX
 
