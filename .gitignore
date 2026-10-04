@@ -153,3 +153,4 @@ tmp/
 
 # live smoke screenshots
 scripts/smoke-shots/
+*.swp

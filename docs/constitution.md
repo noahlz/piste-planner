@@ -10,7 +10,7 @@
 
 ### II. Test-First
 - Write failing tests first, confirm the failure reason, then implement.
-- Update tests in the same task as the behavior change.
+- Update tests in the same change as the behavior they cover.
 - Dispatch `test-quality-reviewer` after test edits and `react-code-reviewer` after React edits.
 
 ### III. Behavior Drift Is Measured, Not Assumed
@@ -23,38 +23,25 @@
 - Use `as const` objects with derived unions – never enums, namespaces, or parameter properties.
 
 ### VI. The App Is Verified Live
-- End every user-visible feature with `scripts/smoke.mjs` passing against the running app (`live-smoke` skill).
-- Update the driver in the task that reshapes the UI – never rewrite it from scratch.
+- End every user-visible change with `scripts/smoke.mjs` passing against the running app (`live-smoke` skill).
+- Update the driver in the same change that reshapes the UI – never rewrite it from scratch.
+- Dispatch iterative verification, such as live-smoke locator repair, to a subagent.
 
-## Planning Artifacts
-- Keep in-flight feature work in `specs/<nnn>-<short-name>/`. Planning method for new features: undecided.
-- Write intent and expected behavior in plans, never implementation code.
-- Put cross-phase design in `docs/design/` and point to it.
-- Give each fact one home – other copies are pointers.
+## Planning and Implementation
+- Choose your own approach to planning, task breakdown, and delegation.
+- Describe intent and expected behavior in plans, not pre-written implementation code.
+- Keep cross-phase design in `docs/design/` and point to it rather than restating it.
 
 ## Git Ownership
-- Never `push`, `merge`, `rebase`, `reset --hard`, delete branches, or make a feature's closing commit – the user owns `main`.
+- Never `push`, `merge`, `rebase`, `reset --hard`, delete branches, or make the commit that closes a piece of work – the user owns `main`.
 - Run read-only git freely.
-- Name one flow per feature in `plan.md`:
-
-| Flow | Subagents commit | User finishes with |
-|---|---|---|
-| Worktree | yes, on the worktree branch, with drift counts and corrections in messages | `merge-with-costs` into `main` |
-| Root | no | `commit-with-costs` at each `tasks.md` checkpoint marked "(user commits)" |
-
-- Never squash.
+- Commit freely inside a git worktree, on its own branch, recording drift counts and deliberate corrections in the messages.
+- Never commit outside a worktree – the user commits there with `commit-with-costs`.
+- Merge branches into `main` only via the user's `merge-with-costs` – never squash.
 
 ### The merge is checked too, not just the branch
 - Run `tsc -b`, `lint`, and the full suite on the merged tree before `merge-with-costs`, and fix red first.
-- Write any predicted cross-feature collision as a task in the receiving feature's `tasks.md`.
-
-## Orchestration & Model Roles
-- Never write code as orchestrator beyond 1–5 line edits – dispatch to subagents.
-- Dispatch on Sonnet, reserving Opus for complicated tasks.
-- Dispatch iterative verification, including live-smoke locator repair.
-- Stop after revising `tasks.md` or `plan.md` mid-implementation: record changes, hand back a resume prompt.
-- Treat ticks, outcome annotations, Delivered status, and carried corrections as record-keeping, not re-planning.
+- Turn any predicted collision with another branch into a concrete check or test, not handoff prose.
 
 ## Governance
-- Check `plan.md` against these principles before and after design, and log violations in Complexity Tracking with the rejected simpler alternative.
 - Defer to `CLAUDE.md` and `~/.claude` rules for anything not covered here.

@@ -12,7 +12,7 @@ React + TypeScript + Vite. UI: shadcn/ui (Radix), Tailwind CSS v4, Zustand. Test
 - `src/store/` — Zustand store. `buildConfig.ts` bridges store state to engine types.
 - `src/components/` — React UI with wizard and single-page layouts.
 - `__tests__/` — mirrors `src/`. Factories in `__tests__/helpers/factories.ts`.
-- `specs/` — feature work in flight. `docs/design/` — cross-phase design and backlog.
+- `specs/` — past and in-flight feature notes. `docs/design/` — cross-phase design and backlog.
 
 ## Commands
 
@@ -32,10 +32,6 @@ Tournament types: NAC (North American Cup), ROC (Regional Open Circuit), RYC (Re
 ## MCP Tools
 
 ts-morph MCP `tsconfigPath`: use `./tsconfig.app.json`, not `tsconfig.json`.
-
-## Methodology
-
-Execute a feature's `tasks.md` one subagent per task. Method for new features: undecided.
 
 ## Closing a session
 
