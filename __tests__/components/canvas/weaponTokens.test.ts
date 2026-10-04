@@ -69,11 +69,6 @@ describe('weaponToken', () => {
 })
 
 describe('weaponVar', () => {
-  it('wraps the token name in var(...)', () => {
-    expect(weaponVar(Weapon.FOIL, WeaponTokenPart.FILL)).toBe('var(--weapon-foil-fill)')
-    expect(weaponVar(Weapon.SABRE, WeaponTokenPart.HATCH)).toBe('var(--weapon-sabre-hatch)')
-  })
-
   it('returns the exact var(...) string for every weapon and part', () => {
     const actual = Object.fromEntries(
       CASES.map(([weapon, part]) => [`${weapon}/${part}`, weaponVar(weapon, part)]),
