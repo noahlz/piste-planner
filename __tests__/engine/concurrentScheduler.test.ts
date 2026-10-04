@@ -590,14 +590,14 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
 // consumer side: scheduleAllConcurrent must turn each one into a WARN
 // bottleneck naming both competitions, and must never emit one when the
 // coloring is satisfiable. Fixture and strip count match
-// __tests__/engine/dayColoring.test.ts's R7 suite exactly, per baseline.md §2.
+// __tests__/engine/dayColoring.test.ts's R7 suite exactly, per specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md).
 // ──────────────────────────────────────────────
 
 describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T010)', () => {
   const STRIPS = 80
   const VIDEO_STRIPS = 12
 
-  /** Builds one template through the app's own configuration path, exactly as baseline.md §2/§3 measured it. */
+  /** Builds one template through the app's own configuration path, exactly as specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)/§3 measured it. */
   function buildTemplate(name: string) {
     useStore.setState(useStore.getInitialState(), true)
     const state = () => useStore.getState()
@@ -608,11 +608,12 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
     return buildTournamentConfig(state())
   }
 
-  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one WARN UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck per hard-edged pair, naming both ids (baseline.md §2, 6 pairs)', () => {
+  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one WARN UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck per hard-edged pair, naming both ids (6 pairs)', () => {
     const { config, competitions } = buildTemplate('NAC Cadet/Junior')
     const { bottlenecks } = scheduleAllConcurrent(competitions, config)
 
-    // baseline.md §2 "Witness pairs" table, 80 strips / 12 video column.
+    // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) "Witness pairs" table, 80 strips / 12 video column.
     const expectedPairs: [string, string][] = [
       ['CDT-M-EPEE-TEAM', 'JR-M-EPEE-TEAM'],
       ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
@@ -646,7 +647,8 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
     }
   })
 
-  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable, reports no UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck (baseline.md §2, viol=0)', () => {
+  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
+  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable, reports no UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck (viol=0)', () => {
     const { config, competitions } = buildTemplate('NAC Youth')
     const { bottlenecks } = scheduleAllConcurrent(competitions, config)
 

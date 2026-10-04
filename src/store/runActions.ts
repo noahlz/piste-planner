@@ -58,7 +58,7 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
     if (result.pool_start === null) continue
     placements[id] = {
       day: result.assigned_day,
-      // result.pool_start is on the scheduler axis (contracts/day-axis.md C2)
+      // result.pool_start is on the scheduler axis (specs/006-day-axis-parity/contracts/day-axis.md C2 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md))
       // — day d's times are shifted by d*DAY_AXIS_SPACING_MINS. Subtract that
       // shift back off before it becomes a clock-axis Placement.start_time,
       // which is the only axis the store, the shared link, and the canvas

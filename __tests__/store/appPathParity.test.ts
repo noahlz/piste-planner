@@ -4,7 +4,7 @@ import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
 import type { ScenarioId } from '../../src/data/tournaments.ts'
 
 /**
- * The app-path parity check (contracts/day-axis.md C5, FR-004): for each of
+ * The app-path parity check (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), FR-004): for each of
  * the eight reference tournaments, the app's own route — `applyPreset` →
  * `buildTournamentConfig` → `scheduleAll` — must place the count the drift
  * ledger records for that tournament, unless FR-004a pins a documented
@@ -12,21 +12,21 @@ import type { ScenarioId } from '../../src/data/tournaments.ts'
  *
  * Every number below was measured on 2026-08-31 after the axis fix landed
  * (T006/T008, commit b20f351347), not predicted. The classification behind
- * each exception is `specs/006-day-axis-parity/parity-exceptions.md`; the
+ * each exception is `specs/006-day-axis-parity/parity-exceptions.md` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md); the
  * short form lives beside the number here so a reader who only opens this
  * file still learns why it is what it is.
  *
  * B2's `24` and B8's `53` were re-measured on 2026-08-31 by feature 008
  * (T004, T008/T009), against 008's own code rather than 006's axis fix. B8's
- * classification is `specs/008-team-event-cut/b8-residual.md`, alongside
- * this file's existing pointer to `parity-exceptions.md`.
+ * classification is `specs/008-team-event-cut/b8-residual.md` (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md), alongside
+ * this file's existing pointer to `specs/006-day-axis-parity/parity-exceptions.md` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md).
  *
  * **All eight were re-measured on 2026-09-01 by 004 US4 (T063a)**, against the
  * post-D5/D6/D7/T061a tree, and every number below is what that run reported
  * rather than what it was hoped to report. Two moved: B4 16 → **0**, which is
  * the ledger's own count, so its FR-004a exception is gone; and B6 43 → **39**,
  * which is one further from the ledger, not nearer. B8 did not move off 53.
- * The account of both movements is `specs/004-p3-workbench-shell/drift-baseline.md`
+ * The account of both movements is `specs/004-p3-workbench-shell/drift-baseline.md` (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/drift-baseline.md)
  * §T062 and commit `29aabc9031`.
  *
  * **No exception below is attributable to the day axis** (FR-004a's hard
@@ -39,7 +39,7 @@ import type { ScenarioId } from '../../src/data/tournaments.ts'
 
 /**
  * The drift ledger's `scheduledCount` per scenario — the target parity is
- * measured against, carried from baseline.md's ledger column and unchanged
+ * measured against, carried from specs/006-day-axis-parity/baseline.md's (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md) ledger column and unchanged
  * by this feature (FR-005). Where a pin below differs from its entry here,
  * `PARITY_EXCEPTIONS` must say why.
  *
@@ -73,7 +73,7 @@ interface ParityException {
 /**
  * FR-004a exceptions. Admissible only for a per-competition default the two
  * paths have not converged on; a day-axis difference is a contract violation,
- * not an exception (contracts/day-axis.md C5).
+ * not an exception (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)).
  *
  * 006 recorded three, all at the same seam: `defaultConfigForId`
  * (`src/store/store.ts`) and `buildConfig.ts` build a competition differently
@@ -135,7 +135,7 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
    * `strips_allocated: 0` had been hiding, and B6 re-packed at its capacity
    * margin — 8 events out, 4 in, `validateFeasibility` clean on both sides.
    * Isolated and recorded in commit `29aabc9031` and in
-   * `specs/004-p3-workbench-shell/drift-baseline.md` §T062.
+   * `specs/004-p3-workbench-shell/drift-baseline.md` (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/drift-baseline.md) §T062.
    *
    * Two per-competition defaults still differ, both of them the store
    * resolving per tournament type where the ledger's factory resolves per
@@ -182,14 +182,14 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
 
   /**
    * B8 held at 53 against the ledger's 52 — re-measured at T063a, not
-   * assumed. The 006/008 record (`specs/008-team-event-cut/b8-residual.md`)
+   * assumed. The 006/008 record (`specs/008-team-event-cut/b8-residual.md` (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md))
    * attributed the +1 jointly to `de_mode` **and** `strips_allocated`, each
    * necessary and neither sufficient. **US4 closed one half and inverted the
    * other**, and the two changes cancel at the count while changing the
    * cause underneath it:
    *
    * - `strips_allocated` now differs on **zero** of the 53 events. T061a
-   *   adopted the ledger's `max(2, ceil(n/7))`, so half of b8-residual.md's
+   *   adopted the ledger's `max(2, ceil(n/7))`, so half of specs/008-team-event-cut/b8-residual.md's (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md)
    *   conjunction is gone.
    * - `de_mode` now differs on **41**, and in the opposite direction. B8 is a
    *   NAC, so US4's per-type table (`data-model.md`) resolves all 53 to
@@ -198,7 +198,7 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
    *   app was the `SINGLE_STAGE` side before and is the `STAGED` side now.
    *
    * So B8 was never going to reach 52 through US4: 52 is what
-   * `b8-residual.md` P1 measured under the **ledger's** per-event staging
+   * `specs/008-team-event-cut/b8-residual.md` (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md) P1 measured under the **ledger's** per-event staging
    * rule, and US4 shipped the per-type rule instead — a different assignment
    * of `de_mode` to events, not a failed attempt at the same one. That is a
    * decided difference in rules, not a shortfall against a target.
@@ -212,8 +212,8 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
   B8: {
     appPath: 53,
     ledger: 52,
-    cause: 'de_mode is now the whole gap, and it is the two paths applying different rules rather than one lagging the other: US4 resolves de_mode from the per-type table (NAC → STAGED, all 53 events) while the ledger derives it per event from a REQUIRED video policy (12 events staged), so 41 of 53 differ. b8-residual.md\'s second cause, strips_allocated, closed in T061a and now differs on zero events',
-    evidence: 'measured at T063a: 53 on the app\'s config and 53 on the ledger\'s, against the ledger\'s 52 on either config. Swapping in the ledger\'s de_mode alone now takes the app path to 52 — sole and sufficient, where b8-residual.md R2/R3/P1 measured it as necessary-but-not-sufficient alongside strips_allocated. cut_mode, cut_value, strips_allocated and de_video_policy differ on zero of the 53',
+    cause: 'de_mode is now the whole gap, and it is the two paths applying different rules rather than one lagging the other: US4 resolves de_mode from the per-type table (NAC → STAGED, all 53 events) while the ledger derives it per event from a REQUIRED video policy (12 events staged), so 41 of 53 differ. specs/008-team-event-cut/b8-residual.md\'s (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md) second cause, strips_allocated, closed in T061a and now differs on zero events',
+    evidence: 'measured at T063a: 53 on the app\'s config and 53 on the ledger\'s, against the ledger\'s 52 on either config. Swapping in the ledger\'s de_mode alone now takes the app path to 52 — sole and sufficient, where specs/008-team-event-cut/b8-residual.md (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md) R2/R3/P1 measured it as necessary-but-not-sufficient alongside strips_allocated. cut_mode, cut_value, strips_allocated and de_video_policy differ on zero of the 53',
     closedBy: 'the same follow-up as B6 — "The drift ledger\'s factory does not apply the store\'s per-type resolutions" in docs/design/backlog.md, unnumbered: the ledger\'s factory (__tests__/helpers/scenarios.ts:66-68) adopts the per-type de_mode table in place of its per-event video derivation. Not 004 US4: that would edit the comparison point T062 diffs against, moving the drift ledger\'s own recorded counts under constitution III',
   },
 }
@@ -244,7 +244,8 @@ const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
   B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
 }
 
-describe('app-path parity with the drift ledger (contracts/day-axis.md C5)', () => {
+// specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)
+describe('app-path parity with the drift ledger (day-axis C5)', () => {
   it.each(SCENARIO_IDS)('%s places its pinned app-path count', (id) => {
     const exception = PARITY_EXCEPTIONS[id]
     const result = runAppPath(id)
@@ -322,10 +323,10 @@ describe('app-path parity with the drift ledger (contracts/day-axis.md C5)', () 
    * research.md D1, second symptom: with all four of B1's day windows
    * coincident on the absolute axis, `findDayForTime` resolves every
    * allocation to day 0, so referee demand collapses onto day one instead of
-   * being spread across the tournament's four days. baseline.md measured
+   * being spread across the tournament's four days. specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md) measured
    * this exactly: day 0 carries all 134 peak refs, days 1–3 read zero.
    *
-   * B1 is the scenario baseline.md measured this on, and it is the boot
+   * B1 is the scenario specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md) measured this on, and it is the boot
    * preset — the tournament this symptom was originally noticed against.
    */
   it('spreads B1\'s referee requirements across its four days, not all onto day one', () => {

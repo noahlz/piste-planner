@@ -58,7 +58,7 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  * `CenterView`, so the axis this draws never runs ahead of the blocks it
  * bounds. `dayConfigs` is the store's, never `schedule.config.dayConfigs`,
  * which for a scheduled tournament may carry the scheduler's own day axis
- * rather than clock time (contracts/day-axis.md C4, research D4/D5).
+ * rather than clock time (specs/006-day-axis-parity/contracts/day-axis.md C4 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), research D4/D5).
  *
  * The day bands are computed here too, by `daySummariesFromBlocks` over this
  * component's own `lanes` — the same committed blocks the grid draws — plus

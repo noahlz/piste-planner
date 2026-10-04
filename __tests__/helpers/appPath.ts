@@ -3,11 +3,11 @@
  * `buildTournamentConfig` → `scheduleAll` → `runScheduleAll`'s placement
  * filter — the same path `src/store/boot.ts` takes. No test-only shortcut
  * around `buildTournamentConfig`: this is the instrument the parity check
- * (contracts/day-axis.md C5) and the smoke floors read their numbers from,
+ * (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)) and the smoke floors read their numbers from,
  * so it has to be the real app path, not a stand-in for it.
  *
  * `runScheduleAll` only ever persists placements — `ref_requirements_by_day`
- * is a `scheduleAll` return value the store does not keep (baseline.md
+ * is a `scheduleAll` return value the store does not keep (specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)
  * "Referee attribution"), so this harness re-derives it by calling
  * `buildTournamentConfig` and `scheduleAll` directly rather than reading it
  * back off the store.
@@ -25,7 +25,7 @@ export interface AppPathResult {
   placedCount: number
   /** `Object.keys(store.selectedCompetitions).length` after `applyPreset`. */
   selectedCount: number
-  /** From the same `scheduleAll` run, keyed by day (baseline.md "Referee attribution"). */
+  /** From the same `scheduleAll` run, keyed by day (specs/006-day-axis-parity/baseline.md "Referee attribution" (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)). */
   refRequirementsByDay: RefRequirementsByDay[]
 }
 

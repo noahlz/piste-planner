@@ -523,7 +523,7 @@ reviews (FR-069).
   `handoff.md` §Verdicts and carried into T044's scope
   → Run 2026-09-07 at 785327a42f: SMOKE PASS, 0 console errors, no driver
   edit, Suggest 15/63/80/48; both shots sent to the product owner. Re-look
-  verdict pending – recorded and ticked in the next session (sessions/S4.md).
+  verdict pending – recorded and ticked in the next session.
   → Recorded 2026-09-07: SMOKE PASS, 0 console errors, no driver edit, and
   the product owner's re-look verdict is "matches" – nothing carried into
   T044 (handoff.md §Verdicts).
@@ -704,7 +704,7 @@ policy. `appPathParity.test.ts` unchanged. A v2 link is refused.
   `de_mode_override` key round-trips to null; two fixture comments corrected;
   the cut-ordering case is marked ordering-only. 72 files, 1837 passing.
 
-- [ ] **T022** [US2] Settings panel and the last two store changes (FR-029 to
+- [x] **T022** [US2] Settings panel and the last two store changes (FR-029 to
   FR-031, FR-063, [research D7](./research.md)). Red first:
   `__tests__/components/workbench/panels/SettingsPanel.test.tsx` re-targets
   `__tests__/components/workbench/SettingsPanel.test.tsx` (deleted here) –
@@ -1279,6 +1279,9 @@ placed event once at the canvas's times, and printing yields four pages.
   reporting a pin collision, `Bottleneck`'s missing second subject, the two
   dead constants and the unwired `daySequencing.ts` research D1 found
   *(subagent commits)*
+  Backlog closures for the canvas, fencer-count-0/1, Advanced-panel, rail and
+  save/load entries done 2026-10-04 in the repo cleanup; what remains for T042
+  is recording what 013 deliberately did not fix.
 
 - [ ] **T043** Write `specs/013-workbench-redesign/handoff.md`: §Verdicts (the
   T015 screenshot verdict, T023's NAC Youth value, T041's print check); the

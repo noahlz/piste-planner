@@ -11,7 +11,7 @@
  * them or does not exist.
  *
  * **The scan runs upward one strip at a time, and that is load-bearing.** `[M]`
- * `specs/012-actionable-strip-suggestion/baseline.md` §1a swept every count in
+ * `specs/012-actionable-strip-suggestion/baseline.md` (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) §1a swept every count in
  * range across ten templates: on four of them a count *above* the smallest
  * working count places *fewer* events. Scheduling is not monotonic in strip
  * count, so any method assuming it is — a bisection, or a scan that samples

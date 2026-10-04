@@ -187,7 +187,8 @@ describe('dismissals are sticky through rule flicker (spec US3 acceptance 2/4, e
   })
 })
 
-describe('dismissedFindings serialization round-trip (contracts/serialization-v2.md, SC-001)', () => {
+// specs/003-p2-derived-state/contracts/serialization-v2.md (removed; git show 0ab5bd2dc9:specs/003-p2-derived-state/contracts/serialization-v2.md)
+describe('dismissedFindings serialization round-trip (serialization-v2, SC-001)', () => {
   it('a store-level dismissal survives serializeState → deserializeState exactly', () => {
     setupB5()
     useStore.getState().setDays(1)

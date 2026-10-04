@@ -10,7 +10,7 @@ import { DEFAULT_CUT_BY_CATEGORY } from '../engine/constants.ts'
  * requires every team event to carry `DISABLED`, and the last time this
  * derivation diverged from a second copy of itself, the app shipped an empty
  * schedule for every tournament with team events
- * (specs/008-team-event-cut/research.md D1).
+ * (specs/008-team-event-cut/research.md D1 (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/research.md)).
  */
 export interface DefaultCut {
   mode: CutMode

@@ -3,7 +3,7 @@
 **Status**: approved design, 2026-08-27. Supersedes the 2026-05-06 four-phase
 Strip-Time Matrix rollout, whose plan files have been deleted. Its phase 1 scope
 survives as P1 of the roadmap below and is specified in detail at
-[`specs/001-p1-foundations/`](../../specs/001-p1-foundations/spec.md).
+`specs/001-p1-foundations/` (specs/001-p1-foundations/spec.md, removed; git show 0ab5bd2dc9:specs/001-p1-foundations/spec.md).
 
 This is the cross-phase design document. It outlives any single feature, so it
 lives here rather than under `specs/`. Each phase gets its own Spec Kit feature
@@ -162,7 +162,7 @@ the weapon instead.
 
 80 strips × 4 days is 320 rows, roughly 7000px tall at normal row height. The
 canvas is plain SVG built by the component itself – no charting library is a
-dependency (research [D1](../../specs/004-p3-workbench-shell/research.md)) – so
+dependency (research D1 (specs/004-p3-workbench-shell/research.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/research.md)) – so
 the component renders only the visible row window and the visible time window
 itself. This changes the component's structure rather than being a later
 optimization, so it belongs in the first implementation.
@@ -173,7 +173,7 @@ An HTML overlay, not the `title` attribute. A single controlled Radix
 `Tooltip` – `radix-ui` is already a dependency – anchored at a zero-size
 element the canvas positions per hovered block, portaled so it escapes the
 canvas clip and flipped near viewport edges by Radix's own collision detection
-(research [D1](../../specs/004-p3-workbench-shell/research.md), D3). Contents:
+(research D1 (specs/004-p3-workbench-shell/research.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/research.md), D3). Contents:
 event name, weapon, category, gender, day, phase, start and end as HH:MM,
 duration, strip range, and any findings attached to that block.
 
@@ -219,15 +219,17 @@ is a full canvas, not an empty form.
 
 ## Roadmap
 
+> Stale as of 2026-10-04: features through 013 have shipped. The next planning session rewrites this section.
+
 Each phase gets its own Spec Kit feature – `specs/<nnn>-<short-name>/` with
 `spec.md`, `plan.md`, and `tasks.md` – when it is picked up. This document is the
 design they all reference.
 
 | | Work | Depends on |
 |---|---|---|
-| **P1** | Foundations – `SLOT_MINS` 5, pod removal, double-strip removal, capacity model collapse, `perBoutDuration` helper, and the staged-DE referee correction. Specified in [`specs/001-p1-foundations/`](../../specs/001-p1-foundations/spec.md) | – |
+| **P1** | Foundations – `SLOT_MINS` 5, pod removal, double-strip removal, capacity model collapse, `perBoutDuration` helper, and the staged-DE referee correction. Specified in `specs/001-p1-foundations/` (specs/001-p1-foundations/spec.md, removed; git show 0ab5bd2dc9:specs/001-p1-foundations/spec.md) | – |
 | **P2** | Derived state – placements as intent, store inversion, staleness removal, validation split, days cap widened, findings identity, presets moved to `src/data` | P1 |
-| **P3** | Workbench shell and canvas – SVG matrix with zoom, virtualization, encoding, tooltip, rail, tray, drawer, view toggle, per-type defaults in the rail's Advanced panel, and the top-bar gears surface over settings the store already carries. Deletes wizard, kitchen sink, and `layoutMode`. **Delivered** – [`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md) | P2 |
+| **P3** | Workbench shell and canvas – SVG matrix with zoom, virtualization, encoding, tooltip, rail, tray, drawer, view toggle, per-type defaults in the rail's Advanced panel, and the top-bar gears surface over settings the store already carries. Deletes wizard, kitchen sink, and `layoutMode`. **Delivered** – `specs/004-p3-workbench-shell/` (specs/004-p3-workbench-shell/spec.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/spec.md) | P2 |
 | **P4** | Manual placement – event-level drag, unpack-to-blocks, advisory edit validation, undo/redo, `Auto-fill unplaced` via pre-colored DSatur and pre-seeded scheduler state | P3 |
 | **P5** | FLUID bout allocator – deferred. An auto-schedule strategy with no UI dependency | P1 |
 
@@ -238,11 +240,11 @@ strip intervals, pre-colored days, and exclusion from `buildEventStates`.
 
 ### Revised sequence (2026-08-31, re-ordered 2026-09-01)
 
-The [2026-08-31 reassessment](./reassessment-2026-08-31.md) found the app path
+The 2026-08-31 reassessment (`reassessment-2026-08-31.md`, removed; see git history at 0ab5bd2dc9) found the app path
 schedules 11 of B1's 24 events at boot (day-axis mismatch, its §2) and
 re-ordered the remaining work. The
-[2026-09-01 reassessment](./reassessment-2026-09-01.md) re-ordered what came
-after, once 004 closed. Both files' analysis is the record; this table is the
+2026-09-01 reassessment (`reassessment-2026-09-01.md`, removed; see git history at 0ab5bd2dc9) re-ordered what came
+after, once 004 closed. Both files' analysis is the record in git history; this table is the
 index.
 
 Everything above the 007 row is done. **The forward sequence is 009 → 010 →
@@ -253,10 +255,10 @@ decision has to be answered before it can be sized.
 
 | | Work | Status |
 |---|---|---|
-| **006** | Day-axis parity – reconcile the store's clock-time `dayConfigs` with the engine's compacted axis, add the app-path parity test (per preset, `applyPreset → buildTournamentConfig → scheduleAll` matches the ledger's scheduled count), restore the smoke boot floor to a real number | Done. Boot went from 11 of 24 to 24 of 24; full record in [`specs/006-day-axis-parity/`](../../specs/006-day-axis-parity/), handoff in [`handoff.md`](../../specs/006-day-axis-parity/handoff.md). **Unblocks 004 US3** |
+| **006** | Day-axis parity – reconcile the store's clock-time `dayConfigs` with the engine's compacted axis, add the app-path parity test (per preset, `applyPreset → buildTournamentConfig → scheduleAll` matches the ledger's scheduled count), restore the smoke boot floor to a real number | Done. Boot went from 11 of 24 to 24 of 24; full record in `specs/006-day-axis-parity/` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/), handoff in `handoff.md` (specs/006-day-axis-parity/handoff.md, removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/handoff.md). **Unblocks 004 US3** |
 | **004 US3–US5** | Scorecard, per-type defaults (the drift gate), gears – sessions S6–S9 | **Done 2026-09-01.** All five stories merged, US5 as `1fc119ae00`. T082's two human judgments went against the build – SC-004 fails, SC-002 mixed – and are carried in [`backlog.md`](./backlog.md) §The workbench canvas is not yet a finished surface |
-| **008** | Team-event cut default – team events reach the engine with a percentage cut, a BINDING error that empties the whole tournament's schedule; B2 and B8 place nothing today. A per-`event_type` default, **not** one of US4's per-tournament-type defaults. Found by 006, recorded in [`backlog.md`](./backlog.md) and [`parity-exceptions.md`](../../specs/006-day-axis-parity/parity-exceptions.md) | **Done 2026-08-31.** B2 went 0 → 24, B8 0 → 53; full record in [`specs/008-team-event-cut/`](../../specs/008-team-event-cut/) |
-| **007** | Rail rebuild – replace the five re-homed section components with purpose-built rail panels, resolve the FR-003/FR-004 top-bar/rail duplication | **Superseded 2026-09-01** by 009 simple workbench, [reassessment-2026-09-01.md §7](./reassessment-2026-09-01.md). 007 preserved the five-panel structure and so preserved the duplication; the product goal is now *fewer, larger* panels. 009 keeps the same tear-up directive with a narrower target, and absorbs the three canvas defects |
+| **008** | Team-event cut default – team events reach the engine with a percentage cut, a BINDING error that empties the whole tournament's schedule; B2 and B8 place nothing today. A per-`event_type` default, **not** one of US4's per-tournament-type defaults. Found by 006, recorded in [`backlog.md`](./backlog.md) and `parity-exceptions.md` (specs/006-day-axis-parity/parity-exceptions.md, removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) | **Done 2026-08-31.** B2 went 0 → 24, B8 0 → 53; full record in `specs/008-team-event-cut/` (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/) |
+| **007** | Rail rebuild – replace the five re-homed section components with purpose-built rail panels, resolve the FR-003/FR-004 top-bar/rail duplication | **Superseded 2026-09-01** by 009 simple workbench, reassessment-2026-09-01.md §7 (removed; see git history at 0ab5bd2dc9). 007 preserved the five-panel structure and so preserved the duplication; the product goal is now *fewer, larger* panels. 009 keeps the same tear-up directive with a narrower target, and absorbs the three canvas defects |
 | **009** | Simple workbench – one header, one home per setting, the rail rebuilt as two panels, one preset picker, dead controls removed, larger elements, and the three canvas defects fixed. Replaces 007 | **Superseded 2026-09-07** by the Claude Design workbench mockup. Never specced – 010, 011 and 012 shipped ahead of it. Its scope is absorbed into 013 workbench redesign, analysed in [workbench-design-alignment-2026-09-07.md](./workbench-design-alignment-2026-09-07.md), which is the record from here |
 | **010** | Empty-board fixes – the `indiv-team-same-day` BINDING rule that empties two templates on a 4-day tournament, and the strip under-suggestion that empties `ROC Mega`. Both reach an empty board through the same all-or-nothing gate | After 009. Unspecced. Detail in [`backlog.md`](./backlog.md); edits `src/engine/`, so constitution III applies |
 | **P4** | Manual placement, as above – additionally absorbs the parked decisions: advisory-vs-binding validation wiring, placement states (unplaced / day-known-time-unknown / placed / pinned), flighting as user intent or removal, zoom-to-selection enablement | After 010, and re-specced against the simpler rail |
@@ -264,7 +266,7 @@ decision has to be answered before it can be sized.
 P1 carries one item this design did not originally scope: DE referee demand
 becomes one referee per strip on every path, which raises staged-DE figures
 roughly 4× on the NAC scenarios. It is a correction to an under-count rather than
-a new feature, and decision D1 in [`specs/001-p1-foundations/research.md`](../../specs/001-p1-foundations/research.md)
+a new feature, and decision D1 in `specs/001-p1-foundations/research.md` (removed; git show 0ab5bd2dc9:specs/001-p1-foundations/research.md)
 holds the reasoning.
 Anyone comparing referee numbers across P1 should expect a step change.
 
@@ -299,11 +301,11 @@ copies, so detail goes there and nowhere else.
 | Item | Owner phase |
 |---|---|
 | Youth-event pool duration calibration | Unassigned. P1's US2 measures the delta it needs. |
-| `CAPACITY_TARGET_FILL = 0.3` re-tune | Done – [`specs/003-p2-derived-state/`](../../specs/003-p2-derived-state/), research.md D8 |
+| `CAPACITY_TARGET_FILL = 0.3` re-tune | Done – `specs/003-p2-derived-state/` (removed; git show 0ab5bd2dc9:specs/003-p2-derived-state/), research.md D8 |
 | Global settings – engine constants as a user-editable config file | Split. Gears control and first panel: delivered by 004 US5. Remainder: **unassigned, needs a spec** – it is not queued behind any phase. |
 | A what-if scenario mode | **Unassigned, needs a spec.** The five settings US5 withdrew are hypotheses, not organizer preferences – reframed 2026-09-01. |
 | METHODOLOGY ↔ engine reconciliation | **Unassigned, deferred 2026-09-01.** The doc is the spec and the engine has diverged from it. One blocking decision first – see `backlog.md`. |
-| Per-type defaults in the rail's Advanced panel | Done – [`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md) |
+| Per-type defaults in the rail's Advanced panel | Done – `specs/004-p3-workbench-shell/` (specs/004-p3-workbench-shell/spec.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/spec.md) |
 
 Detail for every row lives in `backlog.md`, which is the record.
 

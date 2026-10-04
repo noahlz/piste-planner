@@ -12,7 +12,7 @@ as it is today, and four reference screenshots.
 **Direction from the product owner**: the design takes precedence over the
 current UI. Where the design and the code disagree, this document says which
 side moves and what has to be cleaned up first. It supersedes
-[reassessment-2026-09-01.md §6–§7](./reassessment-2026-09-01.md) as the scope
+reassessment-2026-09-01.md §6–§7 (removed; see git history at 0ab5bd2dc9) as the scope
 of "009 simple workbench": that scope was never specced, 010–012 shipped ahead
 of it, and the design now defines the target it only sketched.
 
@@ -76,7 +76,7 @@ drawn.
 
 | # | What the design shows | Why it cannot ship as drawn | Resolution |
 |---|---|---|---|
-| I1 | **Video strips in two panels** – a "With video" stepper in Strips *and* "Video strips · 8 reserved for finals" in Settings | Two homes for one setting is the duplication 009 exists to remove ([reassessment §6.1](./reassessment-2026-09-01.md)) | One home: the Strips panel stepper. Settings drops the line |
+| I1 | **Video strips in two panels** – a "With video" stepper in Strips *and* "Video strips · 8 reserved for finals" in Settings | Two homes for one setting is the duplication 009 exists to remove (reassessment-2026-09-01.md §6.1, removed; see git history at 0ab5bd2dc9) | One home: the Strips panel stepper. Settings drops the line |
 | I2 | **Pool durations by pool size** – "Pool of 5 · 50 min, Pool of 6 · 60 min, Pool of 7 · 75 min" | The engine's table is per **weapon** (`pool_round_duration_table: Record<Weapon, number>`), and pool sizes are folded in by `weightedPoolDuration`. Feature 002 chose that axis | Rows become Foil / Epee / Saber. The per-size axis is future engine work and stays in the backlog under "Youth-event pool duration calibration" |
 | I3 | **"18 strips to finish every day by 18:00 · Apply"** | The search returns the smallest count that *places every event* (012 FR-001). No finish-time criterion exists, and the day ends at 22:00 by default | Copy becomes "strips to place every event". A finish-time search is not in scope |
 | I4 | **No fencer-count editing anywhere.** The Events panel is chips, the detail strip shows `186 fencers` as text | Fencer count is the one per-event input every schedule depends on. Today it is `FencerCounts`, which the design deletes with the rail | The Events panel must carry the count: a selected chip exposes it (chip with count, click to edit). This is the one addition the design needs |
@@ -424,6 +424,6 @@ Facts this document leans on and does not restate:
 
 - The store inversion, validation split, and findings identity: [competition-planner-workbench.md §State model, §Validation](./competition-planner-workbench.md).
 - The three canvas defects: [backlog.md §The workbench canvas is not yet a finished surface](./backlog.md).
-- The strip search and its non-monotone band: [specs/012-actionable-strip-suggestion/handoff.md](../../specs/012-actionable-strip-suggestion/handoff.md), [strip-count-scheduling-anomaly.md](./strip-count-scheduling-anomaly.md).
+- The strip search and its non-monotone band: specs/012-actionable-strip-suggestion/handoff.md (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/handoff.md), [strip-count-scheduling-anomaly.md](./strip-count-scheduling-anomaly.md).
 - Every engine gap in §5: its named backlog entry.
-- The 009 scope this supersedes: [reassessment-2026-09-01.md §7](./reassessment-2026-09-01.md).
+- The 009 scope this supersedes: reassessment-2026-09-01.md §7 (removed; see git history at 0ab5bd2dc9).

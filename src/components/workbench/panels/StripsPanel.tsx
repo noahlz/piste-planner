@@ -10,7 +10,7 @@ import { DefaultLabel } from '../../common/DefaultLabel.tsx'
 // 012 T013 (research.md D5, FR-008), carried over from the retired strips
 // section: the search yields to the browser between candidates, so a real
 // run takes 199-229ms on the largest template and well under 100ms on every
-// other one (baseline.md §5). 100ms is the point at which the indicator is
+// other one (specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)). 100ms is the point at which the indicator is
 // visible on the largest board for roughly a hundred milliseconds and never
 // appears on a board that finishes in an instant (SC-007's second clause).
 export const SUGGEST_INDICATOR_DELAY_MS = 100

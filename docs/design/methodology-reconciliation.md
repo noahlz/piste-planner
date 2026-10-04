@@ -1,7 +1,7 @@
 # METHODOLOGY.md ↔ engine reconciliation
 
 *Produced 2026-09-05 against `main` at `a2dc363e45`, executing
-[`methodology-reconciliation-prompt.md`](./methodology-reconciliation-prompt.md).
+`methodology-reconciliation-prompt.md` (removed; see git history at 0ab5bd2dc9).
 Analysis only – no `src/` file was edited and no `specs/` directory was created.*
 
 **Baseline at the time of measurement**: `pnpm vitest run __tests__` → 67 files,

@@ -215,7 +215,8 @@ describe('analysisSlice removal', () => {
 })
 
 describe('runScheduleAll (store inversion)', () => {
-  it('writes an auto placement per scheduled event, extracted from scheduleAll output, with the day offset removed (contracts/day-axis.md C2)', () => {
+  // specs/006-day-axis-parity/contracts/day-axis.md C2 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)
+  it('writes an auto placement per scheduled event, extracted from scheduleAll output, with the day offset removed (day-axis C2)', () => {
     setupB5()
     const { config, competitions } = buildTournamentConfig(useStore.getState())
     const expected = scheduleAll(competitions, config)
@@ -242,7 +243,8 @@ describe('runScheduleAll (store inversion)', () => {
     }
   })
 
-  it('places every scheduled event inside its own day\'s clock hours, not some other day\'s (contracts/day-axis.md C2 round trip)', () => {
+  // specs/006-day-axis-parity/contracts/day-axis.md C2 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)
+  it('places every scheduled event inside its own day\'s clock hours, not some other day\'s (day-axis C2 round trip)', () => {
     // B5 is 3 days with uniform hours DAY_START-DAY_END (store.ts setDays
     // default) — a start_time outside that per-day window, or a day index
     // that does not match where the scheduler actually placed the event,

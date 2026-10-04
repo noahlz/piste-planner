@@ -533,7 +533,7 @@ describe('colorPenalty — PROXIMITY_3_PLUS_DAYS (L1)', () => {
 // ──────────────────────────────────────────────
 
 describe('assignDaysByColoring — least-bad-color fallback violations (R7)', () => {
-  // baseline.md §2 pins the strip count: colorPenalty's load-balancing term
+  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) pins the strip count: colorPenalty's load-balancing term
   // reads dayCapacity = strips_total × DAY_LENGTH_MINS / 60, so the witness
   // pairs for NAC Cadet/Junior differ at 39 (app-suggested) vs 80/12 strips
   // even though the violation count is 6 at both. 80/12 matches the venue
@@ -545,7 +545,7 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     return [a, b].sort().join('|')
   }
 
-  /** Builds one template through the app's own configuration path, exactly as baseline.md §2/§3 measured it. */
+  /** Builds one template through the app's own configuration path, exactly as specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)/§3 measured it. */
   function buildTemplate(name: string) {
     useStore.setState(useStore.getInitialState(), true)
     const state = () => useStore.getState()
@@ -556,13 +556,14 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     return buildTournamentConfig(state())
   }
 
-  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one violation per hard-edged pair sharing day 0, naming both ids (baseline.md §2, 6 pairs, least-bad branch)', () => {
+  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one violation per hard-edged pair sharing day 0, naming both ids (6 pairs, least-bad branch)', () => {
     const { config, competitions } = buildTemplate('NAC Cadet/Junior')
     const graph = buildConstraintGraph(competitions)
 
     const { violations } = assignDaysByColoring(graph, competitions, config)
 
-    // baseline.md §2 "Witness pairs" table, 80 strips / 12 video column.
+    // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) "Witness pairs" table, 80 strips / 12 video column.
     const expectedPairs: [string, string][] = [
       ['CDT-M-EPEE-TEAM', 'JR-M-EPEE-TEAM'],
       ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
@@ -578,7 +579,8 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     expect(actualKeys).toEqual(expectedKeys)
   })
 
-  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable in the days available, reports no violations (baseline.md §2, relax=0/viol=0)', () => {
+  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
+  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable in the days available, reports no violations (relax=0/viol=0)', () => {
     const { config, competitions } = buildTemplate('NAC Youth')
     const graph = buildConstraintGraph(competitions)
 
@@ -587,13 +589,14 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     expect(violations.length).toBe(0)
   })
 
-  it('NAC Div1/Junior at 3 days / 80 strips / 12 video: its six DIV1-ind/JUNIOR-team conflicts resolve through the relaxed branch and must not also appear as violations (baseline.md §2, relax=6/viol=0)', () => {
+  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
+  it('NAC Div1/Junior at 3 days / 80 strips / 12 video: its six DIV1-ind/JUNIOR-team conflicts resolve through the relaxed branch and must not also appear as violations (relax=6/viol=0)', () => {
     const { config, competitions } = buildTemplate('NAC Div1/Junior')
     const graph = buildConstraintGraph(competitions)
 
     const { violations, relaxations } = assignDaysByColoring(graph, competitions, config)
 
-    // Confirms the fixture actually exercises the relaxed branch (baseline.md
+    // Confirms the fixture actually exercises the relaxed branch (specs/010-wave-1-reconciliation/baseline.md (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
     // §2: 6 relaxations, 0 violations) — if this drops to 0, the premise
     // changed and the "reports no violations" assertion below is vacuous.
     expect(relaxations.size).toBe(6)
@@ -641,7 +644,7 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     }
 
     expect(Object.fromEntries(dayMap)).toEqual(expectedDayMap)
-    // baseline.md §2: NAC Cadet/Junior's six violations come from the
+    // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md): NAC Cadet/Junior's six violations come from the
     // least-bad branch, not the relaxed branch — zero relaxations here.
     // R7 must not start writing to relaxations for this witness.
     expect(relaxations.size).toBe(0)

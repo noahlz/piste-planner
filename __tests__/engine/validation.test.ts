@@ -81,8 +81,8 @@ function findingIdentity(finding: ValidationError): string {
 //   - days_available outside 2–4 (within structural 1–14) — advisory-only
 //     per spec acceptance scenario 3 (spec.md:106-108): a 5-day tournament
 //     warns and the schedule can still be computed.
-//   - cut-on-team (cut_mode) — moved off POLICY by R3/FR-011 (research.md
-//     D4, 010-wave-1-reconciliation): buildConfig already coerces a TEAM
+//   - cut-on-team (cut_mode) — moved off POLICY by R3/FR-011 (specs/010-wave-1-reconciliation/research.md
+//     D4, removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/research.md): buildConfig already coerces a TEAM
 //     competition's cut_mode to DISABLED before the engine sees it, so the
 //     finding is a heads-up on a cosmetic field, not a gate.
 //
@@ -819,7 +819,8 @@ describe('finding identity — rule and subjects per kind (US3, data-model.md §
     expect(f1!.subjects).toEqual(['bad-fencer-count'])
   })
 
-  it('policy: same-population rule id is exactly "same-population" — already pinned by contracts/serialization-v2.md and placements.test.ts dismissal fixtures', () => {
+  // specs/003-p2-derived-state/contracts/serialization-v2.md (removed; git show 0ab5bd2dc9:specs/003-p2-derived-state/contracts/serialization-v2.md)
+  it('policy: same-population rule id is exactly "same-population" — already pinned by serialization-v2 and placements.test.ts dismissal fixtures', () => {
     const config = makeConfig({ days_available: 3 })
     const comps = [1, 2, 3, 4].map(i =>
       makeCompetition({

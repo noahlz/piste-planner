@@ -7,7 +7,7 @@ import { BottleneckSeverity, CutMode, EventType, ValidationMode } from '../../sr
 import { DEFAULT_CUT_BY_CATEGORY } from '../../src/engine/constants.ts'
 
 /**
- * Contract test for specs/008-team-event-cut/contracts/competition-defaults.md
+ * Contract test for specs/008-team-event-cut/contracts/competition-defaults.md (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/contracts/competition-defaults.md)
  * (C1, C2, C3). Gates the store's per-competition default derivation
  * (`defaultConfigForId`, src/store/store.ts:217-235) against the engine's own
  * published rules, checked across the whole catalogue rather than the eight
@@ -37,11 +37,11 @@ import { DEFAULT_CUT_BY_CATEGORY } from '../../src/engine/constants.ts'
 const VALID_FENCER_COUNT = 32
 
 /**
- * C1's store-chosen fields (contracts/competition-defaults.md C1 scope
+ * C1's store-chosen fields (specs/008-team-event-cut/contracts/competition-defaults.md C1 (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/contracts/competition-defaults.md) scope
  * note) — the fields `defaultConfigForId` picks, as opposed to
  * `fencer_count`, which is the user's input. A BINDING ERROR whose `field`
  * falls outside this set is out of C1's scope regardless of severity — e.g.
- * ROC Mega's strip-hours shortfall (baseline.md), which is a tournament-level
+ * ROC Mega's strip-hours shortfall (specs/008-team-event-cut/baseline.md (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/baseline.md)), which is a tournament-level
  * feasibility finding on `feasibility`, not a per-competition default.
  */
 const STORE_CHOSEN_FIELDS = new Set([

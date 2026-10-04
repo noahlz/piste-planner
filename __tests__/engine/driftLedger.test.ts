@@ -257,7 +257,7 @@ describe('drift ledger', () => {
     //    invisible. FR-001/FR-002 are what this holds.
     //  - the demoted `feasibility-strip-hours` finding is still PRESENT, as a
     //    WARN. The demotion must not become a deletion: B4's 481-strip-hour
-    //    shortfall (~29%, baseline.md §2) is real and the organizer still has to
+    //    shortfall (~29%, specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md)) is real and the organizer still has to
     //    be told about it. Without this the rule could be dropped outright and
     //    every other assertion here would still pass.
     //  - no ERROR sits in Phase.VALIDATION. B4's 13 ERRORs are all

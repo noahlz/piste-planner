@@ -384,11 +384,11 @@ describe('Realistic tournament integration', () => {
 
   describe('NAC Div1/Junior — the app configuration path (010 US1, T004)', () => {
     /**
-     * Not the app-suggested strip count. baseline.md §3 records that at the
+     * Not the app-suggested strip count. specs/010-wave-1-reconciliation/baseline.md §3 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) records that at the
      * suggested count, `NAC Vet/Div1/Junior` also trips `feasibility-strip-hours`
      * (a Wave 3 defect this feature does not fix), which would contaminate the
      * premise that `indiv-team-same-day` is the only thing emptying the board.
-     * 80 strips / 12 video is the venue baseline.md measured as clean of that
+     * 80 strips / 12 video is the venue specs/010-wave-1-reconciliation/baseline.md (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) measured as clean of that
      * defect for both `NAC Div1/Junior` and `NAC Vet/Div1/Junior`.
      */
     const STRIPS_ISOLATING_INDIV_TEAM_SAME_DAY = 80
@@ -410,9 +410,9 @@ describe('Realistic tournament integration', () => {
 
   describe('NAC Vet/Div1/Junior — the app configuration path (010 US1, T004)', () => {
     // Same isolating venue as NAC Div1/Junior above, for the same reason:
-    // baseline.md §3 records feasibility-strip-hours underneath R1's two
+    // specs/010-wave-1-reconciliation/baseline.md §3 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) records feasibility-strip-hours underneath R1's two
     // errors at this template's suggested strip count, and 80/12 is the venue
-    // baseline.md measured as clean of that Wave 3 defect.
+    // specs/010-wave-1-reconciliation/baseline.md (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) measured as clean of that Wave 3 defect.
     const STRIPS_ISOLATING_INDIV_TEAM_SAME_DAY = 80
     const VIDEO_STRIPS = 12
 
@@ -426,7 +426,7 @@ describe('Realistic tournament integration', () => {
       const { config, competitions } = buildTournamentConfig(useStore.getState())
       const { schedule } = scheduleAll(competitions, config)
 
-      // baseline.md §3 "After R1" measures this at 45/66, driven by
+      // specs/010-wave-1-reconciliation/baseline.md §3 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) "After R1" measures this at 45/66, driven by
       // DEADLINE_BREACH warnings and the scheduling-density feasibility rule
       // this feature does not touch — Wave 3's territory. Assert non-emptiness,
       // not the exact 45: pinning it would pin a number Wave 3 is expected to

@@ -38,7 +38,7 @@ import { buildStrips } from '../engine/stripBudget.ts'
 /**
  * Calendar-day spacing between scheduler-axis day windows (research.md D5).
  * Day d's window is [d*DAY_AXIS_SPACING_MINS + start_d, d*DAY_AXIS_SPACING_MINS + end_d) —
- * see contracts/day-axis.md C1. `runActions.ts` imports this to reverse the
+ * see specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md). `runActions.ts` imports this to reverse the
  * conversion when a schedule result becomes a Placement (C2).
  */
 export const DAY_AXIS_SPACING_MINS = 1440
@@ -67,7 +67,7 @@ export function buildTournamentConfig(state: StoreState): {
     // Store's dayConfigs are clock axis (0-1439 within each day). scheduleAll
     // requires the scheduler axis instead — day d's window shifted by
     // d*DAY_AXIS_SPACING_MINS so no two days' windows overlap on the absolute
-    // minute axis strip_allocations uses (contracts/day-axis.md C1). The
+    // minute axis strip_allocations uses (specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)). The
     // store's own state.dayConfigs is left untouched — only this config copy
     // carries the shift.
     dayConfigs: state.dayConfigs.map((day, d) => ({
@@ -224,7 +224,7 @@ function buildCompetitions(state: StoreState): Competition[] {
       flighted: overrides.flighted,
       flighting_group_id: null,
       is_priority: false,
-      // The fourth seam parity-exceptions.md names. A `0` here zeroes the DE
+      // The fourth seam specs/006-day-axis-parity/parity-exceptions.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names. A `0` here zeroes the DE
       // term of `estimateCompetitionStripHours`
       // (`strips_allocated × de_duration / 60`, src/engine/capacity.ts:146),
       // so every individual event contributed nothing to the upfront

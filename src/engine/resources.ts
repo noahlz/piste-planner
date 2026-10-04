@@ -195,7 +195,7 @@ function earliestFreeStartFor(state: GlobalState, stripIdx: number, startTime: n
  * *compacted* axis — days packed back-to-back at `d * DAY_LENGTH_MINS` with no
  * gap between them — and is wrong once days are spaced at a fixed 1440
  * minutes instead, which is the axis the store's config now emits (see
- * specs/006-day-axis-parity/research.md D3). Because every real call site
+ * specs/006-day-axis-parity/research.md D3 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/research.md)). Because every real call site
  * supplies `day`, this fallback is unreachable from an actual scheduling run;
  * it is exercised only by resources.test.ts, and even there its result only
  * ever selects the `STRIPS`-vs-`TIME` label on a miss.

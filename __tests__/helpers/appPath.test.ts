@@ -9,21 +9,21 @@ import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
  * contaminate each other.
  *
  * T006/T008 (buildConfig.ts's scheduler-axis emission, runActions.ts's
- * clock-axis conversion back) moved these numbers off the baseline.md
+ * clock-axis conversion back) moved these numbers off the specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)
  * pre-fix column. Each entry below carries the pre-fix number in a comment
- * so the before/after stays legible — per baseline.md's own count, that was
+ * so the before/after stays legible — per specs/006-day-axis-parity/baseline.md's (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md) own count, that was
  * the whole defect this feature exists to fix. B2 and B8 now place their
  * ledger counts too, but not from this feature's axis fix — feature
  * 008-team-event-cut gave team events the all-advance `cut_mode` the engine
  * requires, closing the last BINDING error that zeroed both
- * (specs/008-team-event-cut/).
+ * (specs/008-team-event-cut/ (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/)).
  *
  * 004 US4's T061a then moved two of them again — see `BASELINE` below.
  */
 describe('runAppPath', () => {
   // Measured post-fix on 2026-08-31 via
   // `timeout 120 pnpm --silent vitest run __tests__/helpers/appPath.test.ts`.
-  // Pre-fix numbers (baseline.md "Raw output from the measurement run",
+  // Pre-fix numbers (specs/006-day-axis-parity/baseline.md "Raw output from the measurement run" (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md),
   // captured at the commit this feature branched from) in comments.
   //
   // B4's and B6's placed counts are a **second copy** of the pins in
@@ -68,6 +68,7 @@ describe('runAppPath', () => {
     B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4
   }
 
+  // specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)
   it.each(SCENARIO_IDS)('reproduces baseline.md\'s app-path numbers for %s', (id) => {
     const result = runAppPath(id)
     expect(result.selectedCount).toBe(BASELINE[id].selected)
@@ -75,7 +76,7 @@ describe('runAppPath', () => {
   })
 
   it('spreads B1\'s ref_requirements_by_day across all four days, post-fix', () => {
-    // Pre-fix (baseline.md): all 134 peak refs landed on day 0, days 1-3 read
+    // Pre-fix (specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)): all 134 peak refs landed on day 0, days 1-3 read
     // zero — findDayForTime resolved every coincident window to day 0
     // (research.md D1, second symptom). Post-fix the four day windows are
     // disjoint, so each day carries its own peak.
@@ -92,7 +93,7 @@ describe('runAppPath', () => {
     // pool (src/engine/pools.ts:170-175). D7 cannot either: applyPreset always
     // calls setVideoStrips, so video_strips_total is never the null that
     // buildConfig.ts:60 fills in. The per-scenario account is in
-    // specs/004-p3-workbench-shell/drift-baseline.md §T062.
+    // specs/004-p3-workbench-shell/drift-baseline.md §T062 (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/drift-baseline.md).
     //
     // 010 L1, 2026-09-05 — six of the twelve numbers moved and all four
     // peak_time values held. T018 wired PENALTY_WEIGHTS.PROXIMITY_3_PLUS_DAYS

@@ -9,7 +9,7 @@ with the measurement and the literature rather than re-investigated as a bug.
 `[M]` Feature 012's baseline swept every strip count from the strip-hours floor
 to the concurrency ceiling on all ten templates, at the app's boot day count of
 four, 946 scheduler runs in total
-([`specs/012-actionable-strip-suggestion/baseline.md` §1a](../../specs/012-actionable-strip-suggestion/baseline.md)).
+(`specs/012-actionable-strip-suggestion/baseline.md` §1a (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)).
 On four of the ten, some strip count *above* the smallest working count places
 *fewer* events than that count does.
 
@@ -95,8 +95,8 @@ from options rather than from zero.
 ## Where the measurement lives
 
 The full per-candidate sweep, the method, and the probe are in
-[`specs/012-actionable-strip-suggestion/baseline.md` §1a](../../specs/012-actionable-strip-suggestion/baseline.md).
-[`research.md` D3](../../specs/012-actionable-strip-suggestion/research.md)
+`specs/012-actionable-strip-suggestion/baseline.md` §1a (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md).
+`research.md` D3 (specs/012-actionable-strip-suggestion/research.md, removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/research.md)
 records why the search was specified as an upward scan rather than a bisection
 before this was observed; the sweep is the counterexample that decision
 anticipated.

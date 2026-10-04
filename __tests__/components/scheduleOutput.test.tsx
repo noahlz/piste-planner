@@ -7,7 +7,7 @@ import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { makePlacement } from '../helpers/factories.ts'
 
 // 005 T011: schedule-output rows moved out of the two departing layout test
-// files (triage-record.md rows: one departing file's rows 22, 23, 24, 25, 26,
+// files (specs/005-consolidate-domain-logic/triage-record.md (removed; git show 0ab5bd2dc9:specs/005-consolidate-domain-logic/triage-record.md) rows: one departing file's rows 22, 23, 24, 25, 26,
 // 27; the other departing file's row 41).
 //
 // 2026-09-01: the three cases that mounted `ScheduleView` were deleted with it.

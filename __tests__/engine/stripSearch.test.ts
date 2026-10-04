@@ -22,7 +22,7 @@ import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/e
 // ──────────────────────────────────────────────
 
 /**
- * [MIN] B1 (24 events, days=4) — baseline.md §1 shows every one of the ten
+ * [MIN] B1 (24 events, days=4) — specs/012-actionable-strip-suggestion/baseline.md §1 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) shows every one of the ten
  * measured templates undershoots at its floor, so the floor and the answer
  * differ by construction on any of them. B1 is the cheapest scenario fixture
  * available through the test helpers: floor=36, ceiling=135, answer=48,
@@ -175,7 +175,7 @@ describe('scanStripCounts', () => {
     const { comps: minComps, config } = minBoard()
     // One unsizeable competition added so `required` (sizeable events) diverges
     // from `competitions.length` — the assertion below has no teeth otherwise,
-    // since every measured template's events are all sizeable (baseline.md §1).
+    // since every measured template's events are all sizeable (specs/012-actionable-strip-suggestion/baseline.md §1 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)).
     const comps = [...minComps, makeCompetition({ id: 'unsizeable', fencer_count: 1 })]
     const range = stripSearchRange(comps, config)!
     const { candidates } = drain(scanStripCounts(comps, config, range))

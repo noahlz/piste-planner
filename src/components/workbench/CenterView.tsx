@@ -31,7 +31,7 @@ interface CommittedModel {
    */
   findingRows: Finding[]
   /**
-   * The store's clock-time day hours (contracts/day-axis.md C4), committed in
+   * The store's clock-time day hours (specs/006-day-axis-parity/contracts/day-axis.md C4 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)), committed in
    * the same settle as `schedule`/`findings` so the matrix's axis and "Fit to
    * day" never run ahead of the blocks they bound (RCR-T009 finding 1).
    */
@@ -61,8 +61,7 @@ interface CommittedModel {
  * hands it down as the `viewMode` prop; the toggle that changes it moved to
  * `StatusFooter`.
  *
- * The committed model also carries the store's `dayConfigs` (contracts/
- * day-axis.md C4) alongside `schedule`/`findings`, for the same reason: the
+ * The committed model also carries the store's `dayConfigs` (specs/006-day-axis-parity/contracts/day-axis.md C4 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)) alongside `schedule`/`findings`, for the same reason: the
  * matrix's day axis is drawn from it, and committing it separately from the
  * schedule would let the axis settle a render ahead of the blocks it bounds
  * (RCR-T009 finding 1).

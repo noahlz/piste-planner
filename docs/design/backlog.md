@@ -14,11 +14,10 @@ Spec Kit feature directory is created for one only when it is assigned a phase.
 > phase, and points back here for the detail. **This file is the record, that
 > table is the index** – do not restate detail there.
 
-> **2026-09-01 update**: the file is split. Everything down to the `# Closed`
-> divider is open work; below it are finished features, kept only as a pointer
-> plus what each one deliberately did *not* fix. Scan the top half for what
-> needs doing, read the bottom half before reopening ground a closed feature
-> already covered.
+> **2026-10-04 update**: pruned. Every entry below is open work. Finished and
+> superseded entries, including the former `# Closed` section, were removed –
+> git history at `0ab5bd2dc9` preserves them, and each shipped feature's own
+> `specs/` handoff records what it deliberately did not fix.
 
 ## `Bottleneck` has no structured field for a second subject
 
@@ -28,7 +27,7 @@ fixed — `types.ts` is out of this feature's scope.*
 `Bottleneck` (`src/engine/types.ts:354-362`) carries a single `competition_id`
 plus a free-text `message`, with no field for a second subject. R7's
 hard-edge-violation bottlenecks (010 T010,
-[`specs/010-wave-1-reconciliation/`](../../specs/010-wave-1-reconciliation/))
+`specs/010-wave-1-reconciliation/` (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/))
 are the first producer that genuinely needs two — FR-003 requires naming both
 competitions in a violated pair — and with no structured place to put the
 second one, the consumer test in
@@ -46,34 +45,18 @@ mirroring `ValidationError`'s and updating every bottleneck producer to fill
 it, which ripples wider than this feature's one-file-per-item scope and needs
 its own review.
 
-## A fencer count of 0 or 1 unmounts the whole app
-
-*Found by 004's T054 React review on 2026-09-01 while reviewing US3. Not fixed
-there — it is pre-existing and belongs to US2's territory, not US3's scope.
-Highest user-facing defect in the area reviewed.*
-
-`FencerCounts` (`src/components/sections/FencerCounts.tsx:51`) renders its
-`NumberInput` with `min={0}` and `commitOnChange`, so typing `0` or `1` commits
-on the keystroke. `computePoolStructure` (`src/engine/pools.ts:25`) throws for
-`fencerCount <= 1`, and `initialAnalysis` (`src/engine/analysis.ts:26`) calls it
-unguarded for every *selected* competition regardless of whether it is placed —
-so `AnalysisOutput` and `CenterView` both reach it on the next render. There is
-no `ErrorBoundary` and no `componentDidCatch` anywhere in `src/`, so the throw
-escapes to the root and React unmounts the tree: blank page, no recovery short
-of a reload, and the typed value is not even persisted.
-
-Two independent cheap fixes, either sufficient on its own:
-
-- Raise the input's `min` to `MIN_FENCERS`, which is already **2**
-  (`src/engine/constants.ts:92`) and so coincides exactly with the throw
-  threshold — the guard the component needs already exists as a named constant
-  and is simply not used here.
-- Guard `analysis.ts:26` the way `validation.ts:240-241` already guards its own
-  call to the same function.
-
-An `ErrorBoundary` at the shell is worth having regardless, but it is the weaker
-fix on its own: it converts a crash into a dead panel rather than keeping the
-app usable.
+**A second consumer coupled to message text.** `postScheduleDiagnostics`'s gate
+(`concurrentScheduler.ts`) tells the demoted feasibility finding apart by
+`b.message.startsWith('RESOURCE_INSUFFICIENT')`, because `Bottleneck` carries no
+rule id – `ValidationError` has one and it is dropped when the finding is pushed.
+Introduced by 011's T005 (2026-09-05) as the only option against today's
+interface. It is safe as written, since 011's FR-001 and FR-002 pin that message
+text and no other validation message starts with that prefix, but it is not
+robust: reword the message and the "Strips: need N, have M" INFO silently stops
+appearing on exactly the boards it exists for. Same root cause, so the same fix:
+`Bottleneck` needs a rule id plus `subjects`. Two features have now coupled to
+message text for want of one. 012 removed the number from the finding but the
+prefix gate remains.
 
 ## The scorecard's peak-referee row reads higher than the scheduler's own
 
@@ -166,50 +149,6 @@ and `youthVetDelta` as parameters into `deStripFootprint` and
 `perBoutDuration` — `deBlockDurations` is untouched by that commit, which is
 documented BEHAVIOUR-PRESERVING.
 
-## The workbench canvas is not yet a finished surface
-
-*Found by the product owner on 2026-09-02 driving the running app (B1 preset,
-80 strips × 4 days). Recorded, not fixed — the product owner's framing is that
-the workbench UI itself is not done, not that any one of these three is an
-isolated bug.*
-
-### Block encoding is not readable at a glance (SC-004 fails)
-
-`specs/004-p3-workbench-shell/quickstart.md` §What a human has to confirm asks
-whether a person can name a block's weapon, gender, age category, and phase
-(pools vs DE) without hovering. Verdict: no. Which of the four is
-indistinguishable was not narrowed down in this pass — recorded as open rather
-than guessed at. The quickstart already predicts the cause it did not confirm:
-"sixteen fills across four families is exactly where that fails quietly."
-
-### No affordance that the canvas can be scrolled, and no drag-to-pan
-
-`MatrixCanvas.tsx` keeps the viewport `overflow-hidden` with both scroll
-offsets held as view state, so there are no scrollbars. Movement today is
-two-finger/wheel scroll (vertical pans rows, horizontal pans time), Cmd/Ctrl+
-scroll to zoom, and arrow keys once the canvas has focus. There is no
-pointer-drag handler — `onPointerMove` serves tooltip hit-testing only. The
-product owner's first instinct was to drag, got no response, and had no
-on-screen cue that any other gesture would work.
-
-SC-002 only ever specified "scrolling and zooming" — dragging was never in
-scope — so this is a missing affordance, not a regression against a criterion.
-
-### Zooming in destroys the view
-
-The most severe of the three. Reproduction, confirmed twice in the running
-app on B1: click the toolbar's **Zoom in** button roughly six times. The
-canvas becomes a single flat colour field — the time-axis header (8:00,
-9:00, …) disappears, along with gridlines, block boundaries, and every event
-label. Nothing on screen indicates position or scale, and there is no way
-back except **Fit to day**, which restores the view fully. The cause is not
-speculated on here — that is the fixing session's job.
-
-One line that matters for anyone tempted to treat this as already covered:
-the live smoke driver passes three consecutive green runs with zero console
-errors against this same build, so `scripts/smoke.mjs` has no assertion
-covering what the canvas renders after a zoom.
-
 ## Day-end overrun is a hard failure the methodology calls a warning
 
 *Found by the 2026-08-31 methodology review (web research + code cross-check).
@@ -254,7 +193,7 @@ T009/T010 (R7), 2026-09-05.*
 `docs/design/methodology-reconciliation.md` §1.2.2 calls this "the single most
 serious finding in the audit": the DSatur least-bad-color fallback can break a
 hard separation and report nothing. 010's baseline measurement
-([`specs/010-wave-1-reconciliation/baseline.md`](../../specs/010-wave-1-reconciliation/baseline.md)
+(`specs/010-wave-1-reconciliation/baseline.md` (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
 §2) adds two facts the audit's table did not have, and 010 T009/T010 made the
 break visible going forward without repairing it.
 
@@ -270,7 +209,7 @@ break visible going forward without repairing it.
   `dayCapacity` (derived from `strips_total`, `src/engine/dayColoring.ts:653`):
   at the app-suggested 39 strips, five are Group 1 CADET↔JUNIOR breaks plus
   one same-population break; at 80 strips / 12 video, all six are Group 1
-  CADET↔JUNIOR. Full witness tables: baseline.md §2.
+  CADET↔JUNIOR. Full witness tables: specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md).
 - Per the audit's §1.2.1 clique/chromatic computation, three templates — `NAC
   Cadet/Junior`, `NAC Div1/Junior`, `NAC Vet/Div1/Junior` — carry a K₄ per
   (gender, weapon) and need 4 days. The store defaults to **3**
@@ -285,7 +224,7 @@ one. The repair is a bounded re-color pass — the audit's Part 3 Option B,
 which shares its machinery with §Runtime failure is terminal above — and it
 needs the Part 3 decision first. Tracked as the audit's Wave 3.
 
-Record: [`specs/010-wave-1-reconciliation/`](../../specs/010-wave-1-reconciliation/),
+Record: `specs/010-wave-1-reconciliation/` (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/),
 [`methodology-reconciliation.md`](./methodology-reconciliation.md) §1.2.2.
 
 ## Vet co-day serialization is unsourced and never fit-checked
@@ -364,14 +303,14 @@ verdicted ledger, a satisfiability computation over all ten templates, and the
 blocking decision below written up with a recommendation. **Read that first**:
 it re-verifies every claim in this entry, corrects two of them, and adds the
 finding that day coloring absorbs unsatisfiable hard constraints in silence.
-[`methodology-reconciliation-prompt.md`](./methodology-reconciliation-prompt.md)
-is the brief it executed, kept for provenance.
+`methodology-reconciliation-prompt.md` was the brief it executed (removed; see
+git history at 0ab5bd2dc9).
 
 **The framing that matters**: `METHODOLOGY.md` was hand-written as the
 *specification* for the engine. Where the two disagree, the default is that the
 engine is wrong — not that the doc is stale. Any earlier note proposing to
 "rewrite the doc to describe what the engine does" (including
-[reassessment-2026-09-01.md §5](./reassessment-2026-09-01.md)) predates that
+`reassessment-2026-09-01.md` §5, removed; see git history at 0ab5bd2dc9) predates that
 correction and should not be followed as written.
 
 ### The pattern: the spec is implemented in code nothing calls
@@ -499,34 +438,6 @@ the tree on purpose.*
   (`integration.test.ts` renders lanes with it), so `--production` is right to
   flag it and wrong to delete it.
 
-## The sabre referee row can light no blocks at all
-
-*Surfaced by 004's US4 T067 on 2026-09-01, restoring the singular branch of the
-scorecard's highlight announcement. Recorded, not fixed — the repair is a
-referee-model change, and US4 does not open one.*
-
-On B1, hovering `refs:peak-sabre` announces **"Peak sabre referees: 0 blocks
-highlighted"** while the row itself reads 64. FR-029 says hovering a metric MUST
-highlight the blocks driving it, and here it highlights nothing.
-
-The cause is documented at `src/store/derived.ts:409-414` and is a missing
-field, not a bug in the selector. `RefRequirementsByDay` carries no
-sabre-specific peak time: `src/engine/refs.ts:97-99` sweeps the **total** demand
-for `peak_time` and sweeps sabre separately for the value, so the sabre row's
-day and its instant come from two different sweeps. `selectScorecardMetrics`
-uses that row's own `peak_time` as the closest instant available — the
-alternative, the total peak day's time, would light blocks on a day whose sabre
-peak is not the number being reported. On B1 after T061a's re-pack the sabre
-maximum of 64 is reached on days 0, 1 and 3, the first is day 0, and day 0's
-total `peak_time` is 480, a minute at which no sabre block on that day is open.
-
-The approximation has been in place since the metric was written. B1 is the
-first fixture where it visibly fails, and
-`__tests__/components/workbench/Scorecard.test.tsx` now pins the 0 as an
-expected string — which is the moment it stops being noticed. Closing it means
-`refs.ts` recording a per-weapon peak instant alongside the per-weapon value, so
-the row can name the blocks that actually produce its number.
-
 ## The drift ledger's factory does not apply the store's per-type resolutions
 
 *Measured by 004's US4 T063a on 2026-09-01, when the app-path parity pins were
@@ -539,7 +450,7 @@ B6's and B8's `closedBy`.*
 `de_mode` **per event**, from the catalogue's category and video policy. Since
 004's US4 the store derives them **per tournament type** — `REGIONAL_CUT_OVERRIDES`
 in `buildConfig.ts`, and the per-type table in
-[`specs/004-p3-workbench-shell/data-model.md`](../../specs/004-p3-workbench-shell/data-model.md)
+`specs/004-p3-workbench-shell/data-model.md` (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/data-model.md)
 (`AUTO` → `STAGED` at NAC, `SINGLE_STAGE` elsewhere; two referees per pool at
 NAC/SJCC/SYC, one elsewhere). The two paths now apply different rules, not the
 same rule at different stages, which is why no number can be tuned to close the
@@ -565,57 +476,30 @@ Two cautions for whoever picks it up:
   `TWO` both score two refs per pool (`src/engine/pools.ts:170-175`), so
   swapping it moves no scheduled count — but it is why B6's referee columns
   stay apart from the ledger's after US4
-  ([`drift-baseline.md` §T062](../../specs/004-p3-workbench-shell/drift-baseline.md)).
+  (`drift-baseline.md` §T062 (specs/004-p3-workbench-shell/drift-baseline.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/drift-baseline.md)).
 - **The factory's independence from the store is deliberate.** 008's
-  [research.md D2](../../specs/008-team-event-cut/research.md) argues it, and it
+  research.md D2 (specs/008-team-event-cut/research.md, removed; git show 0ab5bd2dc9:specs/008-team-event-cut/research.md) argues it, and it
   is what let the parity check find the team-event bug at all. Converging the
   *rules* is not the same as having the factory call the store's helpers, and
   the argument against the latter still stands.
 
-## Rail rebuild
-
-*Assigned to feature 007 on 2026-08-31 (unspecced). **007 was superseded on
-2026-09-01 by 009 simple workbench** –
-[reassessment-2026-09-01.md §7](./reassessment-2026-09-01.md). The directive
-below still stands and 009 carries it; what changed is the target. 007 replaced
-the five re-homed components with five purpose-built panels, which preserved the
-duplication, and 009 rebuilds the rail as two panels with one home per setting.*
-
-The five section components re-homed unmodified into the rail
-(`TournamentSetup`, `StripSetup`, `CompetitionMatrix`, `FencerCounts`,
-`CompetitionOverrides`) are the surviving wizard/kitchen-sink-era debris:
-`CompetitionMatrix` overflows at 320px, day-time selects truncate, and the
-top bar and rail both edit tournament type, days, and strips (the
-FR-003/FR-004 duplication S2 recorded). User directive 2026-08-31: replace
-with purpose-built workbench panels, no preservation effort — tests
-re-target to the new panels as they are built, no 005-style triage pass.
-Detail in [reassessment-2026-08-31.md §3.5](./reassessment-2026-08-31.md).
-
-## The Advanced panel re-implements the engine's referees-per-pool factor
-
-*Raised by 004's US4 T068 React review on 2026-09-01. Unassigned and
-unnumbered — it needs a spec directory when it is picked up, because the fix
-edits `src/engine/`.*
-
-`AdvancedPanel.tsx`'s `refereesPerPool` returns `policy === RefPolicy.ONE ? 1 :
-2`, a second copy of the factor `peakPoolRefDemand` scales its demand by
-(`src/engine/refs.ts:22`). The number the panel states as the type's applied
-default and the number the engine schedules against are therefore two
-independent answers, and the copy in the UI is invisible to the B1–B8 drift
-ledger — a change to the engine's factor moves every scenario's referee columns
-and leaves the panel stating the old value with a green suite.
-
-The fix is to export the factor from `src/engine/refs.ts` and have the panel
-read it. That edits the engine, so constitution III makes it a gated change with
-its own snapshot review, which is why T068 recorded it here rather than making
-it. Note that swapping it changes no *scheduled* count today — both `AUTO` and
-`TWO` already score two refs per pool — so the review is over the referee
-columns, not the placement counts.
+**B4 shows the same seam, with one unexplained event.** B4's app path places 18
+where the ledger places 17 (found by 011's T006, 2026-09-05, recorded and not
+reconciled by product-owner direction). The divergence is not new – it was
+masked while both paths read 0, and 011's demotion of `feasibility-strip-hours`
+made it visible. `validateConfig` on the ledger's B4 config returns twelve WARN
+`regional-cut-override` findings, because B4 is an SYC and `buildConfig.ts`
+applies `REGIONAL_CUT_OVERRIDES` for Y14 and Cadet while the ledger's factory
+(`scenarios.ts:50-52`) cuts at 20%. It is recorded in
+`__tests__/store/appPathParity.test.ts` as an FR-004a exception whose `cause` is
+marked unconfirmed, and its `closedBy` names this item with that caveat. Whoever
+takes this item runs B4's swap-one-default isolation first: if `cut_mode` does
+not account for the +1, B4 needs its own owner and that `closedBy` is wrong.
 
 ## Global settings
 
 *Split on 2026-08-29. The gears control and a first panel were delivered by 004
-US5 – [`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).
+US5 – `specs/004-p3-workbench-shell/` (specs/004-p3-workbench-shell/spec.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/spec.md).
 The remainder, described below, is **unassigned and needs a spec**. It was
 parked "after P5" at the split; that was re-homed on 2026-09-01, since P5 is
 itself deferred with no owner and "after P5" therefore meant never. Nothing is
@@ -740,29 +624,6 @@ defines the function. No design decision is needed for this one, but every
 scheduled time is snapped, so the drift review is the real work regardless of
 how mechanical the wiring is.
 
-## Save / load / share browser plumbing
-
-*Specified and cut from
-[`specs/005-consolidate-domain-logic/`](../../specs/005-consolidate-domain-logic/spec.md)
-on 2026-08-30. Unassigned.*
-
-`SaveLoadShare.tsx` defines its save, load, and share handlers inline: a blob
-built and downloaded through a synthetic anchor, a `FileReader` read, a share
-URL assembled from `window.location`, a clipboard write, and a 2KB size
-threshold. None of it is layout, but all of it is reachable only by rendering
-the component, which is why its cases sat in `KitchenSinkPage.test.tsx` and had
-to be re-homed rather than pointed at a module.
-
-The serialization underneath is already extracted and already carries 76 tests
-in `__tests__/store/serialization.test.ts`. What is left is the browser
-plumbing wrapped around it.
-
-Cut from 005 because `SaveLoadShare.tsx` survives 004's T020 deletion – it is
-re-homed into the workbench top bar intact – so nothing breaks without the
-extraction, and doing it there would have traded a test dependency on one
-layout for a dependency on another. Worth picking up when the top bar is
-settled and the trade is no longer circular.
-
 ## Youth-event pool duration calibration
 
 B4 currently predicts 5–6 hours for Y8/Y10 events that finish in 2–3 hours in
@@ -772,109 +633,21 @@ densification or genuinely needs duration recalibration.
 
 P1's US2 widens this gap – removing double-stripping raises the duration of any
 event whose pool round is a single pool of 8 or more by about 1.67×. Task T037 in
-[`specs/001-p1-foundations/tasks.md`](../../specs/001-p1-foundations/tasks.md)
+`specs/001-p1-foundations/tasks.md` (removed; git show 0ab5bd2dc9:specs/001-p1-foundations/tasks.md)
 records B4's affected durations before and after, so the recalibration starts
 from a measured number rather than a re-derived one.
 
 ## Calibration debt
 
 One item open. The two closed ones – the `CAPACITY_TARGET_FILL` re-tune and the
-integration-test floors, both done in 003 – are under
-[§Closed](#calibration-debt-closed-items).
+integration-test floors, both done in 003 – were removed with the `# Closed`
+section (see git history at 0ab5bd2dc9).
 
 - A drift scenario with `days_available` set above the chromatic number, so a
   future `CAPACITY_TARGET_FILL` re-tune has a scenario the current B1–B8 set
   lacks – see
-  [research D8](../../specs/003-p2-derived-state/research.md)'s correction for
+  research D8 (specs/003-p2-derived-state/research.md, removed; git show 0ab5bd2dc9:specs/003-p2-derived-state/research.md)'s correction for
   why none of today's scenarios can discriminate the constant.
-
-## The suggested strip count is sufficient, not minimal
-
-*Found by 011, 2026-09-06, and measured across all ten templates. Not fixed
-there – FR-005 scoped the rule to the busiest day's summed demand and it does
-that correctly. **This is the highest-value open item in the strip-suggestion
-area.***
-
-011 made the **Suggest** button size for the busiest day rather than the largest
-single event, and every one of the ten templates now places 100% of its events
-at its suggested count. The number is arithmetically right and, at the top end,
-not actionable: nothing in the rule searches for the *smallest* count that fills
-the board, and the gap between sufficient and minimal is large.
-
-**On eight of the ten templates, 80 strips place exactly what the suggested
-count places.** The suggestion buys events on two templates only – +21 on
-`NAC Vet/Div1/Junior` for +277 strips, and +2 on `NAC Youth` for +178. A venue
-told it needs 357 strips is being asked to more than quadruple a floor that
-already schedules 45 of 66. The small regionals (30, 49, 72, 100) read as
-plausible venue plans; the large NACs (179–357) read as a theoretical ceiling.
-
-The per-template table is
-[`specs/011-feasibility-and-strip-suggestion/handoff.md`](../../specs/011-feasibility-and-strip-suggestion/handoff.md)
-§7 finding 2, which also holds the three options and why they are ordered as
-they are: a minimal-sufficient bisection (best answer, most expensive, and it
-must be a *second* number because FR-009 forbids this rule depending on a
-scheduling result), reporting both figures side by side (cheapest honest
-option), or a confidence band (weakest – it says the answer is uncertain without
-saying what to do).
-
-**Whoever takes this re-measures at `days_available` = 4 first** – see the next
-item.
-
-**Closed by 012 (2026-09-06)**: the search returns the smallest count that
-places every event; 268 → 85 on the largest template
-([`specs/012-actionable-strip-suggestion/handoff.md`](../../specs/012-actionable-strip-suggestion/handoff.md)
-§2).
-
-## `baseline.md`'s suggested strip counts are days=3; the app runs at days=4
-
-*Found by 011's T013 against the running app, 2026-09-06. Recorded, not fixed –
-the harness's day count is what makes 010's and 011's tables comparable.*
-
-010's and 011's ten-template harnesses both force `setDays(3)`. The app boots at
-**4 days** and `applyTemplate` never touches `days_available`. The old
-suggestion rule was a function of the largest event alone and never read day
-count, so the harness and the app agreed by accident. The rule 011 shipped reads
-`days_available` by design (FR-005), so they no longer agree:
-
-| Template | days=3 (`baseline.md` §5) | **days=4 (what a user sees)** |
-|---|---:|---:|
-| NAC Youth | 258 | **197** |
-| NAC Cadet/Junior | 192 | **144** |
-| ROC Div1A/Vet | 30 | **23** |
-
-Both are the rule working correctly at different day counts, and the placed
-counts hold at days=4. The hazard is quotation: `baseline.md` §5's suggested
-column is the most quotable table in that feature and it is **not** the number
-the product shows. Anyone sizing a follow-up against 258 is sizing it against a
-harness constant.
-
-**012 measured everything at days=4**;
-[`specs/012-actionable-strip-suggestion/baseline.md`](../../specs/012-actionable-strip-suggestion/baseline.md)
-supersedes 011's §5 for the suggestion.
-
-## B4's app path places 18 where the drift ledger places 17
-
-*Found by 011's T006, 2026-09-05. Recorded, not reconciled, by product-owner
-direction.*
-
-Two code paths over the same scenario disagree by one event. The divergence is
-**not new** – it was masked for as long as both paths read 0, and 011's
-demotion of `feasibility-strip-hours` made it visible rather than creating it.
-It is recorded in `__tests__/store/appPathParity.test.ts` as an FR-004a
-exception whose `cause` is marked **unconfirmed**.
-
-Measured: `validateConfig` on the *ledger's* B4 config returns twelve WARN
-`regional-cut-override` findings, because B4 is an SYC and `buildConfig.ts:196`
-applies `REGIONAL_CUT_OVERRIDES` for Y14 and Cadet while the ledger's factory
-(`scenarios.ts:50-52`) cuts at 20%. That is the same seam
-[§The drift ledger's factory does not apply the store's per-type resolutions](#the-drift-ledgers-factory-does-not-apply-the-stores-per-type-resolutions)
-already documents for B6 and B8. **Not** run: the swap-one-default isolation
-that would prove those twelve events account for the one-event gap.
-
-The exception's `closedBy` names that existing item as the owner *with the
-caveat that B4's attribution to it is unconfirmed*. Whoever takes it runs B4's
-isolation first – if `cut_mode` does not account for the +1, this needs its own
-owner and that `closedBy` is wrong.
 
 ## A test comment described its own fixture wrongly, and hid what the test proved
 
@@ -895,55 +668,6 @@ fixed this one and split the case into the two halves it could never separate.
 **Nothing audited the rest of the suite for the same defect**, and there is no
 cheap way to: it needs someone to re-measure fixtures against the claims their
 comments make.
-
-## `stripBudget.ts` and `analysis.ts` are a mutual import
-
-*Introduced deliberately by 011's T011, 2026-09-05, and recorded in a comment at
-the import site.*
-
-`analysis.ts` imports `computeStripCap` from `stripBudget.ts`, and T011's
-delegation of `recommendStripCount` to `suggestStripCount` made the dependency
-mutual. **Safe today**: both sides are hoisted function declarations used only
-when called, never at module-evaluation time, so neither module observes the
-other half-initialized. The alternative was a second copy of the suggestion
-rule, which is the exact defect FR-008 exists to remove, so the cycle was the
-right call.
-
-It is fragile in a specific, silent way: the day either module gains a top-level
-`const` that calls into the other, one of them evaluates against `undefined` and
-the failure appears at import time in an unrelated test. The fix is a third leaf
-module holding the shared arithmetic. Worth doing opportunistically the next
-time either file needs real work – not as a feature of its own.
-
-**Closed by 012 T011** (`b5e0600efc`): `recommendStripCount` deleted,
-`stripBudget.ts` no longer imports `analysis.ts`.
-
-## The post-schedule strip recommendation is gated on message text
-
-*Introduced by 011's T005, 2026-09-05, as the only option against today's
-`Bottleneck` interface.*
-
-`postScheduleDiagnostics`'s gate (`concurrentScheduler.ts:1457`) tells the
-demoted feasibility finding apart by
-`message.startsWith('RESOURCE_INSUFFICIENT')`, because `Bottleneck` carries no
-rule id – `ValidationError` has one and it is dropped when the finding is pushed
-at `:212`.
-
-**It is safe as written**, and the reason is worth stating: 011's FR-001 and
-FR-002 pin that message text as unchanged, and `grep` confirms no other
-validation message starts with that prefix, so a WARN from any other
-notice-kind rule pushed with the same cause still leaves the gate closed. What
-it is not is *robust* – reword the message and the "Strips: need N, have M" INFO
-silently stops appearing on exactly the boards it exists for.
-
-This is the same root cause as
-[§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject):
-`Bottleneck` needs a rule id, or `subjects`, or both. Two features have now had
-to couple to message text for want of one.
-
-**012 removed the number from the finding**; the gate on the
-`RESOURCE_INSUFFICIENT` prefix remains (`concurrentScheduler.ts`,
-`postScheduleDiagnostics`). Still open.
 
 ## Per-event entry caps are not modelled
 
@@ -1098,7 +822,7 @@ the previous three seasons.
 takes a table per template; pointing it at real numbers is mechanical. Finding
 three seasons of per-event entry counts is not, and no source for them has been
 identified. Until one is, this cannot be scoped. Note also that every number this
-project has measured – the drift ledger floors, `baseline.md`, 012's minimums –
+project has measured – the drift ledger floors, `baseline.md` (the per-feature baselines, e.g. specs/010-wave-1-reconciliation/baseline.md, removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md), 012's minimums –
 is measured against these synthetic tables, so replacing them moves every
 recorded figure at once.
 
@@ -1163,328 +887,4 @@ strips in pairs can drop an event from the board with no explanation, and it
 will be reported as a bug. The design note has the answer to that report and
 four fix options with their costs. None is scheduled.
 
-012 measured this (`baseline.md` §1a) and did not fix it. Still open.
-
----
-
-# Closed
-
-Everything above this line is open. Everything below is done, and is kept for
-one reason only: what each feature **deliberately did not fix**, so a later
-session does not rediscover it. Each entry is a pointer to the feature record
-plus that list. The narrative lives in the linked spec directory, not here.
-
-## NAC Youth suggests 63 in the smoke driver's accumulated state and 66 from a fresh store
-
-*Diagnosed 2026-09-06, not a defect. Record: the NAC Youth step's comment in
-[`scripts/smoke.mjs`](../../scripts/smoke.mjs); the original probe is
-[`specs/012-actionable-strip-suggestion/handoff.md`](../../specs/012-actionable-strip-suggestion/handoff.md)
-§7(c).*
-
-`[M]` The cause: the driver's gears-panel step changes Admin gap 30 → 15,
-reverts it to 30, then re-applies 15 so the override carries through the
-share link – and nothing after that restores it. `applyTemplate` keeps that
-override across the NAC Youth switch the same way it keeps `days_available`,
-`strips_total`, `video_strips_total`, and `tournament_type`.
-
-A probe (`tmp/probe-nac-youth-gap.test.ts`, deleted) replayed the driver's
-store actions and swapped one field at a time: `ADMIN_GAP_MINS` alone moved
-the answer 63 ↔ 66 in both directions, while `strips_total`, `strips`, and
-`video_strips_total` were inert. The search's floor and ceiling were
-identical on both paths at 53/197, and all 24 competitions were
-byte-identical.
-
-Verdict: not a defect. A gears-panel override is a tournament-wide setting
-the organizer chose, and a template switch keeping it follows the same rule
-that keeps days, strips, type, and video strips.
-
-The original entry's description of this as "Admin-gap 30→15→reverted" was
-wrong – the driver re-applies 15 at `scripts/smoke.mjs:677` and never
-restores it.
-
-## R5 and L5 — the app refused to schedule at its own recommendation
-
-*Feature 011, done 2026-09-06. Closes the audit's **R5** and **L5**.*
-
-Record:
-[`specs/011-feasibility-and-strip-suggestion/`](../../specs/011-feasibility-and-strip-suggestion/),
-built against
-[`methodology-reconciliation.md`](./methodology-reconciliation.md) §1.3 R5 and
-§2.1 L5. `baseline.md` there holds every number and `handoff.md` the record.
-
-Two defects that were two halves of one failure – the app recommended a strip
-count and then refused to schedule at it.
-
-- **R5** (`feasibility-strip-hours` demoted ERROR → WARN) — both feasibility
-  rules became notice-kind, WARN in every validation mode, rule id, field and
-  message text unchanged, and `validateConfig`'s mode re-derivation deleted with
-  them. No board is returned empty on an aggregate estimate any more. Drift:
-  **B4 0 → 17**, its floor raised to 17 in the same commit; the other seven
-  scenarios byte-identical.
-- **L5** (the suggestion sizes for the busiest day, not the largest event) —
-  three implementations collapsed to one pure function in `src/engine/`, reached
-  from the store through `buildConfig`. Drift: no scheduled count moved;
-  `stripRecommendation` moved on all eight (B1 57→135, B2 57→189, B3 50→182,
-  B4 37→190, B5 23→73, B6 23→165, B7 58→207, B8 48→147), which is what
-  `max` → `sum` must do.
-
-**All ten templates now place 100% of their events at their suggested strip
-count.** The five that rendered a blank board: `NAC Youth` 0→24 of 24,
-`NAC Cadet/Junior` 0→24, `NAC Vet/Div1/Junior` 0→66, `ROC Mega` 0→42,
-`Junior Olympics` 0→18. Confirmed live: `NAC Youth` at 197 suggested strips
-places 24 of 24 in the browser, SMOKE PASS twice with 0 console errors.
-
-**What 011 deliberately did not fix:**
-
-- **The `DEADLINE_BREACH` shortfall.** Several templates placed fewer events
-  than they have on deadline warnings alone, with no ERROR. It disappears from
-  the suggested column after L5 – but only because the new strip counts are
-  large enough that no event loses its race against the day's end. **The cause
-  is untouched.** Give any of those templates a realistic strip count again and
-  it returns. Spec §Out of Scope; a separate defect with a separate cause.
-- **The feasibility estimate's magnitude.** R5 demoted the finding's severity
-  and changed nothing about how it is computed – not the worst-case aggregate
-  sum, not the 15% slack band. An estimate that is wrong in magnitude is still
-  wrong in magnitude; it merely stops discarding tournaments. It is still shown
-  to the user as a warning with a shortfall number in it.
-- **Video strip suggestion.** `resolveVideoStrips` still picks a video count by
-  tournament type. FR-002 demoted `feasibility-video-strip-hours` alongside its
-  sibling, but no rule in 011 recommends a video strip count, and the
-  busiest-day rule sizes competition strips only.
-- **Double-stripping, in any form.** Never a planned scheduling input. No
-  toggle, no ratio, no strip-for-time trade appears anywhere in the feature –
-  the rule allocates one strip per pool throughout. Recorded above at
-  §Double-stripping.
-- **Wave 3's remaining items still wait on Part 3.** R5 was taken out of Wave
-  3's order by product-owner direction on 2026-09-05 and nothing else moved with
-  it. The eight time-of-day penalty weights are still undecided, and R4, R6, R8,
-  R9 and the rest of Waves 2–4 are unbuilt.
-
-**Six things it found and could not fix are open above the divider**: the
-suggestion being sufficient rather than minimal (the largest of them), the
-days=3 / days=4 harness gap, B4's 18-vs-17 app-path divergence, a test comment
-that described its own fixture wrongly, the `stripBudget` ↔ `analysis` import
-cycle, and the message-text gate on the strip recommendation.
-
-**Two corrections to its own planning artifacts, recorded because both repeat:**
-
-1. **`research.md` D6 was half wrong.** It claimed US2 could not move the drift
-   ledger. True for scheduled counts – B1–B8 supply strip counts as fixture
-   literals and nothing consumes the recommendation – and false for the
-   snapshot, which records `stripRecommendation`. "The ledger has no reference
-   to X" is a claim about the *fixtures*; the digest is a separate surface that
-   has to be read separately.
-2. **`spec.md` §Tests that invert listed six tests; eleven inverted.** The five
-   extra were found by measurement, not by reading, and all five were the same
-   "feasibility empties the board" fixture class on files the spec did not name.
-   **That table is a merge-gate artifact and it should be built by measurement**
-   – make the change on a scratch branch and run the suite, which enumerates the
-   list exactly. Reading the codebase for it found 6 of 11.
-
-## Wave 1 of the methodology reconciliation
-
-*Feature 010, done 2026-09-05.*
-
-Record: [`specs/010-wave-1-reconciliation/`](../../specs/010-wave-1-reconciliation/),
-built against
-[`methodology-reconciliation.md`](./methodology-reconciliation.md) §Recommended
-sequence, Wave 1. `baseline.md` there holds every number below.
-
-The seven independent fixes, one commit each:
-
-- **R1** (delete `indiv-team-same-day`) — `NAC Div1/Junior` 0/24 → 24/24 at
-  80/12, `NAC Vet/Div1/Junior` 0/66 → 45/66. Drift: nothing moved.
-- **R7** (report the fallback's broken hard edges) — one WARN per pair, cause
-  `UNAVOIDABLE_CROSSOVER_CONFLICT`. Drift: nothing moved.
-- **R2** (scope per-event structural findings to their subjects) — one bad
-  event no longer discards the tournament. Drift: nothing moved.
-- **R3** (coerce the team cut) — `buildConfig` coerces `cut_mode` to
-  `DISABLED`, `cut-on-team` demoted to a notice. Drift: nothing moved.
-- **L1** (wire `PROXIMITY_3_PLUS_DAYS`) — day assignments moved on
-  B1/B2/B3/B7/B8 with no count lost; B5/B6 byte-identical.
-- **L9** (remove the Y8→Y10 penalty) — B6 44 → 45, errors 10 → 9, floor raised
-  to 45. Also removed the derived Y8↔Y12 two-hop edge.
-- **L3** (apply `SOFT_SEPARATION_PAIRS`) — DIV1↔CADET 0.8 → 5.0, DIV1↔DIV2
-  0.0 → 3.0, DIV1↔DIV3 0.0 → 3.0. Drift: nothing moved — see the coverage note
-  below.
-
-**What Wave 1 deliberately did not fix:**
-
-- **Part 3 is still open.** The eight time-of-day penalty weights have no
-  mechanism, and the Option A/B/C decision on giving them one is the product
-  owner's. Wave 1 was built to be unaffected either way —
-  [`methodology-reconciliation.md`](./methodology-reconciliation.md) Part 3.
-- **Waves 2, 3 and 4 are unbuilt.** §Recommended sequence in that same document
-  names them: Wave 2 is documentation-only, Wave 3 needs the Part 3 answer,
-  Wave 4 needs its own drift review per item.
-- **`feasibility-strip-hours` was the next target — and is now done in 011**
-  (§R5 and L5 above; this bullet is kept as Wave 1 wrote it). The product owner
-  directed
-  on 2026-09-05 that the next session plans the audit's **R5** — demoting it
-  from a blocking ERROR to a WARN. It is why four templates still place zero
-  at the app-suggested strip count (`NAC Youth`, `NAC Cadet/Junior`,
-  `ROC Mega`, `Junior Olympics`) and why `NAC Vet/Div1/Junior` still places
-  zero there too (`baseline.md` §3). The audit's **L5** — `suggestStrips`
-  recommending one strip per pool of the largest event, ignoring every other
-  event on the day — is the cause under that symptom: the app suggests the
-  very configuration its own validation gate then refuses.
-- **No same-day bonus was added for Y8/Y10.** METHODOLOGY:118 says Y8 "CAN and
-  SHOULD" share a day with Y10. L9 removed the penalty, making "CAN" true;
-  "SHOULD" would need a weight the specification does not state, and inventing
-  one is the habit the audit exists to break (spec.md §Out of Scope).
-- **`NAC Youth` places 22 of 24 at 80/12, not 24.** Two events
-  (`CDT-W-FOIL-IND`, `Y14-W-FOIL-IND`) go unplaced on `DEADLINE_BREACH`
-  warnings with no ERROR. This corrects the audit's §2.1 L5 claim of 24/24 —
-  `baseline.md` §6, finding 1.
-
-**Two coverage gaps the drift ledger cannot see, found while building this
-feature — these matter more than any single fix, because they say what the
-ledger cannot prove:**
-
-1. **B1–B8 never enter the DSatur least-bad-color fallback**, proved by
-   day-map reconstruction and by V8 statement coverage showing 0 executions
-   across 896 vertex colourings. Already recorded above at §The store's
-   default day count is unsatisfiable for three templates — not restated
-   here.
-2. **L3 moved nothing because the ledger cannot exercise two of its three
-   pairs.** DIV1 appears in B1/B2/B7/B8 and DIV2/DIV3 in B3/B6, and those sets
-   never intersect, so DIV1↔DIV2 and DIV1↔DIV3 have zero occurrences across
-   all eight scenarios — unit-tested only. The third pair, DIV1↔CADET, occurs
-   18 times (12 in B2, 6 in B7) and all 18 were already on different days at
-   0.8, so raising it to 5.0 only made an already-rejected option more
-   expensive. A green ledger is not evidence that L3 is correct.
-
-## Day-axis parity
-
-*Feature 006, done 2026-08-31. Unblocked 004's US3.*
-
-Record: [`specs/006-day-axis-parity/`](../../specs/006-day-axis-parity/). The
-finding, repro and isolation numbers are in
-[reassessment-2026-08-31.md §2](./reassessment-2026-08-31.md); the store↔engine
-axis invariants are
-[`contracts/day-axis.md`](../../specs/006-day-axis-parity/contracts/day-axis.md).
-
-**What 006 deliberately did not fix:**
-
-- **Per-day capacity math still uses the `DAY_LENGTH_MINS` constant**, not the
-  per-day windows 006 introduced — `dayRemainingCapacity`
-  (`src/engine/capacity.ts:211`) and the DSATUR day-assignment loop
-  (`src/engine/dayColoring.ts:612`) both compute a day's strip-hour budget as
-  `strips_total × DAY_LENGTH_MINS / 60`, a fixed per-day length rather than
-  that day's own configured hours. 006's axis fix reconciled where events
-  land; it did not touch how much capacity a day is credited with. A
-  tournament whose days have unequal lengths is scheduled correctly today only
-  because no reference tournament yet discriminates the two — a latent gap, not
-  a verified-safe one.
-- **Placement states for partial knowledge** — unplaced /
-  day-known-time-unknown / placed / pinned — stay parked at P4, per the
-  §Revised sequence table in
-  [`competition-planner-workbench.md`](./competition-planner-workbench.md).
-- **`findAvailableStripsInWindow`'s `day` argument guard has one residual
-  gap.** T015 states the day-inference precondition (`src/engine/resources.ts`
-  comments, no behavior change) and `__tests__/engine/resources.test.ts`
-  backstops it two ways: a `vi.spyOn` over a real multi-day `scheduleAll` run,
-  and a static arity check per call site in `concurrentScheduler.ts`. An
-  explicit `undefined` passed in the `day` position keeps the call's arity at
-  7 and slips past the static backstop at the STAGED-DE precheck call site
-  (`concurrentScheduler.ts:902`), which the spy cannot reach. The consequence
-  is bounded — an unreached `day` value feeds only the `reason` ternary in
-  `findAvailableStripsInWindow`, so no scheduling outcome moves — but a `TIME`
-  shortfall could be relabeled `STRIPS` there, manufacturing a spurious
-  `STRIP_CONTENTION` bottleneck (`concurrentScheduler.ts:727`) that tells an
-  organizer to add strips when the day was the real constraint. Documented in
-  the test file's own comment block above the guard's `describe`.
-
-## Team events block their whole tournament
-
-*Found by 006, fixed by feature 008, done 2026-08-31.*
-
-`defaultConfigForId` derived a team competition's cut from
-`DEFAULT_CUT_BY_CATEGORY` with no `event_type === TEAM` branch, so a team event
-reached the engine carrying a percentage cut, tripped the `cut-on-team` BINDING
-error, and one BINDING error discarded the entire tournament's schedule.
-Measured: B2 0 → 24, B8 0 → 53. Record:
-[`specs/008-team-event-cut/`](../../specs/008-team-event-cut/); B8's residual
-gap is [`b8-residual.md`](../../specs/008-team-event-cut/b8-residual.md).
-
-**What 008 deliberately did not fix:**
-
-- **`ROC Mega` also places nothing, and has no team event.** Its cause is a
-  strip-hour capacity shortfall reported by `validateConfig` in BINDING mode,
-  triggered by `suggestStrips()` under-recommending strips for 42 events – a
-  different defect reaching an empty board by the same "one BINDING error
-  discards the whole schedule" architecture. Measured in
-  [`baseline.md`](../../specs/008-team-event-cut/baseline.md).
-- **`NAC Div1/Junior` and `NAC Vet/Div1/Junior` stay at 0**, and 008's fix is
-  not implicated — zero `cut-on-team` findings on either. Both are blocked by
-  two BINDING errors from `indiv-team-same-day`
-  (`src/engine/validation.ts:272-310`), which computes a hypothetical worst
-  case — individual total + `INDIV_TEAM_MIN_GAP_MINS` + team total, assuming
-  both land on the same day — on the same two Div1 épée pairs, 15 and 20
-  minutes over `DAY_LENGTH_MINS` 840. `days_available` appears nowhere in
-  `validateTimingConstraints`, so it fires identically on a 1-day and a 5-day
-  tournament even though the scheduler is free to separate the pair across
-  days. A fix would touch, weakest option last: the rule's severity — it is
-  emitted via `policy()` (`validation.ts:299-305`), which maps to ERROR under
-  BINDING, and demoting it to `notice()` would let the scheduler place what it
-  can, verified at the source; the all-or-nothing gate itself
-  (`concurrentScheduler.ts:186-204`) — the finding carries its two implicated
-  competitions as `subjects`, so dropping or deferring only those would fix the
-  class rather than the instance and would cover `ROC Mega` too, though the
-  isolation run never opened `concurrentScheduler.ts` to verify that mechanism;
-  or the Div1 épée default fencer counts (`D1-M-EPEE-IND` 310,
-  `D1-W-EPEE-IND` 210) — weakest, since it tunes a number to dodge a rule and
-  the counts are user-editable. The diagnosis is verified; the outcome of any
-  fix is untested.
-- **B8's +1 over the ledger stays open**, attributed by isolation to the
-  ledger's `de_mode` and `strips_allocated` acting together – neither alone
-  moves the count. It belongs with **B4 and B6**, which remain FR-004a
-  exceptions.
-- **`__tests__/helpers/scenarios.ts`'s copy of the team-event branch is
-  deliberate, not debt.** Converging it on the store's helper would make the
-  app-path parity check true by construction and destroy the instrument that
-  found this bug. Reasoning:
-  [research.md D2](../../specs/008-team-event-cut/research.md).
-
-`catalogue.ts:217`'s wrong comment, also recorded here by 008, was fixed on
-2026-09-01.
-
-## Per-type defaults in the rail's Advanced panel
-
-*Delivered by 004 US4, 2026-09-01 –
-[`specs/004-p3-workbench-shell/`](../../specs/004-p3-workbench-shell/spec.md).*
-
-The six-row table is `src/store/typeDefaults.ts` (`effa7c908e`), the three
-per-type resolutions are in `buildConfig.ts` (`9f53379b70`), and
-`AdvancedPanel.tsx` shipped with the AUTO marker (`332817d283`). Referees 2 at
-NAC/SJCC/SYC and 1 elsewhere, DE mode staged at NAC and single-stage elsewhere,
-video strips required for certain NAC events at a default count of 8.
-
-Two open entries above descend from this one: §The Advanced panel re-implements
-the engine's referees-per-pool factor, and §The drift ledger's factory does not
-apply the store's per-type resolutions.
-
-## Configurable pool round durations
-
-*Delivered by feature 002 –
-[`specs/002-configurable-pool-durations/`](../../specs/002-configurable-pool-durations/).*
-
-[research.md D4](../../specs/002-configurable-pool-durations/research.md)
-records how the table widens, so the per-category dimension §Youth-event pool
-duration calibration may add lands in the same table rather than a second
-override system.
-
-## Calibration debt (closed items)
-
-Both delivered by 003 –
-[`specs/003-p2-derived-state/`](../../specs/003-p2-derived-state/). The one
-open item is §Calibration debt above.
-
-- `CAPACITY_TARGET_FILL` re-tune:
-  [research.md D8](../../specs/003-p2-derived-state/research.md) records the
-  measured sweep. 0.3 stands – the sweep was non-discriminating, a structural
-  finding rather than a tie. **D8 also holds the re-tune's precondition**, which
-  is what the open item exists to supply.
-- Integration-test floors: re-baselined, with the measured counts B1–B8 now
-  assert against in
-  [research.md D7](../../specs/003-p2-derived-state/research.md).
+012 measured this (`specs/012-actionable-strip-suggestion/baseline.md` §1a (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)) and did not fix it. Still open.

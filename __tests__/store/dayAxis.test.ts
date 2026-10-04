@@ -6,7 +6,7 @@ import type { DayConfig } from '../../src/engine/types.ts'
 import { TournamentType } from '../../src/engine/types.ts'
 
 /**
- * Assertions for contracts/day-axis.md C1: the config handed to `scheduleAll`
+ * Assertions for specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md): the config handed to `scheduleAll`
  * must carry scheduler-axis day windows — day d at
  * [d*1440 + start_d, d*1440 + end_d) — disjoint, ordered, congruent to the
  * store's clock-axis day mod 1440, and slot-aligned.
@@ -107,7 +107,8 @@ function assertDayZeroUnshifted(windows: DayConfig[], storeDayConfigs: DayConfig
   )
 }
 
-describe('day axis invariants (contracts/day-axis.md C1)', () => {
+// specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)
+describe('day axis invariants (day-axis C1)', () => {
   describe('uniform hours (three identical days)', () => {
     const storeDayConfigs: DayConfig[] = [
       { day_start_time: 480, day_end_time: 1320 },

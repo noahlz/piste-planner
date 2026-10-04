@@ -15,7 +15,7 @@ import { SCENARIOS } from '../helpers/scenarios.ts'
  *
  * These are behavior tests over the store's real path
  * (`buildTournamentConfig` -> `scheduleAll` -> `runScheduleAll`'s clock-time
- * conversion), not axis-literal assertions — contracts/day-axis.md C1's
+ * conversion), not axis-literal assertions — specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)'s
  * literal-window checks already live in dayAxis.test.ts.
  */
 

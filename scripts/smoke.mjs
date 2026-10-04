@@ -249,7 +249,7 @@ log('opens on the matrix, no schedule table mounted')
 // of its 24 selected events after 006's day-axis fix — measured against the
 // running app by switching to Schedule (a real table, not windowed) and back;
 // before the fix this same boot placed only 11 of 24
-// (specs/006-day-axis-parity/baseline.md). The matrix view itself is windowed
+// (specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)). The matrix view itself is windowed
 // by viewport (see "Blocks render" below), so it is not read here.
 await page.getByRole('radio', { name: 'Schedule' }).click()
 await page.waitForTimeout(200)
@@ -360,10 +360,10 @@ await closePanel()
 // `days_available`, so it stays at boot's B1 value of 4 throughout this whole
 // driver — nothing here ever calls setDays. Before this feature the strip
 // suggestion was a function of the largest event alone and did not read day
-// count, so the old rule and baseline.md's day=3 harness happened to agree.
+// count, so the old rule and specs/012-actionable-strip-suggestion/baseline.md's (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) day=3 harness happened to agree.
 // T010's busiest-day rule is a function of `days_available` (FR-005) by
 // design, so at the app's real days=4 it suggests 23 strips for this template
-// where baseline.md's forced days=3 harness measures 30 — both are the rule
+// where specs/012-actionable-strip-suggestion/baseline.md's (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) forced days=3 harness measures 30 — both are the rule
 // working correctly at different day counts, not a disagreement. 23 strips
 // still places all 12 of 12 (re-confirmed via the engine directly), but the
 // wider strip axis pushes some of the 12 placed events onto higher strip
@@ -371,7 +371,7 @@ await closePanel()
 // without scrolling. Measured against the running app, 2026-09-05.
 //
 // `[M]` 012 T014, 2026-09-06: T007-T011's search-based rule further lowers
-// this to 15 strips (baseline.md §5), down from 23. Matrix event blocks
+// this to 15 strips (specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)), down from 23. Matrix event blocks
 // measured at 14 at that count, still above this floor of 8, so the floor
 // below needs no change.
 //
@@ -814,8 +814,8 @@ log('DE mode restored to Staged after the round-trip, isolating later templates 
 // ── NAC Div1/Junior (010 R1) ──
 // Before R1, indiv-team-same-day blocked D1-M-EPEE-IND + D1-M-EPEE-TEAM's
 // worst-case same-day duration (855 vs DAY_LENGTH_MINS 840) and emptied this
-// template's whole board at every strip count (baseline.md §3). 80 strips /
-// 12 video is the column baseline.md's after-R1 table measured clean through
+// template's whole board at every strip count (specs/010-wave-1-reconciliation/baseline.md §3 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)). 80 strips /
+// 12 video is the column specs/010-wave-1-reconciliation/baseline.md's (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) after-R1 table measured clean through
 // the engine (24/24, no ERROR); this is the same claim through the browser.
 // Still under tournament type NAC — nothing above this point has changed it.
 await choosePreset('NAC Div1/Junior')
@@ -847,7 +847,7 @@ await page.waitForTimeout(200)
 const div1JuniorRowCount = await page.locator('[data-schedule-row]').count()
 log('NAC Div1/Junior schedule table rows =', div1JuniorRowCount)
 // Measured against the running app, 2026-09-05: 80 strips / 12 video places
-// all 24 of 24, agreeing with baseline.md's after-R1 engine measurement.
+// all 24 of 24, agreeing with specs/010-wave-1-reconciliation/baseline.md's (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) after-R1 engine measurement.
 if (div1JuniorRowCount !== 24) {
   throw new Error(`NAC Div1/Junior schedule table rendered ${div1JuniorRowCount} rows, expected 24`)
 }
@@ -857,7 +857,7 @@ await shot('06-div1junior-schedule')
 // Before this feature, NAC Youth's Suggest button wrote 39 strips (the largest
 // single event's pool count) and the board came back empty:
 // `feasibility-strip-hours` tripped a blocking ERROR before the scheduler ever
-// ran (baseline.md §1). US1 (R5) demoted that finding to a WARN and US2 (L5)
+// ran (specs/011-feasibility-and-strip-suggestion/baseline.md §1 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md)). US1 (R5) demoted that finding to a WARN and US2 (L5)
 // replaced the largest-event rule with one sized for the busiest day's summed
 // pool demand, so this step presses the same button on the same template and
 // checks the board is no longer empty.
@@ -882,7 +882,7 @@ log('NAC Youth schedule table rows =', nacYouthRowCount)
 // Not pinned to a literal count: `days_available` sits at boot's B1 value of 4
 // for this whole driver (applyTemplate never touches it), so the suggested
 // number and the placed count here are one instance of the busiest-day rule
-// at a day count baseline.md's engine harness (forced to 3) does not share —
+// at a day count specs/012-actionable-strip-suggestion/baseline.md's (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) engine harness (forced to 3) does not share —
 // see the ROC Div1A/Vet matrix-block comment above for the same effect. The
 // assertion that matters for SC-005 is non-zero: zero is exactly the outcome
 // R5/L5 exist to prevent, and pinning to a packing detail would make this
@@ -891,7 +891,7 @@ log('NAC Youth schedule table rows =', nacYouthRowCount)
 //
 // `[M]` 012 T014, 2026-09-06, in the driver's accumulated session state:
 // suggested 63 strips, 24 of 24 placed (superseding the pre-search-rule 197
-// this comment recorded on 2026-09-05). baseline.md §5's fresh-store answer
+// this comment recorded on 2026-09-05). specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)'s fresh-store answer
 // is 66. Isolated 2026-09-06: the gears-panel step above changes Admin gap
 // 30 → 15, reverts it to 30, then re-applies 15 so the override carries
 // through the share link — and nothing after that restores it.
@@ -938,15 +938,15 @@ await shot('06c-nacyouth-schedule')
 // `[M]` 012 T014, 2026-09-06: this driver's accumulated session state carries
 // boot's B1 preset video strip count of 12 into this step (nothing before it
 // resets video_strips_total), and at 12 video strips the suggested count is
-// 80, not baseline.md §5's fresh-store 85 (measured there at 8 video
-// strips — the spec's 96 is the monotone threshold, baseline.md §1a, the
+// 80, not specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)'s fresh-store 85 (measured there at 8 video
+// strips — the spec's 96 is the monotone threshold, specs/012-actionable-strip-suggestion/baseline.md §1a (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md), the
 // smallest count above which *every* count places every event, not the
 // smallest count that does). A throwaway probe (tmp/probe-t014-video.test.ts,
 // deleted) reproduced both numbers from a fresh store: 80 at video=12, 85 at
 // video=null(8). The search evaluates the config the app would actually
 // build (tasks.md §One decision), so a different video count is a different
 // board — 80 is correct for the config this driver hands it, not a
-// regression against baseline.md's 85.
+// regression against specs/012-actionable-strip-suggestion/baseline.md's (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) 85.
 //
 // `[M]` 013 T023, 2026-09-13: two runs both read 80, holding this assertion.
 // The 69 and then 66 read earlier this session were both stale reads of
@@ -1044,7 +1044,7 @@ log('NAC Cadet/Junior schedule table rows =', teamRowCount)
 // `[M]` 2026-09-06 (012 T014): 144 → 48, rows unchanged at 24. T007-T011's
 // search-based rule supersedes the busiest-day rule above. Measured at 12
 // video strips (this driver's accumulated state, same as the SC-008 step
-// above) and still lands on 48 — matching baseline.md §5's fresh-store
+// above) and still lands on 48 — matching specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)'s fresh-store
 // answer exactly, so unlike NAC Vet/Div1/Junior, video strip count does not
 // move this template's suggested count.
 if (teamRowCount !== 24) {

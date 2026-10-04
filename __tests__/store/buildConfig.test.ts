@@ -104,7 +104,7 @@ describe('buildTournamentConfig', () => {
     // here asserted what the engine config's dayConfigs actually contained.
     // That absence is what let the day-axis defect (research.md D1) survive
     // three features — see research.md D4's closing note and
-    // contracts/day-axis.md. `dayAxis.test.ts` carries the full C1 invariant
+    // specs/006-day-axis-parity/contracts/day-axis.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md). `dayAxis.test.ts` carries the full C1 invariant
     // suite (disjoint, ordered, congruent, slot-aligned); this test pins the
     // specific shift buildTournamentConfig applies.
     it('shifts each day onto the scheduler axis by day_index * 1440, leaving the store\'s own dayConfigs untouched', () => {
@@ -182,7 +182,7 @@ describe('buildTournamentConfig', () => {
       // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
       // the ledger factory (`__tests__/helpers/scenarios.ts:69`). 64 fencers
       // gives 10. The old `0` here was the fourth app-path seam
-      // `specs/006-day-axis-parity/parity-exceptions.md` names — it zeroed the
+      // `specs/006-day-axis-parity/parity-exceptions.md` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names — it zeroed the
       // DE term of the feasibility estimate for every individual event.
       expect(comp.strips_allocated).toBe(10)
     })
@@ -457,7 +457,7 @@ describe('buildTournamentConfig', () => {
       // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
       // the ledger factory (`__tests__/helpers/scenarios.ts:69`), where it used
       // to send `0` — the fourth app-path seam
-      // `specs/006-day-axis-parity/parity-exceptions.md` names.
+      // `specs/006-day-axis-parity/parity-exceptions.md` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names.
       //
       // Asserted per competition and outside the loop, because the value now
       // differs between the two fixtures (64 fencers -> 10, 32 -> 5) where the

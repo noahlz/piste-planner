@@ -27,10 +27,10 @@ Snapshot `__tests__/engine/__snapshots__/driftLedger.test.ts.snap` SHA-256:
 
 | Call site | Template | Count the comment carries | Comment line |
 |---|---|---:|---|
-| `scripts/smoke.mjs:367` | ROC Div1A/Vet | 15 | `:406–408` (supersedes 23 recorded at `:398`; `[M]` 012 T014, 2026-09-06, T007-T011's search-based rule, baseline.md §5) |
-| `:786` | NAC Youth | 63 | `:811–812` (`[M]` 012 T014, 2026-09-06, in the driver's accumulated session state; baseline.md §5's fresh-store answer is 66) |
+| `scripts/smoke.mjs:367` | ROC Div1A/Vet | 15 | `:406–408` (supersedes 23 recorded at `:398`; `[M]` 012 T014, 2026-09-06, T007-T011's search-based rule, specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)) |
+| `:786` | NAC Youth | 63 | `:811–812` (`[M]` 012 T014, 2026-09-06, in the driver's accumulated session state; specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)'s fresh-store answer is 66) |
 | `:863` | NAC Vet/Div1/Junior | 80 | asserted at `:866–867`, explained at `:882–883` (`[M]`, measured in the running app, 2026-09-06) |
-| `:912` | NAC Cadet/Junior | 48 | `:955–960` (supersedes 144 at `:946`, itself superseding 39; `[M]` 012 T014, 2026-09-06, T007-T011's search-based rule supersedes the busiest-day rule, matches baseline.md §5's fresh-store answer of 48) |
+| `:912` | NAC Cadet/Junior | 48 | `:955–960` (supersedes 144 at `:946`, itself superseding 39; `[M]` 012 T014, 2026-09-06, T007-T011's search-based rule supersedes the busiest-day rule, matches specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)'s fresh-store answer of 48) |
 
 NAC Youth is expected to read 66 after phase 2 deletes the Admin gap override
 step (research D14); T023 records the observed value.

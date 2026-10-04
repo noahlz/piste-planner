@@ -15,7 +15,7 @@ import type { Placement } from '../../src/engine/types.ts'
 // ──────────────────────────────────────────────
 // P2 types not yet on StoreState/SerializedState (T008 adds the store slices,
 // T010 adds the wire shape) — local stand-ins so these tests compile against
-// the target v2 contract (specs/003-p2-derived-state/contracts/serialization-v2.md)
+// the target v2 contract (specs/003-p2-derived-state/contracts/serialization-v2.md (removed; git show 0ab5bd2dc9:specs/003-p2-derived-state/contracts/serialization-v2.md))
 // ahead of that work.
 // ──────────────────────────────────────────────
 
