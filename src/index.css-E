@@ -30,6 +30,14 @@
   --success: #5a8a6a;
   --success-hover: #4a7559;
   --success-foreground: #ffffff;
+  --danger: #a35b5b;
+  --danger-hover: #8c4d4d;
+  --warning: #fef3c7;
+  --warning-text: #92400e;
+  --error: #fee2e2;
+  --error-text: #991b1b;
+  --info: #dbeafe;
+  --info-text: #1e40af;
   --accent-hover: #4d7295;
 
   /* Industry design-system tokens (docs/design/mockup/ds-styles.css) –

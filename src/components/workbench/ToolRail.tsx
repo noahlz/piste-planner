@@ -72,16 +72,16 @@ export function ToolRail({ panel, onSelect }: ToolRailProps) {
               data-badge={isFindings ? String(findingsCount) : undefined}
               onClick={() => onSelect(pressed ? null : id)}
               className={cn(
-                'relative flex h-[46px] w-[46px] items-center justify-center rounded-[13px] border-[1.5px] border-chrome-border bg-secondary text-neutral-700 shadow-[0_1px_2px_rgba(43,43,45,.05)] hover:border-accent-400 hover:bg-hover-tint',
+                'relative flex h-[46px] w-[46px] items-center justify-center rounded-[13px] border-[1.5px] border-chrome-border bg-secondary text-neutral-700 shadow-rail hover:border-accent-400 hover:bg-hover-tint',
                 pressed &&
-                  'border-primary bg-accent-100 text-accent-800 shadow-[0_1px_3px_rgba(43,43,45,.1)] hover:border-primary hover:bg-accent-100',
+                  'border-primary bg-accent-100 text-accent-800 shadow-rail-active hover:border-primary hover:bg-accent-100',
               )}
             >
               <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
               {isFindings && findingsCount > 0 && (
                 <span
                   aria-hidden="true"
-                  className="absolute -top-[5px] -right-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-[99px] border-2 border-chrome bg-rail-badge px-[5px] text-[10.5px] font-bold text-white"
+                  className="absolute -top-[5px] -right-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-[99px] border-2 border-chrome bg-rail-badge px-[5px] text-[10.5px] font-bold text-primary-foreground"
                 >
                   {findingsCount}
                 </span>

@@ -203,13 +203,13 @@ export function CenterView({
             aria-label="Blocking findings"
             aria-live="assertive"
             aria-atomic="true"
-            className="absolute inset-x-4 top-4 rounded-md border border-red-200 bg-error p-4 text-error-text shadow-lg"
+            className="absolute inset-x-4 top-4 rounded-[12px] border-[1.5px] border-finding-border bg-finding-bg p-4 text-finding-link shadow-lg"
           >
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <h2 className="flex items-center gap-2 text-[11.5px] font-semibold tracking-[.06em] uppercase">
               <AlertCircle className="h-4 w-4" />
               Configuration is invalid
             </h2>
-            <ul className="mt-2 space-y-1 text-sm">
+            <ul className="mt-2 space-y-1 text-[12.5px] leading-[1.5]">
               {blocking.map((e, i) => (
                 <li key={`${e.field}-${i}`}>
                   {e.field}: {e.message}

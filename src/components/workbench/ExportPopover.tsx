@@ -103,7 +103,7 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
       <PopoverContent align="end" className="w-[28rem] space-y-4">
         {/* Save */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-foreground">Save Configuration</h3>
+          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">Save Configuration</h3>
           <Button type="button" onClick={handleSave}>
             <Download className="mr-2 h-4 w-4" />
             Save to File
@@ -112,7 +112,7 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
 
         {/* Load */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-foreground">Load Configuration</h3>
+          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">Load Configuration</h3>
           <input
             ref={fileInputRef}
             type="file"
@@ -125,14 +125,14 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
             Load from File
           </Button>
           {loadError && (
-            <p className="mt-2 text-sm text-error-text" role="alert">
+            <p className="mt-2 text-sm text-finding-link" role="alert">
               {loadError}
             </p>
           )}
           {/* Always mounted: a live region only announces changes if it exists
               in the DOM before the content lands. */}
           <p
-            className={droppedPlacements.length > 0 ? 'mt-2 text-sm text-warning-text' : undefined}
+            className={droppedPlacements.length > 0 ? 'mt-2 text-sm text-finding-badge-text' : undefined}
             role="status"
           >
             {droppedPlacements.length > 0 && (
@@ -147,7 +147,7 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
 
         {/* Share */}
         <div>
-          <h3 className="mb-2 text-sm font-medium text-foreground">Share via URL</h3>
+          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">Share via URL</h3>
           <Button type="button" onClick={handleShare}>
             <Share2 className="mr-2 h-4 w-4" />
             Generate Link
@@ -172,7 +172,7 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
                 </Button>
               </div>
               {urlExceedsLimit && (
-                <p className="text-xs text-warning-text" role="status">
+                <p className="text-xs text-finding-badge-text" role="status">
                   Warning: URL exceeds 2KB and may not work in all browsers. Consider saving to file
                   instead.
                 </p>

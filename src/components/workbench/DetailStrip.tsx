@@ -29,6 +29,8 @@ interface Pill {
 const ACTION_BUTTON =
   'flex h-8 shrink-0 items-center gap-[7px] whitespace-nowrap rounded-[10px] border-[1.5px] border-chrome-border bg-secondary px-[13px] text-[12.5px] font-semibold text-foreground hover:border-accent-400 hover:bg-accent-100'
 const ACTION_BUTTON_PRESSED = 'border-accent-400 bg-accent-100 text-accent-800'
+const TOGGLE_BUTTON =
+  'flex h-[26px] w-[30px] shrink-0 items-center justify-center rounded-[8px] text-neutral-600 hover:bg-neutral-200'
 const ICON_BUTTON =
   'flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border-[1.5px] border-chrome-border bg-secondary text-neutral-600 hover:bg-muted hover:text-foreground'
 
@@ -165,13 +167,13 @@ export function DetailStrip({
       data-collapsed={detailCollapsed ? 'true' : 'false'}
       {...factAttrs}
       className={cn(
-        'print-hidden flex shrink-0 items-center gap-3.5 border-t-[1.5px] border-chrome-border bg-chrome-deep px-3',
+        'print-hidden flex shrink-0 items-center gap-3.5 border-t-[1.5px] border-chrome-border bg-chrome-deep px-3 animate-in fade-in slide-in-from-bottom-full duration-200 motion-reduce:animate-none',
         detailCollapsed ? 'h-[30px]' : 'h-[58px]',
       )}
     >
       <span
         aria-hidden="true"
-        className="shrink-0 rounded-[5px]"
+        className={cn('shrink-0', detailCollapsed ? 'rounded-[5px]' : 'rounded-[7px]')}
         style={{
           width: detailCollapsed ? 14 : 20,
           height: detailCollapsed ? 14 : 34,
@@ -185,7 +187,7 @@ export function DetailStrip({
       ) : (
         <>
           <div className="flex min-w-[150px] flex-1 flex-col gap-px overflow-hidden">
-            <span className="truncate text-[17px] leading-tight font-bold text-foreground">{name}</span>
+            <span className="truncate text-[17px] leading-[1.2] font-bold text-foreground">{name}</span>
             <span className="flex gap-[11px] font-mono text-[11px] font-semibold whitespace-nowrap text-neutral-600">
               {placed && (
                 <span>
@@ -201,13 +203,13 @@ export function DetailStrip({
 
           {pills.length > 0 && (
             <>
-              <span aria-hidden="true" className="h-7 w-[1.5px] shrink-0 rounded-sm bg-chrome-border" />
+              <span aria-hidden="true" className="h-7 w-[1.5px] shrink-0 rounded-sm bg-grid-line" />
               <div className="flex min-w-0 flex-none items-center gap-2 overflow-hidden">
                 {pills.map((pill) => (
                   <span
                     key={pill.phase}
                     data-phase-pill={pill.phase}
-                    className="flex h-7 items-center gap-[7px] rounded-full border-[1.5px] border-neutral-200 bg-neutral-100 px-[11px] text-[12.5px] whitespace-nowrap text-foreground"
+                    className="flex h-7 items-center gap-[7px] rounded-full border-[1.5px] border-neutral-200 bg-chrome-soft px-[11px] text-[12.5px] whitespace-nowrap text-foreground"
                   >
                     {pill.text}
                   </span>
@@ -279,7 +281,7 @@ export function DetailStrip({
           type="button"
           aria-label={detailCollapsed ? 'Expand details' : 'Collapse details'}
           onClick={onToggleDetailCollapsed}
-          className={ICON_BUTTON}
+          className={TOGGLE_BUTTON}
         >
           {detailCollapsed ? (
             <ChevronUp aria-hidden="true" className="h-4 w-4" />
