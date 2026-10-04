@@ -63,8 +63,10 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  * The day bands are computed here too, by `daySummariesFromBlocks` over this
  * component's own `lanes` — the same committed blocks the grid draws — plus
  * `findingRows`, a fourth prop `CenterView` commits alongside the other three
- * on the same settle (013 T032, contract §4.3). Two store reads remain
- * unexpressed from the committed model: `placements`, for the pin badge, and
+ * on the same settle (013 T032, contract §4.3). The pin badge reads
+ * `pinnedIds`, the pinned set committed with the schedule since 013 T046
+ * (FR-042), so it cannot describe a schedule the grid is not drawing. One
+ * store read remains unexpressed from the committed model:
  * `selectedCompetitionId` (013 T029), for the selection ring — a click
  * selects the event immediately, and waiting for the next settle to ring it
  * would make the click feel unacknowledged. `jumpNonce` (013 T032, contract
@@ -110,6 +112,12 @@ export interface CanvasProps {
   /** The store's clock-time day hours, committed with `schedule` (C4). */
   dayConfigs: DayConfig[]
   zoom: ZoomState
+  /**
+   * The competition ids pinned as of the committed schedule (FR-042, T046).
+   * Required, so a dropped prop fails the typecheck rather than drawing every
+   * badge unpinned.
+   */
+  pinnedIds: ReadonlySet<string>
 }
 
 /** One block resolved to what it draws, once per render. */
@@ -221,12 +229,11 @@ const EMPTY_SUMMARY: Omit<DaySummary, 'day'> = {
   findings: 0,
 }
 
-export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom }: CanvasProps) {
+export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinnedIds }: CanvasProps) {
   const { config } = schedule
   const stripsTotal = Math.max(0, Math.floor(config.strips_total))
   const daysAvailable = Math.max(0, Math.floor(config.days_available))
 
-  const placements = useStore((s) => s.placements)
   const selectedCompetitionId = useStore((s) => s.selectedCompetitionId)
   const selectCompetition = useStore((s) => s.selectCompetition)
   // Read live rather than off the committed model (013 T032, contract §4.4):
@@ -583,7 +590,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom }: Ca
                         competition={block.competition}
                         label={block.label}
                         placement={block.placement}
-                        pinned={placements[block.placement.competitionId]?.pinned ?? false}
+                        pinned={pinnedIds.has(block.placement.competitionId)}
                         selected={selectedCompetitionId === block.placement.competitionId}
                         flash={flashId === block.placement.competitionId}
                         widthPx={

@@ -263,6 +263,54 @@ describe('CenterView dimmed-invalid rule (day band, FR-042)', () => {
   })
 })
 
+// FR-042, finding 25 (T046) — the pin badge commits with the schedule, so
+// while a finding is ERROR it holds at the last committed pinned set.
+describe('CenterView holds the pin badge while blocking (FR-042, T046)', () => {
+  let restoreResizeObserver: () => void
+
+  beforeEach(() => {
+    restoreResizeObserver = installStubResizeObserver(900, 480)
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    restoreResizeObserver()
+  })
+
+  it('keeps the badge unpinned after a pin lands during an ERROR, however long the wait', () => {
+    const id = seedPlacedCompetition()
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
+    const badges = (): (string | undefined)[] =>
+      Array.from(document.querySelectorAll<HTMLElement>(`[data-event-id="${id}"]`)).map(
+        (el) => el.dataset.pinned,
+      )
+    expect(badges().length, 'the canvas drew no blocks for the event').toBeGreaterThan(0)
+
+    act(() => {
+      useStore.getState().setStrips(0)
+    })
+    expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
+
+    act(() => {
+      useStore.getState().setPinned(id, true)
+    })
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS * 4)
+    })
+
+    expect(useStore.getState().placements[id]?.pinned).toBe(true)
+    expect(badges().every((p) => p === 'false')).toBe(true)
+  })
+})
+
 // The suite above proves the dim and the overlay, both of which are driven by
 // *live* findings and land synchronously. The suppression rule itself — that
 // the CENTER_SETTLE_MS timer never replaces `committed` while a finding is

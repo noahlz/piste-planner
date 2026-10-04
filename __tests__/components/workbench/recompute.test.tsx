@@ -303,6 +303,38 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     expect(blockEnd(id, 'DE_ROUND_OF_16')).toBe(915)
   })
 
+  it('holds the pin badge at the committed pinned set until the settle (FR-042, T046)', () => {
+    const id = seedPlacedCompetitions(8)
+    render(
+      <CenterView
+        viewMode={ViewMode.MATRIX}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
+
+    const badges = (): (string | undefined)[] =>
+      Array.from(document.querySelectorAll<HTMLElement>(`[data-event-id="${id}"]`)).map(
+        (el) => el.dataset.pinned,
+      )
+    expect(badges().length, 'the canvas drew no blocks for the event').toBeGreaterThan(0)
+    expect(badges().every((p) => p === 'false')).toBe(true)
+
+    act(() => {
+      useStore.getState().setPinned(id, true)
+    })
+
+    // The write landed, so the held badge below is the hold and not a missed write.
+    expect(useStore.getState().placements[id]?.pinned).toBe(true)
+    expect(badges().every((p) => p === 'false')).toBe(true)
+
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS)
+    })
+    expect(badges().every((p) => p === 'true')).toBe(true)
+  })
+
   it('holds a block’s findings at the committed model too, not just its geometry', () => {
     // The case above covers the `schedule` prop. The findings travel by a
     // second prop and the canvas has a live subscription to fall back on when

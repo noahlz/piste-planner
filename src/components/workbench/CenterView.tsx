@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../../store/store.ts'
 import type { DayConfig } from '../../engine/types.ts'
 import {
@@ -36,6 +36,13 @@ interface CommittedModel {
    * day" never run ahead of the blocks they bound (RCR-T009 finding 1).
    */
   dayConfigs: DayConfig[]
+  /**
+   * The ids of the competitions pinned when this model committed (FR-042,
+   * finding 25, 013 T046), so the pin badge on a block can never describe a
+   * schedule the grid is not drawing – a pin lands on the next settle with the
+   * blocks, and not at all while a blocking ERROR suppresses the commit.
+   */
+  pinnedIds: ReadonlySet<string>
 }
 
 /**
@@ -117,6 +124,18 @@ export function CenterView({
   const liveFindings = useStore(selectDerivedFindings)
   const liveFindingRows = useStore(selectFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)
+  const livePlacements = useStore((s) => s.placements)
+  // Memoised so the set's identity only changes with `placements`, keeping the
+  // commit effect below from re-arming on every render.
+  const livePinnedIds = useMemo<ReadonlySet<string>>(
+    () =>
+      new Set(
+        Object.entries(livePlacements)
+          .filter(([, placement]) => placement.pinned)
+          .map(([id]) => id),
+      ),
+    [livePlacements],
+  )
 
   const blocking = liveFindings.validationErrors.filter((e) => e.severity === 'ERROR')
   const hasBlocking = blocking.length > 0
@@ -126,6 +145,7 @@ export function CenterView({
     findings: liveFindings,
     findingRows: liveFindingRows,
     dayConfigs: liveDayConfigs,
+    pinnedIds: livePinnedIds,
   }))
 
   useEffect(() => {
@@ -140,11 +160,12 @@ export function CenterView({
           findings: liveFindings,
           findingRows: liveFindingRows,
           dayConfigs: liveDayConfigs,
+          pinnedIds: livePinnedIds,
         }),
       CENTER_SETTLE_MS,
     )
     return () => clearTimeout(timer)
-  }, [live, liveFindings, liveFindingRows, liveDayConfigs, hasBlocking])
+  }, [live, liveFindings, liveFindingRows, liveDayConfigs, livePinnedIds, hasBlocking])
 
   const showingMatrix = viewMode === ViewMode.MATRIX
 
@@ -168,6 +189,7 @@ export function CenterView({
               findingRows={committed.findingRows}
               dayConfigs={committed.dayConfigs}
               zoom={zoom}
+              pinnedIds={committed.pinnedIds}
             />
           ) : (
             <ScheduleOutput schedule={committed.schedule} />

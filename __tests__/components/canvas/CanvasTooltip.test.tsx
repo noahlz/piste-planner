@@ -410,6 +410,7 @@ const CANVAS_DAY_CONFIGS: DayConfig[] = [
   { day_start_time: 480, day_end_time: 1320 },
   { day_start_time: 480, day_end_time: 1320 },
 ]
+const NO_PINS: ReadonlySet<string> = new Set()
 const CANVAS_ZOOM = { zoomStep: 2, fitting: false }
 const EMPTY_FINDINGS: DerivedFindings = {
   validationErrors: [],
@@ -427,6 +428,7 @@ function renderCanvas(schedule: DerivedSchedule = scheduleWithTwoEvents()): void
       findingRows={[]}
       dayConfigs={CANVAS_DAY_CONFIGS}
       zoom={CANVAS_ZOOM}
+      pinnedIds={NO_PINS}
     />,
   )
 }
