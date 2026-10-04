@@ -1331,7 +1331,7 @@ placed event once at the canvas's times, and printing yields four pages.
   tests, tsc and lint clean. SMOKE PASS, no driver edit, 0 console errors,
   Suggest 15/66/80/48, boot 24 rows / 19·5·0; 9 of 66 B1 boot blocks warned.
 
-- [ ] **T049** Small text to WCAG AA (owner decision 2026-10-04, `handoff.md`
+- [x] **T049** Small text to WCAG AA (owner decision 2026-10-04, `handoff.md`
   finding 32). The panels' section captions (`SectionCaption`, duplicated in
   more than one panel, plus the other copies of the 11.5px / 600 / .06em
   uppercase caption style) go from `text-neutral-600` to `text-neutral-700`.
@@ -1342,6 +1342,20 @@ placed event once at the canvas's times, and printing yields four pages.
   so the axis keeps its hierarchy. Styling only: no accessible name, role,
   `data-*` or DOM-order change. SMOKE PASS with no driver edit; reshoot
   `scripts/screenshot.mjs`. `react-code-reviewer` after *(subagent commits)*
+  → Done 2026-10-04: `e8c6f2db90`, review follow-up `f6726047d5` (Prettier
+  on three files, whitespace only). One `CAPTION_CLASS` in
+  `src/components/common/caption.ts` and one `SectionCaption` beside it
+  replace the three panel copies; EventsPanel's "Selected", ScheduleOutput's
+  column heads and ExportPopover's three headings use the same class, each
+  keeping its element. Measured: caption `#5d5d60` on `--chrome` 4.00 →
+  6.13:1; off-hour tick `--tick-minor` `#a3a3a6` → `#68686b` on
+  `--chrome-deep` 2.11 → 4.66:1; hour ticks raised `neutral-700` →
+  `neutral-800` (5.51 → 8.41:1) so the axis keeps its step. No role, name,
+  `data-*` or DOM change; no test edit; 76 files / 1762 tests, tsc and lint
+  clean. SMOKE PASS, no driver edit, 0 console errors, Suggest 15/66/80/48,
+  boot 24 rows / 19·5·0; shots retaken. Other small text still below AA
+  (dock heading, preset caption, footer labels at `neutral-500`, and more)
+  was listed, not changed – T042 records it.
 
 - [ ] **T037** [P] Design-document edits (FR-070). In
   `docs/design/competition-planner-workbench.md`: §Virtualization (`:161`)
