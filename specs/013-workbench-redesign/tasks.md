@@ -1217,6 +1217,9 @@ placed event once at the canvas's times, and printing yields four pages.
   → Re-planned 2026-10-04 by the planning session (owner decisions in
   `docs/design/competition-planner-workbench.md` §Roadmap). Order is now
   T047 → T045 → T046 → T044 → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043.
+  → 2026-10-04, T044 verdict "matches" with two owner decisions that add
+  T048 and T049 (`handoff.md` §Verdicts, T044). Order from here:
+  T048 → T049 → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043.
 
 - [x] **T047** Delete the team-event cut coercion loop in
   `src/store/buildConfig.ts` (handoff finding 7, owner decision: delete). It is
@@ -1274,7 +1277,7 @@ placed event once at the canvas's times, and printing yields four pages.
   helper (`NO_PINS`, `pinBadges`); `Canvas.test.tsx` mounts through
   `renderCanvas`. 76 files / 1753 tests.
 
-- [ ] **T044** Close-out polish against the mockup (styling only, standing
+- [x] **T044** Close-out polish against the mockup (styling only, standing
   rule 13; the second half of the T015 verdict). With every surface built,
   walk the mockup region by region – header, rail, each of the five panels,
   the dock, the canvas and its blocks, the detail strip, the findings panel,
@@ -1295,6 +1298,35 @@ placed event once at the canvas's times, and printing yields four pages.
   tooltip, detail strip, Schedule view). Shots sent to the product owner;
   verdict pending. Scope calls and open contrast questions are in
   `handoff.md` findings 31–32.
+  → Verdict 2026-10-04: **matches** (`handoff.md` §Verdicts, T044). The two
+  open questions came back as T048 and T049.
+
+- [ ] **T048** The findings border on a block (mockup M1285, owner decision
+  2026-10-04, `handoff.md` finding 31). A placed, non-overflow block whose
+  competition has a committed finding row (`findingRows`, the list
+  `CenterView` commits – never the live store, FR-042) of severity Warning,
+  Unplaced or Blocking draws a solid 2px `--flash` border. A block with
+  only Notes draws none. An overflow block keeps its dashed `--flash` edge.
+  `Block` gains one boolean prop and one `data-*` attribute that says so.
+  Pin both in `contracts/ui-contract.md` §Canvas first, and grep every
+  `<Block` and `<Canvas` mount under `__tests__/` before naming the files the
+  dispatch may edit. Test-first in `Canvas.test.tsx`: a Warning row flags its
+  event's blocks, a Note-only event's blocks stay unflagged, and the flag
+  follows the commit, not the store. `react-code-reviewer` and
+  `test-quality-reviewer` after. SMOKE PASS with no driver edit
+  *(subagent commits)*
+
+- [ ] **T049** Small text to WCAG AA (owner decision 2026-10-04, `handoff.md`
+  finding 32). The panels' section captions (`SectionCaption`, duplicated in
+  more than one panel, plus the other copies of the 11.5px / 600 / .06em
+  uppercase caption style) go from `text-neutral-600` to `text-neutral-700`.
+  Fold the copies into one shared caption style while there, which the T044
+  review suggested. The canvas's off-hour tick labels (`--tick-minor`,
+  `#a3a3a6` on the axis background) move to a grey that measures at least
+  4.5:1 there. They must stay visibly lighter or smaller than the hour ticks,
+  so the axis keeps its hierarchy. Styling only: no accessible name, role,
+  `data-*` or DOM-order change. SMOKE PASS with no driver edit; reshoot
+  `scripts/screenshot.mjs`. `react-code-reviewer` after *(subagent commits)*
 
 - [ ] **T037** [P] Design-document edits (FR-070). In
   `docs/design/competition-planner-workbench.md`: §Virtualization (`:161`)

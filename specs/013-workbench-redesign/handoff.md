@@ -71,6 +71,25 @@ read as a board at 100%; legibility of the header summary, dock chips and
 footer. A "no" halts phase 3 (US3, the canvas) until the look is revised, and
 that revision is a re-plan.
 
+### T044 – the close-out polish (standing rule 13, the second half of T015's verdict)
+
+Shots at `37d7f33e91` on preset B1 (4 days, 80 strips) by
+`scripts/screenshot.mjs`: `shell-1440x900.png`, `shell-1920x1080.png`, and
+at 1440×900 `t044-{tournament,strips,events,findings,settings,tooltip,detail,schedule}.png`
+under `scripts/smoke-shots/`. SMOKE PASS with no driver edit, 0 console
+errors.
+
+**Verdict (2026-10-04)**: **matches.** Two owner decisions came with it, on
+the questions in findings 31 and 32. Each becomes a follow-up task ahead of
+T037:
+
+- **The findings border** (M1285): drawn on a block whose findings include a
+  Warning, Unplaced or Blocking row – **not** for Notes alone, so B1 does not
+  turn red. → T048.
+- **Small-text contrast**: raise the panels' section captions and the
+  canvas's off-hour tick labels to WCAG AA (4.5:1). This is slightly darker
+  than the mockup's `#7a7a7d` / `#a3a3a6`. → T049.
+
 ### T023 – phase 2 smoke (FR-067, SC-013)
 
 Both runs at `9da51b1b15` (dev server on port 5174 in the worktree):
@@ -526,6 +545,9 @@ every review finding was folded into one follow-up commit per task.
     - Everything that needs a new element: day-band spans, the overflow
       stripe, block meta text, the detail strip's pill internals, the rail
       tooltip, and the panel title level. The gap list is in the T044 commits.
+
+    Ruled 2026-10-04: the border is drawn for Warning, Unplaced and Blocking
+    findings, not for Notes (T048). The rest stays out of 013.
 32. **Small text below WCAG AA where the mockup puts it.** The mockup's
     caption grey `#7a7a7d` at 11.5px is about 4.3:1 on white, against AA's
     4.5:1. T044 raised the Schedule view's column heads and the Export
@@ -533,6 +555,7 @@ every review finding was folded into one follow-up commit per task.
     before. The panels' section captions keep the mockup grey (T015a's
     accepted look). The canvas's off-hour tick labels (`#a3a3a6` on the axis,
     about 2.1:1) are also the mockup's value. Both are owner calls.
+    Ruled 2026-10-04: raise both to AA (T049).
 33. **Two "Unplaced, needs N strips" figures for one event** (seen in the
     T044 shots). B1's Div 1 Women's Epee shows "needs 32 strips" in the detail
     strip and "needs 16 strips" in the DE-prelims tooltip. Each is that
