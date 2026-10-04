@@ -69,7 +69,6 @@
   --scroll-thumb: #c2c2c6;
   --conflict-tint: #fdf4f3;
   --conflict-chip: #f6e3e0;
-  --finding-hover: #fbf1e9;
   --docked: #e2edf8;
   /* Consumed by var() in Block's inline style, so it lives in :root; the
      tooltip and rail shadows below feed shadow-* utilities in @theme. */
@@ -153,14 +152,6 @@ button:not(:disabled) {
   --color-success: var(--success);
   --color-success-hover: var(--success-hover);
   --color-success-foreground: var(--success-foreground);
-  --color-danger: var(--danger);
-  --color-danger-hover: var(--danger-hover);
-  --color-warning: var(--warning);
-  --color-warning-text: var(--warning-text);
-  --color-error: var(--error);
-  --color-error-text: var(--error-text);
-  --color-info: var(--info);
-  --color-info-text: var(--info-text);
   --color-accent-hover: var(--accent-hover);
 
   /* Industry design-system ramps and chrome roles. This deliberately
@@ -192,15 +183,12 @@ button:not(:disabled) {
   --color-hover-tint: var(--hover-tint);
   --color-ok: var(--ok);
   --color-chrome-soft: var(--chrome-soft);
-  --color-plot: var(--plot);
   --color-grid-line: var(--grid-line);
   --color-row-line: var(--row-line);
   --color-divider-soft: var(--divider-soft);
   --color-tick-minor: var(--tick-minor);
-  --color-scroll-thumb: var(--scroll-thumb);
   --color-conflict-tint: var(--conflict-tint);
   --color-conflict-chip: var(--conflict-chip);
-  --color-finding-hover: var(--finding-hover);
   --color-docked: var(--docked);
   --color-finding-bg: var(--finding-bg);
   --color-finding-border: var(--finding-border);

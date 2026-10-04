@@ -53,7 +53,7 @@ function Stepper({
       min={min}
       max={max}
       aria-label={ariaLabel}
-      className="w-full justify-between gap-0 overflow-hidden rounded-[10px] border-[1.5px] border-chrome-border bg-secondary p-0 [&_button]:h-[34px] [&_button]:w-[30px] [&_button]:shrink-0 [&_button]:rounded-none [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-neutral-700 [&_input]:h-[34px] [&_input]:flex-1 [&_input]:rounded-none [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-center [&_input]:font-mono [&_input]:text-[13.5px] [&_input]:font-semibold"
+      className="w-full justify-between gap-0 overflow-hidden rounded-[10px] border-[1.5px] border-chrome-border bg-secondary p-0 [&_button]:h-[34px] [&_button]:w-[30px] [&_button]:shrink-0 [&_button]:rounded-none [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-neutral-700 [&_input]:h-[34px] [&_input]:flex-1 [&_input]:rounded-none [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-center [&_input]:font-mono [&_input]:text-[13.5px] [&_input]:font-semibold [&_button:focus-visible]:ring-inset [&_input:focus-visible]:ring-inset"
     />
   )
 }

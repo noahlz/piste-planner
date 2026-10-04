@@ -423,8 +423,9 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
         }
     return {
       position: 'absolute',
-      top: `${placement.firstStrip * rowHeightPx + 3}px`,
-      height: `${Math.max(1, placement.stripCount * rowHeightPx - 6)}px`,
+      // Block.tsx's label fit (contentHeightPx = heightPx - 8) assumes this +2/-4 inset.
+      top: `${placement.firstStrip * rowHeightPx + 2}px`,
+      height: `${Math.max(1, placement.stripCount * rowHeightPx - 4)}px`,
       ...geometry,
     }
   }
@@ -590,7 +591,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                     style={{
                       position: 'relative',
                       height: stripsTotal * rowHeightPx,
-                      background: 'var(--plot)',
+                      backgroundColor: 'var(--plot)',
                       backgroundImage: plotGridImage,
                       ...(zoom.fitting
                         ? { flex: 1, minWidth: 0 }

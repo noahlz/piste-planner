@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-const HEAD = 'text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase'
+const HEAD = 'text-[11.5px] font-semibold tracking-[.06em] text-neutral-700 uppercase'
 
 /**
  * The DE's first scheduled minute. A single-piece DE carries it in `de_start`;

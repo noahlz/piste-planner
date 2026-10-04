@@ -103,7 +103,7 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
       <PopoverContent align="end" className="w-[28rem] space-y-4">
         {/* Save */}
         <div>
-          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">Save Configuration</h3>
+          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-700 uppercase">Save Configuration</h3>
           <Button type="button" onClick={handleSave}>
             <Download className="mr-2 h-4 w-4" />
             Save to File
@@ -112,7 +112,7 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
 
         {/* Load */}
         <div>
-          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">Load Configuration</h3>
+          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-700 uppercase">Load Configuration</h3>
           <input
             ref={fileInputRef}
             type="file"
@@ -147,7 +147,7 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
 
         {/* Share */}
         <div>
-          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">Share via URL</h3>
+          <h3 className="mb-2 text-[11.5px] font-semibold tracking-[.06em] text-neutral-700 uppercase">Share via URL</h3>
           <Button type="button" onClick={handleShare}>
             <Share2 className="mr-2 h-4 w-4" />
             Generate Link
