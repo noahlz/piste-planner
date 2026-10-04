@@ -1,7 +1,7 @@
 # Backlog
 
 Work no phase plan has picked up. Items here are not tracked in `specs/` – a
-Spec Kit feature directory is created for one only when it is assigned a phase.
+feature directory is created for one only when it is assigned a phase.
 
 > **2026-10-04 plan**: [`competition-planner-workbench.md`](./competition-planner-workbench.md)
 > §Roadmap orders the entries needed to finish the product into features

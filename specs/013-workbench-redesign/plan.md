@@ -73,7 +73,7 @@ deleted, 8 rewritten and 20 added.
 | **V. Erasable TypeScript** | The error boundary is a class with a field initialiser, no parameter property. New unions (`PresetId`, `PanelId`, `FindingSeverity`) are `as const` objects with derived types. `VideoPolicy.FINALS_ONLY` is removed from an `as const` object, not an enum. |
 | **VI. Verified Live** | `scripts/smoke.mjs` is re-pointed in each task that reshapes a control it locates ([research D14](./research.md) is the map), never rewritten. Its four **Suggest** presses survive as open-panel-and-Apply. The product owner's screenshot judgment at 80 strips on B1 happens at the end of story 1, before the canvas is rewritten (FR-069). Live smoke repair is dispatched to a subagent because locator repair iterates. |
 | **Planning Artifacts** | `spec.md` (clarified), `plan.md`, `research.md` (D1–D18), `data-model.md`, `contracts/ui-contract.md`, `contracts/engine-contract.md`, `quickstart.md`, then `tasks.md`; `drift-baseline.md` and `handoff.md` during execution. The alignment document is pointed at, never restated; its three corrections are recorded in research.md, not patched into it silently. FR-070's edit to the design document's virtualization section is a task. |
-| **Git Ownership** | **Worktree flow** ([research D16](./research.md)). A fresh worktree per session at `/Users/noahlz/projects/piste-planner-013-workbench-redesign` on `013-workbench-redesign`, branched from `main` at `78ae3b28f4` or later. Subagents commit to that branch at the checkpoints `tasks.md` marks. No push, no merge, no rebase, no amend, no branch deletion, no commit to `main`. The user merges it with `git merge --no-ff --no-commit` completed by `commit-with-costs`, and the merged tree runs `tsc -b`, `lint` and the full suite first. |
+| **Git Ownership** | **Worktree flow** ([research D16](./research.md)). A fresh worktree per session at `/Users/noahlz/projects/piste-planner-013-workbench-redesign` on `013-workbench-redesign`, branched from `main` at `78ae3b28f4` or later. Subagents commit to that branch at the checkpoints `tasks.md` marks. No push, no merge, no rebase, no amend, no branch deletion, no commit to `main`. The user merges it with `merge-with-costs`, and the merged tree runs `tsc -b`, `lint` and the full suite first. |
 | **Orchestration** | The orchestrator dispatches and writes no code beyond a 1–5 line edit. Sonnet: panels, dock, footer, Export move, store shrink, serialization bump, test re-targeting, smoke re-pointing, the design-document edit. Opus: the engine story, the canvas rewrite, the unified findings selector, the ledger diff review. A session that revises this plan or `tasks.md` after implementation begins records the change, hands back a resume prompt, and stops. |
 
 **Pre-Phase 0 result**: pass, no violations.
@@ -115,7 +115,7 @@ specs/013-workbench-redesign/
 │   └── requirements.md      # Spec quality checklist, all items pass
 ├── drift-baseline.md        # Written during execution, before the engine edit
 ├── handoff.md               # Written at close
-└── tasks.md                 # /speckit-tasks output – not created by /speckit-plan
+└── tasks.md                 # Ordered task list
 ```
 
 ### Source Code (repository root)

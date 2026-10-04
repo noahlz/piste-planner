@@ -6,7 +6,7 @@ survives as P1 of the roadmap below and is specified in detail at
 `specs/001-p1-foundations/` (specs/001-p1-foundations/spec.md, removed; git show 0ab5bd2dc9:specs/001-p1-foundations/spec.md).
 
 This is the cross-phase design document. It outlives any single feature, so it
-lives here rather than under `specs/`. Each phase gets its own Spec Kit feature
+lives here rather than under `specs/`. Each phase gets its own feature
 directory when it is picked up, and those specs reference this document rather
 than restating it.
 

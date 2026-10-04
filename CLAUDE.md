@@ -1,6 +1,6 @@
 _Piste Planner_ is a USA Fencing tournament schedule planner. Computes pool rounds, DE brackets, strip assignments, and referee allocations for multi-day tournaments (NACs, RYCs, etc.).
 
-@.specify/memory/constitution.md
+@docs/constitution.md
 
 ## Technology
 
@@ -12,7 +12,7 @@ React + TypeScript + Vite. UI: shadcn/ui (Radix), Tailwind CSS v4, Zustand. Test
 - `src/store/` — Zustand store. `buildConfig.ts` bridges store state to engine types.
 - `src/components/` — React UI with wizard and single-page layouts.
 - `__tests__/` — mirrors `src/`. Factories in `__tests__/helpers/factories.ts`.
-- `specs/` — Spec Kit features. `docs/design/` — cross-phase design and backlog.
+- `specs/` — feature work in flight. `docs/design/` — cross-phase design and backlog.
 
 ## Commands
 
@@ -35,7 +35,7 @@ ts-morph MCP `tsconfigPath`: use `./tsconfig.app.json`, not `tsconfig.json`.
 
 ## Methodology
 
-Execute `tasks.md` with `/speckit-implement`, one subagent per task.
+Execute a feature's `tasks.md` one subagent per task. Method for new features: undecided.
 
 ## Closing a session
 
