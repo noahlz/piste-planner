@@ -168,9 +168,7 @@ export function EventsPanel() {
   return (
     <div className="flex flex-col gap-2.5">
       <h3 className="flex items-baseline justify-between">
-        <span className={CAPTION_CLASS}>
-          Selected
-        </span>
+        <span className={CAPTION_CLASS}>Selected</span>
         <span className="font-mono text-[11.5px] font-semibold text-neutral-700">
           {`${selectedIds.size} of ${CATALOGUE.length}`}
         </span>
