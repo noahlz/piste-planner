@@ -423,11 +423,21 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
         }
     return {
       position: 'absolute',
-      top: `${placement.firstStrip * rowHeightPx + 2}px`,
-      height: `${Math.max(1, placement.stripCount * rowHeightPx - 4)}px`,
+      top: `${placement.firstStrip * rowHeightPx + 3}px`,
+      height: `${Math.max(1, placement.stripCount * rowHeightPx - 6)}px`,
       ...geometry,
     }
   }
+
+  // Hour verticals and strip-row lines (mockup lines 1576-1580). Under Fit day
+  // an hour is a share of the plot's own width, so the browser keeps the
+  // lines on the blocks without a measurement.
+  const hourStep = zoom.fitting ? `calc(100% / ${(spanMinutes / 60).toFixed(3)})` : `${60 * rung.ppm}px`
+  const plotGridImage =
+    spanMinutes > 0
+      ? `repeating-linear-gradient(to right, var(--grid-line) 0 1px, transparent 1px ${hourStep}), ` +
+        `repeating-linear-gradient(to bottom, var(--row-line) 0 1px, transparent 1px ${rowHeightPx}px)`
+      : undefined
 
   const days = Array.from({ length: daysAvailable }, (_, day) => day)
 
@@ -436,7 +446,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
       <div
         ref={scrollerRef}
         data-canvas-scroller="true"
-        style={{ position: 'absolute', inset: 0, overflow: 'auto', background: 'var(--chrome)' }}
+        className="pp-scroll"
+        style={{ position: 'absolute', inset: 0, overflow: 'auto', background: 'var(--background)' }}
       >
         <div style={{ minWidth: zoom.fitting ? '100%' : GUTTER_WIDTH_PX + plotWidthAtRung }}>
           {/* The time axis. Sticky on the vertical, with its own corner cell
@@ -471,7 +482,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                 fontWeight: 600,
                 letterSpacing: '.05em',
                 textTransform: 'uppercase',
-                color: 'var(--neutral-500)',
+                color: 'var(--tick-minor)',
               }}
             >
               Strip
@@ -492,7 +503,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                     fontWeight: 600,
                     fontSize: 10.5,
                     color:
-                      minutes % 60 === 0 ? 'var(--neutral-700)' : 'var(--neutral-500)',
+                      minutes % 60 === 0 ? 'var(--neutral-700)' : 'var(--tick-minor)',
                   }}
                 >
                   {formatClock(minutes)}
@@ -522,7 +533,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                     paddingRight: 16,
                     overflow: 'hidden',
                     whiteSpace: 'nowrap',
-                    background: 'var(--chrome)',
+                    background: 'var(--chrome-soft)',
                     borderTop: '1.5px solid var(--chrome-border)',
                     borderBottom: '1.5px solid var(--chrome-border)',
                     fontSize: 12.5,
@@ -561,9 +572,10 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                             fontFamily: 'var(--font-mono)',
                             fontWeight: 600,
                             fontSize: Math.max(10, Math.min(11, rowHeightPx - 3)),
-                            color: isFlagged ? 'var(--error-text)' : 'var(--neutral-700)',
-                            background: isFlagged ? 'var(--error)' : undefined,
-                            borderBottom: '1px solid var(--divider)',
+                            color: isFlagged ? 'var(--finding-link)' : 'var(--neutral-700)',
+                            background: isFlagged ? 'var(--conflict-tint)' : undefined,
+                            boxShadow: isFlagged ? 'inset 3px 0 0 var(--flash)' : undefined,
+                            borderBottom: '1px solid var(--row-line)',
                           }}
                         >
                           {stripRowLabel(strip, rowHeightPx, isFlagged)}
@@ -578,7 +590,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                     style={{
                       position: 'relative',
                       height: stripsTotal * rowHeightPx,
-                      background: 'var(--card)',
+                      background: 'var(--plot)',
+                      backgroundImage: plotGridImage,
                       ...(zoom.fitting
                         ? { flex: 1, minWidth: 0 }
                         : { width: plotWidthAtRung, flexShrink: 0 }),
