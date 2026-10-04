@@ -42,6 +42,3 @@
 ### The merge is checked too, not just the branch
 - Run `tsc -b`, `lint`, and the full suite on the merged tree before `merge-with-costs`, and fix red first.
 - Turn any predicted collision with another branch into a concrete check or test, not handoff prose.
-
-## Governance
-- Defer to `CLAUDE.md` and `~/.claude` rules for anything not covered here.
