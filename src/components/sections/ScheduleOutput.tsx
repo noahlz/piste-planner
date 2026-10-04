@@ -117,8 +117,15 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
             className="print-page overflow-hidden rounded-[12px] border-[1.5px] border-chrome-border bg-secondary print:overflow-visible"
           >
             <div className="flex items-center gap-2 border-b-[1.5px] border-chrome-border bg-chrome-soft px-3 py-1.5 print:bg-transparent">
-              <h3 className="text-base font-bold tracking-[.03em] text-foreground uppercase">{dayLabel}</h3>
-              {dayOutOfRange && <Badge variant="destructive" className="h-auto rounded-full bg-conflict-chip px-2 text-[10.5px] font-semibold text-finding-link uppercase">{`${dayLabel} out of range`}</Badge>}
+              <h3 className="text-base font-bold tracking-[.03em] text-foreground uppercase">
+                {dayLabel}
+              </h3>
+              {dayOutOfRange && (
+                <Badge
+                  variant="destructive"
+                  className="h-auto rounded-full bg-conflict-chip px-2 text-[10.5px] font-semibold text-finding-link uppercase"
+                >{`${dayLabel} out of range`}</Badge>
+              )}
             </div>
             <Table>
               <TableHeader>
@@ -140,25 +147,46 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
                     data-out-of-range={day_out_of_range ? 'true' : undefined}
                     className="border-row-line"
                   >
-                    <TableCell data-cell="competition" className="font-mono text-xs text-foreground">
+                    <TableCell
+                      data-cell="competition"
+                      className="font-mono text-xs text-foreground"
+                    >
                       {r.competition_id}
                     </TableCell>
-                    <TableCell data-cell="poolStart" className="text-right font-mono text-[11.5px] font-semibold text-foreground">
+                    <TableCell
+                      data-cell="poolStart"
+                      className="text-right font-mono text-[11.5px] font-semibold text-foreground"
+                    >
                       {formatMinutes(r.pool_start)}
                     </TableCell>
-                    <TableCell data-cell="poolEnd" className="text-right font-mono text-[11.5px] font-semibold text-foreground">
+                    <TableCell
+                      data-cell="poolEnd"
+                      className="text-right font-mono text-[11.5px] font-semibold text-foreground"
+                    >
                       {formatMinutes(r.pool_end)}
                     </TableCell>
-                    <TableCell data-cell="deStart" className="text-right font-mono text-[11.5px] font-semibold text-foreground">
+                    <TableCell
+                      data-cell="deStart"
+                      className="text-right font-mono text-[11.5px] font-semibold text-foreground"
+                    >
                       {formatMinutes(deStartMinutes(r))}
                     </TableCell>
-                    <TableCell data-cell="deEnd" className="text-right font-mono text-[11.5px] font-semibold text-foreground">
+                    <TableCell
+                      data-cell="deEnd"
+                      className="text-right font-mono text-[11.5px] font-semibold text-foreground"
+                    >
                       {formatMinutes(deEndMinutes(r))}
                     </TableCell>
-                    <TableCell data-cell="strips" className="text-right font-mono text-[11.5px] font-semibold text-foreground">
+                    <TableCell
+                      data-cell="strips"
+                      className="text-right font-mono text-[11.5px] font-semibold text-foreground"
+                    >
                       {r.pool_strip_count}
                     </TableCell>
-                    <TableCell data-cell="finish" className="text-right font-mono text-[11.5px] font-semibold text-foreground">
+                    <TableCell
+                      data-cell="finish"
+                      className="text-right font-mono text-[11.5px] font-semibold text-foreground"
+                    >
                       {formatMinutes(r.de_total_end)}
                     </TableCell>
                   </TableRow>
