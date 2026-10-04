@@ -3,16 +3,10 @@
 Work no phase plan has picked up. Items here are not tracked in `specs/` – a
 Spec Kit feature directory is created for one only when it is assigned a phase.
 
-> **2026-08-27 update**: The workbench UI design at
-> [`competition-planner-workbench.md`](./competition-planner-workbench.md)
-> absorbed most of this list – real-tournament presets, the tournament setup
-> screen, the FLUID re-pack button, and drag-drop matrix repair are all covered
-> by its P1–P5 roadmap.
->
-> What remains below is work no phase plan has picked up. The design's "Open
-> items carried forward" table lists these same four items with their owner
-> phase, and points back here for the detail. **This file is the record, that
-> table is the index** – do not restate detail there.
+> **2026-10-04 plan**: [`competition-planner-workbench.md`](./competition-planner-workbench.md)
+> §Roadmap orders the entries needed to finish the product into features
+> 014–022 and lists the rest as after-finish work. **This file is the record,
+> that table is the index** – do not restate detail there.
 
 > **2026-10-04 update**: pruned. Every entry below is open work. Finished and
 > superseded entries, including the former `# Closed` section, were removed –
@@ -292,10 +286,11 @@ described under "Global settings," rather than chasing each season in
 
 ## METHODOLOGY.md and the engine have diverged, and the doc is the spec
 
-*Assessed 2026-09-01 against `main` at `1c75548cc6`. **Deferred by the product
-owner the same day** – recorded here, fixed later. Needs its own spec directory
-when picked up, and most of its fixes edit `src/engine/`, so constitution III's
-B1–B8 drift review applies.*
+*Assessed 2026-09-01 against `main` at `1c75548cc6`, deferred the same day.
+**Unblocked 2026-10-04**: the product owner answered the blocking question
+below – the eight time-of-day weights are retired from the doc. Roadmap
+feature 021. Most of its fixes edit `src/engine/`, so constitution III's B1–B8
+drift review applies.*
 
 **The analysis is done.** It ran on 2026-09-05 and its output is
 [`methodology-reconciliation.md`](./methodology-reconciliation.md) – the
@@ -344,7 +339,9 @@ three ways, and the split is what decides the size of the work:
   `CROSS_WEAPON_SAME_DEMOGRAPHIC_VET` are all pure day-level properties that day
   coloring has every input to compute. `PROXIMITY_3_PLUS_DAYS` is the starkest –
   `PROXIMITY_1_DAY` is applied three lines above the guard that skips it.
-- **Eight need a decision, and it is the one blocking question.**
+- **Eight needed a decision – answered 2026-10-04: retire them from the doc
+  as Phase D casualties.** That makes this a doc feature with three engine
+  fixes, not a scheduler change. The analysis that framed the choice:
   `SAME_TIME_HIGH_CROSSOVER`, `SAME_TIME_LOW_CROSSOVER`,
   `INDIV_TEAM_SAME_TIME_OR_WRONG_ORDER`, `INDIV_TEAM_GAP_UNDER_MIN`, the three
   `EARLY_START_*`, and `Y10_NON_FIRST_SLOT` are all phrased in the doc as
@@ -355,9 +352,7 @@ three ways, and the split is what decides the size of the work:
   ascending cost: score them in the concurrent scheduler where times are known;
   add a bounded re-color pass against realised times (which would share
   machinery with §Runtime failure is terminal); or retire them from the doc as
-  Phase D casualties. **Nothing should be specced until this is answered** – it
-  decides whether this is a doc feature with three engine fixes or a scheduler
-  change with a full drift review.
+  Phase D casualties. The owner took the last option.
 - **Three need referee demand earlier than it is computed.** The
   `LAST_DAY_REF_SHORTAGE_*` trio. Referee demand is a post-schedule output
   today.
@@ -498,56 +493,49 @@ not account for the +1, B4 needs its own owner and that `closedBy` is wrong.
 
 ## Global settings
 
-*Split on 2026-08-29. The gears control and a first panel were delivered by 004
-US5 – `specs/004-p3-workbench-shell/` (specs/004-p3-workbench-shell/spec.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/spec.md).
-The remainder, described below, is **unassigned and needs a spec**. It was
-parked "after P5" at the split; that was re-homed on 2026-09-01, since P5 is
-itself deferred with no owner and "after P5" therefore meant never. Nothing is
-queued behind it and nothing blocks it — it needs a spec directory and a
-decision to start.*
+*Rewritten 2026-10-04. After-finish work – not on the roadmap's finish line,
+needs its own spec directory and a decision to start.*
 
-All engine constants become a configuration file with defaults, reachable from
-a gears control in the top bar. Per-event and global weights, penalties, and
-earliest-start offsets are all editable. Serialization persists only the
-overrides, so unset values continue to track the defaults in `constants.ts`.
+All engine constants become a configuration file with defaults. Per-event and
+global weights, penalties, and earliest-start offsets are all editable.
+Serialization persists only the overrides, so unset values continue to track
+the defaults in `constants.ts`.
 
-**What P3 took**: the top-bar gears control and a panel over two settings –
-`ADMIN_GAP_MINS` and `FLIGHT_BUFFER_MINS` – plus `PoolDurationSettings` from
-002, which is the precedent for the default / override / reset /
-overrides-only-persistence pattern and moved behind the same gears surface. It
-intended to take seven, and the five it did not are now the entry below. All
-seven still travel through the store, `buildConfig` and the share URL; only two
-have an editing surface. `DEFAULT_DE_STRIP_FOOTPRINT` shipped a row briefly and
-was withdrawn in the same commit that cut the other four – see the entry below
-for why moving the schedule was not enough to keep it.
+**Where it stands after 013.** 004 US5 built a gears panel over two constants
+(`ADMIN_GAP_MINS`, `FLIGHT_BUFFER_MINS`) and carried five more through the
+store unreachable. 013 T022 (research D7) deleted the `GlobalOverrides` slice
+and the gears surface: `buildConfig.ts` now reads all seven from `constants.ts`
+directly, and they no longer travel through the store or the share URL
+(`src/store/store.ts:77`). The engine's `TournamentConfig` still carries every
+one of them as a field, so an engine reader needs no change when an editing
+surface returns. The one constant an organizer can still edit is
+`pool_round_duration_table`, in the Strips panel, which keeps the
+default / override / reset / overrides-only-persistence pattern this entry
+would generalise.
 
-**What stays here**: promoting the rest of `constants.ts` – per-event and global
-weights, the penalty matrices, category start preferences, earliest-start
-offsets – into a user-editable configuration file. That is a feature of its own
-size and it needs a spec directory when it is picked up.
-
-**One dependency worth naming**: several of those weights are the subject of
+**One dependency worth naming**: many of those weights are the subject of
 §METHODOLOGY.md and the engine have diverged, which found fourteen of nineteen
 `PENALTY_WEIGHTS` unread. Promoting a constant to a user-editable setting before
-deciding whether the engine should read it at all would ship a control that
-silently does nothing – the exact defect US5 withdrew five rows to avoid. That
-reconciliation comes first.
+the engine reads it ships a control that silently does nothing. Roadmap feature
+021 comes first.
 
-`video_stage_mode` is P5's, and P5 is deferred with no owner.
+`video_stage_mode` belongs to P5 (FLUID), which is deferred with no owner.
 
 ## A what-if scenario mode, not more settings rows
 
 *Reframed 2026-09-01 by the product owner, rejecting this entry's earlier
-"teach the engine to read these five settings" framing. Unassigned and
-unnumbered – needs its own spec directory, and sits behind the B1–B8 drift
-ledger because it edits `src/engine/` (constitution III).*
+"teach the engine to read these five settings" framing. Rewritten 2026-10-04
+after 013 removed the gears panel. After-finish work – needs its own spec
+directory, and sits behind the B1–B8 drift ledger because it edits
+`src/engine/` (constitution III).*
 
-004's US5 built nine gears rows and shipped three, then withdrew one of those
-three – `DEFAULT_DE_STRIP_FOOTPRINT` – in the same commit, leaving two. The
-five withdrawn keys are not organizer settings with an incomplete engine
-reader. They are **hypotheses about how the tournament would run differently**,
-and the settings panel is the wrong shape for that regardless of whether the
-engine is wired up to read them:
+004's US5 built nine gears rows and shipped three, then withdrew
+`DEFAULT_DE_STRIP_FOOTPRINT` in the same commit, leaving two. 013 T022 then
+removed the panel and the store slice altogether (§Global settings). The five
+withdrawn keys are not organizer settings with an incomplete engine reader.
+They are **hypotheses about how the tournament would run differently**, and a
+settings panel is the wrong shape for that regardless of whether the engine is
+wired up to read them:
 
 - **`SLOT_MINS` (scheduling grid resolution)** is an implementation artifact,
   not a domain parameter – it controls how finely the scheduler rounds times,
@@ -569,7 +557,7 @@ engine is wired up to read them:
   an event by counting pools against `strips_total`, never by minutes. This
   reads as a parameter left over from a design flighting no longer uses, not a
   hypothesis worth modelling. The open question is whether it should exist in
-  `GlobalOverrides` at all, not how to wire it up.
+  `TournamentConfig` at all, not how to wire it up.
 - **`DEFAULT_DE_STRIP_FOOTPRINT` (DE strip footprint)** is the hardest case and
   the reason this whole entry is a what-if feature rather than a settings
   feature. See below – it is not merely inert like the other four, and any
@@ -603,16 +591,14 @@ constant: `SLOT_MINS` 5→30, `YOUTH_VET_BOUT_DELTA` −5→−60, `DE_BOUT_DURA
 panel – an organizer picks a hypothesis ("what if épée bouts ran faster"),
 the engine re-derives a schedule from it, and the result is compared against
 the committed schedule and labelled hypothetical throughout its display so it
-can never be mistaken for a plan. This is a different feature shape than
-`SettingsPanel`'s default/override/revert pattern, which presents a value as
-something the organizer's own tournament genuinely uses.
+can never be mistaken for a plan. This is a different feature shape than a
+default/override/revert setting, which presents a value as something the
+organizer's own tournament genuinely uses.
 
-`SettingsPanel.tsx`'s `NotSurfacedKey` union is the list of what stays out of
-the gears panel, and the compile-time exhaustiveness check beside it means a
-new `GlobalOverrides` key cannot reach the store without either a row or a
-reasoned entry there. All five keys keep their store, `buildConfig`,
-serialization and engine-threading support regardless of which of them a
-scenario feature ends up using – that work is tested and behaviour-preserving.
+Since 013 T022 none of the five reaches the store, serialization or the share
+URL – `buildConfig.ts` fills them from `constants.ts`. A scenario feature
+re-adds whichever it uses as scenario state, never as tournament config, so a
+hypothetical value cannot leak into a shared plan.
 
 Mechanical path for whoever picks up `SLOT_MINS`, since it is the one purely
 mechanical piece here: `config.SLOT_MINS` is read nowhere today; the only slot
@@ -888,3 +874,65 @@ will be reported as a bug. The design note has the answer to that report and
 four fix options with their costs. None is scheduled.
 
 012 measured this (`specs/012-actionable-strip-suggestion/baseline.md` §1a (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)) and did not fix it. Still open.
+
+## The canvas calls events unplaced that the engine placed
+
+*Measured by 013 (handoff findings 1 and 9), promoted to an entry 2026-10-04
+when the owner set T039's pass condition. Roadmap feature 017.*
+
+On the boot preset (B1, 80 strips) the engine places all 24 events and the
+Schedule view shows 24 rows, but the footer reads `19 placed · 5 unplaced ·
+0 pinned` and the canvas draws five blocks at strip 0 with the dashed overflow
+edge. `assignStripLanes` (`src/layout/lanes.ts:13`) packs each block into the
+lowest *contiguous* run of strips, in a fixed order, while the engine only
+counts free strips per window. Fragmentation leaves the packer without a run
+the engine's count says exists. `selectPlacementCounts` and the Findings
+list's Unplaced rows both read the packer, so the first screen of the app
+reports five problems that are not real.
+
+**What it needs**: one strip model shared by the engine and the canvas –
+either the engine assigns concrete strip ranges the canvas draws, or the
+packer may split a block across non-contiguous strips. The first edits
+`src/engine/` and needs a drift review. Pass condition: the footer reads
+24 / 0 on B1 at 80 strips, and the smoke driver asserts it.
+
+**Cost if ignored**: every organizer's first impression is a board with five
+phantom unplaced events and Findings rows they cannot act on.
+
+## A placed block cannot be selected from the keyboard
+
+*013 handoff findings 13 and 20. Owner decision 2026-10-04: blocks become
+buttons. Roadmap feature 017.*
+
+`Block`'s root is `role="img"` with an `aria-label`, pinned by 013's
+`ui-contract.md` §Canvas, and T029 added `onClick` to it. A keyboard or
+assistive-technology user can select an unplaced event (the dock's chips are
+buttons) and can reach a placed one only through Findings → "Show on grid".
+The fix changes the role to `button` in the contract, keeps the accessible
+name, adds a visible focus ring, and re-checks the smoke driver's block
+locators in the same task.
+
+## A shared URL with a fencer count of 0 or 1 may reach unguarded pool math
+
+*Unverified, from the 2026-10-04 state-of-project audit. Roadmap feature 018
+verifies it first.*
+
+`analysis.ts:117` and `:140` call `computePoolStructure(comp.fencer_count, …)`
+with no guard, while the module's own comment (`:44`) says a competition with
+≤ 1 fencer cannot form a pool. 013 fixed the UI path that let a 0 or 1 unmount
+the app, but `deserializeState` checks shape, not range, so a hand-edited or
+old share link may still deliver one. Verify with a failing test before
+deciding where the guard goes.
+
+## Release housekeeping
+
+*From the 2026-10-04 state-of-project audit. Roadmap feature 022, the last
+before calling the product finished.*
+
+- `README.md` names no dev URL (the app is served under `/piste-planner/`) and
+  no lint, typecheck or smoke command.
+- `.claude/launch.json` uses port 5175 while `scripts/` default to 5173.
+- `.claude/settings.local.json` carries stale allow entries.
+- Bare `research.md D#` and `data-model.md §` citations in `src/` and
+  `__tests__/` mostly mean 013's files, but some mean deleted features. Each
+  becomes a path or a `git show 0ab5bd2dc9:…` pointer.

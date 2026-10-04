@@ -1214,6 +1214,33 @@ placed event once at the canvas's times, and printing yields four pages.
 
 ## Phase 8: Close-out
 
+  → Re-planned 2026-10-04 by the planning session (owner decisions in
+  `docs/design/competition-planner-workbench.md` §Roadmap). Order is now
+  T047 → T045 → T046 → T044 → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043.
+
+- [ ] **T047** Delete the team-event cut coercion loop in
+  `src/store/buildConfig.ts` (handoff finding 7, owner decision: delete). It is
+  unreachable under current constants and no test exercises it. Expected: no
+  test changes, `tsc -b`, lint and the full suite green, drift ledger and
+  parity unmoved *(subagent commits)*
+
+- [ ] **T045** A third "Default" pill in the Settings panel's DE mode group
+  (handoff finding 6, owner decision). Pressing it sets `de_mode_override` to
+  null so the tournament follows its type's default again; it is the pressed
+  pill whenever the override is null. Test-first in `SettingsPanel.test.tsx`
+  and the store tests; the share round-trip carries null. The smoke driver's
+  post-round-trip "restore Staged" step (finding 8) presses Default instead,
+  edited in place. `react-code-reviewer` and `test-quality-reviewer` after
+  *(subagent commits)*
+
+- [ ] **T046** The pin badge reads the committed schedule (handoff findings 11
+  and 25, FR-042, owner decision: fix in 013). `Canvas.tsx` reads
+  `placements` live for the pin badge; the pinned set commits with the
+  schedule the way findings already do, so the badge never describes a
+  schedule the grid is not showing. Test-first: a pin toggled during the
+  settle window does not change the badge until the commit.
+  `react-code-reviewer` and `test-quality-reviewer` after *(subagent commits)*
+
 - [ ] **T044** Close-out polish against the mockup (styling only, standing
   rule 13; the second half of the T015 verdict). With every surface built,
   walk the mockup region by region – header, rail, each of the five panels,
@@ -1239,6 +1266,8 @@ placed event once at the canvas's times, and printing yields four pages.
   from the loop's seed, with a note that 013 delivered the pre-seeded
   colouring and intervals (research D1 rejected the original wording)
   *(subagent commits)*
+  → 2026-10-04: the roadmap half is done – the planning session rewrote
+  §Roadmap and both citations are gone. T037 is §Virtualization only.
 
 - [ ] **T038** The retired surfaces are gone (SC-002). From the orchestrator,
   no commit: run the full quickstart §2 grep over `src/`, `__tests__/` and
@@ -1254,6 +1283,10 @@ placed event once at the canvas's times, and printing yields four pages.
   `scripts/smoke.mjs` is in place. Report both runs' verdicts, the four
   counts, and NAC Youth's observed value *(subagent commits if the driver
   changed)*
+  → 2026-10-04 owner decision: "boot places 24 of 24" means **24 schedule
+  rows**. The footer's `19 placed · 5 unplaced · 0 pinned` is the known
+  lane-packer overflow (handoff finding 9), recorded with the run and not a
+  failure; backlog §The canvas calls events unplaced owns the fix.
 
 - [ ] **T040** Run the full gate on the finished branch twice: `tsc -b`,
   `lint`, `pnpm test`. Account for the test-count delta against T001's
@@ -1282,6 +1315,9 @@ placed event once at the canvas's times, and printing yields four pages.
   Backlog closures for the canvas, fencer-count-0/1, Advanced-panel, rail and
   save/load entries done 2026-10-04 in the repo cleanup; what remains for T042
   is recording what 013 deliberately did not fix.
+  → 2026-10-04: the lane-packer overflow and keyboard-operable blocks
+  (finding 13) already have backlog entries from the planning session;
+  point at them rather than writing new ones.
 
 - [ ] **T043** Write `specs/013-workbench-redesign/handoff.md`: §Verdicts (the
   T015 screenshot verdict, T023's NAC Youth value, T041's print check); the

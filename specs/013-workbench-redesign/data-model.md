@@ -258,13 +258,16 @@ tokens.
 DaySummary
   day         number
   events      number     distinct events with a block on the day
-  finish      number | null   latest de_total_end on the day (clock axis)
+  finish      number | null   latest block end over the day's lanes (clock axis)
   peakStrips  number     max concurrent strips, sampled at block boundaries
   unplaced    number     overflow blocks on the day
   findings    number     undismissed findings whose day is this day
 ```
 
-`finish` is the value `finish:day:N` reported in the retired scorecard.
+`finish` is the time the day band prints as "finishes HH:MM", and late finish
+reads the same value. It excludes the unscheduled medal-bout tail that
+`de_total_end` carries, so it can sit below the footer's tournament finish.
+Owner decision 2026-10-04, handoff finding 16.
 `peakStrips` is the mockup's `dayStats.peak` over the lane packer's blocks.
 
 ---

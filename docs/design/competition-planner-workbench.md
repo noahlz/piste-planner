@@ -219,56 +219,67 @@ is a full canvas, not an empty form.
 
 ## Roadmap
 
-> Stale as of 2026-10-04: features through 013 have shipped. The next planning session rewrites this section.
+*Rewritten 2026-10-04 at `main` `e9fca69e70`, from the state-of-project audit of
+that day (removed once folded in here; `git show e9fca69e70:docs/design/state-of-project-2026-10-04.md`).*
 
-Each phase gets its own Spec Kit feature – `specs/<nnn>-<short-name>/` with
-`spec.md`, `plan.md`, and `tasks.md` – when it is picked up. This document is the
-design they all reference.
+### Where it stands
 
-| | Work | Depends on |
+Features 001–012 are delivered and their spec folders removed – `git show
+0ab5bd2dc9:specs/<feature>/` recovers any of them. 013, the workbench redesign
+from the Claude Design mockup, has phases 0–7 merged. The original P1–P4 rows
+are all delivered: P1 as 001, P2 as 003, P3 as 004, and P4's manual placement
+and pre-seeded scheduling as 013 (pins, Move day, Auto-assign around pins –
+the pinned events are excluded from the loop's seed, not from
+`buildEventStates`, per 013 research D1). P5 (FLUID) stays deferred with no
+owner.
+
+Baseline: `tsc -b` and lint clean, 76 files / 1747 tests. Drift ledger B1–B8
+scheduled 24 / 24 / 24 / 17 / 12 / 45 / 18 / 52, app-path parity 17.
+
+### Owner decisions, 2026-10-04
+
+| Question | Answer | Lands in |
 |---|---|---|
-| **P1** | Foundations – `SLOT_MINS` 5, pod removal, double-strip removal, capacity model collapse, `perBoutDuration` helper, and the staged-DE referee correction. Specified in `specs/001-p1-foundations/` (specs/001-p1-foundations/spec.md, removed; git show 0ab5bd2dc9:specs/001-p1-foundations/spec.md) | – |
-| **P2** | Derived state – placements as intent, store inversion, staleness removal, validation split, days cap widened, findings identity, presets moved to `src/data` | P1 |
-| **P3** | Workbench shell and canvas – SVG matrix with zoom, virtualization, encoding, tooltip, rail, tray, drawer, view toggle, per-type defaults in the rail's Advanced panel, and the top-bar gears surface over settings the store already carries. Deletes wizard, kitchen sink, and `layoutMode`. **Delivered** – `specs/004-p3-workbench-shell/` (specs/004-p3-workbench-shell/spec.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/spec.md) | P2 |
-| **P4** | Manual placement – event-level drag, unpack-to-blocks, advisory edit validation, undo/redo, `Auto-fill unplaced` via pre-colored DSatur and pre-seeded scheduler state | P3 |
-| **P5** | FLUID bout allocator – deferred. An auto-schedule strategy with no UI dependency | P1 |
+| 013 finding 6 – nothing returns `de_mode_override` to null | A third "Default" pill | 013 phase 8 |
+| 013 finding 13 – a placed block is mouse-only | Blocks become buttons | 017 |
+| 013 finding 25 – the pin badge reads `placements` live | Fix inside 013 | 013 phase 8 |
+| 013 finding 16 – late finish reads block ends, not `de_total_end` | Accept, data-model §9 corrected | done |
+| 013 finding 7 – unreachable team-cut coercion loop | Delete it | 013 phase 8 |
+| T039 – "boot places 24 of 24" while the footer reads 19 / 5 | Pass on 24 schedule rows, record the footer; the overflow is fixed later | 013 phase 8, 017 |
+| The eight time-of-day penalty weights | Retire them from METHODOLOGY as Phase D casualties | 021 |
 
-`Auto-schedule all` works from P3. `Auto-fill unplaced` needs P4's engine
-change: `createGlobalState` starts empty at `concurrentScheduler.ts:183` and
-`assignDaysByColoring` colors every vertex, so pinned events need pre-seeded
-strip intervals, pre-colored days, and exclusion from `buildEventStates`.
+### The finish line
 
-### Revised sequence (2026-08-31, re-ordered 2026-09-01)
+The product is finished when every row below is delivered. Each becomes a Spec
+Kit feature when picked up; numbers after 013 are provisional. Detail lives in
+[`backlog.md`](./backlog.md) – the second column names its entry.
 
-The 2026-08-31 reassessment (`reassessment-2026-08-31.md`, removed; see git history at 0ab5bd2dc9) found the app path
-schedules 11 of B1's 24 events at boot (day-axis mismatch, its §2) and
-re-ordered the remaining work. The
-2026-09-01 reassessment (`reassessment-2026-09-01.md`, removed; see git history at 0ab5bd2dc9) re-ordered what came
-after, once 004 closed. Both files' analysis is the record in git history; this table is the
-index.
+| # | Work | Backlog entry | Size | After | Drift review |
+|---|---|---|---|---|---|
+| **013** | Phase 8 close-out – polish, docs, the three decided fixes above, the retired-surface grep, live smoke, the full check twice, the owner's print check, handoff. `specs/013-workbench-redesign/sessions/S11.md` | – | M | – | no engine change |
+| **014** | Structured bottlenecks – `Bottleneck` gains a rule id and `subjects`, every producer fills them, both message-text consumers move to them | §`Bottleneck` has no structured field | S–M | 013 | yes, expect zero movement |
+| **015** | Ledger converges with the store – the drift factory applies the per-type cut, DE-mode and ref-policy rules; B4's 18-vs-17 isolated first. A deliberate re-baseline, so every later engine fix is measured against what the app runs | §The drift ledger's factory | M | 013 | re-baseline |
+| **016** | Hand placements obey the rules – crossover hard edges checked on the current placements and shown as findings; one referee-peak number for the footer and the engine | §Hand-placed events, §The scorecard's peak-referee row | L | 014 | if the referee fix touches the engine |
+| **017** | The canvas tells the truth – one strip model for engine and canvas so B1 boots 24 / 0; blocks become keyboard-operable buttons | §The canvas calls events unplaced, §A placed block cannot be selected | M | 015 | if the engine assigns strip ranges |
+| **018** | Engine correctness – DE prelims bout share, day-end overrun as a warning, Div 1 cut 25 %, the fencer-count ≤ 1 URL path verified. One drift review per fix | §DE prelims, §Day-end overrun, §Policy tables (Div 1 only), §A shared URL with a fencer count of 0 or 1 | M | 015 | one per fix |
+| **019** | Default days per template – the three K₄ templates default to 4 days so they satisfy their own hard rules | §The store's default day count | S | 015 | parity only |
+| **020** | Re-run on parameter change – debounced, with a show-after-delay working indicator | §Changing a parameter should re-run the engine | M | 013, independent of 014–019 | no |
+| **021** | METHODOLOGY reconciliation – retire the eight time-of-day weights, the three cheap weight fixes, the doc's self-contradictions, the verdicts in [`methodology-reconciliation.md`](./methodology-reconciliation.md); delete `daySequencing.ts` and the dead constants; add the calibration scenario | §METHODOLOGY.md and the engine have diverged, §Dead code held back, §Calibration debt | M–L | 018 (day-end wording) | yes |
+| **022** | Release housekeeping – README, dev port, stale settings, stale citations | §Release housekeeping | S | last | no |
 
-Everything above the 007 row is done. **The forward sequence is 009 → 010 →
-P4.** The METHODOLOGY ↔ engine reconciliation was pulled out of that sequence
-and deferred on 2026-09-01 – it is unassigned work in
-[`backlog.md`](./backlog.md), not a numbered row here, because one blocking
-decision has to be answered before it can be sized.
+020 can run beside any of 014–019 since it touches only the UI. Everything else
+runs in the order shown.
 
-| | Work | Status |
-|---|---|---|
-| **006** | Day-axis parity – reconcile the store's clock-time `dayConfigs` with the engine's compacted axis, add the app-path parity test (per preset, `applyPreset → buildTournamentConfig → scheduleAll` matches the ledger's scheduled count), restore the smoke boot floor to a real number | Done. Boot went from 11 of 24 to 24 of 24; full record in `specs/006-day-axis-parity/` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/), handoff in `handoff.md` (specs/006-day-axis-parity/handoff.md, removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/handoff.md). **Unblocks 004 US3** |
-| **004 US3–US5** | Scorecard, per-type defaults (the drift gate), gears – sessions S6–S9 | **Done 2026-09-01.** All five stories merged, US5 as `1fc119ae00`. T082's two human judgments went against the build – SC-004 fails, SC-002 mixed – and are carried in [`backlog.md`](./backlog.md) §The workbench canvas is not yet a finished surface |
-| **008** | Team-event cut default – team events reach the engine with a percentage cut, a BINDING error that empties the whole tournament's schedule; B2 and B8 place nothing today. A per-`event_type` default, **not** one of US4's per-tournament-type defaults. Found by 006, recorded in [`backlog.md`](./backlog.md) and `parity-exceptions.md` (specs/006-day-axis-parity/parity-exceptions.md, removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) | **Done 2026-08-31.** B2 went 0 → 24, B8 0 → 53; full record in `specs/008-team-event-cut/` (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/) |
-| **007** | Rail rebuild – replace the five re-homed section components with purpose-built rail panels, resolve the FR-003/FR-004 top-bar/rail duplication | **Superseded 2026-09-01** by 009 simple workbench, reassessment-2026-09-01.md §7 (removed; see git history at 0ab5bd2dc9). 007 preserved the five-panel structure and so preserved the duplication; the product goal is now *fewer, larger* panels. 009 keeps the same tear-up directive with a narrower target, and absorbs the three canvas defects |
-| **009** | Simple workbench – one header, one home per setting, the rail rebuilt as two panels, one preset picker, dead controls removed, larger elements, and the three canvas defects fixed. Replaces 007 | **Superseded 2026-09-07** by the Claude Design workbench mockup. Never specced – 010, 011 and 012 shipped ahead of it. Its scope is absorbed into 013 workbench redesign, analysed in [workbench-design-alignment-2026-09-07.md](./workbench-design-alignment-2026-09-07.md), which is the record from here |
-| **010** | Empty-board fixes – the `indiv-team-same-day` BINDING rule that empties two templates on a 4-day tournament, and the strip under-suggestion that empties `ROC Mega`. Both reach an empty board through the same all-or-nothing gate | After 009. Unspecced. Detail in [`backlog.md`](./backlog.md); edits `src/engine/`, so constitution III applies |
-| **P4** | Manual placement, as above – additionally absorbs the parked decisions: advisory-vs-binding validation wiring, placement states (unplaced / day-known-time-unknown / placed / pinned), flighting as user intent or removal, zoom-to-selection enablement | After 010, and re-specced against the simpler rail |
+### After finish
 
-P1 carries one item this design did not originally scope: DE referee demand
-becomes one referee per strip on every path, which raises staged-DE figures
-roughly 4× on the NAC scenarios. It is a correction to an under-count rather than
-a new feature, and decision D1 in `specs/001-p1-foundations/research.md` (removed; git show 0ab5bd2dc9:specs/001-p1-foundations/research.md)
-holds the reasoning.
-Anyone comparing referee numbers across P1 should expect a step change.
+Recorded in `backlog.md`, not needed to call the product finished, and not
+scheduled: global settings as a config file, a what-if scenario mode, the
+bounded re-colour repair for runtime failure, the test-comment fixture audit,
+P5 (FLUID), and the experimental mode (rejected in 012). Five of them wait on
+an owner decision or on data first: vet co-day serialization, per-event entry
+caps, the strip non-monotonicity warning, youth pool calibration, and real
+2026-27 templates with the Elite/National split. The policy-tables entry's
+rows other than the Div 1 cut sit here too.
 
 ## Testing
 
@@ -294,22 +305,6 @@ Anyone comparing referee numbers across P1 should expect a step change.
 
 ## Open items carried forward
 
-These predate this design and are unaffected by it. [`backlog.md`](./backlog.md)
-is the single record of each one – the entries below are pointers, not second
-copies, so detail goes there and nowhere else.
-
-| Item | Owner phase |
-|---|---|
-| Youth-event pool duration calibration | Unassigned. P1's US2 measures the delta it needs. |
-| `CAPACITY_TARGET_FILL = 0.3` re-tune | Done – `specs/003-p2-derived-state/` (removed; git show 0ab5bd2dc9:specs/003-p2-derived-state/), research.md D8 |
-| Global settings – engine constants as a user-editable config file | Split. Gears control and first panel: delivered by 004 US5. Remainder: **unassigned, needs a spec** – it is not queued behind any phase. |
-| A what-if scenario mode | **Unassigned, needs a spec.** The five settings US5 withdrew are hypotheses, not organizer preferences – reframed 2026-09-01. |
-| METHODOLOGY ↔ engine reconciliation | **Unassigned, deferred 2026-09-01.** The doc is the spec and the engine has diverged from it. One blocking decision first – see `backlog.md`. |
-| Per-type defaults in the rail's Advanced panel | Done – `specs/004-p3-workbench-shell/` (specs/004-p3-workbench-shell/spec.md, removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/spec.md) |
-
-Detail for every row lives in `backlog.md`, which is the record.
-
-**"After P5" is not a schedule.** Two of these rows were parked "after P5" when
-they were split out, and P5 is itself deferred with no owner, so the phrase
-meant never. They are re-homed above as unassigned work needing a spec, which
-is what they always were.
+[`backlog.md`](./backlog.md) is the single record of every open item, and
+§Roadmap above is its index – the finish-line table and §After finish name
+every entry. Detail goes in the backlog and nowhere else.
