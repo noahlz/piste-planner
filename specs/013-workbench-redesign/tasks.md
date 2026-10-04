@@ -1301,7 +1301,7 @@ placed event once at the canvas's times, and printing yields four pages.
   → Verdict 2026-10-04: **matches** (`handoff.md` §Verdicts, T044). The two
   open questions came back as T048 and T049.
 
-- [ ] **T048** The findings border on a block (mockup M1285, owner decision
+- [x] **T048** The findings border on a block (mockup M1285, owner decision
   2026-10-04, `handoff.md` finding 31). A placed, non-overflow block whose
   competition has a committed finding row (`findingRows`, the list
   `CenterView` commits – never the live store, FR-042) of severity Warning,
@@ -1315,6 +1315,21 @@ placed event once at the canvas's times, and printing yields four pages.
   follows the commit, not the store. `react-code-reviewer` and
   `test-quality-reviewer` after. SMOKE PASS with no driver edit
   *(subagent commits)*
+  → Done 2026-10-04 on `013-phase8-finish`: `94f1cb739c`, review follow-up
+  `c61ef2e96a`. `Block` takes a required `warned` prop; `data-warned` is
+  "true" exactly when the solid `--flash` edge is drawn (warned and not
+  overflow); `Canvas` derives the set from the committed `findingRows`
+  (`WARNED_SEVERITIES` over `flaggedTargets`), no new prop. Contract miss:
+  `CanvasTooltip.test.tsx` mounts `<Block>` directly – halted, authorized,
+  `warned={false}` at its two mounts. 8 cases red first on the predicted
+  reason; the three Block edge cases first asserted border longhands jsdom
+  leaves empty under a `var()` shorthand (test bug, fixed). The React review
+  found a real defect: the `border` shorthand beside a `borderStyle` longhand
+  logs a React style-conflict error whenever `warned` flips on a mounted
+  block, which the smoke's console check would catch; now longhands from one
+  `warnedEdge` boolean, with a re-render test. 76 files / 1753 → 1761 → 1762
+  tests, tsc and lint clean. SMOKE PASS, no driver edit, 0 console errors,
+  Suggest 15/66/80/48, boot 24 rows / 19·5·0; 9 of 66 B1 boot blocks warned.
 
 - [ ] **T049** Small text to WCAG AA (owner decision 2026-10-04, `handoff.md`
   finding 32). The panels' section captions (`SectionCaption`, duplicated in
