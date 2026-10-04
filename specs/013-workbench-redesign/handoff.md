@@ -481,6 +481,66 @@ Still open, unchanged by this phase: findings 6 and 13 (owner decisions),
 finding 25 (`Canvas.tsx` reads `placements` live for the pin badge). The
 human print check (quickstart §8, SC-008) is T041's, recorded in T043.
 
+### Phase 8 – T047, T045, T046, T044 (2026-10-04)
+
+Branch `013-phase8-closeout`, cut from main `27e505b1a2` (which carries the
+phase 7 merge and the Spec Kit removal). Every task ran test-first where it
+had behavior, then `react-code-reviewer` and `test-quality-reviewer`, and
+every review finding was folded into one follow-up commit per task.
+
+- **T047** `3c2d298d5d`: the team-cut coercion loop is gone (finding 7
+  closed). Ledger and parity unmoved, SHA `5483c40c1349…`.
+- **T045** `e0402bf768`, driver `d0844bcbba`, follow-up `0f48b38d19`:
+  the Default pill (finding 6 closed). The share round-trip and the driver's
+  restore step now go through it; finding 8's explicit-Staged workaround is
+  retired.
+- **T046** `97c12b9ca7`, follow-up `74e42d208b`: the pin badge reads the
+  pinned set committed with the schedule (findings 11 and 25 closed).
+- **T044** `68bc3486d9` (tokens, canvas, blocks, tooltip), `5094129973`
+  (panels), `08fd4208ab` (detail strip, overlay, Schedule view, chrome, dead
+  tokens), `172ca790e7` (per-surface owner shots in `scripts/screenshot.mjs`),
+  follow-up `37d7f33e91`. The work was scoped from a read-only gap audit of
+  the mockup, region by region. `scripts/smoke.mjs` passed three times across
+  the pass with **no driver edit**. Shots: `scripts/smoke-shots/shell-*.png`
+  and `t044-{tournament,strips,events,findings,settings,tooltip,detail,schedule}.png`.
+
+29. **The Default pill carries a hint the owner did not ask for** (T045).
+    With Default checked, Staged and Single are both unchecked, so the panel
+    stopped saying which mode applies. A hint `{type} default: {mode}` sits
+    beside the group and describes the Default radio. This keeps the
+    information the old checked-pill-plus-badge carried.
+30. **A `sed -i` backup was committed as `src/index.css-E`** (T044-C, removed
+    in `37d7f33e91`). BSD sed reads `-i -E` as "edit in place, back up with
+    suffix `-E`", so it wrote a full copy of the stylesheet that still held
+    the deleted tokens. Nothing imported
+    it, but a grep for a retired token would have hit it. The same commit had
+    deleted the eight tokens' `:root` values and left their `@theme`
+    mappings, so `bg-error` and the rest still compiled to undefined vars.
+    Both were found by the React review, not the tests.
+31. **Left out of the polish on purpose** (scope calls, owner to rule):
+    - The mockup's solid red border on a block that has findings (M1285).
+      Blocks carry Note-level findings too, so most of B1 would turn red.
+      That is a meaning, not paint.
+    - The mockup's +3 / −6 block inset was applied and then reverted, because
+      `Block.tsx`'s label fit assumes +2 / −4.
+    - Everything that needs a new element: day-band spans, the overflow
+      stripe, block meta text, the detail strip's pill internals, the rail
+      tooltip, and the panel title level. The gap list is in the T044 commits.
+32. **Small text below WCAG AA where the mockup puts it.** The mockup's
+    caption grey `#7a7a7d` at 11.5px is about 4.3:1 on white, against AA's
+    4.5:1. T044 raised the Schedule view's column heads and the Export
+    popover's headings to `neutral-700`, because they were `foreground`
+    before. The panels' section captions keep the mockup grey (T015a's
+    accepted look). The canvas's off-hour tick labels (`#a3a3a6` on the axis,
+    about 2.1:1) are also the mockup's value. Both are owner calls.
+33. **Two "Unplaced, needs N strips" figures for one event** (seen in the
+    T044 shots). B1's Div 1 Women's Epee shows "needs 32 strips" in the detail
+    strip and "needs 16 strips" in the DE-prelims tooltip. Each is that
+    phase's own need under the lane packer's overflow (finding 9), so they
+    are not wrong. They do read as a contradiction, beside a dock that says
+    "Every event has a slot." Feature 017 (the canvas calls events unplaced)
+    owns it.
+
 ## Measurements
 
 | Where | Value | When |
@@ -528,3 +588,10 @@ human print check (quickstart §8, SC-008) is T041's, recorded in T043.
 | Suggest: ROC Div1A/Vet, NAC Youth, NAC Vet/Div1/Junior, NAC Cadet/Junior | 15 / 66 / 80 / 48 | T036 smoke, both runs |
 | Console errors, two smoke runs | 0 | T036 smoke |
 | Unit suite at `3d35a84e65` (review follow-up) | 76 files / 1747 tests, tsc and lint clean | phase 7 checkpoint, verified twice |
+| Unit suite at `27e505b1a2` (phase 8 base, main) | 76 files / 1747 tests, tsc and lint clean | phase 8 baseline |
+| Drift ledger and parity before/after T047 | pass / pass, SHA `5483c40c1349…` unchanged | T047 `3c2d298d5d` |
+| Unit suite at `74e42d208b` (T045, T046 and follow-ups) | 76 files / 1753 tests, tsc and lint clean | phase 8 |
+| Smoke at `d0844bcbba` (T045 driver re-point), two runs | PASS, 0 console errors, Suggest 15/66/80/48, boot 24 rows / 19·5·0 | T045 |
+| Smoke at `172ca790e7` (T044 polish), two runs, no driver edit | PASS, 0 console errors, Suggest 15/66/80/48, boot 24 rows / 19·5·0 | T044 |
+| Smoke at `37d7f33e91` (T044 review follow-up), no driver edit | PASS, 0 console errors, Suggest 15/66/80/48 | T044 |
+| Unit suite at `37d7f33e91` | 76 files / 1753 tests, tsc and lint clean | T044 |

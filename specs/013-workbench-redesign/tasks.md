@@ -1287,6 +1287,14 @@ placed event once at the canvas's times, and printing yields four pages.
   shots to the product owner; their verdict goes in `handoff.md` §Verdicts
   beside T015's. Runs before T039 so the live smoke validates it
   *(subagent commits)*
+  → Built 2026-10-04 in four commits plus a review follow-up (`68bc3486d9`,
+  `5094129973`, `08fd4208ab`, `172ca790e7`, `37d7f33e91`), scoped from a
+  read-only gap audit of the mockup. SMOKE PASS with no driver edit, 0
+  console errors, Suggest 15/66/80/48. 76 files / 1753 tests, tsc and lint
+  clean. `scripts/screenshot.mjs` gained a per-surface pass (five panels,
+  tooltip, detail strip, Schedule view). Shots sent to the product owner;
+  verdict pending. Scope calls and open contrast questions are in
+  `handoff.md` findings 31–32.
 
 - [ ] **T037** [P] Design-document edits (FR-070). In
   `docs/design/competition-planner-workbench.md`: §Virtualization (`:161`)
