@@ -1255,13 +1255,24 @@ placed event once at the canvas's times, and printing yields four pages.
   sharpened four cases, and fixed spec scenario 8 and the key entity, which
   still named two choices. 76 files / 1753 tests.
 
-- [ ] **T046** The pin badge reads the committed schedule (handoff findings 11
+- [x] **T046** The pin badge reads the committed schedule (handoff findings 11
   and 25, FR-042, owner decision: fix in 013). `Canvas.tsx` reads
   `placements` live for the pin badge; the pinned set commits with the
   schedule the way findings already do, so the badge never describes a
   schedule the grid is not showing. Test-first: a pin toggled during the
   settle window does not change the badge until the commit.
   `react-code-reviewer` and `test-quality-reviewer` after *(subagent commits)*
+  → Done 2026-10-04: `97c12b9ca7`, review follow-up `74e42d208b`.
+  `CommittedModel.pinnedIds` is built by `pinnedIdsOf(placements)` inside the
+  commit (not a memo, which React may discard), and `Canvas` takes a required
+  `pinnedIds` prop in place of its live `placements` read. Three cases red
+  first on the predicted assertion: the badge held through the settle
+  (`recompute.test.tsx`), held while an ERROR blocks and released once it
+  clears (`invalidState.test.tsx`), and read from the prop, not the store
+  (`Canvas.test.tsx`). The Pin button and the footer's pinned count stay live
+  by design; `DetailStrip`'s docblock says so. Shared `canvasQueries.ts`
+  helper (`NO_PINS`, `pinBadges`); `Canvas.test.tsx` mounts through
+  `renderCanvas`. 76 files / 1753 tests.
 
 - [ ] **T044** Close-out polish against the mockup (styling only, standing
   rule 13; the second half of the T015 verdict). With every surface built,
