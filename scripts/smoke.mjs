@@ -80,9 +80,10 @@
 // Tournament panel's "Type" combobox needs `exact` since a competition's name
 // is a prefix of its siblings', so `Referees for …` needs it too. The retired
 // top bar's own "Tournament type" control and the Advanced trigger's
-// `aria-describedby` summary link are both gone (013 T009/T010) —
-// the Advanced panel no longer collapses, so its FR-035 summary is read straight
-// off the section's first always-rendered `div` instead.
+// `aria-describedby` summary link are both gone (013 T009/T010), and 013 T018
+// removed the Advanced section itself, so the type-change block below reads
+// referees-per-pool and video strips from the open Strips & referees
+// Inspector panel aside.
 
 import { chromium } from 'playwright-core'
 import { homedir } from 'node:os'
