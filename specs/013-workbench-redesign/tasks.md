@@ -1232,7 +1232,7 @@ placed event once at the canvas's times, and printing yields four pages.
   `competitionDefaults.ts`, `validation.ts`, `validation.test.ts` and
   data-model §4. 76 files / 1747 tests, tsc and lint clean.
 
-- [ ] **T045** A third "Default" pill in the Settings panel's DE mode group
+- [x] **T045** A third "Default" pill in the Settings panel's DE mode group
   (handoff finding 6, owner decision). Pressing it sets `de_mode_override` to
   null so the tournament follows its type's default again; it is the pressed
   pill whenever the override is null. Test-first in `SettingsPanel.test.tsx`
@@ -1240,6 +1240,20 @@ placed event once at the canvas's times, and printing yields four pages.
   post-round-trip "restore Staged" step (finding 8) presses Default instead,
   edited in place. `react-code-reviewer` and `test-quality-reviewer` after
   *(subagent commits)*
+  → Done 2026-10-04: `e0402bf768` (pill), `d0844bcbba` (driver), review
+  follow-up `0f48b38d19`. Radios Default / Staged / Single in that order;
+  group value `de_mode_override ?? FOLLOW_TYPE`; the old Default badge is
+  gone (the pill is the marker). Added beyond the owner's wording, so the
+  panel still says what Default means: a hint `{type} default: {mode}`
+  describing the Default radio. 7 cases red first on "no radio named
+  Default". Store coverage was already there (`serialization.test.ts:1130`,
+  `store.test.ts:247`), so no store test added. Driver: first-open and
+  round-trip checks read the Default radio's `aria-checked`, the restore step
+  presses Default; SMOKE PASS ×2, 0 console errors, Suggest 15/66/80/48, no
+  locator repair. Review follow-up dropped the pills' `onClick`s (redundant
+  once the group value tracks the override), raised the hint to AA contrast,
+  sharpened four cases, and fixed spec scenario 8 and the key entity, which
+  still named two choices. 76 files / 1753 tests.
 
 - [ ] **T046** The pin badge reads the committed schedule (handoff findings 11
   and 25, FR-042, owner decision: fix in 013). `Canvas.tsx` reads
