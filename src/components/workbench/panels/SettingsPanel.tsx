@@ -7,7 +7,7 @@ import { PoolDurationSettings } from '../../sections/PoolDurationSettings.tsx'
 
 /** Standing rule 13 pill, matching TournamentPanel's — one pill shape per panel. */
 const PILL_CLASSES =
-  'rounded-full px-[13px] py-1.5 text-[12.5px] border-[1.5px] border-chrome-border bg-white ' +
+  'rounded-full px-[14px] py-1.5 text-[12.5px] border-[1.5px] border-chrome-border bg-secondary ' +
   'data-[state=checked]:border-transparent data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground'
 
 /** The Default pill's radio value. Not a `DeMode`, so it can never collide with
@@ -59,7 +59,7 @@ export function SettingsPanel() {
   const hintId = useId()
 
   return (
-    <section aria-label="Settings" className="flex flex-col gap-4 text-[12.5px]">
+    <section aria-label="Settings" className="flex flex-col gap-4 py-0.5 text-[12.5px]">
       <div>
         <SectionCaption>Pool durations</SectionCaption>
         <PoolDurationSettings />

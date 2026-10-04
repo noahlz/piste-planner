@@ -34,8 +34,8 @@ export function PoolDurationSettings() {
     // and their behaviour are unchanged; only the container is the mockup's
     // card now (013 T022, mockup lines 224–250).
     <section aria-label="Pool round durations">
-      <div className="overflow-hidden rounded-[12px] border-[1.5px] border-chrome-border bg-white">
-        <div className="divide-y-[1.5px] divide-chrome-border">
+      <div className="overflow-hidden rounded-[12px] border-[1.5px] border-chrome-border bg-secondary">
+        <div className="divide-y-[1.5px] divide-divider-soft">
           {WEAPON_ROWS.map(({ weapon, label }) => {
             const defaultMinutes = DEFAULT_POOL_ROUND_DURATION_TABLE[weapon]
             // Override state is derived by comparison against the default –
@@ -43,7 +43,7 @@ export function PoolDurationSettings() {
             const isDefault = durations[weapon] === defaultMinutes
             return (
               <div key={weapon} className="flex items-center gap-2 px-3 py-2">
-                <Label htmlFor={`pool-duration-${weapon}`} className="w-12 text-xs">
+                <Label htmlFor={`pool-duration-${weapon}`} className="w-12 text-[12.5px] font-normal text-neutral-700">
                   {label}
                 </Label>
                 <NumberInput
@@ -55,11 +55,11 @@ export function PoolDurationSettings() {
                   rejectOutOfRange
                   aria-label={`${label} pool round duration`}
                 />
-                <span className="text-xs text-muted-foreground">min</span>
+                <span className="text-xs text-neutral-600">min</span>
                 <DefaultLabel isDefault={isDefault} />
                 {!isDefault && (
                   <>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-neutral-600">
                       default: {defaultMinutes} min
                     </span>
                     <Button

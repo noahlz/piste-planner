@@ -15,10 +15,10 @@ import { FindingSeverity, selectFindings, type Finding } from '../../../store/de
  * apart, not a second badge colour.
  */
 const BADGE_CLASSES: Record<FindingSeverity, string> = {
-  [FindingSeverity.BLOCKING]: 'bg-error text-error-text',
+  [FindingSeverity.BLOCKING]: 'bg-conflict-chip text-finding-link',
   [FindingSeverity.WARNING]: 'bg-finding-badge text-finding-badge-text',
   [FindingSeverity.UNPLACED]: 'bg-finding-badge text-finding-badge-text',
-  [FindingSeverity.NOTE]: 'bg-info text-info-text',
+  [FindingSeverity.NOTE]: 'bg-neutral-200 text-neutral-700',
 }
 
 /**

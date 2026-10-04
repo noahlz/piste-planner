@@ -19,7 +19,7 @@ const TOURNAMENT_TYPES = Object.values(TournamentType)
 
 /** Standing rule 13 pill: selected fills primary, unselected is a bordered white pill. */
 const PILL_CLASSES =
-  'rounded-full px-[13px] py-1.5 text-[12.5px] border-[1.5px] border-chrome-border bg-white ' +
+  'rounded-full px-[13px] py-1.5 text-[12.5px] border-[1.5px] border-chrome-border bg-secondary ' +
   'data-[state=checked]:border-transparent data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground ' +
   'disabled:cursor-not-allowed disabled:opacity-60'
 
@@ -45,7 +45,7 @@ function DayHoursSelect({
     <Select value={String(value)} onValueChange={(v: string) => onChange(Number(v))}>
       <SelectTrigger
         aria-label={ariaLabel}
-        className="h-auto flex-1 rounded-[9px] border-[1.5px] border-chrome-border bg-white px-2.5 py-1.5 font-mono text-[11.5px] font-semibold"
+        className="h-auto flex-1 rounded-[9px] border-[1.5px] border-chrome-border bg-secondary px-2.5 py-1.5 font-mono text-[11.5px] font-semibold"
       >
         <SelectValue>{formatClock(value)}</SelectValue>
       </SelectTrigger>
@@ -85,7 +85,7 @@ export function TournamentPanel() {
   const isOutOfRange = daysAvailable !== 2 && daysAvailable !== 3 && daysAvailable !== 4
 
   return (
-    <div className="flex flex-col gap-[18px]">
+    <div className="flex flex-col gap-[18px] py-0.5">
       <div>
         <SectionCaption>Type</SectionCaption>
         <RadioGroupPrimitive.Root
@@ -114,7 +114,7 @@ export function TournamentPanel() {
           className="flex flex-wrap gap-[5px]"
         >
           {[2, 3, 4].map((d) => (
-            <RadioGroupPrimitive.Item key={d} value={String(d)} className={PILL_CLASSES}>
+            <RadioGroupPrimitive.Item key={d} value={String(d)} className={cn(PILL_CLASSES, "px-[15px]")}>
               {d}
             </RadioGroupPrimitive.Item>
           ))}
@@ -122,7 +122,7 @@ export function TournamentPanel() {
             <RadioGroupPrimitive.Item
               value={String(daysAvailable)}
               disabled
-              className={PILL_CLASSES}
+              className={cn(PILL_CLASSES, "px-[15px]")}
             >
               {daysAvailable}
             </RadioGroupPrimitive.Item>
