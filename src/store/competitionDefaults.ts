@@ -5,8 +5,9 @@ import { DEFAULT_CUT_BY_CATEGORY } from '../engine/constants.ts'
 /**
  * The default cut pair for a catalogue entry. Since the per-event record shrank
  * (013 research D7) this has one caller: `buildConfig.ts` applies it as the
- * first of the three cut rules, ahead of the regional override and the team
- * coercion. The engine's `cut-on-team` rule (src/engine/validation.ts:157-159)
+ * first of the two cut rules, ahead of the regional override. Team events reach
+ * the engine DISABLED because this answers DISABLED/100 for every team entry.
+ * The engine's `cut-on-team` rule (src/engine/validation.ts:157-159)
  * requires every team event to carry `DISABLED`, and the last time this
  * derivation diverged from a second copy of itself, the app shipped an empty
  * schedule for every tournament with team events

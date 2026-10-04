@@ -153,9 +153,9 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
     }
 
     // Team events must not use cuts — notice, not policy (R3, FR-011):
-    // buildConfig already coerces cut_mode to DISABLED before the engine sees
-    // it, so this is a heads-up on a cosmetic field, never a gate
-    // (research.md D4).
+    // team events reach the engine DISABLED because defaultCutForEntry answers
+    // DISABLED/100 for every team entry, so this is a heads-up on a cosmetic
+    // field, never a gate (research.md D4).
     if (comp.event_type === EventType.TEAM && comp.cut_mode !== CutMode.DISABLED) {
       errors.push(notice('cut_mode', `${comp.id}: team events must have cut_mode=DISABLED`, 'cut-on-team', [comp.id]))
     }
