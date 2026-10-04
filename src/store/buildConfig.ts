@@ -3,7 +3,7 @@ import type {
   TournamentConfig,
   PinnedPlacement,
 } from '../engine/types.ts'
-import { CutMode, DeStripRequirement, EventType } from '../engine/types.ts'
+import { DeStripRequirement } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import {
   DAY_START_MINS,
@@ -174,10 +174,10 @@ function buildCompetitions(state: StoreState): Competition[] {
     const entry = findCompetition(id)
     if (!entry) continue
 
-    // First of the three cut rules, in the order data-model §4 states them:
-    // the catalogue default here, the regional override below, then the team
-    // coercion. `defaultConfigForId` no longer applies this — the store record
-    // has no cut pair to seed.
+    // First of the two cut rules, in the order data-model §4 states them:
+    // the catalogue default here (which already answers DISABLED/100 for a
+    // team entry), then the regional override below. `defaultConfigForId` no
+    // longer applies this — the store record has no cut pair to seed.
     const cut = defaultCutForEntry(entry)
 
     competitions.push({
@@ -249,22 +249,6 @@ function buildCompetitions(state: StoreState): Competition[] {
         comp.cut_mode = override.mode
         comp.cut_value = override.value
       }
-    }
-  }
-
-  // Team events never cut (R3, FR-010): coerce cut_mode to DISABLED before the
-  // competition reaches the engine, mirroring the regional-cut loop above.
-  // cut_value follows to 100, the TEAM default pair competitionDefaults.ts
-  // already establishes — DISABLED makes the value inert either way, but the
-  // pair is what the fixtures and the ledger compare against, so a stray
-  // non-default number left behind would read as a real difference.
-  // `validation.ts`'s `cut-on-team` is a notice, not a blocker (FR-011),
-  // because this coercion already makes the engine's arithmetic ignore the
-  // field (research.md D4).
-  for (const comp of competitions) {
-    if (comp.event_type === EventType.TEAM && comp.cut_mode !== CutMode.DISABLED) {
-      comp.cut_mode = CutMode.DISABLED
-      comp.cut_value = 100
     }
   }
 

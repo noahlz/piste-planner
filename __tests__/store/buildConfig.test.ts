@@ -401,17 +401,15 @@ describe('buildTournamentConfig', () => {
     })
   })
 
-  // Since 013 T020 the pair arrives from `defaultCutForEntry`, which already
-  // answers DISABLED/100 for a TEAM entry, so the coercion loop is a backstop
-  // rather than the producer and this case can no longer prove it fires. What
-  // it still proves is the behavior FR-010 and the engine's `cut-on-team` rule
-  // need: a team event reaches the engine with its cut disabled, by whichever
-  // of the two rules got there first.
-  describe('team event cut_mode coercion (R3, cut-on-team, FR-010)', () => {
-    it('a TEAM competition reaches the engine with cut_mode DISABLED', () => {
+  // The pair arrives from `defaultCutForEntry`, which answers DISABLED/100 for
+  // a TEAM entry. This case pins the invariant FR-010 and the engine's
+  // `cut-on-team` rule need: a team event reaches the engine with its cut
+  // disabled.
+  describe('team event cut_mode invariant (R3, cut-on-team, FR-010)', () => {
+    it.each([TournamentType.NAC, TournamentType.ROC])('a TEAM competition reaches the engine with cut_mode DISABLED, at %s', (type) => {
       const state = storeWith({
         ...minimalState(),
-        tournament_type: TournamentType.NAC,
+        tournament_type: type,
         selectedCompetitions: {
           'JR-M-FOIL-TEAM': {
             fencer_count: 40,
@@ -549,7 +547,7 @@ describe('buildTournamentConfig', () => {
       // (__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json)
       // and the explicit JUNIOR-at-ROC/NAC literal cases earlier in this file.
       it.each([TournamentType.NAC, TournamentType.ROC])(
-        'cut_mode/cut_value follow defaultCutForEntry, then the regional override, then the team coercion, at %s',
+        'cut_mode/cut_value follow defaultCutForEntry, then the regional override; every team event arrives DISABLED/100, at %s',
         (type) => {
           const { competitions } = buildTournamentConfig(derivedState(type))
           for (const comp of competitions) {
@@ -561,6 +559,8 @@ describe('buildTournamentConfig', () => {
               const override = REGIONAL_CUT_OVERRIDES[entry.category]
               if (override) expected = override
             }
+            // Guard: fails if a regional override ever gives a cut to a category
+            // that has a team event in this fixture (Div1, Junior).
             if (entry.event_type === EventType.TEAM) {
               expected = { mode: CutMode.DISABLED, value: 100 }
             }

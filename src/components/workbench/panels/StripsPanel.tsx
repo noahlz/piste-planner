@@ -53,7 +53,7 @@ function Stepper({
       min={min}
       max={max}
       aria-label={ariaLabel}
-      className="w-full justify-between gap-0 rounded-[10px] border-[1.5px] border-chrome-border bg-white p-0 [&_button]:h-[34px] [&_button]:w-[30px] [&_button]:shrink-0 [&_button]:rounded-none [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-neutral-700 [&_input]:h-[34px] [&_input]:flex-1 [&_input]:rounded-none [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-center [&_input]:font-mono [&_input]:text-[13.5px] [&_input]:font-semibold"
+      className="w-full justify-between gap-0 overflow-hidden rounded-[10px] border-[1.5px] border-chrome-border bg-secondary p-0 [&_button]:h-[34px] [&_button]:w-[30px] [&_button]:shrink-0 [&_button]:rounded-none [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-neutral-700 [&_input]:h-[34px] [&_input]:flex-1 [&_input]:rounded-none [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-center [&_input]:font-mono [&_input]:text-[13.5px] [&_input]:font-semibold [&_button:focus-visible]:ring-inset [&_input:focus-visible]:ring-inset"
     />
   )
 }
@@ -187,7 +187,7 @@ export function StripsPanel() {
   const refsPerPool = resolveRefsPerPool(TYPE_DEFAULTS[tournamentType].ref_policy, 1).refs_per_pool
 
   return (
-    <div className="flex flex-col gap-[18px]">
+    <div className="flex flex-col gap-[18px] py-0.5">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <SectionCaption>Strips</SectionCaption>
@@ -227,9 +227,9 @@ export function StripsPanel() {
 
       <section
         aria-label="Suggested minimum"
-        className="rounded-xl border-[1.5px] border-chrome-border bg-white p-[13px]"
+        className="rounded-[12px] border-[1.5px] border-chrome-border bg-secondary p-[13px]"
       >
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 [&>div]:mb-0">
           <SectionCaption>Suggested minimum</SectionCaption>
           {showIndicator && (
             <span role="status" className="text-right text-[11px] text-neutral-500">
@@ -237,7 +237,7 @@ export function StripsPanel() {
             </span>
           )}
         </div>
-        <div className="flex items-baseline gap-[9px]">
+        <div className="mt-[3px] flex items-baseline gap-[9px]">
           <span data-suggested-strips className="text-[32px] leading-none text-foreground">
             {suggested === null ? '—' : suggested}
           </span>
@@ -260,7 +260,7 @@ export function StripsPanel() {
         <div className="flex items-center gap-[9px] text-[12.5px] text-neutral-700">
           <span
             data-refs-per-pool
-            className="rounded-[9px] border-[1.5px] border-chrome-border bg-white px-3 py-[5px] font-mono font-semibold text-foreground"
+            className="rounded-[9px] border-[1.5px] border-chrome-border bg-secondary px-3 py-[5px] font-mono font-semibold text-foreground"
           >
             {refsPerPool}
           </span>

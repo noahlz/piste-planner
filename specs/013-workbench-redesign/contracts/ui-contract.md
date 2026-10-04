@@ -115,7 +115,9 @@ severity badge as text, `where`, the message, and, when a target exists,
 
 `<section aria-label="Pool round durations">` **kept** with its per-weapon
 inputs and revert buttons **kept**. `radiogroup` "DE mode" with `radio`s
-"Staged" and "Single", plus the Default marker when following the type.
+"Default", "Staged" and "Single"; "Default" is checked while `de_mode_override`
+is `null` and pressing it writes `null`; a hint `{type} default: {Staged|Single}`
+describes the Default radio. (T045, finding 6.)
 
 ---
 
@@ -141,7 +143,7 @@ zoom controls", and the `group` "Matrix grid".
 | Fill | Weapon | `data-weapon` and the token on the block. Three weapons, three fills |
 | Hatch and icon | Phase | DE blocks carry the hatch and a bracket icon, pool blocks a grid icon |
 | Name text | Category and gender | Present when the block has room, else in the tooltip |
-| Badge | Pinned | `data-pinned="true"` and the pin glyph |
+| Badge | Pinned | `data-pinned="true"` and the pin glyph. Reads the pinned set committed with the schedule, so it holds through the settle and while blocked (FR-042, T046) |
 | Dashed edge | Overflow | `data-overflow="true"` |
 | Ring | Selected | `data-selected="true"` |
 

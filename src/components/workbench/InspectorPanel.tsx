@@ -39,7 +39,7 @@ export function InspectorPanel({ panel, docked, onToggleDocked, onClose, childre
     <aside
       aria-label="Inspector panel"
       className={cn(
-        'print-hidden flex w-[324px] flex-col bg-chrome',
+        'print-hidden flex w-[324px] flex-col bg-chrome animate-in fade-in slide-in-from-left-[14px] duration-200 motion-reduce:animate-none',
         docked
           ? 'relative shrink-0 border-r-[1.5px] border-chrome-border'
           : 'absolute top-0 left-0 z-40 h-full border-r-[1.5px] border-chrome-border shadow-panel',
@@ -58,7 +58,7 @@ export function InspectorPanel({ panel, docked, onToggleDocked, onClose, childre
             onClick={onToggleDocked}
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200 hover:text-foreground',
-              docked && 'bg-accent-200 text-accent-800 hover:bg-accent-200 hover:text-accent-800',
+              docked && 'bg-docked text-accent-800 hover:bg-docked hover:text-accent-800',
             )}
           >
             <PanelLeft className="h-[15px] w-[15px]" strokeWidth={1.75} />

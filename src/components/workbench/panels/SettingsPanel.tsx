@@ -1,14 +1,23 @@
+import { useId } from 'react'
 import { RadioGroup as RadioGroupPrimitive } from 'radix-ui'
 import { useStore } from '../../../store/store.ts'
 import { DeMode } from '../../../engine/types.ts'
 import { TYPE_DEFAULTS } from '../../../store/typeDefaults.ts'
-import { DefaultLabel } from '@/components/common/DefaultLabel'
 import { PoolDurationSettings } from '../../sections/PoolDurationSettings.tsx'
 
 /** Standing rule 13 pill, matching TournamentPanel's — one pill shape per panel. */
 const PILL_CLASSES =
-  'rounded-full px-[13px] py-1.5 text-[12.5px] border-[1.5px] border-chrome-border bg-white ' +
+  'rounded-full px-[14px] py-1.5 text-[12.5px] border-[1.5px] border-chrome-border bg-secondary ' +
   'data-[state=checked]:border-transparent data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground'
+
+/** The Default pill's radio value. Not a `DeMode`, so it can never collide with
+ *  an override: the group's value is `de_mode_override ?? FOLLOW_TYPE`. */
+const FOLLOW_TYPE = 'FOLLOW_TYPE'
+
+const DE_MODE_LABELS: Record<DeMode, string> = {
+  [DeMode.STAGED]: 'Staged',
+  [DeMode.SINGLE_STAGE]: 'Single',
+}
 
 /** Section caption above each field group (standing rule 13, as TournamentPanel). */
 function SectionCaption({ children }: { children: string }) {
@@ -30,6 +39,10 @@ function SectionCaption({ children }: { children: string }) {
  * `buildConfig.ts` now reads all seven from `constants.ts`. What earns a row
  * back is engine work first, recorded in `docs/design/backlog.md`.
  *
+ * DE mode has a third pill, Default, that returns `de_mode_override` to `null`
+ * so the tournament follows its type again (handoff finding 6, owner decision
+ * 2026-10-04). A hint beside the pills names what Default resolves to.
+ *
  * `PoolDurationSettings` is mounted unchanged (FR-043, research D13) — it
  * brings its own `region` and its own per-weapon revert behaviour, so this
  * panel only places it under the caption.
@@ -43,15 +56,10 @@ export function SettingsPanel() {
   const deModeOverride = useStore((s) => s.de_mode_override)
   const setDeModeOverride = useStore((s) => s.setDeModeOverride)
 
-  // The resolved mode is what the pills show; the override is what decides
-  // whether it reads as a default. Comparing the resolved mode against the
-  // type default instead would mislabel a deliberate choice that happens to
-  // agree with the type — and that choice outlives a type change, where a
-  // `null` would not (buildConfig.ts resolves `null` per render).
-  const resolved = deModeOverride ?? TYPE_DEFAULTS[tournamentType].de_mode
+  const hintId = useId()
 
   return (
-    <section aria-label="Settings" className="flex flex-col gap-4 text-[12.5px]">
+    <section aria-label="Settings" className="flex flex-col gap-4 py-0.5 text-[12.5px]">
       <div>
         <SectionCaption>Pool durations</SectionCaption>
         <PoolDurationSettings />
@@ -59,40 +67,44 @@ export function SettingsPanel() {
 
       <div>
         <SectionCaption>DE mode</SectionCaption>
-        <div className="flex items-center gap-[5px]">
+        <div className="flex flex-col gap-[5px]">
           <RadioGroupPrimitive.Root
             aria-label="DE mode"
-            value={resolved}
-            onValueChange={(value: string) => setDeModeOverride(value as DeMode)}
+            value={deModeOverride ?? FOLLOW_TYPE}
+            onValueChange={(value: string) =>
+              setDeModeOverride(value === FOLLOW_TYPE ? null : (value as DeMode))
+            }
             className="flex flex-wrap gap-[5px]"
           >
-            {/* `onClick` as well as the group's `onValueChange`, because the
-                two fire in different cases and both are a real choice here.
-                Radix raises `onValueChange` only when the value *changes*, so
-                pressing the pill that is already checked — the one showing
-                Default, because the type resolves to it — would otherwise do
-                nothing, and the organizer who means "staged, and stay staged
-                if I change the type later" has no way to say it. Clicking
-                either pill writes the override; the writes agree, so the two
-                handlers firing together is idempotent. */}
+            {/* No per-pill `onClick`: the group's value is `deModeOverride ??
+                FOLLOW_TYPE`, so the checked pill always equals the stored
+                value and re-pressing it would write what is already stored.
+                `onValueChange` covers every real change, mouse or arrow key. */}
+            <RadioGroupPrimitive.Item
+              value={FOLLOW_TYPE}
+              aria-describedby={hintId}
+              className={PILL_CLASSES}
+            >
+              Default
+            </RadioGroupPrimitive.Item>
             <RadioGroupPrimitive.Item
               value={DeMode.STAGED}
-              onClick={() => setDeModeOverride(DeMode.STAGED)}
               className={PILL_CLASSES}
             >
               Staged
             </RadioGroupPrimitive.Item>
             <RadioGroupPrimitive.Item
               value={DeMode.SINGLE_STAGE}
-              onClick={() => setDeModeOverride(DeMode.SINGLE_STAGE)}
               className={PILL_CLASSES}
             >
               Single
             </RadioGroupPrimitive.Item>
           </RadioGroupPrimitive.Root>
-          {/* Sibling of the group, never inside a pill: a badge inside an item
+          {/* Sibling of the group, never inside a pill: text inside an item
               would join that radio's accessible name and rename it. */}
-          <DefaultLabel isDefault={deModeOverride === null} />
+          <p id={hintId} className="text-[11.5px] text-neutral-700">
+            {`${tournamentType} default: ${DE_MODE_LABELS[TYPE_DEFAULTS[tournamentType].de_mode]}`}
+          </p>
         </div>
       </div>
     </section>

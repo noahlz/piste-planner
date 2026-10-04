@@ -20,6 +20,7 @@ import {
   makeStrips,
 } from '../../helpers/factories.ts'
 import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
+import { NO_PINS } from '../../helpers/canvasQueries.ts'
 
 // 004 T030 — the tooltip contract (contracts/ui-contract.md §Tooltip contract,
 // FR-022).
@@ -427,6 +428,7 @@ function renderCanvas(schedule: DerivedSchedule = scheduleWithTwoEvents()): void
       findingRows={[]}
       dayConfigs={CANVAS_DAY_CONFIGS}
       zoom={CANVAS_ZOOM}
+      pinnedIds={NO_PINS}
     />,
   )
 }

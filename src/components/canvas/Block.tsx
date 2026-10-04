@@ -204,12 +204,12 @@ export function Block({
     color: 'var(--block-ink)',
     // An unplaced block goes dashed; a placed one keeps a solid edge, so the
     // two states never read alike (mockup line 1287).
-    border: placement.overflow ? '2px dashed var(--block-edge)' : '1.5px solid var(--block-edge)',
+    border: placement.overflow ? '2px dashed var(--flash)' : '1.5px solid var(--block-edge)',
     borderStyle: placement.overflow ? 'dashed' : 'solid',
-    borderRadius: 5,
+    borderRadius: 9,
     boxSizing: 'border-box',
     overflow: 'hidden',
-    boxShadow: '0 1px 2px rgba(43, 43, 45, .07)',
+    boxShadow: 'var(--shadow-block)',
   } as CSSProperties
 
   return (
@@ -252,7 +252,7 @@ export function Block({
           data-pin-glyph
           aria-hidden="true"
           className="absolute top-1 right-[5px] z-[2] flex items-center justify-center rounded-[5px]"
-          style={{ width: 15, height: 15, background: 'var(--block-edge)', color: '#fff' }}
+          style={{ width: 15, height: 15, background: 'var(--block-edge)', color: 'var(--primary-foreground)' }}
         >
           <PinGlyph />
         </span>
@@ -262,7 +262,7 @@ export function Block({
         <span
           data-ring
           aria-hidden="true"
-          className="pointer-events-none absolute -inset-[1.5px] rounded-[6px] border-[2.5px] border-accent-700"
+          className="pointer-events-none absolute -inset-[1.5px] rounded-[10px] border-[2.5px] border-accent-700"
         />
       )}
 
@@ -275,7 +275,7 @@ export function Block({
         <span
           data-flash-ring
           aria-hidden="true"
-          className="pointer-events-none absolute -inset-[3px] z-[3] rounded-[8px]"
+          className="pointer-events-none absolute -inset-[3px] z-[3] rounded-[12px]"
           style={{
             border: '3px solid var(--flash)',
             boxShadow: '0 0 0 4px color-mix(in srgb, var(--flash) 22%, transparent)',

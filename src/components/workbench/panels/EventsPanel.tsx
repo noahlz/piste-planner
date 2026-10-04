@@ -99,9 +99,9 @@ function chipText(entry: CatalogueEntry): string {
 }
 
 const CHIP_BASE =
-  'rounded-full border-[1.5px] px-[11px] py-1 text-[11.5px] leading-tight transition-colors'
+  'rounded-full border-[1.5px] px-2.5 py-1 text-[11.5px] leading-tight transition-colors'
 const CHIP_SELECTED = 'border-transparent bg-primary text-primary-foreground'
-const CHIP_UNSELECTED = 'border-chrome-border bg-white text-neutral-700 hover:bg-chrome-deep'
+const CHIP_UNSELECTED = 'border-neutral-200 bg-neutral-100 text-neutral-700'
 
 /**
  * One chip + its fencer-count input. Subscribes only to its own entry's
@@ -170,7 +170,7 @@ export function EventsPanel() {
         <span className="text-[11.5px] font-semibold tracking-[.06em] text-neutral-600 uppercase">
           Selected
         </span>
-        <span className="font-mono text-[11.5px] font-semibold text-neutral-600">
+        <span className="font-mono text-[11.5px] font-semibold text-neutral-700">
           {`${selectedIds.size} of ${CATALOGUE.length}`}
         </span>
       </h3>
@@ -181,11 +181,11 @@ export function EventsPanel() {
           <section
             key={group.key}
             aria-label={group.label}
-            className="overflow-hidden rounded-[12px] border-[1.5px] border-chrome-border bg-white"
+            className="overflow-hidden rounded-[12px] border-[1.5px] border-chrome-border bg-secondary"
           >
-            <div className="flex items-center justify-between bg-chrome-deep px-[11px] py-[7px] text-[11.5px] font-semibold tracking-[.05em] uppercase">
+            <div className="flex items-center justify-between bg-chrome-soft px-[11px] py-[7px] text-[11.5px] font-semibold tracking-[.05em] uppercase">
               <span>{group.label}</span>
-              <span className="font-mono font-semibold text-neutral-600">{groupCount}</span>
+              <span className="font-mono font-semibold text-neutral-700">{groupCount}</span>
             </div>
             <div className="flex flex-wrap items-center gap-[5px] px-[11px] pt-[9px] pb-[11px]">
               {group.entries.map((entry) => (

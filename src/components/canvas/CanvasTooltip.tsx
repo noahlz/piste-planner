@@ -139,7 +139,7 @@ export function CanvasTooltip({ target }: { target: CanvasTooltipTarget | null }
           ref={releasePopperWrapper}
           side="top"
           align="center"
-          className="pointer-events-none block max-w-sm items-start text-left"
+          className="pointer-events-none block max-w-[280px] items-start text-left [&_[data-tooltip-field=name]]:text-[15.5px] [&_[data-tooltip-field=name]]:leading-[1.2] [&_[data-tooltip-field=phase]]:font-semibold [&_[data-tooltip-field=phase]]:text-accent-300"
         >
           {target !== null && <TooltipBody target={target} />}
         </TooltipContent>

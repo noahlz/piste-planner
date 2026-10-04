@@ -30,14 +30,6 @@
   --success: #5a8a6a;
   --success-hover: #4a7559;
   --success-foreground: #ffffff;
-  --danger: #a35b5b;
-  --danger-hover: #8c4d4d;
-  --warning: #fef3c7;
-  --warning-text: #92400e;
-  --error: #fee2e2;
-  --error-text: #991b1b;
-  --info: #dbeafe;
-  --info-text: #1e40af;
   --accent-hover: #4d7295;
 
   /* Industry design-system tokens (docs/design/mockup/ds-styles.css) –
@@ -66,6 +58,21 @@
   --chrome-deep: #eaebee;
   --hover-tint: #f7fbff;
   --ok: #5b8f6a;
+  /* Canvas, tooltip and polish tokens (013 T044-A, mockup lines 23-25, 1486,
+     1548, 1573-1580, 1569, 1868-1869). */
+  --chrome-soft: #f2f2f4;
+  --plot: #fdfdfe;
+  --grid-line: #e4e4e8;
+  --row-line: #eaeaee;
+  --divider-soft: #f0f0f2;
+  --tick-minor: #a3a3a6;
+  --scroll-thumb: #c2c2c6;
+  --conflict-tint: #fdf4f3;
+  --conflict-chip: #f6e3e0;
+  --docked: #e2edf8;
+  /* Consumed by var() in Block's inline style, so it lives in :root; the
+     tooltip and rail shadows below feed shadow-* utilities in @theme. */
+  --shadow-block: 0 1px 2px rgba(43, 43, 45, 0.07);
 
   /* Findings panel and rail badge (013 T032, mockup lines 1609-1622,
      1792-1807) — the mockup's own warm finding palette, not yet tokens
@@ -145,14 +152,6 @@ button:not(:disabled) {
   --color-success: var(--success);
   --color-success-hover: var(--success-hover);
   --color-success-foreground: var(--success-foreground);
-  --color-danger: var(--danger);
-  --color-danger-hover: var(--danger-hover);
-  --color-warning: var(--warning);
-  --color-warning-text: var(--warning-text);
-  --color-error: var(--error);
-  --color-error-text: var(--error-text);
-  --color-info: var(--info);
-  --color-info-text: var(--info-text);
   --color-accent-hover: var(--accent-hover);
 
   /* Industry design-system ramps and chrome roles. This deliberately
@@ -183,6 +182,14 @@ button:not(:disabled) {
   --color-chrome-deep: var(--chrome-deep);
   --color-hover-tint: var(--hover-tint);
   --color-ok: var(--ok);
+  --color-chrome-soft: var(--chrome-soft);
+  --color-grid-line: var(--grid-line);
+  --color-row-line: var(--row-line);
+  --color-divider-soft: var(--divider-soft);
+  --color-tick-minor: var(--tick-minor);
+  --color-conflict-tint: var(--conflict-tint);
+  --color-conflict-chip: var(--conflict-chip);
+  --color-docked: var(--docked);
   --color-finding-bg: var(--finding-bg);
   --color-finding-border: var(--finding-border);
   --color-finding-badge: var(--finding-badge);
@@ -212,6 +219,9 @@ button:not(:disabled) {
   --shadow-md: 0 3px 10px rgba(43, 43, 45, 0.16);
   --shadow-lg: 0 12px 32px rgba(43, 43, 45, 0.22);
   --shadow-panel: 7px 0 24px rgba(43, 43, 45, 0.13);
+  --shadow-tooltip: 0 6px 20px rgba(43, 43, 45, 0.3);
+  --shadow-rail: 0 1px 2px rgba(43, 43, 45, 0.05);
+  --shadow-rail-active: 0 1px 3px rgba(43, 43, 45, 0.1);
 }
 
 @layer base {
@@ -221,6 +231,22 @@ button:not(:disabled) {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* The canvas scroller's scrollbar (mockup lines 23-25). */
+.pp-scroll::-webkit-scrollbar {
+  width: 13px;
+  height: 13px;
+}
+
+.pp-scroll::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border: 4px solid var(--neutral-100);
+  border-radius: 99px;
+}
+
+.pp-scroll::-webkit-scrollbar-track {
+  background: var(--neutral-100);
 }
 
 /* Print (FR-051, FR-052; phase7-contract.md §2). Chrome that has no place on

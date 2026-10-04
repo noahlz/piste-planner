@@ -657,18 +657,28 @@ log('opening the Settings panel closed Export — the popover dismisses on outsi
 // the schedule, but off `de_duration_table` durations calibrated against it,
 // so an override desyncs the two rather than doing nothing.
 // 4 markers, not 5, since 013 T022: the two gears rows left with the
-// global-overrides slice, and the DE mode pills gained one marker of their own
-// (it reads Default while the tournament type decides the mode). So the count
-// is PoolDurationSettings' 3 weapons plus DE mode's 1. The read is kept rather
-// than deleted with the rows it used to count — it is what catches a panel
-// that renders but reads every setting as overridden on first open.
+// global-overrides slice. Since T045 the count reads 4 for a different reason:
+// PoolDurationSettings' 3 weapon badges plus the DE mode Default pill's own
+// label, which is always present whatever the DE mode is (it replaced the old
+// sibling badge). So the count no longer says DE mode follows its type – the
+// aria-checked assertion below does. The count is kept because it still
+// catches a panel that renders but reads every pool duration as overridden.
 const settingsDefaultCount = () => settingsRegion.getByText('Default', { exact: true }).count()
 if ((await settingsDefaultCount()) !== 4) {
   throw new Error(
     `Settings panel: expected 4 settings reading Default on first open, got ${await settingsDefaultCount()}`,
   )
 }
-log('Settings panel opened, all 4 settings read Default')
+const deModeDefaultFirstOpen = await settingsRegion
+  .getByRole('radiogroup', { name: 'DE mode' })
+  .getByRole('radio', { name: 'Default' })
+  .getAttribute('aria-checked')
+if (deModeDefaultFirstOpen !== 'true') {
+  throw new Error(
+    `Settings panel: DE mode should follow its tournament type on first open (Default radio checked), got aria-checked=${deModeDefaultFirstOpen}`,
+  )
+}
+log('Settings panel opened, all 4 settings read Default and DE mode follows its type')
 await shot('09-gears-default')
 
 // FR-046: a setting change must move the schedule with no explicit re-run.
@@ -776,40 +786,40 @@ if (singleChecked !== 'true') {
     `share round-trip lost the DE mode override: expected Single checked, got aria-checked=${singleChecked}`,
   )
 }
-// The marker, not the checked pill — a payload that carried nothing would
-// still show Single checked on a tournament type that defaults to it, and
-// would read as Default while doing so. NAC defaults to Staged, so this is
-// doubly covered, and the marker is the half that generalises.
-const defaultMarkersOnLoad = await settingsRegion3
-  .getByText('Default', { exact: true })
-  .count()
-if (defaultMarkersOnLoad !== 3) {
+// The Default radio is the override marker now (T045, finding 6) — a payload
+// that carried nothing would still show Single checked on a tournament type
+// that defaults to it, and would leave Default checked while doing so. NAC
+// defaults to Staged, so this is doubly covered, and the unchecked Default
+// radio is the half that generalises: the payload carried an override, not
+// "follow the type".
+const defaultRadioOnLoad = await deModeGroup3
+  .getByRole('radio', { name: 'Default' })
+  .getAttribute('aria-checked')
+if (defaultRadioOnLoad !== 'false') {
   throw new Error(
-    `DE mode round-tripped its value but not its override marker: expected 3 Default markers (the pool durations only), got ${defaultMarkersOnLoad} (FR-045)`,
+    `DE mode round-tripped its value but not its override marker: expected the Default radio unchecked, got aria-checked=${defaultRadioOnLoad} (FR-045)`,
   )
 }
 log('share round-trip: DE mode Single arrived marked as an override, not a default')
 await page3.screenshot({ path: `${SHOTS}11-gears-roundtrip.png`, fullPage: FULLPAGE })
 await page3.close()
 
-// ── Restore isolation: no control returns `de_mode_override` to null ──
-// (handoff.md finding 6), so the Single override set above for the round-trip
-// leaks into every template applied after this point — `applyTemplate` keeps
-// it across a switch the same way it keeps `days_available`. Clicking Staged
-// here writes an explicit STAGED override rather than clearing it, but NAC's
-// type default is Staged, so the resolved DE mode every later Suggest sees is
-// the same one a fresh store would compute; only the (absent) Default marker
-// differs, and nothing after this point reads that marker. 013 T023 measured
-// the leak before this step existed: NAC Vet/Div1/Junior's SC-008 read 69
-// instead of its fresh-store 80, and NAC Youth read 50 instead of 66. This is
-// driver hygiene under D14 (re-point, never rewrite), not an app fix.
-await deModeGroup.getByRole('radio', { name: 'Staged' }).click()
+// ── Restore isolation: the Single override set above leaks into later templates ──
+// `applyTemplate` keeps the override across a switch the same way it keeps
+// `days_available`. Since T045 (handoff finding 6) the Default pill clears the
+// override to null, so every later template resolves DE mode as a fresh store
+// would – following its own type – instead of carrying an explicit Staged.
+// 013 T023 measured the leak before this step existed: NAC Vet/Div1/Junior's
+// SC-008 read 69 instead of its fresh-store 80, and NAC Youth read 50 instead
+// of 66. This is driver hygiene under D14 (re-point, never rewrite), not an
+// app fix.
+await deModeGroup.getByRole('radio', { name: 'Default' }).click()
 await page.waitForTimeout(400)
-const stagedChecked = await deModeGroup.getByRole('radio', { name: 'Staged' }).getAttribute('aria-checked')
-if (stagedChecked !== 'true') {
-  throw new Error(`restoring DE mode to Staged after the round-trip did not check the Staged radio: aria-checked=${stagedChecked}`)
+const defaultChecked = await deModeGroup.getByRole('radio', { name: 'Default' }).getAttribute('aria-checked')
+if (defaultChecked !== 'true') {
+  throw new Error(`restoring DE mode to Default after the round-trip did not check the Default radio: aria-checked=${defaultChecked}`)
 }
-log('DE mode restored to Staged after the round-trip, isolating later templates from the leftover Single override')
+log('DE mode restored to Default after the round-trip, isolating later templates from the leftover Single override')
 
 // ── NAC Div1/Junior (010 R1) ──
 // Before R1, indiv-team-same-day blocked D1-M-EPEE-IND + D1-M-EPEE-TEAM's

@@ -22,6 +22,7 @@ import {
   makePlacement,
   makeStrips,
 } from '../../helpers/factories.ts'
+import { NO_PINS } from '../../helpers/canvasQueries.ts'
 
 // 004 T031 — view equivalence (contracts/ui-contract.md §View equivalence
 // contract, FR-023).
@@ -301,6 +302,7 @@ function renderBothViews(model: DerivedSchedule): void {
         findingRows={[]}
         dayConfigs={CANVAS_DAY_CONFIGS}
         zoom={CANVAS_ZOOM}
+        pinnedIds={NO_PINS}
       />
     </>,
   )

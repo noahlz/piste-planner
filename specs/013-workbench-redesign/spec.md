@@ -173,7 +173,7 @@ mode, per-event video policy or per-event referee policy exists anywhere.
    engine's minimum.
 8. **Given** the Settings panel, **When** the organizer reads it, **Then** pool
    durations are listed per weapon with default, override and reset, DE mode
-   offers Staged and Single for the whole tournament, and there is no row for
+   offers Default (follow the type), Staged and Single for the whole tournament, and there is no row for
    admin gap, flight buffer or video strips.
 9. **Given** the Settings panel's DE mode set to Single, **When** a share link is
    generated and opened, **Then** the setting survives the round trip.
@@ -555,7 +555,8 @@ shows. Print to PDF and confirm the output holds only the schedule.
   override and reset pattern.
 - **FR-030**: DE mode MUST be a tournament-level choice of Staged or Single that
   overrides the type's default, MUST be serialized, and MUST replace the
-  per-event DE mode.
+  per-event DE mode. A third choice, Default, returns the tournament to its
+  type's default (owner decision 2026-10-04, handoff finding 6).
 - **FR-031**: Settings MUST NOT carry a row for admin gap, flight buffer or
   video strips.
 
@@ -695,8 +696,8 @@ shows. Print to PDF and confirm the output holds only the schedule.
   Counts as unplaced, draws dashed, raises an Unplaced finding.
 - **Event configuration**: fencer count and flighted flag. Everything else about
   an event is computed.
-- **Tournament DE mode**: one Staged-or-Single choice for the whole tournament,
-  overriding the type's default.
+- **Tournament DE mode**: one Default-Staged-or-Single choice for the whole tournament,
+  where Default follows the type and the others override it.
 - **Finding**: identity, severity, where, message, optional target event.
   Blocking findings disable Auto-assign. Warnings can be dismissed.
 - **Event footprint**: the strips, pool minutes and elimination minutes an

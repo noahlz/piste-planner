@@ -82,9 +82,9 @@ function findingIdentity(finding: ValidationError): string {
 //     per spec acceptance scenario 3 (spec.md:106-108): a 5-day tournament
 //     warns and the schedule can still be computed.
 //   - cut-on-team (cut_mode) — moved off POLICY by R3/FR-011 (specs/010-wave-1-reconciliation/research.md
-//     D4, removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/research.md): buildConfig already coerces a TEAM
-//     competition's cut_mode to DISABLED before the engine sees it, so the
-//     finding is a heads-up on a cosmetic field, not a gate.
+//     D4, removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/research.md): team events reach the engine
+//     DISABLED because defaultCutForEntry answers DISABLED/100 for every team
+//     entry, so the finding is a heads-up on a cosmetic field, not a gate.
 //
 // OUT OF SCOPE for this catalogue: `validateSameDayCompletion` is exported
 // and directly tested, but has zero callers anywhere in src/ (confirmed by

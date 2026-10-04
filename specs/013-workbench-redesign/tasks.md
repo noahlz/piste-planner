@@ -1217,14 +1217,25 @@ placed event once at the canvas's times, and printing yields four pages.
   → Re-planned 2026-10-04 by the planning session (owner decisions in
   `docs/design/competition-planner-workbench.md` §Roadmap). Order is now
   T047 → T045 → T046 → T044 → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043.
+  → 2026-10-04, T044 verdict "matches" with two owner decisions that add
+  T048 and T049 (`handoff.md` §Verdicts, T044). Order from here:
+  T048 → T049 → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043.
 
-- [ ] **T047** Delete the team-event cut coercion loop in
+- [x] **T047** Delete the team-event cut coercion loop in
   `src/store/buildConfig.ts` (handoff finding 7, owner decision: delete). It is
   unreachable under current constants and no test exercises it. Expected: no
   test changes, `tsc -b`, lint and the full suite green, drift ledger and
   parity unmoved *(subagent commits)*
+  → Done 2026-10-04 at `3c2d298d5d` on `013-phase8-closeout` (cut from main
+  `27e505b1a2`, which carries the phase 7 merge). Ledger and parity pass
+  before and after, snapshot SHA `5483c40c1349…` unchanged, nothing moved.
+  Two test names in `buildConfig.test.ts` reworded from "coercion" to
+  "invariant"; the it.each's team expected step stays as the guard a future
+  regional override would trip. Stale "coerces" comments reworded in
+  `competitionDefaults.ts`, `validation.ts`, `validation.test.ts` and
+  data-model §4. 76 files / 1747 tests, tsc and lint clean.
 
-- [ ] **T045** A third "Default" pill in the Settings panel's DE mode group
+- [x] **T045** A third "Default" pill in the Settings panel's DE mode group
   (handoff finding 6, owner decision). Pressing it sets `de_mode_override` to
   null so the tournament follows its type's default again; it is the pressed
   pill whenever the override is null. Test-first in `SettingsPanel.test.tsx`
@@ -1232,16 +1243,41 @@ placed event once at the canvas's times, and printing yields four pages.
   post-round-trip "restore Staged" step (finding 8) presses Default instead,
   edited in place. `react-code-reviewer` and `test-quality-reviewer` after
   *(subagent commits)*
+  → Done 2026-10-04: `e0402bf768` (pill), `d0844bcbba` (driver), review
+  follow-up `0f48b38d19`. Radios Default / Staged / Single in that order;
+  group value `de_mode_override ?? FOLLOW_TYPE`; the old Default badge is
+  gone (the pill is the marker). Added beyond the owner's wording, so the
+  panel still says what Default means: a hint `{type} default: {mode}`
+  describing the Default radio. 7 cases red first on "no radio named
+  Default". Store coverage was already there (`serialization.test.ts:1130`,
+  `store.test.ts:247`), so no store test added. Driver: first-open and
+  round-trip checks read the Default radio's `aria-checked`, the restore step
+  presses Default; SMOKE PASS ×2, 0 console errors, Suggest 15/66/80/48, no
+  locator repair. Review follow-up dropped the pills' `onClick`s (redundant
+  once the group value tracks the override), raised the hint to AA contrast,
+  sharpened four cases, and fixed spec scenario 8 and the key entity, which
+  still named two choices. 76 files / 1753 tests.
 
-- [ ] **T046** The pin badge reads the committed schedule (handoff findings 11
+- [x] **T046** The pin badge reads the committed schedule (handoff findings 11
   and 25, FR-042, owner decision: fix in 013). `Canvas.tsx` reads
   `placements` live for the pin badge; the pinned set commits with the
   schedule the way findings already do, so the badge never describes a
   schedule the grid is not showing. Test-first: a pin toggled during the
   settle window does not change the badge until the commit.
   `react-code-reviewer` and `test-quality-reviewer` after *(subagent commits)*
+  → Done 2026-10-04: `97c12b9ca7`, review follow-up `74e42d208b`.
+  `CommittedModel.pinnedIds` is built by `pinnedIdsOf(placements)` inside the
+  commit (not a memo, which React may discard), and `Canvas` takes a required
+  `pinnedIds` prop in place of its live `placements` read. Three cases red
+  first on the predicted assertion: the badge held through the settle
+  (`recompute.test.tsx`), held while an ERROR blocks and released once it
+  clears (`invalidState.test.tsx`), and read from the prop, not the store
+  (`Canvas.test.tsx`). The Pin button and the footer's pinned count stay live
+  by design; `DetailStrip`'s docblock says so. Shared `canvasQueries.ts`
+  helper (`NO_PINS`, `pinBadges`); `Canvas.test.tsx` mounts through
+  `renderCanvas`. 76 files / 1753 tests.
 
-- [ ] **T044** Close-out polish against the mockup (styling only, standing
+- [x] **T044** Close-out polish against the mockup (styling only, standing
   rule 13; the second half of the T015 verdict). With every surface built,
   walk the mockup region by region – header, rail, each of the five panels,
   the dock, the canvas and its blocks, the detail strip, the findings panel,
@@ -1254,6 +1290,43 @@ placed event once at the canvas's times, and printing yields four pages.
   shots to the product owner; their verdict goes in `handoff.md` §Verdicts
   beside T015's. Runs before T039 so the live smoke validates it
   *(subagent commits)*
+  → Built 2026-10-04 in four commits plus a review follow-up (`68bc3486d9`,
+  `5094129973`, `08fd4208ab`, `172ca790e7`, `37d7f33e91`), scoped from a
+  read-only gap audit of the mockup. SMOKE PASS with no driver edit, 0
+  console errors, Suggest 15/66/80/48. 76 files / 1753 tests, tsc and lint
+  clean. `scripts/screenshot.mjs` gained a per-surface pass (five panels,
+  tooltip, detail strip, Schedule view). Shots sent to the product owner;
+  verdict pending. Scope calls and open contrast questions are in
+  `handoff.md` findings 31–32.
+  → Verdict 2026-10-04: **matches** (`handoff.md` §Verdicts, T044). The two
+  open questions came back as T048 and T049.
+
+- [ ] **T048** The findings border on a block (mockup M1285, owner decision
+  2026-10-04, `handoff.md` finding 31). A placed, non-overflow block whose
+  competition has a committed finding row (`findingRows`, the list
+  `CenterView` commits – never the live store, FR-042) of severity Warning,
+  Unplaced or Blocking draws a solid 2px `--flash` border. A block with
+  only Notes draws none. An overflow block keeps its dashed `--flash` edge.
+  `Block` gains one boolean prop and one `data-*` attribute that says so.
+  Pin both in `contracts/ui-contract.md` §Canvas first, and grep every
+  `<Block` and `<Canvas` mount under `__tests__/` before naming the files the
+  dispatch may edit. Test-first in `Canvas.test.tsx`: a Warning row flags its
+  event's blocks, a Note-only event's blocks stay unflagged, and the flag
+  follows the commit, not the store. `react-code-reviewer` and
+  `test-quality-reviewer` after. SMOKE PASS with no driver edit
+  *(subagent commits)*
+
+- [ ] **T049** Small text to WCAG AA (owner decision 2026-10-04, `handoff.md`
+  finding 32). The panels' section captions (`SectionCaption`, duplicated in
+  more than one panel, plus the other copies of the 11.5px / 600 / .06em
+  uppercase caption style) go from `text-neutral-600` to `text-neutral-700`.
+  Fold the copies into one shared caption style while there, which the T044
+  review suggested. The canvas's off-hour tick labels (`--tick-minor`,
+  `#a3a3a6` on the axis background) move to a grey that measures at least
+  4.5:1 there. They must stay visibly lighter or smaller than the hour ticks,
+  so the axis keeps its hierarchy. Styling only: no accessible name, role,
+  `data-*` or DOM-order change. SMOKE PASS with no driver edit; reshoot
+  `scripts/screenshot.mjs`. `react-code-reviewer` after *(subagent commits)*
 
 - [ ] **T037** [P] Design-document edits (FR-070). In
   `docs/design/competition-planner-workbench.md`: §Virtualization (`:161`)

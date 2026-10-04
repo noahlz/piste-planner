@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store/store.ts'
-import type { DayConfig } from '../../engine/types.ts'
+import type { DayConfig, Placement } from '../../engine/types.ts'
 import {
   selectDerivedFindings,
   selectDerivedSchedule,
@@ -19,6 +19,19 @@ import { AlertCircle } from 'lucide-react'
 /** How long an edit must settle before the center relayouts (FR-008). */
 export const CENTER_SETTLE_MS = 150
 
+/**
+ * The ids of the pinned placements. Pure and called from the state initializer
+ * and the settle timer, so the set is built from the same render's placements
+ * as the schedule it commits with and no memo identity is relied upon.
+ */
+function pinnedIdsOf(placements: Record<string, Placement>): ReadonlySet<string> {
+  return new Set(
+    Object.entries(placements)
+      .filter(([, placement]) => placement.pinned)
+      .map(([id]) => id),
+  )
+}
+
 /** The derived model the center is currently drawing, whichever view is up. */
 interface CommittedModel {
   schedule: DerivedSchedule
@@ -36,6 +49,13 @@ interface CommittedModel {
    * day" never run ahead of the blocks they bound (RCR-T009 finding 1).
    */
   dayConfigs: DayConfig[]
+  /**
+   * The ids of the competitions pinned when this model committed (FR-042,
+   * finding 25, 013 T046), so the pin badge on a block can never describe a
+   * schedule the grid is not drawing – a pin lands on the next settle with the
+   * blocks, or once a blocking ERROR clears and the next settle passes.
+   */
+  pinnedIds: ReadonlySet<string>
 }
 
 /**
@@ -117,6 +137,7 @@ export function CenterView({
   const liveFindings = useStore(selectDerivedFindings)
   const liveFindingRows = useStore(selectFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)
+  const livePlacements = useStore((s) => s.placements)
 
   const blocking = liveFindings.validationErrors.filter((e) => e.severity === 'ERROR')
   const hasBlocking = blocking.length > 0
@@ -126,6 +147,7 @@ export function CenterView({
     findings: liveFindings,
     findingRows: liveFindingRows,
     dayConfigs: liveDayConfigs,
+    pinnedIds: pinnedIdsOf(livePlacements),
   }))
 
   useEffect(() => {
@@ -140,11 +162,12 @@ export function CenterView({
           findings: liveFindings,
           findingRows: liveFindingRows,
           dayConfigs: liveDayConfigs,
+          pinnedIds: pinnedIdsOf(livePlacements),
         }),
       CENTER_SETTLE_MS,
     )
     return () => clearTimeout(timer)
-  }, [live, liveFindings, liveFindingRows, liveDayConfigs, hasBlocking])
+  }, [live, liveFindings, liveFindingRows, liveDayConfigs, livePlacements, hasBlocking])
 
   const showingMatrix = viewMode === ViewMode.MATRIX
 
@@ -168,6 +191,7 @@ export function CenterView({
               findingRows={committed.findingRows}
               dayConfigs={committed.dayConfigs}
               zoom={zoom}
+              pinnedIds={committed.pinnedIds}
             />
           ) : (
             <ScheduleOutput schedule={committed.schedule} />
@@ -179,13 +203,13 @@ export function CenterView({
             aria-label="Blocking findings"
             aria-live="assertive"
             aria-atomic="true"
-            className="absolute inset-x-4 top-4 rounded-md border border-red-200 bg-error p-4 text-error-text shadow-lg"
+            className="absolute inset-x-4 top-4 rounded-[12px] border-[1.5px] border-finding-border bg-finding-bg p-4 text-finding-link shadow-lg"
           >
-            <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <h2 className="flex items-center gap-2 text-[11.5px] font-semibold tracking-[.06em] uppercase">
               <AlertCircle className="h-4 w-4" />
               Configuration is invalid
             </h2>
-            <ul className="mt-2 space-y-1 text-sm">
+            <ul className="mt-2 space-y-1 text-[12.5px] leading-[1.5]">
               {blocking.map((e, i) => (
                 <li key={`${e.field}-${i}`}>
                   {e.field}: {e.message}

@@ -5,8 +5,8 @@ import { FindingSeverity, selectFindings, type Finding } from '../../../store/de
 
 /**
  * Badge fill per severity (013 T032, contract §3, standing rule 13). Blocking
- * reuses the existing `--error`/`--error-text` pair and Note the existing
- * `--info`/`--info-text` pair; the contract names only those two plus
+ * uses the `conflict-chip` fill with `finding-link` text and Note the neutral
+ * `neutral-200`/`neutral-700` pair; the contract names only those two plus
  * Unplaced explicitly and leaves Warning open. Warning shares Unplaced's
  * `--finding-badge` pair here: both are underlying WARN rows (contract §1's
  * `FindingSeverity` doc comment — Unplaced is "a Warning with a flag"), the
@@ -15,10 +15,10 @@ import { FindingSeverity, selectFindings, type Finding } from '../../../store/de
  * apart, not a second badge colour.
  */
 const BADGE_CLASSES: Record<FindingSeverity, string> = {
-  [FindingSeverity.BLOCKING]: 'bg-error text-error-text',
+  [FindingSeverity.BLOCKING]: 'bg-conflict-chip text-finding-link',
   [FindingSeverity.WARNING]: 'bg-finding-badge text-finding-badge-text',
   [FindingSeverity.UNPLACED]: 'bg-finding-badge text-finding-badge-text',
-  [FindingSeverity.NOTE]: 'bg-info text-info-text',
+  [FindingSeverity.NOTE]: 'bg-neutral-200 text-neutral-700',
 }
 
 /**

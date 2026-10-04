@@ -134,7 +134,7 @@ today as constants or helpers, and this table is the order they apply in.
 | `fencer_count` | the store | `CompetitionConfig` |
 | `flighted` | the store | `CompetitionConfig` |
 | `ref_policy` | `TYPE_DEFAULTS[type].ref_policy` | `typeDefaults.ts` |
-| `cut_mode`, `cut_value` | `defaultCutForEntry(entry)`, then the regional-type override, then the team coercion – the three rules `buildConfig.ts` already applies in that order | `competitionDefaults.ts`, `constants.ts` |
+| `cut_mode`, `cut_value` | `defaultCutForEntry(entry)`, then the regional-type override, the two rules `buildConfig.ts` applies in that order (T047 deleted the team coercion as unreachable – team entries already default to DISABLED/100) | `competitionDefaults.ts`, `constants.ts` |
 | `de_mode` | `de_mode_override ?? TYPE_DEFAULTS[type].de_mode` | `typeDefaults.ts` |
 | `de_video_policy` | `DEFAULT_VIDEO_POLICY_BY_CATEGORY[category]` | `constants.ts` |
 | `use_single_pool_override` | `false` | – |
