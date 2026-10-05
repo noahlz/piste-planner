@@ -284,7 +284,7 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
     restoreResizeObserver()
   })
 
-  /** The row's cells in table order: id, pool start, pool end, DE start, DE end, strips. */
+  /** The row's cells in table order: event name, pool start, pool end, DE start, DE end, strips. */
   function rowCells(id: string): string[] {
     const row = document.querySelector<HTMLElement>(`[data-schedule-row="${id}"]`)
     if (!row) throw new Error(`no schedule row for ${id}`)

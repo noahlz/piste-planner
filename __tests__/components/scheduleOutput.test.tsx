@@ -95,30 +95,53 @@ function committedModel(
   }
 }
 
+/** Places the catalogue's team veteran event in the live store. */
+function seedPlacedTeamVet(): void {
+  seedValidConfig()
+  useStore.getState().addCompetition(TEAM_VET_ID)
+  useStore.getState().updateCompetition(TEAM_VET_ID, { fencer_count: 10 })
+  useStore.getState().setPlacementsFromAuto({ [TEAM_VET_ID]: makePlacement({ strip_count: 5 }) })
+}
+
 describe('Competition cell names the event (T050)', () => {
-  it('shows a committed catalogue event by its readable name, not its id', () => {
-    seedValidConfig()
-    useStore.getState().addCompetition(TEAM_VET_ID)
-    useStore.getState().updateCompetition(TEAM_VET_ID, { fencer_count: 10 })
-    useStore.getState().setPlacementsFromAuto({ [TEAM_VET_ID]: makePlacement({ strip_count: 5 }) })
+  it('names a store-placed catalogue event by its readable label, not its id', () => {
+    seedPlacedTeamVet()
     render(<ScheduleOutput />)
 
     expect(competitionCell(TEAM_VET_ID)).toBe("Veteran Men's Foil Team")
   })
 
-  it('falls back to the id when the schedule carries no competition for the row', () => {
-    const orphan = makeCompetition({ id: 'orphan-event' })
+  it('shows the id, not a catalogue name, when the schedule carries no competition for the row', () => {
+    // A real catalogue id left out of `listed`: a catalogue fallback would print the label.
+    const orphan = makeCompetition({ id: TEAM_VET_ID })
     const model = committedModel([{ competition: orphan, placement: makePlacement({ strip_count: 4 }) }], [])
     render(<ScheduleOutput schedule={model} />)
 
-    expect(competitionCell('orphan-event')).toBe('orphan-event')
+    expect(competitionCell(TEAM_VET_ID)).toBe(TEAM_VET_ID)
+  })
+
+  it('breaks start-time ties by id, not by the label the reader sees', () => {
+    // 'a-event' is a Y12 event ("Y12 ...") and sorts after 'b-event' (Cadet) by label.
+    const a = makeCompetition({ id: 'a-event', category: Category.Y12 })
+    const b = makeCompetition({ id: 'b-event', category: Category.CADET })
+    const placement = makePlacement({ day: 0, start_time: 480, strip_count: 4 })
+    const model = committedModel(
+      [
+        { competition: b, placement },
+        { competition: a, placement },
+      ],
+      [a, b],
+    )
+    render(<ScheduleOutput schedule={model} />)
+
+    const rowIds = Array.from(document.querySelectorAll('[data-schedule-row]')).map((el) =>
+      el.getAttribute('data-schedule-row'),
+    )
+    expect(rowIds).toEqual(['a-event', 'b-event'])
   })
 
   it('reads the committed schedule prop, not the live store', () => {
-    seedValidConfig()
-    useStore.getState().addCompetition(TEAM_VET_ID)
-    useStore.getState().updateCompetition(TEAM_VET_ID, { fencer_count: 10 })
-    useStore.getState().setPlacementsFromAuto({ [TEAM_VET_ID]: makePlacement({ strip_count: 5 }) })
+    seedPlacedTeamVet()
     // Same id as the store's event, different event: the label must follow the prop.
     const committed = makeCompetition({
       id: TEAM_VET_ID,

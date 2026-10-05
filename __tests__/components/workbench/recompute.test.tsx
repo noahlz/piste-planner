@@ -114,7 +114,7 @@ function fencerInput(id: string): HTMLElement {
   return screen.getByRole('spinbutton', { name: `Fencer count for ${label}` })
 }
 
-/** `id`'s row in the center's schedule table: id, pool start, pool end,
+/** `id`'s row in the center's schedule table: event name, pool start, pool end,
  *  DE start, DE end, strips, finish — the same cell order CenterView's own
  *  suite reads. */
 function centerRowCells(id: string): string[] {

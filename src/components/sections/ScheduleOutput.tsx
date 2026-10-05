@@ -59,7 +59,7 @@ function byPoolStartThenId(a: DerivedEventSchedule, b: DerivedEventSchedule): nu
  * competitions falls back to the id rather than borrowing a name from a model
  * the rest of the row was not derived from (T050). `data-schedule-row` stays
  * the id. The cell may wrap, since labels run to ~41 characters and a
- * no-wrap cell would squeeze the six time columns off a printed page.
+ * no-wrap cell would squeeze the other six columns off a printed page.
  *
  * `schedule` is the committed model `CenterView` hands down while a debounce
  * or the dimmed-invalid rule holds the center behind the live store
@@ -71,7 +71,7 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
   const schedule = committed ?? live
 
   const entries = Object.values(schedule.events)
-  const competitionsById = new Map(schedule.competitions.map((c) => [c.id, c]))
+  const labelById = new Map(schedule.competitions.map((c) => [c.id, competitionLabel(c)]))
 
   const printButton = (
     <button
@@ -161,9 +161,7 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
                       data-cell="competition"
                       className="text-[12.5px] whitespace-normal text-foreground"
                     >
-                      {competitionsById.has(r.competition_id)
-                        ? competitionLabel(competitionsById.get(r.competition_id)!)
-                        : r.competition_id}
+                      {labelById.get(r.competition_id) ?? r.competition_id}
                     </TableCell>
                     <TableCell
                       data-cell="poolStart"
