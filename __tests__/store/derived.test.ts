@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
+import { BottleneckRule } from '../../src/engine/types.ts'
 import type { Placement } from '../../src/engine/types.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makePlacement } from '../helpers/factories.ts'
@@ -163,7 +164,7 @@ describe('selectDerivedFindings', () => {
     // No placements: round-robin fallback (i % days_available) puts these two
     // events on different days (0 and 1) — no capacity warning.
     const noPlacements = selectDerivedFindings(useStore.getState())
-    expect(noPlacements.analysis.warnings.some(w => w.message.includes('Day'))).toBe(false)
+    expect(noPlacements.analysis.warnings.some(w => w.rule === BottleneckRule.DAY_POOLS_EXCEED_STRIPS)).toBe(false)
 
     // Both manually placed on the same day — placement day wins over the
     // round-robin fallback, producing the capacity warning.
@@ -172,7 +173,9 @@ describe('selectDerivedFindings', () => {
       'JR-W-EPEE-IND': makePlacement({ day: 0 }),
     })
     const withPlacements = selectDerivedFindings(useStore.getState())
-    expect(withPlacements.analysis.warnings.some(w => w.message.includes('Day 1:'))).toBe(true)
+    expect(withPlacements.analysis.warnings.some(
+      w => w.rule === BottleneckRule.DAY_POOLS_EXCEED_STRIPS && w.message.includes('Day 1:'),
+    )).toBe(true)
   })
 })
 

@@ -687,7 +687,7 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
   function assertRuleError(competitions: Competition[], config: TournamentConfig, badId: string, rule: string): void {
     const errors = validateConfig(config, competitions, ValidationMode.BINDING)
     const matches = errors.filter(
-      e => e.severity === BottleneckSeverity.ERROR && e.rule === rule && (e.subjects ?? []).includes(badId),
+      e => e.severity === BottleneckSeverity.ERROR && e.rule === rule && e.subjects.includes(badId),
     )
     expect(matches.length, `expected exactly one '${rule}' ERROR naming ${badId}`).toBe(1)
   }
@@ -796,18 +796,13 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
 
     assertOnlyValidScheduled(competitions, config, [bad1.id, bad2.id])
 
-    // Every other bottleneck this validation gate produces today is either
-    // an ERROR (the per-event findings themselves) or lives outside
-    // Phase.VALIDATION entirely — so cause RESOURCE_EXHAUSTION + WARN +
-    // Phase.VALIDATION is free for T015 to use for the summary alone, and
-    // this is where T015 must put it (research.md D2, FR-009).
+    // The summary is found by its rule: feasibility and other notices are also
+    // RESOURCE_EXHAUSTION WARNs in Phase.VALIDATION, so that shape is shared
+    // (research.md D2, FR-009). It is venue-wide, so it names no subjects.
     const { bottlenecks } = scheduleAllConcurrent(competitions, config)
-    const summaries = bottlenecks.filter(
-      b => b.phase === Phase.VALIDATION
-        && b.severity === BottleneckSeverity.WARN
-        && b.cause === BottleneckCause.RESOURCE_EXHAUSTION,
-    )
+    const summaries = bottlenecks.filter(b => b.rule === BottleneckRule.PER_EVENT_EXCLUSION_SUMMARY)
     expect(summaries, 'expected exactly one summary bottleneck for the excluded count').toHaveLength(1)
+    expect(summaries[0]?.subjects).toEqual([])
     expect(summaries[0]?.message, 'summary message should name the excluded count').toMatch(/\b2\b/)
   })
 

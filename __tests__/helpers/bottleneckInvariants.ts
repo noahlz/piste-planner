@@ -83,6 +83,10 @@ export function checkInvariants(
 
   const named = competitionIds.filter(id => namesCompetition(b.message, id))
   for (const id of named) expect(b.subjects, `${id} named by ${where}`).toContain(id)
+  // Subjects -> message holds for engine-native rules only. Two validation rules
+  // list ids their message never names: same-population (the message names the
+  // [category|gender|weapon] group) and flighting-group-strips (it names the group id).
+  if (!CATALOGUE.has(b.rule)) return
   for (const s of b.subjects) {
     if (competitionIds.includes(s)) expect(namesCompetition(b.message, s), `${s} in ${where}`).toBe(true)
   }

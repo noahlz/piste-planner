@@ -13,8 +13,9 @@
  * producers fire is the drift ledger's concern, and producers a scenario never
  * reaches are not exercised here.
  *
- * The subjects -> message direction couples to wording on purpose, as a one-time
- * cross-check that subjects name what the message names. A future switch to
+ * The subjects -> message direction applies to engine-native rules only (two
+ * validation rules list ids their message does not name) and couples to wording
+ * on purpose, as a one-time cross-check that subjects name what the message names. A future switch to
  * display names in messages must update it.
  */
 import { describe, it, expect, beforeAll } from 'vitest'
@@ -105,5 +106,17 @@ describe('Bottleneck rule and subjects invariants', () => {
     const derived = scheduleAll([comp], config).bottlenecks.find(b => b.message === finding?.message)
     expect(derived?.rule).toBe(finding?.rule)
     expect(derived?.subjects).toEqual(finding?.subjects)
+  })
+
+  it('a same-population bottleneck passes the oracle though its message names the group, not the event ids', () => {
+    const config = makeConfig({ days_available: 2 })
+    const competitions = ['SP-1', 'SP-2', 'SP-3'].map(id => makeCompetition({ id }))
+    const findings = validateConfig(config, competitions, ValidationMode.BINDING)
+    const finding = findings.find(f => f.rule === 'same-population')
+    expect(finding?.subjects).toEqual(['SP-1', 'SP-2', 'SP-3'])
+
+    const derived = scheduleAll(competitions, config).bottlenecks.find(b => b.rule === 'same-population')
+    expect(derived).toBeDefined()
+    checkInvariants(derived!, competitions.map(c => c.id), new Set(findings.map(f => f.rule)))
   })
 })
