@@ -31,7 +31,8 @@ import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '..
 import type { ScenarioId } from '../helpers/scenarios.ts'
 
 /**
- * Scheduled-event floors, measured on the pre-change baseline. The constitution
+ * Scheduled-event floors, measured on the pre-change baseline and re-measured
+ * where a dated entry below says so. The constitution
  * halts a task when any scenario schedules fewer events than before, so these
  * are asserted rather than left to a reader of the snapshot diff.
  *
@@ -101,6 +102,9 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  *
  * 015, 2026-10-05 – B8 left the list: with the per-type DE mode it places
  * JR-W-EPEE-IND too, so it places every event and emits no summary line.
+ *
+ * Membership is asserted in both directions: the day-peaks test below fails if a
+ * listed scenario emits no summary line or an unlisted one emits any.
  */
 const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6']
 
@@ -185,10 +189,13 @@ function dayPeakRefDemands(
 
 /**
  * Refs per pool for the scenario's `refRecommendation`, resolved from the
- * competitions' own `ref_policy` through `resolveRefsPerPool` – the same call
- * `StripsPanel.tsx` makes for **Suggest**. The policy must be uniform across the
- * scenario, since `recommendRefCount` takes a single factor. A mixed scenario
- * fails here, naming the policies seen, rather than picking one silently.
+ * competitions' own `ref_policy`, through `resolveRefsPerPool(policy, 1)` as
+ * `StripsPanel.tsx` does for **Suggest**. StripsPanel feeds it the store's
+ * `TYPE_DEFAULTS[tournamentType].ref_policy` instead, and the two agree because
+ * `factoryParity.test.ts` pins the factory's `ref_policy` to the store's. The
+ * policy must be uniform across the scenario, since `recommendRefCount` takes a
+ * single factor. A mixed scenario fails here, naming the policies seen, rather
+ * than picking one silently.
  */
 function scenarioRefsPerPool(id: ScenarioId, competitions: Competition[]): number {
   const policies = [...new Set(competitions.map(c => c.ref_policy))]
@@ -285,7 +292,8 @@ describe('drift ledger', () => {
     // gate no longer aborts and B4 packs 17 of its 30 events. T006 keeps the
     // pin's purpose and inverts what it pins: the ONE structural fact about B4
     // is no longer "an aggregate estimate empties it" but "an aggregate estimate
-    // does not empty it". So this asserts, `[M]` at T006 against the real run:
+    // does not empty it". So this asserts, `[M]` at T006, re-measured at 015,
+    // against the real run:
     //
     //  - 18 scheduled exactly, not merely at-or-above the floor. The floor test
     //    below catches a collapse; this catches any movement in either
@@ -303,10 +311,13 @@ describe('drift ledger', () => {
     //    'feasibility-strip-hours' stays on purpose, as an independent pin of
     //    the wire id. FR-001/FR-002 are what this holds.
     //  - the demoted `feasibility-strip-hours` finding is still PRESENT, as a
-    //    WARN. The demotion must not become a deletion: B4's 481-strip-hour
-    //    shortfall (~29%, specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md)) is real and the organizer still has to
-    //    be told about it. Without this the rule could be dropped outright and
-    //    every other assertion here would still pass.
+    //    WARN. The demotion must not become a deletion: B4's 633-strip-hour
+    //    shortfall (~38%) is real and the organizer still has to be told about
+    //    it. Without this the rule could be dropped outright and every other
+    //    assertion here would still pass. 015, 2026-10-05 – aside: the shortfall
+    //    was 481 (~29%,
+    //    specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md))
+    //    before the factory took the per-type DE mode and regional cut.
     //  - no ERROR sits in Phase.VALIDATION. B4's 12 ERRORs are all
     //    DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the ordinary
     //    per-event degradation of an oversubscribed board, which is spec.md
@@ -342,17 +353,23 @@ describe('drift ledger', () => {
   it('day peaks match the scheduler\'s own DAY_RESOURCE_SUMMARY line', () => {
     let compared = 0
 
-    for (const id of SCENARIOS_WITH_DAY_SUMMARY) {
+    for (const id of SCENARIO_IDS) {
       const { competitions, config, schedule, bottlenecks } = runScenario(id)
       const peaks = dayPeakRefDemands(competitions, config, schedule)
 
+      let lines = 0
       for (const b of bottlenecks) {
         const match = DAY_REFS_SUMMARY.exec(b.message)
         if (!match) continue
         const day = Number(match[1]) - 1
         expect(peaks[day], `${id} day ${day + 1} peak ref demand`).toBe(Number(match[2]))
-        compared++
+        lines++
       }
+      expect(
+        lines > 0,
+        `${id}: ${lines} Day N refs lines, listed=${SCENARIOS_WITH_DAY_SUMMARY.includes(id)} – lines are emitted iff listed in SCENARIOS_WITH_DAY_SUMMARY`,
+      ).toBe(SCENARIOS_WITH_DAY_SUMMARY.includes(id))
+      compared += lines
     }
 
     // Without this the test passes vacuously if the message format ever changes.

@@ -14,7 +14,9 @@
  * axis the drift ledger and `stripSearch.test.ts` fixtures run on.
  *
  * Every fixture number in a comment below is [M] measured directly against
- * this worktree (baseline commit 71180db6e7), never predicted by hand.
+ * this worktree (baseline commit 71180db6e7), never predicted by hand, and
+ * re-checked at 015 (2026-10-05) under the converged factory. Any figure that
+ * moved carries a dated 015 line.
  */
 import { describe, it, expect } from 'vitest'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
@@ -169,10 +171,12 @@ describe('pinned scheduling (T033)', () => {
       expect(sr?.assigned_day, `${pin.competition_id} day`).toBe(pin.day)
       expect(sr?.pool_start, `${pin.competition_id} start`).toBe(pin.start_time)
     }
-    // [M] all 24 hold day/start at (4, 80, 12) even though three
-    // (JR-W-EPEE-IND POOLS, VET-W-FOIL-IND-VCMB DE, D1-W-FOIL-IND POOLS)
-    // carry a PINNED_UNCLAIMED warning — guarantee 1 (day/start from the
-    // seed) does not require the phase to have claimed strips.
+    // [M] all 24 hold day/start at (4, 80, 12) even though two
+    // (JR-W-EPEE-IND POOLS, D1-W-FOIL-IND POOLS) carry a PINNED_UNCLAIMED
+    // warning — guarantee 1 (day/start from the seed) does not require the
+    // phase to have claimed strips.
+    // 015, 2026-10-05 – re-measured under the converged factory: was three,
+    // with VET-W-FOIL-IND-VCMB DE.
     expect(new Set(Object.keys(withPins.schedule))).toEqual(new Set(comps.map(c => c.id)))
   })
 
@@ -181,9 +185,11 @@ describe('pinned scheduling (T033)', () => {
     // [M] computeStripCap(80, 0.80) = 64 (b1()'s config): no pair of B1's
     // pool phases needs more than 64 strips each, so 80-strip B1 can never
     // show two pins colliding on strip count. Dropping to 48 strips still
-    // places all 24 events with zero ERROR bottlenecks [M], and
+    // places all 24 events with zero ERROR bottlenecks when nothing is pinned [M], and
     // computeStripCap(48, 0.80) = 38 leaves room to force a collision with
     // two pins that individually stay under cap but jointly exceed the board.
+    // [M] With both pins below the run places 23 of 24: VET-W-FOIL-IND-VCMB is
+    // unscheduled with an ERROR (both attempts failed at DE_ROUND_OF_16).
     const config = tournamentConfig(4, 48, 7, SCENARIOS.B1.tournamentType)
     expect(computeStripCap(48, config.max_pool_strip_pct)).toBe(38)
 
@@ -242,10 +248,15 @@ describe('pinned scheduling (T033)', () => {
       expect(warn.message).toContain(warn.phase)
     }
 
-    // Board not emptied. [M] At (4, 48, 7) with no pins, day 0 carries
-    // D1-M-EPEE-IND, D1-W-EPEE-IND, VET-M-SABRE-IND-VCMB and
-    // VET-W-SABRE-TEAM (4 events); the three not pinned here must still show
-    // a pool start.
+    // Board not emptied. [M] In this pinned run, day 0 shows pool starts for
+    // both pins plus one event not pinned here, VET-M-SABRE-IND-VCMB (015
+    // re-measure, 2026-10-05). At least one event not pinned here must still
+    // show a pool start on day 0. The `>= 1` is a floor on purpose: it guards
+    // an emptied day 0, not the exact count, which moves with the factory.
+    //
+    // 015, 2026-10-05 – aside: the no-pins board at (4, 48, 7) carries
+    // D1-M-EPEE-IND, D1-W-EPEE-IND and VET-W-SABRE-TEAM on day 0 (3 events;
+    // was 4 with VET-M-SABRE-IND-VCMB).
     const others = Object.keys(result.schedule)
       .filter(id => id !== pin1.competition_id && id !== pin2.competition_id)
     const day0OthersPlaced = others.filter(id =>

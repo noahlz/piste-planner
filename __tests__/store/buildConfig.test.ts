@@ -180,7 +180,8 @@ describe('buildTournamentConfig', () => {
       expect(comp.flighting_group_id).toBeNull()
       expect(comp.is_priority).toBe(false)
       // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
-      // the ledger factory (`__tests__/helpers/scenarios.ts:69`). 64 fencers
+      // the ledger factory (`__tests__/helpers/scenarios.ts`'s `buildCompetitions`,
+      // `strips_allocated`). 64 fencers
       // gives 10. The old `0` here was the fourth app-path seam
       // `specs/006-day-axis-parity/parity-exceptions.md` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names — it zeroed the
       // DE term of the feasibility estimate for every individual event.
@@ -453,7 +454,8 @@ describe('buildTournamentConfig', () => {
       }
 
       // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
-      // the ledger factory (`__tests__/helpers/scenarios.ts:69`), where it used
+      // the ledger factory (`__tests__/helpers/scenarios.ts`'s `buildCompetitions`,
+      // `strips_allocated`), where it used
       // to send `0` — the fourth app-path seam
       // `specs/006-day-axis-parity/parity-exceptions.md` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names.
       //

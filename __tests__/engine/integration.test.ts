@@ -252,7 +252,7 @@ describe('Realistic tournament integration', () => {
       // demand and the threshold are untouched — R5 moved the severity and
       // nothing about the estimate — so B4 is still an oversubscribed venue.
       // What moved is what an oversubscribed venue returns: a partial board,
-      // thirteen unplaced events, and the shortfall as a warning.
+      // thirteen unplaced events at T006, twelve since 015 (2026-10-05), and the shortfall as a warning.
       //
       // The regression this case has always guarded is B4's *shape*, and it
       // still does; the shape inverted. It fails if B4 collapses back to an

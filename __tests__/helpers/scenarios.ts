@@ -30,7 +30,8 @@ export type { ScenarioId, ScenarioFixture } from '../../src/data/tournaments.ts'
 
 /**
  * Per-type referee policy and DE mode, transcribed from the 004 data-model's
- * per-type default table (video strips are not here – the scenario fixture
+ * per-type default table (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/data-model.md
+ * §Per-type default table) (video strips are not here – the scenario fixture
  * supplies them). Keyed by every `TournamentType` so a missing row is a type
  * error.
  */
@@ -48,8 +49,8 @@ const TYPE_RULES: Record<TournamentType, { ref_policy: RefPolicy; de_mode: DeMod
  * 008, then 015): the team-event cut default that `src/store/competitionDefaults.ts`
  * derives, and the three per-type rules – the regional cut override, the DE
  * mode and the referee policy – that `src/store/buildConfig.ts` applies from
- * `src/store/typeDefaults.ts`. This factory imports none of them, and it should
- * not start to.
+ * `src/store/typeDefaults.ts`. This factory imports none of the store's helpers
+ * (`src/store/*`), and it should not start to.
  *
  * `appPathParity.test.ts` and `factoryParity.test.ts` catch a store/engine
  * divergence by deriving a tournament's competitions down both paths
@@ -59,7 +60,14 @@ const TYPE_RULES: Record<TournamentType, { ref_policy: RefPolicy; de_mode: DeMod
  * would stop being able to fail on that rule, and a wrong row in a shared table
  * would move the ledger and the app together instead of surfacing as a parity
  * gap. That is also why the per-type table above is transcribed from the spec
- * rather than imported.
+ * rather than imported. The regional cut override is the exception: its step is
+ * written here, but its data (`REGIONAL_CUT_OVERRIDES`,
+ * `REGIONAL_CUT_TOURNAMENT_TYPES`), like `DEFAULT_CUT_BY_CATEGORY`, comes from
+ * the engine constants the app and the engine's regional-cut-override rule
+ * also read. Parity therefore cannot catch a wrong row in those tables.
+ * `__tests__/engine/constants.test.ts` pins only the rows present today, not
+ * exact membership, so an added row is caught by neither it nor parity – a
+ * cost specs/015-ledger-convergence/plan.md D1 accepts.
  *
  * See research.md D2 (008) for the full argument and the alternatives rejected.
  */

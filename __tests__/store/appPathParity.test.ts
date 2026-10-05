@@ -105,8 +105,10 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {}
  * 011 T006, 2026-09-05 — B4 re-measured 0 → **18**, against the ledger's 17. It
  * left the equal-to-ledger group and became the third FR-004a exception, and
  * its copy in `appPath.test.ts` moved with it in the same commit. The count
- * moved because T004 demoted `feasibility-strip-hours`; the *gap* it exposes is
- * older than that and is recorded, not closed — see `PARITY_EXCEPTIONS.B4`.
+ * moved because T004 demoted `feasibility-strip-hours`; the *gap* it exposed was
+ * older than that and was recorded then as `PARITY_EXCEPTIONS.B4`, which 015
+ * removed when the ledger reached 18 too (see the 015 line below and
+ * specs/015-ledger-convergence/plan.md §B4's 18-vs-17 – isolated).
  *
  * 015, 2026-10-05 – no pin moved. The ledger moved onto them instead, and B4,
  * B6 and B8 rejoined the equal-to-ledger group (specs/015-ledger-convergence/plan.md).
@@ -158,56 +160,7 @@ describe('app-path parity with the drift ledger (day-axis C5)', () => {
    * prevent — or leave a stale exception behind after US4 closes one.
    */
   it.each(SCENARIO_IDS)('%s: pinning off the ledger\'s count requires a recorded FR-004a exception', (id) => {
-    const pinned = PINNED_APP_PATH_COUNTS[id]
-    const ledger = LEDGER_SCHEDULED_COUNTS[id]
-    const exception = PARITY_EXCEPTIONS[id]
-
-    if (pinned === ledger) {
-      expect(
-        exception,
-        `${id}: pinned at the ledger's ${ledger}, so it must carry no FR-004a exception`,
-      ).toBeUndefined()
-      return
-    }
-
-    expect(
-      exception,
-      `${id}: pinned at ${pinned} against the ledger's ${ledger} with no exception recorded. `
-        + 'FR-004a admits a different number only with the ledger\'s count, the cause, and the closing feature beside it.',
-    ).toBeDefined()
-    expect(exception?.appPath, `${id}: the exception's appPath must be the pinned number`).toBe(pinned)
-    expect(exception?.ledger, `${id}: the exception's ledger count must be the ledger's`).toBe(ledger)
-    expect(exception?.cause.length, `${id}: the exception must state its cause`).toBeGreaterThan(0)
-    expect(exception?.evidence.length, `${id}: the exception must state the isolation run behind its cause`).toBeGreaterThan(0)
-
-    // Until T063a this read `.toContain('004 US4')`, because every exception
-    // 006 recorded was expected to close there. Two do not: B6 and B8 both
-    // close by the ledger's factory adopting the store's per-type
-    // resolutions, which 004 US4 deliberately does not touch. Naming one
-    // feature forever would have forced the choice between a false `closedBy`
-    // and deleting the check — so the check keeps what it was actually for,
-    // which is that no exception is parked without an owner, and drops the
-    // part that named which owner. A blank or placeholder `closedBy` still
-    // fails (008 T010 / issue #255 anticipated exactly this relaxation).
-    const closedBy = exception?.closedBy?.trim() ?? ''
-    expect(
-      closedBy.length,
-      `${id}: the exception must name the feature that closes it — FR-004a admits a gap only with an owner beside it`,
-    ).toBeGreaterThan(0)
-    expect(
-      closedBy,
-      `${id}: "${closedBy}" is a placeholder, not a closing feature`,
-    ).not.toMatch(/^(tbd|todo|none|n\/a|unassigned|unknown|\?+|-+)$/i)
-    // 004 US4 T067 — the placeholder list above rejects a fixed set of words,
-    // so `closedBy: 'later'` or 'a future feature' passed it, and "the named
-    // owner actually exists somewhere a reader can find it" rested entirely on
-    // this comment. The owner has to be locatable, which in this repo means a
-    // backlog entry or a spec directory.
-    expect(
-      closedBy,
-      `${id}: "${closedBy}" names no locatable artifact. An owner a reader cannot open is `
-        + 'the same parked exception FR-004a forbids — point at a docs/design/backlog.md entry or a specs/ directory.',
-    ).toMatch(/backlog\.md|specs\//)
+    assertPinAgreesWithLedger(id, PINNED_APP_PATH_COUNTS[id], LEDGER_SCHEDULED_COUNTS[id], PARITY_EXCEPTIONS[id])
   })
 
   /**
@@ -231,5 +184,145 @@ describe('app-path parity with the drift ledger (day-axis C5)', () => {
       `B1 ref_requirements_by_day: ${JSON.stringify(result.refRequirementsByDay)} — ` +
         'expected nonzero peak_total_refs on at least one day other than day 0',
     ).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * The consistency test's whole per-scenario decision: a pin on its ledger count
+ * carries no exception, and a pin off it carries a well-formed one. It lives in
+ * a helper so the describes below can exercise both branches while
+ * `PARITY_EXCEPTIONS` is empty – otherwise nothing runs them until the next gap
+ * opens, and a broken check would wave that gap through.
+ *
+ * What this does not prove: that the per-scenario test above actually calls it.
+ * With `PARITY_EXCEPTIONS` empty and every pin equal to its ledger count, a
+ * no-op in place of that call leaves the suite green, which is inherent while
+ * all eight scenarios agree. The pin table and the ledger table are each tied to
+ * a live run by their own tests, and only this call relates the two tables.
+ */
+function assertPinAgreesWithLedger(
+  id: string,
+  pinned: number,
+  ledger: number,
+  exception: ParityException | undefined,
+): void {
+  if (pinned === ledger) {
+    expect(
+      exception,
+      `${id}: pinned at the ledger's ${ledger}, so it must carry no FR-004a exception`,
+    ).toBeUndefined()
+    return
+  }
+  assertWellFormedException(id, exception, pinned, ledger)
+}
+
+/** The FR-004a exception checks, run for any pin that leaves its ledger count. */
+function assertWellFormedException(
+  id: string,
+  exception: ParityException | undefined,
+  pinned: number,
+  ledger: number,
+): void {
+  expect(
+    exception,
+    `${id}: pinned at ${pinned} against the ledger's ${ledger} with no exception recorded. `
+      + 'FR-004a admits a different number only with the ledger\'s count, the cause, and the closing feature beside it.',
+  ).toBeDefined()
+  expect(exception?.appPath, `${id}: the exception's appPath must be the pinned number`).toBe(pinned)
+  expect(exception?.ledger, `${id}: the exception's ledger count must be the ledger's`).toBe(ledger)
+  expect(exception?.cause.length, `${id}: the exception must state its cause`).toBeGreaterThan(0)
+  expect(exception?.evidence.length, `${id}: the exception must state the isolation run behind its cause`).toBeGreaterThan(0)
+
+  // Until T063a this read `.toContain('004 US4')`, because every exception
+  // 006 recorded was expected to close there. Two do not: B6 and B8 both
+  // close by the ledger's factory adopting the store's per-type
+  // resolutions, which 004 US4 deliberately does not touch. Naming one
+  // feature forever would have forced the choice between a false `closedBy`
+  // and deleting the check — so the check keeps what it was actually for,
+  // which is that no exception is parked without an owner, and drops the
+  // part that named which owner. A blank or placeholder `closedBy` still
+  // fails (008 T010 / issue #255 anticipated exactly this relaxation).
+  const closedBy = exception?.closedBy?.trim() ?? ''
+  expect(
+    closedBy.length,
+    `${id}: the exception must name the feature that closes it — FR-004a admits a gap only with an owner beside it`,
+  ).toBeGreaterThan(0)
+  expect(
+    closedBy,
+    `${id}: "${closedBy}" is a placeholder, not a closing feature`,
+  ).not.toMatch(/^(tbd|todo|none|n\/a|unassigned|unknown|\?+|-+)$/i)
+  // 004 US4 T067 — the placeholder list above rejects a fixed set of words,
+  // so `closedBy: 'later'` or 'a future feature' passed it, and "the named
+  // owner actually exists somewhere a reader can find it" rested entirely on
+  // this comment. The owner has to be locatable, which in this repo means a
+  // backlog entry or a spec directory.
+  expect(
+    closedBy,
+    `${id}: "${closedBy}" names no locatable artifact. An owner a reader cannot open is `
+      + 'the same parked exception FR-004a forbids — point at a docs/design/backlog.md entry or a specs/ directory.',
+  ).toMatch(/backlog\.md|specs\//)
+}
+
+/** One well-formed off-ledger exception, shared by both synthetic describes below. */
+const SYNTHETIC_PINNED = 18
+const SYNTHETIC_LEDGER = 17
+const WELL_FORMED_EXCEPTION: ParityException = {
+  appPath: SYNTHETIC_PINNED,
+  ledger: SYNTHETIC_LEDGER,
+  cause: 'per-type DE mode',
+  evidence: 'isolation probe: DE mode alone moves the count',
+  closedBy: 'docs/design/backlog.md §Ledger convergence',
+}
+
+describe('an FR-004a exception must be well formed', () => {
+  it.each([
+    ['a backlog entry', WELL_FORMED_EXCEPTION.closedBy],
+    ['a spec directory', 'specs/015-ledger-convergence'],
+  ])('accepts an exception whose closedBy points at %s', (_, closedBy) => {
+    expect(() => assertWellFormedException(
+      'BX', { ...WELL_FORMED_EXCEPTION, closedBy }, SYNTHETIC_PINNED, SYNTHETIC_LEDGER,
+    )).not.toThrow()
+  })
+
+  // Each row names the message its own check produces, so a row fails if that
+  // check is removed and a later one catches the input instead. Every input
+  // breaks only its own field, and the helper's check order makes that field's
+  // check the first to fail.
+  it.each<[string, ParityException | undefined, RegExp]>([
+    ['no exception recorded', undefined, /with no exception recorded/],
+    ['appPath differs from the pin', { ...WELL_FORMED_EXCEPTION, appPath: SYNTHETIC_PINNED + 1 }, /appPath must be the pinned number/],
+    ['ledger differs from the ledger count', { ...WELL_FORMED_EXCEPTION, ledger: SYNTHETIC_LEDGER + 1 }, /ledger count must be the ledger's/],
+    ['an empty cause', { ...WELL_FORMED_EXCEPTION, cause: '' }, /must state its cause/],
+    ['empty evidence', { ...WELL_FORMED_EXCEPTION, evidence: '' }, /isolation run behind its cause/],
+    ['a blank closedBy', { ...WELL_FORMED_EXCEPTION, closedBy: '' }, /must name the feature that closes it/],
+    ['a placeholder closedBy', { ...WELL_FORMED_EXCEPTION, closedBy: 'TBD' }, /is a placeholder/],
+    ['an unlocatable closedBy', { ...WELL_FORMED_EXCEPTION, closedBy: 'later' }, /names no locatable artifact/],
+  ])('rejects %s', (_, exception, message) => {
+    expect(() => assertWellFormedException('BX', exception, SYNTHETIC_PINNED, SYNTHETIC_LEDGER)).toThrow(message)
+  })
+})
+
+describe('a pin may leave its ledger count only with an exception', () => {
+  // The off-ledger fixture is the well-formed one, so this describe cannot drift
+  // from the shape the first describe proves acceptable.
+  const offLedgerException = WELL_FORMED_EXCEPTION
+
+  it('rejects an off-ledger pin with no exception', () => {
+    expect(() => assertPinAgreesWithLedger('BX', SYNTHETIC_PINNED, SYNTHETIC_LEDGER, undefined))
+      .toThrow(/with no exception recorded/)
+  })
+
+  it('accepts an off-ledger pin with a well-formed exception', () => {
+    expect(() => assertPinAgreesWithLedger('BX', SYNTHETIC_PINNED, SYNTHETIC_LEDGER, offLedgerException))
+      .not.toThrow()
+  })
+
+  it('rejects an on-ledger pin still carrying a leftover exception', () => {
+    expect(() => assertPinAgreesWithLedger('BX', SYNTHETIC_LEDGER, SYNTHETIC_LEDGER, offLedgerException))
+      .toThrow(/must carry no FR-004a exception/)
+  })
+
+  it('accepts an on-ledger pin with no exception', () => {
+    expect(() => assertPinAgreesWithLedger('BX', SYNTHETIC_LEDGER, SYNTHETIC_LEDGER, undefined)).not.toThrow()
   })
 })
