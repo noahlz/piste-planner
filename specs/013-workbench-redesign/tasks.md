@@ -1530,7 +1530,7 @@ placed event once at the canvas's times, and printing yields four pages.
   SMOKE PASS, 0 console errors, Suggest 15/66/80/48. The owner's re-print
   after T050 passed: names in the Competition column, one day per page.
 
-- [ ] **T043** Write `specs/013-workbench-redesign/handoff.md`: §Verdicts (the
+- [x] **T043** Write `specs/013-workbench-redesign/handoff.md`: §Verdicts (the
   T015 screenshot verdict, T023's NAC Youth value, T041's print check); the
   drift record (T002's baseline beside T035's after-table, every count
   unmoved); one row per task with what it deleted and what replaced it; the
@@ -1542,6 +1542,17 @@ placed event once at the canvas's times, and printing yields four pages.
   the merged tree before `commit-with-costs`); and a paste-ready resume
   prompt. Mark `spec.md` Status Delivered. Then stop – the merge commit is the
   user's *(subagent commits)*
+  → Done 2026-10-04: `cbcfcdee1d`, fact-check corrections `fc558f4ece` and
+  `39478a64c9` (the first wrongly called T040's three renamed test names
+  two; two titles were reworded, three names changed). Merged tree checked
+  before writing, at `a819520ad2` in a throwaway detached worktree: main
+  `8512bed20c` is an ancestor (fast-forward, no conflicts, tree identical to
+  the branch), `package.json` and the lockfile unchanged, tsc and lint
+  clean, 76 files / 1764 tests, drift ledger 18 tests with snapshot SHA
+  `5483c40c1349…` unchanged. Every commit after `a819520ad2` touches
+  `specs/` only. A read-only fact-check confirmed all 70 cited SHAs, the
+  counts, the smoke records, the drift table and every T043 requirement.
+  `spec.md` Status: Delivered (2026-10-04). The merge commit is the user's.
 
 ---
 
