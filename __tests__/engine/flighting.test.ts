@@ -183,7 +183,7 @@ describe('validateFlightingGroup', () => {
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt1', strips_for_priority: 14, strips_for_flighted: 10 }
     const dayAssignments: Record<string, number> = { pri: 0, flt1: 0, flt2: 0 }
 
-    const bottlenecks = validateFlightingGroup(group, [c1, c2, c3], dayAssignments)
+    const bottlenecks = validateFlightingGroup(group, [c1, c3, c2], dayAssignments)
 
     // Implementation emits one bottleneck per flighted competition on the day
     const multipleFlighted = bottlenecks.filter(b => b.cause === BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY)

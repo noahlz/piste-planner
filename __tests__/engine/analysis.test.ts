@@ -193,7 +193,7 @@ describe('initialAnalysis — Pass 3: one flighted per day', () => {
     const config = makeConfig()
     const c1 = makeBigComp('flt-1', 70, { flighted: true })
     const c2 = makeBigComp('flt-2', 70, { flighted: true })
-    const result = initialAnalysis(config, [c1, c2], { 'flt-1': 1, 'flt-2': 1 })
+    const result = initialAnalysis(config, [c2, c1], { 'flt-1': 1, 'flt-2': 1 })
 
     const warn = result.warnings.find(
       (w: Bottleneck) => w.cause === BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY,
@@ -286,11 +286,11 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
     // Both have REQUIRED video, which should produce a flighting-video conflict warning.
     // ceil(210/7)=30, ceil(203/7)=29; 30+29=59 > 55 strips, each fits within poolStripCap (44)
     const config = makeConfig({ strips_total: 55 })
-    const comp1 = makeBigComp('fg-vid-1', 210, {
+    const comp1 = makeBigComp('fg-vid-2', 210, {
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
     })
-    const comp2 = makeBigComp('fg-vid-2', 203, {
+    const comp2 = makeBigComp('fg-vid-1', 203, {
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
       gender: Gender.WOMEN,

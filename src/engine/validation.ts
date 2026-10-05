@@ -348,7 +348,7 @@ export type FeasibilityRule = (typeof FeasibilityRule)[keyof typeof FeasibilityR
  * scheduler goes on to place what fits. `subjects` is `[field]` since
  * feasibility aggregates across the whole list, not one subject.
  */
-function feasibilityErr(field: string, message: string, rule: string): ValidationError {
+function feasibilityErr(field: string, message: string, rule: FeasibilityRule): ValidationError {
   return notice(field, message, rule, [field])
 }
 
