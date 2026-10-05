@@ -12,7 +12,7 @@ import {
 } from '../../src/engine/resources.ts'
 import * as resourcesModule from '../../src/engine/resources.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
-import { BottleneckRule, Phase } from '../../src/engine/types.ts'
+import { BottleneckCause, BottleneckRule, Phase } from '../../src/engine/types.ts'
 import { makeBottleneck, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { SCENARIOS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 
@@ -195,6 +195,7 @@ describe('releaseEventAllocations', () => {
       makeBottleneck({
         competition_id: 'evt-A',
         subjects: ['evt-A', 'evt-B'],
+        cause: BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
         rule: BottleneckRule.HARD_SEPARATION_VIOLATED,
         message: 'evt-A and evt-B share a day',
       }),

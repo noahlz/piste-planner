@@ -19,8 +19,7 @@ describe('suggestFlightingGroups', () => {
     const c2 = makeCompetition({ id: 'small', fencer_count: 203 }) // 29 pools
     const dayAssignments: Record<string, number> = { large: 0, small: 0 }
 
-    // construction order differs from sorted order so a dropped sort() fails
-    const { suggestions, bottlenecks } = suggestFlightingGroups([c2, c1], 55, dayAssignments, 55)
+    const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 55)
 
     expect(suggestions).toHaveLength(1)
     expect(suggestions[0].priority_competition_id).toBe('large')
@@ -62,7 +61,8 @@ describe('suggestFlightingGroups', () => {
     const c2 = makeCompetition({ id: 'tied-b', fencer_count: 210 }) // 30 pools
     const dayAssignments: Record<string, number> = { 'tied-a': 0, 'tied-b': 0 }
 
-    const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 55)
+    // construction order differs from sorted order so a dropped sort() fails
+    const { suggestions, bottlenecks } = suggestFlightingGroups([c2, c1], 55, dayAssignments, 55)
 
     expect(suggestions).toHaveLength(1)
     const manualNeeded = bottlenecks.find(

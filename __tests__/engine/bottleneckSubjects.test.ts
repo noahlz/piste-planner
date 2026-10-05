@@ -6,8 +6,11 @@
  * rule <-> cause (engine-native rules against `CAUSE_OF_RULE`, validation-derived
  * ones are RESOURCE_EXHAUSTION in Phase.VALIDATION), and rule membership in the
  * catalogue or `validateConfig`'s own ids. It does not pin which rule a given
- * producer reports: exact rule pins live in the producers' own tests, and which
- * producers fire is the drift ledger's concern. Producers a scenario never
+ * producer reports. Exact pins exist only for some producers, in their own
+ * tests. For the rest, the rule <-> cause table catches a swap across causes but
+ * not a swap between rules that share a cause, such as the three
+ * DAY_RESOURCE_SUMMARY rules or first/last-day-longer-than-middle. Which
+ * producers fire is the drift ledger's concern, and producers a scenario never
  * reaches are not exercised here.
  *
  * The subjects -> message direction couples to wording on purpose, as a one-time
@@ -15,13 +18,15 @@
  * display names in messages must update it.
  */
 import { describe, it, expect, beforeAll } from 'vitest'
-import { Phase, ValidationMode } from '../../src/engine/types.ts'
+import { BottleneckRule, Phase, ValidationMode } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { initialAnalysis } from '../../src/engine/analysis.ts'
 import { validateConfig } from '../../src/engine/validation.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { checkInvariants, namesCompetition } from '../helpers/bottleneckInvariants.ts'
+
+const catalogue = new Set<string>(Object.values(BottleneckRule))
 
 describe('namesCompetition', () => {
   it('does not find an id inside a longer id that extends it', () => {
@@ -75,7 +80,9 @@ describe('Bottleneck rule and subjects invariants', () => {
   }
 
   it('the scenarios between them check at least one validation-derived bottleneck', () => {
-    const derived = SCENARIO_IDS.flatMap(id => scenarios[id].bottlenecks.filter(b => b.phase === Phase.VALIDATION))
+    const derived = SCENARIO_IDS.flatMap(id => scenarios[id].bottlenecks.filter(
+      b => b.phase === Phase.VALIDATION && !catalogue.has(b.rule),
+    ))
     expect(derived.length).toBeGreaterThan(0)
   })
 
