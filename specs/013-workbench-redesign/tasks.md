@@ -1520,6 +1520,16 @@ placed event once at the canvas's times, and printing yields four pages.
   ids inside Findings messages, `competitionLabel` wording – each also
   listed under "What 013 deliberately left unfixed".
 
+- [x] **T052** Print defaults to landscape (owner, T041 re-print
+  2026-10-04: "looks good. The default should be landscape if possible.")
+  → Done 2026-10-04: `0f8e25629c`. `@page { size: landscape }` at the top of
+  the `@media print` block in `src/index.css`, kept by the Vite build. jsdom
+  cannot observe `@page`, so the check is a Chromium PDF of B1's Schedule
+  with `preferCSSPageSize`: 4 pages, 792 × 612 pt (Letter, landscape). Other
+  browsers were not checked. 76 files / 1764 tests, tsc and lint clean,
+  SMOKE PASS, 0 console errors, Suggest 15/66/80/48. The owner's re-print
+  after T050 passed: names in the Competition column, one day per page.
+
 - [ ] **T043** Write `specs/013-workbench-redesign/handoff.md`: §Verdicts (the
   T015 screenshot verdict, T023's NAC Youth value, T041's print check); the
   drift record (T002's baseline beside T035's after-table, every count
