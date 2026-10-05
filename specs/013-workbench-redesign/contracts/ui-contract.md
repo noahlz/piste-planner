@@ -189,7 +189,10 @@ The driver's `button` "Fit to day" becomes "Fit day".
 One `<section aria-label="Day N">` per day with a table whose rows carry
 `data-schedule-row={competitionId}` **kept** and whose column headers **kept**
 are Competition, Pool Start, Pool End, DE Start, DE End, Strips, Finish
-(the Day column moves to the section heading). A `button` "Print" calls the
+(the Day column moves to the section heading). The Competition cell shows the
+event's readable name (`competitionLabel`, from the committed schedule's
+competitions, the id as fallback) while `data-schedule-row` stays the id
+(T050). A `button` "Print" calls the
 browser's print. Under `@media print` every region but this one is hidden and
 each day section starts a new page.
 

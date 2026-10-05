@@ -118,8 +118,8 @@ function fencerInput(id: string): HTMLElement {
  *  DE start, DE end, strips, finish — the same cell order CenterView's own
  *  suite reads. */
 function centerRowCells(id: string): string[] {
-  const row = screen.getByText(id).closest('tr')
-  if (!row) throw new Error(`no <tr> found for ${id}`)
+  const row = document.querySelector<HTMLElement>(`[data-schedule-row="${id}"]`)
+  if (!row) throw new Error(`no schedule row for ${id}`)
   return within(row).getAllByRole('cell').map((cell) => cell.textContent ?? '')
 }
 

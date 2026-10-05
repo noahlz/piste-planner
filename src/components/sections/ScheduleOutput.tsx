@@ -3,6 +3,7 @@ import { selectDerivedSchedule } from '../../store/derived.ts'
 import type { DerivedSchedule } from '../../store/derived.ts'
 import type { DerivedEventSchedule } from '../../engine/derive.ts'
 import { formatMinutes } from '../../lib/time.ts'
+import { competitionLabel } from '../../lib/competitionLabels.ts'
 import type { ScheduleResult } from '../../engine/types.ts'
 import { CAPTION_CLASS } from '../common/caption.ts'
 import { Badge } from '@/components/ui/badge'
@@ -51,6 +52,15 @@ function byPoolStartThenId(a: DerivedEventSchedule, b: DerivedEventSchedule): nu
  * under, so `@media print` (`src/index.css`) can break a page there and a
  * reader can tell days apart without decoding a column.
  *
+ * The Competition cell names the event the way the canvas names its blocks
+ * (`competitionLabel`), looked up by id in the same committed
+ * `schedule.competitions`, so the table and the blocks cannot disagree. It
+ * deliberately does not read the catalogue: an id absent from the committed
+ * competitions falls back to the id rather than borrowing a name from a model
+ * the rest of the row was not derived from (T050). `data-schedule-row` stays
+ * the id. The cell may wrap, since labels run to ~41 characters and a
+ * no-wrap cell would squeeze the six time columns off a printed page.
+ *
  * `schedule` is the committed model `CenterView` hands down while a debounce
  * or the dimmed-invalid rule holds the center behind the live store
  * (S2-contract.md §Center view). The hook still runs unconditionally — hook
@@ -61,6 +71,7 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
   const schedule = committed ?? live
 
   const entries = Object.values(schedule.events)
+  const competitionsById = new Map(schedule.competitions.map((c) => [c.id, c]))
 
   const printButton = (
     <button
@@ -148,9 +159,11 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
                   >
                     <TableCell
                       data-cell="competition"
-                      className="font-mono text-xs text-foreground"
+                      className="text-[12.5px] whitespace-normal text-foreground"
                     >
-                      {r.competition_id}
+                      {competitionsById.has(r.competition_id)
+                        ? competitionLabel(competitionsById.get(r.competition_id)!)
+                        : r.competition_id}
                     </TableCell>
                     <TableCell
                       data-cell="poolStart"
