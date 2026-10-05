@@ -9,6 +9,8 @@
  * below. Start-time shifts, day reassignments, and referee changes are expected
  * churn and halt nothing. The floors are asserted, not merely snapshotted — a
  * snapshot alone is defeated by `vitest -u`.
+ * The one admitted floor lowering is the input-correction case named in the
+ * `SCHEDULED_FLOORS` docblock below.
  *
  * What is deliberately NOT in the digest: bottleneck message strings. They embed
  * times that churn for uninteresting reasons and would drown every real finding.
@@ -24,14 +26,9 @@ import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from '../../src/engine/refs.ts'
 import { recommendRefCount } from '../../src/engine/stripBudget.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
+import { resolveRefsPerPool } from '../../src/engine/pools.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
-
-/**
- * Refs per pool under `RefPolicy.AUTO` — the same peak estimate
- * `peakPoolRefDemand` applies for AUTO. Not an arbitrary constant.
- */
-const AUTO_REFS_PER_POOL = 2
 
 /**
  * Scheduled-event floors, measured on the pre-change baseline. The constitution
@@ -41,6 +38,15 @@ const AUTO_REFS_PER_POOL = 2
  * A later task may deliberately RAISE a floor when it improves packing. Lowering
  * one is the regression the gate exists to catch: never edit a floor down to make
  * a red test pass — identify the cause first, and record both counts.
+ *
+ * The one exception is input correction: a floor may be lowered only when the
+ * ledger's own inputs were wrong, and only when all four of these hold:
+ *  - the old count was measured on a configuration the app never runs
+ *  - the new count equals the app path's measured count
+ *  - `__tests__/store/factoryParity.test.ts` passes in the lowering commit, which
+ *    proves the inputs now match. A count alone can match by coincidence, as
+ *    B4's cut and DE mode showed when they cancelled.
+ *  - the lowering commit records both counts and the isolation beside the floor
  *
  * B4's floor was 0 for as long as the upfront `validateFeasibility` gate aborted
  * its build. 011's T004 demoted that finding to a WARN, so B4 packs again and its
@@ -59,7 +65,26 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // passing the gate. T006 removed the `continue` that had kept B4 out of the
   // generic floor test below, so from T006 on this number is asserted for B4 the
   // same way it is for the other seven.
-  B1: 24, B2: 24, B3: 24, B4: 17, B5: 12, B6: 45, B7: 18, B8: 52,
+  //
+  // 015, 2026-10-05 – B4 raised 17 → 18: the factory now applies the regional
+  // cut and the per-type DE mode, as the app does. Measured in isolation, cut
+  // alone gives 19 and DE mode alone 20, while both together give 18, equal to
+  // the app path's 18. A raise under the rule above.
+  //
+  // 015, 2026-10-05 – B8 raised 52 → 53: the per-type DE mode alone places
+  // JR-W-EPEE-IND, equal to the app path's 53. A raise under the rule above.
+  //
+  // 015, 2026-10-05 – B6 lowered 45 → 40, the one deliberate lowering, under the
+  // input-correction exception above. The old 45 came from a factory that ran
+  // B6 (an ROC) without the regional cut and with the wrong DE mode, a
+  // configuration the app never runs. Measured in isolation: CUT alone gives 43,
+  // DE mode alone 42, both 40, equal to the app path's 40. Eight events leave
+  // (VET-M-EPEE-IND-VCMB, VET-W-EPEE-IND-VCMB, Y12-M-FOIL-IND, Y12-M-SABRE-IND,
+  // Y12-W-SABRE-IND, D2-M-EPEE-IND, D2-M-SABRE-IND, D2-W-EPEE-IND) and three
+  // arrive (D1A-W-FOIL-IND, JR-M-EPEE-IND, JR-W-SABRE-IND): the all-advance
+  // brackets cost the strip-hours the 20% cut hid. See
+  // specs/015-ledger-convergence/plan.md §What planning measured and §D4.
+  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
 }
 
 /**
@@ -67,14 +92,17 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  *
  * B4 was absent for as long as the upfront feasibility gate aborted its build
  * before any per-day packing ran, so `postScheduleDayBreakdown` never executed
- * for it. 011's T004 demoted that finding to a WARN and B4 packs again: `[M]` at
- * T006 it emits three summary lines (days 1-3, peak demand 86 / 182 / 98) and
- * `dayPeakRefDemands` reproduces all three, so B4 joins the list rather than the
- * comment being rewritten around its absence. B1/B2/B3/B5/B7 stay out because
- * they emit no summary line at all — the scheduler only writes one for a day
- * that had a failure, and those five place every event.
+ * for it. 011's T004 demoted that finding to a WARN and B4 packs again: it emits
+ * three summary lines (days 1-3, peak demand 86 / 156 / 162, re-measured at 015)
+ * and `dayPeakRefDemands` reproduces all three, so B4 joins the list rather than
+ * the comment being rewritten around its absence. B1/B2/B3/B5/B7/B8 stay out
+ * because they emit no summary line at all – the scheduler only writes one for
+ * a day that had a failure, and those six place every event.
+ *
+ * 015, 2026-10-05 – B8 left the list: with the per-type DE mode it places
+ * JR-W-EPEE-IND too, so it places every event and emits no summary line.
  */
-const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6', 'B8']
+const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6']
 
 /** Matches the refs line built by `postScheduleDayBreakdown` in `concurrentScheduler.ts`. */
 const DAY_REFS_SUMMARY = /^Day (\d+) refs: peak demand (\d+)\.$/
@@ -120,7 +148,7 @@ type ScenarioDigest = {
 
 function runScenario(id: ScenarioId) {
   const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS[id]
-  const competitions = buildCompetitions(fencerCounts)
+  const competitions = buildCompetitions(fencerCounts, tournamentType)
   const config = tournamentConfig(days, strips, videoStrips, tournamentType)
   return { competitions, config, ...scheduleAll(competitions, config) }
 }
@@ -153,6 +181,21 @@ function dayPeakRefDemands(
     peaks.push(peakRefDemand)
   }
   return peaks
+}
+
+/**
+ * Refs per pool for the scenario's `refRecommendation`, resolved from the
+ * competitions' own `ref_policy` through `resolveRefsPerPool` – the same call
+ * `StripsPanel.tsx` makes for **Suggest**. The policy must be uniform across the
+ * scenario, since `recommendRefCount` takes a single factor. A mixed scenario
+ * fails here, naming the policies seen, rather than picking one silently.
+ */
+function scenarioRefsPerPool(id: ScenarioId, competitions: Competition[]): number {
+  const policies = [...new Set(competitions.map(c => c.ref_policy))]
+  if (policies.length !== 1) {
+    throw new Error(`${id}: expected one ref_policy across the scenario, saw [${policies.join(', ')}]`)
+  }
+  return resolveRefsPerPool(policies[0], 1).refs_per_pool
 }
 
 /** WARN bottlenecks tallied by cause. Counts carry no times, so no message text leaks in. */
@@ -214,7 +257,7 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
     warnCountsByCause: warnCountsByCause(bottlenecks),
     refRequirementsByDay: ref_requirements_by_day,
     daySummaryPeaks: dayPeakRefDemands(competitions, config, schedule),
-    refRecommendation: recommendRefCount(competitions, AUTO_REFS_PER_POOL, config),
+    refRecommendation: recommendRefCount(competitions, scenarioRefsPerPool(id, competitions), config),
     stripRecommendation: searchStripCount(competitions, config),
     events,
   }
@@ -244,15 +287,18 @@ describe('drift ledger', () => {
     // is no longer "an aggregate estimate empties it" but "an aggregate estimate
     // does not empty it". So this asserts, `[M]` at T006 against the real run:
     //
-    //  - 17 scheduled exactly, not merely at-or-above the floor. The floor test
+    //  - 18 scheduled exactly, not merely at-or-above the floor. The floor test
     //    below catches a collapse; this catches any movement in either
     //    direction, which is what the old `toBe(0)` did for the old number.
+    //    015, 2026-10-05 – 17 → 18: the factory now applies the regional cut and
+    //    the per-type DE mode, which together account for the +1 (cut alone 19,
+    //    DE mode alone 20, both 18 – specs/015-ledger-convergence/plan.md).
     //  - no ERROR-severity validation finding at all, and in particular neither
     //    feasibility rule id among them. This reads `validateConfig` directly
     //    because it pins the severity at the source: a severity re-escalation
     //    of either feasibility rule would otherwise show up only as a
     //    scheduledCount change, and a re-escalation that happened to leave B4
-    //    at 17 would be invisible. The scheduler-side assertion at the end pins
+    //    at 18 would be invisible. The scheduler-side assertion at the end pins
     //    the copy the scheduler's own bottlenecks carry. The literal
     //    'feasibility-strip-hours' stays on purpose, as an independent pin of
     //    the wire id. FR-001/FR-002 are what this holds.
@@ -261,16 +307,16 @@ describe('drift ledger', () => {
     //    shortfall (~29%, specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md)) is real and the organizer still has to
     //    be told about it. Without this the rule could be dropped outright and
     //    every other assertion here would still pass.
-    //  - no ERROR sits in Phase.VALIDATION. B4's 13 ERRORs are all
+    //  - no ERROR sits in Phase.VALIDATION. B4's 12 ERRORs are all
     //    DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the ordinary
     //    per-event degradation of an oversubscribed board, which is spec.md
     //    §Edge Cases' accepted cost. A validation-phase ERROR returning is the
     //    shape that empties the board, and it halts here whatever its rule id.
     if (id === 'B4') {
-      it('B4 packs under a demoted feasibility WARN — 17 scheduled, no validation ERROR', () => {
+      it('B4 packs under a demoted feasibility WARN — 18 scheduled, no validation ERROR', () => {
         const { competitions, config, bottlenecks } = runScenario(id)
 
-        expect(buildDigest(id).scheduledCount).toBe(17)
+        expect(buildDigest(id).scheduledCount).toBe(18)
 
         const findings = validateConfig(config, competitions, ValidationMode.BINDING)
         expect(findings.filter(f => f.severity === BottleneckSeverity.ERROR)).toEqual([])

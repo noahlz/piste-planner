@@ -483,7 +483,7 @@ describe('findAvailableStripsInWindow — day-inference precondition (T015)', ()
   it('every call recorded during a real multi-day scheduleAll run passes a defined day', () => {
     const spy = vi.spyOn(resourcesModule, 'findAvailableStripsInWindow')
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B1
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     scheduleAll(competitions, config)

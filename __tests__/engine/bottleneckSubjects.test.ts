@@ -29,6 +29,15 @@ import { checkInvariants, namesCompetition } from '../helpers/bottleneckInvarian
 
 const catalogue = new Set<string>(Object.values(BottleneckRule))
 
+/**
+ * Scenarios whose `initialAnalysis` raises no warning, pinned at exactly zero so
+ * a new warning is noticed rather than silently skipped. B5 is here because
+ * 015's factory builds the SJCC as the app does – the regional all-advance cut
+ * and single-stage DEs – and the converged B5 raises none (measured 015,
+ * 2026-10-05). Every other scenario must raise at least one.
+ */
+const SCENARIOS_WITHOUT_ANALYSIS_WARNINGS: readonly (typeof SCENARIO_IDS)[number][] = ['B5']
+
 describe('namesCompetition', () => {
   it('does not find an id inside a longer id that extends it', () => {
     expect(namesCompetition('VET-M-EPEE-IND-VCMB is late', 'VET-M-EPEE-IND')).toBe(false)
@@ -45,7 +54,7 @@ describe('namesCompetition', () => {
 
 function runScenario(id: (typeof SCENARIO_IDS)[number]) {
   const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS[id]
-  const competitions = buildCompetitions(fencerCounts)
+  const competitions = buildCompetitions(fencerCounts, tournamentType)
   const config = tournamentConfig(days, strips, videoStrips, tournamentType)
   const { schedule, bottlenecks } = scheduleAll(competitions, config)
   const dayAssignments = Object.fromEntries(
@@ -75,7 +84,14 @@ describe('Bottleneck rule and subjects invariants', () => {
     it(`initialAnalysis warnings of ${id} carry a rule and the competitions they name`, () => {
       const { competitions, warnings, validationRules } = scenarios[id]
       const ids = competitions.map(c => c.id)
-      expect(warnings.length, `${id} warnings checked`).toBeGreaterThan(0)
+      if (SCENARIOS_WITHOUT_ANALYSIS_WARNINGS.includes(id)) {
+        expect(
+          warnings,
+          `${id} now emits initialAnalysis warnings. Confirm they are expected, then remove ${id} from SCENARIOS_WITHOUT_ANALYSIS_WARNINGS. The invariant loop checks them.`,
+        ).toHaveLength(0)
+      } else {
+        expect(warnings.length, `${id} warnings checked`).toBeGreaterThan(0)
+      }
       for (const b of warnings) checkInvariants(b, ids, validationRules)
     })
   }

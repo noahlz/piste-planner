@@ -34,7 +34,7 @@ const scheduleAllWithPins = scheduleAll
 /** B1: 24 events, 4 days, 80 strips (12 video) — the ledger's cheapest fixture. */
 function b1(): { comps: Competition[], config: TournamentConfig } {
   return {
-    comps: buildCompetitions(SCENARIOS.B1.fencerCounts),
+    comps: buildCompetitions(SCENARIOS.B1.fencerCounts, SCENARIOS.B1.tournamentType),
     config: tournamentConfig(4, 80, 12, SCENARIOS.B1.tournamentType),
   }
 }
@@ -177,7 +177,7 @@ describe('pinned scheduling (T033)', () => {
   })
 
   it('case 5: two pins whose combined strips exceed the board — the second is PINNED_UNCLAIMED', () => {
-    const comps = buildCompetitions(SCENARIOS.B1.fencerCounts)
+    const comps = buildCompetitions(SCENARIOS.B1.fencerCounts, SCENARIOS.B1.tournamentType)
     // [M] computeStripCap(80, 0.80) = 64 (b1()'s config): no pair of B1's
     // pool phases needs more than 64 strips each, so 80-strip B1 can never
     // show two pins colliding on strip count. Dropping to 48 strips still
@@ -256,7 +256,7 @@ describe('pinned scheduling (T033)', () => {
   it('case 6: the no-pins path is byte-identical to scheduleAll on every B1-B8 scenario', () => {
     for (const id of SCENARIO_IDS as readonly ScenarioId[]) {
       const fixture = SCENARIOS[id]
-      const comps = buildCompetitions(fixture.fencerCounts)
+      const comps = buildCompetitions(fixture.fencerCounts, fixture.tournamentType)
       const config = tournamentConfig(fixture.days, fixture.strips, fixture.videoStrips, fixture.tournamentType)
       expect(scheduleAllWithPins(comps, config, []), id).toEqual(scheduleAll(comps, config))
     }

@@ -1,47 +1,35 @@
 import { describe, it, expect } from 'vitest'
 import { runAppPath } from '../helpers/appPath.ts'
-import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
-import type { ScenarioId } from '../../src/data/tournaments.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
+import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
+import type { ScenarioId } from '../helpers/scenarios.ts'
 
 /**
  * The app-path parity check (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), FR-004): for each of
- * the eight reference tournaments, the app's own route — `applyPreset` →
- * `buildTournamentConfig` → `scheduleAll` — must place the count the drift
+ * the eight reference tournaments, the app's own route – `applyPreset` →
+ * `buildTournamentConfig` → `scheduleAll` – must place the count the drift
  * ledger records for that tournament, unless FR-004a pins a documented
  * per-default exception (research.md D7).
  *
- * Every number below was measured on 2026-08-31 after the axis fix landed
- * (T006/T008, commit b20f351347), not predicted. The classification behind
- * each exception is `specs/006-day-axis-parity/parity-exceptions.md` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md); the
- * short form lives beside the number here so a reader who only opens this
- * file still learns why it is what it is.
+ * **All eight scenarios agree.** 015 converged the ledger's factory
+ * (`__tests__/helpers/scenarios.ts`'s `buildCompetitions`) onto the app's
+ * per-type rules – the regional cut override, the per-type DE mode and the
+ * per-type referee policy – and the three FR-004a exceptions it left open
+ * (B4, B6, B8) closed with it. `__tests__/store/factoryParity.test.ts` checks
+ * the two builds field by field, which this file's counts cannot. The plan and
+ * its measured tables are `specs/015-ledger-convergence/plan.md`.
  *
- * B2's `24` and B8's `53` were re-measured on 2026-08-31 by feature 008
- * (T004, T008/T009), against 008's own code rather than 006's axis fix. B8's
- * classification is `specs/008-team-event-cut/b8-residual.md` (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md), alongside
- * this file's existing pointer to `specs/006-day-axis-parity/parity-exceptions.md` (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md).
- *
- * **All eight were re-measured on 2026-09-01 by 004 US4 (T063a)**, against the
- * post-D5/D6/D7/T061a tree, and every number below is what that run reported
- * rather than what it was hoped to report. Two moved: B4 16 → **0**, which is
- * the ledger's own count, so its FR-004a exception is gone; and B6 43 → **39**,
- * which is one further from the ledger, not nearer. B8 did not move off 53.
- * The account of both movements is `specs/004-p3-workbench-shell/drift-baseline.md` (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/drift-baseline.md)
- * §T062 and commit `29aabc9031`.
- *
- * **No exception below is attributable to the day axis** (FR-004a's hard
- * limit, SC-002). That was established per row by isolation, not by argument:
- * holding the competitions fixed and swapping only the config — the app's
- * 1440-spaced day windows for the ledger's empty `dayConfigs`, and back —
- * moves no count on any row, while holding the config fixed and swapping the
- * per-competition defaults reproduces the other path's count exactly.
+ * The day axis is not a permitted cause of any gap (FR-004a's hard limit,
+ * SC-002): the ledger keeps the engine's own empty `dayConfigs` while the app
+ * builds 1440-spaced day windows, and swapping one for the other moves no
+ * count.
  */
 
 /**
- * The drift ledger's `scheduledCount` per scenario — the target parity is
- * measured against, carried from specs/006-day-axis-parity/baseline.md's (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md) ledger column and unchanged
- * by this feature (FR-005). Where a pin below differs from its entry here,
- * `PARITY_EXCEPTIONS` must say why.
+ * The drift ledger's `scheduledCount` per scenario – the target parity is
+ * measured against, first carried from specs/006-day-axis-parity/baseline.md's (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md) ledger column.
+ * Where a pin below differs from its entry here, `PARITY_EXCEPTIONS` must say
+ * why.
  *
  * 010 L9, 2026-09-05 — B6 moved 44 → 45, read from the drift ledger's own
  * re-taken snapshot in the same commit (T019). It is the only entry that moved:
@@ -52,9 +40,19 @@ import type { ScenarioId } from '../../src/data/tournaments.ts'
  * snapshot, which T004 re-took in the commit that demoted
  * `feasibility-strip-hours` to a WARN in every mode. It is the only entry that
  * moved: B4 was the one scenario the aggregate feasibility gate emptied.
+ *
+ * 015, 2026-10-05 – B4 17 → 18, B6 45 → 40 and B8 52 → 53, read from the drift
+ * ledger's re-taken snapshot after the ledger's factory adopted the app's
+ * per-type rules. Every entry now equals its app-path pin.
+ *
+ * The table is still typed out, but it is no longer trusted as typed: the
+ * "matches the live drift ledger" test below re-measures every entry by the
+ * drift ledger's own route. Until 015 it was a hand-typed copy that nothing
+ * checked, which is why three stale FR-004a exceptions stayed green after the
+ * ledger's real counts had moved.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 17, B5: 12, B6: 45, B7: 18, B8: 52,
+  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
 }
 
 interface ParityException {
@@ -72,157 +70,27 @@ interface ParityException {
 
 /**
  * FR-004a exceptions. Admissible only for a per-competition default the two
- * paths have not converged on; a day-axis difference is a contract violation,
+ * paths have not converged on – a day-axis difference is a contract violation,
  * not an exception (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)).
  *
- * 006 recorded three, all at the same seam: `defaultConfigForId`
- * (`src/store/store.ts`) and `buildConfig.ts` build a competition differently
- * from the ledger's factory (`__tests__/helpers/scenarios.ts:44-72`).
+ * **None is open.** Every gap recorded here sat at one seam: the app resolves
+ * cut, DE mode and referee policy per tournament type (`src/store/buildConfig.ts`
+ * and `src/store/typeDefaults.ts`), and the ledger's factory used to resolve
+ * them per event. 015 gave the factory the per-type rules, transcribed from
+ * the spec rather than imported from `src/store`, so a wrong row still shows
+ * up as a gap here (specs/015-ledger-convergence/plan.md D1).
  *
- * **Two remain after 004 US4 (T063a), and the seam has flipped sides.** US4
- * closed the divergence that had the store *understating* demand — T061a gave
- * `buildConfig.ts` the ledger's own `max(2, ceil(n/7))` pre-allocation, and
- * `strips_allocated` now differs on zero events of B6 and zero of B8. What is
- * left is the reverse: the store resolves `cut_mode` and `de_mode` **per
- * tournament type** (`REGIONAL_CUT_OVERRIDES`, and `data-model.md`'s per-type
- * table — `AUTO` → `STAGED` at NAC, `SINGLE_STAGE` elsewhere) while the
- * ledger's factory derives them **per event** from the catalogue's category
- * and video policy. Neither remaining exception closes by another change to
- * `src/`: each closes by the ledger's factory adopting the store's per-type
- * resolutions, which moves the drift ledger's own recorded counts and is
- * therefore a constitution III change with its own snapshot review — see each
- * entry's `closedBy`.
+ * The table and the consistency test below stay for the next gap: a pin that
+ * leaves its ledger count must come with an entry here giving the ledger's
+ * count, the isolated cause and a locatable closing feature.
  */
-const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
-  /**
-   * B4 is a **new** exception, opened by 011 T006, and it is the one entry here
-   * whose cause was recorded rather than isolated.
-   *
-   * B4 had no exception because both paths read **0** — the aggregate
-   * feasibility gate emptied the board on either config, so a per-competition
-   * difference between them could not show up in a placed count. T004's
-   * demotion removed that floor-to-ceiling zero and the two paths landed one
-   * event apart: `[M]` at T006, ledger **17**, app path **18**. The divergence
-   * did not appear at T004; it was always there and nothing could see it.
-   *
-   * **011 does not explain the +1, by product-owner direction: it is recorded
-   * here, not reconciled.** What is measured, and is not a guess:
-   * `validateConfig` on the *ledger's* B4 config returns twelve WARN
-   * `regional-cut-override` findings — "regional tournament (SYC) requires
-   * all-advance for Y14 / CADET". B4 is an SYC, `REGIONAL_CUT_OVERRIDES` covers
-   * Y14 and Cadet, and `src/store/buildConfig.ts:196` applies it while the
-   * ledger's factory (`__tests__/helpers/scenarios.ts:50-52`) cuts at 20%
-   * instead. So the two configs demonstrably disagree on `cut_mode` for twelve
-   * of B4's thirty events, and it is the same seam B6's entry below documents
-   * for an ROC. What was **not** done is the isolation run that would prove
-   * those twelve events are what the one-event gap is made of — swapping only
-   * `cut_mode` and re-measuring. Until someone runs it, the attribution below
-   * is the likeliest seam and not a demonstrated cause, and this comment says
-   * so rather than borrowing B6's confidence.
-   */
-  B4: {
-    appPath: 18,
-    ledger: 17,
-    cause: 'unconfirmed. The two configs are measured to disagree on cut_mode for 12 of B4\'s 30 events — B4 is an SYC, buildConfig.ts:196 applies REGIONAL_CUT_OVERRIDES for Y14 and Cadet, and the ledger\'s factory (scenarios.ts:50-52) cuts at 20% instead, which is why validateConfig raises 12 WARN regional-cut-override findings against the ledger\'s config and none against the app\'s. That is the same seam B6 and B8 sit on. Whether it accounts for the one-event gap was not established: 011 T006 recorded this divergence under product-owner direction and did not isolate it',
-    evidence: 'measured at T006 on 2026-09-05: app path 18, drift ledger 17, both re-measured on this branch after T004 demoted feasibility-strip-hours. Before T004 both paths read 0, so no measurement could have exposed the gap — it is newly visible, not newly created. The 12 regional-cut-override WARNs on the ledger\'s config are measured; no swap-one-default isolation run was performed, which is the difference between this entry and the two below',
-    closedBy: 'the same follow-up as B6 and B8 — "The drift ledger\'s factory does not apply the store\'s per-type resolutions" in docs/design/backlog.md, whose scope already covers the cut_mode half of this gap. Whoever takes it runs B4\'s isolation first: if cut_mode does not account for the +1, this entry needs its own owner and this closedBy is wrong',
-  },
-
-  /**
-   * B6 moved **away** from the ledger under US4: 43 → 39 against the ledger's
-   * unchanged 44. That is not a regression to hunt. T061a's pre-allocated
-   * strips made all-advance regional brackets cost the real strip-hours that
-   * `strips_allocated: 0` had been hiding, and B6 re-packed at its capacity
-   * margin — 8 events out, 4 in, `validateFeasibility` clean on both sides.
-   * Isolated and recorded in commit `29aabc9031` and in
-   * `specs/004-p3-workbench-shell/drift-baseline.md` (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/drift-baseline.md) §T062.
-   *
-   * Two per-competition defaults still differ, both of them the store
-   * resolving per tournament type where the ledger's factory resolves per
-   * event:
-   *
-   * - **cut_mode / cut_value, on 18 of 54 events.** B6 is an ROC, so
-   *   `buildConfig.ts` applies `REGIONAL_CUT_OVERRIDES` — all-advance for
-   *   Y14/Cadet/Junior/Div1 — which the engine's own rule requires
-   *   (`src/engine/validation.ts:256-267`). The ledger's factory does not
-   *   apply it and cuts at 20% (`scenarios.ts:50-52`). **The app is the
-   *   correct side**, and the ledger's 44 is measured on a config the engine
-   *   itself flags.
-   * - **de_mode, on 12 of 54 events.** US4 resolves `de_mode` from the
-   *   per-type table (`data-model.md` §Per-type default table): ROC →
-   *   `SINGLE_STAGE`. The ledger derives `STAGED` per event from a REQUIRED
-   *   video policy (`scenarios.ts:66-68`). The two rules disagree wherever a
-   *   REQUIRED-video individual event sits at a non-NAC type.
-   *
-   * `strips_allocated` is **no longer among them** — T061a adopted the
-   * ledger's `max(2, ceil(n/7))` and it now differs on zero of the 54.
-   * `ref_policy` differs on all 54 (the app's resolved `ONE` against the
-   * ledger's unresolved `AUTO`, which is D5 working) but is inert on
-   * placement — swapping it alone leaves 39.
-   *
-   * **010 L9, 2026-09-05 — both numbers moved by +1 and the gap did not.**
-   * T019 emptied `CROSSOVER_GRAPH[Y8]`, so B6's Y8 events lose their edges to
-   * Y10 (0.8 direct) and Y12 (0.3 two-hop), the three Y8 women's events rotate
-   * days, and one more event clears its deadline on both paths: app path
-   * 39 → **40**, ledger 44 → **45**. The cause below is unchanged — it is about
-   * `cut_mode`/`de_mode` resolution, which L9 does not touch — and the two
-   * counts are re-measured, not inferred. The `evidence` field's isolation
-   * swaps were run at T063a against that tree and are **not** re-run here:
-   * re-running them is a measurement task of its own, and L9 gives no reason to
-   * think a crossover weight changed which per-competition default accounts for
-   * the gap.
-   */
-  B6: {
-    appPath: 40,
-    ledger: 45,
-    cause: 'the ledger\'s factory applies neither per-type resolution the store now ships: it cuts B6\'s Y14/Cadet/Junior/Div1 events at 20% where buildConfig.ts forces the regional all-advance override (18 of 54 events), and it stages DEs per event from a REQUIRED video policy where US4 resolves de_mode per tournament type, ROC to SINGLE_STAGE (12 of 54). T061a moved this pin 43 → 39 by a capacity re-pack, so the gap is wider than 006 recorded, not narrower, and 010 L9 moved both sides by +1 (39 → 40 against 44 → 45) when it emptied CROSSOVER_GRAPH[Y8], leaving the gap at 5',
-    evidence: 'measured at T063a: 39 on the app\'s config and 39 on the ledger\'s, against the ledger\'s 44 on either config — the axis stays uninvolved. Of the fields still differing, swapping in the ledger\'s de_mode alone reaches exactly 44, its cut_mode alone overshoots to 54, cut_value alone stays 39, and swapping every differing field reaches 44. strips_allocated and de_video_policy differ on zero events. Those swap figures are T063a\'s, taken against that tree; 010 L9 re-measured only the two counts (40 and 45) and did not re-run the swaps',
-    closedBy: 'a follow-up feature, unnumbered and named in docs/design/backlog.md as "The drift ledger\'s factory does not apply the store\'s per-type resolutions": the ledger\'s factory (__tests__/helpers/scenarios.ts) adopts REGIONAL_CUT_OVERRIDES and the per-type de_mode table. It cannot close in 004 US4 — scenarios.ts is the comparison point T062 diffs against, and changing it moves the drift ledger\'s own recorded counts, a constitution III change owing its own snapshot review',
-  },
-
-  /**
-   * B8 held at 53 against the ledger's 52 — re-measured at T063a, not
-   * assumed. The 006/008 record (`specs/008-team-event-cut/b8-residual.md` (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md))
-   * attributed the +1 jointly to `de_mode` **and** `strips_allocated`, each
-   * necessary and neither sufficient. **US4 closed one half and inverted the
-   * other**, and the two changes cancel at the count while changing the
-   * cause underneath it:
-   *
-   * - `strips_allocated` now differs on **zero** of the 53 events. T061a
-   *   adopted the ledger's `max(2, ceil(n/7))`, so half of specs/008-team-event-cut/b8-residual.md's (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md)
-   *   conjunction is gone.
-   * - `de_mode` now differs on **41**, and in the opposite direction. B8 is a
-   *   NAC, so US4's per-type table (`data-model.md`) resolves all 53 to
-   *   `STAGED`; the ledger's per-event rule stages only the 12 Div1 and
-   *   Junior individuals whose video policy is REQUIRED. 53 − 12 = 41. The
-   *   app was the `SINGLE_STAGE` side before and is the `STAGED` side now.
-   *
-   * So B8 was never going to reach 52 through US4: 52 is what
-   * `specs/008-team-event-cut/b8-residual.md` (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md) P1 measured under the **ledger's** per-event staging
-   * rule, and US4 shipped the per-type rule instead — a different assignment
-   * of `de_mode` to events, not a failed attempt at the same one. That is a
-   * decided difference in rules, not a shortfall against a target.
-   *
-   * `cut_mode` remains closed at zero differing events (008's
-   * `defaultCutForEntry`, and `REGIONAL_CUT_OVERRIDES` never applies at a
-   * NAC on either side). `ref_policy` differs on all 53 — resolved `TWO`
-   * against unresolved `AUTO` — but both score two refs per pool
-   * (`src/engine/pools.ts:170-175`), and swapping it alone leaves 53.
-   */
-  B8: {
-    appPath: 53,
-    ledger: 52,
-    cause: 'de_mode is now the whole gap, and it is the two paths applying different rules rather than one lagging the other: US4 resolves de_mode from the per-type table (NAC → STAGED, all 53 events) while the ledger derives it per event from a REQUIRED video policy (12 events staged), so 41 of 53 differ. specs/008-team-event-cut/b8-residual.md\'s (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md) second cause, strips_allocated, closed in T061a and now differs on zero events',
-    evidence: 'measured at T063a: 53 on the app\'s config and 53 on the ledger\'s, against the ledger\'s 52 on either config. Swapping in the ledger\'s de_mode alone now takes the app path to 52 — sole and sufficient, where specs/008-team-event-cut/b8-residual.md (removed; git show 0ab5bd2dc9:specs/008-team-event-cut/b8-residual.md) R2/R3/P1 measured it as necessary-but-not-sufficient alongside strips_allocated. cut_mode, cut_value, strips_allocated and de_video_policy differ on zero of the 53',
-    closedBy: 'the same follow-up as B6 — "The drift ledger\'s factory does not apply the store\'s per-type resolutions" in docs/design/backlog.md, unnumbered: the ledger\'s factory (__tests__/helpers/scenarios.ts:66-68) adopts the per-type de_mode table in place of its per-event video derivation. Not 004 US4: that would edit the comparison point T062 diffs against, moving the drift ledger\'s own recorded counts under constitution III',
-  },
-}
+const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {}
 
 /**
  * What the app path places today, measured (T011, re-measured T063a), one
- * number per scenario. **Five** now equal their ledger count and three are the
- * FR-004a exceptions above, gated exactly as the five are: a different pinned
- * number, never an unasserted one.
+ * number per scenario. As of 015 all eight equal their ledger count. A pin
+ * that leaves its ledger count needs an FR-004a exception above and is gated
+ * exactly as the rest are: a different pinned number, never an unasserted one.
  *
  * A second copy of B4's and B6's pins lives in
  * `__tests__/helpers/appPath.test.ts`'s `BASELINE`, which proves the harness
@@ -239,6 +107,9 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {
  * its copy in `appPath.test.ts` moved with it in the same commit. The count
  * moved because T004 demoted `feasibility-strip-hours`; the *gap* it exposes is
  * older than that and is recorded, not closed — see `PARITY_EXCEPTIONS.B4`.
+ *
+ * 015, 2026-10-05 – no pin moved. The ledger moved onto them instead, and B4,
+ * B6 and B8 rejoined the equal-to-ledger group (specs/015-ledger-convergence/plan.md).
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
   B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
@@ -246,6 +117,28 @@ const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
 
 // specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)
 describe('app-path parity with the drift ledger (day-axis C5)', () => {
+  /**
+   * `LEDGER_SCHEDULED_COUNTS` is re-measured here by the same route as the
+   * drift ledger (`runScenario` and `scheduledCount` in
+   * `__tests__/engine/driftLedger.test.ts`) – `scheduleAll` over
+   * `buildCompetitions` plus `tournamentConfig`, counting the schedule's keys.
+   * This test repeats those calls inline rather than calling the ledger's
+   * functions, so a later change to `runScenario` needs the same change here.
+   */
+  it.each(SCENARIO_IDS)('%s: LEDGER_SCHEDULED_COUNTS matches the live drift ledger', (id) => {
+    const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS[id]
+    const { schedule } = scheduleAll(
+      buildCompetitions(fencerCounts, tournamentType),
+      tournamentConfig(days, strips, videoStrips, tournamentType),
+    )
+    const live = Object.keys(schedule).length
+    expect(
+      live,
+      `${id}: the drift ledger schedules ${live} but LEDGER_SCHEDULED_COUNTS says ${LEDGER_SCHEDULED_COUNTS[id]}. `
+        + 'The table is stale – re-measure it, then re-check every pin and FR-004a exception against the new count.',
+    ).toBe(LEDGER_SCHEDULED_COUNTS[id])
+  })
+
   it.each(SCENARIO_IDS)('%s places its pinned app-path count', (id) => {
     const exception = PARITY_EXCEPTIONS[id]
     const result = runAppPath(id)
@@ -309,9 +202,7 @@ describe('app-path parity with the drift ledger (day-axis C5)', () => {
     // so `closedBy: 'later'` or 'a future feature' passed it, and "the named
     // owner actually exists somewhere a reader can find it" rested entirely on
     // this comment. The owner has to be locatable, which in this repo means a
-    // backlog entry or a spec directory. Both current values name
-    // docs/design/backlog.md's "The drift ledger's factory does not apply the
-    // store's per-type resolutions".
+    // backlog entry or a spec directory.
     expect(
       closedBy,
       `${id}: "${closedBy}" names no locatable artifact. An owner a reader cannot open is `
