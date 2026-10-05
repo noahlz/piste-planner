@@ -1,6 +1,6 @@
 import type { Competition } from '../../engine/types.ts'
 import { formatMinutes } from '../../lib/time.ts'
-import { phaseDisplay, stripAssignmentLabel } from '../../lib/blockLabels.ts'
+import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts'
 import { GENDER_DISPLAY, WEAPON_DISPLAY, categoryDisplay } from '../../lib/competitionLabels.ts'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx'
 import type { BlockPlacement } from '../../layout/lanes.ts'

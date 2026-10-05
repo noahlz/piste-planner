@@ -1220,6 +1220,10 @@ placed event once at the canvas's times, and printing yields four pages.
   → 2026-10-04, T044 verdict "matches" with two owner decisions that add
   T048 and T049 (`handoff.md` §Verdicts, T044). Order from here:
   T048 → T049 → T037 ‖ T038 → T039 → T040 → T041 ‖ T042 → T043.
+  → 2026-10-04, T041 print check passed with three owner remarks, triaged
+  into T050 (readable names in the Schedule view, in 013) and T051 (backlog
+  and roadmap: team events run no pool round, a new feature after 015).
+  Order from here: T050 → T051 → T041 re-print → T043.
 
 - [x] **T047** Delete the team-event cut coercion loop in
   `src/store/buildConfig.ts` (handoff finding 7, owner decision: delete). It is
@@ -1301,7 +1305,7 @@ placed event once at the canvas's times, and printing yields four pages.
   → Verdict 2026-10-04: **matches** (`handoff.md` §Verdicts, T044). The two
   open questions came back as T048 and T049.
 
-- [ ] **T048** The findings border on a block (mockup M1285, owner decision
+- [x] **T048** The findings border on a block (mockup M1285, owner decision
   2026-10-04, `handoff.md` finding 31). A placed, non-overflow block whose
   competition has a committed finding row (`findingRows`, the list
   `CenterView` commits – never the live store, FR-042) of severity Warning,
@@ -1315,8 +1319,23 @@ placed event once at the canvas's times, and printing yields four pages.
   follows the commit, not the store. `react-code-reviewer` and
   `test-quality-reviewer` after. SMOKE PASS with no driver edit
   *(subagent commits)*
+  → Done 2026-10-04 on `013-phase8-finish`: `94f1cb739c`, review follow-up
+  `c61ef2e96a`. `Block` takes a required `warned` prop; `data-warned` is
+  "true" exactly when the solid `--flash` edge is drawn (warned and not
+  overflow); `Canvas` derives the set from the committed `findingRows`
+  (`WARNED_SEVERITIES` over `flaggedTargets`), no new prop. Contract miss:
+  `CanvasTooltip.test.tsx` mounts `<Block>` directly – halted, authorized,
+  `warned={false}` at its two mounts. 8 cases red first on the predicted
+  reason; the three Block edge cases first asserted border longhands jsdom
+  leaves empty under a `var()` shorthand (test bug, fixed). The React review
+  found a real defect: the `border` shorthand beside a `borderStyle` longhand
+  logs a React style-conflict error whenever `warned` flips on a mounted
+  block, which the smoke's console check would catch; now longhands from one
+  `warnedEdge` boolean, with a re-render test. 76 files / 1753 → 1761 → 1762
+  tests, tsc and lint clean. SMOKE PASS, no driver edit, 0 console errors,
+  Suggest 15/66/80/48, boot 24 rows / 19·5·0; 9 of 66 B1 boot blocks warned.
 
-- [ ] **T049** Small text to WCAG AA (owner decision 2026-10-04, `handoff.md`
+- [x] **T049** Small text to WCAG AA (owner decision 2026-10-04, `handoff.md`
   finding 32). The panels' section captions (`SectionCaption`, duplicated in
   more than one panel, plus the other copies of the 11.5px / 600 / .06em
   uppercase caption style) go from `text-neutral-600` to `text-neutral-700`.
@@ -1327,8 +1346,22 @@ placed event once at the canvas's times, and printing yields four pages.
   so the axis keeps its hierarchy. Styling only: no accessible name, role,
   `data-*` or DOM-order change. SMOKE PASS with no driver edit; reshoot
   `scripts/screenshot.mjs`. `react-code-reviewer` after *(subagent commits)*
+  → Done 2026-10-04: `e8c6f2db90`, review follow-up `f6726047d5` (Prettier
+  on three files, whitespace only). One `CAPTION_CLASS` in
+  `src/components/common/caption.ts` and one `SectionCaption` beside it
+  replace the three panel copies; EventsPanel's "Selected", ScheduleOutput's
+  column heads and ExportPopover's three headings use the same class, each
+  keeping its element. Measured: caption `#5d5d60` on `--chrome` 4.00 →
+  6.13:1; off-hour tick `--tick-minor` `#a3a3a6` → `#68686b` on
+  `--chrome-deep` 2.11 → 4.66:1; hour ticks raised `neutral-700` →
+  `neutral-800` (5.51 → 8.41:1) so the axis keeps its step. No role, name,
+  `data-*` or DOM change; no test edit; 76 files / 1762 tests, tsc and lint
+  clean. SMOKE PASS, no driver edit, 0 console errors, Suggest 15/66/80/48,
+  boot 24 rows / 19·5·0; shots retaken. Other small text still below AA
+  (dock heading, preset caption, footer labels at `neutral-500`, and more)
+  was listed, not changed – T042 records it.
 
-- [ ] **T037** [P] Design-document edits (FR-070). In
+- [x] **T037** [P] Design-document edits (FR-070). In
   `docs/design/competition-planner-workbench.md`: §Virtualization (`:161`)
   records that 013 removed windowing deliberately – native scrolling and
   sticky positioning closed three recorded defects, 320 rows and ~50–130
@@ -1341,15 +1374,31 @@ placed event once at the canvas's times, and printing yields four pages.
   *(subagent commits)*
   → 2026-10-04: the roadmap half is done – the planning session rewrote
   §Roadmap and both citations are gone. T037 is §Virtualization only.
+  → Done 2026-10-04: `5937f82b6c`. §Virtualization now records that 013
+  removed windowing on purpose, with a link to research D2; the stale D1
+  citation to the removed 004 research went with the old paragraph.
 
-- [ ] **T038** The retired surfaces are gone (SC-002). From the orchestrator,
+- [x] **T038** The retired surfaces are gone (SC-002). From the orchestrator,
   no commit: run the full quickstart §2 grep over `src/`, `__tests__/` and
   `scripts/`, plus `data-highlighted`, `Auto-schedule all`, `Save / Share`,
   `Presets…`, `Fit to day`, `Strip count`, `name: 'Suggest'` over `scripts/`.
   Every one must return nothing. Record the command and its empty output for
   T043's handoff
+  → 2026-10-04: the first run did not return nothing. Hits: `blockLabels`
+  (the live `src/lib/blockLabels.ts` T031 created reuses the retired file's
+  name), `--cat-` and `palette.ts` in `weaponTokens.test.ts` (three cases
+  asserting the retired prefix is absent – standing rule 14), and two
+  `scripts/smoke.mjs` comments naming `AdvancedPanel` and `Presets…`.
+  Follow-up `15b0c6fe35`: the module is now `src/lib/placementLabels.ts`;
+  two `--cat-` cases deleted (covered by exact-name tables), the third
+  replaced by a hand-written 12-row `weaponVar` table; comments reworded.
+  Review follow-ups `929774da34` (a now-redundant two-spot `weaponVar` case
+  deleted) and `45d2a12a4a` (the driver header no longer describes the
+  retired Advanced section). 1762 → 1760 → 1759. Re-run by the orchestrator
+  at `45d2a12a4a`, both commands with `--exclude-dir=smoke-shots`
+  (gitignored shot output): no output, exit 1, both.
 
-- [ ] **T039** **(dispatched)** Live, in the browser (SC-013, quickstart §9).
+- [x] **T039** **(dispatched)** Live, in the browser (SC-013, quickstart §9).
   Use the `live-smoke` skill against the running app. Pass condition: SMOKE
   PASS twice, 0 console errors, boot places 24 of 24, all four Suggest presses
   return their counts, the share link round-trips. Any repair to
@@ -1360,20 +1409,44 @@ placed event once at the canvas's times, and printing yields four pages.
   rows**. The footer's `19 placed · 5 unplaced · 0 pinned` is the known
   lane-packer overflow (handoff finding 9), recorded with the run and not a
   failure; backlog §The canvas calls events unplaced owns the fix.
+  → Done 2026-10-04 at `a6621c0ddf`, dev server from the worktree on :5186:
+  SMOKE PASS twice, byte-identical logs, 0 console errors, Suggest
+  15/66/80/48 (NAC Youth 66), boot 24 schedule rows with footer 19 placed ·
+  5 unplaced · 0 pinned, share round-trip 12 rows of 12 with the Single
+  override restored to Default. No driver edit.
 
-- [ ] **T040** Run the full gate on the finished branch twice: `tsc -b`,
+- [x] **T040** Run the full gate on the finished branch twice: `tsc -b`,
   `lint`, `pnpm test`. Account for the test-count delta against T001's
   starting numbers – tests added minus tests deleted must close exactly, with
   none skipped and no assertion weakened; `grep -rE 'it\.skip|test\.skip|describe\.skip|\.todo|\.only'`
   over `__tests__/` and `src/` returns nothing. Record both runs' numbers here
+  → Done 2026-10-04 at `a6621c0ddf`: two runs, `tsc -b`, lint and the suite
+  clean and identical, 76 files / 1759 tests; the skip/only grep prints
+  nothing. Reconciles: vitest measured at all 90 commits from T001
+  (`1ab0d15c79`, 68 / 1848) to HEAD, test names diffed between consecutive
+  commits, net −89, every checkpoint in §Measurements matching. Every
+  deletion is recorded with its successor or went with its surface. Prose
+  case counts that differ from the names measured (T018 "24" vs 19, T036
+  "Nine" vs 8, T045 "7" vs 6 new + 4 replaced, T006 4 vs 5) open no gap in
+  the totals. Full table in T043's handoff. Re-run after T050.
 
-- [ ] **T041** [P] Print, by hand (SC-008, quickstart §8). Run the app, load
+- [x] **T041** [P] Print, by hand (SC-008, quickstart §8). Run the app, load
   B1, Auto-assign, switch to Schedule, press Print, save to PDF. Confirm four
   pages, one per day, each holding only that day's table, legible in
   greyscale. Record the result in `specs/013-workbench-redesign/handoff.md`
   §Verdicts for T043 *(user judges)*
+  → 2026-10-04, owner: "from printing perspective, it looks great." Three
+  remarks on the content, investigated read-only and each checked by a
+  second agent: (1) the Competition column prints the hyphenated catalogue
+  id, not a name → T050; (2) team events "on two strips" are B1's 10-team
+  Vet events split into two pools of five, and the Strips column shows only
+  the pool strip count – B1's team fields are 10/10/10/10/20/30, rounded and
+  unsourced; (3) the engine gives team events a real pool round, which
+  METHODOLOGY.md assumes (`team_pools_start`, :197) – a spec gap, and an
+  engine change that moves the ledger for B1, B2 and B8 → T051 records it
+  as a roadmap feature after 015. The owner re-prints after T050.
 
-- [ ] **T042** Update `docs/design/backlog.md`: close the three canvas
+- [x] **T042** Update `docs/design/backlog.md`: close the three canvas
   defects under §The workbench canvas is not yet a finished surface, §A
   fencer count of 0 or 1 unmounts the whole app, §The Advanced panel
   re-implements the engine's referees-per-pool factor (corrected by research
@@ -1391,8 +1464,73 @@ placed event once at the canvas's times, and printing yields four pages.
   → 2026-10-04: the lane-packer overflow and keyboard-operable blocks
   (finding 13) already have backlog entries from the planning session;
   point at them rather than writing new ones.
+  → Done 2026-10-04: `a6621c0ddf`. A "What 013 deliberately left unfixed"
+  section at the top of the backlog points at each entry. New entries: an
+  unpinned predecessor is not held before a pinned successor (with crossover
+  between pins and through Move day), the engine and the store both report a
+  pin collision, the mockup's remaining visual gaps (finding 31), and small
+  text still below WCAG AA (T049's list). Existing entries gained finding 33
+  (lane packer) and the two dead constants (dead code).
 
-- [ ] **T043** Write `specs/013-workbench-redesign/handoff.md`: §Verdicts (the
+- [x] **T050** Readable event names in the Schedule view (owner remark on
+  T041, decision 2026-10-04). The Competition column prints
+  `competition_id` (`VET-M-FOIL-TEAM`) in mono; it shows
+  `competitionLabel(competition)` instead, from the committed
+  `schedule.competitions` – the source the canvas names blocks from – with
+  the id as fallback. `data-schedule-row`, the header names and the id
+  tie-break in the sort stay. Pin it in `ui-contract.md` §Schedule view
+  first; grep `data-cell`, `getAllByRole('cell')` and `getByText(<id>)`
+  under `__tests__/` (finding 26) and name every file. Test-first.
+  `react-code-reviewer` and `test-quality-reviewer` after. SMOKE PASS twice
+  with no driver edit, `scripts/screenshot.mjs` reshot, T040 re-run, then
+  the owner re-prints *(subagent commits)*
+  → Done 2026-10-04: `11d8c1573e`, review follow-up `be22677e96`. The cell
+  reads one id → label map built from the committed `schedule.competitions`
+  (`labelById.get(id) ?? id`), drops mono, and may wrap
+  (`whitespace-normal`) so a 41-character name never pushes the other six
+  columns off a page. Contract sentence added to `ui-contract.md` §Schedule
+  view. Three cases red first on the predicted reason; the fallback case
+  green by construction (recorded). Consumers re-pointed to
+  `[data-schedule-row]` in `scheduleOutput`, `invalidState` and `recompute`;
+  `viewEquivalence` expects "Div 1 Men's Foil Individual" and gained a
+  table-equals-block naming case. Review follow-up: the fallback fixture is
+  a real catalogue id left out of the committed list (a catalogue lookup
+  would fail it) and a case pins the id tie-break. 76 files / 1759 → 1764
+  tests (+5 by name, none removed). SMOKE PASS twice, no driver edit, 0
+  console errors, Suggest 15/66/80/48, boot 24 rows / 19·5·0; shots
+  retaken. Print-emulated Letter PDF of B1's Schedule: 4 pages, one day
+  each, no clipped column. T040 re-run at `401e860d18`: two identical clean
+  runs, 76 / 1764, skip grep empty, reconciles from 1759.
+
+- [x] **T051** Backlog and roadmap for the rest of the T041 remarks (docs
+  only). A roadmap feature after 015: team events go straight to DE (no
+  pool round), the team DE is modelled for teams (strips sized to the
+  field rather than a fixed 4, team match length, video for gold and bronze
+  only per METHODOLOGY.md:416), "placed" stops meaning "has a pool start",
+  and B1/B2's rounded team counts are replaced with sourced ones in the same
+  ledger move. The owner amends METHODOLOGY.md first. Backlog entries for
+  catalogue ids inside Findings messages and for `competitionLabel`'s
+  wording against published schedules ("Div 1" vs "Division I", "Senior"
+  for Div 1 team) *(subagent commits)*
+  → Done 2026-10-04: `401e860d18`. Roadmap feature 023 "Team events go
+  straight to DE", after 015 and before 022 (next free number, no
+  renumbering), with its scope, the METHODOLOGY passages the owner amends
+  first, and the ledger statement (B1, B2, B8 move; B3–B7 must not; 24/24/53
+  and the 24-row boot hold). Backlog: team events run a pool round, catalogue
+  ids inside Findings messages, `competitionLabel` wording – each also
+  listed under "What 013 deliberately left unfixed".
+
+- [x] **T052** Print defaults to landscape (owner, T041 re-print
+  2026-10-04: "looks good. The default should be landscape if possible.")
+  → Done 2026-10-04: `0f8e25629c`. `@page { size: landscape }` at the top of
+  the `@media print` block in `src/index.css`, kept by the Vite build. jsdom
+  cannot observe `@page`, so the check is a Chromium PDF of B1's Schedule
+  with `preferCSSPageSize`: 4 pages, 792 × 612 pt (Letter, landscape). Other
+  browsers were not checked. 76 files / 1764 tests, tsc and lint clean,
+  SMOKE PASS, 0 console errors, Suggest 15/66/80/48. The owner's re-print
+  after T050 passed: names in the Competition column, one day per page.
+
+- [x] **T043** Write `specs/013-workbench-redesign/handoff.md`: §Verdicts (the
   T015 screenshot verdict, T023's NAC Youth value, T041's print check); the
   drift record (T002's baseline beside T035's after-table, every count
   unmoved); one row per task with what it deleted and what replaced it; the
@@ -1404,6 +1542,17 @@ placed event once at the canvas's times, and printing yields four pages.
   the merged tree before `commit-with-costs`); and a paste-ready resume
   prompt. Mark `spec.md` Status Delivered. Then stop – the merge commit is the
   user's *(subagent commits)*
+  → Done 2026-10-04: `cbcfcdee1d`, fact-check corrections `fc558f4ece` and
+  `39478a64c9` (the first wrongly called T040's three renamed test names
+  two; two titles were reworded, three names changed). Merged tree checked
+  before writing, at `a819520ad2` in a throwaway detached worktree: main
+  `8512bed20c` is an ancestor (fast-forward, no conflicts, tree identical to
+  the branch), `package.json` and the lockfile unchanged, tsc and lint
+  clean, 76 files / 1764 tests, drift ledger 18 tests with snapshot SHA
+  `5483c40c1349…` unchanged. Every commit after `a819520ad2` touches
+  `specs/` only. A read-only fact-check confirmed all 70 cited SHAs, the
+  counts, the smoke records, the drift table and every T043 requirement.
+  `spec.md` Status: Delivered (2026-10-04). The merge commit is the user's.
 
 ---
 

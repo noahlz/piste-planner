@@ -130,7 +130,7 @@ describes the Default radio. (T045, finding 6.)
 | Day group | `data-day-group={day}` **kept** |
 | Day band | `data-day-band={day}`, sticky. Text: `Day N · E events · finishes H:MM · P of S strips at peak · F findings` |
 | Gutter row | `data-strip-row` **kept**, `data-flagged="true"` when a finding targets an event on that row |
-| Block | `role="img"` **kept**, `aria-label={name}` **kept**, `data-event-block` **kept**, `data-event-id`, `data-day`, `data-phase`, `data-phase-kind`, `data-start`, `data-end`, `data-strips`, `data-first-strip`, `data-overflow` (all **kept**), plus `data-weapon`, `data-pinned`, `data-selected`, `data-flash` |
+| Block | `role="img"` **kept**, `aria-label={name}` **kept**, `data-event-block` **kept**, `data-event-id`, `data-day`, `data-phase`, `data-phase-kind`, `data-start`, `data-end`, `data-strips`, `data-first-strip`, `data-overflow` (all **kept**), plus `data-weapon`, `data-pinned`, `data-warned`, `data-selected`, `data-flash` |
 
 Removed: `data-category`, `data-highlighted`, `data-canvas-viewport`,
 `data-block-layer`, `data-row-line`, `data-day-grid`, the `toolbar` "Canvas
@@ -144,6 +144,7 @@ zoom controls", and the `group` "Matrix grid".
 | Hatch and icon | Phase | DE blocks carry the hatch and a bracket icon, pool blocks a grid icon |
 | Name text | Category and gender | Present when the block has room, else in the tooltip |
 | Badge | Pinned | `data-pinned="true"` and the pin glyph. Reads the pinned set committed with the schedule, so it holds through the settle and while blocked (FR-042, T046) |
+| Solid flash edge | A committed Warning, Unplaced or Blocking finding for the event (not Notes). Never on an overflow block | `data-warned="true"` (T048) |
 | Dashed edge | Overflow | `data-overflow="true"` |
 | Ring | Selected | `data-selected="true"` |
 
@@ -188,7 +189,10 @@ The driver's `button` "Fit to day" becomes "Fit day".
 One `<section aria-label="Day N">` per day with a table whose rows carry
 `data-schedule-row={competitionId}` **kept** and whose column headers **kept**
 are Competition, Pool Start, Pool End, DE Start, DE End, Strips, Finish
-(the Day column moves to the section heading). A `button` "Print" calls the
+(the Day column moves to the section heading). The Competition cell shows the
+event's readable name (`competitionLabel`, from the committed schedule's
+competitions, the id as fallback) while `data-schedule-row` stays the id
+(T050). A `button` "Print" calls the
 browser's print. Under `@media print` every region but this one is hidden and
 each day section starts a new page.
 

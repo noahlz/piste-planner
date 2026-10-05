@@ -4,7 +4,11 @@ import { ScheduleOutput } from '../../src/components/sections/ScheduleOutput.tsx
 import { WorkbenchShell } from '../../src/components/workbench/WorkbenchShell.tsx'
 import { useStore } from '../../src/store/store.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { makePlacement } from '../helpers/factories.ts'
+import { deriveEventSchedule } from '../../src/engine/derive.ts'
+import { Category, Gender, Weapon } from '../../src/engine/types.ts'
+import type { Competition, Placement } from '../../src/engine/types.ts'
+import type { DerivedSchedule } from '../../src/store/derived.ts'
+import { makeCompetition, makeConfig, makePlacement, makeStrips } from '../helpers/factories.ts'
 
 // 005 T011: schedule-output rows moved out of the two departing layout test
 // files (specs/005-consolidate-domain-logic/triage-record.md (removed; git show 0ab5bd2dc9:specs/005-consolidate-domain-logic/triage-record.md) rows: one departing file's rows 22, 23, 24, 25, 26,
@@ -62,12 +66,102 @@ function seedScheduled(specs: Array<{ day: number; start_time: number }>): strin
   return ids
 }
 
+const TEAM_VET_ID = 'VET-M-FOIL-TEAM'
+
+/** The text of one row's Competition cell, found by row id rather than by the cell's own text. */
+function competitionCell(rowId: string): string {
+  const cell = document.querySelector(`[data-schedule-row="${rowId}"] [data-cell="competition"]`)
+  if (!cell) throw new Error(`no competition cell in schedule row ${rowId}`)
+  return cell.textContent ?? ''
+}
+
+/**
+ * A committed model handed to `ScheduleOutput` as its `schedule` prop. Each
+ * event is derived from its competition, but `listed` decides which
+ * competitions the model's `competitions` array carries, so a case can leave
+ * an event's competition out of it.
+ */
+function committedModel(
+  events: Array<{ competition: Competition; placement: Placement }>,
+  listed: Competition[],
+): DerivedSchedule {
+  const config = makeConfig({ days_available: 3, strips: makeStrips(24, 4) })
+  return {
+    config,
+    competitions: listed,
+    events: Object.fromEntries(
+      events.map((e) => [e.competition.id, deriveEventSchedule(e.placement, e.competition, config)]),
+    ),
+  }
+}
+
+/** Places the catalogue's team veteran event in the live store. */
+function seedPlacedTeamVet(): void {
+  seedValidConfig()
+  useStore.getState().addCompetition(TEAM_VET_ID)
+  useStore.getState().updateCompetition(TEAM_VET_ID, { fencer_count: 10 })
+  useStore.getState().setPlacementsFromAuto({ [TEAM_VET_ID]: makePlacement({ strip_count: 5 }) })
+}
+
+describe('Competition cell names the event (T050)', () => {
+  it('names a store-placed catalogue event by its readable label, not its id', () => {
+    seedPlacedTeamVet()
+    render(<ScheduleOutput />)
+
+    expect(competitionCell(TEAM_VET_ID)).toBe("Veteran Men's Foil Team")
+  })
+
+  it('shows the id, not a catalogue name, when the schedule carries no competition for the row', () => {
+    // A real catalogue id left out of `listed`: a catalogue fallback would print the label.
+    const orphan = makeCompetition({ id: TEAM_VET_ID })
+    const model = committedModel([{ competition: orphan, placement: makePlacement({ strip_count: 4 }) }], [])
+    render(<ScheduleOutput schedule={model} />)
+
+    expect(competitionCell(TEAM_VET_ID)).toBe(TEAM_VET_ID)
+  })
+
+  it('breaks start-time ties by id, not by the label the reader sees', () => {
+    // 'a-event' is a Y12 event ("Y12 ...") and sorts after 'b-event' (Cadet) by label.
+    const a = makeCompetition({ id: 'a-event', category: Category.Y12 })
+    const b = makeCompetition({ id: 'b-event', category: Category.CADET })
+    const placement = makePlacement({ day: 0, start_time: 480, strip_count: 4 })
+    const model = committedModel(
+      [
+        { competition: b, placement },
+        { competition: a, placement },
+      ],
+      [a, b],
+    )
+    render(<ScheduleOutput schedule={model} />)
+
+    const rowIds = Array.from(document.querySelectorAll('[data-schedule-row]')).map((el) =>
+      el.getAttribute('data-schedule-row'),
+    )
+    expect(rowIds).toEqual(['a-event', 'b-event'])
+  })
+
+  it('reads the committed schedule prop, not the live store', () => {
+    seedPlacedTeamVet()
+    // Same id as the store's event, different event: the label must follow the prop.
+    const committed = makeCompetition({
+      id: TEAM_VET_ID,
+      category: Category.JUNIOR,
+      gender: Gender.WOMEN,
+      weapon: Weapon.SABRE,
+    })
+    const model = committedModel([{ competition: committed, placement: makePlacement({ strip_count: 4 }) }], [committed])
+    render(<ScheduleOutput schedule={model} />)
+
+    expect(competitionCell(TEAM_VET_ID)).toBe("Junior Women's Saber Individual")
+  })
+})
+
 describe('ScheduleOutput', () => {
   it('renders no staleness banner — placements are always current', () => {
     const id = seedPlacedCompetition()
     render(<ScheduleOutput />)
 
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
     expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
   })
@@ -76,7 +170,7 @@ describe('ScheduleOutput', () => {
     const id = seedPlacedCompetition()
     render(<ScheduleOutput />)
 
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     // Pool start derives straight from the placement's start_time (480 = 8:00)
     expect(screen.getAllByText('8:00').length).toBeGreaterThan(0)
     expect(screen.queryByText('No events placed yet.')).not.toBeInTheDocument()
@@ -119,7 +213,7 @@ describe('ScheduleOutput', () => {
 
     render(<ScheduleOutput />)
 
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Day 8' })).toBeInTheDocument()
     expect(screen.getByText('Day 8 out of range')).toBeInTheDocument()
 

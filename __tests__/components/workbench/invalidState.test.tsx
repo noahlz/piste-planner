@@ -72,7 +72,7 @@ describe('CenterView valid state', () => {
       />,
     )
 
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
     expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
   })
@@ -123,7 +123,7 @@ describe('CenterView cold boot into an already-invalid config (FR-009)', () => {
     )
 
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     expect(screen.queryByText('No events placed yet.')).not.toBeInTheDocument()
   })
 })
@@ -140,14 +140,14 @@ describe('CenterView dimmed-invalid rule', () => {
         onToggleDetailCollapsed={() => {}}
       />,
     )
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
 
     act(() => {
       useStore.getState().setStrips(0)
     })
 
     // The row is still on screen — never blanked — but dimmed.
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
 
     const overlay = screen.getByRole('region', { name: 'Blocking findings' })
@@ -207,19 +207,19 @@ describe('CenterView across an edit sequence', () => {
       />,
     )
 
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
 
     act(() => {
       useStore.getState().setStrips(0)
     })
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'true')
 
     act(() => {
       useStore.getState().setStrips(12)
     })
-    expect(screen.getByText(id)).toBeInTheDocument()
+    expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
     expect(dimmedWrapper()).toHaveAttribute('data-dimmed', 'false')
     expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
   })
@@ -284,10 +284,10 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
     restoreResizeObserver()
   })
 
-  /** The row's cells in table order: id, pool start, pool end, DE start, DE end, strips. */
+  /** The row's cells in table order: event name, pool start, pool end, DE start, DE end, strips. */
   function rowCells(id: string): string[] {
-    const row = screen.getByText(id).closest('tr')
-    if (!row) throw new Error(`no <tr> found for ${id}`)
+    const row = document.querySelector<HTMLElement>(`[data-schedule-row="${id}"]`)
+    if (!row) throw new Error(`no schedule row for ${id}`)
     return within(row).getAllByRole('cell').map((cell) => cell.textContent ?? '')
   }
 

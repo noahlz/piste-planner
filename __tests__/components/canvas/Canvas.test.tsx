@@ -5,7 +5,7 @@ import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
 import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
-import { selectDerivedSchedule, selectDerivedFindings } from '../../../src/store/derived.ts'
+import { selectDerivedSchedule, selectDerivedFindings, selectFindings, FindingSeverity } from '../../../src/store/derived.ts'
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
 import { assignStripLanes } from '../../../src/layout/lanes.ts'
 import { BottleneckCause, BottleneckSeverity } from '../../../src/engine/types.ts'
@@ -482,6 +482,120 @@ describe('Canvas jump (013 T030, contract §4.4)', () => {
       expect(block.dataset.flash).not.toBe('true')
     }
   })
+})
+
+describe('Canvas findings edge (FR-042, 013 T048)', () => {
+  function findingRow(severity: Finding['severity'], target: string): Finding {
+    return {
+      id: `test:${severity}:${target}`,
+      severity,
+      where: `Day 1 · ${target}`,
+      day: 0,
+      message: `${severity} for ${target}`,
+      target,
+    }
+  }
+
+  function blocksOf(id: string): HTMLElement[] {
+    return eventBlocks().filter((b) => b.dataset.eventId === id)
+  }
+
+  /** An event B1 draws with both a placed block and an overflow block. */
+  function eventWithOverflow(): string {
+    const overflow = eventBlocks().find((b) => b.dataset.overflow === 'true')
+    if (!overflow?.dataset.eventId) throw new Error('fixture has no overflow block')
+    return overflow.dataset.eventId
+  }
+
+  /** Every block reports 'true' only if it is a placed block of `targetId`. */
+  function expectWarnedOnly(targetId: string | null): void {
+    for (const b of eventBlocks()) {
+      const expected = b.dataset.eventId === targetId && b.dataset.overflow !== 'true'
+      expect(b.dataset.warned, b.dataset.eventBlock).toBe(expected ? 'true' : 'false')
+    }
+  }
+
+  function guardTarget(targetId: string): void {
+    const blocks = blocksOf(targetId)
+    expect(blocks.some((b) => b.dataset.overflow !== 'true')).toBe(true)
+    expect(blocks.some((b) => b.dataset.overflow === 'true')).toBe(true)
+  }
+
+  /** The id of a B1 event that is not `id`. */
+  function otherThan(competitions: { id: string }[], id: string): string {
+    const other = competitions.find((c) => c.id !== id)
+    if (!other) throw new Error('fixture has one event')
+    return other.id
+  }
+
+  it.each(['Warning', 'Unplaced', 'Blocking'] as const)(
+    'marks every placed block of the event a committed %s row targets, never its overflow block, and no other event',
+    (severity) => {
+      const { schedule, findings, dayConfigs } = b1Board()
+      // Learn the target from a first render, since only a drawn board shows which event overflows.
+      const probe = renderCanvas({ schedule, findings, dayConfigs })
+      const targetId = eventWithOverflow()
+      probe.unmount()
+      const otherId = otherThan(schedule.competitions, targetId)
+
+      // A mixed list: a Note on another event must not mark it.
+      renderCanvas(
+        { schedule, findings, dayConfigs },
+        { findingRows: [findingRow('Note', otherId), findingRow(severity, targetId)] },
+      )
+
+      guardTarget(targetId)
+      expect(blocksOf(otherId).length).toBeGreaterThan(0)
+      expectWarnedOnly(targetId)
+    },
+  )
+
+  it('leaves the event alone when only a Note targets it', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    const targetId = schedule.competitions[0].id
+
+    renderCanvas({ schedule, findings, dayConfigs }, { findingRows: [findingRow('Note', targetId)] })
+
+    expect(blocksOf(targetId).length).toBeGreaterThan(0)
+    expectWarnedOnly(null)
+  })
+
+  it('follows the committed findingRows prop, not the store', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    // The live store rates this event Unplaced, but the committed list does not.
+    const live = selectFindings(useStore.getState()).find(
+      (r) => r.severity === FindingSeverity.UNPLACED && r.target !== null,
+    )
+    if (!live?.target) throw new Error('fixture has no live Unplaced row')
+    const liveTarget = live.target
+
+    const canvasWith = (findingRows: Finding[]) => (
+      <Canvas
+        schedule={schedule}
+        findings={findings}
+        dayConfigs={dayConfigs}
+        zoom={DEFAULT_ZOOM}
+        findingRows={findingRows}
+        pinnedIds={NO_PINS}
+      />
+    )
+    const { rerender } = render(canvasWith([]))
+    expect(blocksOf(liveTarget).length).toBeGreaterThan(0)
+    expectWarnedOnly(null)
+
+    // Only the prop can turn it on.
+    const propTarget = schedule.competitions[0].id
+    rerender(canvasWith([findingRow('Warning', propTarget)]))
+    expect(placedBlocksOfNonEmpty(propTarget)).toBe(true)
+    expectWarnedOnly(propTarget)
+
+    rerender(canvasWith([]))
+    expectWarnedOnly(null)
+  })
+
+  function placedBlocksOfNonEmpty(id: string): boolean {
+    return blocksOf(id).some((b) => b.dataset.overflow !== 'true')
+  }
 })
 
 describe('Canvas pin badge (FR-042, 013 T046)', () => {

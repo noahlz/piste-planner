@@ -3,7 +3,9 @@ import { selectDerivedSchedule } from '../../store/derived.ts'
 import type { DerivedSchedule } from '../../store/derived.ts'
 import type { DerivedEventSchedule } from '../../engine/derive.ts'
 import { formatMinutes } from '../../lib/time.ts'
+import { competitionLabel } from '../../lib/competitionLabels.ts'
 import type { ScheduleResult } from '../../engine/types.ts'
+import { CAPTION_CLASS } from '../common/caption.ts'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -13,8 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-
-const HEAD = 'text-[11.5px] font-semibold tracking-[.06em] text-neutral-700 uppercase'
 
 /**
  * The DE's first scheduled minute. A single-piece DE carries it in `de_start`;
@@ -52,6 +52,15 @@ function byPoolStartThenId(a: DerivedEventSchedule, b: DerivedEventSchedule): nu
  * under, so `@media print` (`src/index.css`) can break a page there and a
  * reader can tell days apart without decoding a column.
  *
+ * The Competition cell names the event the way the canvas names its blocks
+ * (`competitionLabel`), looked up by id in the same committed
+ * `schedule.competitions`, so the table and the blocks cannot disagree. It
+ * deliberately does not read the catalogue: an id absent from the committed
+ * competitions falls back to the id rather than borrowing a name from a model
+ * the rest of the row was not derived from (T050). `data-schedule-row` stays
+ * the id. The cell may wrap, since labels run to ~41 characters and a
+ * no-wrap cell would squeeze the other six columns off a printed page.
+ *
  * `schedule` is the committed model `CenterView` hands down while a debounce
  * or the dimmed-invalid rule holds the center behind the live store
  * (S2-contract.md §Center view). The hook still runs unconditionally — hook
@@ -62,6 +71,7 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
   const schedule = committed ?? live
 
   const entries = Object.values(schedule.events)
+  const labelById = new Map(schedule.competitions.map((c) => [c.id, competitionLabel(c)]))
 
   const printButton = (
     <button
@@ -130,13 +140,13 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
             <Table>
               <TableHeader>
                 <TableRow className="border-row-line">
-                  <TableHead className={HEAD}>Competition</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>Pool Start</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>Pool End</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>DE Start</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>DE End</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>Strips</TableHead>
-                  <TableHead className={`${HEAD} text-right`}>Finish</TableHead>
+                  <TableHead className={CAPTION_CLASS}>Competition</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>Pool Start</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>Pool End</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>DE Start</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>DE End</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>Strips</TableHead>
+                  <TableHead className={`${CAPTION_CLASS} text-right`}>Finish</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -149,9 +159,9 @@ export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSche
                   >
                     <TableCell
                       data-cell="competition"
-                      className="font-mono text-xs text-foreground"
+                      className="text-[12.5px] whitespace-normal text-foreground"
                     >
-                      {r.competition_id}
+                      {labelById.get(r.competition_id) ?? r.competition_id}
                     </TableCell>
                     <TableCell
                       data-cell="poolStart"

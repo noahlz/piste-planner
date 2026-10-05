@@ -13,6 +13,55 @@ feature directory is created for one only when it is assigned a phase.
 > git history at `0ab5bd2dc9` preserves them, and each shipped feature's own
 > `specs/` handoff records what it deliberately did not fix.
 
+## What 013 deliberately left unfixed
+
+*Recorded by 013 T042, 2026-10-04. Each bullet points at its entry. The roadmap
+feature that owns it is in [`competition-planner-workbench.md`](./competition-planner-workbench.md)
+§Roadmap.*
+
+- Sequencing onto a pin, and crossover between pins or through Move day (the
+  design alignment's E3) –
+  [§Auto-assign does not hold an unpinned predecessor before a pinned successor](#auto-assign-does-not-hold-an-unpinned-predecessor-before-a-pinned-successor)
+  and
+  [§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph).
+  Feature 016.
+- The referee model divergence (E5) –
+  [§The scorecard's peak-referee row reads higher than the scheduler's own](#the-scorecards-peak-referee-row-reads-higher-than-the-schedulers-own).
+  Feature 016.
+- The engine and the store both reporting a pin collision –
+  [§The engine and the store both report a pin collision](#the-engine-and-the-store-both-report-a-pin-collision).
+  Feature 017.
+- `Bottleneck`'s missing second subject –
+  [§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject).
+  Feature 014.
+- The two dead constants and the unwired `daySequencing.ts` –
+  [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
+  Feature 021.
+- The lane-packer overflow, including the two "Unplaced, needs N strips"
+  figures for one event –
+  [§The canvas calls events unplaced that the engine placed](#the-canvas-calls-events-unplaced-that-the-engine-placed).
+  Feature 017.
+- Blocks that cannot be selected from the keyboard –
+  [§A placed block cannot be selected from the keyboard](#a-placed-block-cannot-be-selected-from-the-keyboard).
+  Feature 017.
+- The mockup's remaining visual gaps –
+  [§The mockup's remaining visual gaps](#the-mockups-remaining-visual-gaps).
+- Small text still below WCAG AA –
+  [§Small text still below WCAG AA](#small-text-still-below-wcag-aa).
+
+- Team events scheduled with a pool round –
+  [§Team events are scheduled with a pool round](#team-events-are-scheduled-with-a-pool-round).
+  Feature 023. Came from the T041 print remarks.
+- Catalogue ids inside Findings messages –
+  [§Findings messages name events by catalogue id](#findings-messages-name-events-by-catalogue-id).
+  Came from the T041 print remarks, unscheduled.
+- `competitionLabel`'s wording against published schedules –
+  [§`competitionLabel` may not match published USA Fencing wording](#competitionlabel-may-not-match-published-usa-fencing-wording).
+  Came from the T041 print remarks, an owner wording call.
+
+Fact, not work: `src/store/derived.ts` no longer imports from `components/`
+(013 handoff finding 19).
+
 ## `Bottleneck` has no structured field for a second subject
 
 *Found by 010's test-quality review of T010 (R7), 2026-09-05. Recorded, not
@@ -426,6 +475,9 @@ the tree on purpose.*
   file now would discard the evidence for answering that. `saberPileupPenalty`
   in the sibling `dayAssignment.ts` is live (`dayColoring.ts:40`) and documented
   (§Saber Pileup) – that file stays regardless.
+- **`SAME_TIME_WINDOW_MINS` and `MAX_RESCHEDULE_ATTEMPTS`** are threaded through
+  the config and read by no engine code (013 research D1). Roadmap feature 021
+  deletes them with `daySequencing.ts`. Pins are wired into none of the three.
 - **Every unused *export*** flagged by `fallow dead-code --production` stays.
   The list is mostly the faithful-but-dead implementations tabulated above, and
   deleting them would destroy the evidence that the engine once matched its
@@ -899,6 +951,12 @@ packer may split a block across non-contiguous strips. The first edits
 **Cost if ignored**: every organizer's first impression is a board with five
 phantom unplaced events and Findings rows they cannot act on.
 
+The same overflow shows one event two different figures (013 handoff finding
+33). B1's Div 1 Women's Epee reads "Unplaced, needs 32 strips" in the detail
+strip and "needs 16 strips" in the DE-prelims tooltip, each being that phase's
+own need under the packer, beside a dock that says "Every event has a slot."
+One strip model removes it.
+
 ## A placed block cannot be selected from the keyboard
 
 *013 handoff findings 13 and 20. Owner decision 2026-10-04: blocks become
@@ -911,6 +969,88 @@ buttons) and can reach a placed one only through Findings → "Show on grid".
 The fix changes the role to `button` in the contract, keeps the accessible
 name, adds a visible focus ring, and re-checks the smoke driver's block
 locators in the same task.
+
+## Auto-assign does not hold an unpinned predecessor before a pinned successor
+
+*013 research D1 and the engine contract's "not guaranteed" list. Recorded, not
+fixed. Same family as the crossover gap in
+[§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph),
+which is the design alignment's E3.*
+
+`applyCrossEventEdges` (`src/engine/concurrentScheduler.ts`, around `:620–671`)
+makes a team event wait for its individual counterpart and a Vet sibling wait
+for the previous one. A pinned *successor* is committed in the pre-claim pass
+before its unpinned predecessor is placed, so the engine does not hold the
+predecessor before the pin, and the loop may place it after. Crossover between
+two pins, and between a pin and an event moved through Move day, is unchecked
+for the same reason.
+
+**What it needs**: `Competition.latest_end` is the mechanism the research names
+for expressing "this must finish before that pin". It belongs with roadmap
+feature 016, which already owns the crossover check on current placements.
+
+**Cost if ignored**: Auto-assign around pins can return a board where a team
+event precedes its individual event or a Vet sibling runs out of order, with no
+finding.
+
+## The engine and the store both report a pin collision
+
+*013 handoff finding 25. Recorded, not fixed.*
+
+When a pin cannot claim its strips, the engine emits a `PINNED_UNCLAIMED`
+bottleneck (one per phase node, finding 21). The UI never reads it: the Findings
+list shows the lane packer's Unplaced row instead (FR-059). The two surfaces
+agree on the fixture in finding 22 and nothing checks that they agree in
+general, so a pin the engine could not seat and a pin the packer could not seat
+can differ.
+
+**What it needs**: one reporter. Feature 017's single strip model is the natural
+point, and 014's structured `Bottleneck` makes `PINNED_UNCLAIMED` consumable
+without message-text matching.
+
+**Cost if ignored**: the same pin can be reported twice, or by only one surface,
+and the organizer cannot tell which to trust.
+
+## The mockup's remaining visual gaps
+
+*013 handoff finding 31, ruled 2026-10-04: these stay out of 013. The gap list
+is in the T044 commits.*
+
+- Day-band spans, the overflow stripe, block meta text, the detail strip's pill
+  internals, the rail tooltip and the panel title level. Each needs a new
+  element, not restyling.
+- The mockup's +3 / −6 block inset was applied and reverted. `Block.tsx`'s label
+  fit assumes +2 / −4, so adopting the mockup's inset means re-deriving the fit.
+
+**Cost if ignored**: cosmetic. The shell matches the mockup's look and not every
+element of it.
+
+## Small text still below WCAG AA
+
+*013 T049 measured this after raising only the panel captions and the canvas's
+off-hour ticks, an owner decision. Line numbers as of commit `e8c6f2db90`.*
+
+`neutral-600` `#7a7a7d` is 4.28:1 on white, 4.00 on `--chrome` `#f7f7f9`, 3.83
+on `--chrome-soft` `#f2f2f4` and 3.59 on `--chrome-deep` `#eaebee`.
+`neutral-500` `#98989b` is 2.88 on white, 2.69 on chrome and 2.41 on
+chrome-deep. Ratios are against the nearest known background, not each element's
+stacked background.
+
+- `neutral-600` small text: `UnplacedDock.tsx:50` h2 11px (and the p lines at 54
+  and 61, 11.5px), `PresetPicker.tsx:58` 10.5px caption, `DetailStrip.tsx:191`
+  mono 11px, `FindingsPanel.tsx:49` 12.5px, `FindingsPanel.tsx:86` mono 10.5px,
+  `ScheduleOutput.tsx:87` 12.5px, `PoolDurationSettings.tsx:58` and `:62`
+  text-xs.
+- `neutral-500` small text: `Header.tsx:51` mono 11px on chrome (2.69),
+  `StripsPanel.tsx:226` role=status 11px, `StatusFooter.tsx:81`, `89`, `96` and
+  `104` labels at 11.5px on chrome-deep (2.41), `TournamentPanel.tsx:140` the
+  en-dash glyph (2.69, decorative, likely exempt).
+- Icon-only buttons using `neutral-600` are non-text contrast (3:1 threshold) and
+  pass at 4.00.
+
+**Cost if ignored**: low-vision users cannot read captions and status labels the
+app relies on. Raising the tokens moves the shell's look, so it is an owner
+call.
 
 ## A shared URL with a fencer count of 0 or 1 may reach unguarded pool math
 
@@ -936,3 +1076,83 @@ before calling the product finished.*
 - Bare `research.md D#` and `data-model.md §` citations in `src/` and
   `__tests__/` mostly mean 013's files, but some mean deleted features. Each
   becomes a path or a `git show 0ab5bd2dc9:…` pointer.
+
+## Team events are scheduled with a pool round
+
+*From the owner's T041 print remarks, 2026-10-04. Roadmap feature 023, after
+015. The owner's rule: team events go straight to DE.*
+
+The engine gives every event a pool round before its DE, because the phase
+builder has no event-type branch (`concurrentScheduler.ts:538-557`). METHODOLOGY.md
+assumes the same (:64, :72, :130-145, :157-160, :197, :531, :600-601,
+:639-643, :707, :736-738), so this is a spec gap and the owner amends the spec
+first.
+
+What the owner saw: B1's 10-team Vet events (Men's and Women's Foil, Men's and
+Women's Sabre) run two 5-team pools on 2 strips, then a 4-strip "DE round of
+16". The Schedule view's Strips column prints `pool_strip_count`
+(`ScheduleOutput.tsx:183`), so the "2 strips" is the pool round. The 4-strip DE
+is the fixed `de_round_of_16_strips: 4` (`buildConfig.ts:218`) whatever the
+field. B8's real 4-team `D1-M-FOIL-TEAM` (`tournaments.ts:166`) gets a 1-strip
+pool and a 4-strip DE for two semifinal bouts. B1's counts are rounded to the
+nearest 10 (`tournaments.ts:2-3`), so a "10" may be anywhere from 5 to 14
+teams.
+
+Files that count team pools today: `concurrentScheduler.ts` (538-557, 771-783,
+1477-1484, 1526, 1691), `derive.ts` (144-203, 272-296), `capacity.ts`
+(97-108), `refs.ts:20-22`, `stripBudget.ts` (66-80, 132-139), `validation.ts`
+(74-93, 243-248), `flighting.ts` (38-39, 94, 159), `analysis.ts` (49-58, 117,
+140), `store/derived.ts:174-175`, `ScheduleOutput.tsx`, `DetailStrip.tsx:127-138`
+and `UnplacedDock.tsx:114-115`. "Placed" also means `pool_start !== null` in
+`runActions.ts:58`, `stripSearch.ts:146`, `__tests__/helpers/appPath.ts:46,63-64`
+and `serialization.ts:253-254`.
+
+Other gaps the same feature closes:
+
+- Team DE length comes from the individual DE table
+  (`concurrentScheduler.ts:403,582`), not a team match.
+- Div 1, Junior and Cadet team DEs ask for REQUIRED video
+  (`buildConfig.ts:206`) where METHODOLOGY.md:416 says gold and bronze only.
+- The NAC team defaults (`constants.ts:218,228,238,288`) have no stated source,
+  and the regional ones are unreachable (METHODOLOGY.md:665 says only NACs have
+  team events).
+- The ledger factory forces team events SINGLE_STAGE while the app stages them
+  (`scenarios.ts:66-68`), which is why 015 comes first.
+
+Cost if ignored: team events spend strips, time and referees on a round that
+does not exist, and the Strips column reports it.
+
+## Findings messages name events by catalogue id
+
+*From the owner's T041 print remarks, 2026-10-04. Not scheduled.*
+
+The Schedule view and the rest of the app show event labels, but engine message
+text still carries ids, for example `D1-M-EPEE-IND: cut summary — …`
+(`analysis.ts:256`, 12 Notes in B1) and the `${comp.id}: …` messages in
+`validation.ts:142-287`. They reach the Findings panel
+(`store/derived.ts:477,502`), the tooltip's Findings row and the block's
+accessible name (`Canvas.tsx:152-172`, `Block.tsx:130-139`), and the invalid
+overlay (`CenterView.tsx:213-216`).
+
+Options: (B) substitute labels in `computeAllFindings`, store-side, or (C)
+reword the engine messages. Neither moves the drift ledger, which excludes
+message strings (`driftLedger.test.ts:13-15`). Some messages name two ids
+mid-text (`flighting.ts:57`, `analysis.ts:149,193,240`, `validation.ts:89`), so
+a fix must substitute every catalogue id, not only the target or a leading
+`<id>: `. B4, B5 and B6 also raise `validation.ts:217` warnings. The overlay at
+`CenterView.tsx:201-219` has no `print-hidden` class, so a dimmed-invalid board
+prints its codes. `ExportPopover.tsx:129-144` also prints ids from load errors.
+
+## `competitionLabel` may not match published USA Fencing wording
+
+*From the owner's T041 print remarks, 2026-10-04. An owner wording call,
+unsourced either way.*
+
+The Schedule view now shows `competitionLabel` (`competitionLabels.ts:54-58`),
+which prints "Div 1" / "Div 1A" / "Div 2" (:12-15), always appends
+"Individual" (:37) and reads "Senior" for a Div 1 team event (:20-23). The
+handbook notes use "Div I / IA / II / III". FR-051 only says the view follows
+USA Fencing's published schedules, so whether they say "Division I" or omit
+"Individual" is unverified. Confirm the wording against a published schedule
+before pinning it in tests. Labels run up to 41 characters, and 21 of 120 exceed
+34, so a wording change also moves print wrapping.

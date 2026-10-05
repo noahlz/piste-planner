@@ -80,9 +80,10 @@
 // Tournament panel's "Type" combobox needs `exact` since a competition's name
 // is a prefix of its siblings', so `Referees for …` needs it too. The retired
 // top bar's own "Tournament type" control and the Advanced trigger's
-// `aria-describedby` summary link are both gone (013 T009/T010) —
-// AdvancedPanel no longer collapses, so its FR-035 summary is read straight
-// off the section's first always-rendered `div` instead.
+// `aria-describedby` summary link are both gone (013 T009/T010), and 013 T018
+// removed the Advanced section itself, so the type-change block below reads
+// referees-per-pool and video strips from the open Strips & referees
+// Inspector panel aside.
 
 import { chromium } from 'playwright-core'
 import { homedir } from 'node:os'
@@ -197,7 +198,7 @@ async function closePanel() {
 // The template picker is a Radix Select behind the header's "Preset"
 // combobox (PresetPicker.tsx), grouped under "Tournaments" (B1-B8) and
 // "Templates – invented figures" (the ten template names) — not the retired
-// rail's "Presets…" ToggleGroup. Choosing an option re-runs the auto-scheduler
+// rail's preset toggle group. Choosing an option re-runs the auto-scheduler
 // itself (PresetPicker's `handleChange`), and the Select always closes on a
 // choice, so no "is the list already visible" guard is needed the way the old
 // collapsible needed one.

@@ -6,7 +6,7 @@ import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell
 import { deriveEventSchedule } from '../../../src/engine/derive.ts'
 import type { DerivedEventSchedule } from '../../../src/engine/derive.ts'
 import type { Competition, DayConfig, Placement, TournamentConfig } from '../../../src/engine/types.ts'
-import { DeMode } from '../../../src/engine/types.ts'
+import { Category, DeMode, Gender, Weapon } from '../../../src/engine/types.ts'
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
@@ -321,6 +321,38 @@ describe('the matrix and the schedule table cannot disagree (FR-023)', () => {
     expect(fromTable).toEqual(EXPECTED_TUPLES)
   })
 
+  it('names every event in the table as the canvas names its blocks (T050)', () => {
+    // Distinct attributes per shape, so a table that printed one label for every
+    // row could not agree with the blocks by accident.
+    const named: Record<string, Shape> = {
+      plain: {
+        ...SHAPES.plain,
+        competition: makeCompetition({ id: 'plain', category: Category.CADET, gender: Gender.WOMEN, weapon: Weapon.EPEE }),
+      },
+      flighted: {
+        ...SHAPES.flighted,
+        competition: makeCompetition({ id: 'flighted', flighted: true, category: Category.JUNIOR, weapon: Weapon.SABRE }),
+      },
+      staged: {
+        ...SHAPES.staged,
+        competition: makeCompetition({ id: 'staged', de_mode: DeMode.STAGED, fencer_count: 64, category: Category.Y12 }),
+      },
+    }
+    renderBothViews(derivedModel(named))
+
+    for (const id of Object.keys(named)) {
+      const blockNames = Array.from(document.querySelectorAll<HTMLElement>(`[data-event-id="${id}"]`)).map(
+        (el) => (el.getAttribute('aria-label') ?? '').split(', ')[0],
+      )
+      expect(blockNames.length).toBeGreaterThan(0)
+      for (const blockName of blockNames) expect(cellText(id, 'competition')).toBe(blockName)
+    }
+    // Hand-written, so two views that both printed ids could not pass.
+    expect(cellText('plain', 'competition')).toBe("Cadet Women's Epee Individual")
+    expect(cellText('flighted', 'competition')).toBe("Junior Men's Saber Individual")
+    expect(cellText('staged', 'competition')).toBe("Y12 Men's Foil Individual")
+  })
+
   it('spans both flights in the pool interval rather than drawing over the gap between them', () => {
     renderBothViews(derivedModel(SHAPES))
 
@@ -358,7 +390,7 @@ describe('the matrix and the schedule table cannot disagree (FR-023)', () => {
   it('writes the table cells as clock strings, so the normalisation above has something to parse', () => {
     renderBothViews(derivedModel(SHAPES))
 
-    expect(cellText('plain', 'competition')).toBe('plain')
+    expect(cellText('plain', 'competition')).toBe("Div 1 Men's Foil Individual")
     expect(rowDay('plain')).toBe(0)
     expect(cellText('plain', 'poolStart')).toBe('8:00')
     expect(cellText('plain', 'poolEnd')).toBe('9:45')
