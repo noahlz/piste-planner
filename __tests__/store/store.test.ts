@@ -436,6 +436,8 @@ describe('lastAutoRun', () => {
   // tasks landed in this worktree; standing rule 11 says measurements win, so
   // this pins the number this test file actually observes today (18 placed,
   // 12 unplaced) rather than the stale baseline figure.
+  // 015, 2026-10-05 – the converged drift ledger now records B4 at 18 of 30
+  // too, so the two figures agree.
   //
   // unplaced is `competitions.length - placed`, not "entries in schedule with
   // a null pool_start" — concurrentScheduler.ts's commitEventResult only ever

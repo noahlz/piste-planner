@@ -85,6 +85,9 @@ function findingIdentity(finding: ValidationError): string {
 //     D4, removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/research.md): team events reach the engine
 //     DISABLED because defaultCutForEntry answers DISABLED/100 for every team
 //     entry, so the finding is a heads-up on a cosmetic field, not a gate.
+// 015, 2026-10-05 – with the converged factory (every event built by the app's
+// per-type rules) the regional-cut override rule fires 0x on B1–B8, and the
+// video dead-config rule fires on B4 (6x), B5 (12x) and B6 (12x).
 //
 // OUT OF SCOPE for this catalogue: `validateSameDayCompletion` is exported
 // and directly tested, but has zero callers anywhere in src/ (confirmed by

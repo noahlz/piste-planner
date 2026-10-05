@@ -25,13 +25,21 @@ import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/e
  * [MIN] B1 (24 events, days=4) — specs/012-actionable-strip-suggestion/baseline.md §1 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) shows every one of the ten
  * measured templates undershoots at its floor, so the floor and the answer
  * differ by construction on any of them. B1 is the cheapest scenario fixture
- * available through the test helpers: floor=36, ceiling=135, answer=48,
- * placed@floor(36)=0, placed@47=20, placed@48=24. A full 36→48 scan (13
- * candidates) runs in ~18ms.
+ * available through the test helpers: floor=35, ceiling=135, answer=48,
+ * placed@floor(35)=0, placed@47=23, placed@48=24. A full 35→48 scan (14
+ * candidates) runs in ~21ms (re-measured 015, 2026-10-05).
+ *
+ * 015, 2026-10-05 – these moved from floor 36, placed@47=20 and a 13-candidate
+ * scan because the converged factory stages every NAC event's DE (the app's
+ * per-type DE mode) where the old factory staged only the 12 individual events
+ * with required video. B1 is a NAC, so the DE mode is the one rule that changed
+ * its events (the referee policy moved AUTO → TWO, which scores the same 2 refs
+ * per pool). A probe rebuilt B1 with only `de_mode` reverted to the old rule
+ * and got back floor 36 and placed@47=20.
  */
 function minBoard(): { comps: Competition[], config: TournamentConfig } {
   return {
-    comps: buildCompetitions(SCENARIOS.B1.fencerCounts),
+    comps: buildCompetitions(SCENARIOS.B1.fencerCounts, SCENARIOS.B1.tournamentType),
     config: tournamentConfig(4, 80, 12, SCENARIOS.B1.tournamentType),
   }
 }
@@ -107,7 +115,9 @@ describe('stripSearchRange', () => {
     // [M] measured pins, not recomputed: a formula built from the same two
     // functions the implementation calls cannot fail when either regresses.
     // These are the literal B1 (days=4) numbers T005's probe measured.
-    expect(range!.floor).toBe(36)
+    // 015, 2026-10-05 – floor 36 → 35 with the ceiling unchanged at 135: the
+    // converged factory stages every NAC event's DE (see `minBoard`).
+    expect(range!.floor).toBe(35)
     expect(range!.ceiling).toBe(135)
   })
 

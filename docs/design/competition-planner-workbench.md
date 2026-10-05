@@ -231,17 +231,18 @@ that day (removed once folded in here; `git show e9fca69e70:docs/design/state-of
 Features 001–012 are delivered and their spec folders removed – `git show
 0ab5bd2dc9:specs/<feature>/` recovers any of them. 013, the workbench redesign
 from the Claude Design mockup, is delivered and merged (`83168c7f2a`). 014,
-structured bottlenecks, is delivered on branch `014-structured-bottlenecks`
-(`specs/014-structured-bottlenecks/handoff.md`). The original P1–P4 rows
-are all delivered: P1 as 001, P2 as 003, P3 as 004, and P4's manual placement
-and pre-seeded scheduling as 013 (pins, Move day, Auto-assign around pins –
-the pinned events are excluded from the loop's seed, not from
-`buildEventStates`, per 013 research D1). P5 (FLUID) stays deferred with no
-owner.
+structured bottlenecks, is merged (`24d19f7ed6`). 015, the ledger converging
+with the store, is delivered on branch `015-ledger-convergence-impl`
+(`specs/015-ledger-convergence/handoff.md`), awaiting the user's merge.
+The original P1–P4 rows are all delivered: P1 as 001, P2 as 003, P3 as 004,
+and P4's manual placement and pre-seeded scheduling as 013 (pins, Move day,
+Auto-assign around pins – the pinned events are excluded from the loop's
+seed, not from `buildEventStates`, per 013 research D1). P5 (FLUID) stays
+deferred with no owner.
 
-Baseline (after 014): `tsc -b` and lint clean, 77 files / 1794 tests. Drift
-ledger B1–B8 scheduled 24 / 24 / 24 / 17 / 12 / 45 / 18 / 52, app-path parity
-17, snapshot SHA-256 `5483c40c1349…` (unchanged since 013).
+Baseline (after 015): `tsc -b` and lint clean, 78 files / 1830 tests. Drift
+ledger B1–B8 scheduled 24 / 24 / 24 / 18 / 12 / 40 / 18 / 53, equal to the app
+path on all eight. Snapshot SHA-256 `a4a71e333c77…`.
 
 ### Owner decisions, 2026-10-04
 
@@ -267,7 +268,7 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 |---|---|---|---|---|---|
 | **013** | Phase 8 close-out – polish, docs, the three decided fixes above, the retired-surface grep, live smoke, the full check twice, the owner's print check, handoff. `specs/013-workbench-redesign/sessions/S11.md` | – | M | – | no engine change |
 | **014** | **Delivered 2026-10-04** – structured bottlenecks: `Bottleneck` gains a rule id and `subjects`, every producer fills them, the message-text readers move to them. `specs/014-structured-bottlenecks/handoff.md` | closed. Leftovers in §Day-level findings have no structured day | S–M | 013 | zero movement, measured |
-| **015** | **Planned 2026-10-05**, `specs/015-ledger-convergence/plan.md`. Ledger converges with the store – the drift factory applies the per-type cut, DE-mode and ref-policy rules; B4's 18-vs-17 isolated first. A deliberate re-baseline, so every later engine fix is measured against what the app runs | §The drift ledger's factory | M | 013 | re-baseline |
+| **015** | **Delivered 2026-10-05** – ledger converges with the store: the drift factory now applies the per-type cut, DE-mode and ref-policy rules, so B1–B8 are measured on what the app runs. `specs/015-ledger-convergence/handoff.md` | closed | M | 013 | re-baseline, measured |
 | **016** | Hand placements obey the rules – crossover hard edges checked on the current placements and shown as findings; one referee-peak number for the footer and the engine | §Hand-placed events, §The scorecard's peak-referee row | L | 014, 024 | if the referee fix touches the engine |
 | **017** | The canvas tells the truth – one strip model for engine and canvas so B1 boots 24 / 0; blocks become keyboard-operable buttons | §The canvas calls events unplaced, §A placed block cannot be selected | M | 024 | if the engine assigns strip ranges |
 | **018** | Engine correctness – DE prelims bout share, day-end overrun as a warning, Div 1 cut 25 %, the fencer-count ≤ 1 URL path verified. One drift review per fix | §DE prelims, §Day-end overrun, §Policy tables (Div 1 only), §A shared URL with a fencer count of 0 or 1 | M | 024 | one per fix |
@@ -288,10 +289,9 @@ takes its team-match length from 024's DE timing basis.
 
 #### 023 scope (owner decisions, 2026-10-04)
 
-Team events have no pool round, and 015 comes first so team DEs are measured
-against the DE shape the app runs (the ledger factory forces team events
-SINGLE_STAGE today, `__tests__/helpers/scenarios.ts:66-68`). One ledger move
-covers all of it, including the B1/B2 count replacement.
+Team events have no pool round. Since 015 the ledger factory stages NAC team
+DEs as the app does, so team DEs are measured against the DE shape the app
+runs. One ledger move covers all of it, including the B1/B2 count replacement.
 
 - **No pool phase for teams.** Every place that counts team pools changes: the
   phase builder (`concurrentScheduler.ts:538-557`), `derive.ts`, `capacity.ts`,

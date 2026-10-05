@@ -49,19 +49,20 @@ describe('runAppPath', () => {
   // `feasibility-strip-hours` to a WARN in every mode, so the upfront gate no
   // longer aborts B4's build and it packs again.
   //
-  // **18 here against the drift ledger's 17 is a real one-event divergence
-  // between the two paths, and 011 does not explain it.** It is not new — it was
-  // masked for as long as both paths read 0, and the demotion is what made it
-  // visible rather than what created it. Each path is pinned at its own measured
-  // number and neither is adjusted toward the other, by product-owner direction.
-  // The recorded form, with what is measured about it and what was not run, is
-  // `PARITY_EXCEPTIONS.B4` in `__tests__/store/appPathParity.test.ts` — this file
-  // pins numbers and that one pins the contract, so the account lives there.
+  // The drift ledger reads 18 too. Its factory applies the regional cut
+  // override and the per-type DE mode since 015, so the one-event gap 011
+  // recorded against the ledger's 17 is closed and B4 carries no FR-004a
+  // exception (specs/015-ledger-convergence/plan.md). This file pins numbers
+  // and `__tests__/store/appPathParity.test.ts` pins the contract.
+  //
+  // 015, 2026-10-05 – B6's gap closed. The ledger now reads 40, as the app path
+  // does, because 015's factory applies the app's per-type cut, DE mode and
+  // referee policy. B6's placed count here did not move.
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
-    B4: { selected: 30, placed: 18 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it — and the ledger reads 17, not 18 (see above)
+    B4: { selected: 30, placed: 18 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it – the ledger reads 18 too since 015 (see above)
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
     B6: { selected: 54, placed: 40 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty
     B7: { selected: 18, placed: 18 }, // pre-fix: 3

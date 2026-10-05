@@ -165,7 +165,7 @@ describe('Realistic tournament integration', () => {
 
   describe(SCENARIOS.B1.label, () => {
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B1
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     it('schedules events with hard constraints respected', () => {
@@ -188,7 +188,7 @@ describe('Realistic tournament integration', () => {
 
   describe(SCENARIOS.B2.label, () => {
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B2
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     it('schedules events with hard constraints respected', () => {
@@ -211,7 +211,7 @@ describe('Realistic tournament integration', () => {
 
   describe(SCENARIOS.B3.label, () => {
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B3
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     it('schedules events with hard constraints respected', () => {
@@ -233,7 +233,7 @@ describe('Realistic tournament integration', () => {
 
   describe(SCENARIOS.B4.label, () => {
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B4
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     it('B4 degrades per event under a demoted feasibility WARN rather than emptying (011 T006)', () => {
@@ -252,7 +252,7 @@ describe('Realistic tournament integration', () => {
       // demand and the threshold are untouched — R5 moved the severity and
       // nothing about the estimate — so B4 is still an oversubscribed venue.
       // What moved is what an oversubscribed venue returns: a partial board,
-      // thirteen unplaced events, and the shortfall as a warning.
+      // thirteen unplaced events at T006, twelve since 015 (2026-10-05), and the shortfall as a warning.
       //
       // The regression this case has always guarded is B4's *shape*, and it
       // still does; the shape inverted. It fails if B4 collapses back to an
@@ -267,7 +267,9 @@ describe('Realistic tournament integration', () => {
       // either direction; a second exact pin here would mean two files to
       // re-measure for one number. What this file adds is that the count is
       // reached through the integrity assertion above, not merely reported.
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(17)
+      // 015, 2026-10-05 – floor raised 17 → 18, the count the converged factory
+      // measures (the app path's 18).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(18)
 
       // No ERROR out of validation. B4's ERRORs are all
       // DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the per-event
@@ -292,7 +294,7 @@ describe('Realistic tournament integration', () => {
 
   describe(SCENARIOS.B5.label, () => {
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B5
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     it('schedules events with hard constraints respected', () => {
@@ -314,14 +316,18 @@ describe('Realistic tournament integration', () => {
 
   describe(SCENARIOS.B6.label, () => {
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B6
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B6: 44 events. T024 re-baseline 2026-08-29 — floor raised from 28 to the measured count (research.md D7).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(44)
+      // B6: 40 of 54 events, the app path's measured count.
+      // T024 re-baseline 2026-08-29 — floor raised from 28 to the then-measured 44 (research.md D7).
+      // 015, 2026-10-05 – floor lowered 44 → 40 under the input-correction rule in
+      // driftLedger.test.ts's SCHEDULED_FLOORS docblock: the old count came from a
+      // factory the app never runs, and the converged factory's 40 equals the app path's 40.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(40)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -336,7 +342,7 @@ describe('Realistic tournament integration', () => {
 
   describe(SCENARIOS.B7.label, () => {
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B7
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     it('schedules events with hard constraints respected', () => {
@@ -359,16 +365,19 @@ describe('Realistic tournament integration', () => {
 
   describe(SCENARIOS.B8.label, () => {
     const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS.B8
-    const competitions = buildCompetitions(fencerCounts)
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
     const config = tournamentConfig(days, strips, videoStrips, tournamentType)
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B8: 52 events under the current strip-footprint DE model. T024 re-baseline 2026-08-29 —
-      // floor raised from 35 to the measured count (research.md D7).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(52)
+      // B8: all 53 events placed, with every NAC event on the per-type DE mode the
+      // app builds (staged DEs).
+      // T024 re-baseline 2026-08-29 — floor raised from 35 to the then-measured 52 (research.md D7).
+      // 015, 2026-10-05 – floor raised 52 → 53: the converged factory stages every
+      // NAC event's DE, and JR-W-EPEE-IND, unplaced before, is now placed.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(53)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
