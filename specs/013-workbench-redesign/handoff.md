@@ -6,6 +6,23 @@ of the spec.
 
 ## Verdicts
 
+The three verdicts the feature waited on, stated plainly (each has its
+subsection below):
+
+- **T015, the shell at real size**: **yes, with a polish pass** (2026-09-07).
+  The polish was judged twice. T015b's re-look of the chrome was "matches"
+  (2026-09-07), and so was T044's close-out polish of every surface
+  (2026-10-04).
+- **T023, NAC Youth's Suggest count**: **66** (2026-09-13, both runs at
+  `9da51b1b15`). This is research D14's expected value now that the Admin gap
+  step is gone. It still reads 66 at every later smoke run, the last being
+  T052's.
+- **T041, print by hand**: **passes** (2026-10-04). The owner's first print
+  "looks great" from a printing perspective. Its three content remarks became
+  T050 (in 013), T051 (roadmap 023 and the backlog) and team counts inside
+  023. The re-print after T050 "looks good", and its one remark became T052
+  (landscape by default).
+
 ### T015 – the shell at real size (FR-069, SC-001, quickstart §3)
 
 Screenshots taken at `30c7c452b0` on preset B1 (4 days, 80 strips, 24
@@ -89,6 +106,41 @@ T037:
 - **Small-text contrast**: raise the panels' section captions and the
   canvas's off-hour tick labels to WCAG AA (4.5:1). This is slightly darker
   than the mockup's `#7a7a7d` / `#a3a3a6`. → T049.
+
+### T041 – print, by hand (SC-008, quickstart §8)
+
+The owner loaded B1, ran Auto-assign, switched to Schedule, pressed Print and
+saved to PDF.
+
+**First print (2026-10-04)**: "from printing perspective, it looks great."
+The layout passed. Four pages, one per day, each holding only that day's
+table. The owner made three remarks on the content. Each was investigated
+read-only and checked by a second agent, and none blocked the verdict:
+
+1. **"Human-readable names instead of the hyphenated codes."** The
+   Competition column printed `competition_id` (`VET-M-FOIL-TEAM`) in mono,
+   while the canvas already names blocks with `competitionLabel`. FR-051 asks
+   for the published-schedule look, which names events in words. → **T050**,
+   built in 013. Catalogue ids inside Findings messages and the wording of
+   `competitionLabel` against published schedules ("Div 1" vs "Division I",
+   "Senior" for a Div 1 team event) went to the backlog under T051.
+2. **"Why are the team events running on two strips?"** These are B1's
+   10-team Vet events split into two pools of five. The Strips column shows
+   only the pool strip count. B1's team fields (10/10/10/10/20/30) are
+   rounded and unsourced. → Sourced team counts replace them **inside roadmap
+   feature 023**, in the same ledger move.
+3. **"Team events do not have 'pool' rounds. They are direct to DE round."**
+   The engine gives team events a real pool round, which METHODOLOGY.md
+   assumes (`team_pools_start`, :197). This is a gap in the spec, and fixing
+   it is an engine change that moves the ledger for B1, B2 and B8. → **T051**
+   recorded it as roadmap feature **023, "Team events go straight to DE"**,
+   after 015. It is blocked until the owner amends METHODOLOGY.md.
+
+**Re-print after T050 (2026-10-04)**: "looks good. The default should be
+landscape if possible." The Competition column now shows names, with one day
+per page. → **T052** (`0f8e25629c`) sets `@page { size: landscape }`. A
+Chromium PDF of B1's Schedule gives 4 pages at 792 × 612 pt (Letter,
+landscape). Other browsers were not checked.
 
 ### T023 – phase 2 smoke (FR-067, SC-013)
 
@@ -618,3 +670,289 @@ every review finding was folded into one follow-up commit per task.
 | Smoke at `172ca790e7` (T044 polish), two runs, no driver edit | PASS, 0 console errors, Suggest 15/66/80/48, boot 24 rows / 19·5·0 | T044 |
 | Smoke at `37d7f33e91` (T044 review follow-up), no driver edit | PASS, 0 console errors, Suggest 15/66/80/48 | T044 |
 | Unit suite at `37d7f33e91` | 76 files / 1753 tests, tsc and lint clean | T044 |
+| Unit suite at `94f1cb739c` (findings border) | 76 files / 1761 tests | T048 |
+| Unit suite at `c61ef2e96a` (review follow-up) | 76 files / 1762 tests, tsc and lint clean | T048 |
+| Smoke after T048, no driver edit | PASS, 0 console errors, Suggest 15/66/80/48, boot 24 rows / 19·5·0, 9 of 66 B1 boot blocks warned | T048 |
+| Contrast: caption on `--chrome`, off-hour tick on `--chrome-deep`, hour tick | 4.00 → 6.13:1, 2.11 → 4.66:1, 5.51 → 8.41:1 | T049 `e8c6f2db90` |
+| Unit suite at `e8c6f2db90` / `f6726047d5` | 76 files / 1762 tests, tsc and lint clean, no test edit | T049 |
+| Smoke after T049, no driver edit | PASS, 0 console errors, Suggest 15/66/80/48, boot 24 rows / 19·5·0 | T049 |
+| Unit suite at `15b0c6fe35` / `929774da34` | 76 files / 1760, then 1759 | T038 follow-ups |
+| Both retired-surface greps at `45d2a12a4a` | no output, exit 1, both | T038 |
+| Full check at `a6621c0ddf`, two runs | `tsc -b`, lint, suite clean and identical: 76 files / 1759 tests; skip/only grep empty | T040 |
+| Smoke at `a6621c0ddf`, two runs, no driver edit | PASS, byte-identical logs, 0 console errors, Suggest 15/66/80/48 (NAC Youth 66), boot 24 rows / 19·5·0, share round-trip 12 of 12 rows | T039 |
+| Unit suite at `11d8c1573e` / `be22677e96` (readable names) | 76 files / 1763, then 1764 | T050 |
+| Smoke after T050, two runs, no driver edit | PASS, 0 console errors, Suggest 15/66/80/48, boot 24 rows / 19·5·0 | T050 |
+| Print-emulated Letter PDF of B1's Schedule | 4 pages, one day each, no clipped column | T050 |
+| Full check re-run at `401e860d18`, two runs | 76 files / 1764 tests, clean and identical; skip/only grep empty; reconciles from 1759 | T040 re-run |
+| Unit suite at `0f8e25629c` (landscape print) | 76 files / 1764 tests, tsc and lint clean | T052 |
+| Smoke after T052 | PASS, 0 console errors, Suggest 15/66/80/48 | T052 |
+| Chromium PDF of B1's Schedule, `preferCSSPageSize` | 4 pages, 792 × 612 pt (Letter, landscape) | T052 |
+| Merged tree (fast-forward to `a819520ad2`, tree `438ea22039…`) | `tsc -b` and lint exit 0; 76 files / 1764 tests; drift ledger 18 tests pass, SHA `5483c40c1349…` unchanged | merge check, 2026-10-04 |
+| Both retired-surface greps at `a819520ad2` | no output, exit 1, both | T043 |
+
+## Drift record
+
+T002's baseline (`0824b3eccd`, at `aa7b5082fc`, before any `src/engine/`
+edit) beside T035's after-table (`dc1a1b073b`, read at `29f95362f9`, after
+the feature's one engine change). Both are in full in `drift-baseline.md`.
+Each cell reads "before / after".
+
+| Scenario | scheduledCount | errorCount | WARN total | stripRecommendation |
+|---|---|---|---|---|
+| B1 | 24 / 24 | 0 / 0 | 0 / 0 | 48 / 48 |
+| B2 | 24 / 24 | 0 / 0 | 8 / 8 | 70 / 70 |
+| B3 | 24 / 24 | 0 / 0 | 0 / 0 | 71 / 71 |
+| B4 | 17 / 17 | 13 / 13 | 27 / 27 | 76 / 76 |
+| B5 | 12 / 12 | 0 / 0 | 12 / 12 | 28 / 28 |
+| B6 | 45 / 45 | 9 / 9 | 27 / 27 | 60 / 60 |
+| B7 | 18 / 18 | 0 / 0 | 2 / 2 | 64 / 64 |
+| B8 | 52 / 52 | 1 / 1 | 7 / 7 | 69 / 69 |
+
+`warnCountsByCause` is equal cause by cause on all eight. Snapshot SHA-256
+`5483c40c1349944b6ac26659406b39bb84fef9091c2e259c7f0e36920520d0b6` before and
+after, `git diff --stat 71180db6e7 -- __tests__/engine/__snapshots__/` empty,
+`appPathParity.test.ts` 17 passing at both points. **Every count unmoved.**
+
+Phase 8:
+
+- **T047** (`3c2d298d5d`, the only phase 8 change that reaches config the
+  engine sees): ledger and parity pass before and after, SHA unchanged,
+  nothing moved.
+- **The merged tree** (fast-forward of `main` `8512bed20c` to
+  `a819520ad2`): `driftLedger.test.ts` passes (18 tests), SHA
+  `5483c40c1349…`, equal to the baseline.
+
+Across the whole feature, from `aa7b5082fc` to `a819520ad2`, no ledger count
+moved.
+
+## Task record
+
+One row per task, in the order the tasks ran. Commits are on
+`013-workbench-redesign` and its phase branches, all merged into `main`
+except phase 8's second branch. Details are in each task's `→` record in
+`tasks.md`.
+
+| Task | Commit(s) | Deleted | Replaced by / added |
+|---|---|---|---|
+| T001 | `aa7b5082fc` | – | Worktree cut at `1ab0d15c79`. Start: 68 files / 1848 tests, tsc and lint clean |
+| T002 | `0824b3eccd` | – | `drift-baseline.md`: B1–B8, SHA, parity, driver Suggest 15/63/80/48 |
+| T003 | `096f34c8ea` | `components/canvas/lanes.ts`, the layout half of `geometry.ts` | `src/layout/segments.ts`, `src/layout/lanes.ts`, tests under `__tests__/layout/` |
+| T004 | `096f34c8ea` | – | `SelectGroup`, `SelectLabel` in `ui/select.tsx` |
+| T005 | `a2fa3e3ef2` | – | `estimateEventFootprint` in `engine/derive.ts` (no new arithmetic, ledger unmoved) |
+| T006 | `a2fa3e3ef2` | – | `lastAutoRun`, `loadedPresetId` over a wider `PresetId` |
+| T007 | `a2fa3e3ef2` | The handlers inside `SaveLoadShare.tsx` | `src/store/exportActions.ts` |
+| T008 | `a2fa3e3ef2` | – | `ErrorBoundary.tsx` around the shell |
+| T009 | `a2fa3e3ef2` | `Rail.tsx`, `RailPanel.tsx` and its test | `ToolRail.tsx`, `InspectorPanel.tsx`, `panel` / `panelDocked` view state |
+| T010 | `a72c45b7ab`, `031c4b7f9b` | `TopBar.tsx`, `SaveLoadShare.tsx` and its test, `App.tsx`'s header and badge | `Header.tsx`, `PresetPicker.tsx`, `ExportPopover.tsx`, `ui/popover.tsx` |
+| T011 | `4644f98b9a` | `Drawer.tsx`, `Scorecard.tsx`, the scorecard baseline and metric hover, the center's toggle, `drawerHeight`, `scorecardExpanded`, three scorecard test files | `StatusFooter.tsx`, `selectFooterMetrics`, `selectPlacementCounts` |
+| T012 | `a3367af740` | `UnplacedTray.tsx` and its test | `UnplacedDock.tsx` with footprint chips |
+| T013 | `a3367af740` | The `highlight` prop and `data-highlighted` (20 cases) | The six-region `WorkbenchShell` |
+| T014 | `30c7c452b0`, `410d8ef46b`, `37987dc5dc` | The driver's scorecard and hover steps | Driver re-pointed at header, rail and footer, and the tooltip wrapper fix (finding 4) |
+| T015 | `51dfaa5392` | – | `scripts/screenshot.mjs`, the verdict, the polish re-plan |
+| T015a | `59dbfa71fc`, `785327a42f` | Ad-hoc colour classes on the chrome | Mockup tokens in `index.css`, chrome restyled |
+| T015b | `c96049a60a` | – | Re-look verdict "matches" |
+| T016 | `1e730723b7` | `TournamentSetup.tsx`, AM/PM `formatTime` | `panels/TournamentPanel.tsx`, `TIME_OPTIONS` in `lib/time.ts` |
+| T017 | `1e730723b7` | `suggestStrips` | `computeSuggestedStrips` (returns, never writes) |
+| T018 | `1e730723b7`, `8f670eba53`, `9da51b1b15`, `e4fcd29058` | `StripSetup.tsx`, `AdvancedPanel.tsx` and their tests | `panels/StripsPanel.tsx` with Suggested minimum and Apply |
+| T019 | `a85e14f5f5` (with T020) | – | Red tests for the shrink, the pre-shrink fixture |
+| T020 | `a85e14f5f5` | Five per-event fields, `VideoPolicy.FINALS_ONLY`, `CompetitionOverrides.tsx` and its test, the driver's per-event referee steps, payload v2 | `CompetitionConfig { fencer_count, flighted }`, fields derived in `buildConfig.ts`, payload v3 |
+| T021 | `c956bde6bb`, `df977bf487` | `CompetitionMatrix.tsx`, `FencerCounts.tsx`, `configEditing.test.tsx` | `panels/EventsPanel.tsx` |
+| T022 | `260be6b22f` | `globalOverrides`, the old `SettingsPanel`, `deModeLabels.ts`, two test files, the driver's Admin gap steps | `panels/SettingsPanel.tsx`, `de_mode_override` |
+| T023 | `d8035a8c61`, `f934b64c79` | – | Smoke ×2, NAC Youth 66, driver restores Staged (finding 8) |
+| T024 | `05103d5ff4` | – (old modules went in T026) | `zoomLadder.ts`, `weaponTokens.ts` |
+| T025 | `05103d5ff4` | – | Red tests for the canvas, blocks, day summaries |
+| T026 | `05103d5ff4`, `01765a3087` | `MatrixCanvas`, `EventBlock`, the old `blockLabels.ts`, `palette.ts`, `windowing.ts`, `zoom.ts`, `geometry.ts`, the 33 `--cat-*` properties, six test files | `Canvas.tsx`, `Block.tsx`, `selectDaySummaries`, `zoomStep` / `fitting`, the footer's zoom toolbar |
+| T027 | `41dfe0e31f`, `b9f9ad46b8`, `ce540ffd56`, `2eda25bc66` | – | The SC-005 driver read, the narrow-block icon floor |
+| T028 | `5ea2ec5c1c` | `flightingSuggestions` test arguments, absent-key assertions (finding 14) | Red tests for selection and the strip |
+| T029 | `5ea2ec5c1c`, `be7e50dd0b` | `AnalysisSlice`, the `flightingSuggestions` parameter, the Accept / Reject rows, `AnalysisResult.flightingSuggestions` | Selection, `setPinned`, `DetailStrip.tsx` |
+| T030 | `3b3e53504c` | – | Red tests for the findings list |
+| T031 | `3b3e53504c`, `10568db330` | – | `selectFindings`, `FindingSeverity`, `jumpToCompetition`, label helpers moved to `src/lib/` |
+| T032 | `3b3e53504c`, `10568db330` | `AnalysisOutput.tsx` and its test | `FindingsPanel.tsx`, the rail badge, the jump and flash |
+| T033 | `29f95362f9`, `f072d754b5` | – | Red tests for pinned scheduling |
+| T034 | `29f95362f9`, `f072d754b5` | – | `scheduleAll(…, pinned)`, `PINNED_UNCLAIMED`, the pre-claim pass, `buildPinnedPlacements` |
+| T035 | `dc1a1b073b` | – | The after-table, nothing moved |
+| T036 | `4f6204d41a`, `51df2e7795`, `3d35a84e65` | The Day column | Per-day sections, Print, `@media print` |
+| T047 | `3c2d298d5d` | The team-cut coercion loop in `buildConfig.ts` | Two tests renamed "invariant" (finding 7 closed) |
+| T045 | `e0402bf768`, `d0844bcbba`, `0f48b38d19` | The two-pill DE mode group and its Default badge, the driver's restore-Staged step | A Default pill with a `{type} default: {mode}` hint (finding 6 closed) |
+| T046 | `97c12b9ca7`, `74e42d208b` | `Canvas`'s live `placements` read | `pinnedIds` committed with the schedule (findings 11 and 25 closed) |
+| T044 | `68bc3486d9`, `5094129973`, `08fd4208ab`, `172ca790e7`, `37d7f33e91` | Ad-hoc colour classes, dead tokens, the stray `index.css-E` | Mockup tokens on every surface, per-surface shots |
+| T048 | `94f1cb739c`, `c61ef2e96a` | – | `warned` prop, `data-warned`, a solid `--flash` edge |
+| T049 | `e8c6f2db90`, `f6726047d5` | Three panel `SectionCaption` copies, the `#a3a3a6` tick | One `CAPTION_CLASS` / `SectionCaption` in `common/caption.ts`, `#68686b` tick |
+| T037 | `5937f82b6c` | The stale D1 citation | §Virtualization records that windowing was removed on purpose |
+| T038 | `15b0c6fe35`, `929774da34`, `45d2a12a4a` | The `src/lib/blockLabels.ts` name, three `--cat-` negatives, a two-spot `weaponVar` case, two driver comments | `src/lib/placementLabels.ts`, a 12-row `weaponVar` table |
+| T039 | none (no driver edit) | – | Smoke ×2 at `a6621c0ddf` |
+| T040 | none | – | Full check ×2 and the reconciliation, re-run at `401e860d18` |
+| T041 | none (bookkeeping `22b2e8fb78`) | – | The owner's print verdict, remarks → T050, T051 |
+| T042 | `a6621c0ddf` | – | Backlog §What 013 deliberately left unfixed |
+| T050 | `11d8c1573e`, `be22677e96` | The id in mono in the Competition cell | `competitionLabel` from the committed `schedule.competitions` |
+| T051 | `401e860d18` | – | Roadmap 023 and three backlog entries |
+| T052 | `0f8e25629c` | – | `@page { size: landscape }` |
+| T043 | this commit | – | This record, and `spec.md` marked Delivered |
+
+## T038 grep record
+
+The two commands, run from the worktree root. Both run with
+`--exclude-dir=smoke-shots` because that directory is gitignored shot output.
+
+```bash
+grep -rn --exclude-dir=smoke-shots "TopBar\|RailPanel\|AdvancedPanel\|Scorecard\|AnalysisOutput\|Drawer\b\|CompetitionMatrix\|FencerCounts\|CompetitionOverrides\|windowing\|blockLabels\|palette\.ts\|globalOverrides\|scorecardBaseline\|hoveredMetricId\|flightingSuggestion\|FINALS_ONLY\|--cat-" src/ __tests__/ scripts/
+grep -rn --exclude-dir=smoke-shots "data-highlighted\|Auto-schedule all\|Save / Share\|Presets…\|Fit to day\|Strip count\|name: 'Suggest'" scripts/
+```
+
+Output: none, exit 1, for both. The orchestrator ran them at `45d2a12a4a`
+and T043 ran them again at `a819520ad2`.
+
+The first run on 2026-10-04 was not empty. Three changes made it empty:
+
+- `blockLabels` matched the live `src/lib/blockLabels.ts` that T031 created,
+  which reused the retired file's name. It became `src/lib/placementLabels.ts`
+  (`15b0c6fe35`).
+- `--cat-` and `palette.ts` matched three `weaponTokens.test.ts` cases that
+  asserted the retired prefix was absent, which standing rule 14 forbids. Two
+  were deleted because the exact-name tables already cover them. The third
+  became a hand-written 12-row `weaponVar` table (`15b0c6fe35`). A two-spot
+  `weaponVar` case that table made redundant went in `929774da34`. Tests
+  went 1762 → 1760 → 1759.
+- `AdvancedPanel` and `Presets…` matched two `scripts/smoke.mjs` comments.
+  They were reworded (`15b0c6fe35`), and the driver's header comment stopped
+  describing the retired Advanced section (`45d2a12a4a`).
+
+## T039 and T040 verification records
+
+**T039, live smoke** at `a6621c0ddf`, dev server from the worktree on
+`:5186`, `SMOKE_BASE=http://localhost:5186/piste-planner/ timeout 240 node scripts/smoke.mjs`,
+run twice with identical output:
+
+- Run 1 and run 2: **SMOKE PASS** (exit 0), 0 console errors.
+- Suggest: ROC Div1A/Vet 15, NAC Youth **66**, NAC Vet/Div1/Junior 80, NAC
+  Cadet/Junior 48.
+- Boot: 24 schedule rows ("boot places 24 of 24 events"), footer `19 placed ·
+  5 unplaced · 0 pinned`. The footer shows the known lane-packer overflow
+  (finding 9), which the owner ruled is not a failure. Backlog §The canvas
+  calls events unplaced owns it.
+- Share round-trip: a 3195-character URL, 12 of 12 rows matched, the Single
+  DE-mode override arrived marked as an override and was restored to
+  Default.
+- No driver edit.
+
+Later smoke runs, all with no driver edit, 0 console errors and Suggest
+15/66/80/48: two after T050 (boot 24 rows / 19·5·0) and one after T052.
+
+**T040, the full check**:
+
+- At `a6621c0ddf`, two runs back to back. `tsc -b` exit 0, lint exit 0, suite
+  exit 0, 76 files / 1759 tests on both runs. The skip/only grep printed
+  nothing (exit 1):
+  `grep -rnE 'it\.skip|test\.skip|describe\.skip|\.todo|\.only' __tests__/ src/`.
+- Re-run after T050 at `401e860d18`: two identical clean runs, 76 files /
+  1764 tests, skip/only grep empty.
+- After T052 at `0f8e25629c`: 76 files / 1764 tests, tsc and lint clean.
+- On the merged tree (`a819520ad2`): tsc and lint clean, 76 files / 1764
+  tests, ledger 18 passing.
+
+**Reconciliation, 1848 → 1759 → 1764.** For each commit, vitest was measured
+in a throwaway detached worktree, which was then removed. +a/−r counts the
+test names added or removed against the previous 013 commit. Commits where
+nothing changed are left out (bookkeeping, smoke, docs and merges are all
+0). The rows down to `a6621c0ddf` are pasted from the T040 record. The last
+two rows come from T050's record and the T040 re-run.
+
+| Checkpoint | Files / tests | Delta (+a/−r) | What was added or deleted |
+|---|---|---|---|
+| `1ab0d15c79` T001 start | 68/1848 | – | Starting numbers (T001 record matches) |
+| `096f34c8ea` T003+T004 | 70/1849 | +1 (+21/−20) | T003 moved geometry/lanes tests to segments.test/lanes.test (20 renames); T004 +1 Select group case. Matches the T004 record of 70/1849 |
+| `a2fa3e3ef2` T005–T009 | 74/1890 | +41 (+53/−12) | footprint +5 (T005), store +5 (T006 records 4, so 1 is unattributed inside the combined commit), exportActions +14 (T007), ErrorBoundary +3 (T008), Inspector +9, ToolRail +7, viewState +3, Shell +4/−2, Advanced +3/−3 (T009). RailPanel −7: summary-slot cases with no successor, recorded in T009 |
+| `a72c45b7ab` T010 | 76/1903 | +13 (+29/−16) | saveLoadShare 12 re-pointed to ExportPopover (13, +Copy case); Header +8, time +4; top-bar cases re-pointed; strip-count describe removed (recorded, covered by number-input.test) |
+| `031c4b7f9b` T010 f/u | 76/1904 | +1 | FileReader-failure case (recorded) |
+| `4644f98b9a` T011 | 75/1854 | −50 (+28/−78) | Scorecard −22, scorecardBaseline −20, scorecardMetrics −32 deleted with their subjects (D7, recorded); recompute hover −1; viewState −2 (drawerHeight/scorecardExpanded, decision 3); footerMetrics +16, StatusFooter +9, footprint +2 |
+| `a3367af740` T012+T013 | 75/1837 | −17 (+13/−30) | UnplacedTray 3 → UnplacedDock 5 (+2, T012 record 1856); EventBlock highlight −15, MatrixCanvas highlight −5 (D7); Shell +7/−6 (+1). Matches the record 1856 → 1837 = −20+1 |
+| `30c7c452b0` T014 | 75/1840 | +3 | CanvasTooltip wrapper ×2, selectPlacementCounts overflow-once (T011 review fix) |
+| `410d8ef46b`, `37987dc5dc` | 75/1841, 75/1842 | +1, +1 | CanvasTooltip warn/DEV=false cases. 1842 = handoff phase-1 checkpoint |
+| `1e730723b7` T016–T018 | 75/1849 | +7 (+32/−25) | TournamentPanel +7, computeSuggestedStrips +6 replaces suggestStrips −5, StripsPanel +19 (record says '24 cases'); StripSetup/TournamentSetup/configEditing −9; AdvancedPanel −11 (Default-badge and DE-summary cases dropped per the record; video-marker cases moved to StripsPanel steppers; ROC coverage restored in `8f670eba53`) |
+| `a85e14f5f5` T020 | 75/1848 (1 suite red: EventsPanel module missing, as recorded) | −1 (+41/−42) | typeDefaults net −2 and precedence net −4 (the recorded 'dropped without successor' ×2+×2+×2); CompetitionOverrides −4 (deleted by the T020 task line 673); serialization v2 ref_policy/de_mode cases replaced by v3/flighted cases (net −1); buildConfig +9, store +1 |
+| `8f670eba53` T018 f/u | 75/1851 | +3 | runSearch-rejection case, video-strips ROC/type-change cases restored |
+| `c956bde6bb` T021 | 74/1858 | +7 (+13/−6) | EventsPanel 13 (11 + 2 recorded successor gaps) replaces configEditing CompetitionMatrix/FencerCounts −6 |
+| `260be6b22f` T022 | 72/1835 | −23 (+33/−56) | old SettingsPanel 27 → panels/SettingsPanel 23; globalOverrides.test −14 and settingsSerialization.test −12 deleted with the GlobalOverrides surface (task line 719, commit message); buildConfig +4/−1, store +2/−2, serialization +4 |
+| `df977bf487` | 72/1837 | +2 | chip render isolation, absent de_mode_override → null |
+| `9da51b1b15` | 72/1838 | +1 | suggested minimum clears on input change |
+| `e4fcd29058` | 72/1840 | +2 | in-flight search invalidation ×2 |
+| `05103d5ff4` T024–T026 | 71/1663 | −177 (+129/−306) | six SVG-canvas test files deleted (EventBlock 41, MatrixCanvas 75, geometry 22, palette 62, windowing 47 with no successor per T025, zoom 44) plus CanvasTooltip 7 rewritten, viewState 7; added Block 18, Canvas 9, CanvasTooltip 7, weaponTokens 42, zoomLadder 24, StatusFooter 15, daySummaries 4, viewState 9, viewEquivalence 1 |
+| `01765a3087` | 71/1666 | +3 (+4/−1) | day-band committed-model cases (recorded) |
+| `41dfe0e31f`, `b9f9ad46b8`, `ce540ffd56` T027 | 71/1668, 1668, 1671 | +2, 0 (rename), +3 | narrow-block icon floor cases. 1671 = phase-3 checkpoint |
+| `5ea2ec5c1c` T028–T029 | 73/1683 | +12 (+25/−13) | DetailStrip/selection/viewState cases; flighting-suggestion cases deleted with AnalysisResult.flightingSuggestions (T028 sweep, T029 record) |
+| `be7e50dd0b` | 73/1685 | +2 | out-of-range strip and blocker-packing cases |
+| `3b3e53504c` T030–T032 | 74/1718 | +33 (+42/−9) | findings/FindingsPanel/badge/jump; analysisOutput −6 re-targeted to FindingsPanel; 3 cases re-pointed to selectFindings |
+| `10568db330` | 74/1722 | +4 | StrictMode jump, INFO → Note, Note no-dismiss, tie-break (recorded) |
+| `29f95362f9` T034 | 76/1738 | +16 | pinnedScheduling 7, stripSearch 1, findings 1, runActions 7 |
+| `f072d754b5` | 76/1739 | +1 | unknown-id pin case (finding 23) |
+| `4f6204d41a` T036 | 76/1747 | +8 | ScheduleOutput 7 + print 1 (record says 'Nine cases added'; 1747 matches) |
+| `e9fca69e70` (main) | 76/1747 | 0 (+43/−43) | spec references stripped from test titles, rename only |
+| `3c2d298d5d` T047 | 76/1747 | 0 (3 renames) | coercion → invariant (recorded) |
+| `e0402bf768` T045 | 76/1749 | +2 (+6/−4) | 4 two-pill DE-mode cases replaced by 6 Default/Staged/Single cases (record says '7 cases') |
+| `97c12b9ca7` T046 | 76/1752 | +3 | pin-badge cases (record: 3) |
+| `0f48b38d19` | 76/1753 | +1 (+2/−1) | team cut invariant split into NAC and ROC |
+| `74e42d208b` | 76/1753 | 0 (rename) | invalidState pin-badge case tightened. `8512bed20c` branch base = 1753 |
+| `94f1cb739c` T048 | 76/1761 | +8 | Block edge 3, Canvas findings edge 5 |
+| `c61ef2e96a` T048 f/u | 76/1762 | +1 (+4/−3) | 3 Canvas cases renamed to add 'never its overflow block'; +1 re-render style-warning case |
+| `e8c6f2db90` / `f6726047d5` T049 | 76/1762 | 0 | no test edit (recorded) |
+| `15b0c6fe35` T038 f/u | 76/1760 | −2 (+1/−3) | three 'never --cat-' negatives deleted (covered by the exact-name it.each for WEAPON_TOKENS and weaponToken); +1 exact 12-row weaponVar table. Commit message records 1762 → 1760 |
+| `929774da34` T038 review f/u | 76/1759 | −1 | 2-spot 'wraps the token name in var(...)' case deleted, covered by the 12-row exact table |
+| `a6621c0ddf` T042 | 76/1759 | 0 | docs only |
+| `11d8c1573e` T050 | 76/1763 | +4 | Competition cell names: label, fallback and naming cases (commit message: 1759 → 1763) |
+| `be22677e96` T050 f/u | 76/1764 | +1 | id tie-break case; fallback fixture now a real catalogue id left out of the committed list. T050 record: +5 by name, none removed |
+
+The chain closes at 1848 → 1759, net −89, and then 1759 → 1764, net +5.
+Every checkpoint total recorded in `tasks.md` and §Measurements matches its
+measured value. Every deletion either names its successor in the record or
+went with the surface it tested. The phase 8 `weaponTokens` change made the
+assertions stricter, because exact-equality tables replaced the negative
+`not.toContain` checks. Some prose case counts differ from the number of
+names measured: T018 "24" against 19, T036 "Nine" against 8, T045 "7"
+against 6 new and 4 replaced, and T006 4 against 5. Those differences open
+no gap in the totals. Verdict: **reconciles**.
+
+## Merge
+
+The user merges `013-phase8-finish` into `main` with `merge-with-costs`,
+from the main checkout `/Users/noahlz/projects/piste-planner`. Never squash
+it, and never merge by hand followed by `commit-with-costs`.
+
+What was checked on the merged tree, at branch SHA
+`a819520ad2bd1e3cc5a4d3833588ee9d859dd569`:
+
+- `main` is `8512bed20c` and an ancestor of the branch, so the merge is a
+  fast-forward. `git merge-tree --write-tree` found no conflicts, and the
+  merge tree `438ea2203954…` is identical to the branch's tree.
+- On a throwaway merge commit checked out in a detached worktree (since
+  removed): `tsc -b` and lint exit 0, 76 files / 1764 tests pass, the drift
+  ledger passes (18 tests) with snapshot SHA `5483c40c1349…` unchanged, and
+  `package.json` and `pnpm-lock.yaml` are byte-identical to `main`'s.
+
+Nothing in the main checkout blocks the merge. T043 confirmed that `main` is
+at `8512bed20c` and that `git status --short --untracked-files=all` in the
+main checkout prints nothing, so there are no modified, staged or untracked
+files. T001 cut the branch from a commit that already carried `tasks.md`, so
+no copy of it was left uncommitted in the main checkout.
+
+Every commit after `a819520ad2` touches only `specs/`. The only such commit
+is this one, T043, which changes `specs/013-workbench-redesign/handoff.md`
+and `spec.md`. The suite, tsc and lint results above therefore hold for the
+tip as well. T043's box in `tasks.md` is left for the orchestrator to tick.
+
+## Resume prompt (after the merge)
+
+```text
+Piste Planner. Feature 013 (the workbench redesign) is delivered and merged
+into main, and its record is specs/013-workbench-redesign/handoff.md.
+
+Next is roadmap feature 014, structured bottlenecks:
+docs/design/competition-planner-workbench.md §Roadmap row 014, and
+docs/design/backlog.md §"`Bottleneck` has no structured field for a second
+subject". Note that 023 (team events go straight to DE) now sits after 015,
+and it cannot start until the owner amends METHODOLOGY.md.
+
+Start from the main checkout. Cut a fresh worktree off main, named for the
+branch. Plan 014 yourself: no Spec Kit, choose the planning approach, and keep
+the constitution's guardrails (drift ledger, test-first, live smoke, git
+ownership).
+```

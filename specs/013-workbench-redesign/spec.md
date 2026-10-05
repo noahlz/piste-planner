@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-07
 
-**Status**: Draft
+**Status**: Delivered (2026-10-04)
 
 **Input**: Rebuild the workbench on the Claude Design mockup *Piste Planner
 Workbench*: one screen with a header, an unplaced dock, a tool rail with five
