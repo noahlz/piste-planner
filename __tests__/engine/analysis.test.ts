@@ -301,7 +301,7 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
     expect(result.suggestions.length).toBeGreaterThan(0)
     const videoWarn = result.warnings.find(
       (w: Bottleneck) =>
-        w.cause === BottleneckCause.VIDEO_STRIP_CONTENTION && w.message.includes('Flighting group'),
+        w.rule === BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO,
     )
     expect(videoWarn).toBeDefined()
     expect(videoWarn?.rule).toBe(BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO)

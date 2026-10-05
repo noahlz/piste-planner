@@ -243,7 +243,6 @@ describe('validateFlightingGroup', () => {
     )
     expect(conflictWarning).toBeDefined()
     expect(conflictWarning?.severity).toBe(BottleneckSeverity.WARN)
-    expect(conflictWarning?.message).toMatch(/crossover/i)
     expect(conflictWarning?.rule).toBe(BottleneckRule.FLIGHTING_GROUP_CROSSOVER_PENALTY)
     expect(conflictWarning?.subjects).toEqual(['flt', 'pri'])
   })

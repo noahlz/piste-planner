@@ -20,7 +20,7 @@ import { describe, it, expect } from 'vitest'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { computeStripCap } from '../../src/engine/stripBudget.ts'
-import { dayStart, BottleneckSeverity, Phase } from '../../src/engine/types.ts'
+import { dayStart, BottleneckCause, BottleneckSeverity, Phase } from '../../src/engine/types.ts'
 import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/engine/types.ts'
 import { buildCompetitions, tournamentConfig, SCENARIOS, SCENARIO_IDS } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
@@ -100,9 +100,8 @@ describe('pinned scheduling (T033)', () => {
     const neighbourDay = result.schedule['JR-M-EPEE-IND']?.assigned_day
     const crossoverWarning = result.bottlenecks.some(b =>
       b.severity === BottleneckSeverity.WARN
-      && b.cause === 'UNAVOIDABLE_CROSSOVER_CONFLICT'
-      && b.message.includes('D1-M-EPEE-IND')
-      && b.message.includes('JR-M-EPEE-IND'))
+      && b.cause === BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT
+      && b.subjects.join('|') === ['D1-M-EPEE-IND', 'JR-M-EPEE-IND'].join('|'))
     expect(neighbourDay !== pin.day || crossoverWarning).toBe(true)
   })
 
@@ -216,8 +215,7 @@ describe('pinned scheduling (T033)', () => {
     const pin2Warns = warnsFor(pin2.competition_id)
     const pin2PoolWarns = pin2Warns.filter(b => b.phase === Phase.POOLS)
     expect(pin2PoolWarns).toHaveLength(1)
-    expect(pin2PoolWarns[0].message).toContain(pin2.competition_id)
-    expect(pin2PoolWarns[0].message).toContain(Phase.POOLS)
+    expect(pin2PoolWarns[0].subjects).toEqual([pin2.competition_id])
 
     // [M] measured, not predicted: the second pin carries a further
     // PINNED_UNCLAIMED on DE_ROUND_OF_16, and it is an independent collision on
@@ -232,8 +230,7 @@ describe('pinned scheduling (T033)', () => {
     // phase is ever reported twice and the pools row above is never one of a pair.
     expect(new Set(pin2Warns.map(b => b.phase)).size).toBe(pin2Warns.length)
     for (const warn of pin2Warns) {
-      expect(warn.message).toContain(pin2.competition_id)
-      expect(warn.message).toContain(warn.phase)
+      expect(warn.subjects).toEqual([pin2.competition_id])
     }
 
     // Board not emptied. [M] At (4, 48, 7) with no pins, day 0 carries
