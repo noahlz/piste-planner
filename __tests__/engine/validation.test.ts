@@ -876,6 +876,14 @@ describe('validateSameDayCompletion', () => {
     expect(result?.severity).toBe(BottleneckSeverity.ERROR)
     expect(result?.field).toBe('same_day_completion')
   })
+
+  it('names its rule and the competition it is about', () => {
+    const config = makeConfig({ DAY_LENGTH_MINS: 10 })
+    const comp = makeCompetition({ id: 'X-M-EPEE-IND', fencer_count: 64, weapon: Weapon.EPEE, cut_mode: CutMode.DISABLED })
+    const result = validateSameDayCompletion(comp, config)
+    expect(result?.rule).toBe('same-day-completion')
+    expect(result?.subjects).toEqual(['X-M-EPEE-IND'])
+  })
 })
 
 // ──────────────────────────────────────────────

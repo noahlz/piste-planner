@@ -1,5 +1,6 @@
-import type { Competition, Placement, ScheduleResult, TournamentConfig, Strip } from '../../src/engine/types.ts'
+import type { Bottleneck, Competition, Placement, ScheduleResult, TournamentConfig, Strip } from '../../src/engine/types.ts'
 import {
+  BottleneckCause, BottleneckRule, BottleneckSeverity, Phase,
   Category, Gender, Weapon,
   EventType, CutMode, DeMode, VideoPolicy,
   RefPolicy, DeStripRequirement, TournamentType, PlacementSource,
@@ -107,6 +108,21 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
   }
 }
 
+
+export function makeBottleneck(overrides: Partial<Bottleneck> = {}): Bottleneck {
+  const competition_id = overrides.competition_id ?? 'evt-A'
+  return {
+    competition_id,
+    phase: Phase.POOLS,
+    cause: BottleneckCause.STRIP_CONTENTION,
+    severity: BottleneckSeverity.WARN,
+    delay_mins: 10,
+    message: 'x',
+    rule: BottleneckRule.STRIP_CONTENTION_DEFERRAL,
+    subjects: competition_id === '' ? [] : [competition_id],
+    ...overrides,
+  }
+}
 
 export function makePlacement(overrides: Partial<Placement> = {}): Placement {
   return {

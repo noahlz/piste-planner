@@ -1,4 +1,4 @@
-import { BottleneckSeverity, CutMode, VideoPolicy, DeMode, BottleneckCause, Phase } from './types.ts'
+import { BottleneckSeverity, CutMode, VideoPolicy, DeMode, BottleneckCause, BottleneckRule, Phase } from './types.ts'
 import type { AnalysisResult, Bottleneck, Competition, TournamentConfig } from './types.ts'
 import { computePoolStructure, computeDeFencerCount, poolCountFor } from './pools.ts'
 import { computeBracketSize } from './de.ts'
@@ -123,6 +123,8 @@ export function initialAnalysis(
         competition_id: '',
         phase: Phase.CAPACITY,
         cause: BottleneckCause.STRIP_CONTENTION,
+        rule: BottleneckRule.DAY_POOLS_EXCEED_STRIPS,
+        subjects: [],
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
         message: `Day ${day + 1}: ~${totalPools} pools assigned but only ${config.strips_total} strips available. Consider adding strips, reducing competitions, or enabling flighting.`,
@@ -144,6 +146,8 @@ export function initialAnalysis(
           competition_id: comp.id,
           phase: Phase.POOLS,
           cause: BottleneckCause.STRIP_DEFICIT_NO_FLIGHTING,
+          rule: BottleneckRule.POOLS_EXCEED_STRIP_CAP_UNFLIGHTED,
+          subjects: [comp.id],
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
           message: `${comp.id}: ${ps.n_pools} pools but only ${effectiveCap} strips available; flighting not enabled`,
@@ -183,11 +187,14 @@ export function initialAnalysis(
   for (const [day, flighted] of flightedByDay) {
     if (flighted.length > 1) {
       // Emit one warning per flighted competition on the over-subscribed day
+      const flightedIds = flighted.map((c: Competition) => c.id).sort()
       for (const comp of flighted) {
         warnings.push({
           competition_id: comp.id,
           phase: Phase.FLIGHTING,
           cause: BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY,
+          rule: BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY,
+          subjects: flightedIds,
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
           message: `Multiple flighted competitions on day ${day}: ${flighted.map((c: Competition) => c.id).join(', ')}`,
@@ -214,6 +221,8 @@ export function initialAnalysis(
         competition_id: '',
         phase: Phase.DE,
         cause: BottleneckCause.VIDEO_STRIP_CONTENTION,
+        rule: BottleneckRule.DAY_VIDEO_DEMAND_EXCEEDS_VIDEO_STRIPS,
+        subjects: [],
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
         message: `Day ${day}: peak video-required DE demand is ${demand} but only ${config.video_strips_total} video strips available`,
@@ -235,6 +244,8 @@ export function initialAnalysis(
         competition_id: group.flighted_competition_id,
         phase: Phase.DE,
         cause: BottleneckCause.VIDEO_STRIP_CONTENTION,
+        rule: BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO,
+        subjects: [group.priority_competition_id, group.flighted_competition_id].sort(),
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
         message: `Flighting group (${group.priority_competition_id}, ${group.flighted_competition_id}): both competitions require video strips`,
@@ -251,6 +262,8 @@ export function initialAnalysis(
       competition_id: comp.id,
       phase: Phase.CUT,
       cause: BottleneckCause.CUT_SUMMARY,
+      rule: BottleneckRule.CUT_SUMMARY,
+      subjects: [comp.id],
       severity: BottleneckSeverity.INFO,
       delay_mins: 0,
       message: `${comp.id}: cut summary — ${comp.fencer_count} entered, ${promoted} promoted, bracket of ${bracket}`,

@@ -6,8 +6,8 @@ import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constan
 import { computeStripCap } from './stripBudget.ts'
 import { aggregateStripHours } from './capacity.ts'
 
-function err(field: string, message: string): ValidationError {
-  return { field, message, severity: BottleneckSeverity.ERROR }
+function err(field: string, message: string, rule: string, subjects: string[]): ValidationError {
+  return { field, message, severity: BottleneckSeverity.ERROR, rule, subjects }
 }
 
 /** Structural finding: leaves nothing to draw, ERROR in both validation modes (research D3). */
@@ -40,7 +40,7 @@ function policy(field: string, message: string, mode: ValidationMode, rule: stri
  * the producing rule's subject key is too narrow and must widen, not merge.
  */
 export function findingIdentity(finding: ValidationError): string {
-  return `${finding.rule ?? ''}:${(finding.subjects ?? []).join('+')}`
+  return `${finding.rule}:${finding.subjects.join('+')}`
 }
 
 /**
@@ -87,6 +87,8 @@ export function validateSameDayCompletion(
     return err(
       'same_day_completion',
       `Competition ${competition.id} worst-case duration ${total} min exceeds DAY_LENGTH_MINS ${config.DAY_LENGTH_MINS} min (pool=${poolDuration}, admin=${config.ADMIN_GAP_MINS}, DE=${deDuration})`,
+      'same-day-completion',
+      [competition.id],
     )
   }
   return null
@@ -331,6 +333,12 @@ function validateDependencies(config: TournamentConfig, competitions: Competitio
  */
 const FEASIBILITY_SLACK = 1.15
 
+/** Rule ids of the two feasibility findings, shared with the post-schedule diagnostics that recognize them. */
+export const FeasibilityRule = {
+  STRIP_HOURS: 'feasibility-strip-hours',
+  VIDEO_STRIP_HOURS: 'feasibility-video-strip-hours',
+} as const
+
 /**
  * Feasibility finding: notice-kind — WARN in every validation mode, never
  * escalating (011 FR-001/FR-002, research D1/D2). The check is a worst-case
@@ -370,7 +378,7 @@ export function validateFeasibility(
       `RESOURCE_INSUFFICIENT: ${Math.round(totalNeeded)} strip-hours needed over ${competitions.length} events; ` +
       `${Math.round(totalAvailable)} available (${config.days_available}d × ${config.strips_total}s × ${dayLengthHours}h). ` +
       `Shortfall ${Math.round(shortfall)} (~${pct}%). Add ${extraDays} more day(s) OR ${extraStrips} more strip(s).`,
-      'feasibility-strip-hours',
+      FeasibilityRule.STRIP_HOURS,
     ))
   }
 
@@ -389,7 +397,7 @@ export function validateFeasibility(
         `RESOURCE_INSUFFICIENT (video): ${Math.round(videoNeeded)} video strip-hours needed; ` +
         `${Math.round(videoAvailable)} available (${config.days_available}d × ${config.video_strips_total}vs × ${dayLengthHours}h). ` +
         `Shortfall ${Math.round(shortfall)}. ${dayHint} OR ${extraStrips} more video strip(s).`,
-        'feasibility-video-strip-hours',
+        FeasibilityRule.VIDEO_STRIP_HOURS,
       ))
     }
   }

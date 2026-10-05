@@ -157,7 +157,7 @@ function findingsForBlock(
   const messages: string[] = []
 
   for (const error of findings.validationErrors) {
-    if (error.subjects?.includes(competitionId)) messages.push(error.message)
+    if (error.subjects.includes(competitionId)) messages.push(error.message)
   }
 
   const forEvent = findings.analysis.warnings.filter(

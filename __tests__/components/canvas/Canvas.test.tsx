@@ -8,10 +8,8 @@ import { runScheduleAll } from '../../../src/store/runActions.ts'
 import { selectDerivedSchedule, selectDerivedFindings, selectFindings, FindingSeverity } from '../../../src/store/derived.ts'
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
 import { assignStripLanes } from '../../../src/layout/lanes.ts'
-import { BottleneckCause, BottleneckSeverity } from '../../../src/engine/types.ts'
-import { Phase } from '../../../src/engine/types.ts'
 import type { DayConfig } from '../../../src/engine/types.ts'
-import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
+import { makeBottleneck, makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 import { installStubResizeObserver, NeverFiringResizeObserver } from '../../helpers/resizeObserver.ts'
 import { NO_PINS } from '../../helpers/canvasQueries.ts'
 
@@ -303,14 +301,7 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
       validationErrors: [],
       analysis: {
         warnings: [
-          {
-            competition_id: 'flagged',
-            phase: Phase.POOLS,
-            cause: BottleneckCause.STRIP_CONTENTION,
-            severity: BottleneckSeverity.WARN,
-            delay_mins: 10,
-            message: 'flagged waited for strips',
-          },
+          makeBottleneck({ competition_id: 'flagged', delay_mins: 10, message: 'flagged waited for strips' }),
         ],
         suggestions: [],
       },

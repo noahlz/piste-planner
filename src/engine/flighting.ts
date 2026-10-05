@@ -1,4 +1,4 @@
-import { BottleneckCause, BottleneckSeverity, Phase } from './types.ts'
+import { BottleneckCause, BottleneckRule, BottleneckSeverity, Phase } from './types.ts'
 import type { Competition, FlightingGroup, Bottleneck } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { crossoverPenalty } from './crossover.ts'
@@ -52,6 +52,8 @@ export function suggestFlightingGroups(
         competition_id: c1.id,
         phase: Phase.FLIGHTING,
         cause: BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED,
+        rule: BottleneckRule.FLIGHTING_PRIORITY_TIE,
+        subjects: [c1.id, c2.id].sort(),
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
         message: `${c1.id} and ${c2.id} have equal pool counts (${c1Pools}); organiser must designate priority manually`,
@@ -140,11 +142,14 @@ export function validateFlightingGroup(
     c => c.flighted && dayAssignments[c.id] === flightedDay,
   )
   if (flightedOnDay.length > 1) {
+    const flightedIds = flightedOnDay.map(c => c.id).sort()
     for (const comp of flightedOnDay) {
       bottlenecks.push({
         competition_id: comp.id,
         phase: Phase.FLIGHTING,
         cause: BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY,
+        rule: BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY,
+        subjects: flightedIds,
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
         message: `Multiple flighted competitions on day ${flightedDay}: ${flightedOnDay.map(c => c.id).join(', ')}`,
@@ -167,6 +172,8 @@ export function validateFlightingGroup(
       competition_id: flightedComp.id,
       phase: Phase.FLIGHTING,
       cause: BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST,
+      rule: BottleneckRule.FLIGHTED_NOT_LARGEST,
+      subjects: [flightedComp.id, ...(largestComp ? [largestComp.id] : [])].sort(),
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
       message: `Flighted competition ${flightedComp.id} (${flightedPools} pools) is not the largest on day ${flightedDay}; largest is ${largestComp?.id} (${maxPools} pools)`,
@@ -182,6 +189,8 @@ export function validateFlightingGroup(
       competition_id: flightedComp.id,
       phase: Phase.FLIGHTING,
       cause: BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
+      rule: BottleneckRule.FLIGHTING_GROUP_CROSSOVER_PENALTY,
+      subjects: [priorityComp.id, flightedComp.id].sort(),
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
       message: `Flighting group (${priorityComp.id}, ${flightedComp.id}) has a demographic crossover penalty of ${penalty.toFixed(2)}`,

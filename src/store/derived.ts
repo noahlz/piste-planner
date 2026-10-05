@@ -468,7 +468,7 @@ function computeAllFindings(state: StoreState): Finding[] {
 
   // ── §1.1 validation errors ──
   for (const error of derivedFindings.validationErrors) {
-    const target = resolveTarget(error.subjects?.[0])
+    const target = resolveTarget(error.subjects[0])
     const day = target === null ? null : dayOf(target)
     rows.push({
       id: findingIdentity(error),
