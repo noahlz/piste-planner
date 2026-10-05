@@ -79,12 +79,11 @@ and kept every user-visible surface unchanged.*
 *Found while planning 014, 2026-10-04. Recorded, not fixed – 014 kept every
 user-visible surface unchanged.*
 
-014 gave `Bottleneck` a `rule` and `subjects`, which identify every finding
-that names a competition. Venue findings scoped to one day name no
-competition, so they share `rule` and `subjects` (`[]`) and differ only by the
-day in their message text. Examples: `day-pools-exceed-strips` and
-`day-video-demand-exceeds-video-strips` from `initialAnalysis`, and the three
-`DAY_RESOURCE_SUMMARY` lines from `postScheduleDayBreakdown`. Two consequences:
+014 gave `Bottleneck` a `rule` and `subjects`, and neither carries a day.
+Venue findings scoped to one day name no competition, so they share `rule` and
+`subjects` (`[]`) and differ only by the day in their message text, for
+example `day-pools-exceed-strips` and `day-video-demand-exceeds-video-strips`
+from `initialAnalysis`. Two consequences in the Findings panel:
 
 - The Findings panel's bottleneck row id stays
   `analysis:<cause>:<competition_id>:<ordinal>` (`store/derived.ts`, §1.2).
@@ -93,9 +92,20 @@ day in their message text. Examples: `day-pools-exceed-strips` and
 - These rows show `day: null` and `where: 'Venue'`, so a Day 2 strip warning is
   not tied to Day 2 in the panel or on the canvas.
 
+The scheduler's three `DAY_RESOURCE_SUMMARY` lines (`postScheduleDayBreakdown`)
+have the same shape. Scheduler bottlenecks never reach the panel, though,
+because `runActions.ts` keeps only placements, so only the ledger's day-summary
+check meets them.
+
 The fix is a structured `day` on `Bottleneck`, filled by every day-scoped
-producer, with the row id built from `rule`, `subjects` and `day`. That changes
-dismissal identity, so it needs its own decision. The ledger's day-summary
+producer. The row id must then combine `rule`, `competition_id`, `subjects` and
+`day`. `rule` + `subjects` + `day` alone is not unique: `multiple-flighted-same-day`
+emits one warning per flighted event on a day, all with the same rule, the same
+`subjects` and the same day, and only `competition_id` tells them apart.
+Scheduler findings that repeat per phase (`phase-deferred`,
+`strip-contention-deferral`, `pinned-phase-unclaimed`) would also need `phase`
+if they ever reach the panel. That changes dismissal identity, so it needs its
+own decision. The ledger's day-summary
 check (`driftLedger.test.ts`, "day peaks match …") could then filter by rule and
 day, though the peak value it parses from the message has no structured home
 either.
@@ -1155,9 +1165,13 @@ a fix must substitute every catalogue id, not only the target or a leading
 `CenterView.tsx:201-219` has no `print-hidden` class, so a dimmed-invalid board
 prints its codes. `ExportPopover.tsx:129-144` also prints ids from load errors.
 
-Since 014, every `Bottleneck` lists the competitions its message names in
-`subjects`, sorted, as `ValidationError` already did. Option (B) can take the
-ids to substitute from `subjects` instead of scanning the text.
+Since 014, every `Bottleneck` carries `subjects`, as `ValidationError` already
+did. For an engine finding these are exactly the competition ids its message
+names. A finding copied from a validation rule keeps that rule's subjects: a
+field name such as `['feasibility']` for a global rule, and, for
+`same-population` and `flighting-group-strips`, ids their message does not
+name. Option (B) can take the ids to substitute from `subjects` instead of
+scanning the text, once it skips subjects that are not competitions.
 
 ## `competitionLabel` may not match published USA Fencing wording
 
