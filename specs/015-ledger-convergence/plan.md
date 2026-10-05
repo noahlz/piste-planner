@@ -20,8 +20,9 @@ three regional scenarios (B4, B5 and B6), it is also a configuration the
 engine's own `regional-cut-override` rule flags.
 
 **Roadmap:** [`competition-planner-workbench.md` §Roadmap row
-015](../../docs/design/competition-planner-workbench.md). 017, 018, 019 and 023
-are each measured against this ledger and wait on it.
+015](../../docs/design/competition-planner-workbench.md). 024 (the 2026-27
+Operations Manual conformance) comes next and is measured against this
+ledger. 016–019 and 023 follow 024.
 
 **Branches:** the plan was written and measured on `015-ledger-convergence`
 (worktree `.claude/worktrees/015-ledger-convergence`, cut from `main` at
@@ -192,8 +193,10 @@ together, and parity cannot see it. That was already true for
 sites, :168–:362), `resources.test.ts:486`, `bottleneckSubjects.test.ts:48`,
 `stripSearch.test.ts:34` and `pinnedScheduling.test.ts:37, :180, :259`. Team
 events take the per-type DE mode like individual events, as `buildConfig.ts`
-does, so NAC team DEs become STAGED in the ledger. Whether a team DE should
-stage at all is 023's question. The factory also sets `latest_end: Infinity`,
+does, so NAC team DEs become STAGED in the ledger. That is right. The owner
+confirmed on 2026-10-05 that team events at national events are staged, with
+video strips for the gold and bronze medal bouts. 023 still owns the team DE's
+shape and which of its rounds take video. The factory also sets `latest_end: Infinity`,
 measured as byte-identical, so no `Competition` field is left differing.
 
 **D3 – A field-level parity test, written first.** This is a new file,
@@ -305,15 +308,28 @@ is in it.
 
 - *`dayConfigs`* stays as the ledger's day axis (D3).
 - *Team DE modelling*, which is 023. 015 only makes the ledger stage NAC team
-  DEs the way the app already does. 023's scope text and the backlog's
+  DEs the way the app already does, and the owner confirmed that staging is
+  right (D2). 023's scope text and the backlog's
   team-events entry both say "the ledger factory forces team events
   SINGLE_STAGE" (`competition-planner-workbench.md:287`, `backlog.md:1141`).
   Task 4 corrects both.
-- *RYC and the regional cut.* `REGIONAL_CUT_TOURNAMENT_TYPES` is ROC, SYC,
-  RJCC and SJCC, with no RYC. The backlog entry's field table says
-  "ROC/RYC/RJCC". 015 copies the engine's set unchanged. The handoff records
-  the mismatch for the owner, because Y14 at an RYC still cuts 20% on both
-  paths.
+- *RYC and the regional cut.* The owner ruled on 2026-10-05 that Y14 has no
+  20% cut by default at regional level. `REGIONAL_CUT_TOURNAMENT_TYPES` is
+  ROC, SYC, RJCC and SJCC, with no RYC, so an RYC's Y14 events wrongly cut 20%
+  on both paths today. The fix is an engine-constant change, and 015 changes
+  nothing under `src/`, so it goes to 024, the 2026-27 Operations Manual
+  conformance feature that runs right after 015. No B1–B8 scenario is an RYC, so the fix moves no ledger
+  number. The factory picks it up through the shared constant (D1).
+- *Y14 at NACs.* The owner also ruled on 2026-10-05 that Y14 advances 100%
+  at a NAC by default, per the 2024-25 Athlete Handbook. That also goes to
+  024. Unlike the RYC fix, it moves B2 and B3. 015 measures them under
+  today's 20% NAC cut, which is the baseline 024's drift review compares
+  against.
+- *The 2026-27 Operations Manual.* The owner's rulings of 2026-10-05 change
+  pool and DE times, video, the day length and the same-day rules (backlog
+  §The engine's rules predate the 2026-27 Operations Manual). All of it is
+  024. 015 converges the ledger on today's rules, so 024's drift can be
+  measured against what the app runs.
 - *B6 places 40 of 54 in the app.* It is now the ledger's number too. This is
   existing product behavior that 015 makes visible, not something 015 caused.
 
@@ -399,7 +415,8 @@ Nothing under `src/` changed, so any difference is a halt.
   - reviews
   - decisions made on the owner's behalf, each with its cost
   - what was left unfixed:
-    - RYC is missing from the regional cut set
+    - RYC is missing from the regional cut set (owner ruling 2026-10-05,
+      assigned to 024)
     - B6 places 40 of 54
     - `src/store/buildConfig.ts:232` cites `scenarios.ts:69`, which goes stale.
       It is left alone because `src/` is out of scope.
@@ -408,8 +425,8 @@ Nothing under `src/` changed, so any difference is a halt.
     `TYPE_DEFAULTS`, `defaultCutForEntry` or `buildCompetitions` must change
     the factory's own copy in the same commit. It must also list
     `scenarios.ts` and `factoryParity.test.ts` among its editable files.
-    023, which changes the team-event DE rule, and 018, which changes the
-    policy tables, are both exposed.
+    024, which changes the cut, video and DE timing tables, and 023, which
+    changes the team-event DE rule, are both exposed.
   - the merge check
 
 **Commit point:** docs and handoff.

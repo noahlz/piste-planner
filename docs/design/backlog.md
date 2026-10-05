@@ -315,6 +315,10 @@ Relaxing the edge to a staggered-start offset shrinks the chain enough that
 the missing fit check may become moot – measure against the vet-bearing
 templates (`NAC Vet/Div1/Junior`) before adding a chain validator.
 
+*2026-10-05: the owner kept the Vet co-day as a documented departure from the
+manual's adjacent-age-group rule (024). This entry's serialization question
+stays open.*
+
 ## Policy tables are stale against USA Fencing 2025-26 changes
 
 *Found by the 2026-08-31 methodology review (policy research against
@@ -336,22 +340,132 @@ published rules:
   the "max two flights" cap and fixed `FLIGHT_BUFFER_MINS` cadence conflict
   with observed practice – uneven 1.5-2 hour flight gaps
   ([AFM on double-flighted events](https://academyoffencingmasters.com/blog/how-to-make-double-flighted-events-work-for-you/)).
-- **Tiered video replay is uncorroborated**: USA Fencing's public pages
-  describe a flat "R16 onward" rule at NACs. The doc's R16/R8/R4-by-category
-  table has no source found in either direction, and the per-category video
-  logic built on it should be treated as provisional.
+- **Tiered video replay is settled by the 2026-27 Operations Manual**
+  (p.19). It guarantees R16 for Div I, Junior and Cadet, and R8 for every
+  other individual category, with the third tier moving from R4 to R8. See
+  §The engine's rules predate the 2026-27 Operations Manual (024).
 - **2 refs/pool default is unverified**: no source states a per-pool referee
   count, and the default doubles reported staffing versus 1/pool. One usable
   sanity bound exists: the Referee Commission Chair estimated **150-180
   refs/day** at a NAC
   ([FencingParents, 2020](https://www.fencingparents.org/suggestions-for-us-fencing/2020/2/23/fencing-parents-need-to-up-their-game-according-to-referee-commission-chair)).
+  The 2026-27 manual gives no count either, and links a separate Referee
+  Requirements document instead. The owner left the per-type values as they
+  are (2026-10-05).
 - **A 2026-27 overhaul is announced** (single national points list, Elite vs
   National split at 168 entries), so these tables will go stale again.
+- **RYC regional cut** (owner ruling, 2026-10-05; roadmap 024): at regional
+  level, Y14 has no 20% cut by default. `REGIONAL_CUT_TOURNAMENT_TYPES`
+  (`constants.ts:586-591`) leaves out RYC, so an RYC's Y14 events cut 20%
+  today.
+  - The spec contradicts itself. METHODOLOGY.md:377 leaves out RYC and SJCC,
+    while :683-694 give RYC/SYC and RJCC/SJCC 100% advancement. 024's first
+    task drafts the :377 amendment for the owner's approval.
+  - With RYC added, the set equals `REGIONAL_QUALIFIER_TYPES`
+    (`constants.ts:525-531`).
+  - No B1–B8 scenario is an RYC, so no ledger number moves.
+- **Y14 at NACs** (owner ruling, 2026-10-05; roadmap 024): Y14 advances 100%
+  at a NAC by default, per the 2024-25 Athlete Handbook, Table 2.16.1 ("Y14
+  SYC & NAC: 100% to SE"). The code (`DEFAULT_CUT_BY_CATEGORY`) and
+  METHODOLOGY.md:377 cut Y14 20% there. With this ruling and the RYC one
+  together, Y14 advances in full at every tournament type the app models, so
+  its default becomes all-advance. Its `REGIONAL_CUT_OVERRIDES` entry then
+  does nothing. The handbook's 80% applies to the Y14 National Championship,
+  which no template models.
+  - B2 and B3 hold NAC Y14 events, so this moves the ledger and needs 024's
+    drift review against the converged ledger 015 leaves.
+  - The :377 amendment is drafted together with the RYC fix.
 
 The durable fix is the one already on this backlog – promote policy tables
 (cuts, video rounds, flighting caps) into the per-season configuration file
 described under "Global settings," rather than chasing each season in
 `constants.ts`.
+
+## The engine's rules predate the 2026-27 Operations Manual
+
+*Audited 2026-10-05 against the [USA Fencing Operations Manual
+2026-27](https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt31ccda29e31349e7/USAF_OPsManual_2026_27.pdf)
+("Published August 2026"). The edition before it, from 2019, is the spec's
+source S1. Every ruling below is the owner's, made on 2026-10-05. Roadmap
+feature 024, after 015.*
+
+The spec and the engine were written against the 2019 manual. The 2026-27
+edition changes the planning times and the video rounds, and its scheduling
+criteria (p.20) are word-for-word those of 2019. The audit found that the
+spec departs from them in places without saying so.
+
+**Spec first.** 024's first task drafts every METHODOLOGY.md amendment below,
+each citing its manual page, and updates source S1 to the 2026-27 edition.
+No code changes until the owner approves the spec diff.
+
+**Planning times** (p.17, "Average Bout Timing in Minutes": a pool of 7 takes
+120 min for foil and épée and 60 for sabre, and a 15-touch bout takes
+15 / 15 / 8):
+
+- **Pools follow the manual.** A pool of N takes the pool-of-7 time ×
+  bouts(N) ÷ 21. That gives 86 / 86 / 43 min for a pool of 6, and 57 / 57 / 29
+  for a pool of 5. It replaces the default `pool_round_duration_table`
+  (`constants.ts:114-118`). That table gives foil, épée and sabre
+  105 / 120 / 75 for a pool of 6, which `poolDurationForSize`
+  (`pools.ts:62-71`) scales to 147 / 168 / 105 for a pool of 7. The table stays user-editable
+  and only its default changes. The youth calibration entry below is affected.
+- **DE bouts follow the manual plus changeover.** The manual's figures are
+  treated as fencing time, with the app's 5-minute strip changeover added:
+  20 / 20 / 13 per bout. DE length derives from that, and the empirical
+  `de_duration_table` goes. This lifts the design doc's "replacing the
+  empirical `de_duration_table`" out-of-scope line.
+- **The team match is 60 min for foil and épée and 30 for sabre.** That is
+  the figure §Team events (023) needs.
+- **Strips and the day.** The default day becomes 9:00–19:00 (today
+  8:00–22:00, `constants.ts:45-46`). Suggest takes competitors on the busiest
+  day ÷ 14 as its baseline, against about ÷ 5.6 today (`analysis.ts:74-75`).
+  A day that finishes after 19:00 raises a warning, which pairs with §Day-end
+  overrun (018). 024's plan decides how the ÷ 14 baseline combines with the
+  placement search that 011 and 012 built.
+
+**Video** (p.19): replay is guaranteed at NACs for every category.
+
+- From the round of 16: Div I, Junior, Cadet.
+- From the round of 8: all other individual categories. The manual prints
+  "round of 8" for Div IA, II, III and Vet 40/80/Combined, which 2019 had at
+  round of 4, and the owner takes it as printed.
+- Teams: gold and bronze only (023).
+
+At NACs every individual category becomes REQUIRED. Today only Cadet, Junior
+and Div I are REQUIRED (`constants.ts:184-196`). `VIDEO_STAGE_ROUND`
+(`constants.ts:551-556`) gets the round of 8 for the third tier and is wired
+into the staged DE. Nothing in `src/` reads it today.
+
+**Same-day rules** (p.20, Groups 1–3):
+
+| Rule | Manual | Ruling |
+|---|---|---|
+| Div I vs Cadet, same weapon | Group 1, mandatory | **Soft block.** If they must share a day, one runs in the morning and the other in the afternoon, with minimal overlap or one finishing before the other starts. Today it is a soft penalty with no time-of-day rule (`constants.ts:480`), and the spec also lists it as hard (:110-114). |
+| Group 1 and gender | "for any one weapon" | **Per weapon and gender**, as the engine applies it today. The spec states this as its reading. |
+| Group 1 at regionals | titled "National" | **Soft at ROC, RYC, RJCC, SYC and SJCC**, with the Div I–Cadet treatment. This replaces the spec's unsourced "4+ hours apart" exception (:119-122). Today `crossover.ts:172` blocks at every type. |
+| Adjacent age groups | Group 1 | **Y8 with Y10, and the Vet co-day, stay.** The spec documents both as departures from the manual. |
+| Div I vs Div IA | not in the manual | **Stays a hard block**, documented as a departure because nearly the same fencers enter both. |
+| Junior–Cadet rest day | Group 2, Junior Olympics only | **Junior Olympics only.** It comes out of `REST_DAY_PAIRS` (`constants.ts:516-519`) because no template is a Junior Olympics. Junior–Div I keeps its rest day. |
+| First and last day shorter | Group 2 | **Planned, then checked.** Day assignment gives the first and last day less capacity. A warning fires from 3 days up when either isn't shorter. Today it is checked only at 4+ days, and only when longer (`concurrentScheduler.ts:1544, :1588`). |
+| Vet vs Div IA, same weapon | Group 2 | New soft separation. |
+| Div II vs Div III, same weapon | Group 2 | New soft separation. |
+| Y14, Cadet, Junior vs open team, same weapon | Group 2 | New soft separation. |
+| Same age group and gender, different weapon | Group 3 | A weak soft preference for every category. It replaces `CROSS_WEAPON_SAME_DEMOGRAPHIC_VET`, which nothing reads. |
+| Large foil and sabre starts staggered | Group 2 | **Declined.** Not modelled. |
+
+**Cuts.** The RYC regional cut and Y14 all-advance at NACs (§Policy tables)
+move here from 018.
+
+**Not scheduling inputs:**
+
+- Mixed-gender youth events (p.12). The app always plans single-gender events,
+  and a merge is an output decision like referee assignment.
+- Refs per pool. The manual links a separate Referee Requirements document,
+  and the per-type values stay as they are, unsourced.
+
+**Drift.** Pool and DE times move every B1–B8 event, and the video and
+same-day rules move placement. 024 is measured against 015's converged ledger,
+with one drift review per rule group.
 
 ## METHODOLOGY.md and the engine have diverged, and the doc is the spec
 
@@ -444,7 +558,8 @@ Three cases argue against "conform the engine", and each has evidence:
   stale below already records that USA Fencing publishes a flat "R16 onward"
   and that no source was found in either direction. Conforming the engine to an
   uncorroborated table would encode a guess. Every staged event splits at
-  `DE_ROUND_OF_16` today.
+  `DE_ROUND_OF_16` today. **Settled 2026-10-05:** the 2026-27 Operations Manual
+  (p.19) sources the tiers, and 024 conforms the engine to them.
 
 ### The doc also contradicts itself
 
@@ -458,6 +573,9 @@ no blocking decision.*
   hard-constraint bullet should move. Note this is entangled with the soft
   separation row in the table above: the doc's own soft value (5.0) is not the
   one applied (0.8), so fixing the hard/soft listing does not settle the number.
+  **Owner ruling 2026-10-05:** soft, even though the 2026-27 manual makes it
+  mandatory (p.20). If the two must share a day, they split morning and
+  afternoon (024).
 - **Flighting text conflicts with itself.** The Flighting section says Flight
   A/B start/end times are not tracked, while Runtime Decomposition says the
   concurrent scheduler decomposes them into two timed phase nodes. The former
@@ -686,6 +804,10 @@ scheduled time is snapped, so the drift review is the real work regardless of
 how mechanical the wiring is.
 
 ## Youth-event pool duration calibration
+
+*2026-10-05: 024 resets the default pool durations to the 2026-27 Operations
+Manual's planning times (p.17), which are shorter than today's. Re-measure B4
+after 024 before deciding anything here.*
 
 B4 currently predicts 5–6 hours for Y8/Y10 events that finish in 2–3 hours in
 reality. Recalibrate `pool_round_duration_table`, or add a youth-event
@@ -1140,6 +1262,12 @@ Other gaps the same feature closes:
   team events).
 - The ledger factory forces team events SINGLE_STAGE while the app stages them
   (`scenarios.ts:66-68`), which is why 015 comes first.
+- **Staging is right** (owner, 2026-10-05): at national events, team DEs are
+  staged, with video strips for the gold and bronze medal bouts. What 023
+  changes is the team DE's shape and which rounds take video, not its DE
+  mode.
+- **Team match length.** The 2026-27 Operations Manual (p.17) gives 60 min for
+  foil and épée and 30 for sabre. 023 builds on 024's DE timing basis.
 
 Cost if ignored: team events spend strips, time and referees on a round that
 does not exist, and the Strips column reports it.

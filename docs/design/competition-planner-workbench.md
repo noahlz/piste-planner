@@ -255,6 +255,8 @@ ledger B1–B8 scheduled 24 / 24 / 24 / 17 / 12 / 45 / 18 / 52, app-path parity
 | T039 – "boot places 24 of 24" while the footer reads 19 / 5 | Pass on 24 schedule rows, record the footer; the overflow is fixed later | 013 phase 8, 017 |
 | The eight time-of-day penalty weights | Retire them from METHODOLOGY as Phase D casualties | 021 |
 
+**Owner decisions, 2026-10-05:** every finding of the 2026-27 Operations Manual audit is ruled on, and the rulings are recorded in [`backlog.md`](./backlog.md) §The engine's rules predate the 2026-27 Operations Manual. They become feature 024.
+
 ### The finish line
 
 The product is finished when every row below is delivered. Each becomes a Spec
@@ -266,19 +268,23 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 | **013** | Phase 8 close-out – polish, docs, the three decided fixes above, the retired-surface grep, live smoke, the full check twice, the owner's print check, handoff. `specs/013-workbench-redesign/sessions/S11.md` | – | M | – | no engine change |
 | **014** | **Delivered 2026-10-04** – structured bottlenecks: `Bottleneck` gains a rule id and `subjects`, every producer fills them, the message-text readers move to them. `specs/014-structured-bottlenecks/handoff.md` | closed. Leftovers in §Day-level findings have no structured day | S–M | 013 | zero movement, measured |
 | **015** | **Planned 2026-10-05**, `specs/015-ledger-convergence/plan.md`. Ledger converges with the store – the drift factory applies the per-type cut, DE-mode and ref-policy rules; B4's 18-vs-17 isolated first. A deliberate re-baseline, so every later engine fix is measured against what the app runs | §The drift ledger's factory | M | 013 | re-baseline |
-| **016** | Hand placements obey the rules – crossover hard edges checked on the current placements and shown as findings; one referee-peak number for the footer and the engine | §Hand-placed events, §The scorecard's peak-referee row | L | 014 | if the referee fix touches the engine |
-| **017** | The canvas tells the truth – one strip model for engine and canvas so B1 boots 24 / 0; blocks become keyboard-operable buttons | §The canvas calls events unplaced, §A placed block cannot be selected | M | 015 | if the engine assigns strip ranges |
-| **018** | Engine correctness – DE prelims bout share, day-end overrun as a warning, Div 1 cut 25 %, the fencer-count ≤ 1 URL path verified. One drift review per fix | §DE prelims, §Day-end overrun, §Policy tables (Div 1 only), §A shared URL with a fencer count of 0 or 1 | M | 015 | one per fix |
-| **019** | Default days per template – the three K₄ templates default to 4 days so they satisfy their own hard rules | §The store's default day count | S | 015 | parity only |
+| **016** | Hand placements obey the rules – crossover hard edges checked on the current placements and shown as findings; one referee-peak number for the footer and the engine | §Hand-placed events, §The scorecard's peak-referee row | L | 014, 024 | if the referee fix touches the engine |
+| **017** | The canvas tells the truth – one strip model for engine and canvas so B1 boots 24 / 0; blocks become keyboard-operable buttons | §The canvas calls events unplaced, §A placed block cannot be selected | M | 024 | if the engine assigns strip ranges |
+| **018** | Engine correctness – DE prelims bout share, day-end overrun as a warning, Div 1 cut 25 %, the fencer-count ≤ 1 URL path verified. One drift review per fix | §DE prelims, §Day-end overrun, §Policy tables (Div 1 only), §A shared URL with a fencer count of 0 or 1 | M | 024 | one per fix |
+| **019** | Default days per template – the three K₄ templates default to 4 days so they satisfy their own hard rules | §The store's default day count | S | 024 | parity only |
 | **020** | Re-run on parameter change – debounced, with a show-after-delay working indicator | §Changing a parameter should re-run the engine | M | 013, independent of 014–019 | no |
 | **021** | METHODOLOGY reconciliation – retire the eight time-of-day weights, the three cheap weight fixes, the doc's self-contradictions, the verdicts in [`methodology-reconciliation.md`](./methodology-reconciliation.md); delete `daySequencing.ts` and the dead constants; add the calibration scenario | §METHODOLOGY.md and the engine have diverged, §Dead code held back, §Calibration debt | M–L | 018 (day-end wording) | yes |
 | **022** | Release housekeeping – README, dev port, stale settings, stale citations | §Release housekeeping | S | last | no |
-| **023** | Team events go straight to DE – see the scope below | §Team events are scheduled with a pool round | L | 015 | B1, B2, B8 move, B3–B7 must not |
+| **023** | Team events go straight to DE – see the scope below | §Team events are scheduled with a pool round | L | 015, 024 | B1, B2, B8 move, B3–B7 must not |
+| **024** | 2026-27 Operations Manual conformance – the spec amended first (drafted, owner approves), then pool and DE times from the manual, video for every NAC category from R16 or R8, a 9:00–19:00 day with a ÷ 14 strip baseline, the same-day rulings (Div I–Cadet soft with a morning/afternoon split, Group 1 soft at regionals, new Group 2 and 3 soft rules, first and last day shorter), the Y14 and RYC cuts | §The engine's rules predate the 2026-27 Operations Manual, §Policy tables (Y14 and RYC cuts) | L | 015 | one per rule group; every scenario moves |
 
 020 can run beside any of 014–019 since it touches only the UI. Everything else
 runs in the order shown. 023 takes the next free number rather than renumbering
 016–022, which would churn their references. Its dependency is "after 015", and
-it runs before 022, which stays last.
+it runs before 022, which stays last. 024 likewise takes the next free number.
+It runs right after 015 and ahead of 016–019 and 023, so they are measured
+against the 2026-27 planning times rather than the ones it replaces. 023 also
+takes its team-match length from 024's DE timing basis.
 
 #### 023 scope (owner decisions, 2026-10-04)
 
@@ -319,7 +325,7 @@ P5 (FLUID), and the experimental mode (rejected in 012). Five of them wait on
 an owner decision or on data first: vet co-day serialization, per-event entry
 caps, the strip non-monotonicity warning, youth pool calibration, and real
 2026-27 templates with the Elite/National split. The policy-tables entry's
-rows other than the Div 1 cut sit here too.
+rows other than the Div 1 cut (018) and the Y14 cuts (024) sit here too.
 
 ## Testing
 
@@ -341,7 +347,7 @@ rows other than the Div 1 cut sit here too.
 - Mobile and touch drag.
 - Collaborative editing.
 - Export to PNG or PDF.
-- Replacing the empirical `de_duration_table`.
+- ~~Replacing the empirical `de_duration_table`.~~ Lifted 2026-10-05: 024 derives DE length from the 2026-27 Operations Manual's bout times.
 
 ## Open items carried forward
 
