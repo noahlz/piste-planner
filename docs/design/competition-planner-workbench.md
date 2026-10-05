@@ -270,9 +270,42 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 | **020** | Re-run on parameter change – debounced, with a show-after-delay working indicator | §Changing a parameter should re-run the engine | M | 013, independent of 014–019 | no |
 | **021** | METHODOLOGY reconciliation – retire the eight time-of-day weights, the three cheap weight fixes, the doc's self-contradictions, the verdicts in [`methodology-reconciliation.md`](./methodology-reconciliation.md); delete `daySequencing.ts` and the dead constants; add the calibration scenario | §METHODOLOGY.md and the engine have diverged, §Dead code held back, §Calibration debt | M–L | 018 (day-end wording) | yes |
 | **022** | Release housekeeping – README, dev port, stale settings, stale citations | §Release housekeeping | S | last | no |
+| **023** | Team events go straight to DE – see the scope below | §Team events are scheduled with a pool round | L | 015 | B1, B2, B8 move, B3–B7 must not |
 
 020 can run beside any of 014–019 since it touches only the UI. Everything else
-runs in the order shown.
+runs in the order shown. 023 takes the next free number rather than renumbering
+016–022, which would churn their references. Its dependency is "after 015", and
+it runs before 022, which stays last.
+
+#### 023 scope (owner decisions, 2026-10-04)
+
+Team events have no pool round, and 015 comes first so team DEs are measured
+against the DE shape the app runs (the ledger factory forces team events
+SINGLE_STAGE today, `__tests__/helpers/scenarios.ts:66-68`). One ledger move
+covers all of it, including the B1/B2 count replacement.
+
+- **No pool phase for teams.** Every place that counts team pools changes: the
+  phase builder (`concurrentScheduler.ts:538-557`), `derive.ts`, `capacity.ts`,
+  referee demand (`refs.ts`, `concurrentScheduler.ts:1477-1484`), the strip
+  budget (`stripBudget.ts`), `validation.ts`, `flighting.ts`, `analysis.ts`
+  and the pinned-placement budget. The full file list is in the backlog entry.
+- **"Placed" stops meaning "has a pool start".** `runActions.ts:58`,
+  `stripSearch.ts:146`, the `appPath.ts` helper, `serialization.ts:253-254`
+  (rejects `strip_count` < 1) and the dock chip all anchor on the pool.
+- **The team DE is modelled for teams.** Strips sized to the field instead of
+  the fixed `de_round_of_16_strips: 4` (`buildConfig.ts:218`), a team match
+  length instead of the individual DE table, and video for gold and bronze only
+  (METHODOLOGY.md:416, where the code makes Div 1, Junior and Cadet team DEs
+  REQUIRED). The mockup's 260–300 minute team DEs are a calibration hint, not
+  data.
+- **The Schedule view's Strips column** for a team row reports DE strips, since
+  it prints `pool_strip_count` today (`ScheduleOutput.tsx:183`).
+- **Real B1/B2 team counts** from FencingTimeLive replace the rounded ones
+  (`src/data/tournaments.ts:41-42`, `56-57`).
+- **Prerequisite**: the owner amends METHODOLOGY.md first – :64, :72,
+  :130-145, :157-160, :197, :531, :600-601, :639-643, :707 and :736-738.
+- **Ledger**: B1, B2 and B8 move. B3–B7 must not. The app-path counts
+  (24 / 24 / 53) and the smoke's 24-row boot hold.
 
 ### After finish
 

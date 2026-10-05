@@ -49,6 +49,16 @@ feature that owns it is in [`competition-planner-workbench.md`](./competition-pl
 - Small text still below WCAG AA –
   [§Small text still below WCAG AA](#small-text-still-below-wcag-aa).
 
+- Team events scheduled with a pool round –
+  [§Team events are scheduled with a pool round](#team-events-are-scheduled-with-a-pool-round).
+  Feature 023. Came from the T041 print remarks.
+- Catalogue ids inside Findings messages –
+  [§Findings messages name events by catalogue id](#findings-messages-name-events-by-catalogue-id).
+  Came from the T041 print remarks, unscheduled.
+- `competitionLabel`'s wording against published schedules –
+  [§`competitionLabel` may not match published USA Fencing wording](#competitionlabel-may-not-match-published-usa-fencing-wording).
+  Came from the T041 print remarks, an owner wording call.
+
 Fact, not work: `src/store/derived.ts` no longer imports from `components/`
 (013 handoff finding 19).
 
@@ -1066,3 +1076,83 @@ before calling the product finished.*
 - Bare `research.md D#` and `data-model.md §` citations in `src/` and
   `__tests__/` mostly mean 013's files, but some mean deleted features. Each
   becomes a path or a `git show 0ab5bd2dc9:…` pointer.
+
+## Team events are scheduled with a pool round
+
+*From the owner's T041 print remarks, 2026-10-04. Roadmap feature 023, after
+015. The owner's rule: team events go straight to DE.*
+
+The engine gives every event a pool round before its DE, because the phase
+builder has no event-type branch (`concurrentScheduler.ts:538-557`). METHODOLOGY.md
+assumes the same (:64, :72, :130-145, :157-160, :197, :531, :600-601,
+:639-643, :707, :736-738), so this is a spec gap and the owner amends the spec
+first.
+
+What the owner saw: B1's 10-team Vet events (Men's and Women's Foil, Men's and
+Women's Sabre) run two 5-team pools on 2 strips, then a 4-strip "DE round of
+16". The Schedule view's Strips column prints `pool_strip_count`
+(`ScheduleOutput.tsx:183`), so the "2 strips" is the pool round. The 4-strip DE
+is the fixed `de_round_of_16_strips: 4` (`buildConfig.ts:218`) whatever the
+field. B8's real 4-team `D1-M-FOIL-TEAM` (`tournaments.ts:166`) gets a 1-strip
+pool and a 4-strip DE for two semifinal bouts. B1's counts are rounded to the
+nearest 10 (`tournaments.ts:2-3`), so a "10" may be anywhere from 5 to 14
+teams.
+
+Files that count team pools today: `concurrentScheduler.ts` (538-557, 771-783,
+1477-1484, 1526, 1691), `derive.ts` (144-203, 272-296), `capacity.ts`
+(97-108), `refs.ts:20-22`, `stripBudget.ts` (66-80, 132-139), `validation.ts`
+(74-93, 243-248), `flighting.ts` (38-39, 94, 159), `analysis.ts` (49-58, 117,
+140), `store/derived.ts:174-175`, `ScheduleOutput.tsx`, `DetailStrip.tsx:127-138`
+and `UnplacedDock.tsx:114-115`. "Placed" also means `pool_start !== null` in
+`runActions.ts:58`, `stripSearch.ts:146`, `__tests__/helpers/appPath.ts:46,63-64`
+and `serialization.ts:253-254`.
+
+Other gaps the same feature closes:
+
+- Team DE length comes from the individual DE table
+  (`concurrentScheduler.ts:403,582`), not a team match.
+- Div 1, Junior and Cadet team DEs ask for REQUIRED video
+  (`buildConfig.ts:206`) where METHODOLOGY.md:416 says gold and bronze only.
+- The NAC team defaults (`constants.ts:218,228,238,288`) have no stated source,
+  and the regional ones are unreachable (METHODOLOGY.md:665 says only NACs have
+  team events).
+- The ledger factory forces team events SINGLE_STAGE while the app stages them
+  (`scenarios.ts:66-68`), which is why 015 comes first.
+
+Cost if ignored: team events spend strips, time and referees on a round that
+does not exist, and the Strips column reports it.
+
+## Findings messages name events by catalogue id
+
+*From the owner's T041 print remarks, 2026-10-04. Not scheduled.*
+
+The Schedule view and the rest of the app show event labels, but engine message
+text still carries ids, for example `D1-M-EPEE-IND: cut summary — …`
+(`analysis.ts:256`, 12 Notes in B1) and the `${comp.id}: …` messages in
+`validation.ts:142-287`. They reach the Findings panel
+(`store/derived.ts:477,502`), the tooltip's Findings row and the block's
+accessible name (`Canvas.tsx:152-172`, `Block.tsx:130-139`), and the invalid
+overlay (`CenterView.tsx:213-216`).
+
+Options: (B) substitute labels in `computeAllFindings`, store-side, or (C)
+reword the engine messages. Neither moves the drift ledger, which excludes
+message strings (`driftLedger.test.ts:13-15`). Some messages name two ids
+mid-text (`flighting.ts:57`, `analysis.ts:149,193,240`, `validation.ts:89`), so
+a fix must substitute every catalogue id, not only the target or a leading
+`<id>: `. B4, B5 and B6 also raise `validation.ts:217` warnings. The overlay at
+`CenterView.tsx:201-219` has no `print-hidden` class, so a dimmed-invalid board
+prints its codes. `ExportPopover.tsx:129-144` also prints ids from load errors.
+
+## `competitionLabel` may not match published USA Fencing wording
+
+*From the owner's T041 print remarks, 2026-10-04. An owner wording call,
+unsourced either way.*
+
+The Schedule view now shows `competitionLabel` (`competitionLabels.ts:54-58`),
+which prints "Div 1" / "Div 1A" / "Div 2" (:12-15), always appends
+"Individual" (:37) and reads "Senior" for a Div 1 team event (:20-23). The
+handbook notes use "Div I / IA / II / III". FR-051 only says the view follows
+USA Fencing's published schedules, so whether they say "Division I" or omit
+"Individual" is unverified. Confirm the wording against a published schedule
+before pinning it in tests. Labels run up to 41 characters, and 21 of 120 exceed
+34, so a wording change also moves print wrapping.
