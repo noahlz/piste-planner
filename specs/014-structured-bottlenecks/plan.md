@@ -200,9 +200,9 @@ Steps:
   unique strings. `competition_id` is `''` or in `subjects`. Every catalogue
   id named in `message` is in `subjects`, matched on token boundaries, and
   every subject that is a catalogue id appears in `message`. Each `rule` is a
-  `BottleneckRule` value or a `validateConfig` rule id. Add focused cases:
-  the crossover pair's subjects (B-scenario or template from the existing
-  crossover test), a validation-derived bottleneck carrying its finding's
+  `BottleneckRule` value or a `validateConfig` rule id. Add focused cases
+  (the crossover pair's subjects are pinned by Task 2's rewrite of the
+  existing crossover test, not here): a validation-derived bottleneck carrying its finding's
   rule and subjects, `validateSameDayCompletion` carrying
   `same-day-completion` / `[id]`, a rollback case where B's rollback leaves
   A's two-subject finding in place, and an id-prefix case for the oracle's
@@ -245,7 +245,8 @@ Steps:
   *own* bottlenecks carry one `feasibility-strip-hours` WARN, which the old
   comment said was impossible, and keeps the `validateConfig` read. Rewrite
   the four stale comments to say what is true now. The derived.ts comment
-  keeps its ordinal rationale and points to the D5 day-identity entry.
+  keeps its ordinal rationale and cites the backlog entry "Day-level findings
+  have no structured day" (Task 3 creates it under that exact title).
 - [ ] **Run** the suite, `tsc -b`, lint, and the ledger SHA. Then grep `src/`
   and `__tests__/` for `.message.startsWith`, `.message.includes` and
   `message).toContain` on bottlenecks. Every match left must be a test about
@@ -264,8 +265,9 @@ findings into one fix dispatch, then re-run the checks.
 repair, if any, goes to a Sonnet subagent.
 
 - [ ] **Backlog:** delete the closed entry and its bullet in §What 013
-  deliberately left unfixed. Add one entry for D5's day-level identity gap and
-  the Canvas two-subject attach. Append a line to §Findings messages name
+  deliberately left unfixed. Add one entry titled "Day-level findings have no
+  structured day" for D5's day-level identity gap and the Canvas two-subject
+  attach. Append a line to §Findings messages name
   events by catalogue id saying `subjects` now enumerates the ids. Roadmap row
   014: delivered, with the measured counts. Update the baseline line.
 - [ ] **Live smoke** against a dev server started from this worktree on port
