@@ -106,8 +106,9 @@ No test was deleted without a successor, except the length assertion in
   were fixed before the commit.
 - Review wave: spec and quality (Opus), `test-quality-reviewer` twice, and a
   drift audit with mutation checks (Opus). The Task 3 smoke ran in parallel.
-- Triage: 15 findings confirmed and 8 rejected (they re-opened D4 or D5, were a
-  preference, needed `src/`, or duplicated another). Three fix rounds, each
+- Triage: 15 findings confirmed and 10 rejected – 8 on the merits (they
+  re-opened D4 or D5, were a preference or needed `src/`) and 2 as duplicates
+  merged into confirmed items. Three fix rounds, each
   re-reviewed by `test-quality-reviewer`, and the last had no high finding. Four
   comment notes from the last re-review are fixed in `d754066869`.
 
@@ -119,8 +120,8 @@ Each with what it costs if wrong.
    was ruled not a halt. The plan's table gives B8's peaks as "emits none" and
    did not predict a value. B8 does stop writing a `Day N refs:` line, as the
    plan says, and the one newly placed event, `JR-W-EPEE-IND` (182 fencers, 26
-   pools × 2 refs) on day 1, accounts for the 52 exactly. Cost if wrong: an unexplained day-1
-   referee-demand move on B8 would hide in the new baseline.
+   pools × 2 refs) on day 1, accounts for the 52 exactly. Cost if wrong: an
+   unexplained day-1 referee-demand move on B8 would hide in the new baseline.
 2. `stripSearch`'s B1 pins moved (floor 36 to 35, placed at 47 from 20 to 23,
    scan 13 to 14 candidates). A probe that reverted only `de_mode` restored 36
    and 20, so the per-type DE mode is the cause. The plan required no isolation
@@ -187,11 +188,12 @@ Never squash, and never merge by hand followed by `commit-with-costs`.
 
 What was checked:
 
-- `main` and `origin/main` are `a5da71a244`, the branch's merge base, so
-  `git merge-tree --write-tree main <branch>` equals the branch's own tree. The
-  orchestrator re-confirms this after the handoff commit.
-- The suite, `tsc -b` and lint at `d754066869` therefore cover the merged tree.
-  The handoff commit touches only `docs/` and `specs/`.
+- `main` and `origin/main` are `a5da71a244`, the branch's merge base.
+  `git merge-tree --write-tree main 015-ledger-convergence-impl` at `e6348ccbda`
+  gave tree `592f1c2dae`, equal to the branch's own tree.
+- In a detached throwaway worktree on that tree: `tsc -b` and lint exit 0,
+  78 files / 1830 tests pass, ledger snapshot SHA `a4a71e333c77…`. The
+  worktree was removed. The commit recording this touches only this file.
 - `package.json` and `pnpm-lock.yaml` are untouched. Nothing under `src/`
   changed, so the app is the one 014 shipped.
 
