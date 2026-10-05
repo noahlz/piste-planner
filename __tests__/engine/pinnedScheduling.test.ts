@@ -141,7 +141,7 @@ describe('pinned scheduling (T033)', () => {
   // Case 4 pins every B1 event from a *different* config's natural
   // placement (4 days / 48 strips / 7 video, tournamentConfig(4, 48, 7, …) —
   // the same board case 5 uses, which places all 24 with zero ERROR
-  // bottlenecks [M]), then runs the pinned call at the usual (4, 80, 12)
+  // bottlenecks when nothing is pinned [M]), then runs the pinned call at the usual (4, 80, 12)
   // board. Reading the pins off that config's own output rather than the
   // pinned run's own no-pins result means a pass can only mean the pin was
   // honored: 19 of 24 ids land on a different (day, pool_start) pair between

@@ -194,11 +194,14 @@ describe('app-path parity with the drift ledger (day-axis C5)', () => {
  * `PARITY_EXCEPTIONS` is empty – otherwise nothing runs them until the next gap
  * opens, and a broken check would wave that gap through.
  *
- * What this does not prove: that the per-scenario test above actually calls it.
- * With `PARITY_EXCEPTIONS` empty and every pin equal to its ledger count, a
- * no-op in place of that call leaves the suite green, which is inherent while
- * all eight scenarios agree. The pin table and the ledger table are each tied to
- * a live run by their own tests, and only this call relates the two tables.
+ * What this does not prove: that the per-scenario test above actually calls it,
+ * or calls it with the right tables and exception. With `PARITY_EXCEPTIONS`
+ * empty and every pin equal to its ledger count, a no-op in place of that call
+ * leaves the suite green. So do passing the pin table twice, swapping pinned and
+ * ledger, or passing undefined for the exception, because every scenario agrees
+ * either way. That is inherent while all eight scenarios agree. The pin table
+ * and the ledger table are each tied to a live run by their own tests, and only
+ * this call relates the two tables.
  */
 function assertPinAgreesWithLedger(
   id: string,

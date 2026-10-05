@@ -32,9 +32,9 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
 
 /**
  * Scheduled-event floors, measured on the pre-change baseline and re-measured
- * where a dated entry below says so. The constitution
- * halts a task when any scenario schedules fewer events than before, so these
- * are asserted rather than left to a reader of the snapshot diff.
+ * where a dated entry below says so. The constitution halts a task when any
+ * scenario schedules fewer events than before, so these are asserted rather
+ * than left to a reader of the snapshot diff.
  *
  * A later task may deliberately RAISE a floor when it improves packing. Lowering
  * one is the regression the gate exists to catch: never edit a floor down to make
@@ -164,8 +164,9 @@ function runScenario(id: ScenarioId) {
  *
  * Recomputed rather than parsed out of the message, and computed for EVERY day —
  * the scheduler only emits a summary for days with failures, and a ledger field
- * that appears and disappears is unreviewable. `dayPeaksMatchSummaryLine` below
- * pins this copy of the formula to the scheduler's own output.
+ * that appears and disappears is unreviewable. The test 'day peaks match the
+ * scheduler's own DAY_RESOURCE_SUMMARY line' below pins this copy of the formula
+ * to the scheduler's own output.
  */
 function dayPeakRefDemands(
   competitions: Competition[],
