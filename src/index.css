@@ -258,6 +258,12 @@ button:not(:disabled) {
    onto paper instead of being cut at screen height. All of this applies only
    under `@media print` — on screen these classes are inert. */
 @media print {
+  /* Landscape by default (owner, T041 re-print): a day's seven columns read
+     across one sheet, in any browser that honours `@page` `size`. */
+  @page {
+    size: landscape;
+  }
+
   .print-hidden {
     display: none !important;
   }
