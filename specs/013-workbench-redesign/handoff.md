@@ -887,7 +887,7 @@ two rows come from T050's record and the T040 re-run.
 | `f072d754b5` | 76/1739 | +1 | unknown-id pin case (finding 23) |
 | `4f6204d41a` T036 | 76/1747 | +8 | ScheduleOutput 7 + print 1 (record says 'Nine cases added'; 1747 matches) |
 | `e9fca69e70` (main) | 76/1747 | 0 (+43/−43) | spec references stripped from test titles, rename only |
-| `3c2d298d5d` T047 | 76/1747 | 0 (3 renames) | coercion → invariant (recorded) |
+| `3c2d298d5d` T047 | 76/1747 | 0 (2 renames) | coercion → invariant (recorded). The T040 measurement said 3, but the commit diff shows two reworded names (the describe title and the it.each title) |
 | `e0402bf768` T045 | 76/1749 | +2 (+6/−4) | 4 two-pill DE-mode cases replaced by 6 Default/Staged/Single cases (record says '7 cases') |
 | `97c12b9ca7` T046 | 76/1752 | +3 | pin-badge cases (record: 3) |
 | `0f48b38d19` | 76/1753 | +1 (+2/−1) | team cut invariant split into NAC and ROC |
@@ -908,7 +908,7 @@ went with the surface it tested. The phase 8 `weaponTokens` change made the
 assertions stricter, because exact-equality tables replaced the negative
 `not.toContain` checks. Some prose case counts differ from the number of
 names measured: T018 "24" against 19, T036 "Nine" against 8, T045 "7"
-against 6 new and 4 replaced, and T006 4 against 5. Those differences open
+against 6 new and 4 replaced, T006 4 against 5, and T047 3 renames in the T040 measurement against 2 in the commit diff and the task record. Those differences open
 no gap in the totals. Verdict: **reconciles**.
 
 ## Merge
