@@ -20,8 +20,8 @@ import { describe, it, expect } from 'vitest'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { computeStripCap } from '../../src/engine/stripBudget.ts'
-import { dayStart, BottleneckSeverity, Phase } from '../../src/engine/types.ts'
-import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/engine/types.ts'
+import { dayStart, BottleneckCause, BottleneckRule, BottleneckSeverity, Phase } from '../../src/engine/types.ts'
+import type { Bottleneck, Competition, TournamentConfig, PinnedPlacement } from '../../src/engine/types.ts'
 import { buildCompetitions, tournamentConfig, SCENARIOS, SCENARIO_IDS } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
 
@@ -37,6 +37,11 @@ function b1(): { comps: Competition[], config: TournamentConfig } {
     comps: buildCompetitions(SCENARIOS.B1.fencerCounts),
     config: tournamentConfig(4, 80, 12, SCENARIOS.B1.tournamentType),
   }
+}
+
+/** True when the bottleneck's subjects are exactly `ids`, compared in sorted order. */
+function hasSubjects(b: Bottleneck, ...ids: string[]): boolean {
+  return JSON.stringify(b.subjects) === JSON.stringify([...ids].sort())
 }
 
 describe('pinned scheduling (T033)', () => {
@@ -100,9 +105,8 @@ describe('pinned scheduling (T033)', () => {
     const neighbourDay = result.schedule['JR-M-EPEE-IND']?.assigned_day
     const crossoverWarning = result.bottlenecks.some(b =>
       b.severity === BottleneckSeverity.WARN
-      && b.cause === 'UNAVOIDABLE_CROSSOVER_CONFLICT'
-      && b.message.includes('D1-M-EPEE-IND')
-      && b.message.includes('JR-M-EPEE-IND'))
+      && b.cause === BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT
+      && hasSubjects(b, 'D1-M-EPEE-IND', 'JR-M-EPEE-IND'))
     expect(neighbourDay !== pin.day || crossoverWarning).toBe(true)
   })
 
@@ -207,7 +211,7 @@ describe('pinned scheduling (T033)', () => {
     // phase. So this reads the POOLS row specifically rather than counting every
     // row the pin carries.
     const warnsFor = (id: string) => result.bottlenecks.filter(b =>
-      b.competition_id === id && b.severity === BottleneckSeverity.WARN && b.cause === 'PINNED_UNCLAIMED')
+      b.competition_id === id && b.severity === BottleneckSeverity.WARN && b.cause === BottleneckCause.PINNED_UNCLAIMED)
 
     // The earlier pin in (day, start, id) order — 'D1-M-EPEE-IND' <
     // 'D1-M-FOIL-IND' — preclaims first and gets its pools.
@@ -232,6 +236,8 @@ describe('pinned scheduling (T033)', () => {
     // phase is ever reported twice and the pools row above is never one of a pair.
     expect(new Set(pin2Warns.map(b => b.phase)).size).toBe(pin2Warns.length)
     for (const warn of pin2Warns) {
+      expect(warn.rule).toBe(BottleneckRule.PINNED_PHASE_UNCLAIMED)
+      expect(warn.subjects).toEqual([pin2.competition_id])
       expect(warn.message).toContain(pin2.competition_id)
       expect(warn.message).toContain(warn.phase)
     }

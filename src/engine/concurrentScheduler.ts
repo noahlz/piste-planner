@@ -22,6 +22,7 @@ import {
   VideoPolicy,
   Phase,
   BottleneckCause,
+  BottleneckRule,
   BottleneckSeverity,
   Category,
   VetAgeGroup,
@@ -72,7 +73,7 @@ import { findIndividualCounterpart } from './crossover.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { constraintScore } from './dayAssignment.ts'
-import { validateConfig } from './validation.ts'
+import { validateConfig, FeasibilityRule } from './validation.ts'
 import { dayConsumedCapacity } from './capacity.ts'
 
 // ──────────────────────────────────────────────
@@ -216,6 +217,8 @@ export function scheduleAllConcurrent(
       competition_id: '',
       phase: Phase.VALIDATION,
       cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      rule: ve.rule,
+      subjects: ve.subjects,
       severity: ve.severity,
       delay_mins: 0,
       message: ve.message,
@@ -234,14 +237,14 @@ export function scheduleAllConcurrent(
   // (FR-008).
   const errorFindings = validationErrors.filter(ve => ve.severity === BottleneckSeverity.ERROR)
   const scoped = errorFindings.length > 0
-    && errorFindings.every(ve => ve.rule !== undefined && PER_EVENT_ERROR_RULES.has(ve.rule))
+    && errorFindings.every(ve => PER_EVENT_ERROR_RULES.has(ve.rule))
 
   // The union of the scoped findings' subjects: two findings may name the same
   // competition, and the count below is of competitions, not of findings.
   const excludedIds = new Set<string>()
   if (scoped) {
     for (const ve of errorFindings) {
-      for (const subject of ve.subjects ?? []) excludedIds.add(subject)
+      for (const subject of ve.subjects) excludedIds.add(subject)
     }
   }
   const remaining = scoped ? competitions.filter(c => !excludedIds.has(c.id)) : competitions
@@ -265,6 +268,8 @@ export function scheduleAllConcurrent(
       competition_id: '',
       phase: Phase.VALIDATION,
       cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      rule: BottleneckRule.PER_EVENT_EXCLUSION_SUMMARY,
+      subjects: [],
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
       message: `${excludedCount} competition(s) excluded by per-event validation errors, leaving ${remaining.length} to schedule`,
@@ -317,6 +322,8 @@ export function scheduleAllConcurrent(
         competition_id: event.competition.id,
         phase: Phase.DAY_ASSIGNMENT,
         cause: BottleneckCause.CONSTRAINT_RELAXED,
+        rule: BottleneckRule.DAY_ASSIGNMENT_RELAXED,
+        subjects: [event.competition.id],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
         message: `${event.competition.id}: constraint relaxed to level ${relaxLevel} during day assignment`,
@@ -333,6 +340,8 @@ export function scheduleAllConcurrent(
       competition_id: violation.id,
       phase: Phase.DAY_ASSIGNMENT,
       cause: BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
+      rule: BottleneckRule.HARD_SEPARATION_VIOLATED,
+      subjects: [violation.id, violation.targetId].sort(),
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
       message: `${violation.id} and ${violation.targetId} share a day: a hard separation could not be honored within the available days`,
@@ -794,6 +803,8 @@ function preclaimPinnedEvents(
           competition_id: pin.competition_id,
           phase: node.phase_label,
           cause: BottleneckCause.PINNED_UNCLAIMED,
+          rule: BottleneckRule.PINNED_PHASE_UNCLAIMED,
+          subjects: [pin.competition_id],
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
           message: `${pin.competition_id} ${node.phase_label}: pinned phase could not claim strips at its time`,
@@ -875,6 +886,8 @@ function runConcurrentLoop(
         competition_id: event.competition.id,
         phase: Phase.SEQUENCING,
         cause: BottleneckCause.SEQUENCING_CONSTRAINT,
+        rule: BottleneckRule.CROSS_EVENT_DEPENDENCY_DELAY,
+        subjects: [event.competition.id],
         severity: BottleneckSeverity.INFO,
         delay_mins: predReady - oldReady,
         message: `${event.competition.id} ${node.phase_label}: delayed ${predReady - oldReady}min by cross-event dependency`,
@@ -927,6 +940,8 @@ function runConcurrentLoop(
         competition_id: event.competition.id,
         phase: node.phase_label,
         cause: BottleneckCause.NO_WINDOW_DIAGNOSTIC,
+        rule: BottleneckRule.PHASE_DEFERRED,
+        subjects: [event.competition.id],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
         message: `${event.competition.id} ${node.phase_label}: deferred to ${allocated.next_ready_time} (reason: ${allocated.reason})`,
@@ -944,6 +959,8 @@ function runConcurrentLoop(
             competition_id: event.competition.id,
             phase: node.phase_label,
             cause: BottleneckCause.STRIP_CONTENTION,
+            rule: BottleneckRule.STRIP_CONTENTION_DEFERRAL,
+            subjects: [event.competition.id],
             severity: BottleneckSeverity.INFO,
             delay_mins: 0,
             message: `${event.competition.id} ${node.phase_label}: strip contention forced deferral`,
@@ -987,6 +1004,8 @@ function handlePhaseFailure(
       competition_id: event.competition.id,
       phase: Phase.DEADLINE_CHECK,
       cause: BottleneckCause.DEADLINE_BREACH,
+      rule: BottleneckRule.FIRST_ATTEMPT_FAILED,
+      subjects: [event.competition.id],
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
       message: `${event.competition.id}: attempt 1 failed at ${node.phase_label}, retrying`,
@@ -1003,6 +1022,8 @@ function handlePhaseFailure(
       competition_id: event.competition.id,
       phase: Phase.DEADLINE_CHECK,
       cause: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+      rule: BottleneckRule.EVENT_UNSCHEDULED,
+      subjects: [event.competition.id],
       severity: BottleneckSeverity.ERROR,
       delay_mins: 0,
       message: `${event.competition.id}: both attempts failed at ${node.phase_label}, event unscheduled`,
@@ -1148,6 +1169,8 @@ function tryAllocate(
         competition_id: event.competition.id,
         phase: node.phase_label,
         cause: BottleneckCause.SAME_DAY_VIOLATION,
+        rule: BottleneckRule.PHASE_OVERRUNS_DAY_END,
+        subjects: [event.competition.id],
         severity: BottleneckSeverity.ERROR,
         delay_mins: 0,
         message: `${event.competition.id} ${node.phase_label}: ends at ${endTime} past day-end ${dayHardEnd}`,
@@ -1165,6 +1188,8 @@ function tryAllocate(
         competition_id: event.competition.id,
         phase: node.phase_label,
         cause: BottleneckCause.VIDEO_STRIP_CONTENTION,
+        rule: BottleneckRule.VIDEO_PHASE_DELAYED,
+        subjects: [event.competition.id],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
         message: `${event.competition.id} ${node.phase_label}: video-required phase delayed by contention`,
@@ -1269,6 +1294,8 @@ function onPhaseAllocated(
           competition_id: event.competition.id,
           phase: Phase.FLIGHT_B,
           cause: BottleneckCause.FLIGHT_B_DELAYED,
+          rule: BottleneckRule.FLIGHT_B_DELAYED,
+          subjects: [event.competition.id],
           severity: BottleneckSeverity.WARN,
           delay_mins: delay,
           message: `${event.competition.id} Flight B delayed ${delay}min past Flight A end`,
@@ -1550,6 +1577,8 @@ export function postScheduleWarnings(
       competition_id: '',
       phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
+      rule: BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE,
+      subjects: [],
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
       message: `First day (${firstDayDur} min) is longer than average middle day (${Math.round(avgMiddle)} min)`,
@@ -1561,6 +1590,8 @@ export function postScheduleWarnings(
       competition_id: '',
       phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
+      rule: BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
+      subjects: [],
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
       message: `Last day (${lastDayDur} min) is longer than average middle day (${Math.round(avgMiddle)} min)`,
@@ -1591,19 +1622,16 @@ export function postScheduleDiagnostics(
 ): Bottleneck[] {
   const results: Bottleneck[] = []
 
-  // A Bottleneck carries no rule id (only validateConfig's ValidationError
-  // does — the id is dropped when validation findings are pushed at :212), so
-  // a demoted feasibility finding is told apart by the one thing that does
-  // survive: its message text, which FR-001/FR-002 (011) hold unchanged and
-  // which is unique among notice-kind findings to feasibility-strip-hours and
-  // feasibility-video-strip-hours (validation.ts's 'RESOURCE_INSUFFICIENT'
-  // prefix). Widened per research.md D3: feasibility demoting to WARN must
-  // not silence the strip recommendation it is paired with. A WARN from any
-  // other rule (e.g. days-available-range) still leaves this false.
+  // A demoted feasibility finding is told apart by its `rule`, which the
+  // validation pass copies onto the Bottleneck. Widened per research.md D3:
+  // feasibility demoting to WARN must not silence the strip recommendation it
+  // is paired with. A WARN from any other rule (e.g. days-available-range)
+  // still leaves this false.
+  const feasibilityRules: readonly string[] = Object.values(FeasibilityRule)
   const hasResourceExhaustion = bottlenecks.some(b => {
     if (b.cause !== BottleneckCause.RESOURCE_EXHAUSTION) return false
     if (b.severity === BottleneckSeverity.ERROR) return true
-    return b.severity === BottleneckSeverity.WARN && b.message.startsWith('RESOURCE_INSUFFICIENT')
+    return b.severity === BottleneckSeverity.WARN && feasibilityRules.includes(b.rule)
   })
   if (!hasResourceExhaustion) return results
 
@@ -1623,6 +1651,8 @@ export function postScheduleDiagnostics(
     competition_id: '',
     phase: Phase.POST_SCHEDULE,
     cause: BottleneckCause.RESOURCE_RECOMMENDATION,
+    rule: BottleneckRule.RESOURCE_LEVERS,
+    subjects: [],
     severity: BottleneckSeverity.INFO,
     delay_mins: 0,
     message: 'More work than the venue holds. In the order an organizer can act: add a day, flight the largest events, cap entries, and last add strips — strips mean renting more of the facility. The feasibility warning carries the shortfall figures.',
@@ -1677,6 +1707,8 @@ export function postScheduleDayBreakdown(
       competition_id: '',
       phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+      rule: BottleneckRule.DAY_STRIP_HOURS_SUMMARY,
+      subjects: [],
       severity: stripDeficit > 0 ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
       delay_mins: 0,
       message: `Day ${day + 1} strips: ${consumed.strip_hours_consumed.toFixed(1)} strip-hours consumed of ${totalCapacity.toFixed(1)} available${stripDeficit > 0 ? ` (${stripDeficit.toFixed(1)} over capacity)` : ''}.`,
@@ -1698,6 +1730,8 @@ export function postScheduleDayBreakdown(
         competition_id: '',
         phase: Phase.POST_SCHEDULE,
         cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+        rule: BottleneckRule.DAY_REF_PEAK_SUMMARY,
+        subjects: [],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
         message: `Day ${day + 1} refs: peak demand ${peakRefDemand}.`,
@@ -1716,6 +1750,8 @@ export function postScheduleDayBreakdown(
         competition_id: '',
         phase: Phase.POST_SCHEDULE,
         cause: BottleneckCause.DAY_RESOURCE_SUMMARY,
+        rule: BottleneckRule.DAY_VIDEO_DE_REF_SUMMARY,
+        subjects: [],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
         message: `Day ${day + 1} video-stage DE ref demand: ${videoStageSum} refs across ${stagedCount} staged events`,

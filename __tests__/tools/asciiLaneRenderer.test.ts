@@ -4,9 +4,10 @@ import type { Bottleneck, ScheduleResult, StripAllocation } from '../../src/engi
 import {
   Phase,
   BottleneckCause,
+  BottleneckRule,
   BottleneckSeverity,
 } from '../../src/engine/types.ts'
-import { makeConfig, makeCompetition, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
+import { makeBottleneck, makeConfig, makeCompetition, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
 
 // Helpers — keep test setup terse and meaningful.
 
@@ -176,14 +177,15 @@ describe('renderAsciiLanes — UNSCHEDULED footer', () => {
   const config = makeConfig({ days_available: 1, strips: makeStrips(2, 0) })
   const stripAllocs = emptyStripAllocations(2)
   const bottlenecks: Bottleneck[] = [
-    {
+    makeBottleneck({
       competition_id: 'FAILED',
       phase: Phase.DE_PRELIMS,
       cause: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
       severity: BottleneckSeverity.ERROR,
       delay_mins: 0,
       message: 'no time',
-    },
+      rule: BottleneckRule.EVENT_UNSCHEDULED,
+    }),
   ]
 
   const out = renderAsciiLanes({

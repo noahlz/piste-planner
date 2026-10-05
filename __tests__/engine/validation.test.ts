@@ -870,11 +870,13 @@ describe('validateSameDayCompletion', () => {
   it('returns error when pool + admin + DE exceeds DAY_LENGTH_MINS', () => {
     // Craft a config with a very short day but normal competition size
     const config = makeConfig({ DAY_LENGTH_MINS: 10 })
-    const comp = makeCompetition({ fencer_count: 64, weapon: Weapon.EPEE, cut_mode: CutMode.DISABLED })
+    const comp = makeCompetition({ id: 'X-M-EPEE-IND', fencer_count: 64, weapon: Weapon.EPEE, cut_mode: CutMode.DISABLED })
     const result = validateSameDayCompletion(comp, config)
     expect(result).not.toBeNull()
     expect(result?.severity).toBe(BottleneckSeverity.ERROR)
     expect(result?.field).toBe('same_day_completion')
+    expect(result?.rule).toBe('same-day-completion')
+    expect(result?.subjects).toEqual(['X-M-EPEE-IND'])
   })
 })
 

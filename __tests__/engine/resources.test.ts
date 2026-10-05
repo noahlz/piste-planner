@@ -12,8 +12,8 @@ import {
 } from '../../src/engine/resources.ts'
 import * as resourcesModule from '../../src/engine/resources.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
-import { Phase } from '../../src/engine/types.ts'
-import { makeConfig, makeStrips } from '../helpers/factories.ts'
+import { BottleneckCause, BottleneckRule, Phase } from '../../src/engine/types.ts'
+import { makeBottleneck, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { SCENARIOS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 
 // ──────────────────────────────────────────────
@@ -179,14 +179,44 @@ describe('releaseEventAllocations', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
     state.bottlenecks.push(
-      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'x' } as never,
-      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'y' } as never,
+      makeBottleneck({ competition_id: 'evt-A', message: 'x' }),
+      makeBottleneck({ competition_id: 'evt-B', delay_mins: 20, message: 'y' }),
     )
 
     releaseEventAllocations(state, 'evt-A')
 
     expect(state.bottlenecks).toHaveLength(1)
     expect(state.bottlenecks[0].competition_id).toBe('evt-B')
+  })
+
+  it('keeps a bottleneck owned by another event that only names the released one in its subjects', () => {
+    const state = createGlobalState(makeConfig())
+    state.bottlenecks.push(
+      makeBottleneck({
+        competition_id: 'evt-A',
+        subjects: ['evt-A', 'evt-B'],
+        cause: BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
+        rule: BottleneckRule.HARD_SEPARATION_VIOLATED,
+        message: 'evt-A and evt-B share a day',
+      }),
+    )
+
+    releaseEventAllocations(state, 'evt-B')
+
+    expect(state.bottlenecks).toHaveLength(1)
+    expect(state.bottlenecks[0].competition_id).toBe('evt-A')
+    expect(state.bottlenecks[0].rule).toBe(BottleneckRule.HARD_SEPARATION_VIOLATED)
+  })
+
+  it('removes a multi-subject bottleneck when its owner is released', () => {
+    const state = createGlobalState(makeConfig())
+    state.bottlenecks.push(
+      makeBottleneck({ competition_id: 'evt-A', subjects: ['evt-A', 'evt-B'], message: 'evt-A and evt-B share a day' }),
+    )
+
+    releaseEventAllocations(state, 'evt-A')
+
+    expect(state.bottlenecks).toEqual([])
   })
 })
 
@@ -199,10 +229,10 @@ describe('releaseEventAllocations — attempt_id filtering', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
     state.bottlenecks.push(
-      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a1', attempt_id: 1 },
-      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a2', attempt_id: 2 },
-      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-noattempt' },
-      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'b' },
+      makeBottleneck({ competition_id: 'evt-A', message: 'a1', attempt_id: 1 }),
+      makeBottleneck({ competition_id: 'evt-A', message: 'a2', attempt_id: 2 }),
+      makeBottleneck({ competition_id: 'evt-A', message: 'a-noattempt' }),
+      makeBottleneck({ competition_id: 'evt-B', delay_mins: 20, message: 'b' }),
     )
 
     releaseEventAllocations(state, 'evt-A')
@@ -215,10 +245,10 @@ describe('releaseEventAllocations — attempt_id filtering', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
     state.bottlenecks.push(
-      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-attempt1', attempt_id: 1 },
-      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-attempt2', attempt_id: 2 },
-      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-noattempt' },
-      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'b-attempt1', attempt_id: 1 },
+      makeBottleneck({ competition_id: 'evt-A', message: 'a-attempt1', attempt_id: 1 }),
+      makeBottleneck({ competition_id: 'evt-A', message: 'a-attempt2', attempt_id: 2 }),
+      makeBottleneck({ competition_id: 'evt-A', message: 'a-noattempt' }),
+      makeBottleneck({ competition_id: 'evt-B', delay_mins: 20, message: 'b-attempt1', attempt_id: 1 }),
     )
 
     releaseEventAllocations(state, 'evt-A', 1)
@@ -238,9 +268,9 @@ describe('releaseEventAllocations — attempt_id filtering', () => {
     const config = makeConfig()
     const state = createGlobalState(config)
     state.bottlenecks.push(
-      { competition_id: 'evt-A', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 10, message: 'a-attempt1', attempt_id: 1 },
-      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'b-attempt1', attempt_id: 1 },
-      { competition_id: 'evt-B', phase: Phase.POOLS, cause: 'STRIP_CONTENTION', severity: 'WARN', delay_mins: 20, message: 'b-noattempt' },
+      makeBottleneck({ competition_id: 'evt-A', message: 'a-attempt1', attempt_id: 1 }),
+      makeBottleneck({ competition_id: 'evt-B', delay_mins: 20, message: 'b-attempt1', attempt_id: 1 }),
+      makeBottleneck({ competition_id: 'evt-B', delay_mins: 20, message: 'b-noattempt' }),
     )
 
     releaseEventAllocations(state, 'evt-A', 1)

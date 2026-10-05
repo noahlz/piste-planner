@@ -235,7 +235,7 @@ describe('selectFindings — target/day/where for a competition-subject validati
     threeEventsOverlappingOnDayZero()
     const state = useStore.getState()
     const videoNotice = selectDerivedFindings(state).validationErrors.find(
-      (e) => e.rule === 'video-dead-config' && e.subjects?.includes('JR-M-EPEE-IND'),
+      (e) => e.rule === 'video-dead-config' && e.subjects.includes('JR-M-EPEE-IND'),
     )
     expect(videoNotice, 'expected a video-dead-config notice for JR-M-EPEE-IND').toBeDefined()
     const id = findingIdentity(videoNotice!)

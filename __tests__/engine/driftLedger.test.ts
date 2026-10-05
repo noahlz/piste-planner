@@ -20,7 +20,7 @@ import type {
   Bottleneck, BottleneckCause, Competition, RefRequirementsByDay, ScheduleResult, TournamentConfig,
 } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
-import { validateConfig } from '../../src/engine/validation.ts'
+import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from '../../src/engine/refs.ts'
 import { recommendRefCount } from '../../src/engine/stripBudget.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
@@ -248,13 +248,14 @@ describe('drift ledger', () => {
     //    below catches a collapse; this catches any movement in either
     //    direction, which is what the old `toBe(0)` did for the old number.
     //  - no ERROR-severity validation finding at all, and in particular neither
-    //    feasibility rule id among them. A `Bottleneck` drops the rule id
-    //    (`validateConfig`'s `ValidationError` carries it; concurrentScheduler
-    //    discards it when it pushes the bottleneck), so this reads
-    //    `validateConfig` directly — a severity re-escalation of either
-    //    feasibility rule would otherwise show up only as a scheduledCount
-    //    change, and a re-escalation that happened to leave B4 at 17 would be
-    //    invisible. FR-001/FR-002 are what this holds.
+    //    feasibility rule id among them. This reads `validateConfig` directly
+    //    because it pins the severity at the source: a severity re-escalation
+    //    of either feasibility rule would otherwise show up only as a
+    //    scheduledCount change, and a re-escalation that happened to leave B4
+    //    at 17 would be invisible. The scheduler-side assertion at the end pins
+    //    the copy the scheduler's own bottlenecks carry. The literal
+    //    'feasibility-strip-hours' stays on purpose, as an independent pin of
+    //    the wire id. FR-001/FR-002 are what this holds.
     //  - the demoted `feasibility-strip-hours` finding is still PRESENT, as a
     //    WARN. The demotion must not become a deletion: B4's 481-strip-hour
     //    shortfall (~29%, specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md)) is real and the organizer still has to
@@ -279,6 +280,11 @@ describe('drift ledger', () => {
 
         const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
         expect(errors.filter(b => b.phase === Phase.VALIDATION)).toEqual([])
+
+        expect(
+          bottlenecks.filter(b => b.rule === FeasibilityRule.STRIP_HOURS && b.severity === BottleneckSeverity.WARN),
+          'the scheduler\'s own bottlenecks carry the feasibility WARN too',
+        ).toHaveLength(1)
       })
     }
 

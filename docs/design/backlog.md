@@ -31,9 +31,6 @@ feature that owns it is in [`competition-planner-workbench.md`](./competition-pl
 - The engine and the store both reporting a pin collision –
   [§The engine and the store both report a pin collision](#the-engine-and-the-store-both-report-a-pin-collision).
   Feature 017.
-- `Bottleneck`'s missing second subject –
-  [§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject).
-  Feature 014.
 - The two dead constants and the unwired `daySequencing.ts` –
   [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
   Feature 021.
@@ -62,44 +59,67 @@ feature that owns it is in [`competition-planner-workbench.md`](./competition-pl
 Fact, not work: `src/store/derived.ts` no longer imports from `components/`
 (013 handoff finding 19).
 
-## `Bottleneck` has no structured field for a second subject
+## What 014 deliberately left unfixed
 
-*Found by 010's test-quality review of T010 (R7), 2026-09-05. Recorded, not
-fixed — `types.ts` is out of this feature's scope.*
+*Recorded by 014, 2026-10-04. 014 gave `Bottleneck` a `rule` and `subjects`
+and kept every user-visible surface unchanged.*
 
-`Bottleneck` (`src/engine/types.ts:354-362`) carries a single `competition_id`
-plus a free-text `message`, with no field for a second subject. R7's
-hard-edge-violation bottlenecks (010 T010,
-`specs/010-wave-1-reconciliation/` (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/))
-are the first producer that genuinely needs two — FR-003 requires naming both
-competitions in a violated pair — and with no structured place to put the
-second one, the consumer test in
-`__tests__/engine/concurrentScheduler.test.ts` ("one WARN
-UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck per hard-edged pair") can only assert
-`bn.message.includes(a) && bn.message.includes(b)`, which is message-text
-coupling this feature's own rules otherwise prohibit. `ValidationError`
-(`types.ts`) already solves this with `subjects: string[]`; `Bottleneck` has no
-equivalent.
+- Per-day venue findings that only the message tells apart, two-subject
+  findings shown on one block, and sequencing delays that do not name their
+  predecessor –
+  [§Day-level findings have no structured day](#day-level-findings-have-no-structured-day).
+  Unscheduled.
+- `validateFlightingGroup` and `validateSameDayCompletion` have no caller in
+  `src/` –
+  [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
+  Feature 021.
 
-The test's coupling is the best available option against today's interface,
-not a test-authoring gap — the cause is the production type, not the
-assertion. Fixing it means giving `Bottleneck` a `subjects: string[]` field
-mirroring `ValidationError`'s and updating every bottleneck producer to fill
-it, which ripples wider than this feature's one-file-per-item scope and needs
-its own review.
+## Day-level findings have no structured day
 
-**A second consumer coupled to message text.** `postScheduleDiagnostics`'s gate
-(`concurrentScheduler.ts`) tells the demoted feasibility finding apart by
-`b.message.startsWith('RESOURCE_INSUFFICIENT')`, because `Bottleneck` carries no
-rule id – `ValidationError` has one and it is dropped when the finding is pushed.
-Introduced by 011's T005 (2026-09-05) as the only option against today's
-interface. It is safe as written, since 011's FR-001 and FR-002 pin that message
-text and no other validation message starts with that prefix, but it is not
-robust: reword the message and the "Strips: need N, have M" INFO silently stops
-appearing on exactly the boards it exists for. Same root cause, so the same fix:
-`Bottleneck` needs a rule id plus `subjects`. Two features have now coupled to
-message text for want of one. 012 removed the number from the finding but the
-prefix gate remains.
+*Found while planning 014, 2026-10-04. Recorded, not fixed – 014 kept every
+user-visible surface unchanged.*
+
+014 gave `Bottleneck` a `rule` and `subjects`, and neither carries a day.
+Venue findings scoped to one day name no competition, so they share `rule` and
+`subjects` (`[]`) and differ only by the day in their message text, for
+example `day-pools-exceed-strips` and `day-video-demand-exceeds-video-strips`
+from `initialAnalysis`. Two consequences in the Findings panel:
+
+- The Findings panel's bottleneck row id stays
+  `analysis:<cause>:<competition_id>:<ordinal>` (`store/derived.ts`, §1.2).
+  When one of two same-cause venue warnings disappears, the survivor's ordinal
+  drops to 0 and it inherits the other's dismissal.
+- These rows show `day: null` and `where: 'Venue'`, so a Day 2 strip warning is
+  not tied to Day 2 in the panel or on the canvas.
+
+The scheduler's three `DAY_RESOURCE_SUMMARY` lines (`postScheduleDayBreakdown`)
+have the same shape. Scheduler bottlenecks never reach the panel, though,
+because `runActions.ts` keeps only placements, so only the ledger's day-summary
+check meets them.
+
+The fix is a structured `day` on `Bottleneck`, filled by every day-scoped
+producer. The row id must then combine `rule`, `competition_id`, `subjects` and
+`day`. `rule` + `subjects` + `day` alone is not unique: `multiple-flighted-same-day`
+emits one warning per flighted event on a day, all with the same rule, the same
+`subjects` and the same day, and only `competition_id` tells them apart.
+Scheduler findings that repeat per phase (`phase-deferred`,
+`strip-contention-deferral`, `pinned-phase-unclaimed`) would also need `phase`
+if they ever reach the panel. That changes dismissal identity, so it needs its
+own decision. The ledger's day-summary
+check (`driftLedger.test.ts`, "day peaks match …") could then filter by rule and
+day, though the peak value it parses from the message has no structured home
+either.
+
+**Two-subject findings show on one block only.** `findingsForBlock`
+(`Canvas.tsx`) attaches a bottleneck to the block whose `competition_id`
+matches. A finding naming two events, such as `flighting-group-both-video`
+(`analysis.ts` pass 5), appears only on its owner's block. Matching on
+`subjects` would show it on both, which is a user-visible change.
+
+**Sequencing delays name no predecessor.** A `cross-event-dependency-delay`
+bottleneck lists only its owner in `subjects`, because its message does not
+name the event it waited for. `predecessorReadyTime` returns a time, not the
+predecessor's id.
 
 ## The scorecard's peak-referee row reads higher than the scheduler's own
 
@@ -483,7 +503,10 @@ the tree on purpose.*
   deleting them would destroy the evidence that the engine once matched its
   spec. `src/tools/asciiLaneRenderer.ts` also stays – it is test-only by design
   (`integration.test.ts` renders lanes with it), so `--production` is right to
-  flag it and wrong to delete it.
+  flag it and wrong to delete it. 014 found two more of these with no caller in
+  `src/`: `validateFlightingGroup` (`flighting.ts`) and
+  `validateSameDayCompletion` (`validation.ts`). 014 gave both rule ids and
+  subjects, so they stay correct until 021 decides.
 
 ## The drift ledger's factory does not apply the store's per-type resolutions
 
@@ -828,11 +851,10 @@ guard covers only configuration.
 **What it needs**: a derived selector that evaluates the current placements
 against the constraint graph and emits a finding per violated hard edge, wired
 into the same findings surface `validateConfig` already feeds, so a manual
-placement and an auto placement are judged by one rule set. `Bottleneck`'s
-missing second subject
-([§`Bottleneck` has no structured field for a second subject](#bottleneck-has-no-structured-field-for-a-second-subject))
-is in the way – a violated edge names two competitions and there is nowhere
-structured to put the second.
+placement and an auto placement are judged by one rule set. Since 014 a
+`Bottleneck` names both competitions of a violated pair in `subjects`, as the
+engine's own `hard-separation-violated` finding already does, so the finding
+has a structured place for its second subject.
 
 **Cost if ignored**: the drag-drop half of the product silently permits exactly
 the schedule USA Fencing rules forbid, and the organizer finds out at the
@@ -1142,6 +1164,14 @@ a fix must substitute every catalogue id, not only the target or a leading
 `<id>: `. B4, B5 and B6 also raise `validation.ts:217` warnings. The overlay at
 `CenterView.tsx:201-219` has no `print-hidden` class, so a dimmed-invalid board
 prints its codes. `ExportPopover.tsx:129-144` also prints ids from load errors.
+
+Since 014, every `Bottleneck` carries `subjects`, as `ValidationError` already
+did. For an engine finding these are exactly the competition ids its message
+names. A finding copied from a validation rule keeps that rule's subjects: a
+field name such as `['feasibility']` for a global rule, and, for
+`same-population` and `flighting-group-strips`, ids their message does not
+name. Option (B) can take the ids to substitute from `subjects` instead of
+scanning the text, once it skips subjects that are not competitions.
 
 ## `competitionLabel` may not match published USA Fencing wording
 

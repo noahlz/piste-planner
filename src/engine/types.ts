@@ -149,6 +149,43 @@ export const BottleneckCause = {
 } as const
 export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCause]
 
+/**
+ * Stable ids for the conditions engine producers report, one per condition
+ * (two sites reporting the same condition share an id, two conditions sharing
+ * a `cause` do not). Findings copied from `validateConfig` carry that rule's
+ * own id instead, which lives with the validator.
+ */
+export const BottleneckRule = {
+  PER_EVENT_EXCLUSION_SUMMARY: 'per-event-exclusion-summary',
+  DAY_ASSIGNMENT_RELAXED: 'day-assignment-relaxed',
+  HARD_SEPARATION_VIOLATED: 'hard-separation-violated',
+  PINNED_PHASE_UNCLAIMED: 'pinned-phase-unclaimed',
+  CROSS_EVENT_DEPENDENCY_DELAY: 'cross-event-dependency-delay',
+  PHASE_DEFERRED: 'phase-deferred',
+  STRIP_CONTENTION_DEFERRAL: 'strip-contention-deferral',
+  FIRST_ATTEMPT_FAILED: 'first-attempt-failed',
+  EVENT_UNSCHEDULED: 'event-unscheduled',
+  PHASE_OVERRUNS_DAY_END: 'phase-overruns-day-end',
+  VIDEO_PHASE_DELAYED: 'video-phase-delayed',
+  FLIGHT_B_DELAYED: 'flight-b-delayed',
+  FIRST_DAY_LONGER_THAN_MIDDLE: 'first-day-longer-than-middle',
+  LAST_DAY_LONGER_THAN_MIDDLE: 'last-day-longer-than-middle',
+  RESOURCE_LEVERS: 'resource-levers',
+  DAY_STRIP_HOURS_SUMMARY: 'day-strip-hours-summary',
+  DAY_REF_PEAK_SUMMARY: 'day-ref-peak-summary',
+  DAY_VIDEO_DE_REF_SUMMARY: 'day-video-de-ref-summary',
+  DAY_POOLS_EXCEED_STRIPS: 'day-pools-exceed-strips',
+  POOLS_EXCEED_STRIP_CAP_UNFLIGHTED: 'pools-exceed-strip-cap-unflighted',
+  MULTIPLE_FLIGHTED_SAME_DAY: 'multiple-flighted-same-day',
+  DAY_VIDEO_DEMAND_EXCEEDS_VIDEO_STRIPS: 'day-video-demand-exceeds-video-strips',
+  FLIGHTING_GROUP_BOTH_VIDEO: 'flighting-group-both-video',
+  CUT_SUMMARY: 'cut-summary',
+  FLIGHTING_PRIORITY_TIE: 'flighting-priority-tie',
+  FLIGHTED_NOT_LARGEST: 'flighted-not-largest',
+  FLIGHTING_GROUP_CROSSOVER_PENALTY: 'flighting-group-crossover-penalty',
+} as const
+export type BottleneckRule = (typeof BottleneckRule)[keyof typeof BottleneckRule]
+
 export const BottleneckSeverity = {
   ERROR: 'ERROR',
   WARN: 'WARN',
@@ -358,12 +395,17 @@ export interface GlobalState {
 }
 
 export interface Bottleneck {
+  /** The finding's owner: rollback, the canvas and the Findings target key on it. '' or a member of `subjects`. */
   competition_id: string
   phase: Phase
   cause: BottleneckCause
   severity: BottleneckSeverity
   delay_mins: number
   message: string
+  /** Stable kebab-case id for the condition that fired: a `BottleneckRule` value, or a `validateConfig` rule id. */
+  rule: string
+  /** Sorted, unique ids of every competition the finding names, `[field]` for a global validation rule, `[]` when it names none. */
+  subjects: string[]
   attempt_id?: number  // Phase C concurrent scheduler tags retry-emitted bottlenecks
 }
 
@@ -394,11 +436,11 @@ export interface ValidationError {
   field: string
   message: string
   severity: BottleneckSeverity
-  /** Stable kebab-case rule id, e.g. 'same-population'. Optional until T017/T021 populate producers. */
-  rule?: string
+  /** Stable kebab-case rule id, e.g. 'same-population'. */
+  rule: string
   kind?: RuleKind
   /** Sorted competition ids, or [field] for global rules. */
-  subjects?: string[]
+  subjects: string[]
 }
 
 /** Never stores geometry — day is 0-based, start_time is minutes from midnight. Blocks derive in derive.ts. */

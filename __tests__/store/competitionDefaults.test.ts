@@ -70,7 +70,7 @@ describe('C1 — store-chosen defaults raise no BINDING error', () => {
       expect(
         attributable,
         `${id}: ${attributable.length} store-attributable BINDING error(s) — ` +
-          attributable.map((finding) => `${finding.rule ?? '(no rule)'} [${finding.field}]: ${finding.message}`).join('; '),
+          attributable.map((finding) => `${finding.rule} [${finding.field}]: ${finding.message}`).join('; '),
       ).toEqual([])
     },
   )

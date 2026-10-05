@@ -198,7 +198,7 @@ describe('selectDaySummaries — findings, re-pointed to selectFindings (013 T03
 
     const derivedFindings = selectDerivedFindings(state)
     const jrM = derivedFindings.validationErrors.find(
-      (e) => e.rule === 'video-dead-config' && e.subjects?.includes('JR-M-EPEE-IND'),
+      (e) => e.rule === 'video-dead-config' && e.subjects.includes('JR-M-EPEE-IND'),
     )
     expect(jrM, 'expected a video-dead-config finding for JR-M-EPEE-IND').toBeDefined()
     const jrMId = findingIdentity(jrM!)

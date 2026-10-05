@@ -230,15 +230,18 @@ that day (removed once folded in here; `git show e9fca69e70:docs/design/state-of
 
 Features 001–012 are delivered and their spec folders removed – `git show
 0ab5bd2dc9:specs/<feature>/` recovers any of them. 013, the workbench redesign
-from the Claude Design mockup, has phases 0–7 merged. The original P1–P4 rows
+from the Claude Design mockup, is delivered and merged (`83168c7f2a`). 014,
+structured bottlenecks, is delivered on branch `014-structured-bottlenecks`
+(`specs/014-structured-bottlenecks/handoff.md`). The original P1–P4 rows
 are all delivered: P1 as 001, P2 as 003, P3 as 004, and P4's manual placement
 and pre-seeded scheduling as 013 (pins, Move day, Auto-assign around pins –
 the pinned events are excluded from the loop's seed, not from
 `buildEventStates`, per 013 research D1). P5 (FLUID) stays deferred with no
 owner.
 
-Baseline: `tsc -b` and lint clean, 76 files / 1747 tests. Drift ledger B1–B8
-scheduled 24 / 24 / 24 / 17 / 12 / 45 / 18 / 52, app-path parity 17.
+Baseline (after 014): `tsc -b` and lint clean, 77 files / 1794 tests. Drift
+ledger B1–B8 scheduled 24 / 24 / 24 / 17 / 12 / 45 / 18 / 52, app-path parity
+17, snapshot SHA-256 `5483c40c1349…` (unchanged since 013).
 
 ### Owner decisions, 2026-10-04
 
@@ -261,7 +264,7 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 | # | Work | Backlog entry | Size | After | Drift review |
 |---|---|---|---|---|---|
 | **013** | Phase 8 close-out – polish, docs, the three decided fixes above, the retired-surface grep, live smoke, the full check twice, the owner's print check, handoff. `specs/013-workbench-redesign/sessions/S11.md` | – | M | – | no engine change |
-| **014** | Structured bottlenecks – `Bottleneck` gains a rule id and `subjects`, every producer fills them, both message-text consumers move to them | §`Bottleneck` has no structured field | S–M | 013 | yes, expect zero movement |
+| **014** | **Delivered 2026-10-04** – structured bottlenecks: `Bottleneck` gains a rule id and `subjects`, every producer fills them, the message-text readers move to them. `specs/014-structured-bottlenecks/handoff.md` | closed. Leftovers in §Day-level findings have no structured day | S–M | 013 | zero movement, measured |
 | **015** | Ledger converges with the store – the drift factory applies the per-type cut, DE-mode and ref-policy rules; B4's 18-vs-17 isolated first. A deliberate re-baseline, so every later engine fix is measured against what the app runs | §The drift ledger's factory | M | 013 | re-baseline |
 | **016** | Hand placements obey the rules – crossover hard edges checked on the current placements and shown as findings; one referee-peak number for the footer and the engine | §Hand-placed events, §The scorecard's peak-referee row | L | 014 | if the referee fix touches the engine |
 | **017** | The canvas tells the truth – one strip model for engine and canvas so B1 boots 24 / 0; blocks become keyboard-operable buttons | §The canvas calls events unplaced, §A placed block cannot be selected | M | 015 | if the engine assigns strip ranges |

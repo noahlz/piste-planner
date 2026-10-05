@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { scheduleAllConcurrent } from '../../src/engine/concurrentScheduler.ts'
+import { scheduleAllConcurrent, postScheduleDiagnostics } from '../../src/engine/concurrentScheduler.ts'
 import {
   BottleneckCause,
+  BottleneckRule,
   BottleneckSeverity,
   DeMode,
   EventType,
@@ -16,11 +17,12 @@ import {
   ValidationMode,
   tailEstimateMins,
 } from '../../src/engine/types.ts'
-import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
+import type { Bottleneck, Competition, TournamentConfig } from '../../src/engine/types.ts'
 import { computePoolStructure, resolveRefsPerPool } from '../../src/engine/pools.ts'
-import { validateConfig } from '../../src/engine/validation.ts'
+import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
-import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
+import { makeConfig, makeCompetition, makeStrips, makeBottleneck } from '../helpers/factories.ts'
+import { checkInvariants } from '../helpers/bottleneckInvariants.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
@@ -627,24 +629,19 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
       b => b.cause === BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
     )
     expect(crossoverBottlenecks).toHaveLength(6)
+    const competitionIds = competitions.map(c => c.id)
     for (const b of crossoverBottlenecks) {
       expect(b.severity).toBe(BottleneckSeverity.WARN)
+      expect(b.rule).toBe(BottleneckRule.HARD_SEPARATION_VIOLATED)
+      expect(b.subjects, 'the owner is one of the pair').toContain(b.competition_id)
+      checkInvariants(b, competitionIds, new Set())
     }
 
-    // Reads bn.message for the paired competition rather than a structured
-    // subject, because Bottleneck (src/engine/types.ts) carries only a single
-    // competition_id and a free-text message — no field for a second subject
-    // the way ValidationError carries `subjects: string[]`. This is the best
-    // available option against today's interface, not an oversight; see
-    // docs/design/backlog.md §Bottleneck has no structured field for a second
-    // subject.
-    for (const [a, b] of expectedPairs) {
-      const match = crossoverBottlenecks.filter(bn =>
-        (bn.competition_id === a || bn.competition_id === b)
-        && bn.message.includes(a) && bn.message.includes(b),
-      )
-      expect(match, `expected exactly one bottleneck for ${a} + ${b}`).toHaveLength(1)
-    }
+    const pairKey = (ids: readonly string[]) => [...ids].sort().join('|')
+    expect(
+      crossoverBottlenecks.map(bn => bn.subjects.join('|')).sort(),
+      'expected exactly one bottleneck per hard-edged pair, each naming both ids',
+    ).toEqual(expectedPairs.map(pairKey).sort())
   })
 
   // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
@@ -690,7 +687,7 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
   function assertRuleError(competitions: Competition[], config: TournamentConfig, badId: string, rule: string): void {
     const errors = validateConfig(config, competitions, ValidationMode.BINDING)
     const matches = errors.filter(
-      e => e.severity === BottleneckSeverity.ERROR && e.rule === rule && (e.subjects ?? []).includes(badId),
+      e => e.severity === BottleneckSeverity.ERROR && e.rule === rule && e.subjects.includes(badId),
     )
     expect(matches.length, `expected exactly one '${rule}' ERROR naming ${badId}`).toBe(1)
   }
@@ -799,18 +796,13 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
 
     assertOnlyValidScheduled(competitions, config, [bad1.id, bad2.id])
 
-    // Every other bottleneck this validation gate produces today is either
-    // an ERROR (the per-event findings themselves) or lives outside
-    // Phase.VALIDATION entirely — so cause RESOURCE_EXHAUSTION + WARN +
-    // Phase.VALIDATION is free for T015 to use for the summary alone, and
-    // this is where T015 must put it (research.md D2, FR-009).
+    // The summary is found by its rule: feasibility and other notices are also
+    // RESOURCE_EXHAUSTION WARNs in Phase.VALIDATION, so that shape is shared
+    // (research.md D2, FR-009). It is venue-wide, so it names no subjects.
     const { bottlenecks } = scheduleAllConcurrent(competitions, config)
-    const summaries = bottlenecks.filter(
-      b => b.phase === Phase.VALIDATION
-        && b.severity === BottleneckSeverity.WARN
-        && b.cause === BottleneckCause.RESOURCE_EXHAUSTION,
-    )
+    const summaries = bottlenecks.filter(b => b.rule === BottleneckRule.PER_EVENT_EXCLUSION_SUMMARY)
     expect(summaries, 'expected exactly one summary bottleneck for the excluded count').toHaveLength(1)
+    expect(summaries[0]?.subjects).toEqual([])
     expect(summaries[0]?.message, 'summary message should name the excluded count').toMatch(/\b2\b/)
   })
 
@@ -1073,6 +1065,43 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     // figures above already carry the numbers (FR-013).
     expect(message, 'expected no digit anywhere in the lever message').not.toMatch(/\d/)
   })
+
+  const exhaustionFinding = (overrides: Partial<Bottleneck>) => makeBottleneck({
+    cause: BottleneckCause.RESOURCE_EXHAUSTION,
+    severity: BottleneckSeverity.WARN,
+    phase: Phase.VALIDATION,
+    competition_id: '',
+    message: 'reworded finding',
+    ...overrides,
+  })
+
+  it.each(Object.values(FeasibilityRule))(
+    'a RESOURCE_EXHAUSTION WARN with rule %s yields the levers finding whatever its message says',
+    rule => {
+      const results = postScheduleDiagnostics([], smallConfig(), [exhaustionFinding({ rule })])
+
+      expect(results).toHaveLength(1)
+      expect(results[0]?.cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
+      expect(results[0]?.rule).toBe(BottleneckRule.RESOURCE_LEVERS)
+    },
+  )
+
+  it.each([
+    ['another rule, even with a RESOURCE_INSUFFICIENT message', {
+      rule: 'days-available-range', message: 'RESOURCE_INSUFFICIENT: not a feasibility finding',
+    }],
+    ['a feasibility rule under another cause', {
+      rule: FeasibilityRule.STRIP_HOURS, cause: BottleneckCause.STRIP_CONTENTION,
+    }],
+    ['a feasibility rule at INFO severity', {
+      rule: FeasibilityRule.STRIP_HOURS, severity: BottleneckSeverity.INFO,
+    }],
+  ] satisfies Array<[string, Partial<Bottleneck>]>)(
+    'yields nothing for %s',
+    (_name, overrides) => {
+      expect(postScheduleDiagnostics([], smallConfig(), [exhaustionFinding(overrides)])).toEqual([])
+    },
+  )
 
   it('a board that fits emits no RESOURCE_RECOMMENDATION bottleneck', () => {
     // Same shape as test 1 (lines 64-75): two comp(...) events of 20 fencers
