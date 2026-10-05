@@ -1,34 +1,27 @@
 /**
  * Invariant oracle for `Bottleneck.rule` and `Bottleneck.subjects` (014 D1–D3),
  * run over every producer the B1–B8 scenarios reach: `scheduleAll` and
- * `initialAnalysis`. Producers a scenario never reaches are covered by the
- * type system, since both fields are required.
+ * `initialAnalysis`. For each bottleneck it proves the shape (kebab-case rule,
+ * sorted de-duplicated string subjects), owner in subjects, subjects <-> message,
+ * rule <-> cause (engine-native rules against `CAUSE_OF_RULE`, validation-derived
+ * ones are RESOURCE_EXHAUSTION in Phase.VALIDATION), and rule membership in the
+ * catalogue or `validateConfig`'s own ids. It does not pin which rule a given
+ * producer reports: exact rule pins live in the producers' own tests, and which
+ * producers fire is the drift ledger's concern. Producers a scenario never
+ * reaches are not exercised here.
+ *
+ * The subjects -> message direction couples to wording on purpose, as a one-time
+ * cross-check that subjects name what the message names. A future switch to
+ * display names in messages must update it.
  */
-import { describe, it, expect } from 'vitest'
-import { BottleneckRule, ValidationMode } from '../../src/engine/types.ts'
-import type { Bottleneck } from '../../src/engine/types.ts'
+import { describe, it, expect, beforeAll } from 'vitest'
+import { Phase, ValidationMode } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { initialAnalysis } from '../../src/engine/analysis.ts'
 import { validateConfig } from '../../src/engine/validation.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
-
-const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/
-const ID_CHAR = /[A-Za-z0-9_-]/
-
-/** True when `id` appears in `message` as a whole token, not inside a longer id. */
-function namesCompetition(message: string, id: string): boolean {
-  let from = message.indexOf(id)
-  while (from !== -1) {
-    const before = message[from - 1]
-    const after = message[from + id.length]
-    if ((before === undefined || !ID_CHAR.test(before)) && (after === undefined || !ID_CHAR.test(after))) {
-      return true
-    }
-    from = message.indexOf(id, from + 1)
-  }
-  return false
-}
+import { checkInvariants, namesCompetition } from '../helpers/bottleneckInvariants.ts'
 
 describe('namesCompetition', () => {
   it('does not find an id inside a longer id that extends it', () => {
@@ -56,46 +49,35 @@ function runScenario(id: (typeof SCENARIO_IDS)[number]) {
   const validationRules = new Set<string>(
     validateConfig(config, competitions, ValidationMode.BINDING).map(ve => ve.rule),
   )
-  return { competitions, bottlenecks, analysis: analysis.warnings, validationRules }
-}
-
-function checkInvariants(
-  b: Bottleneck,
-  competitionIds: string[],
-  validationRules: Set<string>,
-): void {
-  const where = `${b.cause} "${b.message}"`
-  expect(b.rule, `rule of ${where}`).toMatch(KEBAB_CASE)
-  const catalogue = new Set<string>(Object.values(BottleneckRule))
-  expect(catalogue.has(b.rule) || validationRules.has(b.rule), `unknown rule ${b.rule}`).toBe(true)
-
-  for (const s of b.subjects) expect(typeof s, `subject of ${where}`).toBe('string')
-  expect(b.subjects, `subjects of ${where}`).toEqual([...new Set(b.subjects)].sort())
-  expect(['', ...b.subjects], `owner of ${where}`).toContain(b.competition_id)
-
-  const named = competitionIds.filter(id => namesCompetition(b.message, id))
-  for (const id of named) expect(b.subjects, `${id} named by ${where}`).toContain(id)
-  for (const s of b.subjects) {
-    if (competitionIds.includes(s)) expect(namesCompetition(b.message, s), `${s} in ${where}`).toBe(true)
-  }
+  return { competitions, bottlenecks, warnings: analysis.warnings, validationRules }
 }
 
 describe('Bottleneck rule and subjects invariants', () => {
-  const scenarios = Object.fromEntries(SCENARIO_IDS.map(id => [id, runScenario(id)]))
+  const scenarios = {} as Record<(typeof SCENARIO_IDS)[number], ReturnType<typeof runScenario>>
+  beforeAll(() => {
+    for (const id of SCENARIO_IDS) scenarios[id] = runScenario(id)
+  })
 
   for (const id of SCENARIO_IDS) {
     it(`scheduleAll bottlenecks of ${id} carry a rule and the competitions they name`, () => {
       const { competitions, bottlenecks, validationRules } = scenarios[id]
       const ids = competitions.map(c => c.id)
+      expect(bottlenecks.length, `${id} bottlenecks checked`).toBeGreaterThan(0)
       for (const b of bottlenecks) checkInvariants(b, ids, validationRules)
     })
 
     it(`initialAnalysis warnings of ${id} carry a rule and the competitions they name`, () => {
-      const { competitions, analysis, validationRules } = scenarios[id]
+      const { competitions, warnings, validationRules } = scenarios[id]
       const ids = competitions.map(c => c.id)
-      for (const b of analysis) checkInvariants(b, ids, validationRules)
+      expect(warnings.length, `${id} warnings checked`).toBeGreaterThan(0)
+      for (const b of warnings) checkInvariants(b, ids, validationRules)
     })
   }
+
+  it('the scenarios between them check at least one validation-derived bottleneck', () => {
+    const derived = SCENARIO_IDS.flatMap(id => scenarios[id].bottlenecks.filter(b => b.phase === Phase.VALIDATION))
+    expect(derived.length).toBeGreaterThan(0)
+  })
 
   it('a global validation-derived bottleneck carries its finding rule and subjects', () => {
     const config = makeConfig({ strips: makeStrips(0, 0) })

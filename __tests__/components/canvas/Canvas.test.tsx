@@ -301,7 +301,7 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
       validationErrors: [],
       analysis: {
         warnings: [
-          makeBottleneck({ competition_id: 'flagged', delay_mins: 10, message: 'flagged waited for strips' }),
+          makeBottleneck({ competition_id: 'flagged', message: 'flagged waited for strips' }),
         ],
         suggestions: [],
       },

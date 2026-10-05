@@ -109,6 +109,7 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
 }
 
 
+/** The default `rule` belongs to the default `cause`: override `rule` together with `cause`. */
 export function makeBottleneck(overrides: Partial<Bottleneck> = {}): Bottleneck {
   const competition_id = overrides.competition_id ?? 'evt-A'
   return {

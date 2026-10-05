@@ -19,7 +19,8 @@ describe('suggestFlightingGroups', () => {
     const c2 = makeCompetition({ id: 'small', fencer_count: 203 }) // 29 pools
     const dayAssignments: Record<string, number> = { large: 0, small: 0 }
 
-    const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 55)
+    // construction order differs from sorted order so a dropped sort() fails
+    const { suggestions, bottlenecks } = suggestFlightingGroups([c2, c1], 55, dayAssignments, 55)
 
     expect(suggestions).toHaveLength(1)
     expect(suggestions[0].priority_competition_id).toBe('large')
@@ -183,6 +184,7 @@ describe('validateFlightingGroup', () => {
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt1', strips_for_priority: 14, strips_for_flighted: 10 }
     const dayAssignments: Record<string, number> = { pri: 0, flt1: 0, flt2: 0 }
 
+    // construction order differs from sorted order so a dropped sort() fails
     const bottlenecks = validateFlightingGroup(group, [c1, c3, c2], dayAssignments)
 
     // Implementation emits one bottleneck per flighted competition on the day
@@ -197,6 +199,8 @@ describe('validateFlightingGroup', () => {
 
   it('flighted competition is not largest by pool count on the day → FLIGHTING_GROUP_NOT_LARGEST warning', () => {
     // largest: 20 pools (not flighted), flighted: 15 pools
+    // construction order differs from sorted order so a dropped sort() fails:
+    // the producer lists the flighted id first, and 'big' sorts before 'flt'
     const big = makeCompetition({ id: 'big', fencer_count: 140, flighted: false, is_priority: false })
     const priority = makeCompetition({ id: 'pri', fencer_count: 105, flighted: false, is_priority: true })
     const flighted = makeCompetition({ id: 'flt', fencer_count: 98, flighted: true, is_priority: false })
@@ -243,6 +247,7 @@ describe('validateFlightingGroup', () => {
     )
     expect(conflictWarning).toBeDefined()
     expect(conflictWarning?.severity).toBe(BottleneckSeverity.WARN)
+    expect(conflictWarning?.message).toMatch(/crossover/i)
     expect(conflictWarning?.rule).toBe(BottleneckRule.FLIGHTING_GROUP_CROSSOVER_PENALTY)
     expect(conflictWarning?.subjects).toEqual(['flt', 'pri'])
   })

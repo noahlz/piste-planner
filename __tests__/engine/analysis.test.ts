@@ -193,6 +193,7 @@ describe('initialAnalysis — Pass 3: one flighted per day', () => {
     const config = makeConfig()
     const c1 = makeBigComp('flt-1', 70, { flighted: true })
     const c2 = makeBigComp('flt-2', 70, { flighted: true })
+    // construction order differs from sorted order so a dropped sort() fails
     const result = initialAnalysis(config, [c2, c1], { 'flt-1': 1, 'flt-2': 1 })
 
     const warn = result.warnings.find(
@@ -286,6 +287,7 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
     // Both have REQUIRED video, which should produce a flighting-video conflict warning.
     // ceil(210/7)=30, ceil(203/7)=29; 30+29=59 > 55 strips, each fits within poolStripCap (44)
     const config = makeConfig({ strips_total: 55 })
+    // construction order differs from sorted order so a dropped sort() fails
     const comp1 = makeBigComp('fg-vid-2', 210, {
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
@@ -304,7 +306,8 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
         w.rule === BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO,
     )
     expect(videoWarn).toBeDefined()
-    expect(videoWarn?.rule).toBe(BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO)
+    expect(videoWarn?.cause).toBe(BottleneckCause.VIDEO_STRIP_CONTENTION)
+    expect(videoWarn?.severity).toBe(BottleneckSeverity.WARN)
     expect(videoWarn?.subjects).toEqual(['fg-vid-1', 'fg-vid-2'])
   })
 })

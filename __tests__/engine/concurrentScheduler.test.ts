@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { scheduleAllConcurrent, postScheduleDiagnostics } from '../../src/engine/concurrentScheduler.ts'
 import {
   BottleneckCause,
+  BottleneckRule,
   BottleneckSeverity,
   DeMode,
   EventType,
@@ -16,11 +17,12 @@ import {
   ValidationMode,
   tailEstimateMins,
 } from '../../src/engine/types.ts'
-import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
+import type { Bottleneck, Competition, TournamentConfig } from '../../src/engine/types.ts'
 import { computePoolStructure, resolveRefsPerPool } from '../../src/engine/pools.ts'
 import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
 import { makeConfig, makeCompetition, makeStrips, makeBottleneck } from '../helpers/factories.ts'
+import { checkInvariants } from '../helpers/bottleneckInvariants.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
@@ -627,15 +629,19 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
       b => b.cause === BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
     )
     expect(crossoverBottlenecks).toHaveLength(6)
+    const competitionIds = competitions.map(c => c.id)
     for (const b of crossoverBottlenecks) {
       expect(b.severity).toBe(BottleneckSeverity.WARN)
+      expect(b.rule).toBe(BottleneckRule.HARD_SEPARATION_VIOLATED)
+      expect(b.subjects, 'the owner is one of the pair').toContain(b.competition_id)
+      checkInvariants(b, competitionIds, new Set())
     }
 
-    const bySubjects = (x: string[], y: string[]) => x.join('|').localeCompare(y.join('|'))
+    const pairKey = (ids: readonly string[]) => [...ids].sort().join('|')
     expect(
-      crossoverBottlenecks.map(bn => bn.subjects).sort(bySubjects),
+      crossoverBottlenecks.map(bn => bn.subjects.join('|')).sort(),
       'expected exactly one bottleneck per hard-edged pair, each naming both ids',
-    ).toEqual(expectedPairs.map(pair => [...pair].sort()).sort(bySubjects))
+    ).toEqual(expectedPairs.map(pairKey).sort())
   })
 
   // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
@@ -1065,37 +1071,42 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     expect(message, 'expected no digit anywhere in the lever message').not.toMatch(/\d/)
   })
 
+  const exhaustionFinding = (overrides: Partial<Bottleneck>) => makeBottleneck({
+    cause: BottleneckCause.RESOURCE_EXHAUSTION,
+    severity: BottleneckSeverity.WARN,
+    phase: Phase.VALIDATION,
+    competition_id: '',
+    message: 'reworded finding',
+    ...overrides,
+  })
+
   it.each(Object.values(FeasibilityRule))(
     'a RESOURCE_EXHAUSTION WARN with rule %s yields the levers finding whatever its message says',
     rule => {
-      const finding = makeBottleneck({
-        cause: BottleneckCause.RESOURCE_EXHAUSTION,
-        severity: BottleneckSeverity.WARN,
-        phase: Phase.VALIDATION,
-        competition_id: '',
-        rule,
-        message: 'reworded finding',
-      })
-
-      const results = postScheduleDiagnostics([], smallConfig(), [finding])
+      const results = postScheduleDiagnostics([], smallConfig(), [exhaustionFinding({ rule })])
 
       expect(results).toHaveLength(1)
       expect(results[0]?.cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
+      expect(results[0]?.rule).toBe(BottleneckRule.RESOURCE_LEVERS)
     },
   )
 
-  it('a RESOURCE_EXHAUSTION WARN from another rule yields nothing even when its message starts with RESOURCE_INSUFFICIENT', () => {
-    const finding = makeBottleneck({
-      cause: BottleneckCause.RESOURCE_EXHAUSTION,
-      severity: BottleneckSeverity.WARN,
-      phase: Phase.VALIDATION,
-      competition_id: '',
-      rule: 'days-available-range',
-      message: 'RESOURCE_INSUFFICIENT: not a feasibility finding',
-    })
-
-    expect(postScheduleDiagnostics([], smallConfig(), [finding])).toEqual([])
-  })
+  it.each([
+    ['another rule, even with a RESOURCE_INSUFFICIENT message', {
+      rule: 'days-available-range', message: 'RESOURCE_INSUFFICIENT: not a feasibility finding',
+    }],
+    ['a feasibility rule under another cause', {
+      rule: FeasibilityRule.STRIP_HOURS, cause: BottleneckCause.STRIP_CONTENTION,
+    }],
+    ['a feasibility rule at INFO severity', {
+      rule: FeasibilityRule.STRIP_HOURS, severity: BottleneckSeverity.INFO,
+    }],
+  ] satisfies Array<[string, Partial<Bottleneck>]>)(
+    'yields nothing for %s',
+    (_name, overrides) => {
+      expect(postScheduleDiagnostics([], smallConfig(), [exhaustionFinding(overrides)])).toEqual([])
+    },
+  )
 
   it('a board that fits emits no RESOURCE_RECOMMENDATION bottleneck', () => {
     // Same shape as test 1 (lines 64-75): two comp(...) events of 20 fencers

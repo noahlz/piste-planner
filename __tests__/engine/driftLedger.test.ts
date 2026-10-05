@@ -249,10 +249,13 @@ describe('drift ledger', () => {
     //    direction, which is what the old `toBe(0)` did for the old number.
     //  - no ERROR-severity validation finding at all, and in particular neither
     //    feasibility rule id among them. This reads `validateConfig` directly
-    //    because a severity re-escalation of either feasibility rule would
-    //    otherwise show up only as a scheduledCount change, and a
-    //    re-escalation that happened to leave B4 at 17 would be invisible.
-    //    FR-001/FR-002 are what this holds.
+    //    because it pins the severity at the source: a severity re-escalation
+    //    of either feasibility rule would otherwise show up only as a
+    //    scheduledCount change, and a re-escalation that happened to leave B4
+    //    at 17 would be invisible. The scheduler-side assertion at the end pins
+    //    the copy the scheduler's own bottlenecks carry. The literal
+    //    'feasibility-strip-hours' stays on purpose, as an independent pin of
+    //    the wire id. FR-001/FR-002 are what this holds.
     //  - the demoted `feasibility-strip-hours` finding is still PRESENT, as a
     //    WARN. The demotion must not become a deletion: B4's 481-strip-hour
     //    shortfall (~29%, specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md)) is real and the organizer still has to
