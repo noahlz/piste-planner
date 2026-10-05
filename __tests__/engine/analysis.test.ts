@@ -11,6 +11,7 @@ import {
   CutMode,
   DeMode,
   VideoPolicy,
+  BottleneckRule,
 } from '../../src/engine/types.ts'
 import type { Competition, Bottleneck } from '../../src/engine/types.ts'
 
@@ -118,6 +119,8 @@ describe('initialAnalysis — Pass 1: strip deficit', () => {
     expect(deficit).toBeDefined()
     expect(deficit?.severity).toBe(BottleneckSeverity.WARN)
     expect(deficit?.competition_id).toBe('big-comp')
+    expect(deficit?.rule).toBe(BottleneckRule.POOLS_EXCEED_STRIP_CAP_UNFLIGHTED)
+    expect(deficit?.subjects).toEqual(['big-comp'])
     expect(result.suggestions.length).toBeGreaterThan(0)
     expect(result.suggestions.some((s: string) => s.includes('big-comp'))).toBe(true)
   })
@@ -197,6 +200,8 @@ describe('initialAnalysis — Pass 3: one flighted per day', () => {
     )
     expect(warn).toBeDefined()
     expect(warn?.severity).toBe(BottleneckSeverity.WARN)
+    expect(warn?.rule).toBe(BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY)
+    expect(warn?.subjects).toEqual(['flt-1', 'flt-2'])
   })
 
   it('two flighted competitions on different days → no MULTIPLE_FLIGHTED_SAME_DAY warning', () => {
@@ -299,6 +304,8 @@ describe('initialAnalysis — Pass 5: flighting group video conflict', () => {
         w.cause === BottleneckCause.VIDEO_STRIP_CONTENTION && w.message.includes('Flighting group'),
     )
     expect(videoWarn).toBeDefined()
+    expect(videoWarn?.rule).toBe(BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO)
+    expect(videoWarn?.subjects).toEqual(['fg-vid-1', 'fg-vid-2'])
   })
 })
 

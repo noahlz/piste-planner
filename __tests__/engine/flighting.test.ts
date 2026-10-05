@@ -4,7 +4,7 @@ import {
   calculateFlightedStrips,
   validateFlightingGroup,
 } from '../../src/engine/flighting.ts'
-import { BottleneckCause, BottleneckSeverity, Category, Gender, Weapon } from '../../src/engine/types.ts'
+import { BottleneckCause, BottleneckRule, BottleneckSeverity, Category, Gender, Weapon } from '../../src/engine/types.ts'
 import { makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
@@ -69,6 +69,8 @@ describe('suggestFlightingGroups', () => {
     )
     expect(manualNeeded).toBeDefined()
     expect(manualNeeded?.severity).toBe(BottleneckSeverity.WARN)
+    expect(manualNeeded?.rule).toBe(BottleneckRule.FLIGHTING_PRIORITY_TIE)
+    expect(manualNeeded?.subjects).toEqual(['tied-a', 'tied-b'])
   })
 
   it('each fits within poolStripCap but combined exceeds stripsTotal → suggests group', () => {
@@ -187,22 +189,28 @@ describe('validateFlightingGroup', () => {
     const multipleFlighted = bottlenecks.filter(b => b.cause === BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY)
     expect(multipleFlighted).toHaveLength(2)
     expect(multipleFlighted.map(b => b.competition_id).sort()).toEqual(['flt1', 'flt2'])
+    for (const b of multipleFlighted) {
+      expect(b.rule).toBe(BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY)
+      expect(b.subjects).toEqual(['flt1', 'flt2'])
+    }
   })
 
   it('flighted competition is not largest by pool count on the day → FLIGHTING_GROUP_NOT_LARGEST warning', () => {
     // largest: 20 pools (not flighted), flighted: 15 pools
-    const largest = makeCompetition({ id: 'largest', fencer_count: 140, flighted: false, is_priority: false })
+    const big = makeCompetition({ id: 'big', fencer_count: 140, flighted: false, is_priority: false })
     const priority = makeCompetition({ id: 'pri', fencer_count: 105, flighted: false, is_priority: true })
     const flighted = makeCompetition({ id: 'flt', fencer_count: 98, flighted: true, is_priority: false })
 
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
-    const dayAssignments: Record<string, number> = { largest: 0, pri: 0, flt: 0 }
+    const dayAssignments: Record<string, number> = { big: 0, pri: 0, flt: 0 }
 
-    const bottlenecks = validateFlightingGroup(group, [largest, priority, flighted], dayAssignments)
+    const bottlenecks = validateFlightingGroup(group, [big, priority, flighted], dayAssignments)
 
     const notLargest = bottlenecks.find(b => b.cause === BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST)
     expect(notLargest).toBeDefined()
     expect(notLargest?.severity).toBe(BottleneckSeverity.WARN)
+    expect(notLargest?.rule).toBe(BottleneckRule.FLIGHTED_NOT_LARGEST)
+    expect(notLargest?.subjects).toEqual(['big', 'flt'])
   })
 
   it('no warning when flighted competition is the largest on the day', () => {
@@ -236,6 +244,8 @@ describe('validateFlightingGroup', () => {
     expect(conflictWarning).toBeDefined()
     expect(conflictWarning?.severity).toBe(BottleneckSeverity.WARN)
     expect(conflictWarning?.message).toMatch(/crossover/i)
+    expect(conflictWarning?.rule).toBe(BottleneckRule.FLIGHTING_GROUP_CROSSOVER_PENALTY)
+    expect(conflictWarning?.subjects).toEqual(['flt', 'pri'])
   })
 
   it('no demographic warning for different genders', () => {

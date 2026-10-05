@@ -11,7 +11,7 @@ import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { initialAnalysis } from '../../src/engine/analysis.ts'
 import { validateConfig } from '../../src/engine/validation.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
-import { makeConfig, makeStrips } from '../helpers/factories.ts'
+import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 
 const KEBAB_CASE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const ID_CHAR = /[A-Za-z0-9_-]/
@@ -44,7 +44,7 @@ describe('namesCompetition', () => {
   })
 })
 
-function scenarioBottlenecks(id: (typeof SCENARIO_IDS)[number]) {
+function runScenario(id: (typeof SCENARIO_IDS)[number]) {
   const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS[id]
   const competitions = buildCompetitions(fencerCounts)
   const config = tournamentConfig(days, strips, videoStrips, tournamentType)
@@ -53,7 +53,7 @@ function scenarioBottlenecks(id: (typeof SCENARIO_IDS)[number]) {
     Object.values(schedule).map(sr => [sr.competition_id, sr.assigned_day]),
   )
   const analysis = initialAnalysis(config, competitions, dayAssignments)
-  const validationRules = new Set(
+  const validationRules = new Set<string>(
     validateConfig(config, competitions, ValidationMode.BINDING).map(ve => ve.rule),
   )
   return { competitions, bottlenecks, analysis: analysis.warnings, validationRules }
@@ -62,7 +62,7 @@ function scenarioBottlenecks(id: (typeof SCENARIO_IDS)[number]) {
 function checkInvariants(
   b: Bottleneck,
   competitionIds: string[],
-  validationRules: Set<string | undefined>,
+  validationRules: Set<string>,
 ): void {
   const where = `${b.cause} "${b.message}"`
   expect(b.rule, `rule of ${where}`).toMatch(KEBAB_CASE)
@@ -81,29 +81,40 @@ function checkInvariants(
 }
 
 describe('Bottleneck rule and subjects invariants', () => {
+  const scenarios = Object.fromEntries(SCENARIO_IDS.map(id => [id, runScenario(id)]))
+
   for (const id of SCENARIO_IDS) {
     it(`scheduleAll bottlenecks of ${id} carry a rule and the competitions they name`, () => {
-      const { competitions, bottlenecks, validationRules } = scenarioBottlenecks(id)
+      const { competitions, bottlenecks, validationRules } = scenarios[id]
       const ids = competitions.map(c => c.id)
       for (const b of bottlenecks) checkInvariants(b, ids, validationRules)
     })
 
     it(`initialAnalysis warnings of ${id} carry a rule and the competitions they name`, () => {
-      const { competitions, analysis, validationRules } = scenarioBottlenecks(id)
+      const { competitions, analysis, validationRules } = scenarios[id]
       const ids = competitions.map(c => c.id)
       for (const b of analysis) checkInvariants(b, ids, validationRules)
     })
   }
 
-  it('a validation-derived bottleneck carries its finding rule and subjects', () => {
+  it('a global validation-derived bottleneck carries its finding rule and subjects', () => {
     const config = makeConfig({ strips: makeStrips(0, 0) })
-    const findings = validateConfig(config, [], ValidationMode.BINDING)
-    const finding = findings.find(f => f.rule === 'strips-total-positive')
+    const finding = validateConfig(config, [], ValidationMode.BINDING).find(f => f.rule === 'strips-total-positive')
     expect(finding).toBeDefined()
 
-    const { bottlenecks } = scheduleAll([], config)
-    const derived = bottlenecks.find(b => b.message === finding?.message)
-    expect(derived?.rule).toBe('strips-total-positive')
-    expect(derived?.subjects).toEqual(['strips_total'])
+    const derived = scheduleAll([], config).bottlenecks.find(b => b.message === finding?.message)
+    expect(derived?.rule).toBe(finding?.rule)
+    expect(derived?.subjects).toEqual(finding?.subjects)
+  })
+
+  it('a per-event validation-derived bottleneck carries its finding rule and competition id', () => {
+    const config = makeConfig()
+    const comp = makeCompetition({ id: 'X-M-EPEE-IND', fencer_count: 1 })
+    const finding = validateConfig(config, [comp], ValidationMode.BINDING).find(f => f.rule === 'fencer-count-bounds')
+    expect(finding?.subjects).toEqual(['X-M-EPEE-IND'])
+
+    const derived = scheduleAll([comp], config).bottlenecks.find(b => b.message === finding?.message)
+    expect(derived?.rule).toBe(finding?.rule)
+    expect(derived?.subjects).toEqual(finding?.subjects)
   })
 })

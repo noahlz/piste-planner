@@ -338,6 +338,7 @@ export const FeasibilityRule = {
   STRIP_HOURS: 'feasibility-strip-hours',
   VIDEO_STRIP_HOURS: 'feasibility-video-strip-hours',
 } as const
+export type FeasibilityRule = (typeof FeasibilityRule)[keyof typeof FeasibilityRule]
 
 /**
  * Feasibility finding: notice-kind — WARN in every validation mode, never
