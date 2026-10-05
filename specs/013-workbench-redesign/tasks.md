@@ -1472,7 +1472,7 @@ placed event once at the canvas's times, and printing yields four pages.
   text still below WCAG AA (T049's list). Existing entries gained finding 33
   (lane packer) and the two dead constants (dead code).
 
-- [ ] **T050** Readable event names in the Schedule view (owner remark on
+- [x] **T050** Readable event names in the Schedule view (owner remark on
   T041, decision 2026-10-04). The Competition column prints
   `competition_id` (`VET-M-FOIL-TEAM`) in mono; it shows
   `competitionLabel(competition)` instead, from the committed
@@ -1484,8 +1484,25 @@ placed event once at the canvas's times, and printing yields four pages.
   `react-code-reviewer` and `test-quality-reviewer` after. SMOKE PASS twice
   with no driver edit, `scripts/screenshot.mjs` reshot, T040 re-run, then
   the owner re-prints *(subagent commits)*
+  → Done 2026-10-04: `11d8c1573e`, review follow-up `be22677e96`. The cell
+  reads one id → label map built from the committed `schedule.competitions`
+  (`labelById.get(id) ?? id`), drops mono, and may wrap
+  (`whitespace-normal`) so a 41-character name never pushes the other six
+  columns off a page. Contract sentence added to `ui-contract.md` §Schedule
+  view. Three cases red first on the predicted reason; the fallback case
+  green by construction (recorded). Consumers re-pointed to
+  `[data-schedule-row]` in `scheduleOutput`, `invalidState` and `recompute`;
+  `viewEquivalence` expects "Div 1 Men's Foil Individual" and gained a
+  table-equals-block naming case. Review follow-up: the fallback fixture is
+  a real catalogue id left out of the committed list (a catalogue lookup
+  would fail it) and a case pins the id tie-break. 76 files / 1759 → 1764
+  tests (+5 by name, none removed). SMOKE PASS twice, no driver edit, 0
+  console errors, Suggest 15/66/80/48, boot 24 rows / 19·5·0; shots
+  retaken. Print-emulated Letter PDF of B1's Schedule: 4 pages, one day
+  each, no clipped column. T040 re-run at `401e860d18`: two identical clean
+  runs, 76 / 1764, skip grep empty, reconciles from 1759.
 
-- [ ] **T051** Backlog and roadmap for the rest of the T041 remarks (docs
+- [x] **T051** Backlog and roadmap for the rest of the T041 remarks (docs
   only). A roadmap feature after 015: team events go straight to DE (no
   pool round), the team DE is modelled for teams (strips sized to the
   field rather than a fixed 4, team match length, video for gold and bronze
@@ -1495,6 +1512,13 @@ placed event once at the canvas's times, and printing yields four pages.
   catalogue ids inside Findings messages and for `competitionLabel`'s
   wording against published schedules ("Div 1" vs "Division I", "Senior"
   for Div 1 team) *(subagent commits)*
+  → Done 2026-10-04: `401e860d18`. Roadmap feature 023 "Team events go
+  straight to DE", after 015 and before 022 (next free number, no
+  renumbering), with its scope, the METHODOLOGY passages the owner amends
+  first, and the ledger statement (B1, B2, B8 move; B3–B7 must not; 24/24/53
+  and the 24-row boot hold). Backlog: team events run a pool round, catalogue
+  ids inside Findings messages, `competitionLabel` wording – each also
+  listed under "What 013 deliberately left unfixed".
 
 - [ ] **T043** Write `specs/013-workbench-redesign/handoff.md`: §Verdicts (the
   T015 screenshot verdict, T023's NAC Youth value, T041's print check); the
