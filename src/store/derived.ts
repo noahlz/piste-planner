@@ -482,10 +482,14 @@ function computeAllFindings(state: StoreState): Finding[] {
 
   // ── §1.2 bottleneck warnings ──
   //
-  // `Bottleneck` carries no id, so one is built from cause + competition_id
-  // plus an ordinal among the rows sharing those two (research D6). The
-  // ordinal is what keeps two venue-level warnings of the same cause — both
-  // with an empty `competition_id` — distinct and separately dismissable.
+  // The row id is built from cause + competition_id plus an ordinal among the
+  // rows sharing those two (research D6), not from `rule` + `subjects`. Per-day
+  // venue findings (e.g. two `day-pools-exceed-strips` warnings for different
+  // days) share rule and subjects and differ only by the day in their message,
+  // so those two fields cannot tell them apart – see the backlog entry "Day-level
+  // findings have no structured day" (docs/design/backlog.md). The ordinal also
+  // keeps two venue-level warnings of the same cause, both with an empty
+  // `competition_id`, distinct and separately dismissable.
   const ordinalPerKey = new Map<string, number>()
   for (const warning of derivedFindings.analysis.warnings) {
     const key = `${warning.cause}:${warning.competition_id}`

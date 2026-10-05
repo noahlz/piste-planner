@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scheduleAllConcurrent } from '../../src/engine/concurrentScheduler.ts'
+import { scheduleAllConcurrent, postScheduleDiagnostics } from '../../src/engine/concurrentScheduler.ts'
 import {
   BottleneckCause,
   BottleneckSeverity,
@@ -18,9 +18,9 @@ import {
 } from '../../src/engine/types.ts'
 import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
 import { computePoolStructure, resolveRefsPerPool } from '../../src/engine/pools.ts'
-import { validateConfig } from '../../src/engine/validation.ts'
+import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
-import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
+import { makeConfig, makeCompetition, makeStrips, makeBottleneck } from '../helpers/factories.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
@@ -631,20 +631,11 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
       expect(b.severity).toBe(BottleneckSeverity.WARN)
     }
 
-    // Reads bn.message for the paired competition rather than a structured
-    // subject, because Bottleneck (src/engine/types.ts) carries only a single
-    // competition_id and a free-text message — no field for a second subject
-    // the way ValidationError carries `subjects: string[]`. This is the best
-    // available option against today's interface, not an oversight; see
-    // docs/design/backlog.md §Bottleneck has no structured field for a second
-    // subject.
-    for (const [a, b] of expectedPairs) {
-      const match = crossoverBottlenecks.filter(bn =>
-        (bn.competition_id === a || bn.competition_id === b)
-        && bn.message.includes(a) && bn.message.includes(b),
-      )
-      expect(match, `expected exactly one bottleneck for ${a} + ${b}`).toHaveLength(1)
-    }
+    const bySubjects = (x: string[], y: string[]) => x.join('|').localeCompare(y.join('|'))
+    expect(
+      crossoverBottlenecks.map(bn => bn.subjects).sort(bySubjects),
+      'expected exactly one bottleneck per hard-edged pair, each naming both ids',
+    ).toEqual(expectedPairs.map(pair => [...pair].sort()).sort(bySubjects))
   })
 
   // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
@@ -1072,6 +1063,38 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     // FR-015: the finding reports no strip count of its own — the shortfall
     // figures above already carry the numbers (FR-013).
     expect(message, 'expected no digit anywhere in the lever message').not.toMatch(/\d/)
+  })
+
+  it.each(Object.values(FeasibilityRule))(
+    'a RESOURCE_EXHAUSTION WARN with rule %s yields the levers finding whatever its message says',
+    rule => {
+      const finding = makeBottleneck({
+        cause: BottleneckCause.RESOURCE_EXHAUSTION,
+        severity: BottleneckSeverity.WARN,
+        phase: Phase.VALIDATION,
+        competition_id: '',
+        rule,
+        message: 'reworded finding',
+      })
+
+      const results = postScheduleDiagnostics([], smallConfig(), [finding])
+
+      expect(results).toHaveLength(1)
+      expect(results[0]?.cause).toBe(BottleneckCause.RESOURCE_RECOMMENDATION)
+    },
+  )
+
+  it('a RESOURCE_EXHAUSTION WARN from another rule yields nothing even when its message starts with RESOURCE_INSUFFICIENT', () => {
+    const finding = makeBottleneck({
+      cause: BottleneckCause.RESOURCE_EXHAUSTION,
+      severity: BottleneckSeverity.WARN,
+      phase: Phase.VALIDATION,
+      competition_id: '',
+      rule: 'days-available-range',
+      message: 'RESOURCE_INSUFFICIENT: not a feasibility finding',
+    })
+
+    expect(postScheduleDiagnostics([], smallConfig(), [finding])).toEqual([])
   })
 
   it('a board that fits emits no RESOURCE_RECOMMENDATION bottleneck', () => {

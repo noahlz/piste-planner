@@ -73,7 +73,7 @@ import { findIndividualCounterpart } from './crossover.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { constraintScore } from './dayAssignment.ts'
-import { validateConfig } from './validation.ts'
+import { validateConfig, FeasibilityRule } from './validation.ts'
 import { dayConsumedCapacity } from './capacity.ts'
 
 // ──────────────────────────────────────────────
@@ -1622,19 +1622,16 @@ export function postScheduleDiagnostics(
 ): Bottleneck[] {
   const results: Bottleneck[] = []
 
-  // A Bottleneck carries no rule id (only validateConfig's ValidationError
-  // does — the id is dropped when validation findings are pushed at :212), so
-  // a demoted feasibility finding is told apart by the one thing that does
-  // survive: its message text, which FR-001/FR-002 (011) hold unchanged and
-  // which is unique among notice-kind findings to feasibility-strip-hours and
-  // feasibility-video-strip-hours (validation.ts's 'RESOURCE_INSUFFICIENT'
-  // prefix). Widened per research.md D3: feasibility demoting to WARN must
-  // not silence the strip recommendation it is paired with. A WARN from any
-  // other rule (e.g. days-available-range) still leaves this false.
+  // A demoted feasibility finding is told apart by its `rule`, which the
+  // validation pass copies onto the Bottleneck. Widened per research.md D3:
+  // feasibility demoting to WARN must not silence the strip recommendation it
+  // is paired with. A WARN from any other rule (e.g. days-available-range)
+  // still leaves this false.
+  const feasibilityRules: readonly string[] = Object.values(FeasibilityRule)
   const hasResourceExhaustion = bottlenecks.some(b => {
     if (b.cause !== BottleneckCause.RESOURCE_EXHAUSTION) return false
     if (b.severity === BottleneckSeverity.ERROR) return true
-    return b.severity === BottleneckSeverity.WARN && b.message.startsWith('RESOURCE_INSUFFICIENT')
+    return b.severity === BottleneckSeverity.WARN && feasibilityRules.includes(b.rule)
   })
   if (!hasResourceExhaustion) return results
 
