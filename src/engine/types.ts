@@ -161,6 +161,8 @@ export const BottleneckRule = {
   HARD_SEPARATION_VIOLATED: 'hard-separation-violated',
   PINNED_PHASE_UNCLAIMED: 'pinned-phase-unclaimed',
   CROSS_EVENT_DEPENDENCY_DELAY: 'cross-event-dependency-delay',
+  REGIONAL_WINDOW_HONOURED: 'regional-window-honoured',
+  REGIONAL_WINDOW_NOT_HONOURED: 'regional-window-not-honoured',
   PHASE_DEFERRED: 'phase-deferred',
   STRIP_CONTENTION_DEFERRAL: 'strip-contention-deferral',
   FIRST_ATTEMPT_FAILED: 'first-attempt-failed',

@@ -4,7 +4,7 @@ import {
   calculateFlightedStrips,
   validateFlightingGroup,
 } from '../../src/engine/flighting.ts'
-import { BottleneckCause, BottleneckRule, BottleneckSeverity, Category, Gender, Weapon } from '../../src/engine/types.ts'
+import { BottleneckCause, BottleneckRule, BottleneckSeverity, Category, Gender, TournamentType, Weapon } from '../../src/engine/types.ts'
 import { makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
@@ -185,7 +185,7 @@ describe('validateFlightingGroup', () => {
     const dayAssignments: Record<string, number> = { pri: 0, flt1: 0, flt2: 0 }
 
     // construction order differs from sorted order so a dropped sort() fails
-    const bottlenecks = validateFlightingGroup(group, [c1, c3, c2], dayAssignments)
+    const bottlenecks = validateFlightingGroup(group, [c1, c3, c2], dayAssignments, TournamentType.NAC)
 
     // Implementation emits one bottleneck per flighted competition on the day
     const multipleFlighted = bottlenecks.filter(b => b.cause === BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY)
@@ -208,7 +208,7 @@ describe('validateFlightingGroup', () => {
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
     const dayAssignments: Record<string, number> = { big: 0, pri: 0, flt: 0 }
 
-    const bottlenecks = validateFlightingGroup(group, [big, priority, flighted], dayAssignments)
+    const bottlenecks = validateFlightingGroup(group, [big, priority, flighted], dayAssignments, TournamentType.NAC)
 
     const notLargest = bottlenecks.find(b => b.cause === BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST)
     expect(notLargest).toBeDefined()
@@ -225,7 +225,7 @@ describe('validateFlightingGroup', () => {
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 12, strips_for_flighted: 12 }
     const dayAssignments: Record<string, number> = { pri: 0, flt: 0 }
 
-    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments)
+    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments, TournamentType.NAC)
 
     const notLargest = bottlenecks.find(b => b.cause === BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST)
     expect(notLargest).toBeUndefined()
@@ -240,7 +240,7 @@ describe('validateFlightingGroup', () => {
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
     const dayAssignments: Record<string, number> = { pri: 0, flt: 0 }
 
-    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments)
+    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments, TournamentType.NAC)
 
     const conflictWarning = bottlenecks.find(
       b => b.cause === BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
@@ -259,7 +259,7 @@ describe('validateFlightingGroup', () => {
     const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
     const dayAssignments: Record<string, number> = { pri: 0, flt: 0 }
 
-    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments)
+    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments, TournamentType.NAC)
 
     const conflictWarning = bottlenecks.find(
       b => b.cause === BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,

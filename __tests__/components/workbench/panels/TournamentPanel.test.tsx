@@ -47,6 +47,20 @@ describe('TournamentPanel — type', () => {
   })
 })
 
+describe('TournamentPanel — type help text', () => {
+  // 024 D.2 (METHODOLOGY §Rest Day Preference, Ops Manual p.20 – Group 2): with the
+  // Junior–Cadet rest day gone, the only rest day left (Junior–Div 1) applies at every
+  // type, so the type no longer changes any rest-day requirement.
+  it('says the type affects grouping and priorities, and claims no rest-day requirement', () => {
+    render(<TournamentPanel />)
+
+    expect(screen.getByText(/Affects event grouping rules/)).toHaveTextContent(
+      'Affects event grouping rules and scheduling priorities.',
+    )
+    expect(screen.queryByText(/rest[- ]day/i)).toBeNull()
+  })
+})
+
 describe('TournamentPanel — day count', () => {
   it('renders a radiogroup with 2, 3 and 4, the current count checked', () => {
     useStore.getState().setDays(3)

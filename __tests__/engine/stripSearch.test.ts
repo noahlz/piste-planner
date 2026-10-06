@@ -33,7 +33,8 @@ import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/e
  * ceil(730 / 14) = 53. The strip-hour floor moves 25 → 34 on the 600-minute
  * planning day (§Strip-Hour Capacity): ceil(1358.1 / (4 × 10)) = 34. 53 is
  * the plan's measured B1 `stripRecommendation` at row B.2. The floor no longer
- * undershoots on B1, so the minimality test runs on `undershootBoard` (B4).
+ * undershoots on B1, so the minimality test runs on `undershootBoard` (B5
+ * since 024 group D, B4 before it).
  *
  * 024, 2026-10-06 – floor 35 → 25 and answer 48 → 45 under the 2026-27 Ops
  * Manual planning times (p.17; METHODOLOGY.md §Pool Duration Estimation, §DE
@@ -61,16 +62,21 @@ function minBoard(): { comps: Competition[], config: TournamentConfig } {
 }
 
 /**
- * [UNDER] B4 (30 events, days=3, SYC): the board whose floor still undershoots
- * under group B. Its 1030-competitor busiest day (3 days, largest first) gives
- * a manual baseline of ceil(1030 / 14) = 74, above the strip-hour floor
- * ceil(1547.65 / (3 × 10)) = 52, so floor=74. The answer is 75, the plan's
- * measured B4 `stripRecommendation` at row B.2, and [M] placed@74 = 29 of 30.
- * A two-candidate scan, the cheapest scenario where floor and answer differ
- * (B8, the other one, has 53 events: floor 56, answer 62).
+ * [UNDER] B5 (12 events, days=3, SJCC): the cheapest board whose floor still
+ * undershoots after group D. Its 1160 competitors spread largest first over
+ * 3 days give 390 | 390 | 380, so the manual baseline is ceil(390 / 14) = 28,
+ * above the strip-hour floor ceil(592.05 / (3 × 10)) = 20, so floor=28. The
+ * answer is 29, the plan's measured B5 `stripRecommendation` at row D, and
+ * [M] placed@28 = 11 of 12 (CDT-W-SABRE-IND unplaced). A two-candidate scan
+ * (B2, the other undershooting board, has 24 events: floor 75, answer 77).
+ *
+ * 024 group D, 2026-10-06 – moved from B4. Group D's same-day rules bring B4's
+ * answer down to its floor of 74 and B8's to its floor of 56, so neither
+ * undershoots any more, while dropping the Junior–Cadet rest day (METHODOLOGY.md
+ * §Rest Day Preference) takes B5's answer 28 → 29 over the same floor.
  */
 function undershootBoard(): { comps: Competition[], config: TournamentConfig } {
-  const s = SCENARIOS.B4
+  const s = SCENARIOS.B5
   return {
     comps: buildCompetitions(s.fencerCounts, s.tournamentType),
     config: tournamentConfig(s.days, s.strips, s.videoStrips, s.tournamentType),
@@ -262,7 +268,7 @@ describe('manualBaselineStrips', () => {
 
 describe('scanStripCounts', () => {
   it('minimality from both sides: the floor undershoots and the answer is tight in both directions', () => {
-    // B4, not B1: under group B's manual baseline B1's floor is its answer
+    // B5, not B1: under group B's manual baseline B1's floor is its answer
     // (see `minBoard` and `undershootBoard`).
     const { comps, config } = undershootBoard()
     const range = stripSearchRange(comps, config)!

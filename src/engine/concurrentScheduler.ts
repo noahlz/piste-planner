@@ -66,6 +66,7 @@ import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
 import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
+import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS } from './constants.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { constraintScore } from './dayAssignment.ts'
@@ -135,6 +136,16 @@ interface EventState {
   constraint_score: number
   // Once the event permanently fails (after attempt 2) this flag is set.
   permanently_failed: boolean
+  // The regional Group 1 window's fixed ready-time floor for the first phase
+  // (absolute minutes), or null. Set by `applyCrossEventEdges` on the older
+  // side of a pair; the loop's seed and the retry reset apply it.
+  group1_window_floor: number | null
+}
+
+/** A regional Group 1 pair sharing a day, whose older side `applyCrossEventEdges` floored. */
+interface RegionalWindowPair {
+  older: EventState
+  younger: EventState
 }
 
 /**
@@ -286,14 +297,15 @@ export function scheduleAllConcurrent(
   }
 
   // Day assignment via DSatur graph coloring.
-  const graph = buildConstraintGraph(remaining)
+  const graph = buildConstraintGraph(remaining, config.tournament_type)
   const { dayMap, relaxations, violations } = assignDaysByColoring(graph, remaining, config, activePins)
 
   // Build per-event state & phase nodes.
   const events = buildEventStates(remaining, dayMap, config)
 
-  // Wire cross-event dependency edges (indv→team, Vet sibling order).
-  applyCrossEventEdges(events, config)
+  // Wire cross-event dependency edges (indv→team, Vet sibling order) and the
+  // regional Group 1 window's floors.
+  const windowPairs = applyCrossEventEdges(events, config)
 
   // Pinned events claim their strip-time before the loop opens, at the day and
   // start the caller fixed, and are then kept out of the loop's seed so nothing
@@ -307,6 +319,7 @@ export function scheduleAllConcurrent(
 
   // Run the priority-queue loop.
   runConcurrentLoop(events, state, config, pinnedIds)
+  state.bottlenecks.push(...regionalWindowFindings(windowPairs, state))
 
   // Materialize successful events into state.schedule. Already done inside the
   // loop after each event's terminal phase succeeds — see `commitEventResult`.
@@ -470,6 +483,7 @@ function buildEventStates(
       phases,
       constraint_score: constraintScore(comp, competitions, config),
       permanently_failed: false,
+      group1_window_floor: null,
     })
   }
   return events
@@ -639,7 +653,7 @@ function buildPhaseNodes(
 }
 
 // ──────────────────────────────────────────────
-// Cross-event edges (indv→team, Vet sibling order)
+// Cross-event edges (indv→team, Vet sibling order, regional Group 1 window)
 // ──────────────────────────────────────────────
 
 const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
@@ -650,7 +664,12 @@ const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
   VetAgeGroup.VET80,
 ])
 
-function applyCrossEventEdges(events: EventState[], config: TournamentConfig): void {
+/**
+ * Wires the cross-event dependencies of METHODOLOGY §Cross-Event Dependency
+ * Edges and returns the regional Group 1 pairs it floored, for
+ * `regionalWindowFindings` to judge once the loop has run.
+ */
+function applyCrossEventEdges(events: EventState[], config: TournamentConfig): RegionalWindowPair[] {
   const byId = new Map(events.map(e => [e.competition.id, e]))
 
   for (const event of events) {
@@ -703,6 +722,89 @@ function applyCrossEventEdges(events: EventState[], config: TournamentConfig): v
       }
     }
   }
+
+  return applyRegionalWindowFloors(events, config)
+}
+
+/**
+ * The regional Group 1 window (Ops Manual p.20 – Group 1, METHODOLOGY §Regional
+ * Types: Soft, With a Time-of-Day Window). At ROC, RYC and RJCC, when a Group 1
+ * pair of one weapon and gender shares a day, the older side's pools are not
+ * ready before day start + 4 hours while the younger side starts from day start.
+ *
+ * The floor is fixed and stored on the event rather than pushed as a
+ * `cross_event_predecessors` edge, so the seed and the retry reset apply it to
+ * the first phase – a predecessor edge resolves only once its predecessor has
+ * run, and the retry's reset to day start would undo it. Every pair sets the
+ * same floor, so windows do not stack. Keyed by category, weapon and gender
+ * alone, for any mix of individual and team events (024 plan D10).
+ * Relaxation-level suppression is not modelled (021).
+ */
+function applyRegionalWindowFloors(events: EventState[], config: TournamentConfig): RegionalWindowPair[] {
+  const pairs: RegionalWindowPair[] = []
+  if (!GROUP_1_SOFT_TYPES.has(config.tournament_type)) return pairs
+
+  for (const older of events) {
+    for (const younger of events) {
+      const oc = older.competition
+      const yc = younger.competition
+      if (oc.gender !== yc.gender || oc.weapon !== yc.weapon) continue
+      if (older.assigned_day !== younger.assigned_day) continue
+      if (!GROUP_1_MANDATORY.some(p => p.older === oc.category && p.younger === yc.category)) continue
+      older.group1_window_floor = dayStart(older.assigned_day, config) + REGIONAL_GROUP_1_WINDOW_MINS
+      pairs.push({ older, younger })
+    }
+  }
+  return pairs
+}
+
+/**
+ * One finding per floored pair whose two events were both placed: INFO when
+ * the window held, WARN when it did not. The window holds when the younger
+ * side's pools start before the floor and the older side's at or after it. A
+ * pin skips the seed, so a pinned older side can break it, and in a Y10, Y12
+ * and Y14 day the Y12–Y14 pair starts together at the floor and breaks it
+ * (METHODOLOGY §Regional Types: Soft, With a Time-of-Day Window). A pair with
+ * an unplaced side has no finding: that event's own ERROR covers it.
+ */
+function regionalWindowFindings(pairs: RegionalWindowPair[], state: GlobalState): Bottleneck[] {
+  const findings: Bottleneck[] = []
+  for (const { older, younger } of pairs) {
+    const o = state.schedule[older.competition.id]
+    const y = state.schedule[younger.competition.id]
+    const floor = older.group1_window_floor
+    if (!o || !y || o.pool_start === null || y.pool_start === null || floor === null) continue
+
+    const honoured = o.pool_start >= floor && y.pool_start < floor
+    const oId = older.competition.id
+    const yId = younger.competition.id
+    const starts = `${yId} starts at ${y.pool_start} and ${oId}'s pools at ${o.pool_start}, window floor ${floor}`
+    findings.push({
+      competition_id: oId,
+      phase: Phase.SEQUENCING,
+      cause: BottleneckCause.SEQUENCING_CONSTRAINT,
+      rule: honoured ? BottleneckRule.REGIONAL_WINDOW_HONOURED : BottleneckRule.REGIONAL_WINDOW_NOT_HONOURED,
+      subjects: [oId, yId].sort(),
+      severity: honoured ? BottleneckSeverity.INFO : BottleneckSeverity.WARN,
+      delay_mins: 0,
+      message: honoured
+        ? `${oId} and ${yId} share day ${o.assigned_day + 1} inside the regional Group 1 window: ${starts}`
+        : `${oId} and ${yId} share day ${o.assigned_day + 1} and the regional Group 1 window is not honoured: ${starts}`,
+    })
+  }
+  return findings
+}
+
+/**
+ * The first phase's ready time at the seed and at a retry: day start, held
+ * back by the event's earliest start and by its regional window floor.
+ */
+function firstPhaseReadyTime(event: EventState, config: TournamentConfig): number {
+  return Math.max(
+    dayStart(event.assigned_day, config),
+    event.competition.earliest_start,
+    event.group1_window_floor ?? -Infinity,
+  )
 }
 
 const VET_AGE_WEIGHT: Partial<Record<VetAgeGroup, number>> = {
@@ -829,7 +931,8 @@ function runConcurrentLoop(
   pinnedIds: ReadonlySet<string> = NO_PINNED_IDS,
 ): void {
   // Seed the ready queue with each event's first phase node. Initial
-  // ready_time = max(dayStart, earliest_start). Cross-event predecessors are
+  // ready_time = max(dayStart, earliest_start, regional window floor) –
+  // `firstPhaseReadyTime`. Cross-event predecessors are
   // resolved lazily inside the loop (the predecessor may not be RUNNING yet
   // when we seed).
   //
@@ -841,10 +944,7 @@ function runConcurrentLoop(
   for (const event of events) {
     if (pinnedIds.has(event.competition.id)) continue
     const first = event.phases[0]
-    first.ready_time = Math.max(
-      dayStart(event.assigned_day, config),
-      event.competition.earliest_start,
-    )
+    first.ready_time = firstPhaseReadyTime(event, config)
     first.state = PhaseState.READY
     ready.push(first)
   }
@@ -1034,8 +1134,8 @@ function handlePhaseFailure(
 
 /**
  * Resets an event's phase nodes to PENDING/READY for retry. The first node is
- * READY at dayStart; the rest are PENDING with cleared timestamps and defer
- * counts.
+ * READY at dayStart, or at the event's regional window floor when it has one;
+ * the rest are PENDING with cleared timestamps and defer counts.
  */
 function resetEventPhases(event: EventState, config: TournamentConfig): void {
   for (let i = 0; i < event.phases.length; i++) {
@@ -1045,10 +1145,7 @@ function resetEventPhases(event: EventState, config: TournamentConfig): void {
     p.end_time = 0
     p.defer_count = 0
   }
-  event.phases[0].ready_time = Math.max(
-    dayStart(event.assigned_day, config),
-    event.competition.earliest_start,
-  )
+  event.phases[0].ready_time = firstPhaseReadyTime(event, config)
   event.phases[0].state = PhaseState.READY
 
   // Reset relevant result fields. Day assignment, ids, baselines stay.
@@ -1552,72 +1649,64 @@ function computePostScheduleRefDemand(
  * Generates post-schedule warnings per METHODOLOGY.md §Phase 7: Post-Schedule Warnings.
  * At every day count: one late-day WARN per day that ends past its soft target
  * (`lateDayWarnings`, §Same-Day Completion).
- * For 4+ day events: warns if first or last day is longer than the average
- * middle day duration (Ops Manual Group 2).
+ * Then the first/last-day WARN (`firstLastDayWarnings`).
  */
 export function postScheduleWarnings(
   schedule: Record<string, ScheduleResult>,
   config: TournamentConfig,
 ): Bottleneck[] {
-  const warnings: Bottleneck[] = lateDayWarnings(schedule, config)
+  return [...lateDayWarnings(schedule, config), ...firstLastDayWarnings(schedule, config)]
+}
 
-  if (config.days_available < 4) return warnings
-
-  // Compute max duration per day (from day start to latest event end)
-  const dayDurations: Record<number, number> = {}
-
+/**
+ * The first and last days should be shorter than the days between (Ops Manual
+ * p.20 – Group 2; METHODOLOGY.md §Phase 7, 024 D10). Reads the first and last
+ * USED day and needs at least 3 used days. Each of the two warns when it is not
+ * shorter than the shortest used middle day. A day's projected length is its
+ * last end (`de_total_end`, or `pool_end` with no DE) minus its day start.
+ * Day assignment plans for this with the reduced first/last day capacity
+ * (`dayColoring.ts`, §First and Last Day Capacity).
+ */
+function firstLastDayWarnings(
+  schedule: Record<string, ScheduleResult>,
+  config: TournamentConfig,
+): Bottleneck[] {
+  const dayLengths = new Map<number, number>()
   for (const r of Object.values(schedule)) {
     const end = r.de_total_end ?? r.pool_end
-    // start is only used as a null guard — if no pool/flight started, skip this event.
-    // Duration is measured from dayStart, not from the event's start time.
+    // An event with no pool or flight start placed nothing, so it uses no day.
     const start = r.pool_start ?? r.flight_a_start
     if (end === null || start === null) continue
-
-    const ds = dayStart(r.assigned_day, config)
-    const duration = end - ds
-    dayDurations[r.assigned_day] = Math.max(dayDurations[r.assigned_day] ?? 0, duration)
+    const length = end - dayStart(r.assigned_day, config)
+    dayLengths.set(r.assigned_day, Math.max(dayLengths.get(r.assigned_day) ?? 0, length))
   }
 
-  // Middle days: indices 1 through (days_available - 2)
-  const middleDays: number[] = []
-  for (let d = 1; d <= config.days_available - 2; d++) {
-    middleDays.push(d)
-  }
+  const usedDays = [...dayLengths.keys()].sort((a, b) => a - b)
+  if (usedDays.length < 3) return []
 
-  if (middleDays.length === 0) return warnings
+  const firstDay = usedDays[0]
+  const lastDay = usedDays[usedDays.length - 1]
+  const shortestMiddle = Math.min(...usedDays.slice(1, -1).map((d) => dayLengths.get(d)!))
 
-  const avgMiddle =
-    middleDays.reduce((sum, d) => sum + (dayDurations[d] ?? 0), 0) / middleDays.length
-
-  const firstDayDur = dayDurations[0] ?? 0
-  const lastDayDur = dayDurations[config.days_available - 1] ?? 0
-
-  if (firstDayDur > avgMiddle * 1.1) {
+  const warnings: Bottleneck[] = []
+  const edges = [
+    { day: firstDay, label: 'First', rule: BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE },
+    { day: lastDay, label: 'Last', rule: BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE },
+  ]
+  for (const { day, label, rule } of edges) {
+    const length = dayLengths.get(day)!
+    if (length < shortestMiddle) continue
     warnings.push({
       competition_id: '',
       phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
-      rule: BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE,
+      rule,
       subjects: [],
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
-      message: `First day (${firstDayDur} min) is longer than average middle day (${Math.round(avgMiddle)} min)`,
+      message: `${label} day (Day ${day + 1}, ${length} min) is not shorter than the shortest middle day (${shortestMiddle} min)`,
     })
   }
-
-  if (lastDayDur > avgMiddle * 1.1) {
-    warnings.push({
-      competition_id: '',
-      phase: Phase.POST_SCHEDULE,
-      cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
-      rule: BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
-      subjects: [],
-      severity: BottleneckSeverity.WARN,
-      delay_mins: 0,
-      message: `Last day (${lastDayDur} min) is longer than average middle day (${Math.round(avgMiddle)} min)`,
-    })
-  }
-
   return warnings
 }
 

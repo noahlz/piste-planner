@@ -102,7 +102,8 @@ describe('UnplacedDock populated state', () => {
   })
 
   it('shows the run note when Auto-assign left events unplaced, and omits it when lastAutoRun is null', () => {
-    // B4 measures 19 placed / 11 unplaced (024 group A, was 18 / 12) in __tests__/store/store.test.ts
+    // B4 measures 21 placed / 9 unplaced (024 group D, was 19 / 11 at group A and
+    // 18 / 12 before) in __tests__/store/store.test.ts
     // ("counts events the scheduler drops entirely as unplaced..."), not the
     // stale drift-baseline figure — standing rule 11, measurements win.
     applyPreset('B4')
@@ -119,7 +120,7 @@ describe('UnplacedDock populated state', () => {
 
     const region = screen.getByRole('region', { name: 'Unplaced events' })
     expect(
-      within(region).getByText('Placed 19 events, 11 could not be placed.'),
+      within(region).getByText('Placed 21 events, 9 could not be placed.'),
     ).toBeInTheDocument()
   })
 

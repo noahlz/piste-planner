@@ -136,7 +136,11 @@ describe('scheduleAllConcurrent — video-required priority', () => {
       de_video_policy: VideoPolicy.REQUIRED,
     })
     // 4 video strips total — one R16 fits; the other two must wait.
+    // One day keeps all three on day 0: over two days the Group 3 cross-weapon
+    // preference (0.2, METHODOLOGY.md §Other Soft Preferences, Ops Manual p.20
+    // – Group 3) splits vidA and vidC (both Vet men, no age group) apart.
     const config = smallConfig({
+      days_available: 1,
       strips: makeStrips(20, 4),
       max_pool_strip_pct: 1.0,
       max_de_strip_pct: 1.0,

@@ -93,7 +93,7 @@ export function TournamentPanel() {
           ))}
         </RadioGroupPrimitive.Root>
         <p className="mt-2 text-[12.5px] leading-normal text-neutral-700">
-          Affects event grouping rules, rest-day requirements, and scheduling priorities.
+          Affects event grouping rules and scheduling priorities.
         </p>
       </div>
 

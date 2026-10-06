@@ -71,15 +71,23 @@ describe('runAppPath', () => {
   // JR-W-EPEE-IND on both paths, because the day's hard window shrinks from 840
   // to 780 minutes (Ops Manual 2026-27 p.17, METHODOLOGY.md §Inputs and
   // §Same-Day Completion; specs/024-ops-manual-conformance/plan.md §Group B).
+  //
+  // 024 group D, 2026-10-06 – B4's placed count moved 19 → 21, B6's 50 → 45 and
+  // B8's 52 → 53, with the parity file's pins and the ledger's counts in the
+  // same commit. The Ops Manual p.20 same-day rules (Group 1 by tournament
+  // type, the Junior–Cadet rest day removed, Group 2, Group 3, first and last
+  // days planned shorter) re-colour the days: B8 places JR-W-EPEE-IND again
+  // (METHODOLOGY.md §Overlapping-Population Separation and §First and Last Day
+  // Capacity; specs/024-ops-manual-conformance/plan.md §Group D).
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
-    B4: { selected: 30, placed: 19 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it; 18 until 024 group A – the ledger reads the same since 015 (see above)
+    B4: { selected: 30, placed: 21 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it; 18 until 024 group A; 19 until 024 group D – the ledger reads the same since 015 (see above)
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
-    B6: { selected: 54, placed: 50 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A
+    B6: { selected: 54, placed: 45 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A; 50 until 024 group D (seven out, two in)
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
-    B8: { selected: 53, placed: 52 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4; 53 until 024 group B (JR-W-EPEE-IND lost to the 9:00 start)
+    B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4; 53 until 024 group B (JR-W-EPEE-IND lost to the 9:00 start); 52 until 024 group D placed it again
   }
 
   // specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)
@@ -134,14 +142,25 @@ describe('runAppPath', () => {
     // at their day start, d × 1440 + 540 (540, 3420), day 1 peaks 60 minutes
     // after its 1980 start (1980 → 2040), and day 3's peak moves 4860 → 4920.
     //
+    // 024 group D, 2026-10-06 – day 1 held, and five numbers on days 0, 2 and 3
+    // moved: day 0's sabre peak 64 → 62, day 2 160/50 at 3420 → 134/56 at 3480,
+    // day 3 202/76 → 186/72 at the same 4920. Group D re-colours B1's days
+    // (planning counts 13 of its 24 events changed, most by the Group 3
+    // cross-weapon preference, Ops Manual p.20 – Group 3, METHODOLOGY.md §Other
+    // Soft Preferences), so each day holds a different set of events and a
+    // different concurrent ref demand. Day 2 no longer peaks at its day start:
+    // its peak is 60 minutes in, at JR-W-EPEE-IND's 10:00 pool start (3420 +
+    // 60). Re-measured on this branch, not hand-derived – a per-day peak over a
+    // 24-event NAC is the engine's sweep, and the case pins its shape below.
+    //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.
     const result = runAppPath('B1')
     expect(result.refRequirementsByDay).toEqual([
-      { day: 0, peak_total_refs: 154, peak_saber_refs: 64, peak_time: 540 },
+      { day: 0, peak_total_refs: 154, peak_saber_refs: 62, peak_time: 540 },
       { day: 1, peak_total_refs: 210, peak_saber_refs: 64, peak_time: 2040 },
-      { day: 2, peak_total_refs: 160, peak_saber_refs: 50, peak_time: 3420 },
-      { day: 3, peak_total_refs: 202, peak_saber_refs: 76, peak_time: 4920 },
+      { day: 2, peak_total_refs: 134, peak_saber_refs: 56, peak_time: 3480 },
+      { day: 3, peak_total_refs: 186, peak_saber_refs: 72, peak_time: 4920 },
     ])
   })
 
@@ -154,7 +173,7 @@ describe('runAppPath', () => {
   })
 
   it('does not let one scenario contaminate the next', () => {
-    // B8 (53 selected, 52 placed) run before B1 must not shift B1's own numbers.
+    // B8 (53 selected, 53 placed) run before B1 must not shift B1's own numbers.
     runAppPath('B8')
     const b1 = runAppPath('B1')
     expect(b1.selectedCount).toBe(BASELINE.B1.selected)

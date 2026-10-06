@@ -17,6 +17,11 @@ import {
   DAY_LENGTH_MINS,
   COMPETITORS_PER_STRIP_PER_DAY,
   MAX_DE_FIELD,
+  GROUP_1_MANDATORY,
+  GROUP_1_SOFT_TYPES,
+  DIV1_DIV1A_HARD_PAIR,
+  PENALTY_WEIGHTS,
+  REST_DAY_PAIRS,
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
 
@@ -179,17 +184,45 @@ describe('CROSSOVER_GRAPH', () => {
   })
 })
 
-describe('SOFT_SEPARATION_PAIRS', () => {
-  it('has exactly 3 entries', () => {
-    expect(SOFT_SEPARATION_PAIRS).toHaveLength(3)
+// METHODOLOGY §Overlapping-Population Separation (Group 1), Ops Manual p.20 – Group 1.
+describe('Group 1 constants', () => {
+  it('GROUP_1_MANDATORY holds the six Group 1 pairs, older side first', () => {
+    expect(GROUP_1_MANDATORY).toEqual([
+      { older: Category.DIV1, younger: Category.JUNIOR },
+      { older: Category.JUNIOR, younger: Category.CADET },
+      { older: Category.DIV1, younger: Category.CADET },
+      { older: Category.Y12, younger: Category.Y10 },
+      { older: Category.Y14, younger: Category.Y12 },
+      { older: Category.CADET, younger: Category.Y14 },
+    ])
   })
 
-  it('contains [DIV1, CADET] with penalty 5.0', () => {
-    const entry = SOFT_SEPARATION_PAIRS.find(
-      (e) => e.pair[0] === Category.DIV1 && e.pair[1] === Category.CADET,
+  it('Div 1–Div 1A has its own always-hard constant (Appendix B departure)', () => {
+    expect(DIV1_DIV1A_HARD_PAIR).toEqual([Category.DIV1, Category.DIV1A])
+  })
+
+  it('Group 1 is soft at exactly ROC, RYC and RJCC', () => {
+    expect([...GROUP_1_SOFT_TYPES].sort()).toEqual(
+      [TournamentType.RJCC, TournamentType.ROC, TournamentType.RYC],
     )
-    expect(entry).toBeDefined()
-    expect(entry?.penalty).toBe(5.0)
+  })
+
+  it('the regional Group 1 pair penalty is 5.0 (Appendix A §Penalty Weights)', () => {
+    expect(PENALTY_WEIGHTS.REGIONAL_GROUP_1_PAIR).toBe(5.0)
+  })
+})
+
+// METHODOLOGY §Rest Day Preference, Ops Manual p.20 – Group 2. The Junior–Cadet
+// rest day is a Junior Olympic Championships rule, which no modelled type is.
+describe('REST_DAY_PAIRS', () => {
+  it('holds only the Junior–Div 1 pair', () => {
+    expect(REST_DAY_PAIRS).toEqual([[Category.JUNIOR, Category.DIV1]])
+  })
+})
+
+describe('SOFT_SEPARATION_PAIRS', () => {
+  it('has exactly 2 entries – Div 1–Cadet is a Group 1 pair, not a soft separation', () => {
+    expect(SOFT_SEPARATION_PAIRS).toHaveLength(2)
   })
 
   it('contains [DIV1, DIV2] with penalty 3.0', () => {

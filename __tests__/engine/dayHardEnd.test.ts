@@ -277,6 +277,67 @@ describe('late-day WARN (day-ends-past-target)', () => {
   })
 })
 
+/**
+ * The first/last-day WARN (024 D10, METHODOLOGY.md §Phase 7 – Ops Manual p.20,
+ * Group 2: the first and last days should be shorter than the days between).
+ * It reads the first and last USED day, needs at least 3 used days, and fires
+ * when either is not shorter than the shortest used middle day. A day's
+ * projected length is its last end minus its day start.
+ */
+describe('first/last-day WARN', () => {
+  const FIRST_LAST_RULES: string[] = [
+    BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE,
+    BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
+  ]
+
+  /** One event per entry, ending `length` minutes after its day's start (fallback axis, 1440 apart). */
+  function daysOfLength(lengths: Record<number, number>): Record<string, ScheduleResult> {
+    const schedule: Record<string, ScheduleResult> = {}
+    for (const [day, length] of Object.entries(lengths)) {
+      const d = Number(day)
+      const end = d * 1440 + length
+      schedule[`E${d}`] = { ...makeScheduleResult(`E${d}`, d), pool_start: d * 1440, pool_end: end - 60, de_total_end: end }
+    }
+    return schedule
+  }
+
+  function firstLastRules(schedule: Record<string, ScheduleResult>, daysAvailable: number): string[] {
+    return postScheduleWarnings(schedule, makeConfig({ days_available: daysAvailable }))
+      .map((b) => b.rule as string)
+      .filter((rule) => FIRST_LAST_RULES.includes(rule))
+  }
+
+  it('warns when the first day is as long as the only middle day of 3', () => {
+    expect(firstLastRules(daysOfLength({ 0: 500, 1: 500, 2: 400 }), 3)).toEqual([
+      BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE,
+    ])
+  })
+
+  it('compares against the shortest used middle day, not their average', () => {
+    // Middle days 300 and 500. The last day equals the shortest, so it warns.
+    // The first is one minute shorter, so it does not.
+    expect(firstLastRules(daysOfLength({ 0: 299, 1: 300, 2: 500, 3: 300 }), 4)).toEqual([
+      BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
+    ])
+  })
+
+  it('reads the last used day, not the last available one', () => {
+    // 4 days available, day 4 empty: days 1–3 are used, so day 3 is the last.
+    expect(firstLastRules(daysOfLength({ 0: 300, 1: 400, 2: 450 }), 4)).toEqual([
+      BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
+    ])
+  })
+
+  it('stays silent with fewer than 3 used days, however long they run', () => {
+    expect(firstLastRules(daysOfLength({ 0: 700, 3: 700 }), 4)).toEqual([])
+  })
+
+  // guard: both edge days strictly shorter than the middle – silent today too.
+  it('stays silent when the first and last days are both shorter than every middle day', () => {
+    expect(firstLastRules(daysOfLength({ 0: 299, 1: 300, 2: 299 }), 3)).toEqual([])
+  })
+})
+
 describe('findDayForTime reads the day\'s hard end', () => {
   const config = makeConfig({
     days_available: 2,

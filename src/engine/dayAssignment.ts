@@ -44,7 +44,7 @@ export function constraintScore(
   config: TournamentConfig,
 ): number {
   const crossoverCount = allCompetitions.filter(
-    c2 => c2.id !== competition.id && crossoverPenalty(competition, c2) > 0,
+    c2 => c2.id !== competition.id && crossoverPenalty(competition, c2, config.tournament_type) > 0,
   ).length
 
   const dayWindowMins = config.DAY_HARD_END_MINS - config.DAY_START_MINS

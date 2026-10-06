@@ -122,7 +122,35 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // costs the event (plan §Group B – the drift review re-runs that control).
   // Equal to the app path's 52. Group D's first/last-day capacity is measured
   // to place it again (plan §Group D).
-  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 52,
+  //
+  // 024 group D, 2026-10-06 – B4 raised 19 → 21 by group D (same-day rules,
+  // Ops Manual p.20 Group 1 / Group 2 / Group 3, METHODOLOGY §Overlapping-
+  // Population Separation (Group 1), §First and Last Day Capacity). Out
+  // CDT-W-EPEE-IND, CDT-W-FOIL-IND, CDT-W-SABRE-IND, Y14-W-SABRE-IND. In
+  // CDT-M-SABRE-IND, Y12-M-SABRE-IND, Y12-W-EPEE-IND, Y12-W-FOIL-IND,
+  // Y12-W-SABRE-IND, Y14-W-FOIL-IND. By sub-step 19 / 19 / 19 / 18 / 21: Group 3
+  // (D.4) dips it to 18 and the first/last-day capacity (D.5) lifts it to 21.
+  // The group lands whole, so the dip never reaches a commit (plan D1). Equal to
+  // the app path's 21. A raise under the rule above.
+  //
+  // 024 group D, 2026-10-06 – B8 raised 52 → 53 by group D: the first/last-day
+  // capacity (D.5, METHODOLOGY §First and Last Day Capacity) places
+  // JR-W-EPEE-IND again, the event group B's 9:00 start cost. Equal to the app
+  // path's 53. A raise under the rule above.
+  //
+  // 024 group D, 2026-10-06 – B6 lowered 50 → 45 under the policy-amendment
+  // exception above. The amendments are METHODOLOGY's Group 1 by tournament type
+  // with the regional time-of-day window, the dropped Junior–Cadet rest day,
+  // Group 3 (cross-weapon same demographic) and the first/last-day capacity
+  // (Ops Manual p.20, owner-approved commit 6a4107b710). Out JR-M-FOIL-IND,
+  // JR-M-SABRE-IND, JR-W-EPEE-IND, JR-W-FOIL-IND, VET-M-FOIL-IND-VCMB,
+  // Y12-M-EPEE-IND, Y12-W-FOIL-IND. In D1A-W-EPEE-IND, Y12-M-FOIL-IND. The
+  // sub-step attribution isolates it, measured after each sub-step: D.1 Group 1
+  // by type and the window 50 → 49, D.2 the rest day removed 49 → 48, D.3
+  // Group 2 48 → 48, D.4 Group 3 48 → 46, D.5 the first/last-day capacity
+  // 46 → 45. The ledger equals the app path at every sub-step, 45 at the end.
+  // Both counts: 50 before group D, 45 after (plan §Group D).
+  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
 }
 
 /**
@@ -146,10 +174,15 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  * the B8 floor entry above), so its day had a failure and emits a `Day N refs`
  * line. B4's day peaks move to 154 / 106 / 158 under group B's re-pack.
  *
+ * 024 group D, 2026-10-06 – B8 leaves the list again: group D's first/last-day
+ * capacity (METHODOLOGY §First and Last Day Capacity) places JR-W-EPEE-IND, so
+ * B8 places every event and emits no summary line. B4's day peaks move to
+ * 152 / 168 / 190 and B6's to 112 / 106 / 118 under group D's re-pack.
+ *
  * Membership is asserted in both directions: the day-peaks test below fails if a
  * listed scenario emits no summary line or an unlisted one emits any.
  */
-const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6', 'B8']
+const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6']
 
 /** Matches the refs line built by `postScheduleDayBreakdown` in `concurrentScheduler.ts`. */
 const DAY_REFS_SUMMARY = /^Day (\d+) refs: peak demand (\d+)\.$/
@@ -349,6 +382,12 @@ describe('drift ledger', () => {
     //    (2026-27 Ops Manual) re-pack B4 – CDT-M-EPEE-IND and CDT-M-FOIL-IND out,
     //    CDT-W-FOIL-IND, Y12-W-SABRE-IND and Y14-W-EPEE-IND in
     //    (specs/024-ops-manual-conformance/plan.md §Group A).
+    //    024 group D, 2026-10-06 – 19 → 21: the same-day rules (Ops Manual p.20,
+    //    METHODOLOGY §Overlapping-Population Separation (Group 1), §First and
+    //    Last Day Capacity) re-pack B4 – CDT-W-EPEE-IND, CDT-W-FOIL-IND,
+    //    CDT-W-SABRE-IND and Y14-W-SABRE-IND out, CDT-M-SABRE-IND,
+    //    Y12-M-SABRE-IND, Y12-W-EPEE-IND, Y12-W-FOIL-IND, Y12-W-SABRE-IND and
+    //    Y14-W-FOIL-IND in (plan §Group D).
     //  - no ERROR-severity validation finding at all, and in particular neither
     //    feasibility rule id among them. This reads `validateConfig` directly
     //    because it pins the severity at the source: a severity re-escalation
@@ -371,17 +410,17 @@ describe('drift ledger', () => {
     //    demand at 1548, and group B's 10-hour planning day (2026-27 Ops Manual
     //    p.17, METHODOLOGY §Strip-Hour Capacity) holds 3d × 40s × 10h = 1200,
     //    1380 with the 15% slack, so the WARN fires (1548 > 1380).
-    //  - no ERROR sits in Phase.VALIDATION. B4's 11 ERRORs (12 before 024's
-    //    group A) are all
+    //  - no ERROR sits in Phase.VALIDATION. B4's 9 ERRORs (12 before 024's
+    //    group A, 11 before group D) are all
     //    DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the ordinary
     //    per-event degradation of an oversubscribed board, which is spec.md
     //    §Edge Cases' accepted cost. A validation-phase ERROR returning is the
     //    shape that empties the board, and it halts here whatever its rule id.
     if (id === 'B4') {
-      it('B4 packs with feasibility demoted to WARN — 19 scheduled, no validation ERROR', () => {
+      it('B4 packs with feasibility demoted to WARN — 21 scheduled, no validation ERROR', () => {
         const { competitions, config, bottlenecks } = runScenario(id)
 
-        expect(buildDigest(id).scheduledCount).toBe(19)
+        expect(buildDigest(id).scheduledCount).toBe(21)
 
         const findings = validateConfig(config, competitions, ValidationMode.BINDING)
         expect(findings.filter(f => f.severity === BottleneckSeverity.ERROR)).toEqual([])

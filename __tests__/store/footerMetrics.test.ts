@@ -43,6 +43,15 @@ import { DeMode } from '../../src/engine/types.ts'
  * count, and so the strip-minutes used, do not. Utilization's denominator
  * moves from 840-minute days to 600-minute days. The hand-placed fixtures
  * start at the new 9:00 day start (540), as they started at 8:00 before.
+ *
+ * 024 group D, 2026-10-06 – B5 is re-coloured under the Ops Manual p.20
+ * same-day rules (planning attributes the move to D.2, the Junior–Cadet rest
+ * day removed; METHODOLOGY.md §Rest Day Preference and §Overlapping-Population
+ * Separation). Each day now holds four events: day 0 CDT-W-SABRE, JR-M-EPEE,
+ * JR-M-SABRE, JR-W-FOIL; day 1 CDT-M-EPEE, CDT-M-FOIL, CDT-W-EPEE, JR-W-SABRE;
+ * day 2 CDT-M-SABRE, CDT-W-FOIL, JR-M-FOIL, JR-W-EPEE. No event's start, strip
+ * budget or duration moved, so the finish and utilization numbers hold; the
+ * ref peak and the overflow counts move with the day membership.
  */
 
 // ──────────────────────────────────────────────
@@ -202,10 +211,15 @@ describe('selectFooterMetrics — the three rows', () => {
     expect(metric('finish:tournament').value).toBe(910)
   })
 
-  /** `selectDerivedRefRequirements` for B5 peaks at 116, on day 0. */
+  /**
+   * `selectDerivedRefRequirements` for B5 peaks at 118, on day 0 at 9:00 (116
+   * before 024 group D). SJCC resolves two refs per pool, and day 0's four pool
+   * blocks all start at 540 on 13 + 18 + 18 + 10 = 59 strips: 59 × 2 = 118.
+   * Days 1 and 2 hold 58 and 55 pool strips at 9:00, so 116 and 110.
+   */
   it('refs:peak-total is the peak across days', () => {
     b5()
-    expect(metric('refs:peak-total').value).toBe(116)
+    expect(metric('refs:peak-total').value).toBe(118)
   })
 
   /**
@@ -387,26 +401,34 @@ describe('selectPlacementCounts', () => {
     expect(selectedCount).toBe(12)
     // Re-measured 2026-09-07 against the fixed selector (data-model.md §10:
     // "an event the packer could not fit is unplaced whatever the store
-    // says"). `assignStripLanes` marks three DE blocks overflowing —
-    // JR-M-EPEE-IND, JR-W-FOIL-IND and CDT-W-SABRE-IND, one block each (JR-W-FOIL
-    // replaced JR-W-EPEE under 024's DE times: its DE at 630 is the fourth
-    // 16-strip DE on day 1's 60 strips) — so
-    // `overflowing.size` is 3, not a block count that happened to also be 3.
-    // Each of those three events is excluded from `placed` and counted once
-    // in `unplaced` instead of twice, so `placed` drops from the prior
-    // (incorrect) 12 to 9 and `placed + unplaced` now equals the selected
-    // count exactly rather than exceeding it.
-    expect(counts).toEqual({ placed: 9, unplaced: 3, pinned: 0 })
+    // says"). Each overflowing event is excluded from `placed` and counted
+    // once in `unplaced` instead of twice, so `placed + unplaced` equals the
+    // selected count exactly rather than exceeding it.
+    //
+    // 024 group D, 2026-10-06 – 9 placed / 3 unplaced → 8 / 4. Group D's day
+    // re-colouring (see the header) leaves four 16-strip DE blocks with no
+    // contiguous free run of 16 among the 60 strips when they start, one per
+    // event, so `overflowing.size` is 4. `assignStripLanes` packs first-fit,
+    // pools first in start order:
+    //   - day 0: pools hold 0–12, 13–30, 31–48, 49–58. JR-M-SABRE-IND's DE at
+    //     625 takes 31–46. CDT-W-SABRE-IND's at 630 finds only 0–12, 47–48 and
+    //     59 free, and JR-W-FOIL-IND's at 690 only 16–30 and 47–59.
+    //   - day 1: pools hold 0–17, 18–29, 30–41, 42–57. At 680 the épée and foil
+    //     DEs take 0–15 and 16–31, so CDT-W-EPEE-IND's finds 32–41 and 58–59.
+    //   - day 2: pools hold 0–14, 15–24, 25–42, 43–54. CDT-M-SABRE-IND's DE at
+    //     625, before any other pool ends, finds 0–14 and 55–59.
+    expect(counts).toEqual({ placed: 8, unplaced: 4, pinned: 0 })
     expect(counts.placed + counts.unplaced).toBe(selectedCount)
   })
 
   /**
    * `updatePlacement` always marks its target `pinned: true` (`store.ts`'s
    * `updatePlacement`, unconditionally, regardless of the partial passed) —
-   * the same call a hand-drag or a hand-edit makes. JR-M-EPEE-IND is one of
-   * B5's three overflowing events (see the case above), so pinning it in
-   * place — day and time unchanged — does not move it out of `unplaced`: it
-   * counts once in `pinned` and stays excluded from `placed`.
+   * the same call a hand-drag or a hand-edit makes. JR-M-EPEE-IND is not one
+   * of B5's four overflowing events (see the case above), so pinning it in
+   * place — day and time unchanged — counts it once in `pinned` and leaves it
+   * in `placed` (8; 9 before 024 group D, when it overflowed and stayed out of
+   * `placed`).
    */
   it('counts a pinned placement once, in both placed and pinned', () => {
     b5()
@@ -414,10 +436,10 @@ describe('selectPlacementCounts', () => {
 
     const counts = selectPlacementCounts(useStore.getState())
     expect(counts.pinned).toBe(1)
-    expect(counts.placed).toBe(9)
-    // The three baseline overflow events (see the case above) are unaffected
+    expect(counts.placed).toBe(8)
+    // The four baseline overflow events (see the case above) are unaffected
     // by pinning a placement that was already in range.
-    expect(counts.unplaced).toBe(3)
+    expect(counts.unplaced).toBe(4)
   })
 
   /**
@@ -425,11 +447,13 @@ describe('selectPlacementCounts', () => {
    * JR-M-EPEE-IND there drops it from `placed` and adds it to `unplaced` from
    * the placements loop alone — but it also removes its own segments from
    * `assignStripLanes`'s packing for its day (`day_out_of_range` events are
-   * skipped there), which frees room that resolves its own overflow and,
-   * measured, leaves the other two baseline overflow events (JR-W-FOIL-IND,
-   * CDT-W-SABRE-IND) unaffected. Net: 9 placed (12 selected minus the 1
-   * out-of-range minus the 2 remaining overflow) and 3 unplaced (1
-   * out-of-range plus 2 overflow), not the 11-placed figure a
+   * skipped there). Since 024 group D day 0's three remaining pools then pack
+   * into 0–40 and leave 41–59 free, so day 0 re-packs with no overflow:
+   * JR-M-SABRE-IND's DE takes 0–15,
+   * CDT-W-SABRE-IND's 41–56 and JR-W-FOIL-IND's 16–31. Days 1 and 2 keep
+   * their overflow (CDT-W-EPEE-IND, CDT-M-SABRE-IND). Net: 9 placed (12
+   * selected minus the 1 out-of-range minus the 2 remaining overflow) and 3
+   * unplaced (1 out-of-range plus 2 overflow), not the 11-placed figure a
    * packing-independent count would give.
    */
   it('counts an out-of-range day in unplaced, not placed', () => {

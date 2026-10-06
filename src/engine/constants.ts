@@ -440,31 +440,92 @@ export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>
 }
 
 // ──────────────────────────────────────────────
-// Group 1 mandatory different-day separations (Ops Manual Ch.4, pp.26–27).
-// Pairs listed here return Infinity penalty for same-day placement.
+// Group 1 overlapping-population pairs (Ops Manual p.20 – Group 1, METHODOLOGY
+// §Overlapping-Population Separation (Group 1)). Each pair applies per weapon
+// and gender, keyed by category only, so it covers any mix of individual and
+// team events (024 D10). Hard at NAC, SYC and SJCC; at the GROUP_1_SOFT_TYPES
+// it costs PENALTY_WEIGHTS.REGIONAL_GROUP_1_PAIR, and the older side's pools
+// wait for the time-of-day window.
 // Y8/Y10 intentionally omitted — Y8 CAN and SHOULD be on the same day as Y10.
-// DIV1/CADET moved to SOFT_SEPARATION_PAIRS — "allowed in rare cases."
 // ──────────────────────────────────────────────
 
-export const GROUP_1_MANDATORY: [Category, Category][] = [
-  [Category.DIV1, Category.JUNIOR],
-  [Category.JUNIOR, Category.CADET],
-  [Category.Y10, Category.Y12],
-  [Category.Y12, Category.Y14],
-  [Category.Y14, Category.CADET],
-  [Category.DIV1, Category.DIV1A],
+export const GROUP_1_MANDATORY: readonly { older: Category; younger: Category }[] = [
+  { older: Category.DIV1, younger: Category.JUNIOR },
+  { older: Category.JUNIOR, younger: Category.CADET },
+  { older: Category.DIV1, younger: Category.CADET },
+  { older: Category.Y12, younger: Category.Y10 },
+  { older: Category.Y14, younger: Category.Y12 },
+  { older: Category.CADET, younger: Category.Y14 },
 ]
+
+// Tournament types where Group 1 is soft, with a time-of-day window (METHODOLOGY
+// §Regional Types: Soft, With a Time-of-Day Window). Not REGIONAL_QUALIFIER_TYPES:
+// SYC and SJCC take the national criteria here (Appendix B).
+export const GROUP_1_SOFT_TYPES: ReadonlySet<TournamentType> = new Set<TournamentType>([
+  TournamentType.ROC,
+  TournamentType.RYC,
+  TournamentType.RJCC,
+])
+
+// The regional time-of-day window: when a Group 1 pair shares a day at a
+// GROUP_1_SOFT_TYPES tournament, the older side's pools may not start before
+// day start + 4 hours (METHODOLOGY §Regional Types: Soft, With a Time-of-Day
+// Window, §Cross-Event Dependency Edges).
+export const REGIONAL_GROUP_1_WINDOW_MINS = 240
+
+// Div 1 and Div 1A of one weapon and gender never share a day, at every type:
+// nearly the same fencers enter both. The manual does not list the pair
+// (METHODOLOGY Appendix B – Div 1 and Div 1A, hard).
+export const DIV1_DIV1A_HARD_PAIR: readonly [Category, Category] = [Category.DIV1, Category.DIV1A]
 
 // ──────────────────────────────────────────────
 // Soft separation pairs: high penalty but not hard-blocked.
-// DIV1↔CADET is "allowed in rare cases" per Ops Manual.
 // DIV1↔DIV2 and DIV1↔DIV3 are common enough to warrant soft separation only.
 // ──────────────────────────────────────────────
 
 export const SOFT_SEPARATION_PAIRS: { pair: [Category, Category]; penalty: number }[] = [
-  { pair: [Category.DIV1, Category.CADET], penalty: 5.0 },
   { pair: [Category.DIV1, Category.DIV2], penalty: 3.0 },
   { pair: [Category.DIV1, Category.DIV3], penalty: 3.0 },
+]
+
+// ──────────────────────────────────────────────
+// Group 2 soft separations (Ops Manual p.20 – Group 2, METHODOLOGY §Other Soft
+// Preferences). Each applies per weapon and gender, as for Group 1. A side lists
+// its categories and, where the row is matched by event type, that type (null
+// = any type). crossoverPenalty checks these after the hard blocks and Group 1,
+// so a pair those already separate keeps their value: the open-team row scores
+// only Y14 against the Div 1 team (Cadet and Junior are Group 1 pairs with it).
+// ──────────────────────────────────────────────
+
+export type Group2Side = {
+  categories: readonly Category[]
+  eventType: EventType | null
+}
+
+export const GROUP_2_SOFT_SEPARATIONS: readonly { sides: readonly [Group2Side, Group2Side]; penalty: number }[] = [
+  // Every Veteran individual event (age-banded and Vet Combined) ↔ the Div 1A individual.
+  {
+    sides: [
+      { categories: [Category.VETERAN], eventType: EventType.INDIVIDUAL },
+      { categories: [Category.DIV1A], eventType: EventType.INDIVIDUAL },
+    ],
+    penalty: 3.0,
+  },
+  {
+    sides: [
+      { categories: [Category.DIV2], eventType: null },
+      { categories: [Category.DIV3], eventType: null },
+    ],
+    penalty: 3.0,
+  },
+  // The open (Div 1) team event only, so Div 1 individual events are unaffected.
+  {
+    sides: [
+      { categories: [Category.Y14, Category.CADET, Category.JUNIOR], eventType: null },
+      { categories: [Category.DIV1], eventType: EventType.TEAM },
+    ],
+    penalty: 3.0,
+  },
 ]
 
 // ──────────────────────────────────────────────
@@ -495,10 +556,12 @@ export const PROXIMITY_PENALTY_WEIGHTS: Record<number, number> = {
 
 // ──────────────────────────────────────────────
 // REST_DAY_PAIRS: category pairs that should have a rest day between them
+// (Ops Manual p.20 – Group 2, METHODOLOGY §Rest Day Preference). Junior–Cadet
+// is absent: the manual asks for that rest day only at the Junior Olympic
+// Championships, which no modelled tournament type is.
 // ──────────────────────────────────────────────
 
 export const REST_DAY_PAIRS: [Category, Category][] = [
-  [Category.JUNIOR, Category.CADET],
   [Category.JUNIOR, Category.DIV1],
 ]
 
@@ -604,7 +667,9 @@ export const PENALTY_WEIGHTS = {
   EARLY_START_SAME_DAY_HIGH_CROSSOVER: 2.0,
   /** Early start consecutive days, ind+team same demographic */
   EARLY_START_CONSECUTIVE_INDIV_TEAM: 2.0,
-  /** Rest day violation (consecutive-day penalty for JUNIOR/CADET/DIV1) */
+  /** Regional Group 1 pair on one day: ROC, RYC and RJCC only (Ops Manual p.20 – Group 1) */
+  REGIONAL_GROUP_1_PAIR: 5.0,
+  /** Rest day violation (consecutive-day penalty for JUNIOR/DIV1, Ops Manual p.20 – Group 2) */
   REST_DAY_VIOLATION: 1.5,
   /** Team scheduled before individual (wrong order, proximity) */
   TEAM_BEFORE_INDIVIDUAL: 1.0,
@@ -620,8 +685,12 @@ export const PENALTY_WEIGHTS = {
   LAST_DAY_REF_SHORTAGE_LARGE_ROC: 0.3,
   /** Ind+team 2+ days apart (proximity) */
   INDIV_TEAM_2_PLUS_DAYS: 0.3,
-  /** Cross-weapon same demographic (Veteran only) */
-  CROSS_WEAPON_SAME_DEMOGRAPHIC_VET: 0.2,
+  /**
+   * Cross-weapon same demographic, every category: same category, gender and
+   * event type (Veterans: same age group), different weapon, same day
+   * (Ops Manual p.20 – Group 3, METHODOLOGY §Other Soft Preferences)
+   */
+  CROSS_WEAPON_SAME_DEMOGRAPHIC: 0.2,
   /** Last-day ref shortage: medium tournament (50-100 fencers) */
   LAST_DAY_REF_SHORTAGE_MEDIUM: 0.2,
   /** Proximity 1 day apart (bonus — negative) */
@@ -648,3 +717,11 @@ export const CAPACITY_PENALTY_CURVE = {
   /** Flat penalty when fill ratio exceeds the high threshold */
   OVERFLOW_PENALTY: 20.0,
 } as const
+
+/**
+ * Share of a middle day's strip-hours that day assignment gives the first and
+ * the last day, from 3 days up, so they are planned shorter (Ops Manual p.20 –
+ * Group 2; METHODOLOGY.md §First and Last Day Capacity, Appendix A §Capacity
+ * Model Constants).
+ */
+export const FIRST_LAST_DAY_CAPACITY_FACTOR = 0.8

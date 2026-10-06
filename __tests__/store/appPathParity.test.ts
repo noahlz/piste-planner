@@ -62,6 +62,17 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * (specs/024-ops-manual-conformance/plan.md §Group B, D3). Every entry still
  * equals its app-path pin.
  *
+ * 024 group D, 2026-10-06 – B4 19 → 21, B6 50 → 45 and B8 52 → 53, read from
+ * the drift ledger's re-taken snapshot after the Ops Manual p.20 same-day rules
+ * (Group 1 hard at national types and windowed at regional ones, the
+ * Junior–Cadet rest day removed, Group 2 and Group 3, first and last days
+ * planned shorter; METHODOLOGY.md §Overlapping-Population Separation and
+ * §First and Last Day Capacity). B4: CDT-W-EPEE-IND, CDT-W-FOIL-IND,
+ * CDT-W-SABRE-IND and Y14-W-SABRE-IND out, six in. B6: seven out, D1A-W-EPEE-IND
+ * and Y12-M-FOIL-IND in (D.1 −1, D.2 −1, D.4 −2, D.5 −1). B8: JR-W-EPEE-IND
+ * placed again (specs/024-ops-manual-conformance/plan.md §Group D). Every entry
+ * still equals its app-path pin.
+ *
  * The table is still typed out, but it is no longer trusted as typed: the
  * "matches the live drift ledger" test below re-measures every entry by the
  * drift ledger's own route. Until 015 it was a hand-typed copy that nothing
@@ -69,7 +80,7 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * ledger's real counts had moved.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 52,
+  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
 }
 
 interface ParityException {
@@ -139,9 +150,14 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {}
  * hard window, Ops Manual 2026-27 p.17, METHODOLOGY.md §Same-Day Completion).
  * Its copy in `appPath.test.ts` moved with it in the same commit. No other pin
  * moved.
+ *
+ * 024 group D, 2026-10-06 – B4 re-measured 19 → 21, B6 50 → 45 and B8 52 → 53,
+ * the same moves as the ledger's under the Ops Manual p.20 same-day rules
+ * (specs/024-ops-manual-conformance/plan.md §Group D). Their copies in
+ * `appPath.test.ts` moved with them in the same commit. No other pin moved.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 52,
+  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
 }
 
 // specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)

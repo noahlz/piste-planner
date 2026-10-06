@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { makeCompetition } from '../helpers/factories.ts'
-import { Category, Gender, Weapon, EventType } from '../../src/engine/types.ts'
+import { Category, Gender, Weapon, EventType, TournamentType } from '../../src/engine/types.ts'
 
 describe('buildConstraintGraph', () => {
   it('returns an empty graph for empty input', () => {
-    const graph = buildConstraintGraph([])
+    const graph = buildConstraintGraph([], TournamentType.NAC)
     expect(graph.size).toBe(0)
   })
 
@@ -14,7 +14,7 @@ describe('buildConstraintGraph', () => {
     const c1 = makeCompetition({ id: 'div1-men-foil-1', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const c2 = makeCompetition({ id: 'div1-men-foil-2', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
 
-    const graph = buildConstraintGraph([c1, c2])
+    const graph = buildConstraintGraph([c1, c2], TournamentType.NAC)
 
     const edges1 = graph.get('div1-men-foil-1')!
     expect(edges1).toHaveLength(1)
@@ -32,7 +32,7 @@ describe('buildConstraintGraph', () => {
     const div1 = makeCompetition({ id: 'div1-men-epee', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE, event_type: EventType.INDIVIDUAL })
     const junior = makeCompetition({ id: 'junior-men-epee', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.EPEE, event_type: EventType.INDIVIDUAL })
 
-    const graph = buildConstraintGraph([div1, junior])
+    const graph = buildConstraintGraph([div1, junior], TournamentType.NAC)
 
     const edges = graph.get('div1-men-epee')!
     expect(edges).toHaveLength(1)
@@ -45,7 +45,7 @@ describe('buildConstraintGraph', () => {
     const div1 = makeCompetition({ id: 'div1-women-sabre', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.SABRE, event_type: EventType.INDIVIDUAL })
     const vet = makeCompetition({ id: 'vet-women-sabre', category: Category.VETERAN, gender: Gender.WOMEN, weapon: Weapon.SABRE, event_type: EventType.INDIVIDUAL })
 
-    const graph = buildConstraintGraph([div1, vet])
+    const graph = buildConstraintGraph([div1, vet], TournamentType.NAC)
 
     const edges = graph.get('div1-women-sabre')!
     expect(edges).toHaveLength(1)
@@ -62,7 +62,7 @@ describe('buildConstraintGraph', () => {
     const men = makeCompetition({ id: 'div1-men-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const women = makeCompetition({ id: 'div1-women-foil', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
 
-    const graph = buildConstraintGraph([men, women])
+    const graph = buildConstraintGraph([men, women], TournamentType.NAC)
 
     expect(graph.get('div1-men-foil')).toHaveLength(0)
     expect(graph.get('div1-women-foil')).toHaveLength(0)
@@ -72,7 +72,7 @@ describe('buildConstraintGraph', () => {
     const foil = makeCompetition({ id: 'div1-men-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const epee = makeCompetition({ id: 'div1-men-epee', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE, event_type: EventType.INDIVIDUAL })
 
-    const graph = buildConstraintGraph([foil, epee])
+    const graph = buildConstraintGraph([foil, epee], TournamentType.NAC)
 
     expect(graph.get('div1-men-foil')).toHaveLength(0)
     expect(graph.get('div1-men-epee')).toHaveLength(0)
@@ -85,7 +85,7 @@ describe('buildConstraintGraph', () => {
     const vetIndiv = makeCompetition({ id: 'vet-men-foil-indiv', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const vetTeam = makeCompetition({ id: 'vet-men-foil-team', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
 
-    const graph = buildConstraintGraph([vetIndiv, vetTeam])
+    const graph = buildConstraintGraph([vetIndiv, vetTeam], TournamentType.NAC)
 
     const edges = graph.get('vet-men-foil-indiv')!
     expect(edges).toHaveLength(1)
@@ -102,7 +102,7 @@ describe('buildConstraintGraph', () => {
     const div1Indiv = makeCompetition({ id: 'div1-men-foil-indiv', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const juniorTeam = makeCompetition({ id: 'junior-men-foil-team', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
 
-    const graph = buildConstraintGraph([div1Indiv, juniorTeam])
+    const graph = buildConstraintGraph([div1Indiv, juniorTeam], TournamentType.NAC)
 
     const edges = graph.get('div1-men-foil-indiv')!
     expect(edges).toHaveLength(1)
@@ -122,7 +122,7 @@ describe('buildConstraintGraph', () => {
       makeCompetition({ id: 'cadet-men-foil', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL }),
     ]
 
-    const graph = buildConstraintGraph(competitions)
+    const graph = buildConstraintGraph(competitions, TournamentType.NAC)
 
     // Verify symmetry: for every edge A->B, there must be a matching B->A
     for (const [sourceId, edges] of graph.entries()) {
@@ -139,7 +139,7 @@ describe('buildConstraintGraph', () => {
     const foil = makeCompetition({ id: 'div1-men-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
     const epee = makeCompetition({ id: 'div1-women-epee', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.EPEE })
 
-    const graph = buildConstraintGraph([foil, epee])
+    const graph = buildConstraintGraph([foil, epee], TournamentType.NAC)
 
     expect(graph.has('div1-men-foil')).toBe(true)
     expect(graph.has('div1-women-epee')).toBe(true)

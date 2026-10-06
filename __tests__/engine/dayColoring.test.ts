@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { assignDaysByColoring, capacityPenalty } from '../../src/engine/dayColoring.ts'
+import {
+  assignDaysByColoring,
+  capacityDemandedDays,
+  capacityPenalty,
+  crossWeaponSameDemographicPenalty,
+  dayCapacityFactor,
+} from '../../src/engine/dayColoring.ts'
+import { FIRST_LAST_DAY_CAPACITY_FACTOR } from '../../src/engine/constants.ts'
+import { categoryWeight, estimateCompetitionStripHours } from '../../src/engine/capacity.ts'
 import type { ConstraintGraph } from '../../src/engine/constraintGraph.ts'
+import type { Competition } from '../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
-import { Category, Gender, Weapon, EventType, VetAgeGroup } from '../../src/engine/types.ts'
+import { Category, Gender, Weapon, EventType, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
@@ -179,33 +188,54 @@ describe('assignDaysByColoring', () => {
     expect(dayMap.get('big')).toBe(0)
   })
 
-  it('rest-day pairs prefer non-adjacent days', () => {
-    // JUNIOR and CADET (same gender + weapon) are a REST_DAY_PAIR.
-    // With 3 days and a soft edge between them, they should avoid being adjacent.
+  // METHODOLOGY §Rest Day Preference, Ops Manual p.20 – Group 2. Junior is pinned
+  // to day 0 and two identical women's épée fillers to days 1 and 2, so every day
+  // carries the same load and pins switch off day compaction. The soft 0.5 edge
+  // rules out day 0 for the partner, leaving gap 1 (−0.4 PROXIMITY_1_DAY bonus at
+  // weight 1.0, plus 1.5 if a rest-day pair) against gap 2 (0).
+  function restDayGap(other: Category, tournamentType: TournamentType): number {
     const junior = makeCompetition({
       id: 'junior',
       category: Category.JUNIOR,
       gender: Gender.MEN,
       weapon: Weapon.FOIL,
     })
-    const cadet = makeCompetition({
-      id: 'cadet',
-      category: Category.CADET,
+    const partner = makeCompetition({
+      id: 'partner',
+      category: other,
       gender: Gender.MEN,
       weapon: Weapon.FOIL,
     })
-    // Soft edge (not hard): day separation is possible
-    const graph = buildGraph([['junior', 'cadet', 0.5]])
-    const config = makeConfig({ days_available: 3 })
+    const filler1 = makeCompetition({ id: 'filler1', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE })
+    const filler2 = makeCompetition({ id: 'filler2', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE })
+    const graph = buildGraph([['junior', 'partner', 0.5]])
+    const config = makeConfig({ days_available: 3, tournament_type: tournamentType })
+    const pin = (competition_id: string, day: number) =>
+      ({ competition_id, day, start_time: config.DAY_START_MINS, strip_count: 1 })
 
-    const { dayMap } = assignDaysByColoring(graph, [junior, cadet], config)
+    const { dayMap } = assignDaysByColoring(
+      graph,
+      [junior, partner, filler1, filler2],
+      config,
+      [pin('junior', 0), pin('filler1', 1), pin('filler2', 2)],
+    )
+    expect(dayMap.get('junior')).toBe(0)
+    return dayMap.get('partner')!
+  }
 
-    const jDay = dayMap.get('junior')!
-    const cDay = dayMap.get('cadet')!
-    // With 3 days, they should avoid being placed on adjacent days
-    // (rest-day penalty of 1.5 > proximity bonus of 0.4 for adjacent days)
-    expect(Math.abs(jDay - cDay)).not.toBe(1)
-  })
+  it.each(Object.values(TournamentType))(
+    'Junior and Cadet carry no rest-day penalty at %s, so the proximity bonus puts them on adjacent days',
+    (tournamentType) => {
+      expect(restDayGap(Category.CADET, tournamentType)).toBe(1)
+    },
+  )
+
+  it.each(Object.values(TournamentType))(
+    'Junior and Div 1 keep the rest day at %s: the 1.5 penalty outweighs the adjacent-day bonus',
+    (tournamentType) => {
+      expect(restDayGap(Category.DIV1, tournamentType)).toBe(2)
+    },
+  )
 
   it('individual/team proximity: team event prefers same day or day after individual', () => {
     // INDIVIDUAL DIV1 MEN FOIL and TEAM DIV1 MEN FOIL
@@ -559,7 +589,7 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
   // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
   it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one violation per hard-edged pair sharing day 0, naming both ids (6 pairs, least-bad branch)', () => {
     const { config, competitions } = buildTemplate('NAC Cadet/Junior')
-    const graph = buildConstraintGraph(competitions)
+    const graph = buildConstraintGraph(competitions, config.tournament_type)
 
     const { violations } = assignDaysByColoring(graph, competitions, config)
 
@@ -582,7 +612,7 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
   // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
   it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable in the days available, reports no violations (relax=0/viol=0)', () => {
     const { config, competitions } = buildTemplate('NAC Youth')
-    const graph = buildConstraintGraph(competitions)
+    const graph = buildConstraintGraph(competitions, config.tournament_type)
 
     const { violations } = assignDaysByColoring(graph, competitions, config)
 
@@ -592,7 +622,7 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
   // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
   it('NAC Div1/Junior at 3 days / 80 strips / 12 video: its six DIV1-ind/JUNIOR-team conflicts resolve through the relaxed branch and must not also appear as violations (relax=6/viol=0)', () => {
     const { config, competitions } = buildTemplate('NAC Div1/Junior')
-    const graph = buildConstraintGraph(competitions)
+    const graph = buildConstraintGraph(competitions, config.tournament_type)
 
     const { violations, relaxations } = assignDaysByColoring(graph, competitions, config)
 
@@ -611,35 +641,43 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
   // day assignment, not just added a report, and both T008 and T009 halt.
   it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: the day map and relaxations are unchanged by R7 (FR-004, FR-005 guard)', () => {
     const { config, competitions } = buildTemplate('NAC Cadet/Junior')
-    const graph = buildConstraintGraph(competitions)
+    const graph = buildConstraintGraph(competitions, config.tournament_type)
 
     const { dayMap, relaxations } = assignDaysByColoring(graph, competitions, config)
 
     // Captured from the current code, not derived from this same call.
+    // Re-captured in 024 group D, whose owner-approved rules move six events
+    // (attributed by toggling each rule in a throwaway probe):
+    // - the Group 3 cross-weapon preference (Ops Manual p.20 – Group 3,
+    //   METHODOLOGY.md §Other Soft Preferences) moves CDT-M-FOIL-IND 2→1,
+    //   CDT-W-SABRE-IND 1→2, JR-M-FOIL-IND 1→2 and JR-W-SABRE-IND 2→1, so no
+    //   Cadet or Junior individual demographic keeps all three weapons on one day
+    // - dropping the Junior–Cadet rest day (METHODOLOGY.md §Rest Day
+    //   Preference) moves CDT-M-SABRE-TEAM 1→2 and JR-M-SABRE-IND 2→1
     const expectedDayMap: Record<string, number> = {
       'CDT-M-EPEE-IND': 2,
       'CDT-M-EPEE-TEAM': 0,
-      'CDT-M-FOIL-IND': 2,
+      'CDT-M-FOIL-IND': 1,
       'CDT-M-FOIL-TEAM': 0,
       'CDT-M-SABRE-IND': 0,
-      'CDT-M-SABRE-TEAM': 1,
+      'CDT-M-SABRE-TEAM': 2,
       'CDT-W-EPEE-IND': 1,
       'CDT-W-EPEE-TEAM': 0,
       'CDT-W-FOIL-IND': 1,
       'CDT-W-FOIL-TEAM': 0,
-      'CDT-W-SABRE-IND': 1,
+      'CDT-W-SABRE-IND': 2,
       'CDT-W-SABRE-TEAM': 0,
       'JR-M-EPEE-IND': 1,
       'JR-M-EPEE-TEAM': 0,
-      'JR-M-FOIL-IND': 1,
+      'JR-M-FOIL-IND': 2,
       'JR-M-FOIL-TEAM': 0,
-      'JR-M-SABRE-IND': 2,
+      'JR-M-SABRE-IND': 1,
       'JR-M-SABRE-TEAM': 0,
       'JR-W-EPEE-IND': 2,
       'JR-W-EPEE-TEAM': 0,
       'JR-W-FOIL-IND': 2,
       'JR-W-FOIL-TEAM': 0,
-      'JR-W-SABRE-IND': 2,
+      'JR-W-SABRE-IND': 1,
       'JR-W-SABRE-TEAM': 0,
     }
 
@@ -686,7 +724,7 @@ describe('assignDaysByColoring — Veteran Co-Day Rule', () => {
       vet_age_group: VetAgeGroup.VET60,
     })
 
-    const graph = buildConstraintGraph([vet40, vet50, vet60])
+    const graph = buildConstraintGraph([vet40, vet50, vet60], TournamentType.NAC)
     const config = makeConfig({ days_available: 3 })
 
     const { dayMap } = assignDaysByColoring(graph, [vet40, vet50, vet60], config)
@@ -717,7 +755,7 @@ describe('assignDaysByColoring — Veteran Co-Day Rule', () => {
       vet_age_group: null,
     })
 
-    const graph = buildConstraintGraph([vet40Indiv, vetTeam])
+    const graph = buildConstraintGraph([vet40Indiv, vetTeam], TournamentType.NAC)
     const config = makeConfig({ days_available: 2 })
 
     const { dayMap } = assignDaysByColoring(graph, [vet40Indiv, vetTeam], config)
@@ -852,7 +890,7 @@ describe('assignDaysByColoring — Veteran Co-Day Rule', () => {
     }))
 
     const all = [vet40, vet50, vet60, ...others]
-    const graph = buildConstraintGraph(all)
+    const graph = buildConstraintGraph(all, TournamentType.NAC)
     const config = makeConfig({ days_available: 4 })
 
     const { dayMap } = assignDaysByColoring(graph, all, config)
@@ -894,7 +932,7 @@ describe('assignDaysByColoring — Veteran Co-Day Rule', () => {
       vet_age_group: VetAgeGroup.VET_COMBINED,
     })
 
-    const graph = buildConstraintGraph([vet40, vet60, vetCombined])
+    const graph = buildConstraintGraph([vet40, vet60, vetCombined], TournamentType.NAC)
     const config = makeConfig({ days_available: 3 })
 
     const { dayMap } = assignDaysByColoring(graph, [vet40, vet60, vetCombined], config)
@@ -921,7 +959,7 @@ describe('assignDaysByColoring — Veteran Co-Day Rule', () => {
       vet_age_group: VetAgeGroup.VET_COMBINED,
     })
 
-    const graph = buildConstraintGraph([vetCombined])
+    const graph = buildConstraintGraph([vetCombined], TournamentType.NAC)
     const config = makeConfig({ days_available: 3 })
 
     const { dayMap } = assignDaysByColoring(graph, [vetCombined], config)
@@ -992,7 +1030,7 @@ describe('assignDaysByColoring — VET_COMBINED Day-After Preference (F3c)', () 
     // Build the constraint graph for Vet events (F3a hard edges: vetcomb ↔ each banded),
     // then inject the blocker with hard edges to all three age-banded siblings only.
     const vetComps = [vet40, vet60, vet80, vetCombined]
-    const graph = buildConstraintGraph(vetComps)
+    const graph = buildConstraintGraph(vetComps, TournamentType.NAC)
     graph.set('blocker-div1', [
       { targetId: 'vet40-m-foil', weight: Infinity },
       { targetId: 'vet60-m-foil', weight: Infinity },
@@ -1070,7 +1108,7 @@ describe('assignDaysByColoring — VET_COMBINED Day-After Preference (F3c)', () 
     })
 
     const comps = [vet40, vet60, vet80, vetCombined, junior]
-    const graph = buildConstraintGraph(comps)
+    const graph = buildConstraintGraph(comps, TournamentType.NAC)
     const config = makeConfig({ days_available: 4 })
 
     const { dayMap } = assignDaysByColoring(graph, comps, config)
@@ -1091,6 +1129,133 @@ describe('assignDaysByColoring — VET_COMBINED Day-After Preference (F3c)', () 
     expect(dComb).not.toBe(dVet80)
     // The soft preference is genuinely soft — we do not assert VET_COMBINED is on D+1
     // because this test is specifically about fallback behavior when capacity pressure exists
+  })
+})
+
+// ──────────────────────────────────────────────
+// Group 3 cross-weapon preference (Ops Manual p.20 – Group 3, METHODOLOGY
+// §Other Soft Preferences "Cross-Weapon Same Demographic" 0.2)
+// ──────────────────────────────────────────────
+
+describe('crossWeaponSameDemographicPenalty — Group 3', () => {
+  const self = (overrides: Partial<Competition> = {}) =>
+    makeCompetition({ id: 'self', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.FOIL, ...overrides })
+  const other = (id: string, overrides: Partial<Competition> = {}) =>
+    makeCompetition({ id, category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE, ...overrides })
+  const vet40 = { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET40 }
+
+  /** Scores `s` on day 0 against the `others`, each already coloured onto day 0. */
+  function scoreOnDay0(s: Competition, others: Competition[]): number {
+    const coloring = new Map(others.map(o => [o.id, 0]))
+    return crossWeaponSameDemographicPenalty(s, 0, [s, ...others], coloring)
+  }
+
+  it.each([
+    { label: 'a non-Veteran category, individual (Cadet M foil + Cadet M sabre)', s: self(), o: other('o'), expected: 0.2 },
+    { label: 'a team pair (Cadet M foil team + Cadet M sabre team)', s: self({ event_type: EventType.TEAM }), o: other('o', { event_type: EventType.TEAM }), expected: 0.2 },
+    { label: 'VETERAN, same age group (Vet 40 foil + Vet 40 épée)', s: self(vet40), o: other('o', { ...vet40, weapon: Weapon.EPEE }), expected: 0.2 },
+    { label: 'VETERAN, different age group (Vet 40 foil + Vet 50 épée)', s: self(vet40), o: other('o', { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET50, weapon: Weapon.EPEE }), expected: 0 },
+    { label: 'VETERAN, age-banded against Vet Combined', s: self(vet40), o: other('o', { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET_COMBINED }), expected: 0 },
+    { label: 'different event types (Cadet M foil ind + Cadet M sabre team)', s: self(), o: other('o', { event_type: EventType.TEAM }), expected: 0 },
+    { label: 'different gender (Cadet M foil + Cadet W sabre)', s: self(), o: other('o', { gender: Gender.WOMEN }), expected: 0 },
+    { label: 'different category (Cadet M foil + Junior M sabre)', s: self(), o: other('o', { category: Category.JUNIOR }), expected: 0 },
+    { label: 'the same weapon (not a cross-weapon pair)', s: self(), o: other('o', { weapon: Weapon.FOIL }), expected: 0 },
+  ])('$label → $expected', ({ s, o, expected }) => {
+    expect(scoreOnDay0(s, [o])).toBe(expected)
+  })
+
+  it('is 0 when the cross-weapon sibling is on another day', () => {
+    const s = self()
+    const o = other('o')
+    expect(crossWeaponSameDemographicPenalty(s, 0, [s, o], new Map([['o', 1]]))).toBe(0)
+  })
+
+  it('scores each same-day cross-weapon sibling once (foil with épée and sabre → 0.4)', () => {
+    expect(scoreOnDay0(self(), [other('sabre'), other('epee', { weapon: Weapon.EPEE })])).toBeCloseTo(0.4, 10)
+  })
+
+  it('steers day colouring: a Cadet M sabre with no edges leaves the Cadet M foil day', () => {
+    // foil and x hard-conflict, so they take days 0 and 1 (foil first, by
+    // packing footprint). The sabre has no edges, so both days cost it the same
+    // load-balance fullness and the tie would go to day 0 – the foil's day.
+    // Only the Group 3 term separates them.
+    const foil = makeCompetition({ id: 'foil', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 8 })
+    const x = makeCompetition({ id: 'x', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.EPEE, strips_allocated: 6 })
+    const sabre = makeCompetition({ id: 'sabre', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE, strips_allocated: 1 })
+    const graph = buildGraph([['foil', 'x', Infinity]])
+    graph.set('sabre', [])
+
+    const { dayMap } = assignDaysByColoring(graph, [foil, x, sabre], makeConfig({ days_available: 2 }))
+
+    expect(dayMap.get('foil')).toBe(0)
+    expect(dayMap.get('x')).toBe(1)
+    expect(dayMap.get('sabre')).toBe(1)
+  })
+})
+
+/**
+ * First and last day capacity (024 D10, METHODOLOGY.md §First and Last Day
+ * Capacity, Appendix A §Capacity Model Constants – Ops Manual p.20, Group 2:
+ * the first and last days should be planned shorter than the days between).
+ * From 3 days up, colours 0 and N−1 get FIRST_LAST_DAY_CAPACITY_FACTOR (0.8)
+ * of a middle day's strip-hours, in Phase 2's fill ratio and in day expansion.
+ */
+describe('first and last day capacity', () => {
+  it('is 0.8 of a middle day', () => {
+    expect(FIRST_LAST_DAY_CAPACITY_FACTOR).toBe(0.8)
+  })
+
+  it.each([
+    [1, [1]],
+    [2, [1, 1]],
+    [3, [0.8, 1, 0.8]],
+    [4, [0.8, 1, 1, 0.8]],
+  ])('at %i days gives colours the factors %j', (nDays, factors) => {
+    expect(Array.from({ length: nDays }, (_, c) => dayCapacityFactor(c, nDays))).toEqual(factors)
+  })
+
+  // x is what day expansion asks capacityDemandedDays for: the weighted
+  // strip-hour demand in middle days at the target fill, i.e. totalStripHours /
+  // (dayCapacity × CAPACITY_TARGET_FILL). Today's expansion takes ceil(x). With
+  // the factor, N days hold N middle days below 3 days and N − 2 + 2 × 0.8 =
+  // N − 0.4 from 3 up, so 3 days hold 2.6 and 4 days 3.6: 2 / 2.0001 is the
+  // two-to-three edge (unchanged, no factor at 2 days) and 2.6 / 2.61 the
+  // three-to-four edge, which moves from 3 to 4.
+  it.each([
+    [0.5, 1],
+    [2, 2],
+    [2.0001, 3],
+    [2.6, 3],
+    [2.61, 4],
+  ])('expansion asks for %f middle days and gets %i days', (x, days) => {
+    expect(capacityDemandedDays(x)).toBe(days)
+  })
+
+  it('steers a 3-day colouring\'s fourth event to the middle day when the edge days would pass 0.85 fill', () => {
+    // Four equal, unconstrained Y12 foil events on 3 days. DSatur's tie-break
+    // puts the first three on colours 0, 1 and 2 (one each). The fourth then
+    // sees one event on every day. The strip count is sized so one event's fill
+    // f of a middle day sits in (0.68, 0.85]: no penalty in the middle, but
+    // f / 0.8 > 0.85 on the edge days, where the capacity penalty starts. So
+    // the fourth lands on the middle day. Today every day ties and it takes
+    // colour 0.
+    const comps = ['A', 'B', 'C', 'D'].map(id =>
+      makeCompetition({ id, category: Category.Y12, weapon: Weapon.FOIL, fencer_count: 200 }),
+    )
+    const base = makeConfig({ days_available: 3 })
+    const eventSH = estimateCompetitionStripHours(comps[0], base).total_strip_hours * categoryWeight(comps[0])
+    const strips = Math.round(eventSH / 7.5)
+    const config = makeConfig({ days_available: 3, strips: makeStrips(strips, 0) })
+    const fill = eventSH / (strips * (config.DAY_LENGTH_MINS / 60))
+    expect(fill).toBeGreaterThan(0.68)
+    expect(fill).toBeLessThanOrEqual(0.85)
+
+    const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
+    const { dayMap, effectiveDays } = assignDaysByColoring(graph, comps, config)
+
+    expect(effectiveDays).toBe(3)
+    expect(['A', 'B', 'C'].map(id => dayMap.get(id))).toEqual([0, 1, 2])
+    expect(dayMap.get('D')).toBe(1)
   })
 })
 

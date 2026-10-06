@@ -16,6 +16,8 @@ export const CAUSE_OF_RULE: Record<BottleneckRule, BottleneckCause> = {
   [BottleneckRule.HARD_SEPARATION_VIOLATED]: BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
   [BottleneckRule.PINNED_PHASE_UNCLAIMED]: BottleneckCause.PINNED_UNCLAIMED,
   [BottleneckRule.CROSS_EVENT_DEPENDENCY_DELAY]: BottleneckCause.SEQUENCING_CONSTRAINT,
+  [BottleneckRule.REGIONAL_WINDOW_HONOURED]: BottleneckCause.SEQUENCING_CONSTRAINT,
+  [BottleneckRule.REGIONAL_WINDOW_NOT_HONOURED]: BottleneckCause.SEQUENCING_CONSTRAINT,
   [BottleneckRule.PHASE_DEFERRED]: BottleneckCause.NO_WINDOW_DIAGNOSTIC,
   [BottleneckRule.STRIP_CONTENTION_DEFERRAL]: BottleneckCause.STRIP_CONTENTION,
   [BottleneckRule.FIRST_ATTEMPT_FAILED]: BottleneckCause.DEADLINE_BREACH,

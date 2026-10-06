@@ -447,6 +447,9 @@ describe('lastAutoRun', () => {
   // 024 group A, 2026-10-06 – B4 places 19 of 30 under the 2026-27 Operations
   // Manual planning times, as the ledger and app path do
   // (specs/024-ops-manual-conformance/plan.md §Group A).
+  // 024 group D, 2026-10-06 – B4 places 21 of 30 under the Ops Manual p.20
+  // same-day rules, as the ledger and app path do
+  // (specs/024-ops-manual-conformance/plan.md §Group D).
   //
   // unplaced is `competitions.length - placed`, not "entries in schedule with
   // a null pool_start" — concurrentScheduler.ts's commitEventResult only ever
@@ -459,9 +462,9 @@ describe('lastAutoRun', () => {
 
     const result = runScheduleAll()
 
-    expect(result).toEqual({ placed: 19, unplaced: 11 })
+    expect(result).toEqual({ placed: 21, unplaced: 9 })
     expect(useStore.getState().lastAutoRun).toEqual(
-      expect.objectContaining({ placed: 19, unplaced: 11 }),
+      expect.objectContaining({ placed: 21, unplaced: 9 }),
     )
   })
 })

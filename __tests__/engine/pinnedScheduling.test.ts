@@ -85,11 +85,10 @@ describe('pinned scheduling (T033)', () => {
 
     // [M] buildConstraintGraph(comps) carries an Infinity edge between
     // D1-M-EPEE-IND and JR-M-EPEE-IND: both are Men's Epee individual events,
-    // one Division 1 and one Junior — a GROUP_1_MANDATORY same-population
-    // pair (constants.ts), which crossoverPenalty returns as Infinity before
-    // buildConstraintGraph ever reaches the (irrelevant, since same
-    // event_type) INDIV_TEAM_RELAXABLE_BLOCKS check.
-    const graph = buildConstraintGraph(comps)
+    // one Division 1 and one Junior — a GROUP_1_MANDATORY pair (constants.ts),
+    // which crossoverPenalty returns as Infinity at B1's type, NAC (Ops Manual
+    // p.20 – Group 1).
+    const graph = buildConstraintGraph(comps, config.tournament_type)
     const hardEdge = graph.get('D1-M-EPEE-IND')!
       .some(e => e.targetId === 'JR-M-EPEE-IND' && e.weight === Infinity)
     expect(hardEdge, 'fixture sanity: the pair must be hard-linked').toBe(true)
@@ -201,21 +200,29 @@ describe('pinned scheduling (T033)', () => {
     const comps = buildCompetitions(SCENARIOS.B1.fencerCounts, SCENARIOS.B1.tournamentType)
     // [M] computeStripCap(80, 0.80) = 64 (b1()'s config): no pair of B1's
     // pool phases needs more than 64 strips each, so 80-strip B1 can never
-    // show two pins colliding on strip count. Dropping to 48 strips,
-    // computeStripCap(48, 0.80) = 38 leaves room to force a collision with
-    // two pins that individually stay under cap but jointly exceed the board.
+    // show two pins colliding on strip count. Dropping to 56 strips,
+    // computeStripCap(56, 0.80) = floor(44.8) = 44 leaves room to force a
+    // collision with two pins that individually stay under cap but jointly
+    // exceed the board.
     //
-    // 024 group A review, 2026-10-06 – the board stays at (4, 48, 7) on purpose.
-    // [M] With nothing pinned it places 23 of 24 (D1-W-FOIL-IND is unscheduled,
-    // DEADLINE_BREACH_UNRESOLVABLE at DEADLINE_CHECK), which does not matter
-    // here: the two pins below put the run at 24 of 24 with no ERROR
-    // bottleneck. At (4, 48, 8) the pools collision still holds, but the
-    // second pin's DE_ROUND_OF_16 video collision (see below) disappears, so
-    // moving the board would drop half of what this case covers.
-    const config = tournamentConfig(4, 48, 7, SCENARIOS.B1.tournamentType)
-    expect(computeStripCap(48, config.max_pool_strip_pct)).toBe(38)
+    // 024 group A review, 2026-10-06 – the video strips stay at 7 on purpose.
+    // At 8 the pools collision still holds, but the second pin's
+    // DE_ROUND_OF_16 video collision (see below) disappears, so moving them
+    // would drop half of what this case covers.
+    //
+    // 024 group D, 2026-10-06 – the board moved from (4, 48, 7) to (4, 56, 7).
+    // The two pins are themselves a Group 3 pair (Div 1 men, épée and foil:
+    // Ops Manual p.20 – Group 3, METHODOLOGY.md §Other Soft Preferences), and
+    // at 48 strips the colouring that follows leaves day 0 to the pins alone
+    // and loses JR-M-FOIL-IND (DEADLINE_BREACH_UNRESOLVABLE) – [M] with the
+    // Group 3 weight zeroed in a throwaway probe, VET-M-SABRE-IND-VCMB is back
+    // on day 0 and all 24 place. [M] At 56 strips the pinned run places 24 of
+    // 24 with no ERROR bottleneck, both collisions below hold, and day 0 keeps
+    // VET-M-SABRE-IND-VCMB (54 and 58 strips agree; 52 does not).
+    const config = tournamentConfig(4, 56, 7, SCENARIOS.B1.tournamentType)
+    expect(computeStripCap(56, config.max_pool_strip_pct)).toBe(44)
 
-    // 30 + 30 = 60 > 48 total strips. Sorted by (day, start, id) —
+    // 30 + 30 = 60 > 56 total strips. Sorted by (day, start, id) —
     // 'D1-M-EPEE-IND' < 'D1-M-FOIL-IND' (E < F) — EPEE is preclaimed first
     // and FOIL is the "second in order" contract §10/§6 predicts a
     // PINNED_UNCLAIMED warning for.
@@ -273,7 +280,8 @@ describe('pinned scheduling (T033)', () => {
     }
 
     // [M] 024 group A review, 2026-10-06: the premise for keeping this board at
-    // (4, 48, 7) – the second pin also collides on the round-of-16 video strips.
+    // 7 video strips – the second pin also collides on the round-of-16 video
+    // strips (re-measured at 56 strips in group D, same windows).
     expect(pin2Warns.map(b => b.phase)).toContain(Phase.DE_ROUND_OF_16)
 
     // Board not emptied. [M] In this pinned run, day 0 shows pool starts for
@@ -287,6 +295,7 @@ describe('pinned scheduling (T033)', () => {
     // at 015). Aside: the no-pins board at (4, 48, 7) carries six events on
     // day 0 (VET-M-SABRE-IND-VCMB, VET-W-FOIL-IND-VCMB, D1-M-EPEE-IND,
     // D1-W-EPEE-IND, D1-W-SABRE-IND, VET-M-FOIL-IND-VCMB).
+    // 024 group D, 2026-10-06 – [M] at (4, 56, 7) the one is VET-M-SABRE-IND-VCMB.
     const others = Object.keys(result.schedule)
       .filter(id => id !== pin1.competition_id && id !== pin2.competition_id)
     const day0OthersPlaced = others.filter(id =>

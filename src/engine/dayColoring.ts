@@ -28,7 +28,10 @@
  *   Phase 2 – rerun DSatur with capacity-aware load-balancing penalties
  *             active, capped to the expanded day count from the step above.
  *             A day's penalty rises with its fill ratio (strip-hours /
- *             day capacity), steering events toward less-loaded days.
+ *             day capacity), steering events toward less-loaded days. From
+ *             3 days up the first and last colours hold 0.8 of a middle
+ *             day's capacity, in this pass and in Expand (Ops Manual p.20 –
+ *             Group 2).
  *
  * References:
  *   - DSatur algorithm: https://en.wikipedia.org/wiki/DSatur
@@ -46,6 +49,7 @@ import {
   INDIV_TEAM_RELAXABLE_BLOCKS,
   PENALTY_WEIGHTS,
   CAPACITY_PENALTY_CURVE,
+  FIRST_LAST_DAY_CAPACITY_FACTOR,
 } from './constants.ts'
 
 // ──────────────────────────────────────────────
@@ -101,6 +105,36 @@ export function capacityPenalty(fillRatio: number): number {
   }
   // Past capacity: strong push. OVERFLOW_PENALTY provides upper cap.
   return Math.min(CAPACITY_PENALTY_CURVE.OVERFLOW_PENALTY, 3.0 + (fillRatio - 1.0) * 10.0)
+}
+
+/**
+ * Share of a middle day's strip-hours colour `color` gets in an `nDays`-colour
+ * pass: FIRST_LAST_DAY_CAPACITY_FACTOR for colours 0 and nDays − 1 from 3 days
+ * up, 1 otherwise (Ops Manual p.20 – Group 2; METHODOLOGY.md §First and Last
+ * Day Capacity). Exported for unit tests.
+ */
+export function dayCapacityFactor(color: number, nDays: number): number {
+  if (nDays < 3) return 1
+  return color === 0 || color === nDays - 1 ? FIRST_LAST_DAY_CAPACITY_FACTOR : 1
+}
+
+/** Middle days of capacity that `nDays` days hold, first and last day shares included. */
+function plannedMiddleDays(nDays: number): number {
+  return nDays < 3 ? nDays : nDays - 2 + 2 * FIRST_LAST_DAY_CAPACITY_FACTOR
+}
+
+/**
+ * Fewest days whose planned capacity covers `demand`, the weighted strip-hour
+ * draw expressed in middle days at the target fill. Without the first and last
+ * day shares this is `ceil(demand)`. From 3 days up those shares take 0.4 of a
+ * middle day off, so the answer is `ceil(demand)` or one more – never further,
+ * because ceil(demand) + 1 days hold ceil(demand) + 0.6 ≥ demand. Exported for
+ * unit tests.
+ */
+export function capacityDemandedDays(demand: number): number {
+  const n = Math.ceil(demand)
+  if (n < 3) return n
+  return plannedMiddleDays(n) >= demand ? n : n + 1
 }
 
 // ──────────────────────────────────────────────
@@ -243,6 +277,37 @@ function vetCombinedOrderingPenalty(
 }
 
 /**
+ * Group 3 cross-weapon preference (Ops Manual p.20 – Group 3, METHODOLOGY
+ * §Other Soft Preferences "Cross-Weapon Same Demographic").
+ *
+ * For `competition` on `proposedDay`, adds CROSS_WEAPON_SAME_DEMOGRAPHIC for
+ * each event already coloured on that day with the same category, gender and
+ * event type in a different weapon. Every category is covered, and VETERAN
+ * pairs must also share `vet_age_group`. Lives here rather than in the
+ * constraint graph because `crossoverPenalty` returns 0 across weapons, so
+ * these pairs have no edge.
+ */
+export function crossWeaponSameDemographicPenalty(
+  competition: Competition,
+  proposedDay: number,
+  competitions: Competition[],
+  coloring: Map<string, number>,
+): number {
+  let total = 0.0
+  for (const other of competitions) {
+    if (other.id === competition.id) continue
+    if (coloring.get(other.id) !== proposedDay) continue
+    if (other.weapon === competition.weapon) continue
+    if (other.category !== competition.category) continue
+    if (other.gender !== competition.gender) continue
+    if (other.event_type !== competition.event_type) continue
+    if (competition.category === Category.VETERAN && other.vet_age_group !== competition.vet_age_group) continue
+    total += PENALTY_WEIGHTS.CROSS_WEAPON_SAME_DEMOGRAPHIC
+  }
+  return total
+}
+
+/**
  * Computes the soft penalty for assigning `id` color `c`, given current coloring.
  * Includes:
  *   - direct soft-edge neighbor penalties (weight !== Infinity)
@@ -251,6 +316,7 @@ function vetCombinedOrderingPenalty(
  *     bonus at a gap of 1, nothing at 2, a penalty at 3 or more
  *   - individual/team ordering penalties
  *   - VET_COMBINED day-after preference (F3c)
+ *   - the Group 3 cross-weapon preference
  */
 function colorPenalty(
   id: string,
@@ -262,7 +328,8 @@ function colorPenalty(
   relaxedEdges: Set<string>, // edges temporarily relaxed to soft for this vertex
   loadBalance: boolean,
   stripHoursMap: Map<string, number>,
-  dayCapacity: number,
+  dayCapacity: number, // a middle day's strip-hours
+  nDays: number,
 ): number {
   const edges = graph.get(id) ?? []
   const self = compMap.get(id)!
@@ -315,6 +382,8 @@ function colorPenalty(
   total += individualTeamOrderingPenalty(self, c, competitions, coloring)
   // VET_COMBINED day-after preference (F3c)
   total += vetCombinedOrderingPenalty(self, c, competitions, coloring)
+  // Group 3 cross-weapon preference (Ops Manual p.20 – Group 3)
+  total += crossWeaponSameDemographicPenalty(self, c, competitions, coloring)
 
   // Saber pileup: discourage concentrating saber events on a single day.
   // Always active (not gated by loadBalance) — structural concern.
@@ -332,8 +401,11 @@ function colorPenalty(
       }
     }
     total += eventsOnDay * LOAD_BALANCE_FULLNESS
-    if (dayCapacity > 0) {
-      total += capacityPenalty(sumStripHours / dayCapacity)
+    // The first and last colours hold 0.8 of a middle day from 3 days up
+    // (Ops Manual p.20 – Group 2, METHODOLOGY.md §First and Last Day Capacity).
+    const capacity = dayCapacity * dayCapacityFactor(c, nDays)
+    if (capacity > 0) {
+      total += capacityPenalty(sumStripHours / capacity)
     }
   }
 
@@ -530,9 +602,9 @@ function dsaturLoop(
     let chosenColor: number
     if (validColors.length > 0) {
       let bestColor = validColors[0]
-      let bestPenalty = colorPenalty(id, validColors[0], graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
+      let bestPenalty = colorPenalty(id, validColors[0], graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity, nDays)
       for (let ci = 1; ci < validColors.length; ci++) {
-        const p = colorPenalty(id, validColors[ci], graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
+        const p = colorPenalty(id, validColors[ci], graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity, nDays)
         if (p < bestPenalty) {
           bestPenalty = p
           bestColor = validColors[ci]
@@ -564,9 +636,9 @@ function dsaturLoop(
 
         if (relaxedValidColors.length > 0) {
           let bestColor = relaxedValidColors[0]
-          let bestPenalty = colorPenalty(id, relaxedValidColors[0], graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
+          let bestPenalty = colorPenalty(id, relaxedValidColors[0], graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity, nDays)
           for (let ci = 1; ci < relaxedValidColors.length; ci++) {
-            const p = colorPenalty(id, relaxedValidColors[ci], graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
+            const p = colorPenalty(id, relaxedValidColors[ci], graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity, nDays)
             if (p < bestPenalty) {
               bestPenalty = p
               bestColor = relaxedValidColors[ci]
@@ -577,9 +649,9 @@ function dsaturLoop(
           // Still no valid color — pick least-bad color
           leastBadFallback = true
           chosenColor = 0
-          let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
+          let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity, nDays)
           for (let c = 1; c < nDays; c++) {
-            const p = colorPenalty(id, c, graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity)
+            const p = colorPenalty(id, c, graph, coloring, compMap, competitions, relaxable, loadBalance, stripHoursMap, dayCapacity, nDays)
             if (p < bestPenalty) {
               bestPenalty = p
               chosenColor = c
@@ -590,9 +662,9 @@ function dsaturLoop(
         // No relaxable edges — pick least-bad color
         leastBadFallback = true
         chosenColor = 0
-        let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
+        let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity, nDays)
         for (let c = 1; c < nDays; c++) {
-          const p = colorPenalty(id, c, graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity)
+          const p = colorPenalty(id, c, graph, coloring, compMap, competitions, new Set(), loadBalance, stripHoursMap, dayCapacity, nDays)
           if (p < bestPenalty) {
             bestPenalty = p
             chosenColor = c
@@ -698,9 +770,11 @@ export function assignDaysByColoring(
   // Day expansion: if raw capacity demand exceeds what chromaticN days can
   // absorb at a reasonable fill target, expand — capped at the user's
   // days_available and at MAX_EXPANDED_DAYS. chromaticN is always a floor
-  // (hard constraints must be respected).
+  // (hard constraints must be respected). The first and last days count at
+  // their reduced share from 3 days up (METHODOLOGY.md §First and Last Day
+  // Capacity).
   const capacityDays = dayCapacity > 0
-    ? Math.ceil(totalStripHours / (dayCapacity * CAPACITY_TARGET_FILL))
+    ? capacityDemandedDays(totalStripHours / (dayCapacity * CAPACITY_TARGET_FILL))
     : chromaticN
   const expansionCap = Math.min(config.days_available, MAX_EXPANDED_DAYS)
   const effectiveDays = Math.max(chromaticN, Math.min(capacityDays, expansionCap))
