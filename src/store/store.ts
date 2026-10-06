@@ -21,11 +21,6 @@ import { DAY_END_MINS, DAY_START_MINS, DEFAULT_POOL_ROUND_DURATION_TABLE } from 
 // Constants
 // ──────────────────────────────────────────────
 
-// A new day's default hours: 9:00 AM to the 7:00 PM soft target, the engine's
-// own defaults (Ops Manual 2026-27 p.17, METHODOLOGY.md §Inputs).
-const DAY_START = DAY_START_MINS
-const DAY_END = DAY_END_MINS
-
 /** The default `keep` for `setPlacementsFromAuto` — every one-argument caller. */
 const EMPTY_KEEP: ReadonlySet<string> = new Set<string>()
 
@@ -205,8 +200,8 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
 
     setDays: (days) => {
       const dayConfigs: DayConfig[] = Array.from({ length: days }, () => ({
-        day_start_time: DAY_START,
-        day_end_time: DAY_END,
+        day_start_time: DAY_START_MINS,
+        day_end_time: DAY_END_MINS,
       }))
       set({ days_available: days, dayConfigs })
     },

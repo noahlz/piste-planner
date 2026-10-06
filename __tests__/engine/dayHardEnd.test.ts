@@ -9,6 +9,7 @@ import {
 import { postScheduleWarnings, scheduleAllConcurrent } from '../../src/engine/concurrentScheduler.ts'
 import {
   BottleneckCause,
+  BottleneckRule,
   BottleneckSeverity,
   CutMode,
   DeMode,
@@ -228,6 +229,29 @@ describe('late-day WARN (day-ends-past-target)', () => {
     }
     expect(late[0].message).toMatch(/^Day 1 .*\b700\b/)
     expect(late[1].message).toMatch(/^Day 3 .*\b3500\b/)
+  })
+
+  it('still warns about each late day on a 4-day run whose first and last days also run long', () => {
+    // Fallback axis: targets at 600, 2040, 3480 and 4920. Days 1 and 4 end late
+    // and run longer than the middle days (700 vs. 300 min), so the first and
+    // last day warnings fire too.
+    const config = makeConfig({ days_available: 4 })
+    const schedule: Record<string, ScheduleResult> = {
+      'A-LATE': finishing('A-LATE', 0, 700, 400),
+      'B-MID': finishing('B-MID', 1, 1740, 1500),
+      'C-MID': finishing('C-MID', 2, 3180, 3000),
+      'D-LATE': finishing('D-LATE', 3, 5020, 4800),
+    }
+
+    const warnings = postScheduleWarnings(schedule, config)
+
+    expect(lateDayWarnings(warnings).map((b) => b.subjects)).toEqual([['A-LATE'], ['D-LATE']])
+    expect(warnings.map((b) => b.rule)).toEqual([
+      BottleneckRule.DAY_ENDS_PAST_TARGET,
+      BottleneckRule.DAY_ENDS_PAST_TARGET,
+      BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE,
+      BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
+    ])
   })
 
   it('fires on a one-day run whose DE ends between 19:00 and 22:00', () => {

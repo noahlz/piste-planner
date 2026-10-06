@@ -12,7 +12,7 @@
  * DE_ROUND_OF_16=R16, DE=DE.
  */
 
-import { Phase, BottleneckSeverity, dayStart, dayHardEnd } from '../engine/types.ts'
+import { Phase, BottleneckSeverity, dayStart, dayEnd, dayHardEnd } from '../engine/types.ts'
 import type {
   Bottleneck,
   Competition,
@@ -70,12 +70,15 @@ function renderDay(
     return sr !== undefined && sr.assigned_day === d
   }).length
 
+  // Wall-clock labels: the day's own lengths from DAY_START_MINS. The start
+  // ignores a day's edited start (known limitation of this dev-only tool).
   const wallStart = formatHM(config.DAY_START_MINS)
-  const wallEnd = formatHM(config.DAY_END_MINS)
+  const wallEnd = formatHM(config.DAY_START_MINS + (dayEnd(d, config) - dStart))
+  const wallHardEnd = formatHM(config.DAY_START_MINS + dDur)
 
   const out: string[] = []
   out.push(
-    `DAY ${d + 1}  (${wallStart}-${wallEnd})   strips: ${config.strips_total}   video: ${config.video_strips_total}   scheduled: ${dayCompCount}`,
+    `DAY ${d + 1}  (${wallStart}-${wallEnd}, hard ${wallHardEnd})   strips: ${config.strips_total}   video: ${config.video_strips_total}   scheduled: ${dayCompCount}`,
   )
   out.push(renderTimeAxis(config, dDur, laneWidth))
 
@@ -99,7 +102,8 @@ function renderDay(
 }
 
 function renderTimeAxis(config: TournamentConfig, windowMins: number, laneWidth: number): string {
-  // Room for the closing label, which starts at the lane's last column.
+  // Room for the closing label, which starts in the column just past the lane's
+  // last and runs AXIS_LABEL_WIDTH columns.
   const buf = new Array<string>(PREFIX_WIDTH + laneWidth + AXIS_LABEL_WIDTH).fill(' ')
   // Hourly labels run from the day start through the hard end inclusive.
   for (let h = 0; h * 60 <= windowMins; h++) {

@@ -433,7 +433,7 @@ describe('dayConsumedCapacity', () => {
 describe('dayRemainingCapacity', () => {
   it('empty day → remaining capacity = full capacity (strips_total × DAY_LENGTH_MINS / 60)', () => {
     const config = makeConfig()
-    // makeConfig defaults: 24 strips, 4 video, DAY_LENGTH_MINS=840
+    // makeConfig defaults: 24 strips, 4 video, DAY_LENGTH_MINS=600
     const state = makeGlobalState()
 
     const result = dayRemainingCapacity(0, state, [], config)

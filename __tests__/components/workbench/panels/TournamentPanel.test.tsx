@@ -4,8 +4,6 @@ import { TournamentPanel } from '../../../../src/components/workbench/panels/Tou
 import { Header } from '../../../../src/components/workbench/Header.tsx'
 import { useStore } from '../../../../src/store/store.ts'
 import { TournamentType } from '../../../../src/engine/types.ts'
-import { DAY_HARD_END_MINS } from '../../../../src/engine/constants.ts'
-import { TIME_OPTIONS } from '../../../../src/lib/time.ts'
 
 // 013 T016 (FR-013–FR-015, ui-contract.md §Inspector panel — Tournament):
 // takes over the tournament-setup section's type, day-count and day-hours cases from
@@ -107,7 +105,14 @@ describe('TournamentPanel — day hours', () => {
   it('offers an end time after the 22:00 hard end, which the organizer may choose', () => {
     // The hard end gives way to an organizer day end set later (§Same-Day
     // Completion), so the end control's list must reach past 22:00.
-    expect(Math.max(...TIME_OPTIONS)).toBeGreaterThan(DAY_HARD_END_MINS)
+    useStore.getState().setDays(1)
+    render(<TournamentPanel />)
+
+    // Radix Select opens on a key press on its trigger – jsdom has no pointer
+    // capture for a click.
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Day 1 end' }), { key: 'Enter' })
+
+    expect(screen.getByRole('option', { name: '23:00' })).toBeInTheDocument()
   })
 
   it('reflects a store edit to a day\'s hours in 24-hour form', () => {

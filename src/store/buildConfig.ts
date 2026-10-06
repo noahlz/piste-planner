@@ -9,6 +9,7 @@ import {
   DAY_START_MINS,
   DAY_END_MINS,
   DAY_HARD_END_MINS,
+  clockHardEnd,
   LATEST_START_MINS,
   LATEST_START_OFFSET,
   DAY_LENGTH_MINS,
@@ -77,7 +78,7 @@ export function buildTournamentConfig(state: StoreState): {
     dayConfigs: state.dayConfigs.map((day, d) => ({
       day_start_time: d * DAY_AXIS_SPACING_MINS + day.day_start_time,
       day_end_time: d * DAY_AXIS_SPACING_MINS + day.day_end_time,
-      day_hard_end_time: d * DAY_AXIS_SPACING_MINS + Math.max(day.day_end_time, DAY_HARD_END_MINS),
+      day_hard_end_time: d * DAY_AXIS_SPACING_MINS + clockHardEnd(day.day_end_time),
     })),
 
     // These seven used to come from the store's global-overrides slice, which 013 T022
@@ -219,7 +220,7 @@ function buildCompetitions(state: StoreState): Competition[] {
       // old 9999 binds once a day's scheduler-axis end (d*DAY_AXIS_SPACING_MINS
       // + day_end_time) passes it, which under 1440-minute spacing starts at
       // day 7. Infinity can never be the minimum in
-      // Math.min(dayEnd(day, config), latest_end), for any day count.
+      // Math.min(dayHardEnd(day, config), latest_end), for any day count.
       latest_end: Infinity,
       optional: false,
       de_round_of_16_requirement: DeStripRequirement.HARD,

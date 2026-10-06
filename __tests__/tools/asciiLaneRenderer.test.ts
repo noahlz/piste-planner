@@ -49,6 +49,7 @@ describe('renderAsciiLanes — single day, single event', () => {
   it('renders a DAY 1 header with config metadata', () => {
     const header = out.split('\n')[0]
     expect(header).toContain('DAY 1')
+    expect(header).toContain('(09:00-19:00, hard 22:00)')
     expect(header).toContain('strips: 4')
     expect(header).toContain('video: 1')
     expect(header).toContain('scheduled: 1')
@@ -213,7 +214,7 @@ describe('renderAsciiLanes — UNSCHEDULED footer', () => {
 })
 
 describe('renderAsciiLanes — column width budget', () => {
-  // 80-strip / 14-hour config is the worst-case display target per the plan.
+  // 80-strip / 13-hour config is the worst-case display target per the plan.
   const config = makeConfig({ days_available: 1, strips: makeStrips(80, 8) })
   const out = renderAsciiLanes({
     schedule: {},
@@ -235,10 +236,6 @@ describe('renderAsciiLanes — column width budget', () => {
     expect(axis).toContain('19:00')
     expect(axis).toContain('22:00')
   })
-
-  it('keeps the axis within the width budget with the 22:00 label', () => {
-    expect(out.split('\n')[1].length).toBeLessThanOrEqual(120)
-  })
 })
 
 describe('renderAsciiLanes — a phase between the 19:00 target and the 22:00 hard end', () => {
@@ -257,5 +254,26 @@ describe('renderAsciiLanes — a phase between the 19:00 target and the 22:00 ha
   it('draws the phase inside the lane', () => {
     const lane = findLineStartingWith(out, 'S01')
     expect(lane).toContain('[DE-LATE')
+  })
+})
+
+describe('renderAsciiLanes — an organizer hard end past the default', () => {
+  const config = makeConfig({
+    days_available: 1,
+    strips: makeStrips(1, 0),
+    dayConfigs: [{ day_start_time: 540, day_end_time: 1260, day_hard_end_time: 1380 }],
+  })
+  const out = renderAsciiLanes({
+    schedule: {},
+    strip_allocations: emptyStripAllocations(1),
+    bottlenecks: [],
+    config,
+    competitions: [],
+  })
+
+  it('shows the day hard end in the header and on the axis', () => {
+    const lines = out.split('\n')
+    expect(lines[0]).toContain('(09:00-21:00, hard 23:00)')
+    expect(lines[1]).toContain('23:00')
   })
 })

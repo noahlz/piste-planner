@@ -263,7 +263,7 @@ export interface DayConfig {
  * organizer's hours it carries the day's hard end: no phase may end past it,
  * while ending past `day_end_time` only draws a warning (METHODOLOGY.md
  * §Same-Day Completion). `buildConfig.ts` sets it to
- * `d × 1440 + max(day_end, DAY_HARD_END_MINS)` (024 D7).
+ * `d × 1440 + clockHardEnd(day_end)` (the helper in constants.ts, 024 D7).
  */
 export interface DayWindow extends DayConfig {
   day_hard_end_time: number

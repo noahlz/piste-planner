@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
-import { DAY_HARD_END_MINS, DAY_START_MINS } from '../../engine/constants.ts'
+import { DAY_HARD_END_MINS, DAY_START_MINS, clockHardEnd } from '../../engine/constants.ts'
 import type { Competition, DayConfig, Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
 import { assignStripLanes, type BlockPlacement } from '../../layout/lanes.ts'
@@ -220,7 +220,7 @@ function tickStepMinutes(pixelsPerMinute: number): number {
 /**
  * The clock-time window every day is drawn against: the earliest start and the
  * latest hard end across the configured days. A day's hard end is its
- * `max(day_end_time, DAY_HARD_END_MINS)` – the 10:00 PM hard end, or the
+ * `clockHardEnd(day_end_time)` – the 10:00 PM hard end, or the
  * organizer's later end – so blocks placed between the 7:00 PM soft target and
  * the hard end draw inside the axis (Ops Manual 2026-27 p.17, METHODOLOGY.md
  * §Same-Day Completion).
@@ -235,7 +235,7 @@ function axisSpan(dayConfigs: DayConfig[]): { startMinutes: number; endMinutes: 
   let endMinutes = Number.NEGATIVE_INFINITY
   for (const day of dayConfigs) {
     if (day.day_start_time < startMinutes) startMinutes = day.day_start_time
-    const hardEnd = Math.max(day.day_end_time, DAY_HARD_END_MINS)
+    const hardEnd = clockHardEnd(day.day_end_time)
     if (hardEnd > endMinutes) endMinutes = hardEnd
   }
   if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {

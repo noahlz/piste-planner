@@ -361,7 +361,7 @@ describe('assignDaysByColoring', () => {
   })
 
   it('Phase 2 load-balances unconstrained events away from non-empty days', () => {
-    // Tight config: 2 strips × 14h = 28 SH/day. With a single big DIV1 event
+    // Tight config: 2 strips × 10h = 20 SH/day. With a single big DIV1 event
     // placed first, Phase 2's per-event flat LOAD_BALANCE_FULLNESS plus the
     // capacity penalty together steer an unconstrained candidate to the other
     // day. (This scenario alone does not isolate the capacity term — see

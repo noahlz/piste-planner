@@ -130,9 +130,9 @@ describe('runAppPath', () => {
     // 024 group B, 2026-10-06 – every peak time moved 60 minutes later and
     // every count held. The day now starts at 9:00 (540), not 8:00 (Ops Manual
     // 2026-27 p.17, METHODOLOGY.md §Inputs), and B1 places the same 24 events
-    // on the same days, so each day's schedule shifts whole: days 0–2 peak at
-    // their day start, d × 1440 + 540 (540, 1980 → 2040, 3420), and day 3's
-    // peak 4860 → 4920.
+    // on the same days, so each day's schedule shifts whole: days 0 and 2 peak
+    // at their day start, d × 1440 + 540 (540, 3420), day 1 peaks 60 minutes
+    // after its 1980 start (1980 → 2040), and day 3's peak moves 4860 → 4920.
     //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.

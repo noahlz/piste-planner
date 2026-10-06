@@ -49,6 +49,10 @@ export const CATEGORY_START_PREFERENCE = {
 export const DAY_START_MINS = 540 // 9:00 AM
 export const DAY_END_MINS = 1140 // 7:00 PM — soft target
 export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase may end past it
+/** A clock-axis day's hard end: 10:00 PM, or the organizer's day end when set later (024 D7). */
+export function clockHardEnd(dayEndTime: number): number {
+  return Math.max(dayEndTime, DAY_HARD_END_MINS)
+}
 export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start after this (unsourced)
 export const LATEST_START_OFFSET = 420 // offset from DAY_START to LATEST_START
 export const SLOT_MINS = 5

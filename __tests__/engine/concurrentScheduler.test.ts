@@ -195,8 +195,8 @@ describe('scheduleAllConcurrent — phase dependency order', () => {
 describe('scheduleAllConcurrent — rollback on terminal failure', () => {
   it('event whose terminal phase fails leaves no schedule entry and emits unresolvable', () => {
     // Deterministic failure: with earliest_start=480 and latest_end=510 the
-    // hardEnd cap is 510 (since dayHardEnd = min(dayEnd, latest_end) and
-    // latest_end is tighter than the day's 840-min length). 24 fencers → 4
+    // cap is min(dayHardEnd(day, config), latest_end) = 510, because latest_end
+    // is tighter than the day's 780-minute hard window. 24 fencers → 4
     // pools of 6, FOIL pool round = 105 min — cannot fit in 30 min. Both
     // attempts fail at pools.
     const failing = comp('failing-event', {
