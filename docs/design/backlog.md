@@ -317,7 +317,92 @@ templates (`NAC Vet/Div1/Junior`) before adding a chain validator.
 
 *2026-10-05: the owner kept the Vet co-day as a documented departure from the
 manual's adjacent-age-group rule (024). This entry's serialization question
-stays open.*
+stays open. The edge has never bound – see
+[The Vet sibling and individual-to-team edges never hold an event back](#the-vet-sibling-and-individual-to-team-edges-never-hold-an-event-back).
+A staggered start keeps B8 whole while strict serialization loses eight events.*
+
+## The Vet sibling and individual-to-team edges never hold an event back
+
+*Found by 024 planning, 2026-10-05. Recorded, not fixed.*
+
+`applyCrossEventEdges` (`src/engine/concurrentScheduler.ts:654–707`) adds two
+waits. A younger age-banded Vet sibling waits for the older sibling's last
+phase to end, plus `ADMIN_GAP_MINS` (30). A team event on its individual
+event's day waits for the individual event's end, plus
+`INDIV_TEAM_MIN_GAP_MINS` (120). Neither wait has ever moved an event.
+
+Line numbers in this entry are at main 7975e4efea.
+
+**What happens**: A throwaway probe ran B1–B8 down the factory path and the
+app path. B8 is the only scenario with age-banded Vet events. It has 60
+sibling pairs the Vet edge should order – six gender-weapon groups, ten pairs
+each. All 60 break the rule on both paths. On B8's Men's Epee day, Vet 40, 50,
+60 and 70 all start pools in the day's first slot. Vet 80 starts 2 h 25 min
+later, after the younger events it should come before. Vet 70 alone runs
+6.5 hours. Women's Sabre shows the same pattern. No run emitted a
+`CROSS_EVENT_DEPENDENCY_DELAY` bottleneck. The individual-to-team edge had
+nothing to act on. No scenario puts a team event on its individual event's
+day.
+
+**Why**: Every event's first phase enters the ready queue at day start
+(`:841–851`). The loop checks predecessors once, when it picks the node
+(`:880`). `predecessorReadyTime` (`:1422–1436`) counts a predecessor only once
+its last phase is placed (`:1430`). Otherwise it skips the predecessor and
+returns no floor. The older sibling's DE is never placed by the time the
+younger sibling's pools are picked, so the younger event starts with no wait.
+Nothing puts it back in the queue to check again. The comment at `:833–835`
+says the edge "resolves lazily", but nothing ever resolves it. The sort key
+METHODOLOGY credits with ordering siblings (`vetAgeOrderingKey` in
+`daySequencing.ts`) is unwired – see
+[§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
+That is why Vet 80 can start last.
+
+The individual-to-team edge fails for a different reason. It can never fire.
+`findIndividualCounterpart` (`src/engine/crossover.ts:238–250`) matches the
+same category, gender and weapon. That pair is a hard same-day block at every
+relaxation level (`isSamePopulation`, `crossover.ts:101–114`, returned as
+`Infinity` at `:167`). If a pin or Move day ever produced the pair, the edge
+would fail the same way the Vet edge does.
+
+**What it needs**: Settle the serialization question in
+[§Vet co-day serialization is unsourced and never fit-checked](#vet-co-day-serialization-is-unsourced-and-never-fit-checked)
+first. Then make the chosen wait real. Either a node whose predecessor is not
+placed yet goes back in the queue until the predecessor's end is known, or the
+node gets a floor computed up front. A test must assert the younger sibling's
+actual pool start, not that the edge exists. Delete the individual-to-team
+edge, or keep it with a comment saying the day rule makes it unreachable.
+
+**How it bears on the serialization entry**: That entry asks whether strict
+end-to-end serialization has a source. It also warns that nothing checks the
+chain fits a day. In practice the engine has never serialized anything. B8
+fits only because its siblings run in parallel. A prototype of all of 024's
+rules measured both ways to make the edge real:
+
+- **Bind as written** (younger pools wait for the older event's last phase,
+  plus 30 min). B8 drops from 53 to 45 placed. The eight Vet 40 and Vet 50
+  épée and foil events are lost, and eight `DEADLINE_BREACH` errors appear.
+  Suggest for the NAC Vet/Div1/Junior template finds no strip count (44 of 66
+  placed). The cause is five bands of 3–4.5 h each chained end to end.
+- **Staggered start** (each younger band's pools are ready 60 min after the
+  older band's pool start). B8 keeps 53. Suggest for NAC Vet/Div1/Junior goes
+  from 103 to 110 strips. The start order follows age.
+
+Fixing the edge as written trades a silent rule break for lost placements.
+A staggered start does not.
+
+**How it bears on 024's regional Group 1 window**: The new window says the
+older side's pools start no earlier than day start + 4 hours. Unlike these
+edges, it must bind. It is a fixed offset from day start, so it can be a
+floor set when the event is queued, like `earliest_start` (`:845–848`). If it
+goes through `cross_event_predecessors`, it inherits this defect. 024's tests
+should assert the older event's actual pool start. That check would have
+caught this defect.
+
+**Cost if ignored**: Every Vet co-day runs all five age bands at once. Nested
+eligibility means one fencer often enters more than one band, so those fencers
+are double-booked with no finding. METHODOLOGY describes an order and a wait
+the engine never applies, which misleads anyone checking the board against
+the spec.
 
 ## Policy tables are stale against USA Fencing 2025-26 changes
 

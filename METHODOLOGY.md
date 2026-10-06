@@ -54,8 +54,8 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
   - **Refs per pool**: 1 or 2, defaulted by tournament type – two at NAC, SYC and SJCC, one at ROC, RYC and RJCC (unsourced, see [Refs Per Pool](#refs-per-pool-input-that-affects-the-output)). It is not a scheduling input (see [Not Scheduling Inputs](#not-scheduling-inputs))
 - **Tournament duration**: 2–4 days (longer events, e.g. Summer Nationals, to be supported in a future version)
 - **Per-competition options**:
-  - **DE mode**: determined by tournament type — NACs use "Staged DEs" (Prelim + Video stages); all other types use "Single Stage DE" (all DE rounds run as fast as possible)
-  - **Video stage** (NACs only): the round at which DEs move to video strips. Every individual event at a NAC has video REQUIRED, from the round of 16 for Div 1, Junior and Cadet and from the round of 8 for every other individual category (Ops Manual p.19 – Video Replay, see [Video Replay Policy](#video-replay-policy))
+  - **DE mode**: determined by tournament type and event type – NAC individual events use "Staged DEs" (Prelim + Video stages), and all other individual events use "Single Stage DE" (all DE rounds run as fast as possible). Team events always use Single Stage, NACs included (see [DE Modes](#de-modes))
+  - **Video stage** (NACs only): the round at which DEs move to video strips. Every individual event at a NAC has video REQUIRED (team events have no video stage), from the round of 16 for Div 1, Junior and Cadet and from the round of 8 for every other individual category (Ops Manual p.19 – Video Replay, see [Video Replay Policy](#video-replay-policy))
   - **Cut-to-DE**: % cut (e.g., cut 20% → promote 80%) or promoted count (e.g., promote top 256)
   - **Start time**: defaults to 9:00 AM (Ops Manual p.17), and the user can adjust it per day
   - **Latest end time**: defaults to 7:00 PM, a soft target with a 10:00 PM hard end (see [Same-Day Completion](#same-day-completion))
@@ -430,12 +430,13 @@ Under the concurrent scheduler a flighted event's pools split into two dependent
 
 #### DE Modes
 
-Determined by tournament type. NACs always use Staged DEs, with the stage round starting per the Video Policy (NACs always have video). All other tournament types use Single Stage.
+Determined by tournament type and event type. NAC individual events use Staged DEs, with the stage round starting per the Video Policy (NAC individual events always have video). All other individual events use Single Stage. Team events use Single Stage at every tournament type, NACs included, even when the organizer's DE mode setting is Staged. A team DE has no video stage to split at (see [Video Replay Policy](#video-replay-policy)).
 
 - **Single Stage DE**: all DE rounds run on allocated strips as fast as possible
   - Video replay is not applicable
-  - Strip ask: `min(bracketSize / 2, 16)` (`DEFAULT_DE_STRIP_FOOTPRINT`). The DE's length is derived at the strips actually granted (see [DE Duration](#de-duration))
-- **Staged DEs** (NACs only): two phases – **Prelim** and **Video**
+  - Strip ask: `min(bracketSize / 2, 16)` (`DEFAULT_DE_STRIP_FOOTPRINT`), none for a bracket of 2. The DE's length is derived at the strips actually granted (see [DE Duration](#de-duration))
+  - A team DE is one block on general strips, from the first bracket round through the semifinals. It is derived at the team match time.
+- **Staged DEs** (NAC individual events only): two phases – **Prelim** and **Video**
   - The Video stage round is determined by age category (see [Video Replay Policy](#video-replay-policy))
   - Structure: Prelim DEs on general strips, asking `min(bracketSize / 2, 16)` → Video stage on video strips, asking `min(4, bracketSize / 2)`
   - Multiple events in the Video stage contend for the available video strips
@@ -451,6 +452,7 @@ de_minutes    = sum of round_minutes, first bracket round through the semifinals
 
 - **Strips**: the strips actually granted to the phase. A DE asks for at most `DEFAULT_DE_STRIP_FOOTPRINT` (16) strips (see [DE Modes](#de-modes)). When fewer are granted, the length is derived again at the granted count.
 - **Bouts**: byes are not bouts. The first round has `promoted − bracketSize / 2` bouts, and each later round has half as many bouts as fencers (the round of 16 has 8, the semifinals 2). The gold and bronze bouts are not counted (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
+- **No counted round**: a DE whose bracket has no counted round – a bracket of 2 – takes 0 minutes and asks no strips, general or video. Its gold bout's time is covered by the tail estimate (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 - **Bout time** (see [Timing Constants](#timing-constants)):
   - 15-touch individual bout: 20 foil, 20 épée, 13 sabre – Ops Manual p.17's 15-touch planning figure (15/15/8), read as fencing time, plus a 5-minute strip changeover. The changeover is an extension listed in [Appendix B](#appendix-b-departures-from-the-operations-manual).
   - 10-touch individual bout for Y8, Y10 and every Veteran age group, Vet Combined included: 15 foil, 15 épée, 10 sabre – the 15-touch fencing time × 10⁄15, rounded, plus the 5-minute changeover (S8 p.38 for Y10, Vet Age and Vet Open, and p.41 for all Veteran DEs). This departs from Ops Manual p.17, which prints only a 15-touch figure. Y8's 10-touch bout is Piste Planner's own departure, which extends Y10's rule because S8 no longer states it.
@@ -491,7 +493,8 @@ At national tournaments, video replay is guaranteed from a specific DE round per
 The video policy is a rule per tournament type, not per category:
 
 - **NAC**: every individual event is `REQUIRED`, from the round in the table below. Video strips are automatic when the type is NAC.
-- **Every other type**: every event is `BEST_EFFORT` (Ops Manual p.19, "optional for all local and regional tournaments"). SYC and SJCC are treated as regional for video, although they follow the national same-day rules (see [Appendix B](#appendix-b-departures-from-the-operations-manual)). Video strips might be available but are never guaranteed, and so *do not affect scheduling.*
+- **Team events, at every type**: `BEST_EFFORT`, NACs included. Ops Manual p.19 lists Teams under "Guaranteed for the Gold/Bronze". Gold and bronze bouts are not scheduled, so team events plan with no video requirement. Teams might wait toward the end of the tournament, and the bout committee finds a video strip for the gold and bronze team matches on the day.
+- **Every other type**: every individual event is `BEST_EFFORT` (Ops Manual p.19, "optional for all local and regional tournaments"). SYC and SJCC are treated as regional for video, although they follow the national same-day rules (see [Appendix B](#appendix-b-departures-from-the-operations-manual)). Video strips might be available but are never guaranteed, and so *do not affect scheduling.*
 
 | Age Category | Guaranteed From | Notes |
 |---|---|---|
@@ -501,7 +504,7 @@ The video policy is a rule per tournament type, not per category:
 | Vet 50, Vet 60, Vet 70 | Round of 8 | |
 | Div 1A, Div 2, Div 3 | Round of 8 | As printed on p.19 (the 2019 edition gave the round of 4) |
 | Vet 40, Vet 80, Vet Combined | Round of 8 | As printed on p.19 (the 2019 edition gave the round of 4) |
-| Teams | Gold/Bronze only | The scheduler stops at semis – no gold/bronze phase is allocated. Video for gold/bronze is found ad-hoc (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)). |
+| Teams | Gold/Bronze only (Ops Manual p.19) | No video in planning at any tournament type. The scheduler stops at semis, so no gold/bronze phase is allocated, and the bout committee finds a video strip on the day (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)). |
 
 - Phases before the video round run on general strips
 - The video round and beyond run on video strips. A video block asks for `min(4, bracketSize / 2)` video strips, so the default 8 video strips carry two video stages at once.
@@ -532,6 +535,7 @@ DE bouts are counted as in [DE Duration](#de-duration): every round from the fir
 
 Team DEs use the same model with the team-match time in place of the bout time (`teamDeStripHours`):
 
+- Every team match bills general strip-hours and none bills video strip-hours, at every tournament type, NACs included. Team DEs run Single Stage (see [DE Modes](#de-modes)).
 - Non-power-of-2 entry counts produce play-in bouts in the opening round, and byes are not bouts.
 - The finals match is excluded – the scheduler stops at semis (see [Scheduler Stops at Semis](#scheduler-stops-at-semis)).
 
@@ -770,7 +774,7 @@ Each tournament type sets the same-day rules, the video policy, the DE mode, ref
 
 | Type | Same-day rules | Group 1 pairs | Video | DE mode | Refs per pool | Default cuts |
 |---|---|---|---|---|---|---|
-| NAC | National | Hard | REQUIRED for every individual event | Staged | Two | Cadet, Junior, Div 1: 20% cut. Every other category: 100% advance |
+| NAC | National | Hard | REQUIRED for every individual event, BEST_EFFORT for team events | Staged for individual events, Single Stage for team events | Two | Cadet, Junior, Div 1: 20% cut. Every other category: 100% advance |
 | SYC | National | Hard | BEST_EFFORT | Single Stage | Two | 100% advance |
 | SJCC | National | Hard | BEST_EFFORT | Single Stage | Two | 100% advance |
 | ROC | Regional | Soft, with a time-of-day window | BEST_EFFORT | Single Stage | One | 100% advance |
@@ -780,7 +784,7 @@ Each tournament type sets the same-day rules, the video policy, the DE mode, ref
 - **National types** (NAC, SYC, SJCC): every Group 1 pair is hard, Div 1–Cadet included (Ops Manual p.20 – Group 1). Piste Planner treats a fencer at these types as entering one individual event per day. Treating SYC and SJCC as national is listed in [Appendix B](#appendix-b-departures-from-the-operations-manual).
 - **Regional types** (ROC, RYC, RJCC): fencers enter several events a day, so every Group 1 pair is soft, with a time-of-day window (see [Regional Types](#regional-types-soft-with-a-time-of-day-window) and [Appendix B](#appendix-b-departures-from-the-operations-manual)).
 - At every type, team and individual events of the same category, weapon and gender stay on different days (see [Same-Population Conflicts](#same-population-conflicts)).
-- Video replay is REQUIRED only at NACs. Every other type uses BEST_EFFORT, because video replay is optional at local and regional tournaments (Ops Manual p.19). SYC and SJCC are treated as regional for video (see [Appendix B](#appendix-b-departures-from-the-operations-manual)).
+- Video replay is REQUIRED only for individual events at NACs. Team events and every other type use BEST_EFFORT, because video replay is optional at local and regional tournaments (Ops Manual p.19). SYC and SJCC are treated as regional for video (see [Appendix B](#appendix-b-departures-from-the-operations-manual)).
 - Refs per pool are unsourced (see [Refs Per Pool](#refs-per-pool-input-that-affects-the-output)).
 
 ### NAC (North American Cup)
@@ -789,7 +793,8 @@ Each tournament type sets the same-day rules, the video policy, the DE mode, ref
 - National same-day rules: every Group 1 pair is hard, Div 1–Cadet included (Ops Manual p.20 – Group 1).
 - Rest-day preference between Junior and Div 1 in the same weapon (Ops Manual p.20 – Group 2). The Junior–Cadet rest day is a Junior Olympics rule and does not apply.
 - Default cuts: Cadet, Junior and Div 1 at 80% advancement to DE. Y14 and every other category advance 100% (S8 pp.37–38).
-- Staged DEs with video replay REQUIRED for every individual event: from the round of 16 for Div 1, Junior and Cadet, and from the round of 8 for every other category (Ops Manual p.19 – see [Video Replay Policy](#video-replay-policy)). Team events get video for gold and bronze only.
+- Staged DEs with video replay REQUIRED for every individual event: from the round of 16 for Div 1, Junior and Cadet, and from the round of 8 for every other category (Ops Manual p.19 – see [Video Replay Policy](#video-replay-policy)).
+- Team events plan with no video and run Single Stage DEs on general strips. Video is guaranteed only for the gold and bronze team matches (Ops Manual p.19), which are not scheduled. The bout committee finds a video strip for them on the day.
 - Two refs per pool.
 - Typically 3–4 day events with large fields (100+ fencers in major categories)
 - Predefined templates for common NAC formats (Youth, Cadet/Junior, Div 1/Junior, etc.)
@@ -947,7 +952,7 @@ Gold and bronze referee demand is **not** modeled as discrete `RefDemandInterval
 | Policy | Behavior |
 |---|---|
 | `REQUIRED` | Every individual event at a NAC (Ops Manual p.19). Allocates video strips for the video-stage phase (`r16`), from the video-stage round through the semis. Gold/bronze video is found ad-hoc. |
-| `BEST_EFFORT` | Every event at a non-NAC tournament type (Ops Manual p.19 – optional at local and regional tournaments. SYC and SJCC are treated as regional for video, see [Appendix B](#appendix-b-departures-from-the-operations-manual)). Does not allocate dedicated video strips. Gold/bronze video is found ad-hoc. |
+| `BEST_EFFORT` | Every team event at every tournament type, NACs included (Ops Manual p.19 guarantees Teams video for the gold and bronze only). Also every event at a non-NAC tournament type (Ops Manual p.19 – optional at local and regional tournaments. SYC and SJCC are treated as regional for video, see [Appendix B](#appendix-b-departures-from-the-operations-manual)). Does not allocate dedicated video strips. Gold/bronze video is found ad-hoc. |
 | `FINALS_ONLY` | Operationally identical to `BEST_EFFORT` — there is no `de_finals` phase to scope video to. The enum value is **preserved for save-file compatibility** with schedules saved before the stop-at-semis change. |
 
 For strip allocation and video strip preservation details, see [Strip Assignment](#strip-assignment) and [Video Strip Preservation](#video-strip-preservation).
