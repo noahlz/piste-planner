@@ -277,6 +277,8 @@ const [footerPlaced, footerUnplaced, footerPinned] = countsMatch.slice(1).map(Nu
 // Logged beside the schedule-table boot count above, not asserted equal to
 // it — the lane packer (footer) and the scheduler (schedule table) can
 // legitimately disagree about what counts as "placed".
+// `[M]` 024 task S, 2026-10-06 (logged, not asserted – D13): boot read 24 schedule
+// rows with the footer at 15 placed / 9 unplaced / 0 pinned.
 log('boot placed count: schedule table', bootPlacedCount, 'vs footer', footerPlaced, 'placed /', footerUnplaced, 'unplaced /', footerPinned, 'pinned')
 
 for (const metric of ['finish', 'refs', 'strips']) {
@@ -888,6 +890,9 @@ await shot('06-div1junior-schedule')
 // replaced the largest-event rule with one sized for the busiest day's summed
 // pool demand, so this step presses the same button on the same template and
 // checks the board is no longer empty.
+// `[M]` 024 task S, 2026-10-06 (logged, not asserted – D13): this run's Suggest
+// values were ROC Div1A/Vet 15, NAC Youth 80 and NAC Cadet/Junior 62, each
+// placing every selected event (24 of 24 table rows for Youth and Cadet/Junior).
 await choosePreset('NAC Youth')
 log('NAC Youth template applied')
 
@@ -955,6 +960,36 @@ if (nacYouthRowCount === 0) {
 }
 await shot('06c-nacyouth-schedule')
 
+// ── Group A: a staged DE's video block and tooltip read "Video stage" ──
+// At NAC every individual event is STAGED with REQUIRED video. The code's
+// DE_ROUND_OF_16 phase is the round of 8 for Y8–Y14, so the label has to be
+// the neutral "Video stage" (024 plan §Group A, owner ruling), not "Round of 16".
+// Everything below is read from the DOM: the first video-stage block's own
+// aria-label and the tooltip its hover opens.
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(200)
+const videoBlocks = page.locator('[data-event-block][data-phase="DE_ROUND_OF_16"]')
+const videoBlockCount = await videoBlocks.count()
+if (videoBlockCount === 0) {
+  throw new Error('NAC Youth placed no video-stage (DE_ROUND_OF_16) block on the matrix canvas')
+}
+const youthVideoBlock = videoBlocks.first()
+const youthVideoAria = (await youthVideoBlock.getAttribute('aria-label')) ?? ''
+if (!youthVideoAria.includes(', Video stage, ')) {
+  throw new Error(`video-stage block name does not read "Video stage": "${youthVideoAria}"`)
+}
+await youthVideoBlock.hover()
+await page.waitForTimeout(150)
+const youthVideoTooltipPhase = (await page.locator('[data-tooltip-field="phase"]').first().textContent())?.trim()
+if (youthVideoTooltipPhase !== 'Video stage') {
+  throw new Error(`video-stage tooltip phase reads "${youthVideoTooltipPhase}", expected "Video stage"`)
+}
+log('video-stage blocks =', videoBlockCount, '| block name:', youthVideoAria, '| tooltip phase:', youthVideoTooltipPhase)
+await page.mouse.move(5, 5)
+await page.waitForTimeout(300)
+await page.getByRole('radio', { name: 'Schedule' }).click()
+await page.waitForTimeout(200)
+
 // ── SC-008: Suggest sizes the largest template (012 T014) ──
 // NAC Vet/Div1/Junior (66 events) is the largest template and was not yet
 // exercised by this driver. This runs before the Team event cut section
@@ -992,6 +1027,9 @@ await shot('06c-nacyouth-schedule')
 // the probe (same store actions, this driver's order) read Suggest 103 for
 // NAC Vet/Div1/Junior at 12 video strips, 4 days, NAC (specs/024-ops-manual-conformance/plan.md
 // §Group B, row B.2).
+//
+// `[M]` 024 task S, 2026-10-06: the live run read 103 for NAC Vet/Div1/Junior at
+// 12 video strips, matching the probe, in every run that day, and the template placed all 66.
 await choosePreset('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior template applied')
 
@@ -1019,11 +1057,61 @@ await page.waitForTimeout(200)
 const vetRowCount = await page.locator('[data-schedule-row]').count()
 log('NAC Vet/Div1/Junior schedule table rows =', vetRowCount)
 // SC-008: the largest template places its whole 66-event field at its
-// suggested count of 80. `[M]` measured in the running app, 2026-09-06.
+// suggested count (103 since 024 group B, was 80 on 2026-09-06). `[M]` live
+// run 2026-10-06: 103 strips, 66 of 66 rows placed.
 if (vetRowCount !== 66) {
   throw new Error(`NAC Vet/Div1/Junior schedule table rendered ${vetRowCount} rows, expected 66`)
 }
 await shot('06d-vet-schedule')
+
+// ── Group B: a block placed after 19:00 draws inside the canvas axis ──
+// The planning day is 9:00-19:00 with a 22:00 hard end, and the axis reaches the
+// hard end so a block past 19:00 still has somewhere to draw. This reads the
+// largest template's matrix canvas: finds a placed block ending after 19:00
+// (1140 min) and checks its rendered box lies inside its day's time grid, and
+// that the axis carries ticks up to 22:00 (1320 min).
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(200)
+const lateBlock = await page.evaluate(() => {
+  const late = [...document.querySelectorAll('[data-event-block]')].filter(
+    (el) => Number(el.getAttribute('data-end')) > 19 * 60,
+  )
+  // Ticks mark the start of each interval, so the axis ends one tick step past the last one.
+  const ticks = [...document.querySelectorAll('[data-hour-tick]')].map((t) => Number(t.getAttribute('data-hour-tick')))
+  const maxTick = Math.max(...ticks)
+  const axisEnd = maxTick + (ticks.length > 1 ? ticks[1] - ticks[0] : 0)
+  if (late.length === 0) return { lateCount: 0, maxTick, axisEnd }
+  // The block that ends latest is the one closest to the plot's right edge.
+  const el = late.reduce((a, b) => (Number(b.getAttribute('data-end')) > Number(a.getAttribute('data-end')) ? b : a))
+  const day = el.getAttribute('data-day')
+  const plot = document.querySelector(`[data-day-plot="${day}"]`)
+  const r = el.getBoundingClientRect()
+  const pr = plot.getBoundingClientRect()
+  return {
+    lateCount: late.length,
+    maxTick,
+    axisEnd,
+    end: Number(el.getAttribute('data-end')),
+    day,
+    block: { left: r.left, right: r.right, top: r.top, bottom: r.bottom },
+    plot: { left: pr.left, right: pr.right, top: pr.top, bottom: pr.bottom },
+  }
+})
+if (lateBlock.lateCount === 0) {
+  throw new Error('no placed block ends after 19:00 on NAC Vet/Div1/Junior, so the axis-reach check has nothing to read')
+}
+if (lateBlock.axisEnd < 22 * 60) {
+  throw new Error(`axis ends at ${lateBlock.axisEnd} min (last tick ${lateBlock.maxTick}), expected the axis to reach 22:00 (1320)`)
+}
+{
+  const { block: bx, plot: px } = lateBlock
+  if (bx.left < px.left - 1 || bx.right > px.right + 1 || bx.top < px.top - 1 || bx.bottom > px.bottom + 1) {
+    throw new Error(`block ending ${lateBlock.end} min on day ${lateBlock.day} draws outside its time grid: ${JSON.stringify(lateBlock)}`)
+  }
+}
+log('late blocks (> 19:00) =', lateBlock.lateCount, '| latest ends', lateBlock.end, 'min, day', lateBlock.day, '| inside time grid | axis last tick', lateBlock.maxTick, 'axis end', lateBlock.axisEnd, 'min')
+await page.getByRole('radio', { name: 'Schedule' }).click()
+await page.waitForTimeout(200)
 
 // ── Team event cut (008) ──
 // Before this feature, defaultCutForEntry gave every TEAM catalogue entry a
