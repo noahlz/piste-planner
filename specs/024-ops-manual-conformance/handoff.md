@@ -460,7 +460,14 @@ against the numbers above, so their drift reviews start from this ledger.
 
 ## Merge
 
-Filled in by Task M.
+Checked 2026-10-06 at `da227ab5f8`. `main` is still `41e2b975ee`, the
+branch's merge base, so `git merge-tree --write-tree main
+024-ops-manual-conformance-impl` returns the branch's own tree
+(`b900c5a98066f84b2c22e34af25c593c5876db11`) with no conflict. On that tree
+the full suite passes (81 files / 2148 tests), `tsc -b` and lint are clean, and
+the snapshot SHA-256 is `7e2db75c38bb…`. A detached throwaway worktree was not
+needed. If `main` moves before the merge, re-run the check there first. The
+user merges with `merge-with-costs`.
 
 ## Resume prompt (after the merge)
 
