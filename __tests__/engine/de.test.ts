@@ -11,6 +11,7 @@ import {
   deVideoStripAsk,
   deStripFootprint,
 } from '../../src/engine/de.ts'
+import { computeDeFencerCount } from '../../src/engine/pools.ts'
 import { CutMode, DeMode, EventType, Weapon, Category, VetAgeGroup, tailEstimateMins } from '../../src/engine/types.ts'
 import {
   DE_BOUT_DURATION,
@@ -55,6 +56,16 @@ describe('computeBracketSize', () => {
 
   it('5 entries, DISABLED → bracket 8', () => {
     expect(computeBracketSize(5, CutMode.DISABLED, 100, EventType.INDIVIDUAL)).toBe(8)
+  })
+
+  // METHODOLOGY.md §Bracket Sizing: no DE bracket is larger than 256 (S8 p.37)
+  it('280 entries, DISABLED → bracket 256, not 512', () => {
+    expect(computeBracketSize(280, CutMode.DISABLED, 0, EventType.INDIVIDUAL)).toBe(256)
+  })
+
+  it('280 entries, DISABLED → the round of 256 has 128 bouts and no byes', () => {
+    const promoted = computeDeFencerCount(280, CutMode.DISABLED, 0, EventType.INDIVIDUAL)
+    expect(deRounds(promoted)[0]).toEqual({ round: 256, bouts: 128 })
   })
 })
 

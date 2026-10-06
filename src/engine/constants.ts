@@ -119,6 +119,9 @@ export const EARLY_START_THRESHOLD = 10
 export const MAX_RESCHEDULE_ATTEMPTS = 3
 export const MAX_FENCERS = 500
 export const MIN_FENCERS = 2
+// Most fencers that advance from pools in any event, so no DE bracket exceeds 256
+// (S8 p.37 – "A maximum of 256 fencers will be promoted out of pools for all events")
+export const MAX_DE_FIELD = 256
 
 // ──────────────────────────────────────────────
 // Pool bout counts by pool size (n fencers → round-robin bouts)
@@ -159,11 +162,14 @@ export const POOL_DURATION_MAX = 999
 // Default cut-to-DE settings by category
 // ──────────────────────────────────────────────
 
+// Y14 advances everyone at every tournament type (S8 p.38 – Y14 SYC & NAC, 100%
+// promoted). S8's 80% advance belongs to the Y14 National Championship, which no
+// template models (METHODOLOGY.md §Default Cuts by Age Category).
 export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: number }> = {
   [Category.Y8]: { mode: CutMode.DISABLED, value: 100 },
   [Category.Y10]: { mode: CutMode.DISABLED, value: 100 },
   [Category.Y12]: { mode: CutMode.DISABLED, value: 100 },
-  [Category.Y14]: { mode: CutMode.PERCENTAGE, value: 20 },
+  [Category.Y14]: { mode: CutMode.DISABLED, value: 100 },
   [Category.CADET]: { mode: CutMode.PERCENTAGE, value: 20 },
   [Category.JUNIOR]: { mode: CutMode.PERCENTAGE, value: 20 },
   [Category.VETERAN]: { mode: CutMode.DISABLED, value: 100 },
@@ -578,12 +584,12 @@ export const INDIV_TEAM_RELAXABLE_BLOCKS: { indivCategory: Category; teamCategor
 ]
 
 // ──────────────────────────────────────────────
-// Regional cut overrides: at ROC/SYC/RJCC/SJCC, these categories use 100% advancement
-// instead of the default 20% cut. (METHODOLOGY.md §Default Cuts by Age Category)
+// Regional cut overrides: at ROC/RYC/SYC/RJCC/SJCC, these categories use 100% advancement
+// instead of the default 20% cut. Y14 needs no row, since it advances 100% by default.
+// (METHODOLOGY.md §Default Cuts by Age Category)
 // ──────────────────────────────────────────────
 
 export const REGIONAL_CUT_OVERRIDES: Partial<Record<Category, { mode: CutMode; value: number }>> = {
-  [Category.Y14]: { mode: CutMode.DISABLED, value: 100 },
   [Category.CADET]: { mode: CutMode.DISABLED, value: 100 },
   [Category.JUNIOR]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV1]: { mode: CutMode.DISABLED, value: 100 },
@@ -591,6 +597,7 @@ export const REGIONAL_CUT_OVERRIDES: Partial<Record<Category, { mode: CutMode; v
 
 export const REGIONAL_CUT_TOURNAMENT_TYPES: ReadonlySet<string> = new Set<string>([
   TournamentType.ROC,
+  TournamentType.RYC,
   TournamentType.SYC,
   TournamentType.RJCC,
   TournamentType.SJCC,

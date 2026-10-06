@@ -245,8 +245,9 @@ function buildCompetitions(state: StoreState): Competition[] {
     })
   }
 
-  // For regional tournament types (ROC, SYC, RJCC, SJCC), force DISABLED cuts on categories
-  // that must advance all fencers to DEs per the USA Fencing Athlete Handbook.
+  // For regional tournament types (ROC, RYC, SYC, RJCC, SJCC), force DISABLED cuts on
+  // Cadet, Junior and Div 1, which advance all fencers to DEs there (METHODOLOGY.md
+  // §Default Cuts by Age Category). Y14 advances everyone by default at every type.
   if (REGIONAL_CUT_TOURNAMENT_TYPES.has(state.tournament_type)) {
     for (const comp of competitions) {
       const override = REGIONAL_CUT_OVERRIDES[comp.category]

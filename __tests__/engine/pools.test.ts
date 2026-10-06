@@ -223,6 +223,21 @@ describe('computeDeFencerCount', () => {
     },
   )
 
+  // METHODOLOGY.md §Bracket Sizing: at most 256 fencers advance in every event (S8 p.37)
+  describe('256-fencer DE cap', () => {
+    it.each([
+      { name: '280 fencers, all advance', fencerCount: 280, mode: CutMode.DISABLED, value: 0, eventType: EventType.INDIVIDUAL, expected: 256 },
+      { name: '257 fencers, all advance', fencerCount: 257, mode: CutMode.DISABLED, value: 0, eventType: EventType.INDIVIDUAL, expected: 256 },
+      { name: '256 fencers, all advance (guard)', fencerCount: 256, mode: CutMode.DISABLED, value: 0, eventType: EventType.INDIVIDUAL, expected: 256 },
+      { name: '400 fencers cut 20% (320 advance)', fencerCount: 400, mode: CutMode.PERCENTAGE, value: 20, eventType: EventType.INDIVIDUAL, expected: 256 },
+      { name: '400 fencers, COUNT cut of 300', fencerCount: 400, mode: CutMode.COUNT, value: 300, eventType: EventType.INDIVIDUAL, expected: 256 },
+      { name: '100 teams (guard, below the cap)', fencerCount: 100, mode: CutMode.DISABLED, value: 0, eventType: EventType.TEAM, expected: 100 },
+      { name: '40 teams (guard, below the cap)', fencerCount: 40, mode: CutMode.DISABLED, value: 0, eventType: EventType.TEAM, expected: 40 },
+    ])('$name → $expected', ({ fencerCount, mode, value, eventType, expected }) => {
+      expect(computeDeFencerCount(fencerCount, mode, value, eventType)).toBe(expected)
+    })
+  })
+
   it.each([0, 1, -3])('fencerCount=%i → throws (must be > 1)', (n) => {
     expect(() => computeDeFencerCount(n, CutMode.DISABLED, 0, EventType.INDIVIDUAL)).toThrow(/fencerCount must be > 1/)
   })

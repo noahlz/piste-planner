@@ -69,9 +69,9 @@ const TYPE_RULES: Record<TournamentType, { ref_policy: RefPolicy; de_mode: DeMod
  * `REGIONAL_CUT_TOURNAMENT_TYPES`), like `DEFAULT_CUT_BY_CATEGORY`, comes from
  * the engine constants the app and the engine's regional-cut-override rule
  * also read. Parity therefore cannot catch a wrong row in those tables.
- * `__tests__/engine/constants.test.ts` pins only the rows present today, not
- * exact membership, so an added row is caught by neither it nor parity – a
- * cost specs/015-ledger-convergence/plan.md D1 accepts.
+ * `__tests__/engine/constants.test.ts` pins the exact contents of those tables
+ * (024 plan D8), so a wrong or added row is caught there instead – the cost
+ * specs/015-ledger-convergence/plan.md D1 accepted is now covered.
  *
  * See research.md D2 (008) for the full argument and the alternatives rejected.
  */

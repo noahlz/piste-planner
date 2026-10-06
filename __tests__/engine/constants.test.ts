@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   INDIV_TEAM_RELAXABLE_BLOCKS,
+  DEFAULT_CUT_BY_CATEGORY,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
   VIDEO_STAGE_ROUND,
@@ -15,6 +16,7 @@ import {
   DAY_HARD_END_MINS,
   DAY_LENGTH_MINS,
   COMPETITORS_PER_STRIP_PER_DAY,
+  MAX_DE_FIELD,
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
 
@@ -38,6 +40,13 @@ describe('day timing constants', () => {
 
   it('COMPETITORS_PER_STRIP_PER_DAY is 14', () => {
     expect(COMPETITORS_PER_STRIP_PER_DAY).toBe(14)
+  })
+})
+
+// METHODOLOGY.md §Bracket Sizing – S8 p.37, no DE bracket is larger than 256.
+describe('MAX_DE_FIELD', () => {
+  it('is 256', () => {
+    expect(MAX_DE_FIELD).toBe(256)
   })
 })
 
@@ -75,23 +84,36 @@ describe('INDIV_TEAM_RELAXABLE_BLOCKS', () => {
   })
 })
 
+// The factory in __tests__/helpers/scenarios.ts reads these shared tables, so
+// parity cannot catch a wrong row in them (024 plan D8). Exact contents guard them.
+// METHODOLOGY.md §Default Cuts by Age Category.
 describe('REGIONAL_CUT_OVERRIDES', () => {
-  const disabledAt100 = { mode: CutMode.DISABLED, value: 100 }
-
-  it.each([Category.Y14, Category.CADET, Category.JUNIOR, Category.DIV1])(
-    'maps %s to mode DISABLED / value 100',
-    (cat) => {
-      expect(REGIONAL_CUT_OVERRIDES[cat]).toEqual(disabledAt100)
-    }
-  )
+  it('holds exactly Cadet, Junior and Div 1, each DISABLED / 100 (Y14 advances 100% by default instead)', () => {
+    const disabledAt100 = { mode: CutMode.DISABLED, value: 100 }
+    expect(REGIONAL_CUT_OVERRIDES).toEqual({
+      [Category.CADET]: disabledAt100,
+      [Category.JUNIOR]: disabledAt100,
+      [Category.DIV1]: disabledAt100,
+    })
+  })
 })
 
 describe('REGIONAL_CUT_TOURNAMENT_TYPES', () => {
-  it('contains ROC, SYC, RJCC, SJCC', () => {
-    expect(REGIONAL_CUT_TOURNAMENT_TYPES.has(TournamentType.ROC)).toBe(true)
-    expect(REGIONAL_CUT_TOURNAMENT_TYPES.has(TournamentType.SYC)).toBe(true)
-    expect(REGIONAL_CUT_TOURNAMENT_TYPES.has(TournamentType.RJCC)).toBe(true)
-    expect(REGIONAL_CUT_TOURNAMENT_TYPES.has(TournamentType.SJCC)).toBe(true)
+  it('holds exactly ROC, RYC, SYC, RJCC and SJCC', () => {
+    expect([...REGIONAL_CUT_TOURNAMENT_TYPES].sort()).toEqual([
+      TournamentType.ROC,
+      TournamentType.RYC,
+      TournamentType.SYC,
+      TournamentType.RJCC,
+      TournamentType.SJCC,
+    ].sort())
+  })
+})
+
+// S8 p.38 – Y14 SYC & NAC, 100% promoted. The default is type-independent.
+describe('DEFAULT_CUT_BY_CATEGORY', () => {
+  it('advances Y14 100% by default (DISABLED / 100)', () => {
+    expect(DEFAULT_CUT_BY_CATEGORY[Category.Y14]).toEqual({ mode: CutMode.DISABLED, value: 100 })
   })
 })
 

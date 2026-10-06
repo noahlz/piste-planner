@@ -397,6 +397,29 @@ describe('buildTournamentConfig', () => {
       expect(comp!.cut_value).toBe(20)
     })
 
+    // RYC joined the regional types in 024 (METHODOLOGY.md §Default Cuts by Age
+    // Category). Cadet's default is PERCENTAGE/20, so only the override loop
+    // can make it all-advance. Y14 is all-advance by default at every type.
+    it('forces a CADET event to DISABLED/100 at an RYC tournament', () => {
+      const state = storeWith(regionalCutState(TournamentType.RYC, 'CDT-M-FOIL-IND'))
+      const { competitions } = buildTournamentConfig(state)
+      const comp = competitions.find((c: Competition) => c.id === 'CDT-M-FOIL-IND')
+
+      expect(comp).toBeDefined()
+      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
+      expect(comp!.cut_value).toBe(100)
+    })
+
+    it.each([TournamentType.RYC, TournamentType.NAC])('advances a Y14 event 100% (DISABLED/100) at %s', (type) => {
+      const state = storeWith(regionalCutState(type, 'Y14-M-FOIL-IND'))
+      const { competitions } = buildTournamentConfig(state)
+      const comp = competitions.find((c: Competition) => c.id === 'Y14-M-FOIL-IND')
+
+      expect(comp).toBeDefined()
+      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
+      expect(comp!.cut_value).toBe(100)
+    })
+
     // VETERAN is not in REGIONAL_CUT_OVERRIDES, and its catalogue default is
     // already DISABLED/100 — as is every category the override table omits. So
     // this case records the value a veteran band reaches the engine with at a
