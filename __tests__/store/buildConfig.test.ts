@@ -13,8 +13,8 @@ import {
   SAME_TIME_WINDOW_MINS, INDIV_TEAM_MIN_GAP_MINS,
   EARLY_START_THRESHOLD, MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS, MIN_FENCERS,
-  DEFAULT_POOL_ROUND_DURATION_TABLE, DEFAULT_DE_DURATION_TABLE,
-  DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA, DEFAULT_DE_STRIP_FOOTPRINT,
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
+  DE_BOUT_DURATION, DE_BOUT_DURATION_10_TOUCH, TEAM_MATCH_DURATION, YOUTH_VET_BOUT_DELTA, DEFAULT_DE_STRIP_FOOTPRINT,
   DEFAULT_VIDEO_POLICY_BY_CATEGORY, REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../../src/engine/constants.ts'
 import {
@@ -174,7 +174,10 @@ describe('buildTournamentConfig', () => {
       expect(comp.earliest_start).toBe(0)
       expect(comp.latest_end).toBe(Infinity)
       expect(comp.optional).toBe(false)
-      expect(comp.de_round_of_16_strips).toBe(4)
+      // `de_round_of_16_strips` is gone since 024 group A: the video block asks
+      // `min(4, bracketSize / 2)` through one engine function (METHODOLOGY.md
+      // §DE Modes; 024 plan D6), so the bridge has no strip count to set.
+      expect(comp).not.toHaveProperty('de_round_of_16_strips')
       expect(comp.de_round_of_16_requirement).toBe(DeStripRequirement.HARD)
       expect(comp.flighted).toBe(false)
       expect(comp.flighting_group_id).toBeNull()
@@ -258,6 +261,10 @@ describe('buildTournamentConfig', () => {
       expect(config.THRESHOLD_MINS).toBe(THRESHOLD_MINS)
       expect(config.SLOT_MINS).toBe(SLOT_MINS)
       expect(config.DE_BOUT_DURATION).toEqual(DE_BOUT_DURATION)
+      // 024 group A: the 10-touch and team-match times a DE is derived from
+      // (METHODOLOGY.md §DE Duration, Ops Manual p.17) travel the same way.
+      expect(config.DE_BOUT_DURATION_10_TOUCH).toEqual(DE_BOUT_DURATION_10_TOUCH)
+      expect(config.TEAM_MATCH_DURATION).toEqual(TEAM_MATCH_DURATION)
       expect(config.YOUTH_VET_BOUT_DELTA).toBe(YOUTH_VET_BOUT_DELTA)
       expect(config.DEFAULT_DE_STRIP_FOOTPRINT).toBe(DEFAULT_DE_STRIP_FOOTPRINT)
     })
@@ -323,7 +330,9 @@ describe('buildTournamentConfig', () => {
       expect(config.MAX_FENCERS).toBe(MAX_FENCERS)
       expect(config.MIN_FENCERS).toBe(MIN_FENCERS)
       expect(config.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
-      expect(config.de_duration_table).toEqual(DEFAULT_DE_DURATION_TABLE)
+      // 024 group A: DE length is derived per round from bout time, so the
+      // per-bracket duration table is gone from the config (024 plan §Group A).
+      expect(config).not.toHaveProperty('de_duration_table')
     })
   })
 
@@ -493,7 +502,14 @@ describe('buildTournamentConfig', () => {
      *  on this fixture and wrote its `competitions` array to disk. `Infinity`
      *  has no JSON form, so the capture replaced it with the sentinel string
      *  below — `liveCompetitions` applies the same substitution before the
-     *  deep-equal so both sides compare like for like. */
+     *  deep-equal so both sides compare like for like.
+     *
+     *  Regenerated on purpose at 024 group A (2026-10-06), by the same route,
+     *  after the owner's team ruling (024 plan D4) and the video-ask change
+     *  (D6). Three things moved and nothing else: the 18 NAC team events' de_mode
+     *  STAGED → SINGLE_STAGE, the 12 Div 1 and Junior team events'
+     *  de_video_policy REQUIRED → BEST_EFFORT at each type (the Vet teams were
+     *  BEST_EFFORT already), and `de_round_of_16_strips` left every row. */
     const FIXTURE: { NAC: Competition[]; ROC: Competition[] } = JSON.parse(
       readFileSync(
         `${process.cwd()}/__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json`,
@@ -573,12 +589,22 @@ describe('buildTournamentConfig', () => {
         },
       )
 
-      it('de_video_policy is DEFAULT_VIDEO_POLICY_BY_CATEGORY[category] for every competition', () => {
-        const { competitions } = buildTournamentConfig(derivedState(TournamentType.NAC))
-        for (const comp of competitions) {
-          expect(comp.de_video_policy, comp.id).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[comp.category])
-        }
-      })
+      // 024 group A: a team event plans with no video at every type, NACs
+      // included (METHODOLOGY.md §Video Replay Policy; Ops Manual p.19 gives
+      // teams video for the gold and bronze only; 024 plan D4). An individual
+      // event still reads the category table until group C.
+      it.each([TournamentType.NAC, TournamentType.ROC])(
+        'de_video_policy is BEST_EFFORT for every team event and DEFAULT_VIDEO_POLICY_BY_CATEGORY[category] for every individual one, at %s',
+        (type) => {
+          const { competitions } = buildTournamentConfig(derivedState(type))
+          for (const comp of competitions) {
+            const expected = comp.event_type === EventType.TEAM
+              ? VideoPolicy.BEST_EFFORT
+              : DEFAULT_VIDEO_POLICY_BY_CATEGORY[comp.category]
+            expect(comp.de_video_policy, comp.id).toBe(expected)
+          }
+        },
+      )
 
       it('use_single_pool_override, flighting_group_id and is_priority default false/null/false for every competition', () => {
         const { competitions } = buildTournamentConfig(derivedState(TournamentType.NAC))

@@ -139,18 +139,27 @@ describe('pinned scheduling (T033)', () => {
   })
 
   // Case 4 pins every B1 event from a *different* config's natural
-  // placement (4 days / 48 strips / 7 video, tournamentConfig(4, 48, 7, …) —
-  // the same board case 5 uses, which places all 24 with zero ERROR
-  // bottlenecks when nothing is pinned [M]), then runs the pinned call at the usual (4, 80, 12)
-  // board. Reading the pins off that config's own output rather than the
-  // pinned run's own no-pins result means a pass can only mean the pin was
-  // honored: 19 of 24 ids land on a different (day, pool_start) pair between
-  // the two boards [M], e.g. D1-W-EPEE-IND day 0 / 330 vs day 0 / 0, and
-  // D1-W-SABRE-IND day 2 / 1845 vs day 0 / 165. With the third argument
-  // discarded this case fails (verified by mutation — see final report).
+  // placement (4 days / 48 strips / 8 video, tournamentConfig(4, 48, 8, …),
+  // which places all 24 with zero ERROR bottlenecks when nothing is pinned
+  // [M]), then runs the pinned call at the usual (4, 80, 12) board. Reading the
+  // pins off that config's own output rather than the pinned run's own no-pins
+  // result means a pass can only mean the pin was honored: 15 of 24 ids land on
+  // a different (day, pool_start) pair between the two boards [M], e.g.
+  // D1-W-EPEE-IND day 0 / 235 vs day 0 / 0, and D1-W-SABRE-IND day 0 / 355 vs
+  // day 0 / 120. With the third argument discarded this case fails (verified by
+  // mutation — see final report).
+  //
+  // 024, 2026-10-06 – the source board moved from case 5's (4, 48, 7) to
+  // (4, 48, 8). Under group A's planning times (2026-27 Ops Manual bout times,
+  // METHODOLOGY §DE Duration) the video-stage blocks run longer, and 7 video
+  // strips fit one 4-strip block at a time, so (4, 48, 7) loses D1-W-FOIL-IND
+  // (DEADLINE_BREACH_UNRESOLVABLE at DE_ROUND_OF_16) and the "every event
+  // pinned" premise no longer held. Eight video strips run two blocks side by
+  // side and restore it. Was 19 of 24 differing, with D1-W-EPEE-IND 0 / 330 and
+  // D1-W-SABRE-IND 2 / 1845.
   it('case 4: every event pinned holds every pin\'s day and start, same scheduled set', () => {
     const { comps, config } = b1()
-    const sourceConfig = tournamentConfig(4, 48, 7, SCENARIOS.B1.tournamentType)
+    const sourceConfig = tournamentConfig(4, 48, 8, SCENARIOS.B1.tournamentType)
     const source = scheduleAll(comps, sourceConfig)
 
     const pins: PinnedPlacement[] = comps.map((c) => {
@@ -162,7 +171,7 @@ describe('pinned scheduling (T033)', () => {
         strip_count: sr.pool_strip_count,
       }
     })
-    // [M] all 24 B1 events place with a non-null pool_start under (4, 48, 7).
+    // [M] all 24 B1 events place with a non-null pool_start under (4, 48, 8).
     expect(pins.every(p => p.start_time !== null)).toBe(true)
 
     const withPins = scheduleAllWithPins(comps, config, pins)
@@ -177,6 +186,8 @@ describe('pinned scheduling (T033)', () => {
     // phase to have claimed strips.
     // 015, 2026-10-05 – re-measured under the converged factory: was three,
     // with VET-W-FOIL-IND-VCMB DE.
+    // 024, 2026-10-06 – on the (4, 48, 8) source board three carry one:
+    // JR-W-EPEE-IND, JR-W-SABRE-IND and JR-W-FOIL-IND, all POOLS.
     expect(new Set(Object.keys(withPins.schedule))).toEqual(new Set(comps.map(c => c.id)))
   })
 

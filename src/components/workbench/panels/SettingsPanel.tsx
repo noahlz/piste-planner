@@ -53,7 +53,9 @@ export function SettingsPanel() {
   return (
     <section aria-label="Settings" className="flex flex-col gap-4 py-0.5 text-[12.5px]">
       <div>
-        <SectionCaption>Pool durations</SectionCaption>
+        {/* The table's figures are for a pool of 7 (METHODOLOGY §Pool Duration
+            Estimation, Ops Manual p.17). */}
+        <SectionCaption>Pool durations (pool of 7)</SectionCaption>
         <PoolDurationSettings />
       </div>
 
@@ -97,6 +99,9 @@ export function SettingsPanel() {
           <p id={hintId} className="text-[11.5px] text-neutral-700">
             {`${tournamentType} default: ${DE_MODE_LABELS[TYPE_DEFAULTS[tournamentType].de_mode]}`}
           </p>
+          {/* Team events ignore the mode (METHODOLOGY §DE Modes). Not in the
+              Default radio's description, which names what Default resolves to. */}
+          <p className="text-[11.5px] text-neutral-700">Team events always run single stage.</p>
         </div>
       </div>
     </section>

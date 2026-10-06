@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { TournamentType, RefPolicy, DeMode } from '../../src/engine/types.ts'
-import { TYPE_DEFAULTS, resolveVideoStrips } from '../../src/store/typeDefaults.ts'
+import { TournamentType, RefPolicy, DeMode, EventType, Category, VideoPolicy } from '../../src/engine/types.ts'
+import { DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../../src/engine/constants.ts'
+import {
+  TYPE_DEFAULTS, resolveVideoStrips, resolveDeMode, resolveVideoPolicy,
+} from '../../src/store/typeDefaults.ts'
 
 /**
  * data-model.md §Per-type default table, transcribed as the expectation this
@@ -80,4 +83,47 @@ describe('resolveVideoStrips', () => {
     expect(resolveVideoStrips(null, TournamentType.NAC)).toBe(8)
     expect(resolveVideoStrips(null, TournamentType.ROC)).toBe(0)
   })
+})
+
+/**
+ * 024 D4, the owner's team ruling (METHODOLOGY.md §DE Modes, §Video Replay
+ * Policy): a team event runs Single Stage and plans BEST_EFFORT video at every
+ * tournament type, NACs included, even when the organizer's DE-mode setting
+ * is Staged. Individual events keep the type row (or the override) for DE
+ * mode, and – until group C's per-type column – the category table for video.
+ */
+const DE_MODE_OVERRIDES: readonly (DeMode | null)[] = [null, DeMode.STAGED, DeMode.SINGLE_STAGE]
+const RESOLVER_CASES = Object.values(TournamentType).flatMap((type) =>
+  DE_MODE_OVERRIDES.map((override) => [type, override] as const),
+)
+
+describe('resolveDeMode', () => {
+  it.each(RESOLVER_CASES)('runs a team event Single Stage at %s with override %s', (type, override) => {
+    expect(resolveDeMode(type, EventType.TEAM, override)).toBe(DeMode.SINGLE_STAGE)
+  })
+
+  it.each(RESOLVER_CASES)(
+    'gives an individual event the override, else the type row, at %s with override %s',
+    (type, override) => {
+      expect(resolveDeMode(type, EventType.INDIVIDUAL, override)).toBe(override ?? EXPECTED_ROWS[type].de_mode)
+    },
+  )
+})
+
+describe('resolveVideoPolicy', () => {
+  it.each(Object.values(TournamentType))('plans every team event BEST_EFFORT at %s', (type) => {
+    for (const category of Object.values(Category)) {
+      expect(resolveVideoPolicy(type, EventType.TEAM, category), category).toBe(VideoPolicy.BEST_EFFORT)
+    }
+  })
+
+  it.each(Object.values(TournamentType))(
+    'keeps the category table for individual events at %s (group C replaces it with a per-type column)',
+    (type) => {
+      for (const category of Object.values(Category)) {
+        expect(resolveVideoPolicy(type, EventType.INDIVIDUAL, category), category)
+          .toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[category])
+      }
+    },
+  )
 })

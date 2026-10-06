@@ -7,12 +7,129 @@ import {
   categoryWeight,
   weightedStripHours,
 } from '../../src/engine/capacity.ts'
-import type { GlobalState } from '../../src/engine/types.ts'
+import type { Competition, GlobalState, TournamentConfig } from '../../src/engine/types.ts'
 import {
   Category, CutMode, DeMode, EventType, VideoPolicy, VetAgeGroup, Weapon,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
 import { validateFeasibility } from '../../src/engine/validation.ts'
+import { computePoolStructure, weightedPoolDuration } from '../../src/engine/pools.ts'
+
+/** The pool term of `estimateCompetitionStripHours`, so a test can read the DE term alone. */
+function poolStripHours(comp: Competition, config: TournamentConfig): number {
+  const structure = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
+  return structure.n_pools * weightedPoolDuration(structure, comp.weapon, config.pool_round_duration_table) / 60
+}
+
+// ──────────────────────────────────────────────
+// DE strip-hours = DE bouts × bout time (METHODOLOGY.md §DE Capacity Estimation)
+// ──────────────────────────────────────────────
+
+describe('estimateCompetitionStripHours — DE bills bouts × bout time', () => {
+  it('bills the worked example single-stage: foil, 248 promoted, 246 bouts × 20 min = 82 strip-hours', () => {
+    const config = makeConfig()
+    // R256 120 + R128 64 + R64 32 + R32 16 + R16 8 + QF 4 + SF 2 = 246 bouts.
+    // strips_allocated is deliberately unlike the 16-strip ask: each bout bills
+    // one strip for one bout time, whatever the grant.
+    const comp = makeCompetition({
+      id: 'worked-example',
+      category: Category.DIV1,
+      weapon: Weapon.FOIL,
+      fencer_count: 248,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      strips_allocated: 36,
+    })
+
+    const result = estimateCompetitionStripHours(comp, config)
+
+    expect(result.total_strip_hours - poolStripHours(comp, config)).toBeCloseTo(82, 10)
+    expect(result.video_strip_hours).toBe(0)
+  })
+
+  it('bills a team DE at the team match time: 32 épée teams, 30 matches × 60 min = 30 strip-hours', () => {
+    const config = makeConfig()
+    // R32 16 + R16 8 + QF 4 + SF 2 = 30 matches; the gold match is not billed.
+    const comp = makeCompetition({
+      id: 'team-32-match-time',
+      weapon: Weapon.EPEE,
+      event_type: EventType.TEAM,
+      fencer_count: 32,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+    })
+
+    const result = estimateCompetitionStripHours(comp, config)
+
+    expect(result.total_strip_hours - poolStripHours(comp, config)).toBeCloseTo(30, 10)
+  })
+
+  it('bills the worked example staged from the round of 16: 232 prelims bouts general, 14 video bouts video only', () => {
+    const config = makeConfig()
+    // Div 1 stages at the round of 16. Prelims R256–R32: 120 + 64 + 32 + 16 =
+    // 232 bouts × 20 = 77.3 general strip-hours. Video R16–SF: 8 + 4 + 2 = 14
+    // bouts × 20 = 4.7 video strip-hours, none of it billed to general.
+    const comp = makeCompetition({
+      id: 'worked-example-staged',
+      category: Category.DIV1,
+      weapon: Weapon.FOIL,
+      fencer_count: 248,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+
+    const result = estimateCompetitionStripHours(comp, config)
+
+    expect(result.total_strip_hours - poolStripHours(comp, config)).toBeCloseTo(232 * 20 / 60, 10)
+    expect(result.video_strip_hours).toBeCloseTo(14 * 20 / 60, 10)
+  })
+
+  it('bills no general DE hours for a staged bracket at or below its video-stage round', () => {
+    const config = makeConfig()
+    // 12 Div 1 fencers → bracket of 16, the round-of-16 video stage: every
+    // round runs on video. R16 4 + QF 4 + SF 2 = 10 bouts × 20 = 3.33 video h.
+    const comp = makeCompetition({
+      id: 'staged-at-video-round',
+      category: Category.DIV1,
+      weapon: Weapon.FOIL,
+      fencer_count: 12,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+
+    const result = estimateCompetitionStripHours(comp, config)
+
+    expect(result.total_strip_hours - poolStripHours(comp, config)).toBe(0)
+    expect(result.video_strip_hours).toBeCloseTo(10 * 20 / 60, 10)
+  })
+
+  it('bills every team match to general and none to video, even under a STAGED de_mode', () => {
+    const config = makeConfig()
+    // §Team Events: R32 16 + R16 8 + QF 4 + SF 2 = 30 matches × 60 = 30 general h.
+    const comp = makeCompetition({
+      id: 'team-staged-mode',
+      category: Category.DIV1,
+      weapon: Weapon.EPEE,
+      event_type: EventType.TEAM,
+      fencer_count: 32,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+
+    const result = estimateCompetitionStripHours(comp, config)
+
+    expect(result.total_strip_hours - poolStripHours(comp, config)).toBeCloseTo(30, 10)
+    expect(result.video_strip_hours).toBe(0)
+  })
+})
 
 function makeGlobalState(
   scheduleEntries: Record<string, ReturnType<typeof makeScheduleResult>> = {},
@@ -31,7 +148,7 @@ function makeGlobalState(
 // ──────────────────────────────────────────────
 
 describe('estimateCompetitionStripHours', () => {
-  it('SINGLE_STAGE individual event → DE strip-hours = strips_allocated × table_duration / 60', () => {
+  it('SINGLE_STAGE individual event → pools + DE bouts × bout time', () => {
     const config = makeConfig()
     const comp = makeCompetition({
       id: 'single-stage-flat',
@@ -47,48 +164,37 @@ describe('estimateCompetitionStripHours', () => {
     const result = estimateCompetitionStripHours(comp, config)
 
     // 64 EPEE fencers, cut disabled: n_pools=10 (4 pools of 7, 6 pools of 6)
-    // poolDurationForSize(EPEE,7)=round(120*21/15)=168; poolDurationForSize(EPEE,6)=120
-    // weightedPoolDuration = round((4*168 + 6*120)/10) = round(139.2) = 139
-    // pool_strip_hours = 10 * 139 / 60 ≈ 23.1667
-    // bracketSize = 64 (already a power of 2); table_duration = deDuration(EPEE,64) = 120
-    // DE strip-hours = strips_allocated × table_duration / 60 = 10 × 120 / 60 = 20.0
-    const expectedPoolStripHours = 10 * 139 / 60
+    // poolDurationForSize(EPEE,7)=120; poolDurationForSize(EPEE,6)=round(120*15/21)=86
+    // weightedPoolDuration = round((4*120 + 6*86)/10) = round(99.6) = 100
+    // pool_strip_hours = 10 * 100 / 60 ≈ 16.667
+    // bracket 64: R64 32 + R32 16 + R16 8 + QF 4 + SF 2 = 62 bouts × 20 min / 60 ≈ 20.667
+    const expectedPoolStripHours = 10 * 100 / 60
     const deStripHours = result.total_strip_hours - expectedPoolStripHours
-    expect(deStripHours).toBeCloseTo(20, 10)
+    expect(deStripHours).toBeCloseTo(62 * 20 / 60, 10)
     expect(result.video_strip_hours).toBe(0) // SINGLE_STAGE, no video strip hours
   })
 
-  it('SINGLE_STAGE DE strip-hours scale with strips_allocated (US3: was strip-count-independent under spread)', () => {
-    // Same bracket as the baseline test above (64 EPEE fencers, cut disabled,
-    // bracketSize=64, table_duration=120) — only strips_allocated differs (10 → 5).
-    // Under the old spread model this competition's DE strip-hours would be
-    // unchanged; the flat formula halves them.
+  it('SINGLE_STAGE DE strip-hours do not depend on strips_allocated', () => {
+    // §DE Capacity Estimation: each bout bills one strip for one bout time,
+    // whatever strip count the scheduler grants. Same event at 10 and 5 strips.
     const config = makeConfig()
-    const comp = makeCompetition({
-      id: 'single-stage-flat-half-strips',
+    const at = (strips_allocated: number) => estimateCompetitionStripHours(makeCompetition({
+      id: 'single-stage-flat-strips',
       fencer_count: 64,
       weapon: Weapon.EPEE,
-      event_type: EventType.INDIVIDUAL,
       cut_mode: CutMode.DISABLED,
       cut_value: 100,
       de_mode: DeMode.SINGLE_STAGE,
-      strips_allocated: 5,
-    })
+      strips_allocated,
+    }), config)
 
-    const result = estimateCompetitionStripHours(comp, config)
-
-    // Pool strip-hours unchanged from the baseline (same fencer_count/weapon: 10 * 139 / 60).
-    // DE strip-hours = strips_allocated × table_duration / 60 = 5 × 120 / 60 = 10.0
-    const expectedPoolStripHours = 10 * 139 / 60
-    const deStripHours = result.total_strip_hours - expectedPoolStripHours
-    expect(deStripHours).toBeCloseTo(10, 10)
+    expect(at(5)).toEqual(at(10))
   })
 
-  it('SINGLE_STAGE DE strip-hours change with bracket size (cut alters table_duration)', () => {
+  it('SINGLE_STAGE DE strip-hours change with bracket size (the cut removes bouts)', () => {
     // Same fencer_count/weapon/strips_allocated as the baseline test, but a 50%
-    // cut promotes 32 fencers instead of 64, dropping bracketSize from 64 to 32
-    // and table_duration from 120 to 90 — proving the duration term is a real
-    // table lookup, not a value hardcoded to this test's fencer count.
+    // cut promotes 32 fencers instead of 64, dropping the bracket from 64 to 32
+    // and its bouts from 62 to 30.
     const config = makeConfig()
     const comp = makeCompetition({
       id: 'single-stage-flat-cut',
@@ -105,11 +211,10 @@ describe('estimateCompetitionStripHours', () => {
 
     // Pool strip-hours unchanged (pool structure is computed pre-cut, from raw fencer_count).
     // promoted = round(64 × (1 - 50/100)) = 32; bracketSize = nextPowerOf2(32) = 32
-    // table_duration = deDuration(EPEE, 32) = 90
-    // DE strip-hours = strips_allocated × table_duration / 60 = 10 × 90 / 60 = 15.0
-    const expectedPoolStripHours = 10 * 139 / 60
+    // R32 16 + R16 8 + QF 4 + SF 2 = 30 bouts × 20 min / 60 = 10.0
+    const expectedPoolStripHours = 10 * 100 / 60
     const deStripHours = result.total_strip_hours - expectedPoolStripHours
-    expect(deStripHours).toBeCloseTo(15, 10)
+    expect(deStripHours).toBeCloseTo(10, 10)
   })
 
   it('team event with 30 fencers → much smaller strip-hour footprint than large individual', () => {
@@ -152,31 +257,24 @@ describe('estimateCompetitionStripHours', () => {
       cut_value: 100,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 4,
       strips_allocated: 8,
     })
 
     const result = estimateCompetitionStripHours(comp, config)
 
-    // 100 FOIL fencers: n_pools=15, 10 pools of 7, 5 pools of 6
-    // poolDurationForSize(FOIL,7)=147, poolDurationForSize(FOIL,6)=105
-    // weightedPoolDuration = round((10*147 + 5*105)/15) = round(133) = 133
-    // pool_strip_hours = 15 * 133 / 60 = 33.25
-    // bracket = 128; deDuration(FOIL,128) = 180; deBlockDurations(128,180):
-    //   totalBouts=64, r16Bouts=min(30,63)=30, prelimsBouts=max(64-30-1,0)=33
-    //   r16_dur = round(180 * 30/64) = round(84.375) = 84
-    //   prelims_dur = round(180 * 33/64) = round(92.8125) = 93
-    // prelims_strip_hours = 8 * 93/60 = 12.4
-    // r16_strip_hours = 4 * 84/60 = 5.6
-    // Finals phase no longer separately allocated (stop-at-semis); video_strip_hours = r16 only.
-    // total = 33.25 + 12.4 + 5.6 = 51.25
-    const expectedPoolStripHours = 15 * 133 / 60
-    const expectedPrelimsStripHours = 8 * 93 / 60
-    const expectedR16StripHours = 4 * 84 / 60
-    const expectedVideoStripHours = expectedR16StripHours
-    const expectedTotal = expectedPoolStripHours + expectedPrelimsStripHours + expectedR16StripHours
-    expect(result.video_strip_hours).toBeCloseTo(expectedVideoStripHours, 1)
-    expect(result.total_strip_hours).toBeCloseTo(expectedTotal, 1)
+    // 100 Div 1 FOIL fencers: n_pools=15, 10 pools of 7, 5 pools of 6
+    // poolDurationForSize(FOIL,7)=120, poolDurationForSize(FOIL,6)=round(120*15/21)=86
+    // weightedPoolDuration = round((10*120 + 5*86)/15) = round(108.67) = 109
+    // pool_strip_hours = 15 * 109 / 60 = 27.25
+    // bracket 128, Div 1 stages at the round of 16:
+    //   prelims R128 36 (100 − 64) + R64 32 + R32 16 = 84 bouts × 20 / 60 = 28 general h
+    //   video R16 8 + QF 4 + SF 2 = 14 bouts × 20 / 60 ≈ 4.667 video h, billed to video only
+    // total = 27.25 + 28 = 55.25
+    const expectedPoolStripHours = 15 * 109 / 60
+    const expectedPrelimsStripHours = 84 * 20 / 60
+    const expectedVideoStripHours = 14 * 20 / 60
+    expect(result.video_strip_hours).toBeCloseTo(expectedVideoStripHours, 10)
+    expect(result.total_strip_hours).toBeCloseTo(expectedPoolStripHours + expectedPrelimsStripHours, 10)
   })
 
   it('SINGLE_STAGE competition → zero video_strip_hours regardless of video policy', () => {
@@ -198,9 +296,9 @@ describe('estimateCompetitionStripHours', () => {
     expect(result.video_strip_hours).toBe(0)
   })
 
-  it('team event — 33 teams, EPEE → DE strip-hours ≈ 10.333 (play-in round)', () => {
-    // playInBouts=1 (33-32); rounds 32→16→8→4→2 (finals excluded)
-    // teamDeStripHours = (1+16+8+4+2) × 20/60 = 31 × 20/60 ≈ 10.333
+  it('team event — 33 teams, EPEE → DE strip-hours = 31 (play-in round)', () => {
+    // bracket 64: R64 1 play-in (33 − 32), then R32 16 + R16 8 + QF 4 + SF 2
+    // (finals excluded) = 31 matches × 60 min (team match) / 60 = 31
     const config = makeConfig()
     const comp = makeCompetition({
       id: 'team-33',
@@ -215,35 +313,11 @@ describe('estimateCompetitionStripHours', () => {
 
     const result = estimateCompetitionStripHours(comp, config)
 
-    // Pool for 33 EPEE: n_pools=5, 3 pools of 7 (168 min each), 2 pools of 6 (120 min each)
-    // weightedPoolDur = round((3×168 + 2×120)/5) = round(148.8) = 149; pool_sh = 5×149/60 ≈ 12.417
-    const expectedPoolStripHours = 5 * 149 / 60
+    // Pool for 33 EPEE: n_pools=5, 3 pools of 7 (120 min each), 2 pools of 6 (86 min each)
+    // weightedPoolDur = round((3×120 + 2×86)/5) = round(106.4) = 106; pool_sh = 5×106/60 ≈ 8.833
+    const expectedPoolStripHours = 5 * 106 / 60
     const deStripHours = result.total_strip_hours - expectedPoolStripHours
-    expect(deStripHours).toBeCloseTo(10.333, 1)
-  })
-
-  it('team event — 32 teams, EPEE → DE strip-hours = 10.0 (no play-ins)', () => {
-    // 32 teams, no play-ins. R32:16 + R16:8 + QF:4 + SF:2 = 30 bouts (finals excluded)
-    // teamDeStripHours = 30 × 20/60 = 10.0
-    const config = makeConfig()
-    const comp = makeCompetition({
-      id: 'team-32',
-      fencer_count: 32,
-      weapon: Weapon.EPEE,
-      event_type: EventType.TEAM,
-      cut_mode: CutMode.DISABLED,
-      cut_value: 100,
-      de_mode: DeMode.SINGLE_STAGE,
-      strips_allocated: 16,
-    })
-
-    const result = estimateCompetitionStripHours(comp, config)
-
-    // Pool for 32 EPEE: n_pools=5, 2 pools of 7 (168 min), 3 pools of 6 (120 min)
-    // weightedPoolDur = round((2×168 + 3×120)/5) = round(139.2) = 139; pool_sh = 5×139/60
-    const expectedPoolStripHours = 5 * 139 / 60
-    const deStripHours = result.total_strip_hours - expectedPoolStripHours
-    expect(deStripHours).toBeCloseTo(10.0, 1)
+    expect(deStripHours).toBeCloseTo(31, 10)
   })
 
 })
@@ -298,9 +372,9 @@ describe('dayConsumedCapacity', () => {
 
     const result = dayConsumedCapacity(0, state, [comp1, comp2], config)
 
-    // comp1: 30 FOIL → 5 pools of 6; poolDur(FOIL,6)=105; pool_sh=5*105/60=8.75
+    // comp1: 30 FOIL → 5 pools of 6; poolDur(FOIL,6)=round(120*15/21)=86; pool_sh=5*86/60≈7.167
     //   DE strip-hours computed via estimateCompetitionStripHours
-    // comp2: 30 EPEE → 5 pools of 6; poolDur(EPEE,6)=120; pool_sh=5*120/60=10.0
+    // comp2: 30 EPEE → 5 pools of 6; poolDur(EPEE,6)=86; pool_sh=5*86/60≈7.167
     //   DE strip-hours computed via estimateCompetitionStripHours
     const comp1StripHours = estimateCompetitionStripHours(comp1, config).total_strip_hours
     const comp2StripHours = estimateCompetitionStripHours(comp2, config).total_strip_hours
@@ -320,7 +394,7 @@ describe('dayConsumedCapacity', () => {
     const day0Result = dayConsumedCapacity(0, state, [comp1, comp2], config)
     const emptyDayResult = dayConsumedCapacity(2, state, [comp1, comp2], config)
 
-    // 30 FOIL (default weapon) → 5 pools of 6; poolDur(FOIL,6)=105; pool_sh=5*105/60=8.75
+    // 30 FOIL (default weapon) → 5 pools of 6; poolDur(FOIL,6)=86; pool_sh=5*86/60≈7.167
     // DE strip-hours computed via estimateCompetitionStripHours
     const expectedSingleCompStripHours = estimateCompetitionStripHours(comp1, config).total_strip_hours
     expect(day0Result.strip_hours_consumed).toBeCloseTo(expectedSingleCompStripHours, 5)
@@ -335,7 +409,6 @@ describe('dayConsumedCapacity', () => {
       weapon: Weapon.FOIL,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 4,
       strips_allocated: 8,
     })
 
@@ -344,11 +417,9 @@ describe('dayConsumedCapacity', () => {
     const result = dayConsumedCapacity(0, state, [comp], config)
 
     // Same competition as in the estimateCompetitionStripHours STAGED test:
-    // Finals phase no longer separately allocated (stop-at-semis); video_strip_hours = r16 only.
-    // deBlockDurations(128,180): r16_dur = round(180 * 30/64) = 84
-    // r16_strip_hours = 4 * 84 / 60 = 5.6
-    const expectedVideoStripHours = 4 * 84 / 60
-    expect(result.video_strip_hours_consumed).toBeCloseTo(expectedVideoStripHours, 1)
+    // video R16 8 + QF 4 + SF 2 = 14 bouts × 20 / 60 ≈ 4.667 video strip-hours.
+    const expectedVideoStripHours = 14 * 20 / 60
+    expect(result.video_strip_hours_consumed).toBeCloseTo(expectedVideoStripHours, 10)
   })
 })
 
@@ -394,9 +465,9 @@ describe('dayRemainingCapacity', () => {
     const filledResult = dayRemainingCapacity(0, filledState, [comp], config)
 
     // 50 FOIL: n_pools=8; 2 pools of 7, 6 pools of 6
-    // poolDur(FOIL,7)=round(105*21/15)=147; poolDur(FOIL,6)=105
-    // weightedPoolDur = round((2*147+6*105)/8) = round(924/8) = round(115.5) = 116
-    // pool_sh = 8 * 116 / 60 = 15.4667
+    // poolDur(FOIL,7)=120; poolDur(FOIL,6)=round(120*15/21)=86
+    // weightedPoolDur = round((2*120+6*86)/8) = round(756/8) = round(94.5) = 95
+    // pool_sh = 8 * 95 / 60 ≈ 12.667
     // DE strip-hours computed via estimateCompetitionStripHours
     const expectedCompStripHours = estimateCompetitionStripHours(comp, config).total_strip_hours
     expect(emptyResult.strip_hours_remaining - filledResult.strip_hours_remaining).toBeCloseTo(expectedCompStripHours, 5)
@@ -410,7 +481,6 @@ describe('dayRemainingCapacity', () => {
       weapon: Weapon.FOIL,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 4,
       strips_allocated: 8,
     })
 

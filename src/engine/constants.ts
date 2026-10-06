@@ -51,7 +51,7 @@ export const DAY_LENGTH_MINS = 840 // DAY_END_MINS - DAY_START_MINS
 export const ADMIN_GAP_MINS = 30
 export const FLIGHT_BUFFER_MINS = 15
 export const THRESHOLD_MINS = 10
-// Pool rounds run 75-120 min (see DEFAULT_POOL_ROUND_DURATION_TABLE), so a 60-min wave can't accommodate the second event starting inside the wave.
+// Pool rounds run 60-120 min for a pool of 7 (see DEFAULT_POOL_ROUND_DURATION_TABLE), so a 60-min wave can't accommodate the second event starting inside the wave.
 export const MORNING_WAVE_WINDOW_MINS = 120
 
 // ──────────────────────────────────────────────
@@ -65,19 +65,36 @@ export const INDIV_TAIL_MINS = 30
 export const TEAM_TAIL_MINS = 60
 
 export const DE_REFS = 1
-// DE phase strip footprint cap (concurrentScheduler.ts). de_duration_table's
-// empirical durations are calibrated against this value — changing it
-// requires re-deriving the table.
+// Cap on the strips a single-stage DE or prelims block asks for:
+// min(bracketSize / 2, 16) (METHODOLOGY.md §DE Modes, Appendix A §Resource
+// Constants). The DE's length is derived at the strips granted (§DE Duration).
 export const DEFAULT_DE_STRIP_FOOTPRINT = 16
-// Per-bout time includes the 5-minute strip-changeover overhead, which is why
-// sabre is 15 rather than the pure fencing time.
+// Minutes per DE bout or team match (METHODOLOGY.md Appendix A §Timing
+// Constants, §DE Duration). de.ts's perBoutDuration picks the table.
+//
+// 15-touch: Ops Manual 2026-27 p.17 – Average Bout Timing (15/15/8), read as
+// fencing time, plus a 5-minute strip changeover.
 export const DE_BOUT_DURATION: Record<Weapon, number> = {
   [Weapon.EPEE]: 20,
   [Weapon.FOIL]: 20,
-  [Weapon.SABRE]: 15,
+  [Weapon.SABRE]: 13,
 }
-// Applied to DE_BOUT_DURATION for Y8/Y10 and all veteran age groups — shorter
-// bouts for these categories per USA Fencing rules.
+// 10-touch, for Y8, Y10 and the Veteran category (any age group, Vet Combined
+// included): the 15-touch fencing time × 10⁄15, rounded, plus the changeover
+// (S8 p.38 and p.41). p.17 prints no 10-touch figure, and Y8 extends Y10.
+export const DE_BOUT_DURATION_10_TOUCH: Record<Weapon, number> = {
+  [Weapon.EPEE]: 15,
+  [Weapon.FOIL]: 15,
+  [Weapon.SABRE]: 10,
+}
+// Team match as printed, no changeover added (Ops Manual 2026-27 p.17 – Team Match).
+export const TEAM_MATCH_DURATION: Record<Weapon, number> = {
+  [Weapon.EPEE]: 60,
+  [Weapon.FOIL]: 60,
+  [Weapon.SABRE]: 30,
+}
+// Superseded by DE_BOUT_DURATION_10_TOUCH: −5 cannot give sabre's 10 from 13.
+// No longer read by de.ts.
 export const YOUTH_VET_BOUT_DELTA = -5
 export const SAME_TIME_WINDOW_MINS = 30
 export const INDIV_TEAM_MIN_GAP_MINS = 120
@@ -108,56 +125,23 @@ export const BOUT_COUNTS: Record<number, number> = {
 }
 
 // ──────────────────────────────────────────────
-// Default pool round durations by weapon (minutes for a full pool round)
+// Default pool round durations by weapon (minutes for a pool of 7, 21 bouts)
 // ──────────────────────────────────────────────
 
+// Ops Manual 2026-27 p.17 – Average Bout Timing, Pool of 7 (METHODOLOGY.md
+// Appendix A §Pool Duration by Weapon). Other pool sizes scale by bout count
+// in pools.ts. The organizer-editable table holds pool-of-7 values, so an
+// override saved before 024 is read on this basis (no back-compat).
 export const DEFAULT_POOL_ROUND_DURATION_TABLE: Record<Weapon, number> = {
   [Weapon.EPEE]: 120,
-  [Weapon.FOIL]: 105,
-  [Weapon.SABRE]: 75,
+  [Weapon.FOIL]: 120,
+  [Weapon.SABRE]: 60,
 }
 
 // Validation bounds for user-supplied pool round durations (spec 002, research D5).
 // Shared by the editor UI and the serialization schema so the fact has one home.
 export const POOL_DURATION_MIN = 1
 export const POOL_DURATION_MAX = 999
-
-// ──────────────────────────────────────────────
-// Default DE bout durations by weapon and bracket size (minutes per round)
-// ──────────────────────────────────────────────
-
-export const DEFAULT_DE_DURATION_TABLE: Record<Weapon, Record<number, number>> = {
-  [Weapon.FOIL]: {
-    2: 15,
-    4: 30,
-    8: 45,
-    16: 60,
-    32: 90,
-    64: 120,
-    128: 180,
-    256: 240,
-  },
-  [Weapon.EPEE]: {
-    2: 15,
-    4: 30,
-    8: 45,
-    16: 60,
-    32: 90,
-    64: 120,
-    128: 180,
-    256: 240,
-  },
-  [Weapon.SABRE]: {
-    2: 15,
-    4: 20,
-    8: 30,
-    16: 45,
-    32: 60,
-    64: 90,
-    128: 120,
-    256: 120,
-  },
-}
 
 // ──────────────────────────────────────────────
 // Default cut-to-DE settings by category
@@ -531,9 +515,11 @@ export const REGIONAL_QUALIFIER_TYPES: ReadonlySet<string> = new Set<string>([
 ])
 
 // ──────────────────────────────────────────────
-// Video stage round: the DE round at which video replay begins per category.
-// At NACs these are guaranteed; at other tournaments they're best-effort.
-// (Ops Manual Ch.4, p.25)
+// Video stage round: the DE round at which video replay begins per category
+// (Ops Manual 2026-27 p.19 – Video Replay, METHODOLOGY.md §Video Replay Policy).
+// Every individual category is listed. Y8 is an interpretation: p.19 does not
+// list it, so it follows Y10. de.ts's videoStageRound falls back to the round
+// of 8 only for a VETERAN event with no age group.
 // ──────────────────────────────────────────────
 
 type VideoStageKey = Category | `${Category}:${VetAgeGroup}`
@@ -542,19 +528,27 @@ export const VIDEO_STAGE_ROUND: Partial<Record<VideoStageKey, number>> = {
   [Category.DIV1]: 16,
   [Category.JUNIOR]: 16,
   [Category.CADET]: 16,
+  [Category.Y8]: 8,
   [Category.Y10]: 8,
   [Category.Y12]: 8,
   [Category.Y14]: 8,
+  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: 8,
   [`${Category.VETERAN}:${VetAgeGroup.VET50}`]: 8,
   [`${Category.VETERAN}:${VetAgeGroup.VET60}`]: 8,
   [`${Category.VETERAN}:${VetAgeGroup.VET70}`]: 8,
-  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: 4,
-  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: 4,
-  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: 4,
-  [Category.DIV1A]: 4,
-  [Category.DIV2]: 4,
-  [Category.DIV3]: 4,
+  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: 8,
+  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: 8,
+  [Category.DIV1A]: 8,
+  [Category.DIV2]: 8,
+  [Category.DIV3]: 8,
 }
+
+// Video-stage round for a VETERAN event with no age group (METHODOLOGY.md
+// §Video Replay Policy: every Veteran tier is the round of 8).
+export const VIDEO_STAGE_ROUND_FALLBACK = 8
+
+// The most video strips one video block asks for (METHODOLOGY.md §DE Modes).
+export const VIDEO_BLOCK_STRIP_ASK = 4
 
 // ──────────────────────────────────────────────
 // Individual/Team relaxable blocks: pairs that MUST NOT be on the same day

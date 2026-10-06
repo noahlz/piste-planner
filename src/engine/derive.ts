@@ -13,8 +13,8 @@
  * are scheduler diagnostics about contention, not geometry.
  */
 
-import { DeMode, Phase, PlacementSource, tailEstimateMins } from './types.ts'
-import type { Competition, Placement, ScheduleResult, TournamentConfig } from './types.ts'
+import { DeMode, PlacementSource, tailEstimateMins } from './types.ts'
+import type { Competition, DeRound, Placement, ScheduleResult, TournamentConfig } from './types.ts'
 import { snapToSlot } from './resources.ts'
 import {
   computePoolStructure,
@@ -23,15 +23,7 @@ import {
   resolveRefsPerPool,
   weightedPoolDuration,
 } from './pools.ts'
-import {
-  calculateDeDuration,
-  computeBracketSize,
-  deBlockDurations,
-  dePhasesForBracket,
-  deSingleStageDuration,
-  deStagedPhaseDuration,
-  deStripFootprint,
-} from './de.ts'
+import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap } from './stripBudget.ts'
 
 export interface DerivedEventSchedule {
@@ -47,6 +39,16 @@ export interface DerivedEventSchedule {
  */
 function grantedStrips(desired: number, ...bounds: number[]): number {
   return Math.max(1, Math.min(desired, ...bounds))
+}
+
+/**
+ * Strips a DE block draws. A block with no counted round – a bracket of 2 –
+ * draws none and takes 0 minutes (METHODOLOGY.md §DE Duration 'No counted
+ * round'), matching `concurrentScheduler`'s `hasNoCountedRound`. Keyed to the
+ * rounds, so the 1-strip floor still holds for every other block (024 plan D5).
+ */
+function grantedDeStrips(rounds: readonly DeRound[], desired: number, deCap: number): number {
+  return rounds.length === 0 ? 0 : grantedStrips(desired, deCap)
 }
 
 /**
@@ -69,17 +71,7 @@ export function deriveEventSchedule(
     config.pool_round_duration_table,
   )
   const refs = resolveRefsPerPool(competition.ref_policy, poolStructure.n_pools)
-  const bracketSize = computeBracketSize(
-    competition.fencer_count,
-    competition.cut_mode,
-    competition.cut_value,
-    competition.event_type,
-  )
-  const totalDeBase = calculateDeDuration(
-    competition.weapon,
-    bracketSize,
-    config.de_duration_table,
-  )
+  const deBlocks = deBlocksFor(competition, config)
 
   const poolCap = computeStripCap(
     config.strips_total,
@@ -117,7 +109,7 @@ export function deriveEventSchedule(
       competition.cut_value,
       competition.event_type,
     ),
-    bracket_size: bracketSize,
+    bracket_size: deBlocks.bracketSize,
     cut_mode: competition.cut_mode,
     cut_value: competition.cut_value,
     de_mode: competition.de_mode,
@@ -135,7 +127,7 @@ export function deriveEventSchedule(
     conflict_score: 0,
     pool_duration_baseline: poolBaseline,
     pool_duration_actual: 0,
-    de_duration_baseline: totalDeBase,
+    de_duration_baseline: deBlocks.baselineMinutes,
     de_duration_actual: 0,
     constraint_relaxation_level: 0,
     accepted_warnings: [],
@@ -199,14 +191,15 @@ export function deriveEventSchedule(
   }
 
   // DE block(s). The placement's strip budget covers the pool block only — DE
-  // phases carry their own footprint (deStripFootprint / de_round_of_16_strips).
+  // phases carry their own asks (deBlocksFor: generalAsk / videoAsk), and each
+  // block's length is derived per round at the strips it draws.
   const deStart = snapToSlot(poolEnd + config.ADMIN_GAP_MINS)
-  const deDesired = deStripFootprint(bracketSize, config.DEFAULT_DE_STRIP_FOOTPRINT)
+  const { general, video, generalAsk, videoAsk, boutMinutes } = deBlocks
   let terminalEnd: number
 
   if (competition.de_mode === DeMode.SINGLE_STAGE) {
-    const deStrips = grantedStrips(deDesired, deCap)
-    const deDuration = deSingleStageDuration(totalDeBase, bracketSize, deStrips, deDesired)
+    const deStrips = grantedDeStrips(general, generalAsk, deCap)
+    const deDuration = deRoundsMinutes(general, deStrips, boutMinutes)
 
     result.de_start = deStart
     result.de_end = deStart + deDuration
@@ -214,14 +207,11 @@ export function deriveEventSchedule(
     result.de_duration_actual = deDuration
     terminalEnd = result.de_end
   } else {
-    const blocks = deBlockDurations(bracketSize, totalDeBase)
     let segmentStart = deStart
 
-    if (dePhasesForBracket(bracketSize).includes(Phase.DE_PRELIMS)) {
-      const prelimsStrips = grantedStrips(deDesired, deCap)
-      const prelimsDuration = deStagedPhaseDuration(
-        blocks.prelims_dur, prelimsStrips, deDesired,
-      )
+    if (general.length > 0) {
+      const prelimsStrips = grantedStrips(generalAsk, deCap)
+      const prelimsDuration = deRoundsMinutes(general, prelimsStrips, boutMinutes)
       result.de_prelims_start = segmentStart
       result.de_prelims_end = segmentStart + prelimsDuration
       result.de_prelims_strip_count = prelimsStrips
@@ -229,9 +219,8 @@ export function deriveEventSchedule(
       segmentStart = snapToSlot(result.de_prelims_end + config.ADMIN_GAP_MINS)
     }
 
-    const r16Desired = competition.de_round_of_16_strips
-    const r16Strips = grantedStrips(r16Desired, deCap)
-    const r16Duration = deStagedPhaseDuration(blocks.r16_dur, r16Strips, r16Desired)
+    const r16Strips = grantedDeStrips(video, videoAsk, deCap)
+    const r16Duration = deRoundsMinutes(video, r16Strips, boutMinutes)
 
     result.de_round_of_16_start = segmentStart
     result.de_round_of_16_end = segmentStart + r16Duration

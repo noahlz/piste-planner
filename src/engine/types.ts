@@ -238,7 +238,6 @@ export interface Competition {
   cut_value: number
   de_mode: DeMode
   de_video_policy: VideoPolicy
-  de_round_of_16_strips: number
   de_round_of_16_requirement: DeStripRequirement
   flighted: boolean
   flighting_group_id: string | null
@@ -276,11 +275,13 @@ export interface TournamentConfig {
   MAX_FENCERS: number
   MIN_FENCERS: number
   pool_round_duration_table: Record<Weapon, number>
-  de_duration_table: Record<Weapon, Record<number, number>>
   // Formerly read straight off `constants.ts` by de.ts and capacity.ts. They
   // travel on the config so the gears panel can retune them (FR-042) without
-  // the engine reaching for module state — constitution I.
+  // the engine reaching for module state — constitution I. The three bout-time
+  // tables are `DeBoutTimes` (METHODOLOGY.md Appendix A §Timing Constants).
   DE_BOUT_DURATION: Record<Weapon, number>
+  DE_BOUT_DURATION_10_TOUCH: Record<Weapon, number>
+  TEAM_MATCH_DURATION: Record<Weapon, number>
   YOUTH_VET_BOUT_DELTA: number
   DEFAULT_DE_STRIP_FOOTPRINT: number
   dayConfigs: DayConfig[]
@@ -427,9 +428,38 @@ export interface RefResolution {
   refs_needed: number
 }
 
-export interface DeBlockDurations {
-  prelims_dur: number
-  r16_dur: number
+/** One counted DE round: `round` is its size (256, …, 4 for the semis). */
+export interface DeRound {
+  round: number
+  bouts: number
+}
+
+/** The three DE bout-time tables (METHODOLOGY.md Appendix A §Timing Constants). */
+export interface DeBoutTimes {
+  DE_BOUT_DURATION: Record<Weapon, number>
+  DE_BOUT_DURATION_10_TOUCH: Record<Weapon, number>
+  TEAM_MATCH_DURATION: Record<Weapon, number>
+}
+
+/**
+ * One event's DE as the scheduler places it (METHODOLOGY.md §DE Modes, §DE
+ * Phase Breakdown). Built once per event by de.ts's `deBlocksFor`, so the
+ * scheduler, `derive.ts` and the capacity estimate read one split.
+ */
+export interface DeBlocks {
+  bracketSize: number
+  /** Minutes per bout or team match. */
+  boutMinutes: number
+  /** SINGLE_STAGE: every counted round. STAGED: the prelims, the rounds above the video-stage round. */
+  general: DeRound[]
+  /** STAGED: the video-stage round through the semis. SINGLE_STAGE: none. */
+  video: DeRound[]
+  /** Strips the general block asks: `min(bracketSize / 2, DEFAULT_DE_STRIP_FOOTPRINT)`. */
+  generalAsk: number
+  /** Video strips the video block asks: `min(4, bracketSize / 2)`. */
+  videoAsk: number
+  /** Minutes with every block granted its full ask (`de_duration_baseline`). */
+  baselineMinutes: number
 }
 
 export interface ValidationError {

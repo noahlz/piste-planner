@@ -6,10 +6,23 @@ import {
   VIDEO_STAGE_ROUND,
   SOFT_SEPARATION_PAIRS,
   DE_BOUT_DURATION,
+  DE_BOUT_DURATION_10_TOUCH,
+  TEAM_MATCH_DURATION,
   YOUTH_VET_BOUT_DELTA,
   CROSSOVER_GRAPH,
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
+
+describe('DEFAULT_POOL_ROUND_DURATION_TABLE', () => {
+  it('holds the pool-of-7 defaults: 120 foil, 120 épée, 60 sabre (Ops Manual p.17)', () => {
+    expect(DEFAULT_POOL_ROUND_DURATION_TABLE).toEqual({
+      [Weapon.FOIL]: 120,
+      [Weapon.EPEE]: 120,
+      [Weapon.SABRE]: 60,
+    })
+  })
+})
 
 describe('INDIV_TEAM_RELAXABLE_BLOCKS', () => {
   it('has exactly 2 entries', () => {
@@ -55,41 +68,39 @@ describe('REGIONAL_CUT_TOURNAMENT_TYPES', () => {
   })
 })
 
+// Ops Manual 2026-27 p.19 – Video Replay (METHODOLOGY.md §Video Replay Policy).
+// Every individual category sits at its tier. Y8 follows Y10 by interpretation.
 describe('VIDEO_STAGE_ROUND', () => {
-  it.each([Category.DIV1, Category.JUNIOR, Category.CADET])(
-    '%s → round 16',
-    (cat) => {
-      expect(VIDEO_STAGE_ROUND[cat]).toBe(16)
-    }
-  )
-
-  it.each([Category.Y10, Category.Y12, Category.Y14])('%s → round 8', (cat) => {
-    expect(VIDEO_STAGE_ROUND[cat]).toBe(8)
+  it('lists every individual category at its p.19 tier: Div 1, Junior, Cadet 16, all others 8', () => {
+    expect(VIDEO_STAGE_ROUND).toEqual({
+      [Category.DIV1]: 16,
+      [Category.JUNIOR]: 16,
+      [Category.CADET]: 16,
+      [Category.Y8]: 8,
+      [Category.Y10]: 8,
+      [Category.Y12]: 8,
+      [Category.Y14]: 8,
+      [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: 8,
+      [`${Category.VETERAN}:${VetAgeGroup.VET50}`]: 8,
+      [`${Category.VETERAN}:${VetAgeGroup.VET60}`]: 8,
+      [`${Category.VETERAN}:${VetAgeGroup.VET70}`]: 8,
+      [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: 8,
+      [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: 8,
+      [Category.DIV1A]: 8,
+      [Category.DIV2]: 8,
+      [Category.DIV3]: 8,
+    })
   })
-
-  it.each([VetAgeGroup.VET50, VetAgeGroup.VET60, VetAgeGroup.VET70])(
-    'VETERAN:%s → round 8',
-    (ageGroup) => {
-      expect(VIDEO_STAGE_ROUND[`${Category.VETERAN}:${ageGroup}`]).toBe(8)
-    }
-  )
-
-  it.each([VetAgeGroup.VET40, VetAgeGroup.VET80, VetAgeGroup.VET_COMBINED])(
-    'VETERAN:%s → round 4',
-    (ageGroup) => {
-      expect(VIDEO_STAGE_ROUND[`${Category.VETERAN}:${ageGroup}`]).toBe(4)
-    }
-  )
 })
 
-describe('DE_BOUT_DURATION', () => {
-  it('foil and épée are 20', () => {
-    expect(DE_BOUT_DURATION[Weapon.FOIL]).toBe(20)
-    expect(DE_BOUT_DURATION[Weapon.EPEE]).toBe(20)
-  })
-
-  it('sabre is 15 (includes the 5-minute strip-changeover overhead)', () => {
-    expect(DE_BOUT_DURATION[Weapon.SABRE]).toBe(15)
+// METHODOLOGY.md Appendix A §Timing Constants: minutes per DE bout or team match.
+describe('DE bout times', () => {
+  it.each([
+    { name: 'DE_BOUT_DURATION (15-touch, with the 5-minute changeover)', table: () => DE_BOUT_DURATION, foil: 20, epee: 20, sabre: 13 },
+    { name: 'DE_BOUT_DURATION_10_TOUCH (Y8, Y10, Veteran)', table: () => DE_BOUT_DURATION_10_TOUCH, foil: 15, epee: 15, sabre: 10 },
+    { name: 'TEAM_MATCH_DURATION (as printed, no changeover)', table: () => TEAM_MATCH_DURATION, foil: 60, epee: 60, sabre: 30 },
+  ])('$name is $foil foil / $epee épée / $sabre sabre', ({ table, foil, epee, sabre }) => {
+    expect(table()).toEqual({ [Weapon.FOIL]: foil, [Weapon.EPEE]: epee, [Weapon.SABRE]: sabre })
   })
 })
 

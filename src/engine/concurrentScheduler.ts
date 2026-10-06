@@ -42,7 +42,10 @@ import type {
   RefDemandByDay,
   StripAllocation,
   PinnedPlacement,
+  DeBlocks,
+  DeRound,
 } from './types.ts'
+import type { FindStripsInWindowResult } from './resources.ts'
 import {
   createGlobalState,
   findAvailableStripsInWindow,
@@ -58,15 +61,7 @@ import {
   weightedPoolDuration,
   computeDeFencerCount,
 } from './pools.ts'
-import {
-  computeBracketSize,
-  calculateDeDuration,
-  deBlockDurations,
-  dePhasesForBracket,
-  deSingleStageDuration,
-  deStagedPhaseDuration,
-  deStripFootprint,
-} from './de.ts'
+import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
 import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
@@ -132,8 +127,7 @@ interface EventState {
   poolStructure: ReturnType<typeof computePoolStructure>
   poolBaseline: number
   poolRefRes: ReturnType<typeof resolveRefsPerPool>
-  bracketSize: number
-  totalDeBase: number
+  deBlocks: DeBlocks
   // The phase nodes that belong to this event, in topological order.
   phases: PhaseNode[]
   // Constraint score for priority tie-breaking.
@@ -163,6 +157,9 @@ interface PhaseNode {
   // Computed per-attempt; null until allocated.
   desired_strip_count: number
   duration_at_full: number
+  // DE nodes only: the counted rounds this block runs, re-derived at the strips
+  // granted (METHODOLOGY.md §DE Duration). Empty for pool and flight nodes.
+  de_rounds: readonly DeRound[]
   video_required: boolean
   // The cap to apply (pool_cap or de_cap).
   cap_kind: 'POOL' | 'DE'
@@ -194,7 +191,6 @@ const PER_EVENT_ERROR_RULES: ReadonlySet<string> = new Set([
   'fencer-count-bounds',
   'cut-value-range',
   'cut-value-min-promotions',
-  'de-duration-table-missing-entry',
   'video-r16-strip-shortfall',
 ])
 
@@ -403,13 +399,7 @@ function buildEventStates(
       config.pool_round_duration_table,
     )
     const refRes = resolveRefsPerPool(comp.ref_policy, poolStructure.n_pools)
-    const bracketSize = computeBracketSize(
-      comp.fencer_count,
-      comp.cut_mode,
-      comp.cut_value,
-      comp.event_type,
-    )
-    const totalDeBase = calculateDeDuration(comp.weapon, bracketSize, config.de_duration_table)
+    const deBlocks = deBlocksFor(comp, config)
     const promoted = computeDeFencerCount(
       comp.fencer_count,
       comp.cut_mode,
@@ -438,7 +428,7 @@ function buildEventStates(
       flight_b_refs: 0,
       entry_fencer_count: comp.fencer_count,
       promoted_fencer_count: promoted,
-      bracket_size: bracketSize,
+      bracket_size: deBlocks.bracketSize,
       cut_mode: comp.cut_mode,
       cut_value: comp.cut_value,
       de_mode: comp.de_mode,
@@ -456,13 +446,13 @@ function buildEventStates(
       conflict_score: 0,
       pool_duration_baseline: poolBaseline,
       pool_duration_actual: 0,
-      de_duration_baseline: totalDeBase,
+      de_duration_baseline: deBlocks.baselineMinutes,
       de_duration_actual: 0,
       constraint_relaxation_level: 0,
       accepted_warnings: [],
     }
 
-    const phases = buildPhaseNodes(comp, poolStructure, refRes, poolBaseline, bracketSize, config)
+    const phases = buildPhaseNodes(comp, poolStructure, refRes, poolBaseline, deBlocks, config)
 
     events.push({
       competition: comp,
@@ -472,8 +462,7 @@ function buildEventStates(
       poolStructure,
       poolBaseline,
       poolRefRes: refRes,
-      bracketSize,
-      totalDeBase,
+      deBlocks,
       phases,
       constraint_score: constraintScore(comp, competitions, config),
       permanently_failed: false,
@@ -491,7 +480,7 @@ function buildPhaseNodes(
   poolStructure: ReturnType<typeof computePoolStructure>,
   refRes: ReturnType<typeof resolveRefsPerPool>,
   poolBaseline: number,
-  bracketSize: number,
+  deBlocks: DeBlocks,
   config: TournamentConfig,
 ): PhaseNode[] {
   const nodes: PhaseNode[] = []
@@ -524,6 +513,7 @@ function buildPhaseNodes(
       successor_index: 1,
       desired_strip_count: flightAPools,
       duration_at_full: flightADur,
+      de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
@@ -540,6 +530,7 @@ function buildPhaseNodes(
       successor_index: -1, // patched below
       desired_strip_count: flightBPools,
       duration_at_full: flightBDur,
+      de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
@@ -559,15 +550,18 @@ function buildPhaseNodes(
       successor_index: -1, // patched below
       desired_strip_count: poolStructure.n_pools,
       duration_at_full: poolDur,
+      de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
     })
   }
 
-  // DE phases. See deStripFootprint for why the ask is capped rather than
-  // bracketSize/2 — a 3-5 event day has to share the strip pool concurrently.
-  const deDesired = deStripFootprint(bracketSize, config.DEFAULT_DE_STRIP_FOOTPRINT)
+  // DE phases (METHODOLOGY.md §DE Modes, §DE Phase Breakdown). The general
+  // ask is capped at DEFAULT_DE_STRIP_FOOTPRINT rather than bracketSize/2, so a
+  // 3-5 event day can share the strip pool concurrently. Each block's length
+  // is derived per round at the strips it is granted (computePhaseDuration).
+  const { general, video, generalAsk, videoAsk, boutMinutes } = deBlocks
   if (comp.de_mode === DeMode.SINGLE_STAGE) {
     nodes.push({
       event_id: comp.id,
@@ -579,18 +573,17 @@ function buildPhaseNodes(
       defer_count: 0,
       index: nodes.length,
       successor_index: -1,
-      desired_strip_count: deDesired,
-      duration_at_full: 0, // computed at allocation time (depends on cap)
+      desired_strip_count: generalAsk,
+      duration_at_full: deRoundsMinutes(general, generalAsk, boutMinutes),
+      de_rounds: general,
       video_required: false, // SINGLE_STAGE never uses video
       cap_kind: 'DE',
       cross_event_predecessors: [],
     })
   } else {
-    // STAGED: prelims (only when bracket >= 64) → R16.
-    const phaseList = dePhasesForBracket(bracketSize)
-    const blocks = deBlockDurations(bracketSize, calculateDeDuration(comp.weapon, bracketSize, config.de_duration_table))
-
-    if (phaseList.includes(Phase.DE_PRELIMS)) {
+    // STAGED: prelims (only when the bracket is larger than the video-stage
+    // round) → the video block, the video-stage round through the semis.
+    if (general.length > 0) {
       nodes.push({
         event_id: comp.id,
         kind: PhaseKind.DE_PRELIMS,
@@ -601,8 +594,9 @@ function buildPhaseNodes(
         defer_count: 0,
         index: nodes.length,
         successor_index: -1, // patched below
-        desired_strip_count: deDesired,
-        duration_at_full: blocks.prelims_dur,
+        desired_strip_count: generalAsk,
+        duration_at_full: deRoundsMinutes(general, generalAsk, boutMinutes),
+        de_rounds: general,
         video_required: false,
         cap_kind: 'DE',
         cross_event_predecessors: [],
@@ -620,8 +614,9 @@ function buildPhaseNodes(
       defer_count: 0,
       index: nodes.length,
       successor_index: -1,
-      desired_strip_count: comp.de_round_of_16_strips,
-      duration_at_full: blocks.r16_dur,
+      desired_strip_count: videoAsk,
+      duration_at_full: deRoundsMinutes(video, videoAsk, boutMinutes),
+      de_rounds: video,
       video_required: r16VideoRequired,
       cap_kind: 'DE',
       cross_event_predecessors: [],
@@ -1096,15 +1091,28 @@ type AllocateOutcome =
  * returns `fail`.
  */
 /**
+ * A DE node whose bracket has no counted round – a bracket of 2, whose gold
+ * bout the tail estimate covers. It takes 0 minutes and claims no strip,
+ * general or video (METHODOLOGY.md §DE Duration 'No counted round', §Scheduler
+ * Stops at Semis). Keyed to the rounds, not to a strip ask of 0, so a pinned
+ * flight whose budget splits to 0 keeps its 1-strip floor (024 plan D5).
+ */
+function hasNoCountedRound(node: PhaseNode): boolean {
+  return node.cap_kind === 'DE' && node.de_rounds.length === 0
+}
+
+/**
  * The strip count a phase node actually gets: its ask, held down by the
- * cap its kind answers to, never below 1. Extracted from `tryAllocate` so the
- * pre-claim pass can compute the same number for a phase that claimed nothing.
+ * cap its kind answers to, never below 1 – except a DE with no counted round,
+ * which gets 0. Extracted from `tryAllocate` so the pre-claim pass can compute
+ * the same number for a phase that claimed nothing.
  */
 function cappedStripCount(
   node: PhaseNode,
   event: EventState,
   config: TournamentConfig,
 ): number {
+  if (hasNoCountedRound(node)) return 0
   const cap =
     node.cap_kind === 'POOL'
       ? computeStripCap(
@@ -1136,12 +1144,17 @@ function tryAllocate(
   // Duration depends on phase kind.
   const duration = computePhaseDuration(node, cappedCount, event)
 
+  // A DE with no counted round claims nothing, so it never searches for
+  // strips: it "fits" at ready_time on an empty strip set and passes through
+  // the same day-end check and result write as every other phase.
+  const noCountedRound = hasNoCountedRound(node)
+
   // STAGED-DE phases (prelims, R16) pre-check whether the phase can fit
   // before dayHardEnd at all, before searching for strips. Without this, a
   // phase whose duration alone overruns the day would still search for
   // strips and — if strips happened to be free at ready_time — fail with a
   // SAME_DAY_VIOLATION instead of deferring or failing cleanly.
-  if (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16) {
+  if (!noCountedRound && (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16)) {
     const fitsInDay = node.ready_time + duration <= dayHardEnd
     if (!fitsInDay) {
       // Try deferring once via window probe to confirm STRIPS vs TIME.
@@ -1157,9 +1170,11 @@ function tryAllocate(
 
   // Claim cappedCount strips for the phase duration as a single allocation —
   // the same path every phase kind uses (pools, flights, and both DE modes).
-  const win = findAvailableStripsInWindow(
-    state, config, cappedCount, node.ready_time, duration, node.video_required, day,
-  )
+  const win: FindStripsInWindowResult = noCountedRound
+    ? { fit: 'ok', strip_indices: [] }
+    : findAvailableStripsInWindow(
+        state, config, cappedCount, node.ready_time, duration, node.video_required, day,
+      )
   if (win.fit === 'ok') {
     const startTime = node.ready_time
     const endTime = startTime + duration
@@ -1209,8 +1224,8 @@ function tryAllocate(
 /**
  * Computes the actual (possibly cap-scaled) duration for a phase node given
  * the strip-count it ended up with. Pools recompute via estimatePoolDuration
- * (more rounds when strips are limited); DE phases scale duration by
- * (target_strips / actual_strips).
+ * (more rounds when strips are limited); DE phases re-derive their rounds'
+ * waves at the granted strips (METHODOLOGY.md §DE Duration).
  */
 function computePhaseDuration(node: PhaseNode, cappedCount: number, event: EventState): number {
   if (node.kind === PhaseKind.POOLS) {
@@ -1230,16 +1245,9 @@ function computePhaseDuration(node: PhaseNode, cappedCount: number, event: Event
     const flightBPools = Math.floor(event.poolStructure.n_pools / 2)
     return estimatePoolDuration(flightBPools, event.poolBaseline, cappedCount, event.poolRefRes.refs_per_pool).actual_duration
   }
-  if (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16) {
-    return deStagedPhaseDuration(node.duration_at_full, cappedCount, node.desired_strip_count)
-  }
-  // DE_SINGLE: duration scales with ratio, but excludes gold-bout fraction.
-  return deSingleStageDuration(
-    event.totalDeBase,
-    event.bracketSize,
-    cappedCount,
-    node.desired_strip_count,
-  )
+  // DE_SINGLE, DE_PRELIMS, DE_R16. The gold bout is not a counted round – the
+  // tail estimate covers it (§Scheduler Stops at Semis).
+  return deRoundsMinutes(node.de_rounds, cappedCount, event.deBlocks.boutMinutes)
 }
 
 /**

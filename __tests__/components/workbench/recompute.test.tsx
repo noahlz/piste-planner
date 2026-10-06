@@ -158,11 +158,11 @@ describe('two-tier recompute', () => {
 
     // Only now does the center pick up the new pool/DE structure — not just
     // any change, but the 7-pool structure 45 fencers actually derives to
-    // (pool end 12:06, DE 12:40-15:15, 5 strips, up from 1 at 8 fencers).
+    // (pool end 11:22, DE 11:55-14:10, 5 strips, up from 1 at 8 fencers).
     expect(center.textContent).not.toBe(centerBefore)
     const cells = centerRowCells(id)
-    expect(cells[2]).toBe('12:06') // pool end
-    expect(cells[3]).toBe('12:40') // DE start, now de_prelims_start
+    expect(cells[2]).toBe('11:22') // pool end
+    expect(cells[3]).toBe('11:55') // DE start, now de_prelims_start
     // T040 split the old single DE End column in two: de_end, the last minute
     // the scheduler actually places, and de_total_end with the 30-minute medal
     // tail on top of it.
@@ -176,9 +176,16 @@ describe('two-tier recompute', () => {
     // SINGLE_STAGE on this same fixture — with T061a's pre-allocated
     // strips_allocated left in place — reproduces DE 760-967 and de_total_end
     // 997 exactly, the pre-US4 16:07/16:37. T061a moves nothing here.
-    expect(cells[4]).toBe('15:15') // DE end, now de_round_of_16_end
+    //
+    // 024 group A, 2026-10-06 – the columns moved again, from 12:06/12:40/15:15/
+    // 15:45 to 11:22/11:55/14:10/14:40, under the 2026-27 Ops Manual planning
+    // times (METHODOLOGY §Pool Duration Estimation, §DE Duration). The 7 pools
+    // (3 of 7, 4 of 6) take 2 waves of about 101 min instead of 123, so the pool
+    // ends at 682. The Y10 DE bout is 15 min: DE_PRELIMS 715-790 is 5 waves
+    // (R64 2, R32 2, R16 1) and DE_ROUND_OF_16 820-850 is 2 (QF 1, SF 1).
+    expect(cells[4]).toBe('14:10') // DE end, now de_round_of_16_end
     expect(cells[5]).toBe('5') // pool_strip_count
-    expect(cells[6]).toBe('15:45') // finish, de_total_end
+    expect(cells[6]).toBe('14:40') // finish, de_total_end
   })
 
   it('restarts the settle timer on a second edit rather than relayouting at the first deadline', () => {
@@ -216,11 +223,11 @@ describe('two-tier recompute', () => {
     // first case lands on — never the first edit's (40) intermediate one.
     expect(center.textContent).not.toBe(centerBefore)
     const cells = centerRowCells(id)
-    expect(cells[2]).toBe('12:06') // pool end
-    expect(cells[3]).toBe('12:40') // DE start
-    expect(cells[4]).toBe('15:15') // DE end, as above
+    expect(cells[2]).toBe('11:22') // pool end
+    expect(cells[3]).toBe('11:55') // DE start
+    expect(cells[4]).toBe('14:10') // DE end, as above
     expect(cells[5]).toBe('5') // pool_strip_count
-    expect(cells[6]).toBe('15:45') // finish, de_total_end
+    expect(cells[6]).toBe('14:40') // finish, de_total_end
   })
 })
 
@@ -291,7 +298,7 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
       vi.advanceTimersByTime(CENTER_SETTLE_MS)
     })
 
-    // 726 is 12:06 and 915 is 15:15 — the same pool end and DE end the table
+    // 682 is 11:22 and 850 is 14:10 — the same pool end and DE end the table
     // cases above read off this fixture, so the two views agree (FR-023).
     //
     // 004 US4 T063 — the phase queried moved from DE to DE_ROUND_OF_16 and its
@@ -299,9 +306,9 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     // STAGED de_mode this fixture draws no `DE` block at all, so the old query
     // returned null rather than a wrong number. DE_ROUND_OF_16 is the terminal
     // drawn DE phase and 915 is the value the table cases read.
-    expect(poolEndBefore).not.toBe(726)
-    expect(blockEnd(id, 'POOLS')).toBe(726)
-    expect(blockEnd(id, 'DE_ROUND_OF_16')).toBe(915)
+    expect(poolEndBefore).not.toBe(682)
+    expect(blockEnd(id, 'POOLS')).toBe(682)
+    expect(blockEnd(id, 'DE_ROUND_OF_16')).toBe(850)
   })
 
   it('holds the pin badge at the committed pinned set until the settle (FR-042, T046)', () => {

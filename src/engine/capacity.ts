@@ -5,21 +5,26 @@
  * Strip-hours = strips × hours; a proxy for how much of a day's scheduling
  * capacity a competition consumes. Used as input to capacity-aware day assignment.
  *
- * DE strip-hours are table-driven: individual events read `de_duration_table`
- * directly, and team events sum round-by-round durations. There is no
- * configurable estimation model.
+ * DE strip-hours bill one strip for one bout time per DE bout (METHODOLOGY.md
+ * §DE Capacity Estimation), individual and team events alike. There is no
+ * configurable estimation model. General and video strip-hours are disjoint
+ * budgets: a staged event's video-stage bouts bill video only.
  */
 
-import { Category, DeMode, EventType } from './types.ts'
-import type { Competition, TournamentConfig, GlobalState } from './types.ts'
+import { Category, EventType } from './types.ts'
+import type { Competition, DeRound, TournamentConfig, GlobalState } from './types.ts'
 import { CATEGORY_START_PREFERENCE } from './constants.ts'
-import { computePoolStructure, weightedPoolDuration, computeDeFencerCount } from './pools.ts'
-import { computeBracketSize, calculateDeDuration, deBlockDurations } from './de.ts'
+import { computePoolStructure, weightedPoolDuration } from './pools.ts'
+import { deBlocksFor } from './de.ts'
 
 interface CompetitionStripHours {
-  /** Total estimated strip-hours consumed by this competition (pools + DE). */
+  /**
+   * General strip-hours consumed by this competition: pools plus the DE bouts
+   * that run on general strips. A STAGED event's video-stage bouts are not in
+   * it (METHODOLOGY.md §DE Capacity Estimation).
+   */
   total_strip_hours: number
-  /** Strip-hours consumed on video-capable strips (R16 + finals for STAGED only). */
+  /** Strip-hours of the STAGED video block (video-stage round through the semis). */
   video_strip_hours: number
 }
 
@@ -33,47 +38,9 @@ interface DayRemainingCapacity {
   video_strip_hours_remaining: number
 }
 
-/**
- * Returns the largest power of 2 that is ≤ n.
- */
-function prevPowerOf2(n: number): number {
-  if (n <= 1) return 1
-  return 1 << Math.floor(Math.log2(n))
-}
-
-/**
- * Team DE strip-hours: round-by-round, all bouts in a round run simultaneously.
- * Non-power-of-2 entries cause play-in bouts. Finals excluded.
- */
-function teamDeStripHours(
-  teamCount: number,
-  weapon: Competition['weapon'],
-  // `config.DE_BOUT_DURATION`, threaded from the caller rather than imported,
-  // so an organizer's override reaches the capacity estimate too.
-  boutDurations: TournamentConfig['DE_BOUT_DURATION'],
-): number {
-  if (teamCount <= 1) return 0
-  const boutDuration = boutDurations[weapon]
-
-  const playInBouts = teamCount - prevPowerOf2(teamCount)
-  let totalStripHours = 0
-
-  // Play-in round (if any)
-  if (playInBouts > 0) {
-    totalStripHours += playInBouts * boutDuration / 60
-  }
-
-  // Clean bracket rounds: after play-ins, the bracket is a clean power of 2.
-  // Walk from full field down to SF (2 bouts), excluding finals (1 bout).
-  let remaining = prevPowerOf2(teamCount)
-  while (remaining >= 2) {
-    const bouts = Math.floor(remaining / 2)
-    if (bouts === 1) break // finals — excluded
-    totalStripHours += bouts * boutDuration / 60
-    remaining = Math.floor(remaining / 2)
-  }
-
-  return totalStripHours
+/** Strip-hours `rounds` bill: one strip for one bout time per bout. */
+function deBoutStripHours(rounds: readonly DeRound[], boutMinutes: number): number {
+  return rounds.reduce((sum, { bouts }) => sum + bouts, 0) * boutMinutes / 60
 }
 
 /**
@@ -83,12 +50,19 @@ function teamDeStripHours(
  *   Each pool runs on its own strip simultaneously; the number of pools is
  *   the parallel strip demand for the pool phase.
  *
- * DE strip-hours: strips_allocated × table_duration / 60 for individual events
- * (SINGLE_STAGE and STAGED prelims alike). Team events always use the
- * round-by-round model.
- *
- * For STAGED: prelims use the flat formula; R16 and finals phases use their
- * own strip counts and durations unchanged.
+ * DE strip-hours: DE bouts × bout_minutes / 60 (METHODOLOGY.md §DE Capacity
+ * Estimation), counted from the first bracket round through the semis with
+ * byes not counted, whatever strip count the scheduler grants. Each bout bills
+ * one budget:
+ * - Individual SINGLE_STAGE: every bout bills `total_strip_hours`.
+ * - Individual STAGED: the prelims (rounds above the video-stage round) bill
+ *   `total_strip_hours`, and the video-stage round through the semis bills
+ *   only `video_strip_hours`. A bracket at or below its video-stage round has
+ *   no prelims bill (§DE Phase Breakdown).
+ * - Team: every match bills `total_strip_hours` at the team match time and
+ *   none bills video, whatever the DE mode (§DE Capacity Estimation → Team
+ *   Events; Ops Manual p.19 – teams have video only for the gold/bronze).
+ *   METHODOLOGY's `teamDeStripHours` is this same model.
  */
 export function estimateCompetitionStripHours(
   competition: Competition,
@@ -107,73 +81,18 @@ export function estimateCompetitionStripHours(
   // Pool strip-hours: one strip per pool, running in parallel
   const pool_strip_hours = poolStructure.n_pools * (poolDuration / 60)
 
-  const bracketSize = computeBracketSize(
-    competition.fencer_count,
-    competition.cut_mode,
-    competition.cut_value,
-    competition.event_type,
-  )
-  const promotedFencers = computeDeFencerCount(
-    competition.fencer_count,
-    competition.cut_mode,
-    competition.cut_value,
-    competition.event_type,
-  )
-  const totalDeDuration = calculateDeDuration(competition.weapon, bracketSize, config.de_duration_table)
-
-  let de_strip_hours = 0
-  let video_strip_hours = 0
-
-  // Team events always use the team round-by-round model
-  if (competition.event_type === EventType.TEAM) {
-    de_strip_hours = teamDeStripHours(
-      competition.fencer_count,
-      competition.weapon,
-      config.DE_BOUT_DURATION,
-    )
-  } else if (competition.de_mode === DeMode.STAGED) {
-    // Split DE into prelims / R16 / finals phases and attribute strip-hours separately.
-    // R16 and finals phases require video strips (per competition policy).
-    const blocks = deBlockDurations(bracketSize, totalDeDuration)
-
-    const prelims_strip_hours = prelimsStripHours(
-      promotedFencers,
-      competition.strips_allocated,
-      blocks.prelims_dur,
-    )
-
-    // Finals phase is no longer separately scheduled (stop-at-semis model);
-    // only R16 is attributed as a video strip block.
-    const r16_strip_hours = competition.de_round_of_16_strips * (blocks.r16_dur / 60)
-
-    de_strip_hours = prelims_strip_hours + r16_strip_hours
-    video_strip_hours = r16_strip_hours
-  } else {
-    // SINGLE_STAGE: flat formula — strips_allocated × table_duration / 60
-    de_strip_hours = competition.strips_allocated * totalDeDuration / 60
-    video_strip_hours = 0
-  }
+  // `general` is every round for SINGLE_STAGE and the prelims for STAGED;
+  // `video` is empty unless STAGED. A team event folds any video rounds back
+  // into general, so a team under a STAGED setting still bills no video.
+  const { general, video, boutMinutes } = deBlocksFor(competition, config)
+  const isTeam = competition.event_type === EventType.TEAM
+  const generalRounds = isTeam ? [...general, ...video] : general
+  const videoRounds = isTeam ? [] : video
 
   return {
-    total_strip_hours: pool_strip_hours + de_strip_hours,
-    video_strip_hours,
+    total_strip_hours: pool_strip_hours + deBoutStripHours(generalRounds, boutMinutes),
+    video_strip_hours: deBoutStripHours(videoRounds, boutMinutes),
   }
-}
-
-/**
- * Prelims strip-hours for STAGED.
- *
- * For STAGED, R16/finals phases already use their own strip counts
- * and empirical durations. The prelims phase uses the flat formula
- * `stripsAllocated × prelimsDuration / 60`.
- */
-function prelimsStripHours(
-  promotedFencers: number,
-  stripsAllocated: number,
-  prelimsDuration: number,
-): number {
-  if (promotedFencers <= 16) return 0
-  return stripsAllocated * prelimsDuration / 60
 }
 
 /**

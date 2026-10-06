@@ -1,7 +1,7 @@
-import { BottleneckSeverity, CutMode, VideoPolicy, DeMode, BottleneckCause, BottleneckRule, Phase } from './types.ts'
+import { BottleneckSeverity, CutMode, VideoPolicy, BottleneckCause, BottleneckRule, Phase } from './types.ts'
 import type { AnalysisResult, Bottleneck, Competition, TournamentConfig } from './types.ts'
 import { computePoolStructure, computeDeFencerCount, poolCountFor } from './pools.ts'
-import { computeBracketSize } from './de.ts'
+import { computeBracketSize, demandsVideoStage } from './de.ts'
 import { suggestFlightingGroups } from './flighting.ts'
 import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
@@ -204,11 +204,12 @@ export function initialAnalysis(
   }
 
   // ── Pass 4: video strip peak demand ──────────────────────────────────────
-  // Count STAGED + REQUIRED competitions per day as peak concurrent video demand.
-  // Each such competition needs video strips during its DE phase.
+  // Count STAGED + REQUIRED individual competitions per day as peak concurrent
+  // video demand. Each such competition needs video strips during its DE
+  // phase. Team events never count (024 D4, `demandsVideoStage`).
   const videoDemandByDay = new Map<number, number>()
   for (const comp of competitions) {
-    if (comp.de_mode === DeMode.STAGED && comp.de_video_policy === VideoPolicy.REQUIRED) {
+    if (demandsVideoStage(comp)) {
       const day = dayAssignments[comp.id]
       if (day === undefined) continue
       videoDemandByDay.set(day, (videoDemandByDay.get(day) ?? 0) + 1)

@@ -1,7 +1,7 @@
-import { Weapon, CutMode, EventType, Phase, Category, VetAgeGroup } from './types.ts'
-import type { DeBlockDurations } from './types.ts'
+import { Weapon, CutMode, EventType, Category, VetAgeGroup, DeMode, VideoPolicy } from './types.ts'
+import type { Competition, DeBlocks, DeBoutTimes, DeRound, TournamentConfig } from './types.ts'
 import { computeDeFencerCount } from './pools.ts'
-import { snapToSlot } from './resources.ts'
+import { VIDEO_STAGE_ROUND, VIDEO_STAGE_ROUND_FALLBACK, VIDEO_BLOCK_STRIP_ASK } from './constants.ts'
 
 /**
  * Returns the smallest power of 2 that is ≥ n.
@@ -31,58 +31,10 @@ export function computeBracketSize(
 }
 
 /**
- * Returns the ordered list of DE phases for a given bracket size.
- *
- * Stop-at-semis model: the gold-medal bout is excluded from scheduled blocks
- * and covered by tailEstimateMins() instead. DE_FINALS is never returned here.
- *
- * - bracket ≥ 64: prelims (top-half bouts before round of 16) + R16
- * - bracket ≥ 16: R16 only
- * - bracket < 16: R16 only (tiny bracket absorbed into r16 phase; over-allocates
- *   strips slightly but keeps the model uniform)
- */
-export function dePhasesForBracket(bracketSize: number): Phase[] {
-  if (bracketSize >= 64) {
-    return [Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16]
-  }
-  return [Phase.DE_ROUND_OF_16]
-}
-
-/**
- * Splits total DE time across two scheduled phases proportionally by bout count.
- *
- * Bout allocation:
- * - total_bouts   = bracket_size / 2
- * - prelims_bouts = max(total_bouts - 30 - 1, 0)  — rounds above 32 (bracket ≥ 64)
- * - r16_bouts     = min(30, total_bouts - 1)       — rounds 16 through SF
- * - finals_bouts  = 1 (gold medal only) — not allocated here; caller adds tailEstimateMins()
- *
- * Returns only the two scheduled blocks. The gold-bout share is intentionally
- * left out of both allocations and covered by the tail estimate.
- */
-export function deBlockDurations(bracketSize: number, totalDeDuration: number): DeBlockDurations {
-  const totalBouts = bracketSize / 2
-
-  if (totalBouts <= 0) {
-    return { prelims_dur: 0, r16_dur: totalDeDuration }
-  }
-
-  const r16Bouts = Math.min(30, totalBouts - 1)
-  const prelimsBouts = Math.max(totalBouts - 30 - 1, 0)
-
-  const prelimsDur = Math.round((totalDeDuration * prelimsBouts) / totalBouts)
-  const r16Dur = Math.round((totalDeDuration * r16Bouts) / totalBouts)
-
-  return { prelims_dur: prelimsDur, r16_dur: r16Dur }
-}
-
-/**
- * Strips one DE phase asks for.
- *
- * The empirical durations in de_duration_table are calibrated against a
- * fixed footprint per event, not bracketSize/2. Asking for bracketSize/2 would
- * let one event's DE claim 64+ strips and serialize against every other event
- * sharing the day.
+ * Strips a single-stage DE or prelims block asks for: `min(bracketSize / 2,
+ * defaultFootprint)`, never below 1 (METHODOLOGY.md §DE Modes). Asking for
+ * bracketSize/2 uncapped would let one event's DE claim 64+ strips and
+ * serialize against every other event sharing the day.
  *
  * `defaultFootprint` is `config.DEFAULT_DE_STRIP_FOOTPRINT` — required rather
  * than defaulted to the constant, so no caller can silently keep reading module
@@ -93,67 +45,150 @@ export function deStripFootprint(bracketSize: number, defaultFootprint: number):
 }
 
 /**
- * Duration of one staged DE phase (prelims or R16) that drew `strips` of the
- * `desiredStrips` it asked for. Time stretches by the shortfall ratio, floored
- * at 0.01 so a zero-strip grant cannot divide by zero.
- */
-export function deStagedPhaseDuration(
-  durationAtFull: number,
-  strips: number,
-  desiredStrips: number,
-): number {
-  const ratio = strips / Math.max(desiredStrips, 1)
-  return snapToSlot(Math.ceil(durationAtFull / Math.max(ratio, 0.01)))
-}
-
-/**
- * Duration of a single-stage DE block that drew `strips` of the `desiredStrips`
- * it asked for. Excludes the gold-bout share — that is covered by
- * tailEstimateMins() — and stretches by the strip shortfall ratio.
- */
-export function deSingleStageDuration(
-  totalDeDuration: number,
-  bracketSize: number,
-  strips: number,
-  desiredStrips: number,
-): number {
-  const totalBouts = Math.floor(bracketSize / 2)
-  const adjustedTotal = totalBouts > 0 ? (totalDeDuration * (totalBouts - 1)) / totalBouts : 0
-  const ratio = Math.min(strips / Math.max(desiredStrips, 1), 1.0)
-  if (ratio >= 1.0) return Math.round(adjustedTotal)
-  return Math.ceil(adjustedTotal / ratio)
-}
-
-/**
- * Looks up total DE duration from the provided duration table.
- * Returns the duration for the given weapon and bracket size.
- */
-export function calculateDeDuration(
-  weapon: Weapon,
-  bracketSize: number,
-  durationTable: Record<Weapon, Record<number, number>>,
-): number {
-  return durationTable[weapon][bracketSize]
-}
-
-/**
- * Returns per-bout DE duration in minutes for a weapon/category/vet_age_group combination.
- * Applies `youthVetDelta` when category is Y8 or Y10, or when vet_age_group is
- * non-null. The veteran arm keys off vet_age_group rather than category so it covers
- * VET_COMBINED regardless of how a veteran event sets its category.
+ * Minutes per DE bout (METHODOLOGY.md §DE Duration – Bout time, Appendix A
+ * §Timing Constants; Ops Manual 2026-27 p.17).
  *
- * `boutDurations` and `youthVetDelta` are `config.DE_BOUT_DURATION` and
- * `config.YOUTH_VET_BOUT_DELTA`.
+ * - every team event: the team match time
+ * - Y8, Y10 and the VETERAN category, or any event with a vet age group: the
+ *   10-touch time. The vet arm keys off either field, so a VETERAN event with
+ *   no age group and a Vet Combined event both qualify.
+ * - every other individual event: the 15-touch time
+ *
+ * `boutTimes` carries the three tables, so callers can thread them off the
+ * config rather than module state.
  */
 export function perBoutDuration(
   weapon: Weapon,
   category: Category,
   vet_age_group: VetAgeGroup | null,
-  boutDurations: Record<Weapon, number>,
-  youthVetDelta: number,
+  eventType: EventType,
+  boutTimes: DeBoutTimes,
 ): number {
-  const base = boutDurations[weapon]
-  const isYouth = category === Category.Y8 || category === Category.Y10
-  const isVet = vet_age_group !== null
-  return isYouth || isVet ? base + youthVetDelta : base
+  if (eventType === EventType.TEAM) return boutTimes.TEAM_MATCH_DURATION[weapon]
+  const isTenTouch =
+    category === Category.Y8 ||
+    category === Category.Y10 ||
+    category === Category.VETERAN ||
+    vet_age_group !== null
+  return isTenTouch ? boutTimes.DE_BOUT_DURATION_10_TOUCH[weapon] : boutTimes.DE_BOUT_DURATION[weapon]
+}
+
+/**
+ * The counted DE rounds for `promoted` fencers, largest first, from the first
+ * bracket round through the semis (METHODOLOGY.md §Bracket Sizing, §DE Duration).
+ *
+ * Byes are not bouts, so the first round has `promoted − bracket/2` bouts and
+ * every later round is full. The gold bout is not counted (the tail estimate
+ * covers it), so a bracket of 2 has no counted round.
+ *
+ * Bounded: the round size halves every pass.
+ */
+export function deRounds(promoted: number): DeRound[] {
+  const bracketSize = nextPowerOf2(promoted)
+  const rounds: DeRound[] = []
+  for (let round = bracketSize; round >= 4; round /= 2) {
+    const bouts = round === bracketSize ? promoted - bracketSize / 2 : round / 2
+    rounds.push({ round, bouts })
+  }
+  return rounds
+}
+
+/**
+ * Minutes to run `rounds` back to back on `strips` strips (METHODOLOGY.md
+ * §DE Duration): each round takes `ceil(bouts / strips)` waves of one bout
+ * time. No gap sits between rounds – the changeover is inside the bout time.
+ * A grant of 0 strips counts as 1. The result is not snapped – only start
+ * times snap to the slot.
+ */
+export function deRoundsMinutes(rounds: readonly DeRound[], strips: number, boutMinutes: number): number {
+  const effectiveStrips = Math.max(strips, 1)
+  return rounds.reduce((sum, { bouts }) => sum + Math.ceil(bouts / effectiveStrips) * boutMinutes, 0)
+}
+
+/**
+ * Splits a staged DE at its video-stage round (METHODOLOGY.md §DE Phase
+ * Breakdown): prelims are the rounds above it, the video block runs from it
+ * through the semis. A bracket at or below the video round has no prelims.
+ */
+export function splitAtVideoStage(
+  rounds: readonly DeRound[],
+  videoRound: number,
+): { prelims: DeRound[]; video: DeRound[] } {
+  return {
+    prelims: rounds.filter((r) => r.round > videoRound),
+    video: rounds.filter((r) => r.round <= videoRound),
+  }
+}
+
+/**
+ * The DE round at which an individual event's video stage begins (Ops Manual
+ * 2026-27 p.19; METHODOLOGY.md §Video Replay Policy). A VETERAN event keys
+ * off its age group, and with none it takes the round-of-8 fallback.
+ */
+export function videoStageRound(category: Category, vet_age_group: VetAgeGroup | null): number {
+  const key = category === Category.VETERAN && vet_age_group !== null
+    ? (`${category}:${vet_age_group}` as const)
+    : category
+  return VIDEO_STAGE_ROUND[key] ?? VIDEO_STAGE_ROUND_FALLBACK
+}
+
+/**
+ * Video strips one video block asks for: `min(4, bracket/2)` (METHODOLOGY.md
+ * §DE Modes, §DE Phase Breakdown). The one reading of the video ask.
+ */
+export function deVideoStripAsk(bracketSize: number): number {
+  return Math.min(VIDEO_BLOCK_STRIP_ASK, Math.floor(bracketSize / 2))
+}
+
+/**
+ * Whether an event adds to video demand: a STAGED, REQUIRED individual event.
+ * A team event never does, whatever it carries – a team DE has no video stage
+ * (024 plan D4; METHODOLOGY.md §DE Modes, §Video Replay Policy, Ops Manual
+ * 2026-27 p.19). The one reading of video demand for the day-assignment and
+ * initial-analysis counts.
+ */
+export function demandsVideoStage(competition: Competition): boolean {
+  return (
+    competition.event_type === EventType.INDIVIDUAL &&
+    competition.de_mode === DeMode.STAGED &&
+    competition.de_video_policy === VideoPolicy.REQUIRED
+  )
+}
+
+/**
+ * One event's DE as the scheduler places it (METHODOLOGY.md §DE Modes, §DE
+ * Duration, §DE Phase Breakdown). A SINGLE_STAGE DE is one general block of
+ * every counted round. A STAGED DE splits at its video-stage round into
+ * prelims on general strips and a video block that asks `deVideoStripAsk`.
+ *
+ * The scheduler, `derive.ts`, the capacity estimate and validation all read
+ * the split from here, so no two of them can derive a DE differently.
+ */
+export function deBlocksFor(competition: Competition, config: TournamentConfig): DeBlocks {
+  const { fencer_count, cut_mode, cut_value, event_type, category, vet_age_group, weapon } = competition
+  const promoted = computeDeFencerCount(fencer_count, cut_mode, cut_value, event_type)
+  const bracketSize = nextPowerOf2(promoted)
+  const rounds = deRounds(promoted)
+  const boutMinutes = perBoutDuration(weapon, category, vet_age_group, event_type, config)
+  const generalAsk = deStripFootprint(bracketSize, config.DEFAULT_DE_STRIP_FOOTPRINT)
+  const videoAsk = deVideoStripAsk(bracketSize)
+
+  let general: DeRound[] = rounds
+  let video: DeRound[] = []
+  if (competition.de_mode === DeMode.STAGED) {
+    const split = splitAtVideoStage(rounds, videoStageRound(category, vet_age_group))
+    general = split.prelims
+    video = split.video
+  }
+
+  return {
+    bracketSize,
+    boutMinutes,
+    general,
+    video,
+    generalAsk,
+    videoAsk,
+    baselineMinutes:
+      deRoundsMinutes(general, generalAsk, boutMinutes) + deRoundsMinutes(video, videoAsk, boutMinutes),
+  }
 }

@@ -438,6 +438,9 @@ describe('lastAutoRun', () => {
   // 12 unplaced) rather than the stale baseline figure.
   // 015, 2026-10-05 – the converged drift ledger now records B4 at 18 of 30
   // too, so the two figures agree.
+  // 024 group A, 2026-10-06 – B4 places 19 of 30 under the 2026-27 Operations
+  // Manual planning times, as the ledger and app path do
+  // (specs/024-ops-manual-conformance/plan.md §Group A).
   //
   // unplaced is `competitions.length - placed`, not "entries in schedule with
   // a null pool_start" — concurrentScheduler.ts's commitEventResult only ever
@@ -450,9 +453,9 @@ describe('lastAutoRun', () => {
 
     const result = runScheduleAll()
 
-    expect(result).toEqual({ placed: 18, unplaced: 12 })
+    expect(result).toEqual({ placed: 19, unplaced: 11 })
     expect(useStore.getState().lastAutoRun).toEqual(
-      expect.objectContaining({ placed: 18, unplaced: 12 }),
+      expect.objectContaining({ placed: 19, unplaced: 11 }),
     )
   })
 })

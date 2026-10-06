@@ -58,13 +58,20 @@ describe('runAppPath', () => {
   // 015, 2026-10-05 – B6's gap closed. The ledger now reads 40, as the app path
   // does, because 015's factory applies the app's per-type cut, DE mode and
   // referee policy. B6's placed count here did not move.
+  //
+  // 024 group A, 2026-10-06 – B4's placed count moved 18 → 19 and B6's 40 → 50,
+  // re-measured on this branch, with the parity file's pins and the ledger's
+  // counts in the same commit. The 2026-27 Operations Manual planning times
+  // (pool of 7, DEs derived per round from bout time, team events single stage
+  // without video) shorten most events, so more fit their days
+  // (specs/024-ops-manual-conformance/plan.md §Group A).
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
-    B4: { selected: 30, placed: 18 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it – the ledger reads 18 too since 015 (see above)
+    B4: { selected: 30, placed: 19 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it; 18 until 024 group A – the ledger reads the same since 015 (see above)
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
-    B6: { selected: 54, placed: 40 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty
+    B6: { selected: 54, placed: 50 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
     B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4
   }
@@ -107,14 +114,21 @@ describe('runAppPath', () => {
     // membership. Day 3 absorbs the sabre load the reshuffle displaces, which is
     // why both of its numbers rise the most.
     //
+    // 024 group A, 2026-10-06 – day 1's peak moved 186 → 210 (2025 → 1980) and
+    // day 3's peak time 4905 → 4860, its count held. The 2026-27 Operations
+    // Manual planning times re-time every pool and DE, so the overlapping
+    // windows `computePostScheduleRefDemand` sweeps move, and with them the
+    // minute each peak falls on. Planning measured the 210 independently
+    // (specs/024-ops-manual-conformance/plan.md §Group A).
+    //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.
     const result = runAppPath('B1')
     expect(result.refRequirementsByDay).toEqual([
       { day: 0, peak_total_refs: 154, peak_saber_refs: 64, peak_time: 480 },
-      { day: 1, peak_total_refs: 186, peak_saber_refs: 64, peak_time: 2025 },
+      { day: 1, peak_total_refs: 210, peak_saber_refs: 64, peak_time: 1980 },
       { day: 2, peak_total_refs: 160, peak_saber_refs: 50, peak_time: 3360 },
-      { day: 3, peak_total_refs: 202, peak_saber_refs: 76, peak_time: 4905 },
+      { day: 3, peak_total_refs: 202, peak_saber_refs: 76, peak_time: 4860 },
     ])
   })
 

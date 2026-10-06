@@ -2,8 +2,8 @@ import { Weapon, CutMode, EventType, RefPolicy } from './types.ts'
 import type { PoolStructure, PoolDurationResult, RefResolution } from './types.ts'
 import { BOUT_COUNTS } from './constants.ts'
 
-// BOUT_COUNTS[6] = 15 is the baseline pool size used to scale durations
-const BASELINE_POOL_SIZE = 6
+// BOUT_COUNTS[7] = 21 is the baseline pool size used to scale durations (Ops Manual p.17)
+const BASELINE_POOL_SIZE = 7
 
 /**
  * Computes the pool structure (number of pools and their sizes) for a given fencer count.
@@ -55,9 +55,10 @@ export function poolCountFor(fencerCount: number, useSinglePoolOverride = false)
  * Returns the estimated duration (minutes) for a single pool of a given size.
  *
  * Formula (METHODOLOGY.md §Pool Duration Estimation):
- *   round(baseDuration * BOUT_COUNTS[poolSize] / BOUT_COUNTS[6])
+ *   round(baseDuration * BOUT_COUNTS[poolSize] / BOUT_COUNTS[7])
  *
- * BOUT_COUNTS[6] = 15 is the canonical baseline (standard 6-person pool).
+ * `durationTable` holds pool-of-7 times (21 bouts), per Ops Manual 2026-27
+ * p.17 – Average Bout Timing, Pool of 7.
  */
 export function poolDurationForSize(
   weapon: Weapon,

@@ -149,7 +149,7 @@ describe('CanvasTooltip contents (FR-022)', () => {
     expect(field('category')).toBe('Y10')
     expect(field('gender')).toBe("Women's")
     expect(field('day')).toBe('Day 3')
-    expect(field('phase')).toBe('DE round of 16')
+    expect(field('phase')).toBe('video stage')
     expect(field('start')).toBe('15:15')
     expect(field('end')).toBe('17:10')
     expect(field('duration')).toBe('115 min')
@@ -162,11 +162,30 @@ describe('CanvasTooltip contents (FR-022)', () => {
     [Phase.FLIGHT_B, 'Flight B'],
     [Phase.DE, 'DE'],
     [Phase.DE_PRELIMS, 'DE prelims'],
-    [Phase.DE_ROUND_OF_16, 'DE round of 16'],
+    [Phase.DE_ROUND_OF_16, 'video stage'],
   ])('names the %s phase %s', (phase, label) => {
     render(<CanvasTooltip target={makeTarget({ placement: { ...POOL_PLACEMENT, phase } })} />)
 
     expect(field('phase')).toBe(label)
+  })
+
+  // Ops Manual p.19 puts the video stage at the round of 16 for Div 1, Junior and
+  // Cadet and at the round of 8 for Y8–Y14, Vet and the other Div tiers, so the
+  // label must not name a round (024 plan D6, rulings D13).
+  it.each([
+    ['a round-of-16 event', Category.DIV1],
+    ['a round-of-8 event', Category.Y14],
+  ])('shows "video stage" on a staged block for %s', (_name, category) => {
+    render(
+      <CanvasTooltip
+        target={makeTarget({
+          competition: makeCompetition({ id: 'staged', category }),
+          placement: { ...POOL_PLACEMENT, competitionId: 'staged', phase: Phase.DE_ROUND_OF_16 },
+        })}
+      />,
+    )
+
+    expect(field('phase')).toBe('video stage')
   })
 
   it('writes a one-strip block as a strip rather than as a range of one', () => {

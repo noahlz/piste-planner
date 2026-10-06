@@ -92,7 +92,11 @@ function setupB5(): void {
 
 /**
  * Copied verbatim from `__tests__/store/daySummaries.test.ts` (the proven
- * overflow fixture: JR-M-EPEE-IND's DE phase overflows at 4 strips, day 0).
+ * overflow fixture: one DE phase overflows at 4 strips, day 0). Since 024 group
+ * A (2026-10-06) it is JR-M-FOIL-IND's, not JR-M-EPEE-IND's: a pool of 8 takes
+ * 160 minutes in both weapons (METHODOLOGY.md §Pool Duration Estimation), so
+ * JR-M-EPEE-IND's DE runs 670-710 on 3 strips and JR-M-FOIL-IND's, starting
+ * at 690 with 1 strip free, overflows. Day 0 finishes at 730.
  * See that file for why this fixture's third event is needed to make the
  * lane packer's own interval-overlap logic exercise itself, rather than
  * `twoJuniorEpeeOnSeparateDays`'s one-event-per-day layout.
@@ -123,6 +127,8 @@ function threeEventsOverlappingOnDayZero(): void {
  * function of weapon, category and fencer count, not gender, so both events'
  * phases land on identical minutes: measured (throwaway script, not
  * predicted) at pools 480-704 (1 strip each) and DE 735-769 (4 strips each).
+ * Since 024 group A (2026-10-06): pools 480-640 and DE 670-710, derived from
+ * the pool of 8's 160 minutes and one 20-minute wave each for R8 and the semis.
  * 8 strips covers the DE phase's simultaneous demand (4 + 4) without either
  * event overflowing.
  */
@@ -315,7 +321,7 @@ describe('selectFindings — Unplaced rows from lane overflow (contract §1.3)',
     const overflow = blocks.filter((b) => b.overflow)
     expect(overflow).toHaveLength(1)
     const block = overflow[0]
-    expect(block.competitionId).toBe('JR-M-EPEE-IND')
+    expect(block.competitionId).toBe('JR-M-FOIL-IND')
 
     const rows = selectFindings(state)
     const unplacedRows = rows.filter((r) => r.severity === 'Unplaced')
@@ -323,7 +329,7 @@ describe('selectFindings — Unplaced rows from lane overflow (contract §1.3)',
 
     const row = rows.find((r) => r.id === `unplaced:${block.competitionId}:${block.phase}`)
     expect(row).toBeDefined()
-    expect(row?.id).toBe('unplaced:JR-M-EPEE-IND:DE')
+    expect(row?.id).toBe('unplaced:JR-M-FOIL-IND:DE')
     expect(row?.target).toBe(block.competitionId)
     expect(row?.day).toBe(block.day)
     expect(row?.where).toBe(`Day ${block.day + 1} · ${phaseDisplay(block.phase)}`)
@@ -357,7 +363,9 @@ describe('selectFindings — stranded event Unplaced row (contract §1.3, FR-060
 describe('selectFindings — late finish rows, margin and boundary (contract §1.4)', () => {
   it('warns when the day finishes inside the window before close', () => {
     threeEventsOverlappingOnDayZero()
-    useStore.getState().updateDayConfig(0, { day_end_time: 810 })
+    // Day 0 finishes at 730, so a 760 close puts the finish 30 minutes inside
+    // the 45-minute window, as 810 did against 780 before 024.
+    useStore.getState().updateDayConfig(0, { day_end_time: 760 })
     const state = useStore.getState()
 
     const schedule = selectDerivedSchedule(state)

@@ -252,7 +252,8 @@ describe('Realistic tournament integration', () => {
       // demand and the threshold are untouched — R5 moved the severity and
       // nothing about the estimate — so B4 is still an oversubscribed venue.
       // What moved is what an oversubscribed venue returns: a partial board,
-      // thirteen unplaced events at T006, twelve since 015 (2026-10-05), and the shortfall as a warning.
+      // thirteen unplaced events at T006, twelve since 015 (2026-10-05), eleven since
+      // 024's group A (2026-10-06), and the shortfall as a warning.
       //
       // The regression this case has always guarded is B4's *shape*, and it
       // still does; the shape inverted. It fails if B4 collapses back to an
@@ -269,7 +270,10 @@ describe('Realistic tournament integration', () => {
       // reached through the integrity assertion above, not merely reported.
       // 015, 2026-10-05 – floor raised 17 → 18, the count the converged factory
       // measures (the app path's 18).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(18)
+      // 024, 2026-10-06 – floor raised 18 → 19 by group A (planning times): the
+      // pool of 7 and per-round DE times (2026-27 Ops Manual) re-pack B4. Equal to
+      // the app path's 19.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(19)
 
       // No ERROR out of validation. B4's ERRORs are all
       // DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the per-event
@@ -322,12 +326,15 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B6: 40 of 54 events, the app path's measured count.
+      // B6: 50 of 54 events, the app path's measured count.
       // T024 re-baseline 2026-08-29 — floor raised from 28 to the then-measured 44 (research.md D7).
       // 015, 2026-10-05 – floor lowered 44 → 40 under the input-correction rule in
       // driftLedger.test.ts's SCHEDULED_FLOORS docblock: the old count came from a
       // factory the app never runs, and the converged factory's 40 equals the app path's 40.
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(40)
+      // 024, 2026-10-06 – floor raised 40 → 50 by group A (planning times): the pool
+      // of 7 and per-round DE times (2026-27 Ops Manual) place ten more events and
+      // lose none. Equal to the app path's 50.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(50)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()

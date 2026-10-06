@@ -62,10 +62,16 @@ export function eventTimeSegments(derived: DerivedEventSchedule): TimeSegment[] 
   }
 
   // Single-stage and staged are mutually exclusive on the result, so these
-  // three pushes emit either the one DE block or the staged phases.
-  push(Phase.DE, r.de_start, r.de_end, r.de_strip_count)
-  push(Phase.DE_PRELIMS, r.de_prelims_start, r.de_prelims_end, r.de_prelims_strip_count)
-  push(
+  // three pushes emit either the one DE block or the staged phases. A DE
+  // block of 0 minutes – a bracket of 2, which has no counted round
+  // (METHODOLOGY.md §DE Duration) – draws nothing and is skipped.
+  const pushDe = (phase: Phase, start: number | null, end: number | null, stripCount: number): void => {
+    if (start !== null && start === end) return
+    push(phase, start, end, stripCount)
+  }
+  pushDe(Phase.DE, r.de_start, r.de_end, r.de_strip_count)
+  pushDe(Phase.DE_PRELIMS, r.de_prelims_start, r.de_prelims_end, r.de_prelims_strip_count)
+  pushDe(
     Phase.DE_ROUND_OF_16,
     r.de_round_of_16_start,
     r.de_round_of_16_end,

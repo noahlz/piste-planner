@@ -1,5 +1,10 @@
-import { DeMode, RefPolicy, TournamentType } from '../engine/types.ts'
-import type { TournamentType as TournamentTypeValue } from '../engine/types.ts'
+import { DeMode, EventType, RefPolicy, TournamentType, VideoPolicy } from '../engine/types.ts'
+import type {
+  Category,
+  EventType as EventTypeValue,
+  TournamentType as TournamentTypeValue,
+} from '../engine/types.ts'
+import { DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../engine/constants.ts'
 
 /**
  * Per-type resolved defaults — data-model.md §Per-type default table,
@@ -40,4 +45,44 @@ export function resolveVideoStrips(
   tournamentType: TournamentTypeValue,
 ): number {
   return videoStripsTotal ?? TYPE_DEFAULTS[tournamentType].video_strips_total
+}
+
+/**
+ * The DE mode an event runs (METHODOLOGY.md §DE Modes; 024 plan D4, the
+ * owner's team ruling). A team event runs Single Stage at every tournament
+ * type, NACs included, even when the organizer's setting says Staged: Ops
+ * Manual 2026-27 p.19 gives teams video for the gold and bronze only, so a
+ * team DE has no video stage to split at. An individual event follows the
+ * organizer's tournament-wide setting, `null` meaning the type's row.
+ *
+ * `buildConfig.ts` calls this, and `__tests__/helpers/scenarios.ts` keeps its
+ * own transcription of the same rule on purpose (024 D11).
+ */
+export function resolveDeMode(
+  tournamentType: TournamentTypeValue,
+  eventType: EventTypeValue,
+  deModeOverride: DeMode | null,
+): DeMode {
+  if (eventType === EventType.TEAM) return DeMode.SINGLE_STAGE
+  return deModeOverride ?? TYPE_DEFAULTS[tournamentType].de_mode
+}
+
+/**
+ * The video policy an event plans with (METHODOLOGY.md §Video Replay Policy;
+ * 024 plan D4). A team event is BEST_EFFORT at every tournament type, NACs
+ * included (Ops Manual 2026-27 p.19 guarantees teams video for the gold and
+ * bronze only, and those are not scheduled). The policy follows the type, never
+ * the DE-mode setting, so it takes no override.
+ *
+ * An individual event still reads the category table here. Group C replaces
+ * that with a per-type column and narrows this to `(tournamentType,
+ * eventType)` (024 D9), which is when the type starts to matter.
+ */
+export function resolveVideoPolicy(
+  _tournamentType: TournamentTypeValue,
+  eventType: EventTypeValue,
+  category: Category,
+): VideoPolicy {
+  if (eventType === EventType.TEAM) return VideoPolicy.BEST_EFFORT
+  return DEFAULT_VIDEO_POLICY_BY_CATEGORY[category]
 }

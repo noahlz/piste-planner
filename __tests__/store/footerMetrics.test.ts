@@ -26,6 +26,14 @@ import { makePlacement } from '../helpers/factories.ts'
  * app's own path and reading the engine's output — see that file's history
  * (deleted, but in git log) for the full provenance chain. Nothing here is
  * recomputed by the formula the selector uses.
+ *
+ * 024 group A, 2026-10-06 – the B5 and zero-strip numbers moved with the
+ * 2026-27 Operations Manual planning times: pools on the pool-of-7 basis and
+ * DEs derived per round from bout time (METHODOLOGY.md §Pool Duration
+ * Estimation and §DE Duration, Ops Manual p.17). Each new number was derived
+ * by hand from those sections and the scheduler's placements, then confirmed
+ * against the engine. B5's placements (days, 08:00 starts, strip budgets) did
+ * not move, only their durations.
  */
 
 // ──────────────────────────────────────────────
@@ -172,12 +180,17 @@ describe('selectFooterMetrics — the three rows', () => {
   })
 
   /**
-   * 872 is `ScheduleResult.de_total_end` for JR-M-EPEE-IND — the same figure
-   * `scorecardMetrics.test.ts` pinned for `finish:tournament`.
+   * 850 is `ScheduleResult.de_total_end` for JR-M-EPEE-IND (872 before 024).
+   * 120 épée fencers make 12 pools of 7 and 6 of 6, averaging round(108.67) =
+   * 109 minutes in one wave on 18 strips: pools 480–589. The DE starts at the
+   * next slot after the 30-minute gap, 620, and a bracket of 128 with 120
+   * promoted runs R128 (56 bouts, 4 waves on 16 strips), R64 (2), then R32
+   * through the semis (1 each), 10 × 20 = 200 minutes to 820, plus the
+   * 30-minute tail.
    */
   it('finish:tournament is the latest de_total_end', () => {
     b5()
-    expect(metric('finish:tournament').value).toBe(872)
+    expect(metric('finish:tournament').value).toBe(850)
   })
 
   /** `selectDerivedRefRequirements` for B5 peaks at 116, on day 0. */
@@ -187,12 +200,13 @@ describe('selectFooterMetrics — the three rows', () => {
   })
 
   /**
-   * 52348 strip-minutes used against 151200 available (3 days x 60 strips x
-   * 840-minute window).
+   * 43975 strip-minutes used against 151200 available (3 days x 60 strips x
+   * 840-minute window). 52348 before 024. The 43975 is the sum of each event's
+   * pool block (minutes × its strip budget) and DE block (minutes × 16).
    */
   it('strips:utilization is used strip-minutes over available, across all in-range blocks', () => {
     b5()
-    expect(metric('strips:utilization').value).toBeCloseTo(34.62169312169312, 10)
+    expect(metric('strips:utilization').value).toBeCloseTo(29.08399470899471, 10)
   })
 })
 
@@ -211,11 +225,17 @@ describe('selectFooterMetrics — null values', () => {
   /**
    * Zero strips: no strip-minutes available at all. The finish metric still
    * reads — only the denominator-dependent one goes null.
+   *
+   * 780 (905 before 024): one épée pool of 8 is 28 bouts, round(120 × 28/21) =
+   * 160 minutes, 480–640. A NAC Junior event promotes 6 of 8 into a bracket of
+   * 8, below its round-of-16 video stage, so the whole DE is the video block.
+   * Its R8 (2 bouts) and semis (2) each take 2 waves on the one strip a grant
+   * of 0 counts as, 4 × 20 = 80 minutes from 670, plus the 30-minute tail.
    */
   it('nulls strips:utilization when no strip-minutes are available, while finish still reads', () => {
     zeroStrips()
     expect(metric('strips:utilization').value).toBeNull()
-    expect(metric('finish:tournament').value).toBe(905)
+    expect(metric('finish:tournament').value).toBe(780)
   })
 })
 
@@ -225,37 +245,39 @@ describe('selectFooterMetrics — null values', () => {
 
 describe('selectFooterMetrics — a placement pushed out of range', () => {
   /**
-   * `strips:utilization` moves from 34.62169312169312 (B5 in full) to
-   * 31.776455026455025 once CDT-W-FOIL-IND's own strip-minutes drop out of
-   * the sum.
+   * `strips:utilization` moves from 29.08399470899471 (B5 in full) to
+   * 26.808862433862434 once CDT-W-FOIL-IND's own 3440 strip-minutes (pools
+   * 120 × 10, DE 140 × 16) drop out of the sum: 40535 / 151200.
    */
   it('drops strips:utilization\'s value once the event is out of range', () => {
     b5()
     const before = metric('strips:utilization').value
-    expect(before).toBeCloseTo(34.62169312169312, 10)
+    expect(before).toBeCloseTo(29.08399470899471, 10)
 
     useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 3 })
     const after = metric('strips:utilization').value
 
-    expect(after).toBeCloseTo(31.776455026455025, 10)
+    expect(after).toBeCloseTo(26.808862433862434, 10)
     expect(after).not.toBe(before)
   })
 
   /**
-   * B5's finish column ties four ways at 872 (JR-M-EPEE-IND, JR-W-EPEE-IND,
-   * CDT-M-EPEE-IND, CDT-W-EPEE-IND); moving any one of them out of range
-   * leaves `finish:tournament` at 872. All four have to move to see it drop,
-   * to 867 — the next-highest in-range finish.
+   * B5's finish column ties three ways at 850 (JR-M-EPEE-IND, JR-M-FOIL-IND,
+   * CDT-M-EPEE-IND, the three 120-fencer foil and épée events, whose pool and
+   * DE times are equal since 024); moving any one of them out of range leaves
+   * `finish:tournament` at 850. All three have to move to see it drop, to 800 —
+   * the next-highest in-range finish, JR-W-FOIL-IND's and CDT-W-FOIL-IND's
+   * (10 pools of 7 to 600, then 7 DE waves to 770, plus the tail).
    */
   it('drops finish:tournament to the next in-range finish once every event tied at the top has moved', () => {
     b5()
-    expect(metric('finish:tournament').value).toBe(872)
+    expect(metric('finish:tournament').value).toBe(850)
 
-    for (const id of ['JR-M-EPEE-IND', 'JR-W-EPEE-IND', 'CDT-M-EPEE-IND', 'CDT-W-EPEE-IND']) {
+    for (const id of ['JR-M-EPEE-IND', 'JR-M-FOIL-IND', 'CDT-M-EPEE-IND']) {
       useStore.getState().updatePlacement(id, { day: 3 })
     }
 
-    expect(metric('finish:tournament').value).toBe(867)
+    expect(metric('finish:tournament').value).toBe(800)
   })
 })
 
@@ -287,9 +309,9 @@ describe('selectFooterMetrics — pure function of store inputs', () => {
     const second = selectFooterMetrics(useStore.getState())
 
     expect(second).not.toBe(first)
-    // Halving the strips halves the denominator: 52348 / 75600 = 69.2433…
+    // Halving the strips halves the denominator: 43975 / 75600 = 58.1679…
     expect(second.find((m) => m.id === 'strips:utilization')?.value)
-      .toBeCloseTo(69.24338624338624, 10)
+      .toBeCloseTo(58.16798941798942, 10)
   })
 
   it('writes nothing back to the store', () => {
@@ -314,7 +336,9 @@ describe('selectPlacementCounts', () => {
     // Re-measured 2026-09-07 against the fixed selector (data-model.md §10:
     // "an event the packer could not fit is unplaced whatever the store
     // says"). `assignStripLanes` marks three DE blocks overflowing —
-    // JR-M-EPEE-IND, JR-W-EPEE-IND and CDT-W-SABRE-IND, one block each — so
+    // JR-M-EPEE-IND, JR-W-FOIL-IND and CDT-W-SABRE-IND, one block each (JR-W-FOIL
+    // replaced JR-W-EPEE under 024's DE times: its DE at 630 is the fourth
+    // 16-strip DE on day 1's 60 strips) — so
     // `overflowing.size` is 3, not a block count that happened to also be 3.
     // Each of those three events is excluded from `placed` and counted once
     // in `unplaced` instead of twice, so `placed` drops from the prior
@@ -350,7 +374,7 @@ describe('selectPlacementCounts', () => {
    * the placements loop alone — but it also removes its own segments from
    * `assignStripLanes`'s packing for its day (`day_out_of_range` events are
    * skipped there), which frees room that resolves its own overflow and,
-   * measured, leaves the other two baseline overflow events (JR-W-EPEE-IND,
+   * measured, leaves the other two baseline overflow events (JR-W-FOIL-IND,
    * CDT-W-SABRE-IND) unaffected. Net: 9 placed (12 selected minus the 1
    * out-of-range minus the 2 remaining overflow) and 3 unplaced (1
    * out-of-range plus 2 overflow), not the 11-placed figure a

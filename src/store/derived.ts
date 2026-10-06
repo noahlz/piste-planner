@@ -152,7 +152,10 @@ function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDeman
   const byDay: Record<number, RefDemandByDay> = {}
   const compById = new Map(schedule.competitions.map((c) => [c.id, c]))
 
+  // A block that asks no referee – a bracket of 2's DE draws 0 strips
+  // (METHODOLOGY.md §DE Duration 'No counted round') – emits no interval.
   function push(day: number, interval: RefDemandInterval): void {
+    if (interval.count === 0) return
     if (!byDay[day]) byDay[day] = { intervals: [] }
     byDay[day].intervals.push(interval)
   }

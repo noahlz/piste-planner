@@ -45,6 +45,14 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * ledger's re-taken snapshot after the ledger's factory adopted the app's
  * per-type rules. Every entry now equals its app-path pin.
  *
+ * 024 group A, 2026-10-06 – B4 18 → 19 and B6 40 → 50, read from the drift
+ * ledger's re-taken snapshot after the 2026-27 Operations Manual planning
+ * times (pool of 7, DEs derived per round from bout time, team events single
+ * stage with no video). B4: CDT-M-EPEE-IND and CDT-M-FOIL-IND out,
+ * CDT-W-FOIL-IND, Y12-W-SABRE-IND and Y14-W-EPEE-IND in. B6: ten in, none out
+ * (specs/024-ops-manual-conformance/plan.md §Group A). Every entry still equals
+ * its app-path pin.
+ *
  * The table is still typed out, but it is no longer trusted as typed: the
  * "matches the live drift ledger" test below re-measures every entry by the
  * drift ledger's own route. Until 015 it was a hand-typed copy that nothing
@@ -52,7 +60,7 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * ledger's real counts had moved.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 53,
 }
 
 interface ParityException {
@@ -112,9 +120,13 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {}
  *
  * 015, 2026-10-05 – no pin moved. The ledger moved onto them instead, and B4,
  * B6 and B8 rejoined the equal-to-ledger group (specs/015-ledger-convergence/plan.md).
+ *
+ * 024 group A, 2026-10-06 – B4 re-measured 18 → 19 and B6 40 → 50, the same
+ * moves as the ledger's, and their copies in `appPath.test.ts` moved with them
+ * in the same commit. No other pin moved.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 53,
 }
 
 // specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)

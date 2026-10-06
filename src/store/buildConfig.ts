@@ -18,8 +18,6 @@ import {
   MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS,
   MIN_FENCERS,
-  DEFAULT_DE_DURATION_TABLE,
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
   ADMIN_GAP_MINS,
@@ -27,12 +25,14 @@ import {
   THRESHOLD_MINS,
   SLOT_MINS,
   DE_BOUT_DURATION,
+  DE_BOUT_DURATION_10_TOUCH,
+  TEAM_MATCH_DURATION,
   YOUTH_VET_BOUT_DELTA,
   DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
 import { defaultCutForEntry } from './competitionDefaults.ts'
-import { TYPE_DEFAULTS, resolveVideoStrips } from './typeDefaults.ts'
+import { TYPE_DEFAULTS, resolveDeMode, resolveVideoPolicy, resolveVideoStrips } from './typeDefaults.ts'
 import { buildStrips } from '../engine/stripBudget.ts'
 
 /**
@@ -85,8 +85,10 @@ export function buildTournamentConfig(state: StoreState): {
     FLIGHT_BUFFER_MINS,
     THRESHOLD_MINS,
     SLOT_MINS,
-    // Copied so no consumer spreading the config can reach the module constant.
+    // Copied so no consumer spreading the config can reach the module constants.
     DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
+    DE_BOUT_DURATION_10_TOUCH: { ...DE_BOUT_DURATION_10_TOUCH },
+    TEAM_MATCH_DURATION: { ...TEAM_MATCH_DURATION },
     YOUTH_VET_BOUT_DELTA,
     DEFAULT_DE_STRIP_FOOTPRINT,
 
@@ -104,7 +106,6 @@ export function buildTournamentConfig(state: StoreState): {
     MAX_FENCERS,
     MIN_FENCERS,
     pool_round_duration_table: state.pool_round_duration_table,
-    de_duration_table: DEFAULT_DE_DURATION_TABLE,
 
     // Strip budget defaults — per-event UI overrides to be added in a future task
     max_pool_strip_pct: 0.80,
@@ -201,9 +202,10 @@ function buildCompetitions(state: StoreState): Competition[] {
       // Settings panel writes `de_mode_override`, `null` meaning follow the
       // type. Resolved here rather than in the store so the store keeps the
       // organizer's intent — "follow the type" — instead of a snapshot of what
-      // the type meant when they chose it.
-      de_mode: state.de_mode_override ?? typeDefaults.de_mode,
-      de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
+      // the type meant when they chose it. A team event runs Single Stage
+      // whatever the setting says (024 D4, METHODOLOGY.md §DE Modes).
+      de_mode: resolveDeMode(state.tournament_type, entry.event_type, state.de_mode_override),
+      de_video_policy: resolveVideoPolicy(state.tournament_type, entry.event_type, entry.category),
       use_single_pool_override: false,
 
       // Sensible defaults
@@ -215,7 +217,6 @@ function buildCompetitions(state: StoreState): Competition[] {
       // Math.min(dayEnd(day, config), latest_end), for any day count.
       latest_end: Infinity,
       optional: false,
-      de_round_of_16_strips: 4,
       de_round_of_16_requirement: DeStripRequirement.HARD,
       // The store's own flag. `flighted: true` with a null group is exactly the
       // shape `derive.ts` splits into Flight A and Flight B, so the flag needs
@@ -224,14 +225,12 @@ function buildCompetitions(state: StoreState): Competition[] {
       flighted: overrides.flighted,
       flighting_group_id: null,
       is_priority: false,
-      // The fourth seam specs/006-day-axis-parity/parity-exceptions.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names. A `0` here zeroes the DE
-      // term of `estimateCompetitionStripHours`
-      // (`strips_allocated × de_duration / 60`, src/engine/capacity.ts:146),
-      // so every individual event contributed nothing to the upfront
-      // feasibility estimate and the gate at src/engine/validation.ts:405
-      // never fired on the app path. This is the ledger factory's own
-      // pre-allocation (`__tests__/helpers/scenarios.ts:69`) — a default, not
-      // a decision.
+      // The fourth seam specs/006-day-axis-parity/parity-exceptions.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names. A `0` here once zeroed the DE
+      // term of `estimateCompetitionStripHours`. Since 024 that term bills DE
+      // bouts × bout time and no longer reads this field, but referee demand
+      // (`peakDeRefDemand`) and flighting-group validation still do. This is
+      // the ledger factory's own pre-allocation (`__tests__/helpers/scenarios.ts`)
+      // — a default, not a decision.
       strips_allocated: Math.max(2, Math.ceil(overrides.fencer_count / 7)),
 
       // Per-event strip budget overrides — always null until UI exposes them

@@ -18,9 +18,13 @@ import {
   tailEstimateMins,
 } from '../../src/engine/types.ts'
 import type { Bottleneck, Competition, TournamentConfig } from '../../src/engine/types.ts'
-import { computePoolStructure, resolveRefsPerPool } from '../../src/engine/pools.ts'
+import {
+  computePoolStructure,
+  estimatePoolDuration,
+  resolveRefsPerPool,
+  weightedPoolDuration,
+} from '../../src/engine/pools.ts'
 import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
-import { DEFAULT_DE_DURATION_TABLE } from '../../src/engine/constants.ts'
 import { makeConfig, makeCompetition, makeStrips, makeBottleneck } from '../helpers/factories.ts'
 import { checkInvariants } from '../helpers/bottleneckInvariants.ts'
 import { useStore } from '../../src/store/store.ts'
@@ -38,7 +42,6 @@ function comp(id: string, overrides: Partial<Competition> = {}): Competition {
   return makeCompetition({
     id,
     fencer_count: 24,
-    de_round_of_16_strips: 4,
     de_video_policy: VideoPolicy.BEST_EFFORT,
     de_mode: DeMode.SINGLE_STAGE,
     cut_mode: CutMode.DISABLED,
@@ -108,29 +111,29 @@ describe('scheduleAllConcurrent — video-required priority', () => {
     // only 4 video strips and each R16 wanting 4, at least one R16 must defer
     // until another's R16 finishes — the deferred one accumulates
     // defer_count > 0 and emits VIDEO_STRIP_CONTENTION on its eventual
-    // allocation. Bracket size 32 (fencer_count=24) means dePhasesForBracket
-    // returns just [DE_ROUND_OF_16] — no prelims — so we exercise the R16
-    // contention path directly.
+    // allocation. A VETERAN event with no age group takes its video stage at
+    // the round of 8 (METHODOLOGY.md §Video Replay Policy, Ops Manual 2026-27
+    // p.19), so bracket 8 (fencer_count=8) runs every round in the video block
+    // — no prelims — and each block asks min(4, 8/2) = 4 video strips, so we
+    // exercise the R16 contention path directly. (Through 015 this was
+    // fencer_count 24, bracket 32, when every bracket under 64 had no prelims.)
     const a = comp('vidA', {
       gender: Gender.MEN, weapon: Weapon.EPEE, category: Category.VETERAN,
-      fencer_count: 24,
+      fencer_count: 8,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 4,
     })
     const b = comp('vidB', {
       gender: Gender.WOMEN, weapon: Weapon.FOIL, category: Category.VETERAN,
-      fencer_count: 24,
+      fencer_count: 8,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 4,
     })
     const c = comp('vidC', {
       gender: Gender.MEN, weapon: Weapon.SABRE, category: Category.VETERAN,
-      fencer_count: 24,
+      fencer_count: 8,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 4,
     })
     // 4 video strips total — one R16 fits; the other two must wait.
     const config = smallConfig({
@@ -158,12 +161,12 @@ describe('scheduleAllConcurrent — video-required priority', () => {
 
 describe('scheduleAllConcurrent — phase dependency order', () => {
   it('STAGED event has de_round_of_16_start >= de_prelims_end + ADMIN_GAP_MINS', () => {
-    // Bracket >= 64 forces prelims to exist. Small bracket (64) keeps duration sane.
+    // A bracket above the video-stage round (Div 1: 16) forces prelims to
+    // exist. Small bracket (64) keeps duration sane.
     const stagedBig = comp('big', {
       fencer_count: 64,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.BEST_EFFORT,
-      de_round_of_16_strips: 4,
       cut_mode: CutMode.DISABLED,
       weapon: Weapon.SABRE,
     })
@@ -262,7 +265,12 @@ describe('scheduleAllConcurrent — tail estimate on de_total_end', () => {
     expect(s.de_total_end! - s.de_round_of_16_end!).toBe(tailEstimateMins(EventType.INDIVIDUAL))
   })
 
-  it('STAGED TEAM: de_total_end = de_round_of_16_end + 60', () => {
+  // 024, 2026-10-06 – this was "STAGED TEAM: de_total_end = de_round_of_16_end
+  // + 60". A team event now runs Single Stage at every tournament type (024
+  // plan D4, the owner's ruling; METHODOLOGY.md §DE Modes, Ops Manual 2026-27
+  // p.19), and a STAGED team draws the team-staged-or-video ERROR, so the
+  // team's 60-minute tail is pinned on its one DE block instead.
+  it('TEAM (always Single Stage): de_total_end = de_end + 60', () => {
     // Teams require a matching individual counterpart for validation.
     const ind = comp('teamInd', {
       event_type: EventType.INDIVIDUAL,
@@ -272,7 +280,7 @@ describe('scheduleAllConcurrent — tail estimate on de_total_end', () => {
     const team = comp('team', {
       event_type: EventType.TEAM,
       fencer_count: 30,
-      de_mode: DeMode.STAGED,
+      de_mode: DeMode.SINGLE_STAGE,
       cut_mode: CutMode.DISABLED,
     })
     const config = smallConfig({
@@ -283,8 +291,9 @@ describe('scheduleAllConcurrent — tail estimate on de_total_end', () => {
     const s = result.schedule['team']
     expect(s).toBeDefined()
     expect(s.de_total_end).not.toBeNull()
-    expect(s.de_round_of_16_end).not.toBeNull()
-    expect(s.de_total_end! - s.de_round_of_16_end!).toBe(tailEstimateMins(EventType.TEAM))
+    expect(s.de_end).not.toBeNull()
+    expect(s.de_round_of_16_end).toBeNull()
+    expect(s.de_total_end! - s.de_end!).toBe(tailEstimateMins(EventType.TEAM))
   })
 
   it('SINGLE_STAGE: de_total_end = de_end + tailEstimateMins(event_type)', () => {
@@ -426,14 +435,14 @@ function peakRefsOnDay(result: ReturnType<typeof scheduleAllConcurrent>, day: nu
 
 describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
   it('STAGED event: DE_PRELIMS block emits ref demand equal to its allocated strip count', () => {
-    // Bracket 64 (fencer_count=64, cut disabled) forces a DE_PRELIMS block ahead
-    // of DE_ROUND_OF_16. de_round_of_16_strips is kept small so DE_PRELIMS (capped
-    // at DEFAULT_DE_STRIP_FOOTPRINT = 16) is the day's dominant demand.
+    // Bracket 64 (fencer_count=64, cut disabled) is above Div 1's round-of-16
+    // video stage, so a DE_PRELIMS block runs ahead of DE_ROUND_OF_16. The
+    // video block asks min(4, 64/2) = 4 strips, so DE_PRELIMS (capped at
+    // DEFAULT_DE_STRIP_FOOTPRINT = 16) is the day's dominant demand.
     const e = comp('prelimsEvt', {
       fencer_count: 64,
       de_mode: DeMode.STAGED,
       cut_mode: CutMode.DISABLED,
-      de_round_of_16_strips: 4,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
     const config = smallConfig({
@@ -456,14 +465,16 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     expect(peakRefsOnDay(result, s.assigned_day)).toBe(s.de_prelims_strip_count * config.DE_REFS)
   })
 
-  it('STAGED event with bracket < 64 (no prelims): DE_ROUND_OF_16 block emits ref demand equal to its allocated strip count', () => {
-    // Bracket 32 (fencer_count=24) — dePhasesForBracket returns just
-    // [DE_ROUND_OF_16], isolating the R16 block from any DE_PRELIMS contribution.
+  it('STAGED event with a bracket at its video-stage round (no prelims): DE_ROUND_OF_16 block emits ref demand equal to its allocated strip count', () => {
+    // Div 1 (comp()'s default) takes video from the round of 16 (Ops Manual
+    // 2026-27 p.19). Bracket 16 (fencer_count=16) is at that round, so every
+    // round runs in the video block (METHODOLOGY.md §DE Phase Breakdown),
+    // isolating it from any DE_PRELIMS contribution. It asks min(4, 16/2) = 4
+    // strips against 3 pools' worth of pool refs.
     const e = comp('r16Evt', {
-      fencer_count: 24,
+      fencer_count: 16,
       de_mode: DeMode.STAGED,
       cut_mode: CutMode.DISABLED,
-      de_round_of_16_strips: 16,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
     const config = smallConfig({ strips: makeStrips(20, 4) })
@@ -497,20 +508,21 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     // Symmetric competitions (same fencer_count/weapon/strip target, differing
     // only by gender) with abundant single-day capacity produce identical R16
     // windows — the overlap guard below confirms that determinism.
+    // Bracket 16 sits at Div 1's round-of-16 video stage, so each event is one
+    // DE_ROUND_OF_16 block asking min(4, 16/2) = 4 strips, with no prelims
+    // whose wider ask would set the peak instead.
     const a = comp('r16A', {
       gender: Gender.MEN, weapon: Weapon.EPEE, category: Category.DIV1,
-      fencer_count: 24,
+      fencer_count: 16,
       de_mode: DeMode.STAGED,
       cut_mode: CutMode.DISABLED,
-      de_round_of_16_strips: 8,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
     const b = comp('r16B', {
       gender: Gender.WOMEN, weapon: Weapon.EPEE, category: Category.DIV1,
-      fencer_count: 24,
+      fencer_count: 16,
       de_mode: DeMode.STAGED,
       cut_mode: CutMode.DISABLED,
-      de_round_of_16_strips: 8,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
     const config = smallConfig({ days_available: 2, strips: makeStrips(40, 8) })
@@ -534,11 +546,15 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
   })
 
   it('pool phase ref demand still uses resolveRefsPerPool, unaffected by the DE pod removal', () => {
+    // 30 fencers make 5 pools (5 refs at ref_policy ONE). A COUNT cut of 16
+    // gives bracket 16, at Div 1's round-of-16 video stage, so the whole DE is
+    // one video block asking min(4, 16/2) = 4 strips – below the pool demand
+    // (METHODOLOGY.md §Bracket Sizing, §DE Phase Breakdown).
     const e = comp('poolEvt', {
       fencer_count: 30,
       de_mode: DeMode.STAGED,
-      cut_mode: CutMode.DISABLED,
-      de_round_of_16_strips: 1,
+      cut_mode: CutMode.COUNT,
+      cut_value: 16,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
     const config = smallConfig({ strips: makeStrips(20, 4) })
@@ -564,10 +580,9 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
     // default DE_REFS=1, where "strips × DE_REFS" and "strips × 1" are numerically
     // identical and so cannot catch a staged block landing in the wrong branch.
     const e = comp('r16RefsEvt', {
-      fencer_count: 24,
+      fencer_count: 16,
       de_mode: DeMode.STAGED,
       cut_mode: CutMode.DISABLED,
-      de_round_of_16_strips: 16,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
     const config = smallConfig({ strips: makeStrips(20, 4), DE_REFS: 2 })
@@ -748,36 +763,24 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
     assertOnlyValidScheduled(competitions, config, [bad.id])
   })
 
-  it('de-duration-table-missing-entry: the valid events schedule, the event with no table entry is excluded', () => {
-    // fencer_count 24, cut_mode DISABLED -> bracket 32. The config's DE
-    // duration table has the SABRE/32 entry removed, and only the
-    // defective event uses SABRE — the three valid events stay on
-    // FOIL/EPEE, whose tables are untouched.
-    const sabreTable: Record<number, number> = { ...DEFAULT_DE_DURATION_TABLE[Weapon.SABRE] }
-    delete sabreTable[32]
-    const config = smallConfig({
-      de_duration_table: { ...DEFAULT_DE_DURATION_TABLE, [Weapon.SABRE]: sabreTable },
-    })
-    const bad = comp('bad-de-duration', { weapon: Weapon.SABRE, category: Category.CADET, gender: Gender.MEN })
-    const competitions = [...validTrio(), bad]
-
-    assertRuleError(competitions, config, bad.id, 'de-duration-table-missing-entry')
-    assertOnlyValidScheduled(competitions, config, [bad.id])
-  })
+  // 024, 2026-10-06 – the de-duration-table-missing-entry case is gone with
+  // its rule: every DE now derives from its rounds and bout time
+  // (METHODOLOGY.md §DE Duration), so no bracket can lack an entry.
+  // validation.test.ts pins the rule's absence.
 
   it('video-r16-strip-shortfall: the valid events schedule, the under-provisioned STAGED/REQUIRED event is excluded', () => {
-    // STAGED + REQUIRED video with de_round_of_16_strips (8) exceeding
-    // video_strips_total (4, from smallConfig's makeStrips(20, 4)). Bracket
-    // size and cut fields are left at their defaults so nothing else fires.
+    // STAGED + REQUIRED video whose video block asks min(4, 32/2) = 4 video
+    // strips (bracket 32, METHODOLOGY.md §DE Phase Breakdown) against 2
+    // available (makeStrips(20, 2)). The valid trio is SINGLE_STAGE, so the
+    // smaller video pool touches nothing else.
     const bad = comp('bad-video-shortfall', {
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 8,
       category: Category.CADET,
       gender: Gender.WOMEN,
     })
     const competitions = [...validTrio(), bad]
-    const config = smallConfig()
+    const config = smallConfig({ strips: makeStrips(20, 2) })
 
     assertRuleError(competitions, config, bad.id, 'video-r16-strip-shortfall')
     assertOnlyValidScheduled(competitions, config, [bad.id])
@@ -974,7 +977,7 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
   it('a configuration whose only finding is feasibility-strip-hours (WARN) still emits the post-schedule RESOURCE_RECOMMENDATION INFO', () => {
     // 13 events, one strip-hour-hungry combination per category/gender/weapon
     // so `same-population` never fires. max_pool_strip_pct is deliberately
-    // below 1.0 so each event's own pool count (5, from 32 fencers) stays
+    // below 1.0 so each event's own pool count (7, from 48 fencers) stays
     // under strips_total (8) — no per-event resource-precondition-strips
     // ERROR — while suggestStripCount's ceiling still exceeds it, which is
     // what the post-schedule INFO is gated on. The resulting demand
@@ -986,6 +989,13 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     // producing DEADLINE_BREACH_UNRESOLVABLE ERRORs on excluded events is the
     // accepted cost recorded in spec.md Edge Cases, and those ERRORs carry a
     // different cause, so they play no part in the gate this test checks.
+    //
+    // 024, 2026-10-06 – rebuilt for group A's planning times: fencer_count 32 →
+    // 48. Billing DE bouts × bout time (METHODOLOGY §DE Capacity Estimation, Ops
+    // Manual 2026-27 bout times) cut 32-fencer demand to 208 strip-hours, under
+    // the 224 that 2 days × 8 strips × 14 hours hold, so the feasibility WARN –
+    // this test's premise – stopped firing. 48 fencers demand 326, past the
+    // 258 band. The dead `de_round_of_16_strips` override is dropped (024 D6).
     const combos: Array<[Category, Gender, Weapon]> = [
       [Category.DIV1, Gender.MEN, Weapon.FOIL],
       [Category.DIV1, Gender.WOMEN, Weapon.EPEE],
@@ -1002,7 +1012,7 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
       [Category.DIV1, Gender.MEN, Weapon.EPEE],
     ]
     const competitions = combos.map(([category, gender, weapon], i) =>
-      comp(`ev-${i}`, { category, gender, weapon, fencer_count: 32, de_round_of_16_strips: 4 }),
+      comp(`ev-${i}`, { category, gender, weapon, fencer_count: 48 }),
     )
     const config = smallConfig({
       days_available: 2,
@@ -1028,7 +1038,8 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     // asserted as a lower bound rather than pinned at 3, because the number a
     // 13-event board fits into 8 strips is packing detail this test has no
     // stake in, while zero is the outcome R5 exists to prevent. The drift
-    // ledger pins exact counts; this pins the absence of a collapse.
+    // ledger pins exact counts; this pins the absence of a collapse. 024,
+    // 2026-10-06 – 6 of 13 on the rebuilt 48-fencer board.
     expect(
       Object.keys(schedule).length,
       'a board whose only finding is a feasibility WARN must not come back empty (FR-003)',
@@ -1126,5 +1137,147 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
       bottlenecks.some(b => b.cause === BottleneckCause.RESOURCE_RECOMMENDATION),
       'a board that fits must not receive the post-schedule strip recommendation',
     ).toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────
+// DE phase lengths derive per round at the strips granted (024 A.2,
+// METHODOLOGY.md §DE Duration, §DE Phase Breakdown, §DE Modes)
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent — DE phases derive per round at the granted strips', () => {
+  /** One Div 1 foil event alone on a day with room for every ask. */
+  function scheduleAlone(overrides: Partial<Competition>, configOverrides: Partial<TournamentConfig> = {}) {
+    const competition = makeCompetition({
+      id: 'de-derive',
+      category: Category.DIV1,
+      weapon: Weapon.FOIL,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_video_policy: VideoPolicy.REQUIRED,
+      ...overrides,
+    })
+    const config = makeConfig({
+      days_available: 1,
+      strips: makeStrips(40, 4),
+      max_pool_strip_pct: 1.0,
+      max_de_strip_pct: 1.0,
+      ...configOverrides,
+    })
+    const result = scheduleAllConcurrent([competition], config).schedule[competition.id]
+    if (!result) throw new Error('de-derive was not scheduled')
+    return result
+  }
+
+  it('runs the §DE Duration worked example single-stage in 360 minutes on 16 strips', () => {
+    const s = scheduleAlone({ fencer_count: 248, de_mode: DeMode.SINGLE_STAGE })
+    expect(s.de_strip_count).toBe(16)
+    expect((s.de_end ?? 0) - (s.de_start ?? 0)).toBe(360)
+  })
+
+  it('splits the worked example staged at the round of 16: prelims 300 minutes on 16 strips, video 80 on 4', () => {
+    const s = scheduleAlone({ fencer_count: 248, de_mode: DeMode.STAGED })
+    expect(s.de_prelims_strip_count).toBe(16)
+    expect((s.de_prelims_end ?? 0) - (s.de_prelims_start ?? 0)).toBe(300)
+    expect(s.de_round_of_16_strip_count).toBe(4)
+    expect((s.de_round_of_16_end ?? 0) - (s.de_round_of_16_start ?? 0)).toBe(80)
+  })
+
+  it('re-derives a single-stage DE at fewer granted strips: 24 fencers on 4 strips take 6 waves, 120 minutes', () => {
+    // Bracket of 32 asks 16. A 20% DE cap of 20 strips grants 4: R32's 8 bouts
+    // and R16's 8 take 2 waves each, QF and SF 1 each → 6 × 20 min.
+    const s = scheduleAlone(
+      { fencer_count: 24, de_mode: DeMode.SINGLE_STAGE },
+      { strips: makeStrips(20, 4), max_de_strip_pct: 0.2 },
+    )
+    expect(s.de_strip_count).toBe(4)
+    expect((s.de_end ?? 0) - (s.de_start ?? 0)).toBe(120)
+  })
+
+  it('asks min(4, bracket/2) video strips for a staged video block: a bracket of 4 asks 2', () => {
+    const s = scheduleAlone({ fencer_count: 4, de_mode: DeMode.STAGED })
+    expect(s.bracket_size).toBe(4)
+    expect(s.de_round_of_16_strip_count).toBe(2)
+  })
+
+  it('(guard) asks 4 video strips for a staged video block once the bracket reaches 8', () => {
+    const s = scheduleAlone({ fencer_count: 24, de_mode: DeMode.STAGED })
+    expect(s.bracket_size).toBe(32)
+    expect(s.de_round_of_16_strip_count).toBe(4)
+  })
+})
+
+// ──────────────────────────────────────────────
+// A bracket of 2 has no DE, and a pinned flight keeps its 1-strip floor
+// (024 A.5, plan D5; METHODOLOGY.md §DE Duration 'No counted round',
+// §Scheduler Stops at Semis)
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent — a bracket of 2 has no counted round', () => {
+  /** Two Div 1 foil fencers alone on a day: the DE is the gold bout only. */
+  function scheduleBracketOf2(de_mode: DeMode) {
+    const competition = makeCompetition({
+      id: 'bracket-of-2',
+      fencer_count: 2,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const result = scheduleAllConcurrent([competition], smallConfig())
+    const s = result.schedule[competition.id]
+    if (!s) throw new Error('bracket-of-2 was not scheduled')
+    const deClaims = result.strip_allocations
+      .flat()
+      .filter(a => a.event_id === competition.id && a.phase !== Phase.POOLS)
+    return { s, deClaims }
+  }
+
+  it('runs a single-stage DE in 0 minutes on 0 strips, claims nothing, and keeps the 30-minute tail', () => {
+    const { s, deClaims } = scheduleBracketOf2(DeMode.SINGLE_STAGE)
+    expect(s.bracket_size).toBe(2)
+    expect(s.de_strip_count).toBe(0)
+    expect(s.de_end).toBe(s.de_start)
+    expect(s.de_total_end).toBe((s.de_end ?? 0) + tailEstimateMins(EventType.INDIVIDUAL))
+    expect(deClaims).toEqual([])
+  })
+
+  it('runs a staged DE as a 0-minute video block on 0 video strips with no prelims, and keeps the 30-minute tail', () => {
+    const { s, deClaims } = scheduleBracketOf2(DeMode.STAGED)
+    expect(s.de_prelims_start).toBeNull()
+    expect(s.de_round_of_16_strip_count).toBe(0)
+    expect(s.de_round_of_16_end).toBe(s.de_round_of_16_start)
+    expect(s.de_total_end).toBe((s.de_round_of_16_end ?? 0) + tailEstimateMins(EventType.INDIVIDUAL))
+    expect(deClaims).toEqual([])
+  })
+})
+
+describe('scheduleAllConcurrent — a pinned flighted event on 1 strip', () => {
+  it('(guard) keeps 1 strip for each flight and Flight B its full duration at 1 strip', () => {
+    // 24 fencers → 4 pools, 2 per flight. The pin's 1 strip splits as ceil/floor
+    // (1, 0); Flight B keeps the 1-strip floor, never a 0-strip, 0-minute block.
+    const competition = makeCompetition({
+      id: 'pinned-flight',
+      fencer_count: 24,
+      flighted: true,
+      cut_mode: CutMode.DISABLED,
+      cut_value: 100,
+      de_mode: DeMode.SINGLE_STAGE,
+      de_video_policy: VideoPolicy.BEST_EFFORT,
+    })
+    const config = smallConfig()
+    const pin = { competition_id: competition.id, day: 0, start_time: config.DAY_START_MINS, strip_count: 1 }
+
+    const s = scheduleAllConcurrent([competition], config, [pin]).schedule[competition.id]
+    if (!s) throw new Error('pinned-flight was not scheduled')
+
+    const pools = computePoolStructure(competition.fencer_count)
+    const baseline = weightedPoolDuration(pools, competition.weapon, config.pool_round_duration_table)
+    const refsPerPool = resolveRefsPerPool(competition.ref_policy, pools.n_pools).refs_per_pool
+    const flightBOnOneStrip = estimatePoolDuration(Math.floor(pools.n_pools / 2), baseline, 1, refsPerPool)
+
+    expect(s.flight_a_strips).toBe(1)
+    expect(s.flight_b_strips).toBe(1)
+    expect((s.flight_b_end ?? 0) - (s.flight_b_start ?? 0)).toBe(flightBOnOneStrip.actual_duration)
   })
 })

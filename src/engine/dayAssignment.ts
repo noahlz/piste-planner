@@ -4,13 +4,10 @@
  * Answers: which day should this competition be scheduled on?
  * Uses penalty scoring with constraint relaxation to find the best valid day.
  */
-import {
-  Weapon,
-  DeMode,
-  VideoPolicy,
-} from './types.ts'
+import { Weapon } from './types.ts'
 import type { Competition, TournamentConfig } from './types.ts'
 import { crossoverPenalty } from './crossover.ts'
+import { demandsVideoStage } from './de.ts'
 
 // ──────────────────────────────────────────────
 // SchedulingError
@@ -35,7 +32,7 @@ export class SchedulingError extends Error {
  * Components:
  * - crossover_count: how many other competitions conflict with this one
  * - window_tightness: 840 / (latest_end - earliest_start)
- * - video_scarcity: for STAGED_DE + REQUIRED video — ratio of video comps to video strips
+ * - video_scarcity: for a STAGED_DE + REQUIRED individual event — ratio of such events to video strips
  */
 export function constraintScore(
   competition: Competition,
@@ -50,14 +47,11 @@ export function constraintScore(
   // Guard: avoid divide-by-zero for competitions with zero-width windows
   const windowTightness = windowMins > 0 ? 840 / windowMins : 840
 
-  const videoCompsRequiring = allCompetitions.filter(
-    c => c.de_mode === DeMode.STAGED && c.de_video_policy === VideoPolicy.REQUIRED,
-  ).length
-  const videoScarcity =
-    competition.de_mode === DeMode.STAGED &&
-    competition.de_video_policy === VideoPolicy.REQUIRED
-      ? videoCompsRequiring / Math.max(config.video_strips_total, 1)
-      : 0
+  // Team events never add video demand (024 D4, `demandsVideoStage`).
+  const videoCompsRequiring = allCompetitions.filter(demandsVideoStage).length
+  const videoScarcity = demandsVideoStage(competition)
+    ? videoCompsRequiring / Math.max(config.video_strips_total, 1)
+    : 0
 
   return crossoverCount + windowTightness + videoScarcity
 }

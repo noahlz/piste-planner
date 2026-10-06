@@ -82,9 +82,16 @@ function selectFindings(state: StoreState): Finding[] {
  * Copied from __tests__/store/daySummaries.test.ts's
  * `threeEventsOverlappingOnDayZero` (phase5-contract.md §8 fixture notes) —
  * NAC, 3 days, 4 strips: JR-M-EPEE-IND day 0 @480, JR-W-EPEE-IND day 1 @480,
- * JR-M-FOIL-IND day 0 @500, 8 fencers each, SINGLE_STAGE. Measured blocks:
- * JR-M-EPEE-IND pool 480-704 (1 strip), DE 735-780 (3 strips, overflow);
- * JR-M-FOIL-IND pool 500-696, DE 730-775 (3 strips). Day 0 finish 780.
+ * JR-M-FOIL-IND day 0 @500, 8 fencers each, SINGLE_STAGE.
+ *
+ * 024 group A, 2026-10-06 – blocks derived from METHODOLOGY.md §Pool Duration
+ * Estimation and §DE Duration (Ops Manual p.17). A pool of 8 is 28 bouts,
+ * 120 × 28/21 = 160 minutes for épée and foil alike, and 6 promoted into a
+ * bracket of 8 run R8 and the semis in one wave each on 3 strips, 40 minutes:
+ * JR-M-EPEE-IND pool 480-640 (1 strip), DE 670-710 (3 strips);
+ * JR-M-FOIL-IND pool 500-660, DE 690-730 (3 strips, overflow – only 1 strip
+ * is free at 690). Day 0 finish 730. Before 024 the épée pool ran longer, so
+ * JR-M-EPEE-IND's DE was the one that overflowed and day 0 finished at 780.
  */
 function threeEventsOverlappingOnDayZero(): void {
   useStore.setState(useStore.getInitialState(), true)
@@ -226,7 +233,7 @@ describe('dismissFinding — widened to the unified findings list (013 T030, con
     expect(unplaced, 'expected an Unplaced finding from the overflowing DE block').toBeDefined()
     // Located by severity, then the id is asserted as a literal — a fixture
     // drift reports as a wrong id here rather than a missing row.
-    expect(unplaced!.id).toBe('unplaced:JR-M-EPEE-IND:DE')
+    expect(unplaced!.id).toBe('unplaced:JR-M-FOIL-IND:DE')
 
     useStore.getState().dismissFinding(unplaced!.id)
 
@@ -236,7 +243,9 @@ describe('dismissFinding — widened to the unified findings list (013 T030, con
 
   it('dismissing a Late finish row id records it and filters it', () => {
     threeEventsOverlappingOnDayZero()
-    useStore.getState().updateDayConfig(0, { day_end_time: 810 })
+    // Day 0 finishes at 730, so a 760 close puts the finish 30 minutes inside
+    // the 45-minute late-finish window, as 810 did against 780 before 024.
+    useStore.getState().updateDayConfig(0, { day_end_time: 760 })
     const lateFinish = selectFindings(useStore.getState()).find((f) => f.id === 'late-finish:day:0')
     expect(lateFinish, 'expected a Late finish finding for day 0').toBeDefined()
 

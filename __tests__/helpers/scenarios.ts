@@ -13,7 +13,7 @@
  * depend on test factories that must not ship in app code.
  */
 import {
-  EventType, DeMode, RefPolicy, TournamentType, CutMode,
+  EventType, DeMode, RefPolicy, TournamentType, CutMode, VideoPolicy,
 } from '../../src/engine/types.ts'
 import type { Competition } from '../../src/engine/types.ts'
 import {
@@ -33,7 +33,8 @@ export type { ScenarioId, ScenarioFixture } from '../../src/data/tournaments.ts'
  * per-type default table (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/data-model.md
  * §Per-type default table) (video strips are not here – the scenario fixture
  * supplies them). Keyed by every `TournamentType` so a missing row is a type
- * error.
+ * error. The DE mode is an individual event's: a team event runs Single Stage
+ * at every type (024 D4, applied in `buildCompetitions`).
  */
 const TYPE_RULES: Record<TournamentType, { ref_policy: RefPolicy; de_mode: DeMode }> = {
   [TournamentType.NAC]: { ref_policy: RefPolicy.TWO, de_mode: DeMode.STAGED },
@@ -45,11 +46,14 @@ const TYPE_RULES: Record<TournamentType, { ref_policy: RefPolicy; de_mode: DeMod
 }
 
 /**
- * Four rules here are deliberate second copies of what the app derives (feature
- * 008, then 015): the team-event cut default that `src/store/competitionDefaults.ts`
- * derives, and the three per-type rules – the regional cut override, the DE
+ * Five rules here are deliberate second copies of what the app derives (feature
+ * 008, then 015, then 024): the team-event cut default that `src/store/competitionDefaults.ts`
+ * derives, the three per-type rules – the regional cut override, the DE
  * mode and the referee policy – that `src/store/buildConfig.ts` applies from
- * `src/store/typeDefaults.ts`. This factory imports none of the store's helpers
+ * `src/store/typeDefaults.ts`, and the team rule that `resolveDeMode` and
+ * `resolveVideoPolicy` there apply: a team event is Single Stage and
+ * BEST_EFFORT at every type (024 plan D4 and D11, METHODOLOGY.md §DE Modes,
+ * §Video Replay Policy). This factory imports none of the store's helpers
  * (`src/store/*`), and it should not start to.
  *
  * `appPathParity.test.ts` and `factoryParity.test.ts` catch a store/engine
@@ -103,8 +107,9 @@ export function buildCompetitions(
       ref_policy: typeRules.ref_policy,
       cut_mode: cut.mode,
       cut_value: cut.value,
-      de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
-      de_mode: typeRules.de_mode,
+      // The team rule (024 D4): Single Stage and BEST_EFFORT at every type.
+      de_video_policy: isTeam ? VideoPolicy.BEST_EFFORT : DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
+      de_mode: isTeam ? DeMode.SINGLE_STAGE : typeRules.de_mode,
       latest_end: Infinity,
       strips_allocated: Math.max(2, Math.ceil(fencerCount / 7)),
     })

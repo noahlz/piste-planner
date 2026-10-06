@@ -81,13 +81,19 @@ describe('computePoolStructure', () => {
 // poolDurationForSize
 // ──────────────────────────────────────────────
 
+// METHODOLOGY.md §Pool Duration Estimation: pool-of-7 time × bouts(N) / 21,
+// rounded. Rows for sizes 5 and 6 are the spec's worked examples.
 describe('poolDurationForSize', () => {
   it.each([
-    { weapon: Weapon.EPEE, size: 6, expected: 120 },
-    { weapon: Weapon.EPEE, size: 5, expected: 80 },
-    { weapon: Weapon.EPEE, size: 7, expected: 168 },
-    { weapon: Weapon.FOIL, size: 6, expected: 105 },
-    { weapon: Weapon.SABRE, size: 6, expected: 75 },
+    { weapon: Weapon.FOIL, size: 7, expected: 120 },
+    { weapon: Weapon.EPEE, size: 7, expected: 120 },
+    { weapon: Weapon.SABRE, size: 7, expected: 60 },
+    { weapon: Weapon.FOIL, size: 6, expected: 86 },
+    { weapon: Weapon.EPEE, size: 6, expected: 86 },
+    { weapon: Weapon.SABRE, size: 6, expected: 43 },
+    { weapon: Weapon.FOIL, size: 5, expected: 57 },
+    { weapon: Weapon.EPEE, size: 5, expected: 57 },
+    { weapon: Weapon.SABRE, size: 5, expected: 29 },
   ])('$weapon pool size $size → $expected min', ({ weapon, size, expected }) => {
     const result = poolDurationForSize(weapon, size, DEFAULT_POOL_ROUND_DURATION_TABLE)
     expect(result).toBe(expected)
@@ -99,54 +105,54 @@ describe('poolDurationForSize', () => {
 // ──────────────────────────────────────────────
 
 describe('weightedPoolDuration', () => {
-  it('1×7 + 1×6, EPEE → weighted average of 168 and 120 = 144', () => {
+  it('1×7 + 1×6, EPEE → weighted average of 120 and 86 = 103', () => {
     const structure = computePoolStructure(13) // 1×7 + 1×6
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
-    // (168 * 1 + 120 * 1) / 2 = 144
-    expect(result).toBe(144)
+    // (120 * 1 + 86 * 1) / 2 = 103
+    expect(result).toBe(103)
   })
 
   it('uniform pool sizes (all 6s) → equals single-size duration', () => {
     const structure = computePoolStructure(24) // 4×6
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
-    expect(result).toBe(120)
+    expect(result).toBe(86)
   })
 
   it('n=100 → weighted average of 10×7 and 5×6 pools', () => {
     const structure = computePoolStructure(100) // 10×7 + 5×6
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
-    // (10*168 + 5*120) / 15 = 2280 / 15 = 152
-    expect(result).toBe(152)
+    // (10*120 + 5*86) / 15 = 1630 / 15 = 108.7 → 109
+    expect(result).toBe(109)
   })
 
-  it('SABRE 1×7 + 1×6 → weighted average of 105 and 75 = 90', () => {
+  it('SABRE 1×7 + 1×6 → weighted average of 60 and 43 = 52', () => {
     const structure = computePoolStructure(13) // 1×7 + 1×6
     const result = weightedPoolDuration(structure, Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE)
-    // SABRE base=75 for pool of 6. Pool of 7: round(75 * 21/15) = 105
-    // (105 + 75) / 2 = 90
-    expect(result).toBe(90)
+    // SABRE pool of 7 = 60. Pool of 6: round(60 * 15/21) = 43
+    // (60 + 43) / 2 = 51.5 → 52
+    expect(result).toBe(52)
   })
 
   it('single pool of 8 EPEE → equals poolDurationForSize for size 8 (plain weighted average, no double-stripping reduction)', () => {
     const structure = computePoolStructure(8) // 1×8
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
-    // poolDurationForSize(EPEE, 8) = round(120 * 28/15) = 224
-    expect(result).toBe(224)
+    // poolDurationForSize(EPEE, 8) = round(120 * 28/21) = 160
+    expect(result).toBe(160)
     expect(result).toBe(poolDurationForSize(Weapon.EPEE, 8, DEFAULT_POOL_ROUND_DURATION_TABLE))
   })
 
   it('single pool of 9 SABRE → plain weighted average, no double-stripping reduction', () => {
     const structure = computePoolStructure(9) // 1×9
     const result = weightedPoolDuration(structure, Weapon.SABRE, DEFAULT_POOL_ROUND_DURATION_TABLE)
-    // poolDurationForSize(SABRE, 9) = round(75 * 36/15) = 180
-    expect(result).toBe(180)
+    // poolDurationForSize(SABRE, 9) = round(60 * 36/21) = 103
+    expect(result).toBe(103)
   })
 
   it('single pool of 7 → plain weighted average (no special-casing by pool size)', () => {
     const structure = computePoolStructure(7) // 1×7
     const result = weightedPoolDuration(structure, Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE)
-    // poolDurationForSize(EPEE, 7) = round(120 * 21/15) = 168
-    expect(result).toBe(168)
+    // poolDurationForSize(EPEE, 7) = the pool-of-7 base, 120
+    expect(result).toBe(120)
   })
 })
 

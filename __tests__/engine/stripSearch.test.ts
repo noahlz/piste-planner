@@ -25,9 +25,19 @@ import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/e
  * [MIN] B1 (24 events, days=4) — specs/012-actionable-strip-suggestion/baseline.md §1 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) shows every one of the ten
  * measured templates undershoots at its floor, so the floor and the answer
  * differ by construction on any of them. B1 is the cheapest scenario fixture
- * available through the test helpers: floor=35, ceiling=135, answer=48,
- * placed@floor(35)=0, placed@47=23, placed@48=24. A full 35→48 scan (14
- * candidates) runs in ~21ms (re-measured 015, 2026-10-05).
+ * available through the test helpers: floor=25, ceiling=135, answer=45,
+ * placed@floor(25)=0, placed@44=0, placed@45=24. A full 25→45 scan (21
+ * candidates) (re-measured 024, 2026-10-06).
+ *
+ * 024, 2026-10-06 – floor 35 → 25 and answer 48 → 45 under the 2026-27 Ops
+ * Manual planning times (p.17; METHODOLOGY.md §Pool Duration Estimation, §DE
+ * Duration, §DE Capacity Estimation). Pools rebase to the pool of 7 and DEs
+ * bill bouts × bout time, with a staged event's video-stage bouts on the video
+ * budget only, so B1's general strip-hours fall to 1358.1 – an independent
+ * recomputation from those sections, not from capacity.ts, gives the same
+ * total and ceil(1358.1 / (4 × 14)) = 25. The answer 45 is the plan's
+ * measured B1 `stripRecommendation` after group A. It is now the pool count
+ * of D1-M-EPEE-IND (310 fencers, ceil(310/7) = 45 pools), so 44 places none.
  *
  * 015, 2026-10-05 – these moved from floor 36, placed@47=20 and a 13-candidate
  * scan because the converged factory stages every NAC event's DE (the app's
@@ -117,7 +127,9 @@ describe('stripSearchRange', () => {
     // These are the literal B1 (days=4) numbers T005's probe measured.
     // 015, 2026-10-05 – floor 36 → 35 with the ceiling unchanged at 135: the
     // converged factory stages every NAC event's DE (see `minBoard`).
-    expect(range!.floor).toBe(35)
+    // 024, 2026-10-06 – floor 35 → 25, ceiling unchanged: the 2026-27 planning
+    // times (see `minBoard`).
+    expect(range!.floor).toBe(25)
     expect(range!.ceiling).toBe(135)
   })
 
@@ -250,23 +262,33 @@ describe('search and schedule threading pins (T033)', () => {
     const { comps, config } = minBoard()
 
     // [M] measured directly against this worktree, never predicted. The
-    // no-pins answer on this board is 48. These two events' natural placement
+    // no-pins answer on this board is 45. These two events' natural placement
     // there is D1-M-EPEE-IND day0@0 and D1-M-FOIL-IND day1@840, so neither is
-    // at day0@300 and pinning both there genuinely relocates both.
+    // at day0@180 and pinning both there genuinely relocates both.
     //
     // Their pool asks are 45 and 38 strips — `strips_allocated` and `n_pools`
     // agree here, since the ledger factory sizes both from the fencer count
     // (310 and 260 fencers). Pinned to the same minute they want 45 + 38 = 83
-    // strips at once, well past the 48 the unpinned board needs, and [M] 83 is
+    // strips at once, well past the 45 the unpinned board needs, and [M] 83 is
     // exactly what the search returns: at 83 the pool cap is floor(0.8 × 83) =
     // 66, so neither ask is capped and the two fit the board exactly. At 82 the
     // board is one strip short and the later pin in (day, start, id) order —
     // FOIL, since 'D1-M-EPEE-IND' < 'D1-M-FOIL-IND' — cannot claim its pools.
     //
+    // 024, 2026-10-06 – the pin moved from day0@300 to day0@180. Under the
+    // 2026-27 DE times (Ops Manual p.17; METHODOLOGY.md §DE Duration, §DE Phase
+    // Breakdown) D1-M-EPEE-IND is the spec's worked example: 248 promoted,
+    // bracket 256, prelims 300 min on 16 strips and a video block of 80 min.
+    // From 300 its pools end at 416 (116-min pool round), prelims run 450–750
+    // and the video block 780–860, past the 840-minute day, so the pin could
+    // never claim its video block at any count and the search returned null.
+    // From 180 the video block ends at 740 and the tail at 770, which also
+    // fits the 780-minute hard window group B brings.
+    //
     // Four pins were tried first and can never have an answer: 45 + 38 + 30 +
     // 32 = 145 strips at one minute against a ceiling of 135.
     const pinDay = 0
-    const pinOffset = 300 // multiple of SLOT_MINS (5)
+    const pinOffset = 180 // multiple of SLOT_MINS (5)
     const pinStart = dayStart(pinDay, config) + pinOffset
     const pinnedIds = ['D1-M-EPEE-IND', 'D1-M-FOIL-IND']
     const pins: PinnedPlacement[] = pinnedIds.map(id => {
@@ -276,7 +298,7 @@ describe('search and schedule threading pins (T033)', () => {
     expect(pins.map(p => p.strip_count)).toEqual([45, 38])
 
     const noPinsAnswer = searchStripCount(comps, config)
-    expect(noPinsAnswer).toBe(48)
+    expect(noPinsAnswer).toBe(45)
 
     const n = searchStripCount(comps, config, pins)
     expect(typeof n).toBe('number')

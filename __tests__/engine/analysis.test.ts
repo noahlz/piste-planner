@@ -10,6 +10,7 @@ import {
   Weapon,
   CutMode,
   DeMode,
+  EventType,
   VideoPolicy,
   BottleneckRule,
 } from '../../src/engine/types.ts'
@@ -274,6 +275,27 @@ describe('initialAnalysis — Pass 4: video strip demand', () => {
       (w: Bottleneck) => w.cause === BottleneckCause.VIDEO_STRIP_CONTENTION,
     )
     expect(warn).toBeUndefined()
+  })
+
+  it('counts only individual events: NAC team events marked STAGED + REQUIRED add no video demand (024 D4)', () => {
+    // Two individual video DEs fill 2 video strips exactly. Two team events
+    // hand-built STAGED + REQUIRED would push the day to 4 if counted, but a
+    // team DE has no video stage (METHODOLOGY.md §DE Modes, §Video Replay Policy).
+    const config = makeConfig({ tournament_type: TournamentType.NAC, strips_total: 24, video_strips_total: 2 })
+    const video = { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }
+    const comps = [
+      makeBigComp('indiv-1', 42, video),
+      makeBigComp('indiv-2', 42, video),
+      makeBigComp('team-1', 12, { ...video, event_type: EventType.TEAM, category: Category.JUNIOR }),
+      makeBigComp('team-2', 12, { ...video, event_type: EventType.TEAM, category: Category.DIV1 }),
+    ]
+    const dayAssignments = { 'indiv-1': 0, 'indiv-2': 0, 'team-1': 0, 'team-2': 0 }
+
+    const result = initialAnalysis(config, comps, dayAssignments)
+
+    expect(
+      result.warnings.filter((w: Bottleneck) => w.rule === BottleneckRule.DAY_VIDEO_DEMAND_EXCEEDS_VIDEO_STRIPS),
+    ).toEqual([])
   })
 })
 

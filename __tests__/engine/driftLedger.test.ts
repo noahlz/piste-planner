@@ -98,7 +98,20 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // arrive (D1A-W-FOIL-IND, JR-M-EPEE-IND, JR-W-SABRE-IND): the all-advance
   // brackets cost the strip-hours the 20% cut hid. See
   // specs/015-ledger-convergence/plan.md §What planning measured and §D4.
-  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
+  //
+  // 024, 2026-10-06 – B4 raised 18 → 19 by group A (planning times): pools
+  // rebased to the pool of 7 and DEs derived per round from the 2026-27 Ops
+  // Manual's bout times (METHODOLOGY §Pool Duration Estimation, §DE Duration).
+  // Out CDT-M-EPEE-IND, CDT-M-FOIL-IND. In CDT-W-FOIL-IND, Y12-W-SABRE-IND,
+  // Y14-W-EPEE-IND. Equal to the app path's 19. A raise under the rule above.
+  //
+  // 024, 2026-10-06 – B6 raised 40 → 50 by group A (planning times), the same
+  // rules. In CDT-W-FOIL-IND, D2-M-EPEE-IND, D2-M-FOIL-IND, D2-M-SABRE-IND,
+  // VET-M-EPEE-IND-VCMB, Y12-M-FOIL-IND, Y12-M-SABRE-IND, Y12-W-EPEE-IND,
+  // Y12-W-SABRE-IND, Y14-W-EPEE-IND. None leave. Equal to the app path's 50.
+  // A raise under the rule above. See specs/024-ops-manual-conformance/plan.md
+  // §Group A.
+  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 53,
 }
 
 /**
@@ -107,7 +120,8 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  * B4 was absent for as long as the upfront feasibility gate aborted its build
  * before any per-day packing ran, so `postScheduleDayBreakdown` never executed
  * for it. 011's T004 demoted that finding to a WARN and B4 packs again: it emits
- * three summary lines (days 1-3, peak demand 86 / 156 / 162, re-measured at 015)
+ * three summary lines (days 1-3, peak demand 86 / 156 / 162 at 015, 106 / 148 /
+ * 170 since 024's group A)
  * and `dayPeakRefDemands` reproduces all three, so B4 joins the list rather than
  * the comment being rewritten around its absence. B1/B2/B3/B5/B7/B8 stay out
  * because they emit no summary line at all – the scheduler only writes one for
@@ -315,6 +329,10 @@ describe('drift ledger', () => {
     //    015, 2026-10-05 – 17 → 18: the factory now applies the regional cut and
     //    the per-type DE mode, which together account for the +1 (cut alone 19,
     //    DE mode alone 20, both 18 – specs/015-ledger-convergence/plan.md).
+    //    024, 2026-10-06 – 18 → 19: group A's pool-of-7 and per-round DE times
+    //    (2026-27 Ops Manual) re-pack B4 – CDT-M-EPEE-IND and CDT-M-FOIL-IND out,
+    //    CDT-W-FOIL-IND, Y12-W-SABRE-IND and Y14-W-EPEE-IND in
+    //    (specs/024-ops-manual-conformance/plan.md §Group A).
     //  - no ERROR-severity validation finding at all, and in particular neither
     //    feasibility rule id among them. This reads `validateConfig` directly
     //    because it pins the severity at the source: a severity re-escalation
@@ -332,30 +350,38 @@ describe('drift ledger', () => {
     //    was 481 (~29%,
     //    specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md))
     //    before the factory took the per-type DE mode and regional cut.
-    //  - no ERROR sits in Phase.VALIDATION. B4's 12 ERRORs are all
+    //    024, 2026-10-06 – suspended for group A only. Billing DE bouts × bout
+    //    time (METHODOLOGY §DE Capacity Estimation) drops B4's demand to 1548
+    //    strip-hours, under the 1680 its 14-hour days hold, so no feasibility
+    //    finding fires (the ledger's RESOURCE_EXHAUSTION 7 → 6). Group B's
+    //    600-minute capacity day (1200 available, 1380 with slack) brings the
+    //    WARN back, and Task B restores both presence assertions. Until then the
+    //    test holds only that any feasibility finding is a WARN, and never pins
+    //    its absence.
+    //  - no ERROR sits in Phase.VALIDATION. B4's 11 ERRORs (12 before 024's
+    //    group A) are all
     //    DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the ordinary
     //    per-event degradation of an oversubscribed board, which is spec.md
     //    §Edge Cases' accepted cost. A validation-phase ERROR returning is the
     //    shape that empties the board, and it halts here whatever its rule id.
     if (id === 'B4') {
-      it('B4 packs under a demoted feasibility WARN — 18 scheduled, no validation ERROR', () => {
+      it('B4 packs with feasibility demoted to WARN — 19 scheduled, no validation ERROR', () => {
         const { competitions, config, bottlenecks } = runScenario(id)
 
-        expect(buildDigest(id).scheduledCount).toBe(18)
+        expect(buildDigest(id).scheduledCount).toBe(19)
 
         const findings = validateConfig(config, competitions, ValidationMode.BINDING)
         expect(findings.filter(f => f.severity === BottleneckSeverity.ERROR)).toEqual([])
-        expect(
-          findings.filter(f => f.rule === 'feasibility-strip-hours' && f.severity === BottleneckSeverity.WARN),
-        ).toHaveLength(1)
 
         const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
         expect(errors.filter(b => b.phase === Phase.VALIDATION)).toEqual([])
 
+        // 024 group A: the presence pins are suspended (see the note above).
+        // Task B restores `toHaveLength(1)` on both copies.
         expect(
-          bottlenecks.filter(b => b.rule === FeasibilityRule.STRIP_HOURS && b.severity === BottleneckSeverity.WARN),
-          'the scheduler\'s own bottlenecks carry the feasibility WARN too',
-        ).toHaveLength(1)
+          bottlenecks.filter(b => b.rule === FeasibilityRule.STRIP_HOURS && b.severity !== BottleneckSeverity.WARN),
+          'any feasibility finding the scheduler carries is a WARN',
+        ).toEqual([])
       })
     }
 

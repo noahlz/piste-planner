@@ -7,8 +7,9 @@ import {
 } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
-  DEFAULT_DE_DURATION_TABLE,
   DE_BOUT_DURATION,
+  DE_BOUT_DURATION_10_TOUCH,
+  TEAM_MATCH_DURATION,
   YOUTH_VET_BOUT_DELTA,
   DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
@@ -63,12 +64,13 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     MAX_FENCERS: 500,
     MIN_FENCERS: 2,
     pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
-    de_duration_table: DEFAULT_DE_DURATION_TABLE,
     // T072: de.ts and capacity.ts read these off the config instead of
     // importing them, so every config needs them. Sourced from the constants
     // the engine used to import directly, which is what keeps the factory's
     // configs byte-identical in behavior to their pre-T072 selves.
     DE_BOUT_DURATION,
+    DE_BOUT_DURATION_10_TOUCH,
+    TEAM_MATCH_DURATION,
     YOUTH_VET_BOUT_DELTA,
     DEFAULT_DE_STRIP_FOOTPRINT,
     dayConfigs: [],
@@ -96,7 +98,6 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
     cut_value: 100,
     de_mode: DeMode.SINGLE_STAGE,
     de_video_policy: VideoPolicy.BEST_EFFORT,
-    de_round_of_16_strips: 4,
     de_round_of_16_requirement: DeStripRequirement.HARD,
     flighted: false,
     flighting_group_id: null,

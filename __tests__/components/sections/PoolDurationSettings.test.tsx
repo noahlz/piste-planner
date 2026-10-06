@@ -11,10 +11,12 @@ import { Weapon } from '../../../src/engine/types.ts'
 // Bounds per research.md D5: integer minutes, 1–999, rejected entries keep the
 // last valid value – never clamped-and-committed, and never a blank input.
 
+// Pool-of-7 durations from the 2026-27 Ops Manual (METHODOLOGY Appendix A §Pool Duration by
+// Weapon), replacing the earlier 120/105/75 – 024 group A.
 const DEFAULTS = [
   { weapon: Weapon.EPEE, name: /epee/i, minutes: 120 },
-  { weapon: Weapon.FOIL, name: /foil/i, minutes: 105 },
-  { weapon: Weapon.SABRE, name: /sabre/i, minutes: 75 },
+  { weapon: Weapon.FOIL, name: /foil/i, minutes: 120 },
+  { weapon: Weapon.SABRE, name: /sabre/i, minutes: 60 },
 ] as const
 
 /** The single override value used by every overridden-state fixture. */
@@ -86,7 +88,7 @@ describe('PoolDurationSettings override entry', () => {
 
     commitValue(durationInput(/epee/i), String(EPEE_OVERRIDE))
 
-    expect(storedTable()).toEqual({ EPEE: EPEE_OVERRIDE, FOIL: 105, SABRE: 75 })
+    expect(storedTable()).toEqual({ EPEE: EPEE_OVERRIDE, FOIL: 120, SABRE: 60 })
   })
 
   it('accepts an extreme but valid value – the spec edge case names 600', () => {
@@ -160,7 +162,7 @@ describe('PoolDurationSettings revert', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /revert epee/i }))
 
-    expect(storedTable()).toEqual({ EPEE: 120, FOIL: 100, SABRE: 75 })
+    expect(storedTable()).toEqual({ EPEE: 120, FOIL: 100, SABRE: 60 })
   })
 
   it('activating the revert control brings the Default badge back', () => {

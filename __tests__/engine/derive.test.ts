@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import {
-  DeMode, CutMode, Gender, Weapon, PlacementSource,
+  BottleneckCause, DeMode, CutMode, EventType, Gender, Weapon, PlacementSource, VideoPolicy, tailEstimateMins,
 } from '../../src/engine/types.ts'
 import type { Placement, Competition, TournamentConfig, ScheduleResult } from '../../src/engine/types.ts'
+import {
+  computePoolStructure, estimatePoolDuration, resolveRefsPerPool, weightedPoolDuration,
+} from '../../src/engine/pools.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
@@ -173,6 +176,85 @@ describe('deriveEventSchedule — staged DE event', () => {
   })
 })
 
+describe('deriveEventSchedule — staged video ask (METHODOLOGY.md §DE Modes)', () => {
+  it('asks min(4, bracket/2) video strips: a bracket of 4 draws 2', () => {
+    const competition = makeCompetition({
+      id: 'de-staged-4', fencer_count: 4, de_mode: DeMode.STAGED, cut_mode: CutMode.DISABLED,
+    })
+    const placement: Placement = {
+      day: 0, start_time: 480, strip_count: 1, strips: null, source: PlacementSource.AUTO, pinned: false,
+    }
+
+    const derived = deriveEventSchedule(placement, competition, isolatedConfig())
+
+    expect(derived.result.bracket_size).toBe(4)
+    expect(derived.result.de_round_of_16_strip_count).toBe(2)
+  })
+})
+
+// A bracket of 2 has no counted round: 0 strips, 0 minutes, the tail kept
+// (024 plan D5; METHODOLOGY.md §DE Duration 'No counted round', §Scheduler
+// Stops at Semis).
+describe('deriveEventSchedule — a bracket of 2 has no counted round', () => {
+  const bracketOf2 = (overrides: Partial<Competition>) => makeCompetition({
+    id: 'bracket-of-2', fencer_count: 2, cut_mode: CutMode.DISABLED, cut_value: 100,
+    de_video_policy: VideoPolicy.BEST_EFFORT, ...overrides,
+  })
+
+  it.each([
+    { label: 'individual', event_type: EventType.INDIVIDUAL },
+    { label: 'team', event_type: EventType.TEAM },
+  ])('derives a 0-minute single-stage DE on 0 strips with the $label tail', ({ event_type }) => {
+    const derived = deriveEventSchedule(
+      { day: 0, start_time: 480, strip_count: 1, strips: null, source: PlacementSource.AUTO, pinned: false },
+      bracketOf2({ de_mode: DeMode.SINGLE_STAGE, event_type }),
+      isolatedConfig(),
+    )
+
+    expect(derived.result.bracket_size).toBe(2)
+    expect(derived.result.de_strip_count).toBe(0)
+    expect(derived.result.de_end).toBe(derived.result.de_start)
+    expect(derived.result.de_total_end).toBe((derived.result.de_end ?? 0) + tailEstimateMins(event_type))
+  })
+
+  it('derives a 0-minute staged video block on 0 video strips with no prelims, matching a live scheduleAll run', () => {
+    const config = isolatedConfig()
+    const competition = bracketOf2({ de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED })
+    const { oracle, placement } = scheduleIsolated(competition, config)
+
+    const derived = deriveEventSchedule(placement, competition, config)
+
+    expectGeometryMatches(derived.result, oracle)
+    expect(derived.result.de_prelims_start).toBeNull()
+    expect(derived.result.de_round_of_16_strip_count).toBe(0)
+    expect(derived.result.de_round_of_16_end).toBe(derived.result.de_round_of_16_start)
+  })
+})
+
+describe('deriveEventSchedule — a pinned flighted event on 1 strip', () => {
+  it('(guard) keeps 1 strip for each flight and Flight B its full duration at 1 strip', () => {
+    // The 1-strip budget splits ceil/floor as (1, 0); Flight B keeps the
+    // 1-strip floor, matching the scheduler's pinned path.
+    const config = isolatedConfig()
+    const competition = makeCompetition({ id: 'pinned-flight', fencer_count: 24, flighted: true })
+    const placement: Placement = {
+      day: 0, start_time: 480, strip_count: 1, strips: null, source: PlacementSource.MANUAL, pinned: true,
+    }
+
+    const derived = deriveEventSchedule(placement, competition, config)
+
+    const pools = computePoolStructure(competition.fencer_count)
+    const baseline = weightedPoolDuration(pools, competition.weapon, config.pool_round_duration_table)
+    const refsPerPool = resolveRefsPerPool(competition.ref_policy, pools.n_pools).refs_per_pool
+    const flightBOnOneStrip = estimatePoolDuration(Math.floor(pools.n_pools / 2), baseline, 1, refsPerPool)
+
+    expect(derived.result.flight_a_strips).toBe(1)
+    expect(derived.result.flight_b_strips).toBe(1)
+    expect((derived.result.flight_b_end ?? 0) - (derived.result.flight_b_start ?? 0))
+      .toBe(flightBOnOneStrip.actual_duration)
+  })
+})
+
 // ──────────────────────────────────────────────
 // Case 4: flighted event
 // ──────────────────────────────────────────────
@@ -324,12 +406,22 @@ describe('deriveEventSchedule — day_out_of_range', () => {
 // ──────────────────────────────────────────────
 
 describe('deriveEventSchedule — oracle: reproduces scheduleAll geometry', () => {
+  // 024, 2026-10-06 – rebuilt for group A's planning times. On the old 12
+  // strips with a full DE cap, multi-c's video-stage block (Ops Manual 2026-27
+  // bout times) was deferred behind the pools to 90–142, and multi-a's DE,
+  // asking all 12 strips at its ready time 130, waited for it until 145.
+  // derive.ts reproduces geometry "minus resource contention" (its header), so
+  // it gave the ready time 130 – the two agree on geometry and only the
+  // fixture's contention-free premise moved. 28 strips with a 0.5 DE cap (14)
+  // restore it: every block starts at its ready time, and multi-a's DE is still
+  // strip-capped (14 granted of 16 asked, 100 minutes against an 80 baseline),
+  // as it was on 12.
   it('reproduces one event geometry from a busier multi-event schedule (research D1)', () => {
     const config = makeConfig({
       days_available: 2,
-      strips: makeStrips(12, 2),
+      strips: makeStrips(28, 2),
       max_pool_strip_pct: 1.0,
-      max_de_strip_pct: 1.0,
+      max_de_strip_pct: 0.5,
     })
     const competitions = [
       makeCompetition({ id: 'multi-a', fencer_count: 32, gender: Gender.MEN, weapon: Weapon.FOIL }),
@@ -345,6 +437,10 @@ describe('deriveEventSchedule — oracle: reproduces scheduleAll geometry', () =
     // sanity: pins this fixture as contention-free, so a match failure here
     // means the fixture stopped isolating geometry and started isolating delay.
     expect(bottlenecks.filter((b) => b.delay_mins > 0)).toEqual([])
+    // A strip-contention deferral carries delay_mins 0, so the check above alone
+    // let the 024 contention through. This one names it.
+    expect(bottlenecks.filter((b) => b.cause === BottleneckCause.STRIP_CONTENTION)).toEqual([])
+    expect(oracle.de_strip_count, 'the target DE stays strip-capped').toBeLessThan(oracle.bracket_size / 2)
 
     const placement = placementFromResult(oracle)
     const derived = deriveEventSchedule(placement, target, config)
