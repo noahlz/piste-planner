@@ -135,12 +135,13 @@ describe('resolveDeMode', () => {
 })
 
 describe('resolveVideoPolicy', () => {
+  // Guard (024 plan Task C, from A): a team event plans with no video at every type.
   it.each(Object.values(TournamentType))('plans every team event BEST_EFFORT at %s', (type) => {
     expect(resolveVideoPolicy(type, EventType.TEAM)).toBe(VideoPolicy.BEST_EFFORT)
   })
 
   it.each(Object.values(TournamentType))(
-    'plans every individual event with the type row at %s, whatever its category',
+    'plans every individual event with the type row at %s',
     (type) => {
       expect(resolveVideoPolicy(type, EventType.INDIVIDUAL)).toBe(EXPECTED_ROWS[type].individual_video_policy)
     },

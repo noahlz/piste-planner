@@ -605,6 +605,10 @@ describe('buildTournamentConfig', () => {
       // (METHODOLOGY.md §Video Replay Policy; Ops Manual p.19 gives teams video
       // for the gold and bronze only; 024 plan D4). An individual event follows
       // the type's row, whatever its category (024 D9).
+      const INDIVIDUAL_VIDEO_BY_TYPE = {
+        [TournamentType.NAC]: VideoPolicy.REQUIRED,
+        [TournamentType.ROC]: VideoPolicy.BEST_EFFORT,
+      } as const
       it.each([TournamentType.NAC, TournamentType.ROC])(
         'de_video_policy is BEST_EFFORT for every team event and the type row for every individual one, at %s',
         (type) => {
@@ -612,7 +616,7 @@ describe('buildTournamentConfig', () => {
           for (const comp of competitions) {
             const expected = comp.event_type === EventType.TEAM
               ? VideoPolicy.BEST_EFFORT
-              : TYPE_DEFAULTS[type].individual_video_policy
+              : INDIVIDUAL_VIDEO_BY_TYPE[type]
             expect(comp.de_video_policy, comp.id).toBe(expected)
           }
         },
@@ -652,6 +656,7 @@ describe('buildTournamentConfig', () => {
  * 2026-27 p.19; 024 plan D9). REQUIRED at a NAC for every category, BEST_EFFORT
  * at every other type, and BEST_EFFORT for every team event at every type.
  */
+// Guard (024 plan Task C, from A): the team half pins BEST_EFFORT at every type.
 describe('buildTournamentConfig: de_video_policy follows the tournament type (024 D9)', () => {
   const INDIVIDUAL_IDS = {
     Y8: 'Y8-M-FOIL-IND',

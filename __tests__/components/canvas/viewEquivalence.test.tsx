@@ -448,7 +448,10 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
     const companionId = TEMPLATES['RYC Weekend'][1]
     useStore.getState().setDays(3)
     useStore.getState().setStrips(12)
-    useStore.getState().setVideoStrips(2)
+    // 4 video strips: the default NAC makes every individual event STAGED with video REQUIRED,
+    // a video stage asks min(4, bracketSize/2) = 4 strips, and fewer raises
+    // video-r16-strip-shortfall (024 D9).
+    useStore.getState().setVideoStrips(4)
     useStore.getState().addCompetition(id)
     useStore.getState().updateCompetition(id, { fencer_count: 8 })
     useStore.getState().addCompetition(companionId)

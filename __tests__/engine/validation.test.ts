@@ -94,6 +94,7 @@ function findingIdentity(finding: ValidationError): string {
 // 015, 2026-10-05 – with the converged factory (every event built by the app's
 // per-type rules) the regional-cut override rule fires 0x on B1–B8, and the
 // video dead-config rule fires on B4 (6x), B5 (12x) and B6 (12x).
+// 024 group C, 2026-10-06 – the video dead-config rule no longer fires on B4, B5 or B6: regional individual events are BEST_EFFORT (D9).
 //
 // OUT OF SCOPE for this catalogue: `validateSameDayCompletion` is exported
 // and directly tested, but has zero callers anywhere in src/ (confirmed by
@@ -117,6 +118,9 @@ function validateBoth(config: TournamentConfig, competitions: Competition[]) {
   }
 }
 
+/** 24 fencers fill a 32 bracket, which asks 4 video strips. */
+const BRACKET_32_FENCERS = 24
+
 /**
  * The competitions the store bridge builds for these ids at a tournament type
  * under a DE-mode override, so a test reads the policy the app really derives
@@ -127,7 +131,7 @@ function buildTypeCompetitions(type: TournamentType, deModeOverride: DeMode, ids
   useStore.setState({
     tournament_type: type,
     de_mode_override: deModeOverride,
-    selectedCompetitions: Object.fromEntries(ids.map(id => [id, { fencer_count: 24, flighted: false }])),
+    selectedCompetitions: Object.fromEntries(ids.map(id => [id, { fencer_count: BRACKET_32_FENCERS, flighted: false }])),
   } as Partial<StoreState>)
   try {
     return buildTournamentConfig(useStore.getState()).competitions
@@ -393,6 +397,7 @@ describe('validateConfig — video R16 strip shortfall (structural: resource imp
   })
 
   it('a bracket of 4 asks 2 video strips: 1 is a shortfall, 2 is not', () => {
+    // Guard (024 plan Task C, from A): a small bracket asks fewer than 4 strips, never more than it can seat.
     // METHODOLOGY.md §DE Modes: the video block asks min(4, bracket/2) strips.
     const comp = makeCompetition({
       fencer_count: 4,
@@ -429,7 +434,8 @@ describe('validateConfig — video R16 strip shortfall (structural: resource imp
     const competitions = buildTypeCompetitions(TournamentType.ROC, DeMode.STAGED, [
       'D1-M-FOIL-IND', 'JR-M-FOIL-IND', 'CDT-M-FOIL-IND',
     ])
-    expect(competitions.every(c => c.de_mode === DeMode.STAGED)).toBe(true)
+    expect(competitions.map(c => c.de_mode), 'override reached every event')
+      .toEqual(competitions.map(() => DeMode.STAGED))
     const { binding, advisory } = validateBoth(config, competitions)
     expect(binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
     expect(advisory.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])

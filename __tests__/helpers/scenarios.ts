@@ -69,11 +69,11 @@ const TYPE_RULES: Record<TournamentType, {
  * `src/store/buildConfig.ts` applies from `src/store/typeDefaults.ts`, and the
  * team rule that `resolveDeMode` and `resolveVideoPolicy` there apply: a team
  * event is Single Stage and BEST_EFFORT at every type (024 plan D4 and D11,
- * METHODOLOGY.md §DE Modes, §Video Replay Policy). The video rule is a
- * deliberate second copy on its own account: `individual_video_policy` is
- * transcribed in `TYPE_RULES` above and never read from `TYPE_DEFAULTS`
- * (024 D9 and D11, METHODOLOGY.md §Tournament-Type Policies). This factory imports none of the store's helpers
- * (`src/store/*`), and it should not start to.
+ * METHODOLOGY.md §DE Modes, §Video Replay Policy). `individual_video_policy`
+ * is transcribed in `TYPE_RULES` above and never read from `TYPE_DEFAULTS`
+ * (024 D9 and D11, METHODOLOGY.md §Tournament-Type Policies). This factory
+ * imports none of the store's helpers (`src/store/*`), and it should not
+ * start to.
  *
  * `appPathParity.test.ts` and `factoryParity.test.ts` catch a store/engine
  * divergence by deriving a tournament's competitions down both paths

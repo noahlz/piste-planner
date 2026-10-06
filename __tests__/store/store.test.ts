@@ -307,7 +307,8 @@ describe('competitionSlice', () => {
       }
     })
 
-    it('derives the cut and video-policy defaults from the catalogue on the way to the engine', () => {
+    it('takes the cut default from the catalogue and the video policy from the tournament type on the way to the engine', () => {
+      useStore.getState().setTournamentType(TournamentType.NAC)
       useStore.getState().selectCompetitions([CADET_MF, JUNIOR_WE])
       const cadetEntry = findCompetition(CADET_MF)!
 
