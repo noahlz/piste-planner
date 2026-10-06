@@ -544,11 +544,10 @@ describe('colorPenalty — PROXIMITY_3_PLUS_DAYS (L1)', () => {
 // ──────────────────────────────────────────────
 // DSatur least-bad-color fallback reporting (R7 / US2, T007)
 //
-// Today, when every color is blocked for a vertex, dsaturLoop's two
-// least-bad-color branches (dayColoring.ts:534-544, :546-556) pick a color
-// anyway and leave no trace: no warning, no relaxation, no error. R7 (T009)
-// makes assignDaysByColoring return the broken hard-edge pairs so the caller
-// can report them. These tests pin the return shape T009 must implement:
+// When every color is blocked for a vertex, dsaturLoop's two least-bad-color
+// branches pick a color anyway. R7 (T009) made assignDaysByColoring return the
+// broken hard-edge pairs so the caller can report them instead of leaving no
+// trace. These tests pin that return shape:
 //
 //   assignDaysByColoring(...): {
 //     dayMap, relaxations, effectiveDays,
@@ -633,27 +632,35 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     expect(violations.length).toBe(0)
   })
 
-  // FR-004 / FR-005 guard, not a red test — T009 adds `violations` reporting
-  // to the least-bad-color fallback and must change no coloring decision. The
-  // expected map below was captured by running this exact call against the
-  // pre-T009 code (tmp/t008-probe.test.ts, deleted after capture). It passes
-  // today and must still pass after T009: if it ever goes red, T009 moved a
-  // day assignment, not just added a report, and both T008 and T009 halt.
-  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: the day map and relaxations are unchanged by R7 (FR-004, FR-005 guard)', () => {
+  // Regression capture, not a red test. The expected map below is the day map
+  // after 024 group D's same-day rules (first and last day capacity, Group 3,
+  // no Junior–Cadet rest day). It pins today's coloring so a later change that
+  // moves a day assignment shows up here. It no longer evidences that R7's
+  // violations reporting changed no decision (FR-004, FR-005): that held for
+  // the pre-024 map, which group D replaced.
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: the day map is the post-024-group-D capture and relaxations stay empty', () => {
     const { config, competitions } = buildTemplate('NAC Cadet/Junior')
     const graph = buildConstraintGraph(competitions, config.tournament_type)
 
     const { dayMap, relaxations } = assignDaysByColoring(graph, competitions, config)
 
     // Captured from the current code, not derived from this same call.
-    // Re-captured in 024 group D, whose owner-approved rules move six events
-    // (attributed by toggling each rule in a throwaway probe):
-    // - the Group 3 cross-weapon preference (Ops Manual p.20 – Group 3,
-    //   METHODOLOGY.md §Other Soft Preferences) moves CDT-M-FOIL-IND 2→1,
-    //   CDT-W-SABRE-IND 1→2, JR-M-FOIL-IND 1→2 and JR-W-SABRE-IND 2→1, so no
-    //   Cadet or Junior individual demographic keeps all three weapons on one day
-    // - dropping the Junior–Cadet rest day (METHODOLOGY.md §Rest Day
-    //   Preference) moves CDT-M-SABRE-TEAM 1→2 and JR-M-SABRE-IND 2→1
+    // Re-captured in 024 group D, whose owner-approved rules move six events.
+    // Three rules interact, so the effect is order-dependent. As a path from
+    // the final state, found in a throwaway probe:
+    // - turning the Group 3 cross-weapon preference (Ops Manual p.20 – Group 3,
+    //   METHODOLOGY.md §Other Soft Preferences) off reverts four events:
+    //   CDT-M-FOIL-IND, CDT-W-SABRE-IND, JR-M-FOIL-IND and JR-W-SABRE-IND. With
+    //   it on, no Cadet or Junior individual demographic keeps all three
+    //   weapons on one day
+    // - with the 0.8 first/last day factor on and Group 3 off, restoring the
+    //   Junior–Cadet rest day (METHODOLOGY.md §Rest Day Preference) moves four
+    //   events: CDT-M-SABRE-TEAM and JR-M-SABRE-IND back to their pre-024 days,
+    //   and CDT-W-FOIL-TEAM and JR-W-FOIL-IND off theirs. The 0.8 factor alone
+    //   moves those last two: with the factor at 1.0, Group 3 off and the rest
+    //   day on, the map equals the pre-024 map
+    // - with the factor off, Group 3 alone moves two and the rest day alone
+    //   moves four, and both together give the final six
     const expectedDayMap: Record<string, number> = {
       'CDT-M-EPEE-IND': 2,
       'CDT-M-EPEE-TEAM': 0,
@@ -1216,11 +1223,11 @@ describe('first and last day capacity', () => {
 
   // x is what day expansion asks capacityDemandedDays for: the weighted
   // strip-hour demand in middle days at the target fill, i.e. totalStripHours /
-  // (dayCapacity × CAPACITY_TARGET_FILL). Today's expansion takes ceil(x). With
-  // the factor, N days hold N middle days below 3 days and N − 2 + 2 × 0.8 =
-  // N − 0.4 from 3 up, so 3 days hold 2.6 and 4 days 3.6: 2 / 2.0001 is the
-  // two-to-three edge (unchanged, no factor at 2 days) and 2.6 / 2.61 the
-  // three-to-four edge, which moves from 3 to 4.
+  // (dayCapacity × CAPACITY_TARGET_FILL). Without the factor, expansion takes
+  // ceil(x). With the factor, N days hold N middle days below 3 days and
+  // N − 2 + 2 × 0.8 = N − 0.4 from 3 up, so 3 days hold 2.6 and 4 days 3.6:
+  // 2 / 2.0001 is the two-to-three edge (unchanged, no factor at 2 days) and
+  // 2.6 / 2.61 the three-to-four edge, which moves from 3 to 4.
   it.each([
     [0.5, 1],
     [2, 2],
@@ -1237,8 +1244,8 @@ describe('first and last day capacity', () => {
     // sees one event on every day. The strip count is sized so one event's fill
     // f of a middle day sits in (0.68, 0.85]: no penalty in the middle, but
     // f / 0.8 > 0.85 on the edge days, where the capacity penalty starts. So
-    // the fourth lands on the middle day. Today every day ties and it takes
-    // colour 0.
+    // the fourth lands on the middle day. Without the factor every day ties and
+    // it takes colour 0.
     const comps = ['A', 'B', 'C', 'D'].map(id =>
       makeCompetition({ id, category: Category.Y12, weapon: Weapon.FOIL, fencer_count: 200 }),
     )
@@ -1256,6 +1263,38 @@ describe('first and last day capacity', () => {
     expect(effectiveDays).toBe(3)
     expect(['A', 'B', 'C'].map(id => dayMap.get(id))).toEqual([0, 1, 2])
     expect(dayMap.get('D')).toBe(1)
+  })
+
+  // Wiring: day expansion in assignDaysByColoring goes through
+  // capacityDemandedDays. Eight equal, unconstrained Y12 foil events on 4
+  // available days (chromatic number 1) sized so the weighted strip-hours fill
+  // `ratio` of one middle day: strips = round(total / (ratio × DAY_LENGTH hours)).
+  // x = ratio / CAPACITY_TARGET_FILL (0.3). At ratio 0.85, x ≈ 2.83: ceil(x) says
+  // 3 days but 3 days hold only 2.6 middle days, so the helper says 4. At ratio
+  // 0.70, x ≈ 2.33 sits under 2.6 and both say 3.
+  it.each([
+    [0.85, 4],
+    [0.7, 3],
+  ])('expands to the days capacityDemandedDays asks for at a middle-day fill of %f (%i days)', (ratio, days) => {
+    const comps = Array.from({ length: 8 }, (_, i) =>
+      makeCompetition({ id: `E${i}`, category: Category.Y12, weapon: Weapon.FOIL, fencer_count: 200 }),
+    )
+    const base = makeConfig({ days_available: 4 })
+    const totalSH = comps.reduce(
+      (sum, c) => sum + estimateCompetitionStripHours(c, base).total_strip_hours * categoryWeight(c),
+      0,
+    )
+    const dayHours = base.DAY_LENGTH_MINS / 60
+    const strips = Math.round(totalSH / (ratio * dayHours))
+    const config = makeConfig({ days_available: 4, strips: makeStrips(strips, 0) })
+    const actualRatio = totalSH / (strips * dayHours)
+    expect(actualRatio).toBeGreaterThan(ratio - 0.03)
+    expect(actualRatio).toBeLessThan(ratio + 0.03)
+
+    const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
+    const { effectiveDays } = assignDaysByColoring(graph, comps, config)
+
+    expect(effectiveDays).toBe(days)
   })
 })
 

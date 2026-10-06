@@ -102,10 +102,8 @@ describe('UnplacedDock populated state', () => {
   })
 
   it('shows the run note when Auto-assign left events unplaced, and omits it when lastAutoRun is null', () => {
-    // B4 measures 21 placed / 9 unplaced (024 group D, was 19 / 11 at group A and
-    // 18 / 12 before) in __tests__/store/store.test.ts
-    // ("counts events the scheduler drops entirely as unplaced..."), not the
-    // stale drift-baseline figure — standing rule 11, measurements win.
+    // B4 leaves some events unplaced. The exact split is pinned in
+    // __tests__/store/store.test.ts, so this test asserts against the run's own counts.
     applyPreset('B4')
 
     render(<UnplacedDock />)
@@ -114,14 +112,17 @@ describe('UnplacedDock populated state', () => {
       within(regionBeforeRun).queryByText(/could not be placed/),
     ).not.toBeInTheDocument()
 
+    let counts = { placed: 0, unplaced: 0 }
     act(() => {
-      runScheduleAll()
+      counts = runScheduleAll()
     })
 
+    expect(counts.unplaced).toBeGreaterThan(0)
     const region = screen.getByRole('region', { name: 'Unplaced events' })
     expect(
-      within(region).getByText('Placed 21 events, 9 could not be placed.'),
+      within(region).getByText(`Placed ${counts.placed} events, ${counts.unplaced} could not be placed.`),
     ).toBeInTheDocument()
+    expect(within(region).getAllByRole('button')).toHaveLength(counts.unplaced)
   })
 
   it('sets selectedCompetitionId to the clicked chip\'s event id (013 T028, contract §7)', () => {

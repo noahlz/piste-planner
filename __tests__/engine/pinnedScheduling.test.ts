@@ -284,18 +284,14 @@ describe('pinned scheduling (T033)', () => {
     // strips (re-measured at 56 strips in group D, same windows).
     expect(pin2Warns.map(b => b.phase)).toContain(Phase.DE_ROUND_OF_16)
 
-    // Board not emptied. [M] In this pinned run, day 0 shows pool starts for
-    // both pins plus four events not pinned here (VET-W-FOIL-IND-VCMB,
-    // VET-M-SABRE-IND-VCMB, VET-W-EPEE-IND-VCMB, D1-W-SABRE-IND). At least one
-    // event not pinned here must still show a pool start on day 0. The `>= 1`
-    // is a floor on purpose: it guards an emptied day 0, not the exact count,
-    // which moves with the factory.
+    // Board not emptied. At least one event not pinned here must still show a
+    // pool start on day 0. The `>= 1` is a floor on purpose: it guards an
+    // emptied day 0, not the exact count, which moves with the factory.
     //
-    // 024 group A review, 2026-10-06 – re-measured (was one, VET-M-SABRE-IND-VCMB,
-    // at 015). Aside: the no-pins board at (4, 48, 7) carries six events on
-    // day 0 (VET-M-SABRE-IND-VCMB, VET-W-FOIL-IND-VCMB, D1-M-EPEE-IND,
-    // D1-W-EPEE-IND, D1-W-SABRE-IND, VET-M-FOIL-IND-VCMB).
-    // 024 group D, 2026-10-06 – [M] at (4, 56, 7) the one is VET-M-SABRE-IND-VCMB.
+    // 024 group D, 2026-10-06 – [M] at (4, 56, 7) with the pins, day 0 holds the
+    // two pins plus VET-M-SABRE-IND-VCMB only. Aside: the no-pins board at
+    // (4, 48, 7) carries three events on day 0 (D1-M-EPEE-IND, D1-W-EPEE-IND,
+    // VET-M-SABRE-IND-VCMB).
     const others = Object.keys(result.schedule)
       .filter(id => id !== pin1.competition_id && id !== pin2.competition_id)
     const day0OthersPlaced = others.filter(id =>

@@ -142,16 +142,18 @@ describe('runAppPath', () => {
     // at their day start, d × 1440 + 540 (540, 3420), day 1 peaks 60 minutes
     // after its 1980 start (1980 → 2040), and day 3's peak moves 4860 → 4920.
     //
-    // 024 group D, 2026-10-06 – day 1 held, and five numbers on days 0, 2 and 3
-    // moved: day 0's sabre peak 64 → 62, day 2 160/50 at 3420 → 134/56 at 3480,
-    // day 3 202/76 → 186/72 at the same 4920. Group D re-colours B1's days
-    // (planning counts 13 of its 24 events changed, most by the Group 3
-    // cross-weapon preference, Ops Manual p.20 – Group 3, METHODOLOGY.md §Other
-    // Soft Preferences), so each day holds a different set of events and a
-    // different concurrent ref demand. Day 2 no longer peaks at its day start:
-    // its peak is 60 minutes in, at JR-W-EPEE-IND's 10:00 pool start (3420 +
-    // 60). Re-measured on this branch, not hand-derived – a per-day peak over a
-    // 24-event NAC is the engine's sweep, and the case pins its shape below.
+    // 024 group D, 2026-10-06 – day 1 held, and six values (five counts and one
+    // peak time) on days 0, 2 and 3 moved: day 0's sabre peak 64 → 62, day 2
+    // 160/50 at 3420 → 134/56 at 3480, day 3 202/76 → 186/72 at the same 4920.
+    // Group D re-colours B1's days (planning counts 13 of its 24 events
+    // changed, most by the Group 3 cross-weapon preference, Ops Manual p.20 –
+    // Group 3, METHODOLOGY.md §Other Soft Preferences), so each day holds a
+    // different set of events and a different concurrent ref demand. Day 2 no
+    // longer peaks at its day start: its peak is 60 minutes in, at
+    // JR-W-EPEE-IND's 10:00 pool start (3420 + 60). At 3480 the refs are
+    // 10 + 6 + 58 + 52 + 8 (VET-M-SABRE-TEAM's DE) = 134, of which only the 8
+    // are sabre, and the sabre peak of 56 falls at another minute. The store's selectDerivedRefRequirements independently
+    // reproduces day 0 (154/62) and day 3 (186/72).
     //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.

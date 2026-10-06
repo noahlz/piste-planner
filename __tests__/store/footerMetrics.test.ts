@@ -424,22 +424,28 @@ describe('selectPlacementCounts', () => {
   /**
    * `updatePlacement` always marks its target `pinned: true` (`store.ts`'s
    * `updatePlacement`, unconditionally, regardless of the partial passed) —
-   * the same call a hand-drag or a hand-edit makes. JR-M-EPEE-IND is not one
-   * of B5's four overflowing events (see the case above), so pinning it in
-   * place — day and time unchanged — counts it once in `pinned` and leaves it
-   * in `placed` (8; 9 before 024 group D, when it overflowed and stayed out of
-   * `placed`).
+   * the same call a hand-drag or a hand-edit makes. Pinning an event in place
+   * – day and time unchanged – counts it once in `pinned` and moves neither
+   * `placed` nor `unplaced`, whether it is in range or overflowing.
+   *
+   * 024 group D, 2026-10-06 – JR-M-EPEE-IND used to be the overflowing row
+   * (9 placed before group D, when it overflowed and stayed out of `placed`).
+   * Group D put it in range, so CDT-W-SABRE-IND, still one of the four
+   * overflowing events, keeps the premise the overflowing pin exercises: an
+   * overflowing event is counted in `pinned` and stays out of `placed`.
    */
-  it('counts a pinned placement once, in both placed and pinned', () => {
+  it.each([
+    // In range: not one of B5's four overflowing DE blocks (see the case
+    // above), so it stays in `placed`.
+    'JR-M-EPEE-IND',
+    // Overflowing: its DE at 630 on day 0 finds no free run of 16 strips (see
+    // the case above), so it stays out of `placed` and in `unplaced`.
+    'CDT-W-SABRE-IND',
+  ])('counts a pinned placement of %s once in pinned, leaving placed and unplaced unchanged', (id) => {
     b5()
-    useStore.getState().updatePlacement('JR-M-EPEE-IND', {})
+    useStore.getState().updatePlacement(id, {})
 
-    const counts = selectPlacementCounts(useStore.getState())
-    expect(counts.pinned).toBe(1)
-    expect(counts.placed).toBe(8)
-    // The four baseline overflow events (see the case above) are unaffected
-    // by pinning a placement that was already in range.
-    expect(counts.unplaced).toBe(4)
+    expect(selectPlacementCounts(useStore.getState())).toEqual({ placed: 8, unplaced: 4, pinned: 1 })
   })
 
   /**
@@ -447,14 +453,15 @@ describe('selectPlacementCounts', () => {
    * JR-M-EPEE-IND there drops it from `placed` and adds it to `unplaced` from
    * the placements loop alone — but it also removes its own segments from
    * `assignStripLanes`'s packing for its day (`day_out_of_range` events are
-   * skipped there). Since 024 group D day 0's three remaining pools then pack
-   * into 0–40 and leave 41–59 free, so day 0 re-packs with no overflow:
-   * JR-M-SABRE-IND's DE takes 0–15,
-   * CDT-W-SABRE-IND's 41–56 and JR-W-FOIL-IND's 16–31. Days 1 and 2 keep
-   * their overflow (CDT-W-EPEE-IND, CDT-M-SABRE-IND). Net: 9 placed (12
-   * selected minus the 1 out-of-range minus the 2 remaining overflow) and 3
+   * skipped there). Since 024 group D, day 0's three remaining pools pack into
+   * 0–40 and leave 41–59 free. Day 0 re-packs with no overflow: JR-M-SABRE-IND's
+   * DE takes 0–15, CDT-W-SABRE-IND's 41–56 and JR-W-FOIL-IND's 16–31. Days 1
+   * and 2 keep their overflow (CDT-W-EPEE-IND, CDT-M-SABRE-IND). Net: 9 placed
+   * (12 selected minus the 1 out-of-range minus the 2 remaining overflow) and 3
    * unplaced (1 out-of-range plus 2 overflow), not the 11-placed figure a
-   * packing-independent count would give.
+   * packing-independent count would give. This 9 / 3 is unchanged from before
+   * group D by coincidence, because the composition changed: day 0 has no
+   * overflow now, while days 1 and 2 keep theirs.
    */
   it('counts an out-of-range day in unplaced, not placed', () => {
     b5()

@@ -322,10 +322,16 @@ describe('first/last-day WARN', () => {
   })
 
   it('reads the last used day, not the last available one', () => {
-    // 4 days available, day 4 empty: days 1–3 are used, so day 3 is the last.
+    // 4 days available, day 3 empty: days 0–2 are used, so day 2 is the last.
     expect(firstLastRules(daysOfLength({ 0: 300, 1: 400, 2: 450 }), 4)).toEqual([
       BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
     ])
+  })
+
+  it('takes the shortest middle day from the used days only, skipping an empty one', () => {
+    // Day 1 is empty, so the shortest used middle day is day 2 at 400. Both
+    // edges (300) are shorter. An empty day counted as 0 would make both warn.
+    expect(firstLastRules(daysOfLength({ 0: 300, 2: 400, 3: 300 }), 4)).toEqual([])
   })
 
   it('stays silent with fewer than 3 used days, however long they run', () => {

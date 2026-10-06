@@ -90,24 +90,34 @@ describe('regional Group 1 window – the older side waits for day start + 4 hou
     expect(finding.competition_id).toBe('y14')
   })
 
-  it('applies the floor at ROC, RYC and RJCC and at no national type, where no window finding fires', () => {
-    // The pair shares the one day at every type: at NAC, SYC and SJCC the
-    // least-bad colouring breaks the hard Group 1 edge to place both.
-    const types = [
-      { type: TournamentType.NAC, offset: 0 },
-      { type: TournamentType.SYC, offset: 0 },
-      { type: TournamentType.SJCC, offset: 0 },
-      { type: TournamentType.ROC, offset: WINDOW_MINS },
-      { type: TournamentType.RYC, offset: WINDOW_MINS },
-      { type: TournamentType.RJCC, offset: WINDOW_MINS },
-    ]
-    for (const { type, offset } of types) {
-      const config = oneDay(type)
-      const result = scheduleAllConcurrent([event('y12', Category.Y12), event('y14', Category.Y14)], config)
+  // The pair shares the one day at every type: at NAC, SYC and SJCC the
+  // least-bad colouring breaks the hard Group 1 edge to place both.
+  it.each([
+    { type: TournamentType.NAC, offset: 0 },
+    { type: TournamentType.SYC, offset: 0 },
+    { type: TournamentType.SJCC, offset: 0 },
+    { type: TournamentType.ROC, offset: WINDOW_MINS },
+    { type: TournamentType.RYC, offset: WINDOW_MINS },
+    { type: TournamentType.RJCC, offset: WINDOW_MINS },
+  ])('$type: the Y14 pool start is day start + $offset, with a window finding only at the regional types', ({ type, offset }) => {
+    const config = oneDay(type)
+    const result = scheduleAllConcurrent([event('y12', Category.Y12), event('y14', Category.Y14)], config)
 
-      expect(poolStart(result, 'y14'), `${type} Y14 pool start`).toBe(dayStart(0, config) + offset)
-      expect(windowFindings(result.bottlenecks).length > 0, `${type} window finding`).toBe(offset > 0)
-    }
+    expect(poolStart(result, 'y14')).toBe(dayStart(0, config) + offset)
+    expect(windowFindings(result.bottlenecks).length > 0).toBe(offset > 0)
+  })
+
+  it('does not floor the older side of a pair on different days and reports no window finding', () => {
+    // On 2 days at ROC the soft Group 1 edge (5.0) plus the proximity bonus for
+    // adjacent days put Y12 and Y14 on different days with no pin needed, so the
+    // window has no shared day to apply to.
+    const config = oneDay(TournamentType.ROC, { days_available: 2 })
+    const result = scheduleAllConcurrent([event('y12', Category.Y12), event('y14', Category.Y14)], config)
+
+    const days = [result.schedule['y12']?.assigned_day, result.schedule['y14']?.assigned_day]
+    expect(days[0]).not.toBe(days[1])
+    expect(poolStart(result, 'y14')).toBe(dayStart(result.schedule['y14']!.assigned_day, config))
+    expect(windowFindings(result.bottlenecks)).toEqual([])
   })
 
   it('on a Y10/Y12/Y14 day honours the Y10–Y12 window (INFO) and not the Y12–Y14 one (WARN): windows do not stack', () => {
@@ -138,6 +148,9 @@ describe('regional Group 1 window – the older side waits for day start + 4 hou
     // The team needs its Div 1 individual (validation), which is itself the
     // older side of a Div 1–Cadet pair. The team also waits on that
     // individual's end + 120, so the finding is what names the team's pair.
+    // The team's own floor is not observable in its start: the individual→team
+    // dependency edge already holds the team past ds + 240, so only the finding
+    // proves the pair was detected.
     const config = oneDay(TournamentType.ROC)
     const ds = dayStart(0, config)
     const competitions = [

@@ -135,6 +135,16 @@ describe('buildConstraintGraph', () => {
     }
   })
 
+  it('takes the tournament type: a Y12–Y14 pair is a soft 5.0 edge at ROC and a hard edge at NAC', () => {
+    // Group 1 is soft at the regional types (METHODOLOGY §Regional Types) and
+    // hard at the national ones, so the same pair differs only by type.
+    const y12 = makeCompetition({ id: 'y12', category: Category.Y12, gender: Gender.MEN, weapon: Weapon.EPEE, event_type: EventType.INDIVIDUAL })
+    const y14 = makeCompetition({ id: 'y14', category: Category.Y14, gender: Gender.MEN, weapon: Weapon.EPEE, event_type: EventType.INDIVIDUAL })
+
+    expect(buildConstraintGraph([y12, y14], TournamentType.ROC).get('y12')).toEqual([{ targetId: 'y14', weight: 5.0 }])
+    expect(buildConstraintGraph([y12, y14], TournamentType.NAC).get('y12')).toEqual([{ targetId: 'y14', weight: Infinity }])
+  })
+
   it('all competitions appear as keys even with no edges', () => {
     const foil = makeCompetition({ id: 'div1-men-foil', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
     const epee = makeCompetition({ id: 'div1-women-epee', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.EPEE })
