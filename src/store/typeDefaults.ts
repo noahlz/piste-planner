@@ -1,31 +1,52 @@
 import { DeMode, EventType, RefPolicy, TournamentType, VideoPolicy } from '../engine/types.ts'
 import type {
-  Category,
   EventType as EventTypeValue,
   TournamentType as TournamentTypeValue,
 } from '../engine/types.ts'
-import { DEFAULT_VIDEO_POLICY_BY_CATEGORY } from '../engine/constants.ts'
 
 /**
- * Per-type resolved defaults — data-model.md §Per-type default table,
+ * Per-type resolved defaults — METHODOLOGY.md §Tournament-Type Policies,
  * transcribed row for row. `ref_policy: RefPolicy.AUTO` and a `null` video
  * strip count are the *unset* markers a competition config carries before
  * resolution (research D5, D6, D7); this table holds only resolved values,
  * so `ref_policy` here is never `AUTO`.
+ *
+ * `individual_video_policy` is what an individual event plans with: REQUIRED at
+ * a NAC and BEST_EFFORT at every other type (Ops Manual 2026-27 p.19; 024 plan
+ * D9). A team event ignores it, see `resolveVideoPolicy`.
  */
 export interface TypeDefaults {
   ref_policy: RefPolicy
   video_strips_total: number
   de_mode: DeMode
+  individual_video_policy: VideoPolicy
 }
 
 export const TYPE_DEFAULTS: Record<TournamentTypeValue, TypeDefaults> = {
-  [TournamentType.NAC]: { ref_policy: RefPolicy.TWO, video_strips_total: 8, de_mode: DeMode.STAGED },
-  [TournamentType.SJCC]: { ref_policy: RefPolicy.TWO, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.SYC]: { ref_policy: RefPolicy.TWO, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.ROC]: { ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.RYC]: { ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.RJCC]: { ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
+  [TournamentType.NAC]: {
+    ref_policy: RefPolicy.TWO, video_strips_total: 8, de_mode: DeMode.STAGED,
+    individual_video_policy: VideoPolicy.REQUIRED,
+  },
+  [TournamentType.SJCC]: {
+    ref_policy: RefPolicy.TWO, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.SYC]: {
+    ref_policy: RefPolicy.TWO, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.ROC]: {
+    ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.RYC]: {
+    ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.RJCC]: {
+    ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
 }
 
 /**
@@ -74,15 +95,17 @@ export function resolveDeMode(
  * bronze only, and those are not scheduled). The policy follows the type, never
  * the DE-mode setting, so it takes no override.
  *
- * An individual event still reads the category table here. Group C replaces
- * that with a per-type column and narrows this to `(tournamentType,
- * eventType)` (024 D9), which is when the type starts to matter.
+ * An individual event follows the tournament type's row, whatever its
+ * category (METHODOLOGY.md §Tournament-Type Policies; 024 D9): REQUIRED at a
+ * NAC, BEST_EFFORT elsewhere.
+ *
+ * `buildConfig.ts` calls this, and `__tests__/helpers/scenarios.ts` keeps its
+ * own transcription of the same rule on purpose (024 D11).
  */
 export function resolveVideoPolicy(
-  _tournamentType: TournamentTypeValue,
+  tournamentType: TournamentTypeValue,
   eventType: EventTypeValue,
-  category: Category,
 ): VideoPolicy {
   if (eventType === EventType.TEAM) return VideoPolicy.BEST_EFFORT
-  return DEFAULT_VIDEO_POLICY_BY_CATEGORY[category]
+  return TYPE_DEFAULTS[tournamentType].individual_video_policy
 }

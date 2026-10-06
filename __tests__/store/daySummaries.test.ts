@@ -63,9 +63,9 @@ describe('selectDaySummaries — one row per day (data-model.md §9)', () => {
 })
 
 /**
- * Two JUNIOR epee individual events (category JUNIOR → de_video_policy
- * REQUIRED by default, src/engine/constants.ts DEFAULT_VIDEO_POLICY_BY_CATEGORY),
- * with the tournament-wide DE mode overridden to SINGLE_STAGE
+ * Two JUNIOR epee individual events (at the store's default NAC every
+ * individual event's de_video_policy is REQUIRED, src/store/typeDefaults.ts
+ * resolveVideoPolicy), with the tournament-wide DE mode overridden to SINGLE_STAGE
  * (setDeModeOverride) — REQUIRED + SINGLE_STAGE is dead config
  * (src/engine/validation.ts:217, rule 'video-dead-config'), a WARN-severity
  * notice in both validation modes, so both events carry one such finding

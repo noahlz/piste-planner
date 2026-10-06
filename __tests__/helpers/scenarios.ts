@@ -18,7 +18,6 @@ import {
 import type { Competition } from '../../src/engine/types.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../../src/engine/constants.ts'
@@ -29,31 +28,51 @@ export { SCENARIO_IDS, SCENARIOS } from '../../src/data/tournaments.ts'
 export type { ScenarioId, ScenarioFixture } from '../../src/data/tournaments.ts'
 
 /**
- * Per-type referee policy and DE mode, transcribed from the 004 data-model's
- * per-type default table (removed; git show 0ab5bd2dc9:specs/004-p3-workbench-shell/data-model.md
- * §Per-type default table) (video strips are not here – the scenario fixture
- * supplies them). Keyed by every `TournamentType` so a missing row is a type
- * error. The DE mode is an individual event's: a team event runs Single Stage
- * at every type (024 D4, applied in `buildCompetitions`).
+ * Per-type referee policy, DE mode and individual video policy, transcribed
+ * from METHODOLOGY.md §Tournament-Type Policies (video strips are not here –
+ * the scenario fixture supplies them). Keyed by every `TournamentType` so a
+ * missing row is a type error. The DE mode and video policy are an individual
+ * event's: a team event runs Single Stage and BEST_EFFORT at every type (024 D4,
+ * applied in `buildCompetitions`). The video column is REQUIRED at a NAC and
+ * BEST_EFFORT elsewhere (Ops Manual 2026-27 p.19; 024 D9).
  */
-const TYPE_RULES: Record<TournamentType, { ref_policy: RefPolicy; de_mode: DeMode }> = {
-  [TournamentType.NAC]: { ref_policy: RefPolicy.TWO, de_mode: DeMode.STAGED },
-  [TournamentType.SJCC]: { ref_policy: RefPolicy.TWO, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.SYC]: { ref_policy: RefPolicy.TWO, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.ROC]: { ref_policy: RefPolicy.ONE, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.RYC]: { ref_policy: RefPolicy.ONE, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.RJCC]: { ref_policy: RefPolicy.ONE, de_mode: DeMode.SINGLE_STAGE },
+const TYPE_RULES: Record<TournamentType, {
+  ref_policy: RefPolicy
+  de_mode: DeMode
+  individual_video_policy: VideoPolicy
+}> = {
+  [TournamentType.NAC]: {
+    ref_policy: RefPolicy.TWO, de_mode: DeMode.STAGED, individual_video_policy: VideoPolicy.REQUIRED,
+  },
+  [TournamentType.SJCC]: {
+    ref_policy: RefPolicy.TWO, de_mode: DeMode.SINGLE_STAGE, individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.SYC]: {
+    ref_policy: RefPolicy.TWO, de_mode: DeMode.SINGLE_STAGE, individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.ROC]: {
+    ref_policy: RefPolicy.ONE, de_mode: DeMode.SINGLE_STAGE, individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.RYC]: {
+    ref_policy: RefPolicy.ONE, de_mode: DeMode.SINGLE_STAGE, individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.RJCC]: {
+    ref_policy: RefPolicy.ONE, de_mode: DeMode.SINGLE_STAGE, individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
 }
 
 /**
- * Five rules here are deliberate second copies of what the app derives (feature
+ * Six rules here are deliberate second copies of what the app derives (feature
  * 008, then 015, then 024): the team-event cut default that `src/store/competitionDefaults.ts`
- * derives, the three per-type rules – the regional cut override, the DE
- * mode and the referee policy – that `src/store/buildConfig.ts` applies from
- * `src/store/typeDefaults.ts`, and the team rule that `resolveDeMode` and
- * `resolveVideoPolicy` there apply: a team event is Single Stage and
- * BEST_EFFORT at every type (024 plan D4 and D11, METHODOLOGY.md §DE Modes,
- * §Video Replay Policy). This factory imports none of the store's helpers
+ * derives, the four per-type rules – the regional cut override, the DE
+ * mode, the referee policy and the individual video policy – that
+ * `src/store/buildConfig.ts` applies from `src/store/typeDefaults.ts`, and the
+ * team rule that `resolveDeMode` and `resolveVideoPolicy` there apply: a team
+ * event is Single Stage and BEST_EFFORT at every type (024 plan D4 and D11,
+ * METHODOLOGY.md §DE Modes, §Video Replay Policy). The video rule is a
+ * deliberate second copy on its own account: `individual_video_policy` is
+ * transcribed in `TYPE_RULES` above and never read from `TYPE_DEFAULTS`
+ * (024 D9 and D11, METHODOLOGY.md §Tournament-Type Policies). This factory imports none of the store's helpers
  * (`src/store/*`), and it should not start to.
  *
  * `appPathParity.test.ts` and `factoryParity.test.ts` catch a store/engine
@@ -108,7 +127,8 @@ export function buildCompetitions(
       cut_mode: cut.mode,
       cut_value: cut.value,
       // The team rule (024 D4): Single Stage and BEST_EFFORT at every type.
-      de_video_policy: isTeam ? VideoPolicy.BEST_EFFORT : DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
+      // An individual event follows the type's video column (024 D9).
+      de_video_policy: isTeam ? VideoPolicy.BEST_EFFORT : typeRules.individual_video_policy,
       de_mode: isTeam ? DeMode.SINGLE_STAGE : typeRules.de_mode,
       latest_end: Infinity,
       strips_allocated: Math.max(2, Math.ceil(fencerCount / 7)),

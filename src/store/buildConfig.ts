@@ -211,7 +211,7 @@ function buildCompetitions(state: StoreState): Competition[] {
       // the type meant when they chose it. A team event runs Single Stage
       // whatever the setting says (024 D4, METHODOLOGY.md §DE Modes).
       de_mode: resolveDeMode(state.tournament_type, entry.event_type, state.de_mode_override),
-      de_video_policy: resolveVideoPolicy(state.tournament_type, entry.event_type, entry.category),
+      de_video_policy: resolveVideoPolicy(state.tournament_type, entry.event_type),
       use_single_pool_override: false,
 
       // Sensible defaults

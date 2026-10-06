@@ -15,7 +15,7 @@ import {
   MAX_FENCERS, MIN_FENCERS,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
   DE_BOUT_DURATION, DE_BOUT_DURATION_10_TOUCH, TEAM_MATCH_DURATION, DEFAULT_DE_STRIP_FOOTPRINT,
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY, REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES,
+  REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../../src/engine/constants.ts'
 import {
   Category, Gender, Weapon, EventType,
@@ -495,8 +495,9 @@ describe('buildTournamentConfig', () => {
   // derivation rules themselves (data-model.md §4). Only the `flighted` case
   // is red today — everything else already matches because the store's
   // current per-event defaults (all `AUTO`, all `defaultCutForEntry`, all
-  // `DEFAULT_VIDEO_POLICY_BY_CATEGORY`) happen to equal what T020 hard-codes;
-  // no UI has ever set them to anything else.
+  // video policy) happen to equal what T020 hard-codes; no UI has ever set
+  // them to anything else. (024 group C later made the video policy a per-type
+  // rule, METHODOLOGY.md §Tournament-Type Policies.)
   describe('the per-event shrink (T020) — derivation, not override', () => {
     const FIXTURE_TEMPLATE = 'NAC Vet/Div1/Junior' // DIV1 + JUNIOR individual/team, veteran bands + team
     const FIXTURE_FENCER_COUNT = 40
@@ -514,7 +515,13 @@ describe('buildTournamentConfig', () => {
      *  (D6). Three things moved and nothing else: the 18 NAC team events' de_mode
      *  STAGED → SINGLE_STAGE, the 12 Div 1 and Junior team events'
      *  de_video_policy REQUIRED → BEST_EFFORT at each type (the Vet teams were
-     *  BEST_EFFORT already), and `de_round_of_16_strips` left every row. */
+     *  BEST_EFFORT already), and `de_round_of_16_strips` left every row.
+     *
+     *  Edited again at 024 group C (2026-10-06), only `de_video_policy`: the
+     *  individual policy follows the type (METHODOLOGY.md §Tournament-Type
+     *  Policies, 024 D9), so the 36 NAC Vet individual events went BEST_EFFORT →
+     *  REQUIRED and the 12 ROC Div 1 and Junior individual events REQUIRED →
+     *  BEST_EFFORT. */
     const FIXTURE: { NAC: Competition[]; ROC: Competition[] } = JSON.parse(
       readFileSync(
         `${process.cwd()}/__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json`,
@@ -594,18 +601,18 @@ describe('buildTournamentConfig', () => {
         },
       )
 
-      // 024 group A: a team event plans with no video at every type, NACs
-      // included (METHODOLOGY.md §Video Replay Policy; Ops Manual p.19 gives
-      // teams video for the gold and bronze only; 024 plan D4). An individual
-      // event still reads the category table until group C.
+      // A team event plans with no video at every type, NACs included
+      // (METHODOLOGY.md §Video Replay Policy; Ops Manual p.19 gives teams video
+      // for the gold and bronze only; 024 plan D4). An individual event follows
+      // the type's row, whatever its category (024 D9).
       it.each([TournamentType.NAC, TournamentType.ROC])(
-        'de_video_policy is BEST_EFFORT for every team event and DEFAULT_VIDEO_POLICY_BY_CATEGORY[category] for every individual one, at %s',
+        'de_video_policy is BEST_EFFORT for every team event and the type row for every individual one, at %s',
         (type) => {
           const { competitions } = buildTournamentConfig(derivedState(type))
           for (const comp of competitions) {
             const expected = comp.event_type === EventType.TEAM
               ? VideoPolicy.BEST_EFFORT
-              : DEFAULT_VIDEO_POLICY_BY_CATEGORY[comp.category]
+              : TYPE_DEFAULTS[type].individual_video_policy
             expect(comp.de_video_policy, comp.id).toBe(expected)
           }
         },
@@ -635,5 +642,57 @@ describe('buildTournamentConfig', () => {
         expect(flaggedOff?.flighted, flaggedOff?.id).toBe(false)
       })
     })
+  })
+})
+
+/**
+ * The per-type individual video policy, asserted against literals so a wrong row
+ * in `TYPE_DEFAULTS` cannot hide behind a test that reads the same row
+ * (METHODOLOGY.md §Tournament-Type Policies, §Video Replay Policy; Ops Manual
+ * 2026-27 p.19; 024 plan D9). REQUIRED at a NAC for every category, BEST_EFFORT
+ * at every other type, and BEST_EFFORT for every team event at every type.
+ */
+describe('buildTournamentConfig: de_video_policy follows the tournament type (024 D9)', () => {
+  const INDIVIDUAL_IDS = {
+    Y8: 'Y8-M-FOIL-IND',
+    Y10: 'Y10-M-FOIL-IND',
+    Y12: 'Y12-M-FOIL-IND',
+    Y14: 'Y14-M-FOIL-IND',
+    Cadet: 'CDT-M-FOIL-IND',
+    Junior: 'JR-M-FOIL-IND',
+    Vet: 'VET-M-FOIL-IND-V40',
+    'Div 1': 'D1-M-FOIL-IND',
+    'Div 1A': 'D1A-M-FOIL-IND',
+    'Div 2': 'D2-M-FOIL-IND',
+    'Div 3': 'D3-M-FOIL-IND',
+  } as const
+  const TEAM_IDS = ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM', 'D1-M-FOIL-TEAM', 'VET-M-FOIL-TEAM'] as const
+
+  function videoPolicies(type: TournamentType, ids: readonly string[]): Record<string, VideoPolicy> {
+    const state = storeWith({
+      ...minimalState(),
+      tournament_type: type,
+      selectedCompetitions: Object.fromEntries(ids.map((id) => [id, { fencer_count: 64, flighted: false }])),
+    })
+    const { competitions } = buildTournamentConfig(state)
+    return Object.fromEntries(competitions.map((c) => [c.id, c.de_video_policy]))
+  }
+
+  it.each(Object.entries(INDIVIDUAL_IDS))('requires video for a NAC %s individual event', (_label, id) => {
+    expect(videoPolicies(TournamentType.NAC, [id])[id]).toBe(VideoPolicy.REQUIRED)
+  })
+
+  it.each([TournamentType.SYC, TournamentType.SJCC, TournamentType.ROC, TournamentType.RYC, TournamentType.RJCC])(
+    'plans every individual event BEST_EFFORT at %s, Cadet and Junior included',
+    (type) => {
+      const ids = Object.values(INDIVIDUAL_IDS)
+      const policies = videoPolicies(type, ids)
+      for (const id of ids) expect(policies[id], id).toBe(VideoPolicy.BEST_EFFORT)
+    },
+  )
+
+  it.each(Object.values(TournamentType))('plans every team event BEST_EFFORT at %s', (type) => {
+    const policies = videoPolicies(type, TEAM_IDS)
+    for (const id of TEAM_IDS) expect(policies[id], id).toBe(VideoPolicy.BEST_EFFORT)
   })
 })

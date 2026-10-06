@@ -39,7 +39,7 @@ beforeEach(() => {
 function seedValidConfig(): void {
   useStore.getState().setDays(3)
   useStore.getState().setStrips(12)
-  useStore.getState().setVideoStrips(2)
+  useStore.getState().setVideoStrips(4)
 }
 
 /** Selects one competition and places it, so the center has something derived to show. */

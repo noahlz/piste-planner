@@ -5,7 +5,7 @@ import { applyPreset } from '../../src/store/presets.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { SCENARIO_IDS, SCENARIOS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
-import { TournamentType } from '../../src/engine/types.ts'
+import { TournamentType, VideoPolicy } from '../../src/engine/types.ts'
 import type { Competition } from '../../src/engine/types.ts'
 
 /**
@@ -132,5 +132,39 @@ describe('factory parity with the app-path build', () => {
     const app = appPathBuild('B1', type)
     expect(useStore.getState().tournament_type, `${type}: store took the type`).toBe(type)
     expect(competitionDiffs(buildCompetitions(SCENARIOS.B1.fencerCounts, type), app.competitions)).toEqual([])
+  })
+})
+
+/**
+ * The video rule is a deliberate second copy (024 plan D9 and D11): the
+ * factory's `TYPE_RULES` column against the store's `TYPE_DEFAULTS` and
+ * `resolveVideoPolicy`. Each row builds one event down both paths and pins the
+ * policy to a literal, so a drift in either copy fails here and a drift in both
+ * together still fails on the literal. The three rows reach the cases B1–B8
+ * leave thin: a NAC youth individual event (REQUIRED, where the category table
+ * said BEST_EFFORT), a NAC team event (BEST_EFFORT, the owner's team ruling),
+ * and an SJCC Cadet event (BEST_EFFORT, where the category table said
+ * REQUIRED). METHODOLOGY.md §Tournament-Type Policies, §Video Replay Policy.
+ */
+describe('factory parity on the video rule', () => {
+  const FENCER_COUNT = 64
+  const ROWS: readonly (readonly [string, TournamentType, string, VideoPolicy])[] = [
+    ['a NAC youth individual event', TournamentType.NAC, 'Y12-M-FOIL-IND', VideoPolicy.REQUIRED],
+    ['a NAC team event', TournamentType.NAC, 'CDT-M-FOIL-TEAM', VideoPolicy.BEST_EFFORT],
+    ['an SJCC Cadet event', TournamentType.SJCC, 'CDT-M-FOIL-IND', VideoPolicy.BEST_EFFORT],
+  ]
+
+  it.each(ROWS)('plans %s the same way down both paths', (_label, type, id, expected) => {
+    useStore.setState(useStore.getInitialState(), true)
+    useStore.getState().setTournamentType(type)
+    useStore.getState().selectCompetitions([id])
+    useStore.getState().updateCompetition(id, { fencer_count: FENCER_COUNT })
+
+    const app = buildTournamentConfig(useStore.getState()).competitions
+    const ledger = buildCompetitions({ [id]: FENCER_COUNT }, type)
+
+    expect(app.map((c) => c.de_video_policy), 'app path').toEqual([expected])
+    expect(ledger.map((c) => c.de_video_policy), 'ledger factory').toEqual([expected])
+    expect(competitionDiffs(ledger, app)).toEqual([])
   })
 })

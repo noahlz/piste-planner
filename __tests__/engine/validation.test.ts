@@ -8,6 +8,8 @@ import {
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 import { deBlocksFor } from '../../src/engine/de.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { useStore, type StoreState } from '../../src/store/store.ts'
 
 /**
  * `findingIdentity` — the identity helper T021 adds to validation.ts
@@ -112,6 +114,25 @@ function validateBoth(config: TournamentConfig, competitions: Competition[]) {
   return {
     binding: validateConfig(config, competitions, ValidationMode.BINDING),
     advisory: validateConfig(config, competitions, ValidationMode.ADVISORY),
+  }
+}
+
+/**
+ * The competitions the store bridge builds for these ids at a tournament type
+ * under a DE-mode override, so a test reads the policy the app really derives
+ * (024 plan D9) and not a hand-built copy of it.
+ */
+function buildTypeCompetitions(type: TournamentType, deModeOverride: DeMode, ids: string[]): Competition[] {
+  const initial = useStore.getState()
+  useStore.setState({
+    tournament_type: type,
+    de_mode_override: deModeOverride,
+    selectedCompetitions: Object.fromEntries(ids.map(id => [id, { fencer_count: 24, flighted: false }])),
+  } as Partial<StoreState>)
+  try {
+    return buildTournamentConfig(useStore.getState()).competitions
+  } finally {
+    useStore.setState(initial)
   }
 }
 
@@ -370,6 +391,49 @@ describe('validateConfig — video R16 strip shortfall (structural: resource imp
     expect(binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
     expect(advisory.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
   })
+
+  it('a bracket of 4 asks 2 video strips: 1 is a shortfall, 2 is not', () => {
+    // METHODOLOGY.md §DE Modes: the video block asks min(4, bracket/2) strips.
+    const comp = makeCompetition({
+      fencer_count: 4,
+      cut_mode: CutMode.DISABLED,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const short = validateBoth(makeConfig({ video_strips_total: 1 }), [comp])
+    const enough = validateBoth(makeConfig({ video_strips_total: 2 }), [comp])
+    expect(short.binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toHaveLength(1)
+    expect(enough.binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+    expect(enough.advisory.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+  })
+
+  it('the message names the video stage, not R16', () => {
+    // 024 plan D9 and rulings D13: the stage is the video stage whatever its
+    // first round, so the message does not name R16.
+    const comp = makeCompetition({
+      id: 'comp-video-short',
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const { binding } = validateBoth(makeConfig({ video_strips_total: 2 }), [comp])
+    const finding = binding.find(e => e.rule === 'video-r16-strip-shortfall')!
+    expect(finding.message).toContain('video stage')
+    expect(finding.message).not.toContain('R16')
+  })
+
+  it('a regional event under a Staged override draws no shortfall error', () => {
+    // The policy follows the type (METHODOLOGY.md §Tournament-Type Policies;
+    // 024 plan D9): a regional event is BEST_EFFORT even when the override
+    // makes it Staged, so zero video strips is no impossibility.
+    const config = makeConfig({ video_strips_total: 0 })
+    const competitions = buildTypeCompetitions(TournamentType.ROC, DeMode.STAGED, [
+      'D1-M-FOIL-IND', 'JR-M-FOIL-IND', 'CDT-M-FOIL-IND',
+    ])
+    expect(competitions.every(c => c.de_mode === DeMode.STAGED)).toBe(true)
+    const { binding, advisory } = validateBoth(config, competitions)
+    expect(binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+    expect(advisory.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+  })
 })
 
 // 024 D4, the owner's team ruling (METHODOLOGY.md §DE Modes, §Video Replay
@@ -536,6 +600,24 @@ describe('validateConfig — video dead-config warning (notice: video-dead-confi
     const { binding, advisory } = validateBoth(makeConfig(), [comp])
     expectNoticePair('de_video_policy', binding, advisory, 'no effect')
   })
+
+  it('a NAC under a Single Stage override keeps every individual event REQUIRED, with one notice each and none for teams', () => {
+    // The policy follows the type, never the DE-mode setting (METHODOLOGY.md
+    // §Tournament-Type Policies, §Video Policy Interaction; 024 plan D9).
+    const individualIds = ['Y10-M-FOIL-IND', 'CDT-M-FOIL-IND', 'VET-M-FOIL-IND-V40', 'D1-M-FOIL-IND']
+    const teamIds = ['CDT-M-FOIL-TEAM', 'D1-M-FOIL-TEAM']
+    const competitions = buildTypeCompetitions(TournamentType.NAC, DeMode.SINGLE_STAGE, [...individualIds, ...teamIds])
+    for (const comp of competitions) {
+      const expected = comp.event_type === EventType.TEAM ? VideoPolicy.BEST_EFFORT : VideoPolicy.REQUIRED
+      expect(comp.de_video_policy, comp.id).toBe(expected)
+    }
+
+    const { binding, advisory } = validateBoth(makeConfig({ video_strips_total: 8 }), competitions)
+    for (const findings of [binding, advisory]) {
+      const dead = findings.filter(e => e.rule === 'video-dead-config')
+      expect(dead.map(e => e.subjects).sort()).toEqual(individualIds.map(id => [id]).sort())
+    }
+  })
 })
 
 describe('validateConfig — individual+team same-day duration (rule deleted, FR-001)', () => {
@@ -604,7 +686,8 @@ describe('validateConfig — DE strip cap (notice: r16-over-cap)', () => {
     expectNoticePair('max_de_strip_pct_override', binding, advisory)
     const bFinding = binding.find(e => e.field === 'max_de_strip_pct_override')!
     expect(bFinding.message).toContain('comp-r16-over')
-    expect(bFinding.message).toContain('R16')
+    expect(bFinding.message).toContain('video stage')
+    expect(bFinding.message).not.toContain('R16')
   })
 
   it('does not error when the video ask is within DE strip cap', () => {

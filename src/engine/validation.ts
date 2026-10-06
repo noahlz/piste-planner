@@ -222,8 +222,10 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       comp.de_video_policy === VideoPolicy.REQUIRED &&
       config.video_strips_total < videoAsk
     ) {
-      // Physical resource impossibility for the R16 stage — structural.
-      errors.push(structural('de_video_policy', `${comp.id}: REQUIRED video policy needs ${videoAsk} video strips for R16 but only ${config.video_strips_total} available`, 'video-r16-strip-shortfall', [comp.id]))
+      // Physical resource impossibility for the video stage – structural
+      // (METHODOLOGY.md §Resource Preconditions' video strip minimum; Ops
+      // Manual 2026-27 p.19). The rule id keeps its historical R16 name.
+      errors.push(structural('de_video_policy', `${comp.id}: REQUIRED video policy needs ${videoAsk} video strips for the video stage but only ${config.video_strips_total} available`, 'video-r16-strip-shortfall', [comp.id]))
     }
 
     // DE strip requests exceed the computed DE cap. Soft resource-tuning
@@ -235,7 +237,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       comp.max_de_strip_pct_override,
     )
     if (videoAsk > deStripCap) {
-      errors.push(notice('max_de_strip_pct_override', `${comp.id}: R16 requests ${videoAsk} strips but DE cap is ${deStripCap}`, 'r16-over-cap', [comp.id]))
+      errors.push(notice('max_de_strip_pct_override', `${comp.id}: the video stage requests ${videoAsk} strips but DE cap is ${deStripCap}`, 'r16-over-cap', [comp.id]))
     }
 
     // Resource precondition checks — skip competitions with invalid fencer counts

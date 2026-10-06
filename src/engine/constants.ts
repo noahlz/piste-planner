@@ -1,4 +1,4 @@
-import { Category, CutMode, EventType, Gender, TournamentType, VetAgeGroup, VideoPolicy, Weapon } from './types.ts'
+import { Category, CutMode, EventType, Gender, TournamentType, VetAgeGroup, Weapon } from './types.ts'
 
 // ──────────────────────────────────────────────
 // Category start preferences and capacity weights.
@@ -177,24 +177,6 @@ export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: n
   [Category.DIV1A]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV2]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV3]: { mode: CutMode.DISABLED, value: 100 },
-}
-
-// ──────────────────────────────────────────────
-// Default video policy by category
-// ──────────────────────────────────────────────
-
-export const DEFAULT_VIDEO_POLICY_BY_CATEGORY: Record<Category, VideoPolicy> = {
-  [Category.Y8]: VideoPolicy.BEST_EFFORT,
-  [Category.Y10]: VideoPolicy.BEST_EFFORT,
-  [Category.Y12]: VideoPolicy.BEST_EFFORT,
-  [Category.Y14]: VideoPolicy.BEST_EFFORT,
-  [Category.CADET]: VideoPolicy.REQUIRED,
-  [Category.JUNIOR]: VideoPolicy.REQUIRED,
-  [Category.VETERAN]: VideoPolicy.BEST_EFFORT,
-  [Category.DIV1]: VideoPolicy.REQUIRED,
-  [Category.DIV1A]: VideoPolicy.BEST_EFFORT,
-  [Category.DIV2]: VideoPolicy.BEST_EFFORT,
-  [Category.DIV3]: VideoPolicy.BEST_EFFORT,
 }
 
 // ──────────────────────────────────────────────

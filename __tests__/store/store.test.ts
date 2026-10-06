@@ -3,14 +3,13 @@ import { useStore, type PresetId } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
-import { Category, DeMode, TournamentType, Weapon } from '../../src/engine/types.ts'
+import { Category, DeMode, TournamentType, VideoPolicy, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { serializeState } from '../../src/store/serialization.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../../src/engine/constants.ts'
 
@@ -311,7 +310,6 @@ describe('competitionSlice', () => {
     it('derives the cut and video-policy defaults from the catalogue on the way to the engine', () => {
       useStore.getState().selectCompetitions([CADET_MF, JUNIOR_WE])
       const cadetEntry = findCompetition(CADET_MF)!
-      const juniorEntry = findCompetition(JUNIOR_WE)!
 
       const { competitions } = buildTournamentConfig(useStore.getState())
 
@@ -319,12 +317,14 @@ describe('competitionSlice', () => {
       expect(cadet).toBeDefined()
       expect(cadet.cut_mode).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].mode)
       expect(cadet.cut_value).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].value)
-      expect(cadet.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[cadetEntry.category])
+      // The store starts at a NAC, where every individual event is REQUIRED
+      // (METHODOLOGY.md §Tournament-Type Policies; 024 D9).
+      expect(cadet.de_video_policy).toBe(VideoPolicy.REQUIRED)
       expect(cadet.use_single_pool_override).toBe(false)
 
       const junior = competitions.find((c) => c.id === JUNIOR_WE)!
       expect(junior).toBeDefined()
-      expect(junior.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[juniorEntry.category])
+      expect(junior.de_video_policy).toBe(VideoPolicy.REQUIRED)
     })
 
     it('sends a team competition to the engine all-advance regardless of its category default', () => {

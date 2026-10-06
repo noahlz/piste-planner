@@ -93,7 +93,7 @@ function seedPlacedCompetitions(fencerCount: number): string {
   const companionId = TEMPLATES['RYC Weekend'][1]
   useStore.getState().setDays(3)
   useStore.getState().setStrips(12)
-  useStore.getState().setVideoStrips(2)
+  useStore.getState().setVideoStrips(4)
   useStore.getState().addCompetition(id)
   useStore.getState().updateCompetition(id, { fencer_count: fencerCount })
   useStore.getState().addCompetition(companionId)
