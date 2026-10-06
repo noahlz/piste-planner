@@ -656,7 +656,10 @@ log('opening the Settings panel closed Export — the popover dismisses on outsi
 // schedule byte-identical, and T079 finding 1 cut them to three; a seventh,
 // `DE strip footprint`, was cut afterward for a different reason — it moves
 // the schedule, but off `de_duration_table` durations calibrated against it,
-// so an override desyncs the two rather than doing nothing.
+// so an override desyncs the two rather than doing nothing. (2026-10-06, 024
+// group A: `de_duration_table` was removed – a DE's length is now derived per
+// round from bout times, METHODOLOGY §DE Duration – so the desync the row was
+// cut for no longer has a table to desync from. The row stays cut.)
 // 4 markers, not 5, since 013 T022: the two gears rows left with the
 // global-overrides slice. Since T045 the count reads 4 for a different reason:
 // PoolDurationSettings' 3 weapon badges plus the DE mode Default pill's own
@@ -702,6 +705,15 @@ await shot('09-gears-default')
 //     the committed schedule at its last valid state — confirmed by reading
 //     `[data-dimmed]`, which flipped to "true" while the table never moved
 //     even though the store had genuinely changed.
+//     (2026-10-06, 024 group B: that measurement is history. DAY_LENGTH_MINS
+//     is now the 600-minute planning day, 9:00 to 19:00, used for strip-hour
+//     capacity, and validation.ts checks the sum against the day's hard window,
+//     780 minutes by default, 9:00 to the 22:00 hard end – METHODOLOGY §Timing Constants
+//     and §Single-Day Fit. The ceiling, 780 minutes by default, is lower than
+//     the old 840, but 024 also changed the terms of the sum (derived DE
+//     durations, the pool-of-7 baseline), so this candidate has not been
+//     re-measured. The decrease rule below still holds, since a shorter pool
+//     only relaxes the sum.)
 // Epee's pool duration sits in that same day-length sum as the first term, so
 // the direction rule the Admin gap step settled on carries over unchanged: a
 // *decrease* only relaxes the sum and can never trigger the freeze. The
@@ -828,6 +840,10 @@ log('DE mode restored to Default after the round-trip, isolating later templates
 // template's whole board at every strip count (specs/010-wave-1-reconciliation/baseline.md §3 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)). 80 strips /
 // 12 video is the column specs/010-wave-1-reconciliation/baseline.md's (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) after-R1 table measured clean through
 // the engine (24/24, no ERROR); this is the same claim through the browser.
+// (2026-10-06, 024 group B: 840 was the old DAY_LENGTH_MINS ceiling. Single-Day
+// Fit now measures against the hard window, 780 minutes by default (9:00 to 22:00), and
+// DAY_LENGTH_MINS is the 600-minute planning day for strip-hour capacity only,
+// METHODOLOGY §Timing Constants and §Single-Day Fit.)
 // Still under tournament type NAC — nothing above this point has changed it.
 await choosePreset('NAC Div1/Junior')
 log('NAC Div1/Junior template applied')

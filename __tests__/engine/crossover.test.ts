@@ -36,8 +36,8 @@ describe('buildPenaltyMatrix', () => {
   })
 
   it('Y8↔Y12 two-hop edge is gone now that Y8→Y10 is (L9, research.md D5)', () => {
-    // Y8→Y10 was Y8's only direct edge (METHODOLOGY:118: Y8 CAN and SHOULD
-    // share a day with Y10). Removing it removes the two-hop derivation this
+    // Y8→Y10 was Y8's only direct edge (METHODOLOGY §Departures From the Manual:
+    // Y8 can and should share a day with Y10). Removing it removes the two-hop derivation this
     // matrix entry came from — 0.3 → 0.0, not just the direct edge's 0.8.
     expect(matrix.get(`${Category.Y8}|${Category.Y12}`)).toBeUndefined()
     expect(matrix.get(`${Category.Y12}|${Category.Y8}`)).toBeUndefined()
@@ -118,7 +118,7 @@ describe('crossoverPenalty', () => {
   })
 
   it('Div1↔Div2 returns 3.0 — the SOFT_SEPARATION_PAIRS penalty (L3)', () => {
-    // METHODOLOGY:253. The pair has no CROSSOVER_GRAPH edge at all, direct or
+    // METHODOLOGY §Other Soft Preferences. The pair has no CROSSOVER_GRAPH edge at all, direct or
     // two-hop, so it scored 0.0 — unmodelled, not deliberately free. The old
     // assertion here was `.not.toBe(Infinity)`, which 0.0 satisfies: pinning
     // the value is what makes this test able to catch the defect.
@@ -129,7 +129,7 @@ describe('crossoverPenalty', () => {
   })
 
   it('Div1↔Div3 returns 3.0 — the SOFT_SEPARATION_PAIRS penalty (L3)', () => {
-    // METHODOLOGY:254, and the same story as DIV1↔DIV2: no graph edge, so 0.0,
+    // METHODOLOGY §Other Soft Preferences, and the same story as DIV1↔DIV2: no graph edge, so 0.0,
     // under a `.not.toBe(Infinity)` assertion that could not tell 0.0 from 3.0.
     const c1 = makeComp('a', Category.DIV1, Gender.MEN, Weapon.FOIL)
     const c2 = makeComp('b', Category.DIV3, Gender.MEN, Weapon.FOIL)

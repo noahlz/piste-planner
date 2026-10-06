@@ -119,9 +119,9 @@ function expectedBlockFields(
 /**
  * `twoJuniorEpeeOnSeparateDays` puts exactly one event per day, and a single
  * SINGLE_STAGE event's own pool-then-DE phases never overlap themselves
- * (pool 480-704, DE 735-780) — so that fixture never gave `peakStripsOnDay`'s
+ * (pool 480-640, DE 670-710) — so that fixture never gave `peakStripsOnDay`'s
  * interval-overlap loop an actual overlap to resolve, and a version of it
- * that summed wrong at a shared boundary would still pass. This adds a third
+ * that summed wrong across overlapping blocks would still pass. This adds a third
  * event, JR-M-FOIL-IND, on day 0 starting 20 minutes after JR-M-EPEE-IND —
  * close enough that both their pool phases and (since both derive similar
  * durations) their DE phases overlap.
@@ -161,20 +161,18 @@ describe('selectDaySummaries — per-day fields, derived from assignStripLanes',
     }
   })
 
-  it('sums concurrent strip demand at the busiest instant of the day, half-open at the boundary', () => {
+  it('sums concurrent strip demand at the busiest instant of the day', () => {
     threeEventsOverlappingOnDayZero()
     const summaries = selectDaySummaries(useStore.getState())
 
-    // Day 0's four blocks: JR-M-EPEE-IND pool 480-704 (1 strip), JR-M-FOIL-IND
-    // pool 500-696 (1 strip), JR-M-FOIL-IND DE 730-775 (3 strips), and
-    // JR-M-EPEE-IND DE 735-780 (3 strips, drawn overflowing — 4 strips total
-    // leaves no free run once JR-M-FOIL-IND's DE has taken 3 of them, but
+    // Day 0's four blocks: JR-M-EPEE-IND pool 480-640 (1 strip), JR-M-FOIL-IND
+    // pool 500-660 (1 strip), JR-M-EPEE-IND DE 670-710 (3 strips), and
+    // JR-M-FOIL-IND DE 690-730 (3 strips, drawn overflowing — 4 strips total
+    // leaves no free run once JR-M-EPEE-IND's DE has taken 3 of them, but
     // `peakStripsOnDay` counts its demand regardless, since it measures
-    // demand rather than occupancy). The busiest instant is minute 735, where
-    // both DEs are running at once: 3 + 3 = 6. (JR-M-FOIL-IND's DE has
-    // already started by 735 and JR-M-EPEE-IND's pool has already ended, so
-    // neither pool block reaches this instant — the half-open interval rule
-    // this asserts.)
+    // demand rather than occupancy). The busiest instant is minute 690, where
+    // both DEs are running at once: 3 + 3 = 6. (Both pool blocks have already
+    // ended by 690, so neither reaches this instant.)
     expect(summaries[0].peakStrips).toBe(6)
     // Day 1 carries only JR-W-EPEE-IND, whose own pool-then-DE never overlap
     // each other, so the peak is just its largest single block, the 3-strip DE.

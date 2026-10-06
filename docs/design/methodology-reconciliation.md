@@ -2,7 +2,10 @@
 
 *Produced 2026-09-05 against `main` at `a2dc363e45`, executing
 `methodology-reconciliation-prompt.md` (removed; see git history at 0ab5bd2dc9).
-Analysis only – no `src/` file was edited and no `specs/` directory was created.*
+Analysis only – no `src/` file was edited and no `specs/` directory was created.
+Its `METHODOLOGY:<line>` citations refer to METHODOLOGY.md as of `a2dc363e45`
+(`git show a2dc363e45:METHODOLOGY.md`), and its Ops Manual citations to the 2019
+edition, both as they stood before feature 024.*
 
 **Baseline at the time of measurement**: `pnpm vitest run __tests__` → 67 files,
 1799 tests, all passing. `pnpm exec tsc -b` → clean. Every defect below survives

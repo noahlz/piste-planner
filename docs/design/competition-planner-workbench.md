@@ -304,15 +304,18 @@ runs. One ledger move covers all of it, including the B1/B2 count replacement.
 - **The team DE is modelled for teams.** Strips sized to the field instead of
   the fixed `de_round_of_16_strips: 4` (`buildConfig.ts:218`), a team match
   length instead of the individual DE table, and video for gold and bronze only
-  (METHODOLOGY.md:416, where the code makes Div 1, Junior and Cadet team DEs
+  (METHODOLOGY §Video Replay Policy, Teams row, where the code makes Div 1, Junior and Cadet team DEs
   REQUIRED). The mockup's 260–300 minute team DEs are a calibration hint, not
   data.
 - **The Schedule view's Strips column** for a team row reports DE strips, since
   it prints `pool_strip_count` today (`ScheduleOutput.tsx:183`).
 - **Real B1/B2 team counts** from FencingTimeLive replace the rounded ones
   (`src/data/tournaments.ts:41-42`, `56-57`).
-- **Prerequisite**: the owner amends METHODOLOGY.md first – :64, :72,
-  :130-145, :157-160, :197, :531, :600-601, :639-643, :707 and :736-738.
+- **Prerequisite**: the owner amends METHODOLOGY.md first – §Outputs,
+  §Single-Day Fit, §Resource Preconditions, §Team Events Cannot Use Cuts,
+  §Individual/Team Separation, §Concurrent Phase Scheduler, §Phase 2:
+  Pre-Scheduling Analysis, §Phase 5: Resource Allocation, §Strip Count
+  Suggestion and §Strip-Hour Capacity.
 - **Ledger**: B1, B2 and B8 move. B3–B7 must not. The app-path counts
   (24 / 24 / 53) and the smoke's 24-row boot hold.
 

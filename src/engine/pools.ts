@@ -124,13 +124,14 @@ export function estimatePoolDuration(
 /**
  * Computes the number of fencers advancing to DE after applying pool-round cuts.
  *
- * METHODOLOGY.md §Pool Composition:
- * - TEAM events always bypass cuts (return fencerCount unchanged)
+ * METHODOLOGY.md §Bracket Sizing. The result is min(max(promoted, 2), MAX_DE_FIELD)
+ * where promoted is:
+ * - TEAM events always bypass cuts (all fencers advance)
  * - DISABLED: all fencers advance
- * - PERCENTAGE: floor(fencerCount * value / 100), minimum 2
- * - COUNT: min(value, fencerCount), minimum 2
- * - every event, team or individual: at most MAX_DE_FIELD (256) advance, silently
- *   (METHODOLOGY.md §Bracket Sizing; S8 p.37)
+ * - PERCENTAGE: round(fencerCount * (1 - value / 100)), where value is the % cut
+ * - COUNT: min(value, fencerCount)
+ * The 256 cap holds for every event, team or individual, and is silent (S8 p.37).
+ * Throws when fencerCount is 1 or fewer.
  */
 export function computeDeFencerCount(
   fencerCount: number,

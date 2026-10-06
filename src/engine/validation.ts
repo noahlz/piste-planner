@@ -174,7 +174,9 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
 
       // Cut must produce at least 2 promoted fencers (skip if fencer count already invalid)
       if (comp.fencer_count >= config.MIN_FENCERS && comp.cut_mode !== CutMode.DISABLED) {
-        // computeDeFencerCount returns max(result, 2) so check the raw math:
+        // computeDeFencerCount floors the result at 2 (and caps it at MAX_DE_FIELD),
+        // so check the raw math. PERCENTAGE here reads value as the advancing share,
+        // while computeDeFencerCount reads it as the share cut (a known mismatch).
         // PERCENTAGE: round(count * value / 100); COUNT: min(value, count)
         let rawPromoted: number
         if (comp.cut_mode === CutMode.PERCENTAGE) {

@@ -443,23 +443,25 @@ published rules:
   level, Y14 has no 20% cut by default. `REGIONAL_CUT_TOURNAMENT_TYPES`
   (`constants.ts:586-591`) leaves out RYC, so an RYC's Y14 events cut 20%
   today.
-  - The spec contradicts itself. METHODOLOGY.md:377 leaves out RYC and SJCC,
-    while :683-694 give RYC/SYC and RJCC/SJCC 100% advancement. 024's first
-    task drafts the :377 amendment for the owner's approval.
+  - The spec contradicted itself. METHODOLOGY §Default Cuts by Age Category
+    (before 024) left out RYC and SJCC, while §RYC / SYC and §RJCC / SJCC gave
+    them 100% advancement. 024's first task drafts the §Default Cuts by Age
+    Category amendment for the owner's approval.
   - With RYC added, the set equals `REGIONAL_QUALIFIER_TYPES`
     (`constants.ts:525-531`).
   - No B1–B8 scenario is an RYC, so no ledger number moves.
 - **Y14 at NACs** (owner ruling, 2026-10-05; roadmap 024): Y14 advances 100%
   at a NAC by default, per the 2024-25 Athlete Handbook, Table 2.16.1 ("Y14
   SYC & NAC: 100% to SE"). The code (`DEFAULT_CUT_BY_CATEGORY`) and
-  METHODOLOGY.md:377 cut Y14 20% there. With this ruling and the RYC one
+  METHODOLOGY §Default Cuts by Age Category (before 024) cut Y14 20% there. With this ruling and the RYC one
   together, Y14 advances in full at every tournament type the app models, so
   its default becomes all-advance. Its `REGIONAL_CUT_OVERRIDES` entry then
   does nothing. The handbook's 80% applies to the Y14 National Championship,
   which no template models.
   - B2 and B3 hold NAC Y14 events, so this moves the ledger and needs 024's
     drift review against the converged ledger 015 leaves.
-  - The :377 amendment is drafted together with the RYC fix.
+  - The §Default Cuts by Age Category amendment is drafted together with the
+    RYC fix.
 
 The durable fix is the one already on this backlog – promote policy tables
 (cuts, video rounds, flighting caps) into the per-season configuration file
@@ -1269,9 +1271,11 @@ before calling the product finished.*
 
 The engine gives every event a pool round before its DE, because the phase
 builder has no event-type branch (`concurrentScheduler.ts:538-557`). METHODOLOGY.md
-assumes the same (:64, :72, :130-145, :157-160, :197, :531, :600-601,
-:639-643, :707, :736-738), so this is a spec gap and the owner amends the spec
-first.
+assumes the same (§Outputs, §Single-Day Fit, §Resource Preconditions, §Team
+Events Cannot Use Cuts, §Individual/Team Separation, §Concurrent Phase
+Scheduler, §Phase 2: Pre-Scheduling Analysis, §Phase 5: Resource Allocation,
+§Strip Count Suggestion and §Strip-Hour Capacity), so this is a spec gap and
+the owner amends the spec first.
 
 What the owner saw: B1's 10-team Vet events (Men's and Women's Foil, Men's and
 Women's Sabre) run two 5-team pools on 2 strips, then a 4-strip "DE round of
@@ -1297,9 +1301,10 @@ Other gaps the same feature closes:
 - Team DE length comes from the individual DE table
   (`concurrentScheduler.ts:403,582`), not a team match.
 - Div 1, Junior and Cadet team DEs ask for REQUIRED video
-  (`buildConfig.ts:206`) where METHODOLOGY.md:416 says gold and bronze only.
+  (`buildConfig.ts:206`) where METHODOLOGY §Video Replay Policy says gold and
+  bronze only.
 - The NAC team defaults (`constants.ts:218,228,238,288`) have no stated source,
-  and the regional ones are unreachable (METHODOLOGY.md:665 says only NACs have
+  and the regional ones are unreachable (METHODOLOGY §Tournament-Type Policies says only NACs have
   team events).
 - Since 015 the ledger factory stages NAC team DEs as the app does, so 023 is
   measured against the DE shape the app runs.

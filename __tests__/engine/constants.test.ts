@@ -175,7 +175,7 @@ describe('DE bout times', () => {
 })
 
 describe('CROSSOVER_GRAPH', () => {
-  it('Y8 has no edges — METHODOLOGY:118 says Y8 CAN and SHOULD share a day with Y10 (L9)', () => {
+  it('Y8 has no edges — METHODOLOGY §Departures From the Manual says Y8 can and should share a day with Y10 (L9)', () => {
     // Y8→Y10 was Y8's only direct edge (0.8). Removing it is what research.md
     // D5 calls "removes the edge and invents no bonus" — the specification
     // states the preference, not a magnitude, so the fix is silence, not a

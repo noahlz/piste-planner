@@ -346,7 +346,8 @@ function colorPenalty(
   }
 
   // Rest-day and proximity adjustments — graph neighbors of the same gender and
-  // weapon, banded by day gap (METHODOLOGY:234-240):
+  // weapon, banded by day gap (METHODOLOGY §Rest Day Preference and §Proximity
+  // Preference):
   //   gap 1     – rest-day check, plus the PROXIMITY_1_DAY bonus
   //   gap 2     – neutral, neither term
   //   gap 3+    – the PROXIMITY_3_PLUS_DAYS penalty

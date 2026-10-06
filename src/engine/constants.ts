@@ -63,6 +63,12 @@ export const DAY_LENGTH_MINS = 600
 // strip per day, not a day length, and fixed whatever hours the organizer sets
 // (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip Count Suggestion).
 export const COMPETITORS_PER_STRIP_PER_DAY = 14
+// Gap between a phase and its successor (pools to DE, DE prelims to the next
+// stage, Flight A to Flight B alongside FLIGHT_BUFFER_MINS, an older Vet
+// sibling to its younger one). Its floor is the results-review
+// period between rounds, 15 min national, 10 regional, 5 local (Ops Manual p.18,
+// METHODOLOGY §Timing Constants). No gap sits between DE rounds inside one DE
+// phase – the 5-minute changeover is already in the bout time.
 export const ADMIN_GAP_MINS = 30
 export const FLIGHT_BUFFER_MINS = 15
 export const THRESHOLD_MINS = 10
@@ -396,8 +402,9 @@ export const REGIONAL_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>>
 // Maximum edge weight is 0.8 (capped per METHODOLOGY.md).
 // Two-hop indirect edges are computed in crossover.ts, capped at 0.3.
 export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>> = {
-  // Y8 has no edges. METHODOLOGY:118 states, in bold, that **Y8 CAN and SHOULD
-  // be on the same day as Y10**, and this graph used to carry Y8→Y10 at 0.8 –
+  // Y8 has no edges. METHODOLOGY §Departures From the Manual states, in bold,
+  // that **Y8 can and should share a day with Y10**, and this graph used to
+  // carry Y8→Y10 at 0.8 –
   // the largest finite same-day penalty – applied against the one pairing the
   // specification asks for. The note above GROUP_1_MANDATORY below records the
   // intent correctly; this line contradicted it. Removing the edge makes "CAN"
@@ -446,7 +453,8 @@ export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>
 // team events (024 D10). Hard at NAC, SYC and SJCC; at the GROUP_1_SOFT_TYPES
 // it costs PENALTY_WEIGHTS.REGIONAL_GROUP_1_PAIR, and the older side's pools
 // wait for the time-of-day window.
-// Y8/Y10 intentionally omitted — Y8 CAN and SHOULD be on the same day as Y10.
+// Y8/Y10 intentionally omitted – Y8 can and should share a day with Y10
+// (METHODOLOGY §Departures From the Manual).
 // ──────────────────────────────────────────────
 
 export const GROUP_1_MANDATORY: readonly { older: Category; younger: Category }[] = [
@@ -479,8 +487,10 @@ export const REGIONAL_GROUP_1_WINDOW_MINS = 240
 export const DIV1_DIV1A_HARD_PAIR: readonly [Category, Category] = [Category.DIV1, Category.DIV1A]
 
 // ──────────────────────────────────────────────
-// Soft separation pairs: high penalty but not hard-blocked.
-// DIV1↔DIV2 and DIV1↔DIV3 are common enough to warrant soft separation only.
+// Soft separation pairs: high penalty but not hard-blocked (METHODOLOGY §Other
+// Soft Preferences). DIV1↔DIV2 and DIV1↔DIV3 are common enough to warrant soft
+// separation only. DIV1↔CADET is a Group 1 pair (GROUP_1_MANDATORY) and no
+// longer lives here.
 // ──────────────────────────────────────────────
 
 export const SOFT_SEPARATION_PAIRS: { pair: [Category, Category]; penalty: number }[] = [

@@ -96,7 +96,9 @@ function isIndivTeamRelaxableBlock(c1: CompFields, c2: CompFields): boolean {
 
 /**
  * The soft-separation penalty for a pair, or `undefined` when the pair is not
- * listed (METHODOLOGY:252-254, `SOFT_SEPARATION_PAIRS` in `constants.ts`).
+ * listed (METHODOLOGY §Other Soft Preferences, `SOFT_SEPARATION_PAIRS` in
+ * `constants.ts`). The table holds only DIV1↔DIV2 and DIV1↔DIV3, both at 3.0 –
+ * DIV1↔CADET is a Group 1 pair (`GROUP_1_MANDATORY`) and is not looked up here.
  *
  * These are policy numbers, not crossover fractions, which is why they live in
  * their own table rather than in `CROSSOVER_GRAPH`: that graph means "fraction
