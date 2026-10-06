@@ -23,7 +23,7 @@ import { describe, it, expect } from 'vitest'
 import {
   EventType, BottleneckSeverity, BottleneckCause, Phase,
 } from '../../src/engine/types.ts'
-import type { Competition, Bottleneck } from '../../src/engine/types.ts'
+import type { Competition, Bottleneck, TournamentType } from '../../src/engine/types.ts'
 import type { ScheduleResult, StripAllocation, TournamentConfig } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { crossoverPenalty } from '../../src/engine/crossover.ts'
@@ -62,6 +62,7 @@ function maybeDumpAsciiLanes(
 function assertHardSeparations(
   schedule: Record<string, { assigned_day: number; constraint_relaxation_level: number }>,
   competitions: Competition[],
+  tournamentType: TournamentType,
 ) {
   const compMap = new Map(competitions.map(c => [c.id, c]))
   const entries = Object.entries(schedule)
@@ -75,7 +76,7 @@ function assertHardSeparations(
       const c2 = compMap.get(id2)!
       if (c1.gender !== c2.gender || c1.weapon !== c2.weapon) continue
       if (c1.event_type !== EventType.INDIVIDUAL || c2.event_type !== EventType.INDIVIDUAL) continue
-      const xpen = crossoverPenalty(c1, c2)
+      const xpen = crossoverPenalty(c1, c2, tournamentType)
       if (xpen === Infinity) {
         expect(sr1.assigned_day, `Hard separation: ${id1} vs ${id2}`).not.toBe(sr2.assigned_day)
       }
@@ -126,6 +127,7 @@ function assertScheduleIntegrity(
   bottlenecks: Bottleneck[],
   competitions: Competition[],
   days: number,
+  tournamentType: TournamentType,
 ) {
   const scheduled = Object.keys(schedule).length
   const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR).length
@@ -154,7 +156,7 @@ function assertScheduleIntegrity(
   }
 
   // Hard separation constraints (per-event: skipped for events that used level-3 relaxation)
-  assertHardSeparations(schedule, competitions)
+  assertHardSeparations(schedule, competitions, tournamentType)
 }
 
 // ──────────────────────────────────────────────
@@ -170,7 +172,7 @@ describe('Realistic tournament integration', () => {
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4, tournamentType)
       assertIndTeamSeparation(schedule, competitions)
       // B1: 24 events. T024 re-baseline 2026-08-29 — floor raised from 14 to the measured count (research.md D7).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(24)
@@ -193,7 +195,7 @@ describe('Realistic tournament integration', () => {
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4, tournamentType)
       assertIndTeamSeparation(schedule, competitions)
       // B2: 24 events. T024 re-baseline 2026-08-29 — floor raised from 11 to the measured count (research.md D7).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(24)
@@ -216,7 +218,7 @@ describe('Realistic tournament integration', () => {
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4, tournamentType)
       // B3: 24 events. T024 re-baseline 2026-08-29 — floor raised from 9 to the measured count (research.md D7).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(24)
 
@@ -252,7 +254,8 @@ describe('Realistic tournament integration', () => {
       // demand and the threshold are untouched — R5 moved the severity and
       // nothing about the estimate — so B4 is still an oversubscribed venue.
       // What moved is what an oversubscribed venue returns: a partial board,
-      // thirteen unplaced events at T006, twelve since 015 (2026-10-05), and the shortfall as a warning.
+      // thirteen unplaced events at T006, twelve since 015 (2026-10-05), eleven since
+      // 024's group A (2026-10-06), and the shortfall as a warning.
       //
       // The regression this case has always guarded is B4's *shape*, and it
       // still does; the shape inverted. It fails if B4 collapses back to an
@@ -260,7 +263,7 @@ describe('Realistic tournament integration', () => {
       // one thing it no longer does is assert that collapse as the correct
       // answer — and it now holds B4 to the same hard-constraint integrity as
       // the other seven scenarios, which for as long as it was empty it escaped.
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 3, tournamentType)
 
       // `[M]` at T006: 17 of 30, asserted as a lower bound rather than pinned.
       // `driftLedger.test.ts` owns B4's exact count and halts on movement in
@@ -269,7 +272,14 @@ describe('Realistic tournament integration', () => {
       // reached through the integrity assertion above, not merely reported.
       // 015, 2026-10-05 – floor raised 17 → 18, the count the converged factory
       // measures (the app path's 18).
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(18)
+      // 024, 2026-10-06 – floor raised 18 → 19 by group A (planning times): the
+      // pool of 7 and per-round DE times (2026-27 Ops Manual) re-pack B4. Equal to
+      // the app path's 19.
+      // 024 group D, 2026-10-06 – floor raised 19 → 21 by group D (same-day rules,
+      // Ops Manual p.20 Group 1 / Group 2 / Group 3): Group 3 and the first/last-day
+      // capacity (METHODOLOGY §First and Last Day Capacity) re-pack B4. Equal to
+      // the app path's 21.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(21)
 
       // No ERROR out of validation. B4's ERRORs are all
       // DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the per-event
@@ -299,7 +309,7 @@ describe('Realistic tournament integration', () => {
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 3, tournamentType)
       // B5: 12 events. T024 re-baseline 2026-08-29 — floor raised from 11 to the measured count (research.md D7).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(12)
 
@@ -321,13 +331,23 @@ describe('Realistic tournament integration', () => {
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 3)
-      // B6: 40 of 54 events, the app path's measured count.
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 3, tournamentType)
+      // B6: 45 of 54 events, the app path's measured count.
       // T024 re-baseline 2026-08-29 — floor raised from 28 to the then-measured 44 (research.md D7).
       // 015, 2026-10-05 – floor lowered 44 → 40 under the input-correction rule in
       // driftLedger.test.ts's SCHEDULED_FLOORS docblock: the old count came from a
       // factory the app never runs, and the converged factory's 40 equals the app path's 40.
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(40)
+      // 024, 2026-10-06 – floor raised 40 → 50 by group A (planning times): the pool
+      // of 7 and per-round DE times (2026-27 Ops Manual) place ten more events and
+      // lose none. Equal to the app path's 50.
+      // 024 group D, 2026-10-06 – floor lowered 50 → 45 under the policy-amendment
+      // rule in driftLedger.test.ts's SCHEDULED_FLOORS docblock: METHODOLOGY's
+      // Group 1 by type with the regional window, the dropped Junior–Cadet rest
+      // day, Group 3 and the first/last-day capacity (Ops Manual p.20,
+      // owner-approved commit 6a4107b710). Seven events out and two in, with the
+      // sub-step attribution (D.1 −1, D.2 −1, D.4 −2, D.5 −1) recorded beside
+      // the ledger's floor. Equal to the app path's 45.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(45)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()
@@ -347,7 +367,7 @@ describe('Realistic tournament integration', () => {
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4, tournamentType)
       // B7: 18 events. T024 re-baseline 2026-08-29 — floor raised from 5 to the measured count (research.md D7).
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(18)
 
@@ -370,13 +390,22 @@ describe('Realistic tournament integration', () => {
 
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
-      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
+      assertScheduleIntegrity(schedule, bottlenecks, competitions, 4, tournamentType)
       assertIndTeamSeparation(schedule, competitions)
-      // B8: all 53 events placed, with every NAC event on the per-type DE mode the
-      // app builds (staged DEs).
+      // B8: 53 of 53 events placed, with every NAC event on the per-type DE mode
+      // the app builds (staged DEs).
       // T024 re-baseline 2026-08-29 — floor raised from 35 to the then-measured 52 (research.md D7).
       // 015, 2026-10-05 – floor raised 52 → 53: the converged factory stages every
       // NAC event's DE, and JR-W-EPEE-IND, unplaced before, is now placed.
+      // 024 group B, 2026-10-06 – floor lowered 53 → 52 under the policy-amendment
+      // rule in driftLedger.test.ts's SCHEDULED_FLOORS docblock: METHODOLOGY
+      // §Inputs' 9:00 day start (2026-27 Ops Manual p.17, owner-approved commit
+      // 6a4107b710) shrinks the hard window from 840 to 780 minutes and
+      // JR-W-EPEE-IND is unplaced again. Group B with an 8:00 start places 53
+      // (plan §Group B's control).
+      // 024 group D, 2026-10-06 – floor raised 52 → 53: group D's first/last-day
+      // capacity (METHODOLOGY §First and Last Day Capacity) places JR-W-EPEE-IND
+      // again. Equal to the app path's 53.
       expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(53)
 
       // Ref requirements output

@@ -70,7 +70,9 @@ function vetAgeOrderingKey(a: Competition, b: Competition): number | null {
  *   3.5. Vet age-descending for sibling pairs — VET80 → VET70 → VET60 → VET50 → VET40
  *        (applies only to same-gender, same-weapon, age-banded Veteran INDIVIDUAL pairs)
  *   4. Strip demand descending — strips_allocated × categoryWeight
- *   5. Duration descending — total_strip_hours (longest events start earlier)
+ *   5. Duration descending — general strip-hours: pools plus the DE bouts on
+ *      general strips, so a staged event's video-stage bouts (billed to the
+ *      video budget) are not counted (longest events start earlier)
  *
  * After sorting, any flighted partner (is_priority === false, same flighting_group_id)
  * is moved to immediately follow its priority event.

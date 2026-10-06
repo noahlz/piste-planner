@@ -1,7 +1,7 @@
-import { BottleneckSeverity, CutMode, DeMode, EventType, RuleKind, ValidationMode, VideoPolicy, Weapon } from './types.ts'
+import { BottleneckSeverity, CutMode, DeMode, EventType, RuleKind, ValidationMode, VideoPolicy, dayHardEnd, dayStart } from './types.ts'
 import type { Competition, TournamentConfig, ValidationError } from './types.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
-import { computeBracketSize, calculateDeDuration } from './de.ts'
+import { computeBracketSize, deBlocksFor, deVideoStripAsk } from './de.ts'
 import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
 import { aggregateStripHours } from './capacity.ts'
@@ -44,54 +44,52 @@ export function findingIdentity(finding: ValidationError): string {
 }
 
 /**
- * Pushes a structural error if the DE duration table has no entry for the given
- * weapon/bracket — an undefined table lookup leaves nothing to draw. Shared by
- * individual and team DE-entry validation.
- */
-function checkDeDurationEntry(
-  compId: string,
-  weapon: Weapon,
-  bracketSize: number,
-  table: TournamentConfig['de_duration_table'],
-  errors: ValidationError[],
-): void {
-  const deDuration = table[weapon]?.[bracketSize]
-  if (deDuration === undefined) {
-    errors.push(structural(
-      'de_duration_table',
-      `${compId}: no DE duration entry for weapon=${weapon} bracket=${bracketSize}`,
-      'de-duration-table-missing-entry',
-      [compId],
-    ))
-  }
-}
-
-/**
  * Computes the worst-case single-day duration for a competition:
- * pool round + admin gap + full DE.
- * Returns a ValidationError if it exceeds DAY_LENGTH_MINS, null otherwise.
+ * pool round + admin gap + full DE, each DE block at its full strip ask
+ * (METHODOLOGY.md §DE Duration).
+ * Returns a ValidationError if it exceeds the hard window, null otherwise.
+ *
+ * Single-Day Fit measures against the day's hard window, start to hard end
+ * (9:00 AM to 10:00 PM, 780 minutes, by default), not the 10-hour planning
+ * day: running past the 7:00 PM soft target is a warning, not a violation
+ * (METHODOLOGY.md §Single-Day Fit, §Same-Day Completion; Ops Manual 2026-27
+ * p.17). When the organizer edits hours, the widest day's window applies,
+ * since the competition only has to fit on one of them (024 D7).
  */
 export function validateSameDayCompletion(
   competition: Competition,
   config: TournamentConfig,
 ): ValidationError | null {
-  const { fencer_count, weapon, cut_mode, cut_value, event_type, use_single_pool_override } = competition
+  const { fencer_count, weapon, use_single_pool_override } = competition
 
   const poolStructure = computePoolStructure(fencer_count, use_single_pool_override)
   const poolDuration = weightedPoolDuration(poolStructure, weapon, config.pool_round_duration_table)
-  const bracketSize = computeBracketSize(fencer_count, cut_mode, cut_value, event_type)
-  const deDuration = calculateDeDuration(weapon, bracketSize, config.de_duration_table) ?? 0
+  const deDuration = deBlocksFor(competition, config).baselineMinutes
   const total = poolDuration + config.ADMIN_GAP_MINS + deDuration
+  const window = widestHardWindow(config)
 
-  if (total > config.DAY_LENGTH_MINS) {
+  if (total > window) {
     return err(
       'same_day_completion',
-      `Competition ${competition.id} worst-case duration ${total} min exceeds DAY_LENGTH_MINS ${config.DAY_LENGTH_MINS} min (pool=${poolDuration}, admin=${config.ADMIN_GAP_MINS}, DE=${deDuration})`,
+      `Competition ${competition.id} worst-case duration ${total} min exceeds the day's hard window ${window} min (pool=${poolDuration}, admin=${config.ADMIN_GAP_MINS}, DE=${deDuration})`,
       'same-day-completion',
       [competition.id],
     )
   }
   return null
+}
+
+/**
+ * The widest day's start-to-hard-end window. A day with no `dayConfigs` entry
+ * takes the default window, `DAY_HARD_END_MINS - DAY_START_MINS`, through
+ * `dayStart`/`dayHardEnd`'s own fallback.
+ */
+function widestHardWindow(config: TournamentConfig): number {
+  let widest = 0
+  for (let d = 0; d < config.days_available; d++) {
+    widest = Math.max(widest, dayHardEnd(d, config) - dayStart(d, config))
+  }
+  return widest
 }
 
 // ── Sub-validators ─────────────────────────────────────────────────────────────
@@ -176,7 +174,9 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
 
       // Cut must produce at least 2 promoted fencers (skip if fencer count already invalid)
       if (comp.fencer_count >= config.MIN_FENCERS && comp.cut_mode !== CutMode.DISABLED) {
-        // computeDeFencerCount returns max(result, 2) so check the raw math:
+        // computeDeFencerCount floors the result at 2 (and caps it at MAX_DE_FIELD),
+        // so check the raw math. PERCENTAGE here reads value as the advancing share,
+        // while computeDeFencerCount reads it as the share cut (a known mismatch).
         // PERCENTAGE: round(count * value / 100); COUNT: min(value, count)
         let rawPromoted: number
         if (comp.cut_mode === CutMode.PERCENTAGE) {
@@ -188,28 +188,28 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
           errors.push(structural('cut_value', `${comp.id}: cut produces only ${rawPromoted} promoted fencer(s); minimum is 2`, 'cut-value-min-promotions', [comp.id]))
         }
       }
-
-      // DE duration table must contain an entry for the computed bracket size
-      if (comp.fencer_count >= config.MIN_FENCERS) {
-        checkDeDurationEntry(
-          comp.id,
-          comp.weapon,
-          computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type),
-          config.de_duration_table,
-          errors,
-        )
-      }
     }
 
-    // Team events also need a DE duration table entry (teams bypass cuts, bracket = nextPowerOf2(fencer_count))
-    if (comp.event_type === EventType.TEAM && comp.fencer_count >= config.MIN_FENCERS) {
-      checkDeDurationEntry(
-        comp.id,
-        comp.weapon,
-        computeBracketSize(comp.fencer_count, CutMode.DISABLED, 100, comp.event_type),
-        config.de_duration_table,
-        errors,
+    // Video strips a staged DE's video block asks for (METHODOLOGY.md §DE Modes).
+    // An event below 2 fencers has no bracket to size it from – its
+    // fencer-count finding already covers it – so it asks none.
+    const videoAsk = comp.fencer_count >= Math.max(config.MIN_FENCERS, 2)
+      ? deVideoStripAsk(
+        computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type),
       )
+      : 0
+
+    // A team event is Single Stage and BEST_EFFORT at every tournament type
+    // (024 plan D4, the owner's ruling; METHODOLOGY.md §DE Modes, §Video Replay
+    // Policy – Ops Manual 2026-27 p.19 gives teams video for gold and bronze
+    // only). The store bridge and the ledger factory never build anything
+    // else, so a team carrying STAGED or REQUIRED is a hand-built second model
+    // of one event – structural, ERROR in both modes.
+    if (
+      comp.event_type === EventType.TEAM &&
+      (comp.de_mode === DeMode.STAGED || comp.de_video_policy === VideoPolicy.REQUIRED)
+    ) {
+      errors.push(structural('de_mode', `${comp.id}: team events run Single Stage with BEST_EFFORT video, got de_mode=${comp.de_mode}, de_video_policy=${comp.de_video_policy}`, 'team-staged-or-video', [comp.id]))
     }
 
     // Video policy checks
@@ -222,22 +222,24 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
     if (
       comp.de_mode === DeMode.STAGED &&
       comp.de_video_policy === VideoPolicy.REQUIRED &&
-      config.video_strips_total < comp.de_round_of_16_strips
+      config.video_strips_total < videoAsk
     ) {
-      // Physical resource impossibility for the R16 stage — structural.
-      errors.push(structural('de_video_policy', `${comp.id}: REQUIRED video policy needs ${comp.de_round_of_16_strips} video strips for R16 but only ${config.video_strips_total} available`, 'video-r16-strip-shortfall', [comp.id]))
+      // Physical resource impossibility for the video stage – structural
+      // (METHODOLOGY.md §Resource Preconditions' video strip minimum; Ops
+      // Manual 2026-27 p.19). The rule id keeps its historical R16 name.
+      errors.push(structural('de_video_policy', `${comp.id}: REQUIRED video policy needs ${videoAsk} video strips for the video stage but only ${config.video_strips_total} available`, 'video-r16-strip-shortfall', [comp.id]))
     }
 
     // DE strip requests exceed the computed DE cap. Soft resource-tuning
     // guidance (research D3 correction) because the user may have
-    // intentionally overridden.
+    // intentionally overridden. The field is the per-event lever that clears it.
     const deStripCap = computeStripCap(
       config.strips_total,
       config.max_de_strip_pct,
       comp.max_de_strip_pct_override,
     )
-    if (comp.de_round_of_16_strips > deStripCap) {
-      errors.push(notice('de_round_of_16_strips', `${comp.id}: R16 requests ${comp.de_round_of_16_strips} strips but DE cap is ${deStripCap}`, 'r16-over-cap', [comp.id]))
+    if (videoAsk > deStripCap) {
+      errors.push(notice('max_de_strip_pct_override', `${comp.id}: the video stage requests ${videoAsk} strips but DE cap is ${deStripCap}`, 'r16-over-cap', [comp.id]))
     }
 
     // Resource precondition checks — skip competitions with invalid fencer counts
@@ -376,7 +378,7 @@ export function validateFeasibility(
     const extraStrips = Math.ceil(shortfall / perExtraStrip)
     errors.push(feasibilityErr(
       'feasibility',
-      `RESOURCE_INSUFFICIENT: ${Math.round(totalNeeded)} strip-hours needed over ${competitions.length} events; ` +
+      `RESOURCE_INSUFFICIENT: ${Math.round(totalNeeded)} general strip-hours needed over ${competitions.length} events; ` +
       `${Math.round(totalAvailable)} available (${config.days_available}d × ${config.strips_total}s × ${dayLengthHours}h). ` +
       `Shortfall ${Math.round(shortfall)} (~${pct}%). Add ${extraDays} more day(s) OR ${extraStrips} more strip(s).`,
       FeasibilityRule.STRIP_HOURS,

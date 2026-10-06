@@ -45,6 +45,34 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * ledger's re-taken snapshot after the ledger's factory adopted the app's
  * per-type rules. Every entry now equals its app-path pin.
  *
+ * 024 group A, 2026-10-06 – B4 18 → 19 and B6 40 → 50, read from the drift
+ * ledger's re-taken snapshot after the 2026-27 Operations Manual planning
+ * times (pool of 7, DEs derived per round from bout time, team events single
+ * stage with no video). B4: CDT-M-EPEE-IND and CDT-M-FOIL-IND out,
+ * CDT-W-FOIL-IND, Y12-W-SABRE-IND and Y14-W-EPEE-IND in. B6: ten in, none out
+ * (specs/024-ops-manual-conformance/plan.md §Group A). Every entry still equals
+ * its app-path pin.
+ *
+ * 024 group B, 2026-10-06 – B8 53 → 52, read from the drift ledger's re-taken
+ * snapshot: the 9:00 start loses JR-W-EPEE-IND on both paths. The day moved to
+ * 9:00 with a 19:00 soft target and a 22:00 hard end (Ops Manual 2026-27 p.17,
+ * METHODOLOGY.md §Inputs and §Same-Day Completion), so the hard window shrinks
+ * from 840 to 780 minutes. Planning's 8:00-start control isolates the start as
+ * the cause: under group B with an 8:00 start B8 places 53
+ * (specs/024-ops-manual-conformance/plan.md §Group B, D3). Every entry still
+ * equals its app-path pin.
+ *
+ * 024 group D, 2026-10-06 – B4 19 → 21, B6 50 → 45 and B8 52 → 53, read from
+ * the drift ledger's re-taken snapshot after the Ops Manual p.20 same-day rules
+ * (Group 1 hard at national types and windowed at regional ones, the
+ * Junior–Cadet rest day removed, Group 2 and Group 3, first and last days
+ * planned shorter; METHODOLOGY.md §Overlapping-Population Separation and
+ * §First and Last Day Capacity). B4: CDT-W-EPEE-IND, CDT-W-FOIL-IND,
+ * CDT-W-SABRE-IND and Y14-W-SABRE-IND out, six in. B6: seven out, D1A-W-EPEE-IND
+ * and Y12-M-FOIL-IND in (D.1 −1, D.2 −1, D.4 −2, D.5 −1). B8: JR-W-EPEE-IND
+ * placed again (specs/024-ops-manual-conformance/plan.md §Group D). Every entry
+ * still equals its app-path pin.
+ *
  * The table is still typed out, but it is no longer trusted as typed: the
  * "matches the live drift ledger" test below re-measures every entry by the
  * drift ledger's own route. Until 015 it was a hand-typed copy that nothing
@@ -52,7 +80,7 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * ledger's real counts had moved.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
 }
 
 interface ParityException {
@@ -112,9 +140,24 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {}
  *
  * 015, 2026-10-05 – no pin moved. The ledger moved onto them instead, and B4,
  * B6 and B8 rejoined the equal-to-ledger group (specs/015-ledger-convergence/plan.md).
+ *
+ * 024 group A, 2026-10-06 – B4 re-measured 18 → 19 and B6 40 → 50, the same
+ * moves as the ledger's, and their copies in `appPath.test.ts` moved with them
+ * in the same commit. No other pin moved.
+ *
+ * 024 group B, 2026-10-06 – B8 re-measured 53 → 52, the same move as the
+ * ledger's: the 9:00 start loses JR-W-EPEE-IND on both paths (the 780-minute
+ * hard window, Ops Manual 2026-27 p.17, METHODOLOGY.md §Same-Day Completion).
+ * Its copy in `appPath.test.ts` moved with it in the same commit. No other pin
+ * moved.
+ *
+ * 024 group D, 2026-10-06 – B4 re-measured 19 → 21, B6 50 → 45 and B8 52 → 53,
+ * the same moves as the ledger's under the Ops Manual p.20 same-day rules
+ * (specs/024-ops-manual-conformance/plan.md §Group D). Their copies in
+ * `appPath.test.ts` moved with them in the same commit. No other pin moved.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
 }
 
 // specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)

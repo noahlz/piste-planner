@@ -28,6 +28,7 @@ import {
   VetAgeGroup,
   dayStart,
   dayEnd,
+  dayHardEnd,
   findDayForTime,
   tailEstimateMins,
   ValidationMode,
@@ -42,7 +43,10 @@ import type {
   RefDemandByDay,
   StripAllocation,
   PinnedPlacement,
+  DeBlocks,
+  DeRound,
 } from './types.ts'
+import type { FindStripsInWindowResult } from './resources.ts'
 import {
   createGlobalState,
   findAvailableStripsInWindow,
@@ -58,18 +62,11 @@ import {
   weightedPoolDuration,
   computeDeFencerCount,
 } from './pools.ts'
-import {
-  computeBracketSize,
-  calculateDeDuration,
-  deBlockDurations,
-  dePhasesForBracket,
-  deSingleStageDuration,
-  deStagedPhaseDuration,
-  deStripFootprint,
-} from './de.ts'
+import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
 import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
 import { findIndividualCounterpart } from './crossover.ts'
+import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS } from './constants.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { constraintScore } from './dayAssignment.ts'
@@ -132,14 +129,23 @@ interface EventState {
   poolStructure: ReturnType<typeof computePoolStructure>
   poolBaseline: number
   poolRefRes: ReturnType<typeof resolveRefsPerPool>
-  bracketSize: number
-  totalDeBase: number
+  deBlocks: DeBlocks
   // The phase nodes that belong to this event, in topological order.
   phases: PhaseNode[]
   // Constraint score for priority tie-breaking.
   constraint_score: number
   // Once the event permanently fails (after attempt 2) this flag is set.
   permanently_failed: boolean
+  // The regional Group 1 window's fixed ready-time floor for the first phase
+  // (absolute minutes), or null. Set by `applyCrossEventEdges` on the older
+  // side of a pair; the loop's seed and the retry reset apply it.
+  group1_window_floor: number | null
+}
+
+/** A regional Group 1 pair sharing a day, whose older side `applyCrossEventEdges` floored. */
+interface RegionalWindowPair {
+  older: EventState
+  younger: EventState
 }
 
 /**
@@ -163,6 +169,9 @@ interface PhaseNode {
   // Computed per-attempt; null until allocated.
   desired_strip_count: number
   duration_at_full: number
+  // DE nodes only: the counted rounds this block runs, re-derived at the strips
+  // granted (METHODOLOGY.md §DE Duration). Empty for pool and flight nodes.
+  de_rounds: readonly DeRound[]
   video_required: boolean
   // The cap to apply (pool_cap or de_cap).
   cap_kind: 'POOL' | 'DE'
@@ -188,13 +197,15 @@ const MAX_DEFERS_PER_PHASE = 16
  * never be excluded: a schedule keyed by id cannot be built from a set with
  * duplicates in it, and dropping both copies discards a real event to fix a
  * naming problem. `strips-total-positive` is structural too, with a field name
- * in `subjects`. The list admits neither.
+ * in `subjects`. The list admits neither. `team-staged-or-video` is left off
+ * deliberately (024 plan D4): the app never builds a STAGED or REQUIRED team,
+ * so one marks a hand-built config rather than a bad event, and it rejects the
+ * whole tournament.
  */
 const PER_EVENT_ERROR_RULES: ReadonlySet<string> = new Set([
   'fencer-count-bounds',
   'cut-value-range',
   'cut-value-min-promotions',
-  'de-duration-table-missing-entry',
   'video-r16-strip-shortfall',
 ])
 
@@ -286,14 +297,15 @@ export function scheduleAllConcurrent(
   }
 
   // Day assignment via DSatur graph coloring.
-  const graph = buildConstraintGraph(remaining)
+  const graph = buildConstraintGraph(remaining, config.tournament_type)
   const { dayMap, relaxations, violations } = assignDaysByColoring(graph, remaining, config, activePins)
 
   // Build per-event state & phase nodes.
   const events = buildEventStates(remaining, dayMap, config)
 
-  // Wire cross-event dependency edges (indv→team, Vet sibling order).
-  applyCrossEventEdges(events, config)
+  // Wire cross-event dependency edges (indv→team, Vet sibling order) and the
+  // regional Group 1 window's floors.
+  const windowPairs = applyCrossEventEdges(events, config)
 
   // Pinned events claim their strip-time before the loop opens, at the day and
   // start the caller fixed, and are then kept out of the loop's seed so nothing
@@ -307,6 +319,7 @@ export function scheduleAllConcurrent(
 
   // Run the priority-queue loop.
   runConcurrentLoop(events, state, config, pinnedIds)
+  state.bottlenecks.push(...regionalWindowFindings(windowPairs, state))
 
   // Materialize successful events into state.schedule. Already done inside the
   // loop after each event's terminal phase succeeds — see `commitEventResult`.
@@ -403,13 +416,7 @@ function buildEventStates(
       config.pool_round_duration_table,
     )
     const refRes = resolveRefsPerPool(comp.ref_policy, poolStructure.n_pools)
-    const bracketSize = computeBracketSize(
-      comp.fencer_count,
-      comp.cut_mode,
-      comp.cut_value,
-      comp.event_type,
-    )
-    const totalDeBase = calculateDeDuration(comp.weapon, bracketSize, config.de_duration_table)
+    const deBlocks = deBlocksFor(comp, config)
     const promoted = computeDeFencerCount(
       comp.fencer_count,
       comp.cut_mode,
@@ -438,7 +445,7 @@ function buildEventStates(
       flight_b_refs: 0,
       entry_fencer_count: comp.fencer_count,
       promoted_fencer_count: promoted,
-      bracket_size: bracketSize,
+      bracket_size: deBlocks.bracketSize,
       cut_mode: comp.cut_mode,
       cut_value: comp.cut_value,
       de_mode: comp.de_mode,
@@ -456,13 +463,13 @@ function buildEventStates(
       conflict_score: 0,
       pool_duration_baseline: poolBaseline,
       pool_duration_actual: 0,
-      de_duration_baseline: totalDeBase,
+      de_duration_baseline: deBlocks.baselineMinutes,
       de_duration_actual: 0,
       constraint_relaxation_level: 0,
       accepted_warnings: [],
     }
 
-    const phases = buildPhaseNodes(comp, poolStructure, refRes, poolBaseline, bracketSize, config)
+    const phases = buildPhaseNodes(comp, poolStructure, refRes, poolBaseline, deBlocks, config)
 
     events.push({
       competition: comp,
@@ -472,11 +479,11 @@ function buildEventStates(
       poolStructure,
       poolBaseline,
       poolRefRes: refRes,
-      bracketSize,
-      totalDeBase,
+      deBlocks,
       phases,
       constraint_score: constraintScore(comp, competitions, config),
       permanently_failed: false,
+      group1_window_floor: null,
     })
   }
   return events
@@ -491,7 +498,7 @@ function buildPhaseNodes(
   poolStructure: ReturnType<typeof computePoolStructure>,
   refRes: ReturnType<typeof resolveRefsPerPool>,
   poolBaseline: number,
-  bracketSize: number,
+  deBlocks: DeBlocks,
   config: TournamentConfig,
 ): PhaseNode[] {
   const nodes: PhaseNode[] = []
@@ -524,6 +531,7 @@ function buildPhaseNodes(
       successor_index: 1,
       desired_strip_count: flightAPools,
       duration_at_full: flightADur,
+      de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
@@ -540,6 +548,7 @@ function buildPhaseNodes(
       successor_index: -1, // patched below
       desired_strip_count: flightBPools,
       duration_at_full: flightBDur,
+      de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
@@ -559,15 +568,18 @@ function buildPhaseNodes(
       successor_index: -1, // patched below
       desired_strip_count: poolStructure.n_pools,
       duration_at_full: poolDur,
+      de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
       cross_event_predecessors: [],
     })
   }
 
-  // DE phases. See deStripFootprint for why the ask is capped rather than
-  // bracketSize/2 — a 3-5 event day has to share the strip pool concurrently.
-  const deDesired = deStripFootprint(bracketSize, config.DEFAULT_DE_STRIP_FOOTPRINT)
+  // DE phases (METHODOLOGY.md §DE Modes, §DE Phase Breakdown). The general
+  // ask is capped at DEFAULT_DE_STRIP_FOOTPRINT rather than bracketSize/2, so a
+  // 3-5 event day can share the strip pool concurrently. Each block's length
+  // is derived per round at the strips it is granted (computePhaseDuration).
+  const { general, video, generalAsk, videoAsk, boutMinutes } = deBlocks
   if (comp.de_mode === DeMode.SINGLE_STAGE) {
     nodes.push({
       event_id: comp.id,
@@ -579,18 +591,17 @@ function buildPhaseNodes(
       defer_count: 0,
       index: nodes.length,
       successor_index: -1,
-      desired_strip_count: deDesired,
-      duration_at_full: 0, // computed at allocation time (depends on cap)
+      desired_strip_count: generalAsk,
+      duration_at_full: deRoundsMinutes(general, generalAsk, boutMinutes),
+      de_rounds: general,
       video_required: false, // SINGLE_STAGE never uses video
       cap_kind: 'DE',
       cross_event_predecessors: [],
     })
   } else {
-    // STAGED: prelims (only when bracket >= 64) → R16.
-    const phaseList = dePhasesForBracket(bracketSize)
-    const blocks = deBlockDurations(bracketSize, calculateDeDuration(comp.weapon, bracketSize, config.de_duration_table))
-
-    if (phaseList.includes(Phase.DE_PRELIMS)) {
+    // STAGED: prelims (only when the bracket is larger than the video-stage
+    // round) → the video block, the video-stage round through the semis.
+    if (general.length > 0) {
       nodes.push({
         event_id: comp.id,
         kind: PhaseKind.DE_PRELIMS,
@@ -601,8 +612,9 @@ function buildPhaseNodes(
         defer_count: 0,
         index: nodes.length,
         successor_index: -1, // patched below
-        desired_strip_count: deDesired,
-        duration_at_full: blocks.prelims_dur,
+        desired_strip_count: generalAsk,
+        duration_at_full: deRoundsMinutes(general, generalAsk, boutMinutes),
+        de_rounds: general,
         video_required: false,
         cap_kind: 'DE',
         cross_event_predecessors: [],
@@ -620,8 +632,9 @@ function buildPhaseNodes(
       defer_count: 0,
       index: nodes.length,
       successor_index: -1,
-      desired_strip_count: comp.de_round_of_16_strips,
-      duration_at_full: blocks.r16_dur,
+      desired_strip_count: videoAsk,
+      duration_at_full: deRoundsMinutes(video, videoAsk, boutMinutes),
+      de_rounds: video,
       video_required: r16VideoRequired,
       cap_kind: 'DE',
       cross_event_predecessors: [],
@@ -640,7 +653,7 @@ function buildPhaseNodes(
 }
 
 // ──────────────────────────────────────────────
-// Cross-event edges (indv→team, Vet sibling order)
+// Cross-event edges (indv→team, Vet sibling order, regional Group 1 window)
 // ──────────────────────────────────────────────
 
 const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
@@ -651,7 +664,12 @@ const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
   VetAgeGroup.VET80,
 ])
 
-function applyCrossEventEdges(events: EventState[], config: TournamentConfig): void {
+/**
+ * Wires the cross-event dependencies of METHODOLOGY §Cross-Event Dependency
+ * Edges and returns the regional Group 1 pairs it floored, for
+ * `regionalWindowFindings` to judge once the loop has run.
+ */
+function applyCrossEventEdges(events: EventState[], config: TournamentConfig): RegionalWindowPair[] {
   const byId = new Map(events.map(e => [e.competition.id, e]))
 
   for (const event of events) {
@@ -704,6 +722,89 @@ function applyCrossEventEdges(events: EventState[], config: TournamentConfig): v
       }
     }
   }
+
+  return applyRegionalWindowFloors(events, config)
+}
+
+/**
+ * The regional Group 1 window (Ops Manual p.20 – Group 1, METHODOLOGY §Regional
+ * Types: Soft, With a Time-of-Day Window). At ROC, RYC and RJCC, when a Group 1
+ * pair of one weapon and gender shares a day, the older side's pools are not
+ * ready before day start + 4 hours while the younger side starts from day start.
+ *
+ * The floor is fixed and stored on the event rather than pushed as a
+ * `cross_event_predecessors` edge, so the seed and the retry reset apply it to
+ * the first phase – a predecessor edge resolves only once its predecessor has
+ * run, and the retry's reset to day start would undo it. Every pair sets the
+ * same floor, so windows do not stack. Keyed by category, weapon and gender
+ * alone, for any mix of individual and team events (024 plan D10).
+ * Relaxation-level suppression is not modelled (021).
+ */
+function applyRegionalWindowFloors(events: EventState[], config: TournamentConfig): RegionalWindowPair[] {
+  const pairs: RegionalWindowPair[] = []
+  if (!GROUP_1_SOFT_TYPES.has(config.tournament_type)) return pairs
+
+  for (const older of events) {
+    for (const younger of events) {
+      const oc = older.competition
+      const yc = younger.competition
+      if (oc.gender !== yc.gender || oc.weapon !== yc.weapon) continue
+      if (older.assigned_day !== younger.assigned_day) continue
+      if (!GROUP_1_MANDATORY.some(p => p.older === oc.category && p.younger === yc.category)) continue
+      older.group1_window_floor = dayStart(older.assigned_day, config) + REGIONAL_GROUP_1_WINDOW_MINS
+      pairs.push({ older, younger })
+    }
+  }
+  return pairs
+}
+
+/**
+ * One finding per floored pair whose two events were both placed: INFO when
+ * the window held, WARN when it did not. The window holds when the younger
+ * side's pools start before the floor and the older side's at or after it. A
+ * pin skips the seed, so a pinned older side can break it, and in a Y10, Y12
+ * and Y14 day the Y12–Y14 pair starts together at the floor and breaks it
+ * (METHODOLOGY §Regional Types: Soft, With a Time-of-Day Window). A pair with
+ * an unplaced side has no finding: that event's own ERROR covers it.
+ */
+function regionalWindowFindings(pairs: RegionalWindowPair[], state: GlobalState): Bottleneck[] {
+  const findings: Bottleneck[] = []
+  for (const { older, younger } of pairs) {
+    const o = state.schedule[older.competition.id]
+    const y = state.schedule[younger.competition.id]
+    const floor = older.group1_window_floor
+    if (!o || !y || o.pool_start === null || y.pool_start === null || floor === null) continue
+
+    const honoured = o.pool_start >= floor && y.pool_start < floor
+    const oId = older.competition.id
+    const yId = younger.competition.id
+    const starts = `${yId} starts at ${y.pool_start} and ${oId}'s pools at ${o.pool_start}, window floor ${floor}`
+    findings.push({
+      competition_id: oId,
+      phase: Phase.SEQUENCING,
+      cause: BottleneckCause.SEQUENCING_CONSTRAINT,
+      rule: honoured ? BottleneckRule.REGIONAL_WINDOW_HONOURED : BottleneckRule.REGIONAL_WINDOW_NOT_HONOURED,
+      subjects: [oId, yId].sort(),
+      severity: honoured ? BottleneckSeverity.INFO : BottleneckSeverity.WARN,
+      delay_mins: 0,
+      message: honoured
+        ? `${oId} and ${yId} share day ${o.assigned_day + 1} inside the regional Group 1 window: ${starts}`
+        : `${oId} and ${yId} share day ${o.assigned_day + 1} and the regional Group 1 window is not honoured: ${starts}`,
+    })
+  }
+  return findings
+}
+
+/**
+ * The first phase's ready time at the seed and at a retry: day start, held
+ * back by the event's earliest start and by its regional window floor.
+ */
+function firstPhaseReadyTime(event: EventState, config: TournamentConfig): number {
+  return Math.max(
+    dayStart(event.assigned_day, config),
+    event.competition.earliest_start,
+    event.group1_window_floor ?? -Infinity,
+  )
 }
 
 const VET_AGE_WEIGHT: Partial<Record<VetAgeGroup, number>> = {
@@ -830,7 +931,8 @@ function runConcurrentLoop(
   pinnedIds: ReadonlySet<string> = NO_PINNED_IDS,
 ): void {
   // Seed the ready queue with each event's first phase node. Initial
-  // ready_time = max(dayStart, earliest_start). Cross-event predecessors are
+  // ready_time = max(dayStart, earliest_start, regional window floor) –
+  // `firstPhaseReadyTime`. Cross-event predecessors are
   // resolved lazily inside the loop (the predecessor may not be RUNNING yet
   // when we seed).
   //
@@ -842,10 +944,7 @@ function runConcurrentLoop(
   for (const event of events) {
     if (pinnedIds.has(event.competition.id)) continue
     const first = event.phases[0]
-    first.ready_time = Math.max(
-      dayStart(event.assigned_day, config),
-      event.competition.earliest_start,
-    )
+    first.ready_time = firstPhaseReadyTime(event, config)
     first.state = PhaseState.READY
     ready.push(first)
   }
@@ -1035,8 +1134,8 @@ function handlePhaseFailure(
 
 /**
  * Resets an event's phase nodes to PENDING/READY for retry. The first node is
- * READY at dayStart; the rest are PENDING with cleared timestamps and defer
- * counts.
+ * READY at dayStart, or at the event's regional window floor when it has one;
+ * the rest are PENDING with cleared timestamps and defer counts.
  */
 function resetEventPhases(event: EventState, config: TournamentConfig): void {
   for (let i = 0; i < event.phases.length; i++) {
@@ -1046,10 +1145,7 @@ function resetEventPhases(event: EventState, config: TournamentConfig): void {
     p.end_time = 0
     p.defer_count = 0
   }
-  event.phases[0].ready_time = Math.max(
-    dayStart(event.assigned_day, config),
-    event.competition.earliest_start,
-  )
+  event.phases[0].ready_time = firstPhaseReadyTime(event, config)
   event.phases[0].state = PhaseState.READY
 
   // Reset relevant result fields. Day assignment, ids, baselines stay.
@@ -1096,15 +1192,28 @@ type AllocateOutcome =
  * returns `fail`.
  */
 /**
+ * A DE node whose bracket has no counted round – a bracket of 2, whose gold
+ * bout the tail estimate covers. It takes 0 minutes and claims no strip,
+ * general or video (METHODOLOGY.md §DE Duration 'No counted round', §Scheduler
+ * Stops at Semis). Keyed to the rounds, not to a strip ask of 0, so a pinned
+ * flight whose budget splits to 0 keeps its 1-strip floor (024 plan D5).
+ */
+function hasNoCountedRound(node: PhaseNode): boolean {
+  return node.cap_kind === 'DE' && node.de_rounds.length === 0
+}
+
+/**
  * The strip count a phase node actually gets: its ask, held down by the
- * cap its kind answers to, never below 1. Extracted from `tryAllocate` so the
- * pre-claim pass can compute the same number for a phase that claimed nothing.
+ * cap its kind answers to, never below 1 – except a DE with no counted round,
+ * which gets 0. Extracted from `tryAllocate` so the pre-claim pass can compute
+ * the same number for a phase that claimed nothing.
  */
 function cappedStripCount(
   node: PhaseNode,
   event: EventState,
   config: TournamentConfig,
 ): number {
+  if (hasNoCountedRound(node)) return 0
   const cap =
     node.cap_kind === 'POOL'
       ? computeStripCap(
@@ -1127,8 +1236,12 @@ function tryAllocate(
   config: TournamentConfig,
 ): AllocateOutcome {
   const day = event.assigned_day
-  // Day-window cap is the tighter of dayEnd and the event's latest_end constraint.
-  const dayHardEnd = Math.min(dayEnd(day, config), event.competition.latest_end)
+  // Day-window cap is the tighter of the day's hard end and the event's
+  // latest_end constraint. It bounds the day-end check, the STAGED fits-in-day
+  // pre-check and every deferral below. The 7:00 PM soft target does not bound
+  // placement: a phase may run past it to the hard end (Ops Manual 2026-27
+  // p.17, METHODOLOGY.md §Same-Day Completion, §Phase 5).
+  const hardEnd = Math.min(dayHardEnd(day, config), event.competition.latest_end)
 
   // Strip cap.
   const cappedCount = cappedStripCount(node, event, config)
@@ -1136,19 +1249,24 @@ function tryAllocate(
   // Duration depends on phase kind.
   const duration = computePhaseDuration(node, cappedCount, event)
 
+  // A DE with no counted round claims nothing, so it never searches for
+  // strips: it "fits" at ready_time on an empty strip set and passes through
+  // the same day-end check and result write as every other phase.
+  const noCountedRound = hasNoCountedRound(node)
+
   // STAGED-DE phases (prelims, R16) pre-check whether the phase can fit
-  // before dayHardEnd at all, before searching for strips. Without this, a
+  // before the hard end at all, before searching for strips. Without this, a
   // phase whose duration alone overruns the day would still search for
   // strips and — if strips happened to be free at ready_time — fail with a
   // SAME_DAY_VIOLATION instead of deferring or failing cleanly.
-  if (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16) {
-    const fitsInDay = node.ready_time + duration <= dayHardEnd
+  if (!noCountedRound && (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16)) {
+    const fitsInDay = node.ready_time + duration <= hardEnd
     if (!fitsInDay) {
       // Try deferring once via window probe to confirm STRIPS vs TIME.
       const win = findAvailableStripsInWindow(
         state, config, cappedCount, node.ready_time, duration, node.video_required, day,
       )
-      if (win.fit === 'none' && win.earliest_next_start !== null && win.earliest_next_start + duration <= dayHardEnd) {
+      if (win.fit === 'none' && win.earliest_next_start !== null && win.earliest_next_start + duration <= hardEnd) {
         return { outcome: 'defer', next_ready_time: win.earliest_next_start, reason: win.reason }
       }
       return { outcome: 'fail' }
@@ -1157,14 +1275,18 @@ function tryAllocate(
 
   // Claim cappedCount strips for the phase duration as a single allocation —
   // the same path every phase kind uses (pools, flights, and both DE modes).
-  const win = findAvailableStripsInWindow(
-    state, config, cappedCount, node.ready_time, duration, node.video_required, day,
-  )
+  const win: FindStripsInWindowResult = noCountedRound
+    ? { fit: 'ok', strip_indices: [] }
+    : findAvailableStripsInWindow(
+        state, config, cappedCount, node.ready_time, duration, node.video_required, day,
+      )
   if (win.fit === 'ok') {
     const startTime = node.ready_time
     const endTime = startTime + duration
-    if (endTime > dayHardEnd) {
-      // Even a successful fit overruns the day — fail. Flag as SAME_DAY_VIOLATION.
+    if (endTime > hardEnd) {
+      // Even a successful fit overruns the day's hard end — fail. Flag as
+      // SAME_DAY_VIOLATION (METHODOLOGY.md §Bottlenecks Specific to the
+      // Concurrent Scheduler). Ending past the soft target alone never lands here.
       state.bottlenecks.push({
         competition_id: event.competition.id,
         phase: node.phase_label,
@@ -1173,7 +1295,7 @@ function tryAllocate(
         subjects: [event.competition.id],
         severity: BottleneckSeverity.ERROR,
         delay_mins: 0,
-        message: `${event.competition.id} ${node.phase_label}: ends at ${endTime} past day-end ${dayHardEnd}`,
+        message: `${event.competition.id} ${node.phase_label}: ends at ${endTime} past day-end ${hardEnd}`,
         attempt_id: event.attempt_id,
       })
       return { outcome: 'fail' }
@@ -1200,7 +1322,7 @@ function tryAllocate(
   }
 
   // Miss.
-  if (win.earliest_next_start !== null && win.earliest_next_start + duration <= dayHardEnd) {
+  if (win.earliest_next_start !== null && win.earliest_next_start + duration <= hardEnd) {
     return { outcome: 'defer', next_ready_time: snapToSlot(win.earliest_next_start), reason: win.reason }
   }
   return { outcome: 'fail' }
@@ -1209,8 +1331,8 @@ function tryAllocate(
 /**
  * Computes the actual (possibly cap-scaled) duration for a phase node given
  * the strip-count it ended up with. Pools recompute via estimatePoolDuration
- * (more rounds when strips are limited); DE phases scale duration by
- * (target_strips / actual_strips).
+ * (more rounds when strips are limited); DE phases re-derive their rounds'
+ * waves at the granted strips (METHODOLOGY.md §DE Duration).
  */
 function computePhaseDuration(node: PhaseNode, cappedCount: number, event: EventState): number {
   if (node.kind === PhaseKind.POOLS) {
@@ -1230,16 +1352,9 @@ function computePhaseDuration(node: PhaseNode, cappedCount: number, event: Event
     const flightBPools = Math.floor(event.poolStructure.n_pools / 2)
     return estimatePoolDuration(flightBPools, event.poolBaseline, cappedCount, event.poolRefRes.refs_per_pool).actual_duration
   }
-  if (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16) {
-    return deStagedPhaseDuration(node.duration_at_full, cappedCount, node.desired_strip_count)
-  }
-  // DE_SINGLE: duration scales with ratio, but excludes gold-bout fraction.
-  return deSingleStageDuration(
-    event.totalDeBase,
-    event.bracketSize,
-    cappedCount,
-    node.desired_strip_count,
-  )
+  // DE_SINGLE, DE_PRELIMS, DE_R16. The gold bout is not a counted round – the
+  // tail estimate covers it (§Scheduler Stops at Semis).
+  return deRoundsMinutes(node.de_rounds, cappedCount, event.deBlocks.boutMinutes)
 }
 
 /**
@@ -1531,73 +1646,114 @@ function computePostScheduleRefDemand(
 // ──────────────────────────────────────────────
 
 /**
- * Generates post-schedule warnings per METHODOLOGY.md §Phase 7: Post-Schedule Warnings (Ops Manual Group 2).
- * For 4+ day events: warns if first or last day is longer than the average
- * middle day duration.
+ * Generates post-schedule warnings per METHODOLOGY.md §Phase 7: Post-Schedule Warnings.
+ * At every day count: one late-day WARN per day that ends past its soft target
+ * (`lateDayWarnings`, §Same-Day Completion).
+ * Then the first/last-day WARN (`firstLastDayWarnings`).
  */
 export function postScheduleWarnings(
   schedule: Record<string, ScheduleResult>,
   config: TournamentConfig,
 ): Bottleneck[] {
-  const warnings: Bottleneck[] = []
+  return [...lateDayWarnings(schedule, config), ...firstLastDayWarnings(schedule, config)]
+}
 
-  if (config.days_available < 4) return warnings
-
-  // Compute max duration per day (from day start to latest event end)
-  const dayDurations: Record<number, number> = {}
-
+/**
+ * The first and last days should be shorter than the days between (Ops Manual
+ * p.20 – Group 2; METHODOLOGY.md §Phase 7, 024 D10). Reads the first and last
+ * USED day and needs at least 3 used days. Each of the two warns when it is not
+ * shorter than the shortest used middle day. A day's projected length is its
+ * last end (`de_total_end`, or `pool_end` with no DE) minus its day start.
+ * Day assignment plans for this with the reduced first/last day capacity
+ * (`dayColoring.ts`, §First and Last Day Capacity).
+ */
+function firstLastDayWarnings(
+  schedule: Record<string, ScheduleResult>,
+  config: TournamentConfig,
+): Bottleneck[] {
+  const dayLengths = new Map<number, number>()
   for (const r of Object.values(schedule)) {
     const end = r.de_total_end ?? r.pool_end
-    // start is only used as a null guard — if no pool/flight started, skip this event.
-    // Duration is measured from dayStart, not from the event's start time.
+    // An event with no pool or flight start placed nothing, so it uses no day.
     const start = r.pool_start ?? r.flight_a_start
     if (end === null || start === null) continue
-
-    const ds = dayStart(r.assigned_day, config)
-    const duration = end - ds
-    dayDurations[r.assigned_day] = Math.max(dayDurations[r.assigned_day] ?? 0, duration)
+    const length = end - dayStart(r.assigned_day, config)
+    dayLengths.set(r.assigned_day, Math.max(dayLengths.get(r.assigned_day) ?? 0, length))
   }
 
-  // Middle days: indices 1 through (days_available - 2)
-  const middleDays: number[] = []
-  for (let d = 1; d <= config.days_available - 2; d++) {
-    middleDays.push(d)
-  }
+  const usedDays = [...dayLengths.keys()].sort((a, b) => a - b)
+  if (usedDays.length < 3) return []
 
-  if (middleDays.length === 0) return warnings
+  const firstDay = usedDays[0]
+  const lastDay = usedDays[usedDays.length - 1]
+  const shortestMiddle = Math.min(...usedDays.slice(1, -1).map((d) => dayLengths.get(d)!))
 
-  const avgMiddle =
-    middleDays.reduce((sum, d) => sum + (dayDurations[d] ?? 0), 0) / middleDays.length
-
-  const firstDayDur = dayDurations[0] ?? 0
-  const lastDayDur = dayDurations[config.days_available - 1] ?? 0
-
-  if (firstDayDur > avgMiddle * 1.1) {
+  const warnings: Bottleneck[] = []
+  const edges = [
+    { day: firstDay, label: 'First', rule: BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE },
+    { day: lastDay, label: 'Last', rule: BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE },
+  ]
+  for (const { day, label, rule } of edges) {
+    const length = dayLengths.get(day)!
+    if (length < shortestMiddle) continue
     warnings.push({
       competition_id: '',
       phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
-      rule: BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE,
+      rule,
       subjects: [],
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
-      message: `First day (${firstDayDur} min) is longer than average middle day (${Math.round(avgMiddle)} min)`,
+      message: `${label} day (Day ${day + 1}, ${length} min) is not shorter than the shortest middle day (${shortestMiddle} min)`,
     })
   }
+  return warnings
+}
 
-  if (lastDayDur > avgMiddle * 1.1) {
+/**
+ * One WARN per day whose last competition ends after the day's soft target,
+ * `dayEnd` (default 7:00 PM – Ops Manual 2026-27 p.17), at every day count
+ * (METHODOLOGY.md §Same-Day Completion, 024 D7). Scheduling is not blocked:
+ * the scheduler already placed the work, up to the day's hard end.
+ *
+ * An event's finish is its `de_total_end`, gold/bronze tail included, or its
+ * `pool_end` when it has no DE. The message carries the day's estimated
+ * finish, `delay_mins` the minutes past the target, and `subjects` the events
+ * that finish after it. The finding stays in the engine and the drift ledger
+ * in 024 – the app's own late-day row is the store's late-finish row (D7).
+ */
+function lateDayWarnings(
+  schedule: Record<string, ScheduleResult>,
+  config: TournamentConfig,
+): Bottleneck[] {
+  const lateByDay = new Map<number, { finish: number; ids: string[] }>()
+  for (const r of Object.values(schedule)) {
+    const finish = r.de_total_end ?? r.pool_end
+    if (finish === null || finish <= dayEnd(r.assigned_day, config)) continue
+    const late = lateByDay.get(r.assigned_day)
+    if (late) {
+      late.finish = Math.max(late.finish, finish)
+      late.ids.push(r.competition_id)
+    } else {
+      lateByDay.set(r.assigned_day, { finish, ids: [r.competition_id] })
+    }
+  }
+
+  const warnings: Bottleneck[] = []
+  for (const [day, { finish, ids }] of [...lateByDay.entries()].sort(([a], [b]) => a - b)) {
+    const target = dayEnd(day, config)
+    const subjects = [...new Set(ids)].sort()
     warnings.push({
       competition_id: '',
       phase: Phase.POST_SCHEDULE,
       cause: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
-      rule: BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
-      subjects: [],
+      rule: BottleneckRule.DAY_ENDS_PAST_TARGET,
+      subjects,
       severity: BottleneckSeverity.WARN,
-      delay_mins: 0,
-      message: `Last day (${lastDayDur} min) is longer than average middle day (${Math.round(avgMiddle)} min)`,
+      delay_mins: finish - target,
+      message: `Day ${day + 1} ends at ${finish}, ${finish - target} min past its target ${target}: ${subjects.join(', ')} finish after it`,
     })
   }
-
   return warnings
 }
 

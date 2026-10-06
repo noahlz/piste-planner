@@ -15,14 +15,11 @@ import type { ScenarioId } from '../data/tournaments.ts'
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
 import { FindingSeverity, selectAllFindings } from './derived.ts'
-import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../engine/constants.ts'
+import { DAY_END_MINS, DAY_START_MINS, DEFAULT_POOL_ROUND_DURATION_TABLE } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
 // Constants
 // ──────────────────────────────────────────────
-
-const DAY_START = 480 // 8:00 AM in minutes from midnight
-const DAY_END = 1320 // 10:00 PM in minutes from midnight
 
 /** The default `keep` for `setPlacementsFromAuto` — every one-argument caller. */
 const EMPTY_KEEP: ReadonlySet<string> = new Set<string>()
@@ -203,8 +200,8 @@ function createTournamentSlice(set: SetState, get: GetState): TournamentSlice {
 
     setDays: (days) => {
       const dayConfigs: DayConfig[] = Array.from({ length: days }, () => ({
-        day_start_time: DAY_START,
-        day_end_time: DAY_END,
+        day_start_time: DAY_START_MINS,
+        day_end_time: DAY_END_MINS,
       }))
       set({ days_available: days, dayConfigs })
     },

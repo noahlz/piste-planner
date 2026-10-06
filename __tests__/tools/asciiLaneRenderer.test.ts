@@ -49,6 +49,7 @@ describe('renderAsciiLanes — single day, single event', () => {
   it('renders a DAY 1 header with config metadata', () => {
     const header = out.split('\n')[0]
     expect(header).toContain('DAY 1')
+    expect(header).toContain('(09:00-19:00, hard 22:00)')
     expect(header).toContain('strips: 4')
     expect(header).toContain('video: 1')
     expect(header).toContain('scheduled: 1')
@@ -135,10 +136,11 @@ describe('renderAsciiLanes — multi-phase event on same strip', () => {
 describe('renderAsciiLanes — multi-day rendering', () => {
   const config = makeConfig({ days_available: 3, strips: makeStrips(2, 0) })
   const stripAllocs = emptyStripAllocations(2)
-  // Day 0 = mins 0-840; day 1 = 840-1680; day 2 = 1680-2520.
+  // Fallback axis (024 D7): day d starts at d x 1440, so day 0 = mins 0-1440,
+  // day 1 = 1440-2880, day 2 = 2880-4320.
   stripAllocs[0].push(alloc('E1', Phase.POOLS, 0, 60))
-  stripAllocs[0].push(alloc('E2', Phase.POOLS, 900, 960)) // Day 1
-  stripAllocs[0].push(alloc('E3', Phase.POOLS, 1740, 1800)) // Day 2
+  stripAllocs[0].push(alloc('E2', Phase.POOLS, 1500, 1560)) // Day 1
+  stripAllocs[0].push(alloc('E3', Phase.POOLS, 2940, 3000)) // Day 2
 
   const out = renderAsciiLanes({
     schedule: {
@@ -212,7 +214,7 @@ describe('renderAsciiLanes — UNSCHEDULED footer', () => {
 })
 
 describe('renderAsciiLanes — column width budget', () => {
-  // 80-strip / 14-hour config is the worst-case display target per the plan.
+  // 80-strip / 13-hour config is the worst-case display target per the plan.
   const config = makeConfig({ days_available: 1, strips: makeStrips(80, 8) })
   const out = renderAsciiLanes({
     schedule: {},
@@ -228,9 +230,50 @@ describe('renderAsciiLanes — column width budget', () => {
     }
   })
 
-  it('time axis labels include both day endpoints', () => {
+  it('time axis labels run from the 9:00 start to the 22:00 hard end', () => {
     const axis = out.split('\n')[1]
-    expect(axis).toContain('08:00')
-    expect(axis).toContain('21:00')
+    expect(axis).toContain('09:00')
+    expect(axis).toContain('19:00')
+    expect(axis).toContain('22:00')
+  })
+})
+
+describe('renderAsciiLanes — a phase between the 19:00 target and the 22:00 hard end', () => {
+  const config = makeConfig({ days_available: 1, strips: makeStrips(1, 0) })
+  const comp = makeCompetition({ id: 'LATE' })
+  // Fallback axis: minute 0 is 9:00, so 600..720 is 19:00-21:00.
+  const stripAllocs = [[alloc('LATE', Phase.DE, 600, 720)]]
+  const out = renderAsciiLanes({
+    schedule: { LATE: { ...makeScheduleResult('LATE', 0), pool_start: 0, pool_end: 60 } },
+    strip_allocations: stripAllocs,
+    bottlenecks: [],
+    config,
+    competitions: [comp],
+  })
+
+  it('draws the phase inside the lane', () => {
+    const lane = findLineStartingWith(out, 'S01')
+    expect(lane).toContain('[DE-LATE')
+  })
+})
+
+describe('renderAsciiLanes — an organizer hard end past the default', () => {
+  const config = makeConfig({
+    days_available: 1,
+    strips: makeStrips(1, 0),
+    dayConfigs: [{ day_start_time: 540, day_end_time: 1260, day_hard_end_time: 1380 }],
+  })
+  const out = renderAsciiLanes({
+    schedule: {},
+    strip_allocations: emptyStripAllocations(1),
+    bottlenecks: [],
+    config,
+    competitions: [],
+  })
+
+  it('shows the day hard end in the header and on the axis', () => {
+    const lines = out.split('\n')
+    expect(lines[0]).toContain('(09:00-21:00, hard 23:00)')
+    expect(lines[1]).toContain('23:00')
   })
 })

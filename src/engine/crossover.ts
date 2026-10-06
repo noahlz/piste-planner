@@ -1,13 +1,18 @@
 import type { Category, Competition, ScheduleResult } from './types.ts'
-import { Category as CategoryEnum, EventType, VetAgeGroup } from './types.ts'
+import { Category as CategoryEnum, EventType, TournamentType, VetAgeGroup } from './types.ts'
 import {
   CROSSOVER_GRAPH,
+  DIV1_DIV1A_HARD_PAIR,
   GROUP_1_MANDATORY,
+  GROUP_1_SOFT_TYPES,
+  GROUP_2_SOFT_SEPARATIONS,
+  INDIV_TEAM_RELAXABLE_BLOCKS,
   PENALTY_WEIGHTS,
   PROXIMITY_GRAPH,
   PROXIMITY_PENALTY_WEIGHTS,
   SOFT_SEPARATION_PAIRS,
 } from './constants.ts'
+import type { Group2Side } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // Penalty matrix
@@ -62,25 +67,63 @@ const PENALTY_MATRIX = buildPenaltyMatrix(CROSSOVER_GRAPH)
 
 type CompFields = Pick<Competition, 'id' | 'category' | 'gender' | 'weapon' | 'event_type' | 'vet_age_group'>
 
-function isGroup1Mandatory(a: Category, b: Category): boolean {
-  return GROUP_1_MANDATORY.some(
-    ([x, y]) => (x === a && y === b) || (x === b && y === a),
+const KNOWN_TOURNAMENT_TYPES: ReadonlySet<string> = new Set<string>(Object.values(TournamentType))
+
+/** Unordered category-pair match. */
+function isPair(a: Category, b: Category, x: Category, y: Category): boolean {
+  return (x === a && y === b) || (x === b && y === a)
+}
+
+/** A Group 1 pair by category alone, for any mix of individual and team events (024 D10). */
+function isGroup1Pair(a: Category, b: Category): boolean {
+  return GROUP_1_MANDATORY.some(({ older, younger }) => isPair(a, b, older, younger))
+}
+
+/**
+ * True when one event is the individual and the other the team of an
+ * INDIV_TEAM_RELAXABLE_BLOCKS pair (METHODOLOGY §Individual/Team Separation).
+ * The caller has already matched weapon and gender. Checked before Group 1, so
+ * these stay Infinity at the regional types where Group 1 is soft, and day
+ * colouring alone relaxes them at level 3 (`findRelaxableEdges`).
+ */
+function isIndivTeamRelaxableBlock(c1: CompFields, c2: CompFields): boolean {
+  if (c1.event_type === c2.event_type) return false
+  const [indiv, team] = c1.event_type === EventType.INDIVIDUAL ? [c1, c2] : [c2, c1]
+  return INDIV_TEAM_RELAXABLE_BLOCKS.some(
+    ({ indivCategory, teamCategory }) => indiv.category === indivCategory && team.category === teamCategory,
   )
 }
 
 /**
  * The soft-separation penalty for a pair, or `undefined` when the pair is not
- * listed (METHODOLOGY:252-254, `SOFT_SEPARATION_PAIRS` in `constants.ts`).
+ * listed (METHODOLOGY §Other Soft Preferences, `SOFT_SEPARATION_PAIRS` in
+ * `constants.ts`). The table holds only DIV1↔DIV2 and DIV1↔DIV3, both at 3.0 –
+ * DIV1↔CADET is a Group 1 pair (`GROUP_1_MANDATORY`) and is not looked up here.
  *
  * These are policy numbers, not crossover fractions, which is why they live in
  * their own table rather than in `CROSSOVER_GRAPH`: that graph means "fraction
  * of fencers in category A who also compete in B", capped at 0.8, and it feeds
- * `buildPenaltyMatrix`'s two-hop derivation. 5.0 is neither a fraction nor
+ * `buildPenaltyMatrix`'s two-hop derivation. 3.0 is neither a fraction nor
  * something to derive indirect edges from.
  */
 function softSeparationPenalty(a: Category, b: Category): number | undefined {
   return SOFT_SEPARATION_PAIRS.find(
     ({ pair: [x, y] }) => (x === a && y === b) || (x === b && y === a),
+  )?.penalty
+}
+
+/**
+ * The Group 2 soft-separation penalty for a pair, or `undefined` when no
+ * GROUP_2_SOFT_SEPARATIONS row matches (Ops Manual p.20 – Group 2, METHODOLOGY
+ * §Other Soft Preferences). The caller has already matched weapon and gender.
+ * A side matches on category and, where it names one, event type, in either
+ * argument order.
+ */
+function group2SoftSeparationPenalty(c1: CompFields, c2: CompFields): number | undefined {
+  const matches = (c: CompFields, side: Group2Side) =>
+    side.categories.includes(c.category) && (side.eventType === null || side.eventType === c.event_type)
+  return GROUP_2_SOFT_SEPARATIONS.find(
+    ({ sides: [x, y] }) => (matches(c1, x) && matches(c2, y)) || (matches(c1, y) && matches(c2, x)),
   )?.penalty
 }
 
@@ -146,33 +189,55 @@ function isVetCombinedAgeBandedBlock(c1: CompFields, c2: CompFields): boolean {
 }
 
 /**
- * Returns the penalty for scheduling two competitions on the same day.
- * Returns Infinity when the pairing would be a hard conflict.
+ * Returns the penalty for scheduling two competitions on the same day at a
+ * tournament of `tournamentType`. Returns Infinity when the pairing would be a
+ * hard conflict. Throws on an unknown tournament type, whatever the pair.
  *
- * Hard-conflict checks in order:
+ * Hard-conflict checks in order, all at every type:
  *   1. Same-population (same category+gender+weapon, Vet-aware).
  *   2. VET_COMBINED ↔ age-banded Vet ind (same gender+weapon): fencers typically
  *      enter both, so they must be on different days.
- *   3. GROUP_1_MANDATORY pairs (checked before PENALTY_MATRIX because some
- *      mandatory pairs, e.g. Div1↔Div1A, have no edge in CROSSOVER_GRAPH).
+ *   3. INDIV_TEAM_RELAXABLE_BLOCKS (Div 1 ind ↔ Junior team, Junior ind ↔ Div 1
+ *      team), before Group 1 so they stay hard where Group 1 is soft.
+ *   4. DIV1_DIV1A_HARD_PAIR (Appendix B departure).
+ *
+ * Then the Group 1 pairs (Ops Manual p.20 – Group 1): Infinity at NAC, SYC and
+ * SJCC, and REGIONAL_GROUP_1_PAIR at the GROUP_1_SOFT_TYPES (METHODOLOGY
+ * §Overlapping-Population Separation (Group 1)). Checked before PENALTY_MATRIX,
+ * whose 0.8 edges would otherwise score these pairs.
  *
  * Then SOFT_SEPARATION_PAIRS, which is soft (finite) but overrides the matrix:
  * a listed pair takes its stated penalty whether or not CROSSOVER_GRAPH has an
- * edge for it. Placed AFTER the Group 1 test so a pair later made mandatory
- * still returns Infinity, and BEFORE PENALTY_MATRIX so the specified value wins
- * over the graph's — DIV1↔CADET's matrix value is 0.8 and its specified
- * separation penalty is 5.0 (research.md D6).
+ * edge for it. Placed AFTER the Group 1 test so a Group 1 pair keeps its Group 1
+ * value, and BEFORE PENALTY_MATRIX so the specified value wins over the graph's
+ * (research.md D6).
+ *
+ * Then GROUP_2_SOFT_SEPARATIONS (Ops Manual p.20 – Group 2), on the same terms:
+ * after every block and Group 1, so a pair they already separate stays as it
+ * is, and before PENALTY_MATRIX, whose 0.8 DIV2↔DIV3 edge it overrides.
  */
-export function crossoverPenalty(c1: CompFields, c2: CompFields): number {
+export function crossoverPenalty(c1: CompFields, c2: CompFields, tournamentType: TournamentType): number {
+  if (!KNOWN_TOURNAMENT_TYPES.has(tournamentType)) {
+    throw new Error(`crossoverPenalty: unknown tournament type ${String(tournamentType)}`)
+  }
+
   if (isSamePopulation(c1, c2)) return Infinity
   if (isVetCombinedAgeBandedBlock(c1, c2)) return Infinity
   if (c1.gender !== c2.gender) return 0.0
   if (c1.weapon !== c2.weapon) return 0.0
 
-  if (isGroup1Mandatory(c1.category, c2.category)) return Infinity
+  if (isIndivTeamRelaxableBlock(c1, c2)) return Infinity
+  if (isPair(c1.category, c2.category, ...DIV1_DIV1A_HARD_PAIR)) return Infinity
+
+  if (isGroup1Pair(c1.category, c2.category)) {
+    return GROUP_1_SOFT_TYPES.has(tournamentType) ? PENALTY_WEIGHTS.REGIONAL_GROUP_1_PAIR : Infinity
+  }
 
   const softPenalty = softSeparationPenalty(c1.category, c2.category)
   if (softPenalty !== undefined) return softPenalty
+
+  const group2Penalty = group2SoftSeparationPenalty(c1, c2)
+  if (group2Penalty !== undefined) return group2Penalty
 
   return PENALTY_MATRIX.get(pairKey(c1.category, c2.category)) ?? 0.0
 }

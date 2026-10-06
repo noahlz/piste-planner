@@ -110,7 +110,8 @@ describe('ExportPopover save tests', () => {
           expect(parsed.tournament).toBeDefined()
           expect(parsed.competitions).toBeDefined()
           expect(parsed.tournament.strips_total).toBe(12)
-          expect(parsed.placements[id].start_time).toBe(480)
+          // makePlacement's default start is the Ops Manual p.17 day start, 9:00 = 540
+          expect(parsed.placements[id].start_time).toBe(540)
           expect(parsed.dismissedFindings).toEqual([])
           resolve()
         } catch (e) {

@@ -58,15 +58,36 @@ describe('runAppPath', () => {
   // 015, 2026-10-05 – B6's gap closed. The ledger now reads 40, as the app path
   // does, because 015's factory applies the app's per-type cut, DE mode and
   // referee policy. B6's placed count here did not move.
+  //
+  // 024 group A, 2026-10-06 – B4's placed count moved 18 → 19 and B6's 40 → 50,
+  // re-measured on this branch, with the parity file's pins and the ledger's
+  // counts in the same commit. The 2026-27 Operations Manual planning times
+  // (pool of 7, DEs derived per round from bout time, team events single stage
+  // without video) shorten most events, so more fit their days
+  // (specs/024-ops-manual-conformance/plan.md §Group A).
+  //
+  // 024 group B, 2026-10-06 – B8's placed count moved 53 → 52, with the parity
+  // file's pins and the ledger's count in the same commit: the 9:00 start loses
+  // JR-W-EPEE-IND on both paths, because the day's hard window shrinks from 840
+  // to 780 minutes (Ops Manual 2026-27 p.17, METHODOLOGY.md §Inputs and
+  // §Same-Day Completion; specs/024-ops-manual-conformance/plan.md §Group B).
+  //
+  // 024 group D, 2026-10-06 – B4's placed count moved 19 → 21, B6's 50 → 45 and
+  // B8's 52 → 53, with the parity file's pins and the ledger's counts in the
+  // same commit. The Ops Manual p.20 same-day rules (Group 1 by tournament
+  // type, the Junior–Cadet rest day removed, Group 2, Group 3, first and last
+  // days planned shorter) re-colour the days: B8 places JR-W-EPEE-IND again
+  // (METHODOLOGY.md §Overlapping-Population Separation and §First and Last Day
+  // Capacity; specs/024-ops-manual-conformance/plan.md §Group D).
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
-    B4: { selected: 30, placed: 18 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it – the ledger reads 18 too since 015 (see above)
+    B4: { selected: 30, placed: 21 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it; 18 until 024 group A; 19 until 024 group D – the ledger reads the same since 015 (see above)
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
-    B6: { selected: 54, placed: 40 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty
+    B6: { selected: 54, placed: 45 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A; 50 until 024 group D (seven out, two in)
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
-    B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4
+    B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4; 53 until 024 group B (JR-W-EPEE-IND lost to the 9:00 start); 52 until 024 group D placed it again
   }
 
   // specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)
@@ -107,14 +128,41 @@ describe('runAppPath', () => {
     // membership. Day 3 absorbs the sabre load the reshuffle displaces, which is
     // why both of its numbers rise the most.
     //
+    // 024 group A, 2026-10-06 – day 1's peak moved 186 → 210 (2025 → 1980) and
+    // day 3's peak time 4905 → 4860, its count held. The 2026-27 Operations
+    // Manual planning times re-time every pool and DE, so the overlapping
+    // windows `computePostScheduleRefDemand` sweeps move, and with them the
+    // minute each peak falls on. Planning measured the 210 independently
+    // (specs/024-ops-manual-conformance/plan.md §Group A).
+    //
+    // 024 group B, 2026-10-06 – every peak time moved 60 minutes later and
+    // every count held. The day now starts at 9:00 (540), not 8:00 (Ops Manual
+    // 2026-27 p.17, METHODOLOGY.md §Inputs), and B1 places the same 24 events
+    // on the same days, so each day's schedule shifts whole: days 0 and 2 peak
+    // at their day start, d × 1440 + 540 (540, 3420), day 1 peaks 60 minutes
+    // after its 1980 start (1980 → 2040), and day 3's peak moves 4860 → 4920.
+    //
+    // 024 group D, 2026-10-06 – day 1 held, and six values (five counts and one
+    // peak time) on days 0, 2 and 3 moved: day 0's sabre peak 64 → 62, day 2
+    // 160/50 at 3420 → 134/56 at 3480, day 3 202/76 → 186/72 at the same 4920.
+    // Group D re-colours B1's days (planning counts 13 of its 24 events
+    // changed, most by the Group 3 cross-weapon preference, Ops Manual p.20 –
+    // Group 3, METHODOLOGY.md §Other Soft Preferences), so each day holds a
+    // different set of events and a different concurrent ref demand. Day 2 no
+    // longer peaks at its day start: its peak is 60 minutes in, at
+    // JR-W-EPEE-IND's 10:00 pool start (3420 + 60). At 3480 the refs are
+    // 10 + 6 + 58 + 52 + 8 (VET-M-SABRE-TEAM's DE) = 134, of which only the 8
+    // are sabre, and the sabre peak of 56 falls at another minute. The store's selectDerivedRefRequirements independently
+    // reproduces day 0 (154/62) and day 3 (186/72).
+    //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.
     const result = runAppPath('B1')
     expect(result.refRequirementsByDay).toEqual([
-      { day: 0, peak_total_refs: 154, peak_saber_refs: 64, peak_time: 480 },
-      { day: 1, peak_total_refs: 186, peak_saber_refs: 64, peak_time: 2025 },
-      { day: 2, peak_total_refs: 160, peak_saber_refs: 50, peak_time: 3360 },
-      { day: 3, peak_total_refs: 202, peak_saber_refs: 76, peak_time: 4905 },
+      { day: 0, peak_total_refs: 154, peak_saber_refs: 62, peak_time: 540 },
+      { day: 1, peak_total_refs: 210, peak_saber_refs: 64, peak_time: 2040 },
+      { day: 2, peak_total_refs: 134, peak_saber_refs: 56, peak_time: 3480 },
+      { day: 3, peak_total_refs: 186, peak_saber_refs: 72, peak_time: 4920 },
     ])
   })
 

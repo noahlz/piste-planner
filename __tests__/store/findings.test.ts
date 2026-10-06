@@ -6,11 +6,12 @@ import { runScheduleAll } from '../../src/store/runActions.ts'
 import { makePlacement } from '../helpers/factories.ts'
 import { assignStripLanes } from '../../src/layout/lanes.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
-import { DeMode } from '../../src/engine/types.ts'
+import { DeMode, Phase } from '../../src/engine/types.ts'
 import { selectDerivedSchedule, selectDerivedFindings } from '../../src/store/derived.ts'
 import * as derivedModule from '../../src/store/derived.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { competitionLabel } from '../../src/lib/competitionLabels.ts'
+import { formatClock } from '../../src/lib/time.ts'
 import { phaseDisplay } from '../../src/lib/placementLabels.ts'
 
 /**
@@ -92,7 +93,11 @@ function setupB5(): void {
 
 /**
  * Copied verbatim from `__tests__/store/daySummaries.test.ts` (the proven
- * overflow fixture: JR-M-EPEE-IND's DE phase overflows at 4 strips, day 0).
+ * overflow fixture: one DE phase overflows at 4 strips, day 0). Since 024 group
+ * A (2026-10-06) it is JR-M-FOIL-IND's, not JR-M-EPEE-IND's: a pool of 8 takes
+ * 160 minutes in both weapons (METHODOLOGY.md §Pool Duration Estimation), so
+ * JR-M-EPEE-IND's DE runs 670-710 on 3 strips and JR-M-FOIL-IND's, starting
+ * at 690 with 1 strip free, overflows. Day 0 finishes at 730.
  * See that file for why this fixture's third event is needed to make the
  * lane packer's own interval-overlap logic exercise itself, rather than
  * `twoJuniorEpeeOnSeparateDays`'s one-event-per-day layout.
@@ -123,6 +128,8 @@ function threeEventsOverlappingOnDayZero(): void {
  * function of weapon, category and fencer count, not gender, so both events'
  * phases land on identical minutes: measured (throwaway script, not
  * predicted) at pools 480-704 (1 strip each) and DE 735-769 (4 strips each).
+ * Since 024 group A (2026-10-06): pools 480-640 and DE 670-710, derived from
+ * the pool of 8's 160 minutes and one 20-minute wave each for R8 and the semis.
  * 8 strips covers the DE phase's simultaneous demand (4 + 4) without either
  * event overflowing.
  */
@@ -315,7 +322,7 @@ describe('selectFindings — Unplaced rows from lane overflow (contract §1.3)',
     const overflow = blocks.filter((b) => b.overflow)
     expect(overflow).toHaveLength(1)
     const block = overflow[0]
-    expect(block.competitionId).toBe('JR-M-EPEE-IND')
+    expect(block.competitionId).toBe('JR-M-FOIL-IND')
 
     const rows = selectFindings(state)
     const unplacedRows = rows.filter((r) => r.severity === 'Unplaced')
@@ -323,7 +330,7 @@ describe('selectFindings — Unplaced rows from lane overflow (contract §1.3)',
 
     const row = rows.find((r) => r.id === `unplaced:${block.competitionId}:${block.phase}`)
     expect(row).toBeDefined()
-    expect(row?.id).toBe('unplaced:JR-M-EPEE-IND:DE')
+    expect(row?.id).toBe('unplaced:JR-M-FOIL-IND:DE')
     expect(row?.target).toBe(block.competitionId)
     expect(row?.day).toBe(block.day)
     expect(row?.where).toBe(`Day ${block.day + 1} · ${phaseDisplay(block.phase)}`)
@@ -357,7 +364,9 @@ describe('selectFindings — stranded event Unplaced row (contract §1.3, FR-060
 describe('selectFindings — late finish rows, margin and boundary (contract §1.4)', () => {
   it('warns when the day finishes inside the window before close', () => {
     threeEventsOverlappingOnDayZero()
-    useStore.getState().updateDayConfig(0, { day_end_time: 810 })
+    // Day 0 finishes at 730, so a 760 close puts the finish 30 minutes inside
+    // the 45-minute window, as 810 did against 780 before 024.
+    useStore.getState().updateDayConfig(0, { day_end_time: 760 })
     const state = useStore.getState()
 
     const schedule = selectDerivedSchedule(state)
@@ -379,6 +388,26 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
     expect(comp).toBeDefined()
     expect(row?.where).toBe(`Day 1 · ${competitionLabel(comp!)}`)
     expect(row?.message).toContain(`${close - finish} minutes before`)
+  })
+
+  it('names the video stage when the day ends on one', () => {
+    threeEventsOverlappingOnDayZero()
+    useStore.getState().setDeModeOverride(DeMode.STAGED)
+    useStore.getState().setVideoStrips(4)
+    const preState = useStore.getState()
+    const preBlocks = assignStripLanes(selectDerivedSchedule(preState).events, preState.strips_total)
+    const day0Blocks = preBlocks.filter((b) => b.day === 0)
+    const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
+    const last = day0Blocks.filter((b) => b.endMinutes === finish)
+    expect(
+      last.every((b) => b.phase === Phase.DE_ROUND_OF_16),
+      'expected the day to end on a video-stage block',
+    ).toBe(true)
+
+    useStore.getState().updateDayConfig(0, { day_end_time: finish + 20 })
+
+    const row = selectFindings(useStore.getState()).find((r) => r.id === 'late-finish:day:0')
+    expect(row?.message).toContain(`Video stage finishes at ${formatClock(finish)}, 20 minutes before`)
   })
 
   it('raises no row at the boundary — finish exactly window-minutes before close is not late (strict >)', () => {
@@ -463,6 +492,82 @@ describe('selectFindings — late finish overrun via a hand move, Blocking count
     const blockingAfter = rows.filter((r) => r.severity === 'Blocking').length
     expect(blockingAfter).toBeGreaterThanOrEqual(1)
     expect(blockingAfter).toBe(blockingBefore)
+  })
+})
+
+/**
+ * Two Junior épée events of 8 on the one day at the store's default hours,
+ * 9:00 to the 19:00 target, each placed so its last block ends at the minute
+ * given. Measured (throwaway probe, 2026-10-06): each runs 230 minutes from
+ * its start to its last block end – a pool of 8 takes 160 minutes (§Pool
+ * Duration Estimation), the 30-minute admin gap, then R8 and the semis in one
+ * 20-minute wave each on 4 of the 8 strips, so neither overflows.
+ */
+const EPEE_OF_8_SPAN_MINS = 230
+
+function twoEpeeEventsFinishingAt(mFinish: number, wFinish: number): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(1)
+  s.setStrips(8)
+  s.setVideoStrips(0)
+  s.selectCompetitions(['JR-M-EPEE-IND', 'JR-W-EPEE-IND'])
+  for (const id of ['JR-M-EPEE-IND', 'JR-W-EPEE-IND']) {
+    s.updateCompetition(id, { fencer_count: 8 })
+  }
+  s.setDeModeOverride(DeMode.SINGLE_STAGE)
+  s.setPlacementsFromAuto({
+    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: mFinish - EPEE_OF_8_SPAN_MINS, strip_count: 1 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: wFinish - EPEE_OF_8_SPAN_MINS, strip_count: 1 }),
+  })
+
+  // Premise: the default day ends at its 19:00 target, and the day's last
+  // block ends where the fixture put it.
+  const state = useStore.getState()
+  expect(state.dayConfigs[0].day_end_time).toBe(1140)
+  const blocks = assignStripLanes(selectDerivedSchedule(state).events, state.strips_total)
+  expect(blocks.some((b) => b.overflow)).toBe(false)
+  expect(Math.max(...blocks.map((b) => b.endMinutes))).toBe(Math.max(mFinish, wFinish))
+}
+
+/**
+ * 024 D7, the app's late-day row: the store's late-finish row keeps comparing
+ * the day's last block end against `day_end_time`, which is now the 19:00 soft
+ * target, not the 22:00 hard end (METHODOLOGY.md §Same-Day Completion). It
+ * keeps the 45-minute lead, so it warns of no slack from 18:15 and of a late
+ * finish after 19:00, one row per late day, and it calls 19:00 the day's
+ * target rather than its close, since work may run on to 22:00.
+ */
+describe('selectFindings — late finish against the 19:00 target (024 D7)', () => {
+  function lateFinishRows(): Finding[] {
+    return selectFindings(useStore.getState()).filter((r) => r.id.startsWith('late-finish:'))
+  }
+
+  it('raises one row for a day ending at 20:00, 60 minutes past the 19:00 target', () => {
+    twoEpeeEventsFinishingAt(1200, 1170)
+
+    const rows = lateFinishRows()
+    expect(rows.map((r) => r.id)).toEqual(['late-finish:day:0'])
+    expect(rows[0].target).toBe('JR-M-EPEE-IND')
+    expect(rows[0].message).toContain(`finishes at ${formatClock(1200)}, 60 minutes past the day's target of ${formatClock(1140)}.`)
+  })
+
+  it('raises the no-slack row for a day ending at 18:30, inside the 45-minute lead', () => {
+    twoEpeeEventsFinishingAt(1110, 1080)
+
+    const rows = lateFinishRows()
+    expect(rows.map((r) => r.id)).toEqual(['late-finish:day:0'])
+    expect(rows[0].message).toContain(
+      `finishes at ${formatClock(1110)}, 30 minutes before the day's target of ${formatClock(1140)}. No slack for a delayed round.`,
+    )
+  })
+
+  // guard: 18:00 is 60 minutes before the target, outside the lead – no row today either.
+  it('raises no row for a day ending at 18:00', () => {
+    twoEpeeEventsFinishingAt(1080, 1050)
+
+    expect(lateFinishRows()).toEqual([])
   })
 })
 

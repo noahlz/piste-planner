@@ -7,6 +7,9 @@ import {
   BottleneckSeverity, RuleKind, ValidationMode,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
+import { deBlocksFor } from '../../src/engine/de.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { useStore, type StoreState } from '../../src/store/store.ts'
 
 /**
  * `findingIdentity` — the identity helper T021 adds to validation.ts
@@ -31,8 +34,8 @@ function findingIdentity(finding: ValidationError): string {
 // data-model.md "Finding")
 //
 // STRUCTURAL — leaves nothing to draw; ERROR in both modes. D3-explicit:
-//   fencer_count bounds, days_available outside 1–14, strips_total below 1,
-//   de_duration_table missing entries (individual + team paths).
+//   fencer_count bounds, days_available outside 1–14, strips_total below 1.
+//   (The de_duration_table missing-entry rule went with the table in 024.)
 // Self-classified (not named in D3's lists, judged against the same
 // "leaves nothing to draw" criterion):
 //   - duplicate competition.id — corrupts the schedule's identity key
@@ -43,6 +46,9 @@ function findingIdentity(finding: ValidationError): string {
 //   - de_video_policy: STAGED + REQUIRED with insufficient video strips for
 //     R16 — a physical resource impossibility for that DE stage (already an
 //     ERROR today via err(), unlike the two WARN-today video/strip checks).
+//   - team-staged-or-video (de_mode): a TEAM event that is STAGED or REQUIRED
+//     (024 D4). The app and the ledger never build one, so it can only be a
+//     hand-built config carrying a second DE model for one event.
 //
 // POLICY — advisable, not physically blocking; ERROR(binding) / WARN(advisory).
 // D3-explicit: same_population, team-requires-individual (event_type),
@@ -73,7 +79,7 @@ function findingIdentity(finding: ValidationError): string {
 //     automatically regardless; this is a heads-up, not a gate.
 //   - video-dead-config (de_video_policy: REQUIRED + SINGLE_STAGE) — a soft
 //     "this setting has no effect" hint, blocks nothing.
-//   - r16-over-cap (de_round_of_16_strips over the DE strip cap) — soft
+//   - r16-over-cap (the video ask over the DE strip cap) — soft
 //     resource-tuning guidance; the code's own comment already calls these
 //     "soft warnings... the user may have intentionally overridden." Fires 0
 //     times across B1–B8 (no drift risk of its own) but moved for
@@ -88,6 +94,7 @@ function findingIdentity(finding: ValidationError): string {
 // 015, 2026-10-05 – with the converged factory (every event built by the app's
 // per-type rules) the regional-cut override rule fires 0x on B1–B8, and the
 // video dead-config rule fires on B4 (6x), B5 (12x) and B6 (12x).
+// 024 group C, 2026-10-06 – the video dead-config rule no longer fires on B4, B5 or B6: regional individual events are BEST_EFFORT (D9).
 //
 // OUT OF SCOPE for this catalogue: `validateSameDayCompletion` is exported
 // and directly tested, but has zero callers anywhere in src/ (confirmed by
@@ -108,6 +115,28 @@ function validateBoth(config: TournamentConfig, competitions: Competition[]) {
   return {
     binding: validateConfig(config, competitions, ValidationMode.BINDING),
     advisory: validateConfig(config, competitions, ValidationMode.ADVISORY),
+  }
+}
+
+/** 24 fencers fill a 32 bracket, which asks 4 video strips. */
+const BRACKET_32_FENCERS = 24
+
+/**
+ * The competitions the store bridge builds for these ids at a tournament type
+ * under a DE-mode override, so a test reads the policy the app really derives
+ * (024 plan D9) and not a hand-built copy of it.
+ */
+function buildTypeCompetitions(type: TournamentType, deModeOverride: DeMode, ids: string[]): Competition[] {
+  const initial = useStore.getState()
+  useStore.setState({
+    tournament_type: type,
+    de_mode_override: deModeOverride,
+    selectedCompetitions: Object.fromEntries(ids.map(id => [id, { fencer_count: BRACKET_32_FENCERS, flighted: false }])),
+  } as Partial<StoreState>)
+  try {
+    return buildTournamentConfig(useStore.getState()).competitions
+  } finally {
+    useStore.setState(initial)
   }
 }
 
@@ -309,52 +338,146 @@ describe('validateConfig — cut produces < 2 promoted (structural)', () => {
   })
 })
 
-describe('validateConfig — DE duration table (structural)', () => {
-  it('returns ERROR in both modes when bracket size has no entry in de_duration_table', () => {
-    // bracket size 2 = 2 fencers, DISABLED cut → bracket=2; remove 2 from the table
-    const tableWithMissing = {
+describe('validateConfig — no DE duration table rule (024: DEs derive from bout time)', () => {
+  it('raises no de-duration-table finding, even for a config still carrying a table that lacks the bracket', () => {
+    // METHODOLOGY.md §DE Duration derives every DE from its rounds and bout
+    // time, so no bracket can be missing an entry. A config carrying the old
+    // key – here with no bracket of 2 for foil – is read past, not checked.
+    const legacyTable = {
       FOIL: { 4: 30, 8: 45, 16: 60, 32: 90, 64: 120, 128: 180, 256: 240 },
-      EPEE: { 2: 15, 4: 30, 8: 45, 16: 60, 32: 90, 64: 120, 128: 180, 256: 240 },
-      SABRE: { 2: 15, 4: 20, 8: 30, 16: 45, 32: 60, 64: 90, 128: 120, 256: 120 },
-    } as unknown as TournamentConfig['de_duration_table']
-    const config = makeConfig({ de_duration_table: tableWithMissing })
-    // fencer_count=2, cut=DISABLED → bracket size = nextPowerOf2(2) = 2; missing from FOIL table
-    const comp = makeCompetition({ fencer_count: 2, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED })
-    const { binding, advisory } = validateBoth(config, [comp])
-    expectStructural('de_duration_table', binding, advisory)
-  })
-
-  it('does not error when all bracket sizes are in table', () => {
-    const comp = makeCompetition({ fencer_count: 24, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED })
-    const { binding, advisory } = validateBoth(makeConfig(), [comp])
-    expect(binding.filter(e => e.field === 'de_duration_table')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'de_duration_table')).toHaveLength(0)
+      EPEE: {},
+      SABRE: {},
+    }
+    const config = { ...makeConfig(), de_duration_table: legacyTable } as TournamentConfig
+    const individual = makeCompetition({ id: 'indiv', fencer_count: 2, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED })
+    const team = makeCompetition({ id: 'team', fencer_count: 2, weapon: Weapon.FOIL, event_type: EventType.TEAM })
+    const { binding, advisory } = validateBoth(config, [individual, team])
+    expect(binding.filter(e => e.rule === 'de-duration-table-missing-entry')).toEqual([])
+    expect(advisory.filter(e => e.rule === 'de-duration-table-missing-entry')).toEqual([])
   })
 })
 
 describe('validateConfig — video R16 strip shortfall (structural: resource impossibility)', () => {
-  it('returns ERROR in both modes for STAGED + REQUIRED + video_strips < de_round_of_16_strips', () => {
-    // 2 video strips but de_round_of_16_strips = 4 → not enough video strips for R16
+  it('returns ERROR in both modes for STAGED + REQUIRED + video_strips < the video ask', () => {
+    // 24 fencers → bracket 32, so the video block asks min(4, 32/2) = 4 video
+    // strips (METHODOLOGY.md §DE Modes, §DE Phase Breakdown). 2 are not enough.
     const config = makeConfig({ video_strips_total: 2 })
     const comp = makeCompetition({
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 4,
     })
     const { binding, advisory } = validateBoth(config, [comp])
     expectStructural('de_video_policy', binding, advisory)
   })
 
   it('does not error when STAGED + REQUIRED + enough video strips', () => {
+    // Bracket 32 asks 4 video strips, and 4 are available.
     const config = makeConfig({ video_strips_total: 4 })
     const comp = makeCompetition({
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
-      de_round_of_16_strips: 4,
     })
     const { binding, advisory } = validateBoth(config, [comp])
     expect(binding.filter(e => e.field === 'de_video_policy' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
     expect(advisory.filter(e => e.field === 'de_video_policy' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
+  })
+
+  it('a bracket of 2 asks no video strips, so 0 available is no shortfall', () => {
+    // METHODOLOGY.md §DE Duration 'No counted round': a bracket of 2 asks no
+    // strips, general or video (024 plan D5).
+    const config = makeConfig({ video_strips_total: 0 })
+    const comp = makeCompetition({
+      fencer_count: 2,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const { binding, advisory } = validateBoth(config, [comp])
+    expect(binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+    expect(advisory.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+  })
+
+  it('a bracket of 4 asks 2 video strips: 1 is a shortfall, 2 is not', () => {
+    // Guard (024 plan Task C, from A): a small bracket asks fewer than 4 strips, never more than it can seat.
+    // METHODOLOGY.md §DE Modes: the video block asks min(4, bracket/2) strips.
+    const comp = makeCompetition({
+      fencer_count: 4,
+      cut_mode: CutMode.DISABLED,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const short = validateBoth(makeConfig({ video_strips_total: 1 }), [comp])
+    const enough = validateBoth(makeConfig({ video_strips_total: 2 }), [comp])
+    expect(short.binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toHaveLength(1)
+    expect(enough.binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+    expect(enough.advisory.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+  })
+
+  it('the message names the video stage, not R16', () => {
+    // 024 plan D9 and rulings D13: the stage is the video stage whatever its
+    // first round, so the message does not name R16.
+    const comp = makeCompetition({
+      id: 'comp-video-short',
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const { binding } = validateBoth(makeConfig({ video_strips_total: 2 }), [comp])
+    const finding = binding.find(e => e.rule === 'video-r16-strip-shortfall')!
+    expect(finding.message).toContain('video stage')
+    expect(finding.message).not.toContain('R16')
+  })
+
+  it('a regional event under a Staged override draws no shortfall error', () => {
+    // The policy follows the type (METHODOLOGY.md §Tournament-Type Policies;
+    // 024 plan D9): a regional event is BEST_EFFORT even when the override
+    // makes it Staged, so zero video strips is no impossibility.
+    const config = makeConfig({ video_strips_total: 0 })
+    const competitions = buildTypeCompetitions(TournamentType.ROC, DeMode.STAGED, [
+      'D1-M-FOIL-IND', 'JR-M-FOIL-IND', 'CDT-M-FOIL-IND',
+    ])
+    expect(competitions.map(c => c.de_mode), 'override reached every event')
+      .toEqual(competitions.map(() => DeMode.STAGED))
+    const { binding, advisory } = validateBoth(config, competitions)
+    expect(binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+    expect(advisory.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+  })
+})
+
+// 024 D4, the owner's team ruling (METHODOLOGY.md §DE Modes, §Video Replay
+// Policy): a team event is Single Stage and BEST_EFFORT at every type. The
+// store bridge and the ledger factory never build anything else, so a team
+// event carrying STAGED or REQUIRED is a hand-built second model of one event.
+describe('validateConfig — team event staged or video-required (structural: team-staged-or-video, 024 D4)', () => {
+  const RULE = 'team-staged-or-video'
+
+  function teamFindings(team: Partial<Competition>) {
+    const comp = makeCompetition({ id: 'team', event_type: EventType.TEAM, ...team })
+    const { binding, advisory } = validateBoth(makeConfig(), [comp])
+    return { binding: binding.filter(e => e.rule === RULE), advisory: advisory.filter(e => e.rule === RULE) }
+  }
+
+  it.each([
+    ['STAGED', { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.BEST_EFFORT }],
+    ['REQUIRED', { de_mode: DeMode.SINGLE_STAGE, de_video_policy: VideoPolicy.REQUIRED }],
+    ['STAGED and REQUIRED', { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }],
+  ] as const)('returns one ERROR in both modes for a team event that is %s', (_label, team) => {
+    const { binding, advisory } = teamFindings(team)
+    expect(binding).toHaveLength(1)
+    expect(advisory).toHaveLength(1)
+    expectStructural(binding[0].field, binding, advisory)
+    expect(binding[0].subjects).toEqual(['team'])
+  })
+
+  it('(guard) raises nothing for a Single Stage, BEST_EFFORT team event', () => {
+    const { binding, advisory } = teamFindings({ de_mode: DeMode.SINGLE_STAGE, de_video_policy: VideoPolicy.BEST_EFFORT })
+    expect(binding).toEqual([])
+    expect(advisory).toEqual([])
+  })
+
+  it('(guard) raises nothing for a STAGED, REQUIRED individual event', () => {
+    const comp = makeCompetition({ id: 'indiv', de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED })
+    const { binding, advisory } = validateBoth(makeConfig(), [comp])
+    expect(binding.filter(e => e.rule === RULE)).toEqual([])
+    expect(advisory.filter(e => e.rule === RULE)).toEqual([])
   })
 })
 
@@ -483,6 +606,24 @@ describe('validateConfig — video dead-config warning (notice: video-dead-confi
     const { binding, advisory } = validateBoth(makeConfig(), [comp])
     expectNoticePair('de_video_policy', binding, advisory, 'no effect')
   })
+
+  it('a NAC under a Single Stage override keeps every individual event REQUIRED, with one notice each and none for teams', () => {
+    // The policy follows the type, never the DE-mode setting (METHODOLOGY.md
+    // §Tournament-Type Policies, §Video Policy Interaction; 024 plan D9).
+    const individualIds = ['Y10-M-FOIL-IND', 'CDT-M-FOIL-IND', 'VET-M-FOIL-IND-V40', 'D1-M-FOIL-IND']
+    const teamIds = ['CDT-M-FOIL-TEAM', 'D1-M-FOIL-TEAM']
+    const competitions = buildTypeCompetitions(TournamentType.NAC, DeMode.SINGLE_STAGE, [...individualIds, ...teamIds])
+    for (const comp of competitions) {
+      const expected = comp.event_type === EventType.TEAM ? VideoPolicy.BEST_EFFORT : VideoPolicy.REQUIRED
+      expect(comp.de_video_policy, comp.id).toBe(expected)
+    }
+
+    const { binding, advisory } = validateBoth(makeConfig({ video_strips_total: 8 }), competitions)
+    for (const findings of [binding, advisory]) {
+      const dead = findings.filter(e => e.rule === 'video-dead-config')
+      expect(dead.map(e => e.subjects).sort()).toEqual(individualIds.map(id => [id]).sort())
+    }
+  })
 })
 
 describe('validateConfig — individual+team same-day duration (rule deleted, FR-001)', () => {
@@ -539,33 +680,52 @@ describe('validateConfig — resource precondition: strips (policy: strip minimu
 })
 
 describe('validateConfig — DE strip cap (notice: r16-over-cap)', () => {
-  it('WARN in both modes when de_round_of_16_strips exceeds DE strip cap', () => {
-    // strips_total=24, max_de_strip_pct=0.33 → cap=floor(24*0.33)=7. R16 requests 10.
-    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.33 })
-    const comp = makeCompetition({ id: 'comp-r16-over', de_round_of_16_strips: 10 })
+  // The video block asks min(4, bracket/2) strips (METHODOLOGY.md §DE Modes,
+  // §DE Phase Breakdown), so at 24 fencers (bracket 32) it asks 4, and only a
+  // DE cap below 4 can be exceeded.
+  it('WARN in both modes when the video ask exceeds DE strip cap', () => {
+    // The field names the per-event lever that clears the notice.
+    // strips_total=24, max_de_strip_pct=0.1 → cap=floor(24*0.1)=2. R16 asks 4.
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.1 })
+    const comp = makeCompetition({ id: 'comp-r16-over' })
     const { binding, advisory } = validateBoth(config, [comp])
-    expectNoticePair('de_round_of_16_strips', binding, advisory)
-    const bFinding = binding.find(e => e.field === 'de_round_of_16_strips')!
+    expectNoticePair('max_de_strip_pct_override', binding, advisory)
+    const bFinding = binding.find(e => e.field === 'max_de_strip_pct_override')!
     expect(bFinding.message).toContain('comp-r16-over')
-    expect(bFinding.message).toContain('R16')
+    expect(bFinding.message).toContain('video stage')
+    expect(bFinding.message).not.toContain('R16')
   })
 
-  it('does not error when de_round_of_16_strips is within DE strip cap', () => {
-    // strips_total=24, max_de_strip_pct=0.80 → cap=19. R16 requests 4 → ok.
+  it('does not error when the video ask is within DE strip cap', () => {
+    // strips_total=24, max_de_strip_pct=0.80 → cap=19. R16 asks 4 → ok.
     const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.80 })
-    const comp = makeCompetition({ id: 'comp-r16-ok', de_round_of_16_strips: 4 })
+    const comp = makeCompetition({ id: 'comp-r16-ok' })
     const { binding, advisory } = validateBoth(config, [comp])
-    expect(binding.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
+    expect(binding.filter(e => e.field === 'max_de_strip_pct_override')).toHaveLength(0)
+    expect(advisory.filter(e => e.field === 'max_de_strip_pct_override')).toHaveLength(0)
   })
 
   it('per-competition max_de_strip_pct_override takes precedence over global pct', () => {
-    // Global pct=0.33 (cap=7), but override=0.80 (cap=19). R16 requests 10 → fits under 19.
-    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.33 })
-    const comp = makeCompetition({ id: 'comp-de-override', de_round_of_16_strips: 10, max_de_strip_pct_override: 0.80 })
+    // Global pct=0.1 (cap=2), but override=0.80 (cap=19). R16 asks 4 → fits under 19.
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.1 })
+    const comp = makeCompetition({ id: 'comp-de-override', max_de_strip_pct_override: 0.80 })
     const { binding, advisory } = validateBoth(config, [comp])
-    expect(binding.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
+    expect(binding.filter(e => e.field === 'max_de_strip_pct_override')).toHaveLength(0)
+    expect(advisory.filter(e => e.field === 'max_de_strip_pct_override')).toHaveLength(0)
+  })
+
+  it('a bracket of 2 asks no strips, so a DE cap of 0 is not exceeded', () => {
+    // max_de_strip_pct=0 → cap=0. A bracket of 2 has no counted round and asks
+    // nothing (METHODOLOGY.md §DE Duration 'No counted round'; 024 plan D5).
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0 })
+    const comp = makeCompetition({
+      fencer_count: 2,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const { binding, advisory } = validateBoth(config, [comp])
+    expect(binding.filter(e => e.rule === 'r16-over-cap')).toEqual([])
+    expect(advisory.filter(e => e.rule === 'r16-over-cap')).toEqual([])
   })
 })
 
@@ -646,8 +806,17 @@ describe('validateConfig — feasibility demotes to notice in every mode (011 FR
     const a = advisory.find(e => e.field === 'feasibility')!
     expect(b.rule).toBe('feasibility-strip-hours')
     expect(a.rule).toBe('feasibility-strip-hours')
+    // 024, 2026-10-06 – re-derived from METHODOLOGY.md §Strip-Hour Capacity
+    // under the 2026-27 planning times (Ops Manual p.17). Each 200-fencer foil
+    // event: 29 pools (26 of 7 at 120 min, 3 of 6 at 86), weighted round(3378 /
+    // 29) = 116 min, so 29 × 116 / 60 = 56.07 pool strip-hours. Its single
+    // stage DE: 200 promoted, bracket 256, 72 + 64 + 32 + 16 + 8 + 4 + 2 = 198
+    // bouts × 20 min / 60 = 66 (§DE Capacity Estimation). 20 × 122.07 = 2441,
+    // against 2 days × 2 strips × the 10-hour planning day (§Strip-Hour
+    // Capacity, Ops Manual p.17) = 40: shortfall 2401 (6003.3% → 6003), and
+    // ceil(2401.3 / 20) = 121 more days or strips.
     expect(b.message).toBe(
-      'RESOURCE_INSUFFICIENT: 2022 strip-hours needed over 20 events; 56 available (2d × 2s × 14h). Shortfall 1966 (~3511%). Add 71 more day(s) OR 71 more strip(s).',
+      'RESOURCE_INSUFFICIENT: 2441 general strip-hours needed over 20 events; 40 available (2d × 2s × 10h). Shortfall 2401 (~6003%). Add 121 more day(s) OR 121 more strip(s).',
     )
   })
 })
@@ -661,7 +830,6 @@ describe('validateConfig — feasibility_video demotes to notice in every mode (
         fencer_count: 200,
         de_mode: DeMode.STAGED,
         de_video_policy: VideoPolicy.REQUIRED,
-        de_round_of_16_strips: 4,
       }),
     )
     const { binding, advisory } = validateBoth(config, comps)
@@ -673,8 +841,15 @@ describe('validateConfig — feasibility_video demotes to notice in every mode (
     const a = advisory.find(e => e.field === 'feasibility_video')!
     expect(b.rule).toBe('feasibility-video-strip-hours')
     expect(a.rule).toBe('feasibility-video-strip-hours')
+    // 024, 2026-10-06 – re-derived from METHODOLOGY.md §DE Capacity Estimation
+    // → Individual Events: a staged Div 1 event's video stage starts at the
+    // round of 16 (Ops Manual 2026-27 p.19), so only R16 + QF + SF = 8 + 4 + 2
+    // = 14 bouts bill video, × 20 min / 60 = 4.67 h. 40 × 4.67 = 187 against
+    // 4 × 1 × 10 = 40 (the 10-hour planning day, §Strip-Hour Capacity):
+    // shortfall 147, ceil(146.7 / 10) = 15 more days, ceil(146.7 / 40) = 4
+    // more video strips.
     expect(b.message).toBe(
-      'RESOURCE_INSUFFICIENT (video): 149 video strip-hours needed; 56 available (4d × 1vs × 14h). Shortfall 93. 7 more day(s) OR 2 more video strip(s).',
+      'RESOURCE_INSUFFICIENT (video): 187 video strip-hours needed; 40 available (4d × 1vs × 10h). Shortfall 147. 15 more day(s) OR 4 more video strip(s).',
     )
   })
 })
@@ -702,7 +877,7 @@ describe('validateConfig — rule catalogue is equal across modes', () => {
     // A config firing several structural, policy, and notice rules at once
     // (days_available=1 is a notice — outside 2–4, inside structural 1–14;
     // strips_total=0 also drops the DE strip cap to 0, so the default
-    // de_round_of_16_strips=4 on every competition fires the r16-over-cap
+    // the video block's ask of 4 strips on every competition fires the r16-over-cap
     // notice too).
     const config = makeConfig({ days_available: 1, strips_total: 0, strips: [] })
     const { individual, team } = makeIndividualTeamPair({ team: { cut_mode: CutMode.PERCENTAGE, cut_value: 50 } })
@@ -859,27 +1034,67 @@ describe('finding identity — rule and subjects per kind (US3, data-model.md §
 
 // ──────────────────────────────────────────────
 // validateSameDayCompletion — exported but not wired into validateConfig's
-// pipeline (no callers in src/); out of scope for the kind/mode split.
-// Signature and behavior unchanged by this feature.
+// pipeline (no callers in src/, 024 D14); out of scope for the kind/mode split.
+//
+// 024 D7: Single-Day Fit measures the worst case (pool round + admin gap + full
+// DE) against the day's hard window, start to hard end – 9:00 to 22:00, 780
+// minutes, at default hours – or the widest day's when the organizer edits
+// hours. Running past the 19:00 soft target is a warning elsewhere, not a
+// Single-Day Fit failure (METHODOLOGY.md §Single-Day Fit, §Same-Day Completion).
 // ──────────────────────────────────────────────
 
-describe('validateSameDayCompletion', () => {
-  it('returns null when competition fits comfortably within DAY_LENGTH_MINS', () => {
-    const comp = makeCompetition({ fencer_count: 24, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED })
-    const result = validateSameDayCompletion(comp, makeConfig())
-    expect(result).toBeNull()
+describe('validateSameDayCompletion — the hard window (024 D7)', () => {
+  const ID = 'X-M-FOIL-IND'
+
+  /**
+   * A competition whose worst case is exactly `total` minutes. Seven fencers
+   * make one pool of 7, which takes the table's own entry (§Pool Duration
+   * Estimation), so the foil entry is set to `total` less the admin gap and
+   * the DE's full-ask minutes.
+   */
+  function worstCaseOf(total: number, overrides: Partial<TournamentConfig> = {}) {
+    const base = makeConfig(overrides)
+    const competition = makeCompetition({
+      id: ID, fencer_count: 7, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED, de_mode: DeMode.SINGLE_STAGE,
+    })
+    const de = deBlocksFor(competition, base).baselineMinutes
+    const config: TournamentConfig = {
+      ...base,
+      pool_round_duration_table: { ...base.pool_round_duration_table, [Weapon.FOIL]: total - base.ADMIN_GAP_MINS - de },
+    }
+    return validateSameDayCompletion(competition, config)
+  }
+
+  // Day 2 opens at 9:00 and ends at 23:00, which is also its hard end:
+  // an 840-minute window, the widest of the two.
+  const WIDENED = {
+    days_available: 2,
+    dayConfigs: [
+      { day_start_time: 540, day_end_time: 1140, day_hard_end_time: 1320 },
+      { day_start_time: 1980, day_end_time: 2820, day_hard_end_time: 2820 },
+    ],
+  }
+
+  it('passes a 700-minute worst case at default hours, past the 600-minute target day', () => {
+    expect(worstCaseOf(700)).toBeNull()
   })
 
-  it('returns error when pool + admin + DE exceeds DAY_LENGTH_MINS', () => {
-    // Craft a config with a very short day but normal competition size
-    const config = makeConfig({ DAY_LENGTH_MINS: 10 })
-    const comp = makeCompetition({ id: 'X-M-EPEE-IND', fencer_count: 64, weapon: Weapon.EPEE, cut_mode: CutMode.DISABLED })
-    const result = validateSameDayCompletion(comp, config)
+  it('fails a 790-minute worst case at default hours, naming the 780-minute hard window', () => {
+    const result = worstCaseOf(790)
     expect(result).not.toBeNull()
     expect(result?.severity).toBe(BottleneckSeverity.ERROR)
     expect(result?.field).toBe('same_day_completion')
     expect(result?.rule).toBe('same-day-completion')
-    expect(result?.subjects).toEqual(['X-M-EPEE-IND'])
+    expect(result?.subjects).toEqual([ID])
+    expect(result?.message).toMatch(/\b790 min\b.*\b780 min\b/)
+  })
+
+  it('allows more when the organizer widens a day: 830 minutes fit the widest day\'s 840', () => {
+    expect(worstCaseOf(830, WIDENED)).toBeNull()
+  })
+
+  it('still fails past the widest day\'s hard window', () => {
+    expect(worstCaseOf(850, WIDENED)?.message).toMatch(/\b850 min\b.*\b840 min\b/)
   })
 })
 
@@ -946,9 +1161,10 @@ describe('validateFeasibility', () => {
   })
 
   it('flags video shortfall separately when staged events need more video strip-hours than available', () => {
-    // Many staged DE events, very few video strips. With bracket=256 sabre and
-    // 4 R16 strips per event, video need swamps the single video strip's
-    // 56 hours of capacity once we cross ~25 events.
+    // Many staged DE events, very few video strips. Each 200-fencer foil
+    // event's video stage (R16–SF, 14 bouts × 20 min) bills 4.67 video
+    // strip-hours, so the need swamps the single video strip's 56 hours once
+    // we cross 12 events.
     const config = makeConfig({
       days_available: 4,
       strips: makeStrips(80, 1),
@@ -959,7 +1175,6 @@ describe('validateFeasibility', () => {
         fencer_count: 200,
         de_mode: DeMode.STAGED,
         de_video_policy: VideoPolicy.REQUIRED,
-        de_round_of_16_strips: 4,
       }),
     )
     const errors = validateFeasibility(config, comps)

@@ -148,11 +148,14 @@ export const selectDerivedFindings = memoizeOnDeps(scheduleDeps, computeDerivedF
  * Out-of-range placements are skipped: their `assigned_day` cannot address a
  * day bucket in `config.days_available`.
  */
-function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDemandByDay> {
+export function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDemandByDay> {
   const byDay: Record<number, RefDemandByDay> = {}
   const compById = new Map(schedule.competitions.map((c) => [c.id, c]))
 
+  // A block that asks no referee – a bracket of 2's DE draws 0 strips
+  // (METHODOLOGY.md §DE Duration 'No counted round') – emits no interval.
   function push(day: number, interval: RefDemandInterval): void {
+    if (interval.count === 0) return
     if (!byDay[day]) byDay[day] = { intervals: [] }
     byDay[day].intervals.push(interval)
   }
@@ -378,7 +381,7 @@ export const FindingSeverity = {
 export type FindingSeverity = (typeof FindingSeverity)[keyof typeof FindingSeverity]
 
 /**
- * How close to the day's close a finish has to be before it is worth saying
+ * How close to the day's target a finish has to be before it is worth saying
  * (data-model.md §5). A UI constant, not an engine one: the engine has no
  * opinion about slack, and nothing in `src/engine/` reads this.
  */
@@ -555,9 +558,13 @@ function computeAllFindings(state: StoreState): Finding[] {
   // `finish` is the maximum block end on the day — the same number the day
   // band prints, never `de_total_end`, which is the footer's tournament-wide
   // fact and would let the panel warn about a time the grid does not show.
-  // `close` is `state.dayConfigs`, the store's clock-time day hours.
+  // `target` is the day's `day_end_time` in `state.dayConfigs`, the store's
+  // clock-time day hours: the soft target (default 7:00 PM, Ops Manual 2026-27
+  // p.17), not the 10:00 PM hard end. Work may run past it, so this row is the
+  // app's version of the engine's late-day WARN (METHODOLOGY.md §Same-Day
+  // Completion, 024 D7).
   //
-  // This is the only row a hand move past the day's close can raise: it is a
+  // This is the only row a hand move past the day's target can raise: it is a
   // Warning, so the Blocking count — and therefore Auto-assign's disabled
   // state — is untouched by the move (FR-025). Nothing here compares referees
   // needed against referees available either (FR-026).
@@ -567,12 +574,12 @@ function computeAllFindings(state: StoreState): Finding[] {
     const dayConfig = state.dayConfigs[day]
     if (dayConfig === undefined) continue
 
-    const close = dayConfig.day_end_time
+    const target = dayConfig.day_end_time
     let finish = dayBlocks[0].endMinutes
     for (const block of dayBlocks) {
       if (block.endMinutes > finish) finish = block.endMinutes
     }
-    if (finish <= close - LATE_FINISH_WINDOW_MINS) continue
+    if (finish <= target - LATE_FINISH_WINDOW_MINS) continue
 
     // Ties go to the lowest competition id so the row names the same event
     // between two renders of the same board.
@@ -585,9 +592,9 @@ function computeAllFindings(state: StoreState): Finding[] {
 
     const phase = phaseDisplay(culprit.phase)
     const message =
-      finish > close
-        ? `${phase} finishes at ${formatClock(finish)}, ${finish - close} minutes past the day's close at ${formatClock(close)}.`
-        : `${phase} finishes at ${formatClock(finish)}, ${close - finish} minutes before the day closes at ${formatClock(close)}. No slack for a delayed round.`
+      finish > target
+        ? `${phase} finishes at ${formatClock(finish)}, ${finish - target} minutes past the day's target of ${formatClock(target)}.`
+        : `${phase} finishes at ${formatClock(finish)}, ${target - finish} minutes before the day's target of ${formatClock(target)}. No slack for a delayed round.`
 
     rows.push({
       id: `late-finish:day:${day}`,

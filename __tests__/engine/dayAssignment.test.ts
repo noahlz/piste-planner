@@ -8,6 +8,8 @@ import {
   Gender,
   Weapon,
   DeMode,
+  EventType,
+  TournamentType,
   VideoPolicy,
 } from '../../src/engine/types.ts'
 import {
@@ -56,7 +58,7 @@ describe('constraintScore', () => {
     const looseScore = constraintScore(looseComp, allComps, config)
 
     expect(score).toBeGreaterThan(looseScore)
-    // Absolute lower bound: crossoverCount(4) + windowTightness(840/360≈2.33) + videoScarcity(0) ≈ 6.33
+    // Absolute lower bound: crossoverCount(4) + windowTightness(780/360≈2.17) + videoScarcity(0) ≈ 6.17
     // A refactor that scales scores to near-zero would fail this check.
     expect(score).toBeGreaterThan(5)
   })
@@ -96,6 +98,33 @@ describe('constraintScore', () => {
     // With many video strips, the video scarcity component disappears
     const stagedHighVideoScore = constraintScore(stagedVideoComp, manyVideoComps, manyVideoConfig)
     expect(stagedLowVideoScore).toBeGreaterThan(stagedHighVideoScore)
+  })
+
+  describe('video scarcity counts individual events only (024 D4)', () => {
+    // A team DE has no video stage (METHODOLOGY.md §DE Modes, §Video Replay
+    // Policy), so NAC team events hand-built STAGED + REQUIRED score exactly
+    // as they would Single Stage and BEST_EFFORT, and add nothing to an
+    // individual event's scarcity.
+    const video = { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }
+    const plain = { de_mode: DeMode.SINGLE_STAGE, de_video_policy: VideoPolicy.BEST_EFFORT }
+    const config = makeConfig({ tournament_type: TournamentType.NAC, strips: makeStrips(24, 2) })
+    const individual = makeCompetition({ id: 'indiv', ...video })
+    const teams = (flags: typeof video | typeof plain) => [
+      makeCompetition({ id: 'team-jr', event_type: EventType.TEAM, category: Category.JUNIOR, ...flags }),
+      makeCompetition({ id: 'team-d1', event_type: EventType.TEAM, category: Category.DIV1, ...flags }),
+    ]
+
+    it('an individual event\'s scarcity ignores team events marked STAGED + REQUIRED', () => {
+      expect(constraintScore(individual, [individual, ...teams(video)], config))
+        .toBe(constraintScore(individual, [individual, ...teams(plain)], config))
+    })
+
+    it('a team event marked STAGED + REQUIRED takes no scarcity of its own', () => {
+      const [videoTeam] = teams(video)
+      const [plainTeam] = teams(plain)
+      expect(constraintScore(videoTeam, [individual, ...teams(video)], config))
+        .toBe(constraintScore(plainTeam, [individual, ...teams(plain)], config))
+    })
   })
 })
 

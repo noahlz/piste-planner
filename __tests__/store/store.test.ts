@@ -3,14 +3,13 @@ import { useStore, type PresetId } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
-import { Category, DeMode, TournamentType, Weapon } from '../../src/engine/types.ts'
+import { Category, DeMode, TournamentType, VideoPolicy, Weapon } from '../../src/engine/types.ts'
 import { TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { serializeState } from '../../src/store/serialization.ts'
 import {
   DEFAULT_CUT_BY_CATEGORY,
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../../src/engine/constants.ts'
 
@@ -55,9 +54,11 @@ describe('tournamentSlice', () => {
       const state = useStore.getState()
       expect(state.days_available).toBe(4)
       expect(state.dayConfigs).toHaveLength(4)
+      // 9:00 start (540) and the 19:00 soft target (1140): 2026-27 Ops Manual
+      // p.17, METHODOLOGY.md §Inputs and Appendix A §Timing Constants (024 B).
       for (const dc of state.dayConfigs) {
-        expect(dc.day_start_time).toBe(480)
-        expect(dc.day_end_time).toBe(1320)
+        expect(dc.day_start_time).toBe(540)
+        expect(dc.day_end_time).toBe(1140)
       }
     })
   })
@@ -66,11 +67,13 @@ describe('tournamentSlice', () => {
     it('updates a specific day start time', () => {
       useStore.getState().setDays(3)
 
-      useStore.getState().updateDayConfig(1, { day_start_time: 540 })
+      // 10:00 (600), not the 9:00 default, so the update is observable (024 B
+      // moved the default start to 540). The end keeps the 19:00 default, 1140.
+      useStore.getState().updateDayConfig(1, { day_start_time: 600 })
 
       const state = useStore.getState()
-      expect(state.dayConfigs[1].day_start_time).toBe(540)
-      expect(state.dayConfigs[1].day_end_time).toBe(1320)
+      expect(state.dayConfigs[1].day_start_time).toBe(600)
+      expect(state.dayConfigs[1].day_end_time).toBe(1140)
     })
 
     it('updates a specific day end time', () => {
@@ -80,7 +83,8 @@ describe('tournamentSlice', () => {
 
       const state = useStore.getState()
       expect(state.dayConfigs[2].day_end_time).toBe(1200)
-      expect(state.dayConfigs[2].day_start_time).toBe(480)
+      // the 9:00 default start (540) is untouched
+      expect(state.dayConfigs[2].day_start_time).toBe(540)
     })
   })
 
@@ -303,10 +307,10 @@ describe('competitionSlice', () => {
       }
     })
 
-    it('derives the cut and video-policy defaults from the catalogue on the way to the engine', () => {
+    it('takes the cut default from the catalogue and the video policy from the tournament type on the way to the engine', () => {
+      useStore.getState().setTournamentType(TournamentType.NAC)
       useStore.getState().selectCompetitions([CADET_MF, JUNIOR_WE])
       const cadetEntry = findCompetition(CADET_MF)!
-      const juniorEntry = findCompetition(JUNIOR_WE)!
 
       const { competitions } = buildTournamentConfig(useStore.getState())
 
@@ -314,12 +318,14 @@ describe('competitionSlice', () => {
       expect(cadet).toBeDefined()
       expect(cadet.cut_mode).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].mode)
       expect(cadet.cut_value).toBe(DEFAULT_CUT_BY_CATEGORY[cadetEntry.category].value)
-      expect(cadet.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[cadetEntry.category])
+      // The store starts at a NAC, where every individual event is REQUIRED
+      // (METHODOLOGY.md §Tournament-Type Policies; 024 D9).
+      expect(cadet.de_video_policy).toBe(VideoPolicy.REQUIRED)
       expect(cadet.use_single_pool_override).toBe(false)
 
       const junior = competitions.find((c) => c.id === JUNIOR_WE)!
       expect(junior).toBeDefined()
-      expect(junior.de_video_policy).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[juniorEntry.category])
+      expect(junior.de_video_policy).toBe(VideoPolicy.REQUIRED)
     })
 
     it('sends a team competition to the engine all-advance regardless of its category default', () => {
@@ -438,6 +444,12 @@ describe('lastAutoRun', () => {
   // 12 unplaced) rather than the stale baseline figure.
   // 015, 2026-10-05 – the converged drift ledger now records B4 at 18 of 30
   // too, so the two figures agree.
+  // 024 group A, 2026-10-06 – B4 places 19 of 30 under the 2026-27 Operations
+  // Manual planning times, as the ledger and app path do
+  // (specs/024-ops-manual-conformance/plan.md §Group A).
+  // 024 group D, 2026-10-06 – B4 places 21 of 30 under the Ops Manual p.20
+  // same-day rules, as the ledger and app path do
+  // (specs/024-ops-manual-conformance/plan.md §Group D).
   //
   // unplaced is `competitions.length - placed`, not "entries in schedule with
   // a null pool_start" — concurrentScheduler.ts's commitEventResult only ever
@@ -450,9 +462,9 @@ describe('lastAutoRun', () => {
 
     const result = runScheduleAll()
 
-    expect(result).toEqual({ placed: 18, unplaced: 12 })
+    expect(result).toEqual({ placed: 21, unplaced: 9 })
     expect(useStore.getState().lastAutoRun).toEqual(
-      expect.objectContaining({ placed: 18, unplaced: 12 }),
+      expect.objectContaining({ placed: 21, unplaced: 9 }),
     )
   })
 })

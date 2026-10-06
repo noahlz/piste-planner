@@ -13,9 +13,9 @@ import {
   SAME_TIME_WINDOW_MINS, INDIV_TEAM_MIN_GAP_MINS,
   EARLY_START_THRESHOLD, MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS, MIN_FENCERS,
-  DEFAULT_POOL_ROUND_DURATION_TABLE, DEFAULT_DE_DURATION_TABLE,
-  DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA, DEFAULT_DE_STRIP_FOOTPRINT,
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY, REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES,
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
+  DE_BOUT_DURATION, DE_BOUT_DURATION_10_TOUCH, TEAM_MATCH_DURATION, DEFAULT_DE_STRIP_FOOTPRINT,
+  REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES,
 } from '../../src/engine/constants.ts'
 import {
   Category, Gender, Weapon, EventType,
@@ -115,9 +115,11 @@ describe('buildTournamentConfig', () => {
       const state = storeWith({ ...minimalState(), dayConfigs })
       const { config } = buildTournamentConfig(state)
 
+      // Hard ends (024 D7), d × 1440 + max(day_end, 1320): 0 + max(1200, 1320)
+      // = 1320 and 1440 + max(1320, 1320) = 2760.
       expect(config.dayConfigs).toEqual([
-        { day_start_time: 480, day_end_time: 1200 },
-        { day_start_time: 1980, day_end_time: 2760 },
+        { day_start_time: 480, day_end_time: 1200, day_hard_end_time: 1320 },
+        { day_start_time: 1980, day_end_time: 2760, day_hard_end_time: 2760 },
       ])
       // The store's own state (read back independently of the config we just
       // built) is clock axis and unshifted — buildTournamentConfig must not
@@ -130,7 +132,8 @@ describe('buildTournamentConfig', () => {
       const state = storeWith({ ...minimalState(), dayConfigs, days_available: 1 })
       const { config } = buildTournamentConfig(state)
 
-      expect(config.dayConfigs).toEqual([{ day_start_time: 540, day_end_time: 1260 }])
+      // Hard end (024 D7): 0 × 1440 + max(1260, 1320) = 1320.
+      expect(config.dayConfigs).toEqual([{ day_start_time: 540, day_end_time: 1260, day_hard_end_time: 1320 }])
     })
   })
 
@@ -174,7 +177,10 @@ describe('buildTournamentConfig', () => {
       expect(comp.earliest_start).toBe(0)
       expect(comp.latest_end).toBe(Infinity)
       expect(comp.optional).toBe(false)
-      expect(comp.de_round_of_16_strips).toBe(4)
+      // `de_round_of_16_strips` is gone since 024 group A: the video block asks
+      // `min(4, bracketSize / 2)` through one engine function (METHODOLOGY.md
+      // §DE Modes; 024 plan D6), so the bridge has no strip count to set.
+      expect(comp).not.toHaveProperty('de_round_of_16_strips')
       expect(comp.de_round_of_16_requirement).toBe(DeStripRequirement.HARD)
       expect(comp.flighted).toBe(false)
       expect(comp.flighting_group_id).toBeNull()
@@ -191,16 +197,18 @@ describe('buildTournamentConfig', () => {
     it('leaves latest_end unbinding at a day count beyond the UI\'s current maximum of 4 (research.md D6)', () => {
       // The old 9999 sentinel started truncating at day 7: 7 * 1440 + 1320 =
       // 11400 > 9999. Use an 8-day tournament (day indices 0-7) so day 7's
-      // scheduler-axis end actually exceeds that old bound.
+      // scheduler-axis end actually exceeds that old bound. Since 024 D7 the
+      // scheduler clamps the day's hard end, 7 * 1440 + max(1320, 1320) =
+      // 11400, against latest_end (METHODOLOGY.md §Same-Day Completion).
       const dayConfigs = Array.from({ length: 8 }, () => ({ day_start_time: 480, day_end_time: 1320 }))
       const state = storeWith({ ...minimalState(), days_available: 8, dayConfigs })
       const { config, competitions } = buildTournamentConfig(state)
       const comp = competitions[0]
 
-      const day7End = config.dayConfigs![7].day_end_time
+      const day7End = config.dayConfigs![7].day_hard_end_time
       expect(day7End).toBe(11400)
       // This is concurrentScheduler.ts's own clamp expression: it must return
-      // dayEnd unchanged, never the latest_end sentinel.
+      // the hard end unchanged, never the latest_end sentinel.
       expect(Math.min(day7End, comp.latest_end)).toBe(day7End)
     })
 
@@ -258,7 +266,10 @@ describe('buildTournamentConfig', () => {
       expect(config.THRESHOLD_MINS).toBe(THRESHOLD_MINS)
       expect(config.SLOT_MINS).toBe(SLOT_MINS)
       expect(config.DE_BOUT_DURATION).toEqual(DE_BOUT_DURATION)
-      expect(config.YOUTH_VET_BOUT_DELTA).toBe(YOUTH_VET_BOUT_DELTA)
+      // 024 group A: the 10-touch and team-match times a DE is derived from
+      // (METHODOLOGY.md §DE Duration, Ops Manual p.17) travel the same way.
+      expect(config.DE_BOUT_DURATION_10_TOUCH).toEqual(DE_BOUT_DURATION_10_TOUCH)
+      expect(config.TEAM_MATCH_DURATION).toEqual(TEAM_MATCH_DURATION)
       expect(config.DEFAULT_DE_STRIP_FOOTPRINT).toBe(DEFAULT_DE_STRIP_FOOTPRINT)
     })
   })
@@ -323,7 +334,9 @@ describe('buildTournamentConfig', () => {
       expect(config.MAX_FENCERS).toBe(MAX_FENCERS)
       expect(config.MIN_FENCERS).toBe(MIN_FENCERS)
       expect(config.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
-      expect(config.de_duration_table).toEqual(DEFAULT_DE_DURATION_TABLE)
+      // 024 group A: DE length is derived per round from bout time, so the
+      // per-bracket duration table is gone from the config (024 plan §Group A).
+      expect(config).not.toHaveProperty('de_duration_table')
     })
   })
 
@@ -362,26 +375,33 @@ describe('buildTournamentConfig', () => {
       }
     }
 
-    it('overrides cut to DISABLED/100 for JUNIOR at ROC tournament', () => {
-      const state = storeWith(regionalCutState(TournamentType.ROC, 'JR-M-FOIL-IND'))
-      const { competitions } = buildTournamentConfig(state)
-      const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
-
+    // Builds the one competition down the app path and reads back its cut pair.
+    function cutFor(type: TournamentType, id: string) {
+      const { competitions } = buildTournamentConfig(storeWith(regionalCutState(type, id)))
+      const comp = competitions.find((c: Competition) => c.id === id)
       expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
-      expect(comp!.cut_value).toBe(100)
+      return { cut_mode: comp!.cut_mode, cut_value: comp!.cut_value }
+    }
+
+    it('overrides cut to DISABLED/100 for JUNIOR at ROC tournament', () => {
+      expect(cutFor(TournamentType.ROC, 'JR-M-FOIL-IND')).toEqual({ cut_mode: CutMode.DISABLED, cut_value: 100 })
     })
 
     // The discriminating pair: JUNIOR's catalogue default is PERCENTAGE/20, so
     // the ROC case above can only read DISABLED/100 if the override loop fired.
     it('does NOT override cut for JUNIOR at NAC tournament', () => {
-      const state = storeWith(regionalCutState(TournamentType.NAC, 'JR-M-FOIL-IND'))
-      const { competitions } = buildTournamentConfig(state)
-      const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
+      expect(cutFor(TournamentType.NAC, 'JR-M-FOIL-IND')).toEqual({ cut_mode: CutMode.PERCENTAGE, cut_value: 20 })
+    })
 
-      expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.PERCENTAGE)
-      expect(comp!.cut_value).toBe(20)
+    // RYC joined the regional types in 024 (METHODOLOGY.md §Default Cuts by Age
+    // Category). Cadet's default is PERCENTAGE/20, so only the override loop
+    // can make it all-advance. Y14 is all-advance by default at every type.
+    it('forces a CADET event to DISABLED/100 at an RYC tournament', () => {
+      expect(cutFor(TournamentType.RYC, 'CDT-M-FOIL-IND')).toEqual({ cut_mode: CutMode.DISABLED, cut_value: 100 })
+    })
+
+    it.each([TournamentType.RYC, TournamentType.NAC])('advances a Y14 event 100% (DISABLED/100) at %s', (type) => {
+      expect(cutFor(type, 'Y14-M-FOIL-IND')).toEqual({ cut_mode: CutMode.DISABLED, cut_value: 100 })
     })
 
     // VETERAN is not in REGIONAL_CUT_OVERRIDES, and its catalogue default is
@@ -392,13 +412,7 @@ describe('buildTournamentConfig', () => {
     // The ordering itself is pinned by the derivation describe at the end of
     // this file, across all 66 competitions of the fixture template.
     it('leaves VETERAN at its catalogue default at a ROC tournament (category not in REGIONAL_CUT_OVERRIDES)', () => {
-      const state = storeWith(regionalCutState(TournamentType.ROC, 'VET-M-FOIL-IND-V40'))
-      const { competitions } = buildTournamentConfig(state)
-      const comp = competitions.find((c: Competition) => c.id === 'VET-M-FOIL-IND-V40')
-
-      expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
-      expect(comp!.cut_value).toBe(100)
+      expect(cutFor(TournamentType.ROC, 'VET-M-FOIL-IND-V40')).toEqual({ cut_mode: CutMode.DISABLED, cut_value: 100 })
     })
   })
 
@@ -481,8 +495,9 @@ describe('buildTournamentConfig', () => {
   // derivation rules themselves (data-model.md §4). Only the `flighted` case
   // is red today — everything else already matches because the store's
   // current per-event defaults (all `AUTO`, all `defaultCutForEntry`, all
-  // `DEFAULT_VIDEO_POLICY_BY_CATEGORY`) happen to equal what T020 hard-codes;
-  // no UI has ever set them to anything else.
+  // video policy) happen to equal what T020 hard-codes; no UI has ever set
+  // them to anything else. (024 group C later made the video policy a per-type
+  // rule, METHODOLOGY.md §Tournament-Type Policies.)
   describe('the per-event shrink (T020) — derivation, not override', () => {
     const FIXTURE_TEMPLATE = 'NAC Vet/Div1/Junior' // DIV1 + JUNIOR individual/team, veteran bands + team
     const FIXTURE_FENCER_COUNT = 40
@@ -493,7 +508,20 @@ describe('buildTournamentConfig', () => {
      *  on this fixture and wrote its `competitions` array to disk. `Infinity`
      *  has no JSON form, so the capture replaced it with the sentinel string
      *  below — `liveCompetitions` applies the same substitution before the
-     *  deep-equal so both sides compare like for like. */
+     *  deep-equal so both sides compare like for like.
+     *
+     *  Regenerated on purpose at 024 group A (2026-10-06), by the same route,
+     *  after the owner's team ruling (024 plan D4) and the video-ask change
+     *  (D6). Three things moved and nothing else: the 18 NAC team events' de_mode
+     *  STAGED → SINGLE_STAGE, the 12 Div 1 and Junior team events'
+     *  de_video_policy REQUIRED → BEST_EFFORT at each type (the Vet teams were
+     *  BEST_EFFORT already), and `de_round_of_16_strips` left every row.
+     *
+     *  Edited again at 024 group C (2026-10-06), only `de_video_policy`: the
+     *  individual policy follows the type (METHODOLOGY.md §Tournament-Type
+     *  Policies, 024 D9), so the 36 NAC Vet individual events went BEST_EFFORT →
+     *  REQUIRED and the 12 ROC Div 1 and Junior individual events REQUIRED →
+     *  BEST_EFFORT. */
     const FIXTURE: { NAC: Competition[]; ROC: Competition[] } = JSON.parse(
       readFileSync(
         `${process.cwd()}/__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json`,
@@ -573,12 +601,26 @@ describe('buildTournamentConfig', () => {
         },
       )
 
-      it('de_video_policy is DEFAULT_VIDEO_POLICY_BY_CATEGORY[category] for every competition', () => {
-        const { competitions } = buildTournamentConfig(derivedState(TournamentType.NAC))
-        for (const comp of competitions) {
-          expect(comp.de_video_policy, comp.id).toBe(DEFAULT_VIDEO_POLICY_BY_CATEGORY[comp.category])
-        }
-      })
+      // A team event plans with no video at every type, NACs included
+      // (METHODOLOGY.md §Video Replay Policy; Ops Manual p.19 gives teams video
+      // for the gold and bronze only; 024 plan D4). An individual event follows
+      // the type's row, whatever its category (024 D9).
+      const INDIVIDUAL_VIDEO_BY_TYPE = {
+        [TournamentType.NAC]: VideoPolicy.REQUIRED,
+        [TournamentType.ROC]: VideoPolicy.BEST_EFFORT,
+      } as const
+      it.each([TournamentType.NAC, TournamentType.ROC])(
+        'de_video_policy is BEST_EFFORT for every team event and the type row for every individual one, at %s',
+        (type) => {
+          const { competitions } = buildTournamentConfig(derivedState(type))
+          for (const comp of competitions) {
+            const expected = comp.event_type === EventType.TEAM
+              ? VideoPolicy.BEST_EFFORT
+              : INDIVIDUAL_VIDEO_BY_TYPE[type]
+            expect(comp.de_video_policy, comp.id).toBe(expected)
+          }
+        },
+      )
 
       it('use_single_pool_override, flighting_group_id and is_priority default false/null/false for every competition', () => {
         const { competitions } = buildTournamentConfig(derivedState(TournamentType.NAC))
@@ -604,5 +646,58 @@ describe('buildTournamentConfig', () => {
         expect(flaggedOff?.flighted, flaggedOff?.id).toBe(false)
       })
     })
+  })
+})
+
+/**
+ * The per-type individual video policy, asserted against literals so a wrong row
+ * in `TYPE_DEFAULTS` cannot hide behind a test that reads the same row
+ * (METHODOLOGY.md §Tournament-Type Policies, §Video Replay Policy; Ops Manual
+ * 2026-27 p.19; 024 plan D9). REQUIRED at a NAC for every category, BEST_EFFORT
+ * at every other type, and BEST_EFFORT for every team event at every type.
+ */
+// Guard (024 plan Task C, from A): the team half pins BEST_EFFORT at every type.
+describe('buildTournamentConfig: de_video_policy follows the tournament type (024 D9)', () => {
+  const INDIVIDUAL_IDS = {
+    Y8: 'Y8-M-FOIL-IND',
+    Y10: 'Y10-M-FOIL-IND',
+    Y12: 'Y12-M-FOIL-IND',
+    Y14: 'Y14-M-FOIL-IND',
+    Cadet: 'CDT-M-FOIL-IND',
+    Junior: 'JR-M-FOIL-IND',
+    Vet: 'VET-M-FOIL-IND-V40',
+    'Div 1': 'D1-M-FOIL-IND',
+    'Div 1A': 'D1A-M-FOIL-IND',
+    'Div 2': 'D2-M-FOIL-IND',
+    'Div 3': 'D3-M-FOIL-IND',
+  } as const
+  const TEAM_IDS = ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM', 'D1-M-FOIL-TEAM', 'VET-M-FOIL-TEAM'] as const
+
+  function videoPolicies(type: TournamentType, ids: readonly string[]): Record<string, VideoPolicy> {
+    const state = storeWith({
+      ...minimalState(),
+      tournament_type: type,
+      selectedCompetitions: Object.fromEntries(ids.map((id) => [id, { fencer_count: 64, flighted: false }])),
+    })
+    const { competitions } = buildTournamentConfig(state)
+    return Object.fromEntries(competitions.map((c) => [c.id, c.de_video_policy]))
+  }
+
+  it.each(Object.entries(INDIVIDUAL_IDS))('requires video for a NAC %s individual event', (_label, id) => {
+    expect(videoPolicies(TournamentType.NAC, [id])[id]).toBe(VideoPolicy.REQUIRED)
+  })
+
+  it.each([TournamentType.SYC, TournamentType.SJCC, TournamentType.ROC, TournamentType.RYC, TournamentType.RJCC])(
+    'plans every individual event BEST_EFFORT at %s, Cadet and Junior included',
+    (type) => {
+      const ids = Object.values(INDIVIDUAL_IDS)
+      const policies = videoPolicies(type, ids)
+      for (const id of ids) expect(policies[id], id).toBe(VideoPolicy.BEST_EFFORT)
+    },
+  )
+
+  it.each(Object.values(TournamentType))('plans every team event BEST_EFFORT at %s', (type) => {
+    const policies = videoPolicies(type, TEAM_IDS)
+    for (const id of TEAM_IDS) expect(policies[id], id).toBe(VideoPolicy.BEST_EFFORT)
   })
 })

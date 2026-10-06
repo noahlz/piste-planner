@@ -1,6 +1,4 @@
-import type { Competition } from './types.ts'
-import { EventType } from './types.ts'
-import { INDIV_TEAM_RELAXABLE_BLOCKS } from './constants.ts'
+import type { Competition, TournamentType } from './types.ts'
 import { crossoverPenalty } from './crossover.ts'
 import { forEachCompetitionPair } from './pairs.ts'
 
@@ -17,43 +15,6 @@ export type ConstraintEdge = {
 export type ConstraintGraph = Map<string, ConstraintEdge[]>
 
 // ──────────────────────────────────────────────
-// Individual/Team block check
-// ──────────────────────────────────────────────
-
-/**
- * Returns true if c1 and c2 form an INDIV_TEAM_RELAXABLE_BLOCK pair
- * (same weapon and gender, one INDIVIDUAL of indivCategory and one TEAM of teamCategory).
- * These must not be on the same day.
- */
-function isIndivTeamBlock(c1: Competition, c2: Competition): boolean {
-  if (c1.gender !== c2.gender) return false
-  if (c1.weapon !== c2.weapon) return false
-  // INDIV_TEAM_RELAXABLE_BLOCKS requires one INDIVIDUAL and one TEAM event
-  if (c1.event_type === c2.event_type) return false
-
-  for (const { indivCategory, teamCategory } of INDIV_TEAM_RELAXABLE_BLOCKS) {
-    if (
-      c1.event_type === EventType.INDIVIDUAL &&
-      c1.category === indivCategory &&
-      c2.event_type === EventType.TEAM &&
-      c2.category === teamCategory
-    ) {
-      return true
-    }
-    if (
-      c2.event_type === EventType.INDIVIDUAL &&
-      c2.category === indivCategory &&
-      c1.event_type === EventType.TEAM &&
-      c1.category === teamCategory
-    ) {
-      return true
-    }
-  }
-
-  return false
-}
-
-// ──────────────────────────────────────────────
 // Builder
 // ──────────────────────────────────────────────
 
@@ -61,12 +22,16 @@ function isIndivTeamBlock(c1: Competition, c2: Competition): boolean {
  * Builds an incompatibility constraint graph from all competition pairs.
  * Each edge weight represents the penalty for scheduling the two competitions
  * on the same day: Infinity = hard constraint (must not share a day),
- * finite > 0 = soft penalty.
+ * finite > 0 = soft penalty. The tournament type decides whether a Group 1
+ * pair is hard or soft (Ops Manual p.20 – Group 1, `crossoverPenalty`).
  *
  * Edges are bidirectional and symmetric.
  * O(n^2) over n competitions (n <= 54).
  */
-export function buildConstraintGraph(competitions: Competition[]): ConstraintGraph {
+export function buildConstraintGraph(
+  competitions: Competition[],
+  tournamentType: TournamentType,
+): ConstraintGraph {
   const graph: ConstraintGraph = new Map()
 
   // Initialize adjacency lists for all competitions
@@ -75,13 +40,9 @@ export function buildConstraintGraph(competitions: Competition[]): ConstraintGra
   }
 
   forEachCompetitionPair(competitions, (c1, c2) => {
-    // Check crossoverPenalty first (handles same-population, GROUP_1_MANDATORY, CROSSOVER_GRAPH)
-    let weight = crossoverPenalty(c1, c2)
-
-    // If crossoverPenalty returns 0 (no crossover relationship), check INDIV_TEAM_RELAXABLE_BLOCKS
-    if (weight === 0.0 && isIndivTeamBlock(c1, c2)) {
-      weight = Infinity
-    }
+    // crossoverPenalty covers same-population, the relaxable ind/team blocks,
+    // Group 1 by tournament type, the soft separations and CROSSOVER_GRAPH.
+    const weight = crossoverPenalty(c1, c2, tournamentType)
 
     // Only add an edge if there is a constraint (weight > 0)
     if (weight > 0) {

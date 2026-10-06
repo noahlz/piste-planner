@@ -8,22 +8,37 @@ import { makeConfig, makeCompetition } from '../helpers/factories.ts'
 // peakDeRefDemand
 // ──────────────────────────────────────────────
 
+// DE_REFS (1) per strip of the video block's ask, min(4, bracketSize / 2)
+// (METHODOLOGY.md §DE Modes; 024 plan D6 – one reading of the video ask). The
+// default competition has 24 fencers, cut disabled: bracket 32.
 describe('peakDeRefDemand', () => {
   const config = makeConfig()
 
-  it('STAGED event → DE_REFS × round-of-16 strips, no captain addend', () => {
-    const comp = makeCompetition({ de_mode: DeMode.STAGED, de_round_of_16_strips: 16 })
-    expect(peakDeRefDemand(comp, config)).toBe(16)
-  })
-
-  it('SINGLE_STAGE event → DE_REFS × active strips, no captain addend', () => {
-    const comp = makeCompetition({ de_round_of_16_strips: 8, strips_allocated: 8 })
-    expect(peakDeRefDemand(comp, config)).toBe(8)
-  })
-
-  it('strips_allocated exceeding de_round_of_16_strips is capped, not added', () => {
-    const comp = makeCompetition({ de_round_of_16_strips: 4, strips_allocated: 12 })
+  it('STAGED, bracket 32 → DE_REFS × min(4, 16) = 4, no captain addend', () => {
+    const comp = makeCompetition({ de_mode: DeMode.STAGED })
     expect(peakDeRefDemand(comp, config)).toBe(4)
+  })
+
+  it('SINGLE_STAGE reads the same video ask: bracket 32 → 4', () => {
+    const comp = makeCompetition({ de_mode: DeMode.SINGLE_STAGE, strips_allocated: 8 })
+    expect(peakDeRefDemand(comp, config)).toBe(4)
+  })
+
+  it('strips_allocated above the video ask is capped, not added', () => {
+    const comp = makeCompetition({ strips_allocated: 12 })
+    expect(peakDeRefDemand(comp, config)).toBe(4)
+  })
+
+  it('bracket 4 → DE_REFS × min(4, 2) = 2', () => {
+    const comp = makeCompetition({ fencer_count: 3, de_mode: DeMode.STAGED })
+    expect(peakDeRefDemand(comp, config)).toBe(2)
+  })
+
+  // METHODOLOGY.md §DE Duration 'No counted round': a bracket of 2 asks no
+  // strips, so its DE needs no referee (024 plan D5).
+  it('a bracket of 2 has no DE and demands no DE refs', () => {
+    const comp = makeCompetition({ fencer_count: 2, de_mode: DeMode.STAGED })
+    expect(peakDeRefDemand(comp, config)).toBe(0)
   })
 })
 

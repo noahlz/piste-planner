@@ -2,17 +2,24 @@ import { describe, it, expect } from 'vitest'
 import {
   nextPowerOf2,
   computeBracketSize,
-  dePhasesForBracket,
-  deBlockDurations,
-  calculateDeDuration,
+  deBlocksFor,
   perBoutDuration,
+  deRounds,
+  deRoundsMinutes,
+  splitAtVideoStage,
+  videoStageRound,
+  deVideoStripAsk,
+  deStripFootprint,
 } from '../../src/engine/de.ts'
-import { CutMode, EventType, Weapon, Phase, Category, VetAgeGroup, tailEstimateMins } from '../../src/engine/types.ts'
+import { CutMode, DeMode, EventType, Weapon, Category, VetAgeGroup, tailEstimateMins } from '../../src/engine/types.ts'
 import {
-  DEFAULT_DE_DURATION_TABLE,
   DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
+  DE_BOUT_DURATION_10_TOUCH,
+  TEAM_MATCH_DURATION,
 } from '../../src/engine/constants.ts'
+import { makeCompetition, makeConfig } from '../helpers/factories.ts'
+
+const BOUT_TIMES = { DE_BOUT_DURATION, DE_BOUT_DURATION_10_TOUCH, TEAM_MATCH_DURATION }
 
 describe('nextPowerOf2', () => {
   // n<=0 returns 1: bracket size must be at least 1 (degenerate input → smallest valid bracket)
@@ -49,94 +56,77 @@ describe('computeBracketSize', () => {
   it('5 entries, DISABLED → bracket 8', () => {
     expect(computeBracketSize(5, CutMode.DISABLED, 100, EventType.INDIVIDUAL)).toBe(8)
   })
-})
 
-describe('dePhasesForBracket', () => {
-  it('bracket 64 → [DE_PRELIMS, DE_ROUND_OF_16]', () => {
-    expect(dePhasesForBracket(64)).toEqual([Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16])
-  })
-
-  it('bracket 32 → [DE_ROUND_OF_16]', () => {
-    expect(dePhasesForBracket(32)).toEqual([Phase.DE_ROUND_OF_16])
-  })
-
-  it('bracket 16 → [DE_ROUND_OF_16]', () => {
-    expect(dePhasesForBracket(16)).toEqual([Phase.DE_ROUND_OF_16])
-  })
-
-  it('bracket 8 → [DE_ROUND_OF_16] (tiny bracket absorbed into r16 phase)', () => {
-    expect(dePhasesForBracket(8)).toEqual([Phase.DE_ROUND_OF_16])
-  })
-
-  it('bracket 4 → [DE_ROUND_OF_16] (tiny bracket absorbed into r16 phase)', () => {
-    expect(dePhasesForBracket(4)).toEqual([Phase.DE_ROUND_OF_16])
+  // METHODOLOGY.md §Bracket Sizing: no DE bracket is larger than 256 (S8 p.37)
+  it('280 entries, DISABLED → bracket 256, not 512', () => {
+    expect(computeBracketSize(280, CutMode.DISABLED, 0, EventType.INDIVIDUAL)).toBe(256)
   })
 })
 
-describe('deBlockDurations', () => {
-  // Bout split: totalBouts = bracketSize / 2
-  //   r16Bouts   = min(30, totalBouts - 1)  — rounds 16 through SF
-  //   prelimsBouts = max(totalBouts - 30 - 1, 0)  — rounds above 32
-  //   finals_bouts = 1 (gold) — unallocated; becomes tail estimate
-  //
-  // Proportional formula (no finals floor):
-  //   prelims_dur = round(totalDe * prelimsBouts / totalBouts)
-  //   r16_dur     = round(totalDe * r16Bouts    / totalBouts)
-  //
-  // Return shape has exactly { prelims_dur, r16_dur } — no finals_dur.
+// METHODOLOGY.md §Bracket Sizing: no DE bracket is larger than 256 (S8 p.37).
+describe('deBlocksFor – oversized field', () => {
+  it('280 fencers, cut disabled, single stage → bracket 256 whose first round has 128 bouts and no byes', () => {
+    const blocks = deBlocksFor(
+      makeCompetition({ fencer_count: 280, cut_mode: CutMode.DISABLED, de_mode: DeMode.SINGLE_STAGE }),
+      makeConfig(),
+    )
+    expect(blocks.bracketSize).toBe(256)
+    expect(blocks.general[0]).toEqual({ round: 256, bouts: 128 })
+  })
+})
 
-  it('bracket 64, total 120 min → { prelims_dur, r16_dur } only (no finals_dur)', () => {
-    // totalBouts=32, r16Bouts=min(30,31)=30, prelimsBouts=max(32-30-1,0)=1
-    // prelims_dur = round(120 * 1/32) = round(3.75) = 4
-    // r16_dur     = round(120 * 30/32) = round(112.5) = 113
-    // sum(4+113) = 117 ≤ 120 (one bout's share — the gold — is unallocated)
-    const result = deBlockDurations(64, 120)
-    expect(result).not.toHaveProperty('finals_dur')
-    expect(result).toHaveProperty('prelims_dur', 4)
-    expect(result).toHaveProperty('r16_dur', 113)
-    expect(result.prelims_dur + result.r16_dur).toBeLessThanOrEqual(120)
+// Replaces the removed dePhasesForBracket / deBlockDurations: which rounds a
+// staged DE puts in each block, and the block minutes at the full ask
+// (METHODOLOGY.md §DE Phase Breakdown, §DE Duration). Cut disabled, so
+// promoted = fencer_count.
+describe('deBlocksFor – staged split', () => {
+  const staged = (fencer_count: number, category: Category = Category.DIV1) =>
+    deBlocksFor(makeCompetition({ fencer_count, category, de_mode: DeMode.STAGED }), makeConfig())
+  const roundsOf = (blocks: ReturnType<typeof staged>) => ({
+    general: blocks.general.map((r) => r.round),
+    video: blocks.video.map((r) => r.round),
   })
 
-  it('bracket 32, total 90 min → { prelims_dur, r16_dur } only (no finals_dur)', () => {
-    // totalBouts=16, r16Bouts=min(30,15)=15, prelimsBouts=max(16-30-1,0)=0
-    // prelims_dur = round(90 * 0/16) = 0
-    // r16_dur     = round(90 * 15/16) = round(84.375) = 84
-    const result = deBlockDurations(32, 90)
-    expect(result).not.toHaveProperty('finals_dur')
-    expect(result).toHaveProperty('prelims_dur', 0)
-    expect(result).toHaveProperty('r16_dur', 84)
-    expect(result.prelims_dur + result.r16_dur).toBeLessThanOrEqual(90)
+  it.each([
+    { fencers: 64, general: [64, 32], video: [16, 8, 4] },
+    { fencers: 32, general: [32], video: [16, 8, 4] },
+    { fencers: 16, general: [], video: [16, 8, 4] },
+    { fencers: 8, general: [], video: [8, 4] },
+    { fencers: 4, general: [], video: [4] },
+  ])('Div 1, bracket $fencers, video from the round of 16: general $general, video $video', ({ fencers, general, video }) => {
+    expect(roundsOf(staged(fencers))).toEqual({ general, video })
   })
 
-  it('bracket 8, total 45 min → r16_dur covers R16+QF+SF bouts proportionally (no finals_dur)', () => {
-    // totalBouts=4, r16Bouts=min(30,3)=3, prelimsBouts=max(4-30-1,0)=0
-    // prelims_dur = round(45 * 0/4) = 0
-    // r16_dur     = round(45 * 3/4) = round(33.75) = 34
-    // gold's 1-bout share (≈11 min) is unallocated — becomes tail estimate
-    const result = deBlockDurations(8, 45)
-    expect(result).not.toHaveProperty('finals_dur')
-    expect(result).toHaveProperty('prelims_dur', 0)
-    expect(result).toHaveProperty('r16_dur', 34)
-    expect(result.prelims_dur + result.r16_dur).toBeLessThanOrEqual(45)
+  it('Y14, bracket 16, video from the round of 8: the round of 16 runs as prelims', () => {
+    expect(roundsOf(staged(16, Category.Y14))).toEqual({ general: [16], video: [8, 4] })
   })
 
-  it('bracket 4 (very small): r16_bouts=1, prelims_bouts=0 → r16_dur = half of total', () => {
-    // totalBouts=2, r16Bouts=min(30,1)=1, prelimsBouts=max(2-30-1,0)=0
-    // prelims_dur = round(totalDe * 0/2) = 0
-    // r16_dur     = round(totalDe * 1/2) = totalDe/2
-    const totalDe = 30
-    const result = deBlockDurations(4, totalDe)
-    expect(result).not.toHaveProperty('finals_dur')
-    expect(result).toHaveProperty('prelims_dur', 0)
-    expect(result).toHaveProperty('r16_dur', Math.round(totalDe * 1 / 2))
+  it('worked example – Div 1 foil, 248 promoted: prelims 300 on 16 strips + video 80 on 4 = 380', () => {
+    // Prelims R256–R32: (8 + 4 + 2 + 1) × 20 = 300. Video R16–SF on 4: (2 + 1 + 1) × 20 = 80.
+    const blocks = staged(248)
+    expect({ generalAsk: blocks.generalAsk, videoAsk: blocks.videoAsk }).toEqual({ generalAsk: 16, videoAsk: 4 })
+    expect(blocks.baselineMinutes).toBe(380)
   })
 
-  it('edge case totalBouts <= 0: returns { prelims_dur: 0, r16_dur: totalDeDuration }', () => {
-    // bracketSize=0 → totalBouts=0, hit guard path
-    const result = deBlockDurations(0, 60)
-    expect(result).not.toHaveProperty('finals_dur')
-    expect(result).toHaveProperty('prelims_dur', 0)
-    expect(result).toHaveProperty('r16_dur', 60)
+  it('Div 1 foil, bracket 8: no prelims, video R8–SF on 4 strips = (1 + 1) × 20 = 40', () => {
+    expect(staged(8).baselineMinutes).toBe(40)
+  })
+
+  it('a bracket of 2 has no counted round: no blocks and 0 minutes', () => {
+    const blocks = staged(2)
+    expect({
+      general: blocks.general,
+      video: blocks.video,
+      generalAsk: blocks.generalAsk,
+      videoAsk: blocks.videoAsk,
+      minutes: blocks.baselineMinutes,
+    }).toEqual({
+      general: [],
+      video: [],
+      generalAsk: 0,
+      videoAsk: 0,
+      minutes: 0,
+    })
   })
 })
 
@@ -150,77 +140,176 @@ describe('tailEstimateMins', () => {
   })
 })
 
-describe('calculateDeDuration', () => {
-  it('FOIL, bracket 32 → 90 (from default table)', () => {
-    expect(calculateDeDuration(Weapon.FOIL, 32, DEFAULT_DE_DURATION_TABLE)).toBe(90)
+// Replaces the removed calculateDeDuration / de_duration_table: a single-stage
+// DE's minutes derive per round from the bout time (METHODOLOGY.md §DE
+// Duration). 248 promoted on 16 strips is 8 + 4 + 2 + 1 + 1 + 1 + 1 = 18 waves.
+describe('deBlocksFor – single stage minutes', () => {
+  it.each([
+    { label: 'Div 1 foil, 18 waves × 20', weapon: Weapon.FOIL, category: Category.DIV1, vet: null, expected: 360 },
+    { label: 'Div 1 épée, 18 waves × 20', weapon: Weapon.EPEE, category: Category.DIV1, vet: null, expected: 360 },
+    { label: 'Div 1 sabre, 18 waves × 13', weapon: Weapon.SABRE, category: Category.DIV1, vet: null, expected: 234 },
+    { label: 'Vet 50 foil (10-touch), 18 waves × 15', weapon: Weapon.FOIL, category: Category.VETERAN, vet: VetAgeGroup.VET50, expected: 270 },
+  ])('$label = $expected', ({ weapon, category, vet, expected }) => {
+    const comp = makeCompetition({ fencer_count: 248, weapon, category, vet_age_group: vet })
+    expect(deBlocksFor(comp, makeConfig()).baselineMinutes).toBe(expected)
   })
 
-  it('SABRE, bracket 16 → 45', () => {
-    expect(calculateDeDuration(Weapon.SABRE, 16, DEFAULT_DE_DURATION_TABLE)).toBe(45)
+  it('every round runs on general strips: the whole DE is one block', () => {
+    const blocks = deBlocksFor(makeCompetition({ fencer_count: 248 }), makeConfig())
+    expect({ general: blocks.general.length, video: blocks.video.length }).toEqual({ general: 7, video: 0 })
   })
 
-  it('all weapon × bracket size combinations return expected values', () => {
-    for (const weapon of Object.values(Weapon)) {
-      const table = DEFAULT_DE_DURATION_TABLE[weapon]
-      for (const [bracketStr, expected] of Object.entries(table)) {
-        const bracket = Number(bracketStr)
-        expect(
-          calculateDeDuration(weapon, bracket, DEFAULT_DE_DURATION_TABLE),
-          `${weapon} bracket ${bracket}`,
-        ).toBe(expected)
-      }
-    }
+  it('team épée, 32 teams on 16 strips: (1 + 1 + 1 + 1) × 60 = 240', () => {
+    // R32 16 matches, R16 8, QF 4, SF 2 – one wave each at the team match time.
+    const comp = makeCompetition({ fencer_count: 32, weapon: Weapon.EPEE, event_type: EventType.TEAM })
+    expect(deBlocksFor(comp, makeConfig()).baselineMinutes).toBe(240)
   })
 })
 
+// METHODOLOGY.md §DE Duration – Bout time: 15-touch for most individual events,
+// 10-touch for Y8, Y10 and the Veteran category (any age group, or none), and
+// the team match time for every team event.
 describe('perBoutDuration', () => {
-  // T072 (004 US5) made the bout table and the delta parameters instead of
-  // module imports, so the engine reads them off TournamentConfig. Passing the
-  // same constants the function used to import keeps every expectation below
-  // unchanged — the route changed, the numbers did not.
-  // base = DE_BOUT_DURATION[weapon] (foil/epee 20, sabre 15 after strip-changeover overhead)
-  // YOUTH_VET_BOUT_DELTA (-5) applies when category is Y8 or Y10, or vet_age_group is non-null.
-  // Y12, Y14, and senior (DIV1) categories take the plain weapon duration.
-  const cases: [string, Weapon, Category, VetAgeGroup | null, number][] = [
-    // senior (DIV1) — unaffected, plain weapon duration
-    ['FOIL + DIV1 (senior) → 20', Weapon.FOIL, Category.DIV1, null, 20],
-    ['EPEE + DIV1 (senior) → 20', Weapon.EPEE, Category.DIV1, null, 20],
-    ['SABRE + DIV1 (senior) → 15', Weapon.SABRE, Category.DIV1, null, 15],
-
-    // Y10 — delta across all three weapons
-    ['FOIL + Y10 → 15 (20-5)', Weapon.FOIL, Category.Y10, null, 15],
-    ['EPEE + Y10 → 15 (20-5)', Weapon.EPEE, Category.Y10, null, 15],
-    ['SABRE + Y10 → 10 (15-5)', Weapon.SABRE, Category.Y10, null, 10],
-
-    // Y8 — delta across all three weapons
-    ['FOIL + Y8 → 15 (20-5)', Weapon.FOIL, Category.Y8, null, 15],
-    ['EPEE + Y8 → 15 (20-5)', Weapon.EPEE, Category.Y8, null, 15],
-    ['SABRE + Y8 → 10 (15-5)', Weapon.SABRE, Category.Y8, null, 10],
-
-    // every VetAgeGroup — delta applies, keyed off vet_age_group not category
-    ['FOIL + VETERAN:VET40 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET40, 15],
-    ['FOIL + VETERAN:VET50 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET50, 15],
-    ['FOIL + VETERAN:VET60 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET60, 15],
-    ['FOIL + VETERAN:VET70 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET70, 15],
-    ['FOIL + VETERAN:VET80 → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET80, 15],
-    ['FOIL + VETERAN:VET_COMBINED → 15 (20-5)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET_COMBINED, 15],
-    // VETERAN category with no age group set → 20, unaffected: the delta keys off
-    // vet_age_group, not category, so a null age group gets nothing subtracted
-    // even though the category is VETERAN.
-    ['FOIL + VETERAN, vet_age_group null → 20 (no delta without an age group)', Weapon.FOIL, Category.VETERAN, null, 20],
-
-    // Y12, Y14 — explicitly unaffected
-    ['FOIL + Y12 → 20 (unaffected)', Weapon.FOIL, Category.Y12, null, 20],
-    ['FOIL + Y14 → 20 (unaffected)', Weapon.FOIL, Category.Y14, null, 20],
-
-    // Both predicates true at once (Y8 + a set vet_age_group) → a single delta,
-    // not two: 20 - 5 = 15, never 10.
-    ['FOIL + Y8 + VETERAN:VET40 → 15, single delta not double', Weapon.FOIL, Category.Y8, VetAgeGroup.VET40, 15],
+  const cases: [string, Weapon, Category, VetAgeGroup | null, EventType, number][] = [
+    ['FOIL + DIV1 → 20 (15-touch)', Weapon.FOIL, Category.DIV1, null, EventType.INDIVIDUAL, 20],
+    ['EPEE + DIV1 → 20 (15-touch)', Weapon.EPEE, Category.DIV1, null, EventType.INDIVIDUAL, 20],
+    ['SABRE + DIV1 → 13 (15-touch)', Weapon.SABRE, Category.DIV1, null, EventType.INDIVIDUAL, 13],
+    ['SABRE + Y12 → 13 (15-touch)', Weapon.SABRE, Category.Y12, null, EventType.INDIVIDUAL, 13],
+    ['FOIL + Y14 → 20 (15-touch)', Weapon.FOIL, Category.Y14, null, EventType.INDIVIDUAL, 20],
+    ['FOIL + Y10 → 15 (10-touch)', Weapon.FOIL, Category.Y10, null, EventType.INDIVIDUAL, 15],
+    ['EPEE + Y10 → 15 (10-touch)', Weapon.EPEE, Category.Y10, null, EventType.INDIVIDUAL, 15],
+    ['SABRE + Y10 → 10 (10-touch)', Weapon.SABRE, Category.Y10, null, EventType.INDIVIDUAL, 10],
+    ['SABRE + Y8 → 10 (10-touch)', Weapon.SABRE, Category.Y8, null, EventType.INDIVIDUAL, 10],
+    ['SABRE + VETERAN:VET40 → 10 (10-touch)', Weapon.SABRE, Category.VETERAN, VetAgeGroup.VET40, EventType.INDIVIDUAL, 10],
+    ['FOIL + VETERAN:VET80 → 15 (10-touch)', Weapon.FOIL, Category.VETERAN, VetAgeGroup.VET80, EventType.INDIVIDUAL, 15],
+    ['EPEE + VETERAN:VET_COMBINED → 15 (10-touch)', Weapon.EPEE, Category.VETERAN, VetAgeGroup.VET_COMBINED, EventType.INDIVIDUAL, 15],
+    ['FOIL + VETERAN, no age group → 15 (the category alone is 10-touch)', Weapon.FOIL, Category.VETERAN, null, EventType.INDIVIDUAL, 15],
+    ['FOIL + DIV1 team → 60 (team match)', Weapon.FOIL, Category.DIV1, null, EventType.TEAM, 60],
+    ['EPEE + JUNIOR team → 60 (team match)', Weapon.EPEE, Category.JUNIOR, null, EventType.TEAM, 60],
+    ['SABRE + VETERAN:VET_COMBINED team → 30 (team match beats 10-touch)', Weapon.SABRE, Category.VETERAN, VetAgeGroup.VET_COMBINED, EventType.TEAM, 30],
   ]
 
-  it.each(cases)('%s', (_description, weapon, category, vetAgeGroup, expected) => {
-    expect(
-      perBoutDuration(weapon, category, vetAgeGroup, DE_BOUT_DURATION, YOUTH_VET_BOUT_DELTA),
-    ).toBe(expected)
+  it.each(cases)('%s', (_description, weapon, category, vetAgeGroup, eventType, expected) => {
+    expect(perBoutDuration(weapon, category, vetAgeGroup, eventType, BOUT_TIMES)).toBe(expected)
+  })
+})
+
+// METHODOLOGY.md §Bracket Sizing / §DE Duration: rounds from the first bracket
+// round through the semis. Byes are not bouts, so the first round has
+// promoted − bracket/2 bouts. The gold bout is not a counted round.
+describe('deRounds', () => {
+  it('foil 248 promoted (bracket 256): R256 120 bouts after 8 byes, then full rounds through the semis', () => {
+    expect(deRounds(248)).toEqual([
+      { round: 256, bouts: 120 },
+      { round: 128, bouts: 64 },
+      { round: 64, bouts: 32 },
+      { round: 32, bouts: 16 },
+      { round: 16, bouts: 8 },
+      { round: 8, bouts: 4 },
+      { round: 4, bouts: 2 },
+    ])
+  })
+
+  it.each([
+    { promoted: 17, first: { round: 32, bouts: 1 } },
+    { promoted: 5, first: { round: 8, bouts: 1 } },
+    { promoted: 3, first: { round: 4, bouts: 1 } },
+    { promoted: 64, first: { round: 64, bouts: 32 } },
+  ])('$promoted promoted: byes are not bouts, first round $first.round has $first.bouts', ({ promoted, first }) => {
+    expect(deRounds(promoted)[0]).toEqual(first)
+  })
+
+  it('a bracket of 2 has no counted round', () => {
+    expect(deRounds(2)).toEqual([])
+  })
+})
+
+// METHODOLOGY.md §DE Duration and §DE Phase Breakdown worked examples: foil,
+// 248 promoted, bracket 256, at 20 min a bout.
+describe('deRoundsMinutes', () => {
+  const FOIL_BOUT = 20
+  // Built per test, so a missing export fails each test rather than collection.
+  const rounds = () => deRounds(248)
+
+  it('single stage on 16 strips: (8 + 4 + 2 + 1 + 1 + 1 + 1) × 20 = 360', () => {
+    expect(deRoundsMinutes(rounds(), 16, FOIL_BOUT)).toBe(360)
+  })
+
+  it('staged at the round of 16: prelims 300 on 16 general strips, video 80 on 4 video strips', () => {
+    const { prelims, video } = splitAtVideoStage(rounds(), 16)
+    expect(deRoundsMinutes(prelims, 16, FOIL_BOUT)).toBe(300)
+    expect(deRoundsMinutes(video, 4, FOIL_BOUT)).toBe(80)
+  })
+
+  it('re-derives at fewer granted strips: 8 general → 640, 2 video → 140', () => {
+    // 8 strips: 15 + 8 + 4 + 2 + 1 + 1 + 1 waves. 2 strips: R16 4, QF 2, SF 1.
+    expect(deRoundsMinutes(rounds(), 8, FOIL_BOUT)).toBe(640)
+    expect(deRoundsMinutes(splitAtVideoStage(rounds(), 16).video, 2, FOIL_BOUT)).toBe(140)
+  })
+
+  it('a grant of 0 strips counts as 1', () => {
+    expect(deRoundsMinutes(rounds(), 0, FOIL_BOUT)).toBe(deRoundsMinutes(rounds(), 1, FOIL_BOUT))
+  })
+
+  it('no counted round takes 0 minutes', () => {
+    expect(deRoundsMinutes([], 16, FOIL_BOUT)).toBe(0)
+  })
+})
+
+// METHODOLOGY.md §DE Phase Breakdown: prelims are the rounds above the
+// video-stage round, the video block runs from it through the semis.
+describe('splitAtVideoStage', () => {
+  const roundsOf = (promoted: number, videoRound: number) => {
+    const { prelims, video } = splitAtVideoStage(deRounds(promoted), videoRound)
+    return { prelims: prelims.map((r) => r.round), video: video.map((r) => r.round) }
+  }
+
+  it.each([
+    { promoted: 248, videoRound: 16, prelims: [256, 128, 64, 32], video: [16, 8, 4] },
+    { promoted: 64, videoRound: 8, prelims: [64, 32, 16], video: [8, 4] },
+    { promoted: 16, videoRound: 16, prelims: [], video: [16, 8, 4] },
+    { promoted: 8, videoRound: 16, prelims: [], video: [8, 4] },
+    { promoted: 8, videoRound: 8, prelims: [], video: [8, 4] },
+  ])('$promoted promoted, video from $videoRound: prelims $prelims, video $video', ({ promoted, videoRound, prelims, video }) => {
+    expect(roundsOf(promoted, videoRound)).toEqual({ prelims, video })
+  })
+})
+
+describe('videoStageRound', () => {
+  it.each([
+    { category: Category.DIV1, vetAgeGroup: null, expected: 16 },
+    { category: Category.CADET, vetAgeGroup: null, expected: 16 },
+    { category: Category.Y8, vetAgeGroup: null, expected: 8 },
+    { category: Category.DIV2, vetAgeGroup: null, expected: 8 },
+    { category: Category.VETERAN, vetAgeGroup: VetAgeGroup.VET40, expected: 8 },
+    { category: Category.VETERAN, vetAgeGroup: null, expected: 8 },
+  ])('$category / $vetAgeGroup → round of $expected', ({ category, vetAgeGroup, expected }) => {
+    expect(videoStageRound(category, vetAgeGroup)).toBe(expected)
+  })
+})
+
+// METHODOLOGY.md §DE Modes: a video block asks min(4, bracket/2) video strips,
+// and a bracket of 2 – no counted round – asks none (§DE Duration 'No counted
+// round'; 024 plan D5).
+describe('deVideoStripAsk', () => {
+  it.each([
+    { bracket: 256, expected: 4 },
+    { bracket: 8, expected: 4 },
+    { bracket: 4, expected: 2 },
+    { bracket: 2, expected: 0 },
+  ])('bracket $bracket → $expected', ({ bracket, expected }) => {
+    expect(deVideoStripAsk(bracket)).toBe(expected)
+  })
+})
+
+// METHODOLOGY.md §DE Modes: a general DE block asks min(bracket/2, footprint),
+// and a bracket of 2 asks none (§DE Duration 'No counted round'; 024 plan D5).
+describe('deStripFootprint', () => {
+  it('bracket 4 asks min(4/2, 16) = 2 strips', () => {
+    expect(deStripFootprint(4, 16)).toBe(2)
+  })
+
+  it('a bracket of 2 has no counted round and asks no strips', () => {
+    expect(deStripFootprint(2, 16)).toBe(0)
   })
 })

@@ -74,6 +74,39 @@ and kept every user-visible surface unchanged.*
   [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
   Feature 021.
 
+## What 024 deliberately left unfixed
+
+*Recorded by 024, 2026-10-06. 024 closed §DE prelims gets a sliver of its
+bracket's time and §The engine's rules predate the 2026-27 Operations Manual
+(`git show 41e2b975ee:docs/design/backlog.md` recovers both). Its handoff,
+`specs/024-ops-manual-conformance/handoff.md`, has the rest of what it left.*
+
+- The largest template's Suggest passing the venue ceiling –
+  [§NAC Vet/Div1/Junior suggests 103 strips, past the venue ceiling](#nac-vetdiv1junior-suggests-103-strips-past-the-venue-ceiling).
+  Unscheduled, an owner call.
+- A percentage cut read as the advancing share in one validation check –
+  [§`validation.ts` reads a percentage cut as the share that advances](#validationts-reads-a-percentage-cut-as-the-share-that-advances).
+  Unscheduled.
+- The video-strip stepper's range –
+  [§The video-strip stepper accepts counts the manual does not offer](#the-video-strip-stepper-accepts-counts-the-manual-does-not-offer).
+  An owner question, unscheduled.
+- Team DEs overflowing onto idle video strips and delaying individual video
+  blocks –
+  [§Team DEs spill onto idle video strips and delay individual video blocks](#team-des-spill-onto-idle-video-strips-and-delay-individual-video-blocks).
+  Allowed by the spec, an owner call, unscheduled.
+- Suggest's two bounds reading slightly different inputs –
+  [§Suggest's strip-hour floor and its ceiling read different inputs](#suggests-strip-hour-floor-and-its-ceiling-read-different-inputs).
+  Unscheduled.
+- The type's help text in the Tournament panel –
+  [§The Tournament panel's help text is vague and is not read by screen readers](#the-tournament-panels-help-text-is-vague-and-is-not-read-by-screen-readers).
+  An owner wording call, unscheduled.
+- The late-day WARN's raw minutes and shared dismissal key –
+  [§Day-level findings have no structured day](#day-level-findings-have-no-structured-day).
+  Feature 016.
+- A penalty weight with no reader, `EARLY_START_CONSECUTIVE_HIGH_CROSSOVER` –
+  [§Penalty weights: 5 of 19 are read](#penalty-weights-5-of-19-are-read).
+  Feature 021, and it predates 024.
+
 ## Day-level findings have no structured day
 
 *Found while planning 014, 2026-10-04. Recorded, not fixed – 014 kept every
@@ -121,6 +154,33 @@ bottleneck lists only its owner in `subjects`, because its message does not
 name the event it waited for. `predecessorReadyTime` returns a time, not the
 predecessor's id.
 
+**024's new findings add two cases for 016.** *Found by 024, 2026-10-06.* 024
+added three engine findings (the late-day WARN `day-ends-past-target`, the
+regional window INFO and WARN, and the first and last day WARN) and kept them
+out of the app on purpose, since 016 shows them. Two things about the late-day
+WARN will matter then:
+
+- **Its message prints scheduler-axis minutes, not clock times.**
+  `lateDayWarnings` (`concurrentScheduler.ts`) writes `Day N ends at <finish>,
+  <m> min past its target <target>` with both numbers as they sit on the
+  scheduler's axis, where each day starts a multiple of 1440 minutes along. A
+  late day 3 reads "ends at 4080 … target 4020", not "ends at 20:00 … target
+  19:00". An organizer cannot read that. The fix is to print the clock time
+  from the day's own start, or to carry `day` and the finish as structured
+  fields (the fix above) and let the Findings panel format them.
+- **It shares a dismissal key with every other finding of its cause.** The
+  warning has `competition_id: ''`, so the panel's row id is
+  `analysis:<cause>::<ordinal>` (`store/derived.ts`, an empty id between the
+  colons) with only the ordinal to tell two late days apart. The first and last
+  day WARNs have the same cause and the same empty id, so they sit in the same
+  ordinal sequence. Dismissing a
+  late Day 2 and then fixing it hands that dismissal to whichever finding
+  moves into its slot. The structured `day` above, folded into the row id,
+  closes both this and the venue case.
+
+Cost if ignored: when 016 shows them, a late-day warning reads as an
+unexplained number, and a dismissed one can hide a different day's warning.
+
 ## The scorecard's peak-referee row reads higher than the scheduler's own
 
 *Measured by 004's S6 on 2026-09-01, re-measured by S8 after US4 landed the
@@ -155,67 +215,19 @@ the schedule's own requirement. Worth reconciling when the referee model is next
 opened; until then the divergence is bounded, one-directional, and confined to
 saturated days.
 
-## DE prelims gets a sliver of its bracket's time, not its bout share
-
-*Found by the product owner on 2026-09-02 in the live app. Recorded, not
-fixed — the fix edits `src/engine/`, so it sits behind constitution III's
-B1–B8 drift-ledger review, and needs its own spec directory when picked up.*
-
-A Veteran Combined Men's Saber Individual event with a bracket of 64 showed a
-**DE prelims** block of **5 minutes** across 16 strips.
-
-`deBlockDurations` (`src/engine/de.ts:63-77`) splits `totalDeDuration` between
-the DE_PRELIMS and DE_ROUND_OF_16 phases — the only two `dePhasesForBracket`
-returns once `bracketSize >= 64` (`de.ts:44-49`) — by bout count:
-
-```
-totalBouts   = bracketSize / 2
-r16Bouts     = min(30, totalBouts - 1)
-prelimsBouts = max(totalBouts - 30 - 1, 0)
-```
-
-`totalBouts` is meant to stand for every scheduled bout in the bracket, but
-`bracketSize / 2` only counts the bracket's first round. The literal `30` is a
-cumulative count — bouts from the round of 32 down through the semifinals,
-stop-at-semis — measured against that first-round-only total. The subtraction
-that produces `prelimsBouts` compares two different units.
-
-- **Bracket 64**: `totalBouts = 32`, `r16Bouts = min(30, 31) = 30`,
-  `prelimsBouts = max(32-30-1, 0) = 1`. Prelims gets `round(total × 1/32)`,
-  about 3% of DE time, which `deStagedPhaseDuration`'s slot-snap floors to one
-  5-minute slot — the reported defect. The round of 64 is 32 bouts, the
-  largest single round in the event, and it receives one bout's worth of time.
-- **Bracket 128**: `totalBouts = 64`, `r16Bouts = min(30, 63) = 30`,
-  `prelimsBouts = max(64-30-1, 0) = 33`. Prelims gets 33/64 ≈ 52% of DE time.
-  The bracket's true bout share above the round of 32 is 96 of the 126
-  stop-at-semis bouts ≈ 76%. Less severe than bracket 64, but wrong in the
-  same direction.
-
-Root cause: `totalBouts = bracketSize / 2` counts only the bracket's first
-round, while the `30` it is measured against counts a cumulative total from
-the round of 32 to the semifinals, so the formula subtracts a running total
-from a single round's count.
-
-**Invisible to the B1–B8 drift ledger by construction.** `totalDeDuration` is
-conserved across the split — the misallocated share moves from prelims to r16
-rather than disappearing — so no scenario's `scheduledCount` drops and no
-ledger snapshot cell moves. The damage is confined to where the
-prelims/r16 boundary falls inside an event's own DE block: phase durations,
-the strip demand each staged block reports, and the referee-peak window it
-lands in are all wrong, but nothing the ledger measures notices. This is why
-the defect survived all eight 004 drift-ledger scenarios untouched.
-
-Pre-existing, not introduced by 004: `git log --oneline main..HEAD -L
-'63,77:src/engine/de.ts'` on `004-us5-gears` is empty. US5's only touch to
-`de.ts` was `c7035a6b28`, which threaded `defaultFootprint`, `boutDurations`,
-and `youthVetDelta` as parameters into `deStripFootprint` and
-`perBoutDuration` — `deBlockDurations` is untouched by that commit, which is
-documented BEHAVIOUR-PRESERVING.
-
 ## Day-end overrun is a hard failure the methodology calls a warning
 
 *Found by the 2026-08-31 methodology review (web research + code cross-check).
 Recorded, not fixed.*
+
+*2026-10-06, from 024: the premise below has narrowed. METHODOLOGY now sets
+7:00 PM as a soft target that draws a WARN and 10:00 PM as the hard end, where
+a phase that would end past it fails with `SAME_DAY_VIOLATION` at ERROR
+severity (§Same-Day Completion), and the engine does both: 024 added the
+`day-ends-past-target` WARN (`concurrentScheduler.ts`). The doc and the engine
+now agree on the 10:00 PM rule. What stays open is the last sentence's
+question, whether a phase past 10:00 PM should drop the event or place it with
+a WARN. The text below is the 2026-08-31 record and quotes the older wording.*
 
 `METHODOLOGY.md` calls the 10 PM day end a soft boundary and says a late finish
 "produces a warning with estimated finish time, not a scheduling failure"
@@ -398,6 +410,11 @@ goes through `cross_event_predecessors`, it inherits this defect. 024's tests
 should assert the older event's actual pool start. That check would have
 caught this defect.
 
+*2026-10-06: 024 built the window that way. `applyCrossEventEdges` stores a
+`group1_window_floor` on the older event, and
+`__tests__/engine/regionalGroup1Window.test.ts` asserts the older event's
+actual pool start. The Vet sibling edge above is unchanged.*
+
 **Cost if ignored**: Every Vet co-day runs all five age bands at once. Nested
 eligibility means one fencer often enters more than one band, so those fencers
 are double-booked with no finding. METHODOLOGY describes an order and a wait
@@ -427,8 +444,8 @@ published rules:
   ([AFM on double-flighted events](https://academyoffencingmasters.com/blog/how-to-make-double-flighted-events-work-for-you/)).
 - **Tiered video replay is settled by the 2026-27 Operations Manual**
   (p.19). It guarantees R16 for Div I, Junior and Cadet, and R8 for every
-  other individual category, with the third tier moving from R4 to R8. See
-  §The engine's rules predate the 2026-27 Operations Manual (024).
+  other individual category, with the third tier moving from R4 to R8. 024
+  delivered it (`VIDEO_STAGE_ROUND` in `constants.ts`, read by `de.ts`).
 - **2 refs/pool default is unverified**: no source states a per-pool referee
   count, and the default doubles reported staffing versus 1/pool. One usable
   sanity bound exists: the Referee Commission Chair estimated **150-180
@@ -439,27 +456,6 @@ published rules:
   are (2026-10-05).
 - **A 2026-27 overhaul is announced** (single national points list, Elite vs
   National split at 168 entries), so these tables will go stale again.
-- **RYC regional cut** (owner ruling, 2026-10-05; roadmap 024): at regional
-  level, Y14 has no 20% cut by default. `REGIONAL_CUT_TOURNAMENT_TYPES`
-  (`constants.ts:586-591`) leaves out RYC, so an RYC's Y14 events cut 20%
-  today.
-  - The spec contradicts itself. METHODOLOGY.md:377 leaves out RYC and SJCC,
-    while :683-694 give RYC/SYC and RJCC/SJCC 100% advancement. 024's first
-    task drafts the :377 amendment for the owner's approval.
-  - With RYC added, the set equals `REGIONAL_QUALIFIER_TYPES`
-    (`constants.ts:525-531`).
-  - No B1–B8 scenario is an RYC, so no ledger number moves.
-- **Y14 at NACs** (owner ruling, 2026-10-05; roadmap 024): Y14 advances 100%
-  at a NAC by default, per the 2024-25 Athlete Handbook, Table 2.16.1 ("Y14
-  SYC & NAC: 100% to SE"). The code (`DEFAULT_CUT_BY_CATEGORY`) and
-  METHODOLOGY.md:377 cut Y14 20% there. With this ruling and the RYC one
-  together, Y14 advances in full at every tournament type the app models, so
-  its default becomes all-advance. Its `REGIONAL_CUT_OVERRIDES` entry then
-  does nothing. The handbook's 80% applies to the Y14 National Championship,
-  which no template models.
-  - B2 and B3 hold NAC Y14 events, so this moves the ledger and needs 024's
-    drift review against the converged ledger 015 leaves.
-  - The :377 amendment is drafted together with the RYC fix.
 
 The durable fix is the one already on this backlog – promote policy tables
 (cuts, video rounds, flighting caps) into the per-season configuration file
@@ -480,91 +476,187 @@ Modelling it needs a second pool round with seeded "shark" and "minnow" pools
 and no DE bracket for Y8. If ignored, Y8 events are planned with a DE that does
 not happen, so their time and strip use is wrong.
 
-## The engine's rules predate the 2026-27 Operations Manual
+## NAC Vet/Div1/Junior suggests 103 strips, past the venue ceiling
 
-*Audited 2026-10-05 against the [USA Fencing Operations Manual
-2026-27](https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt31ccda29e31349e7/USAF_OPsManual_2026_27.pdf)
-("Published August 2026"). The edition before it, from 2019, is the spec's
-source S1. Every ruling below is the owner's, made on 2026-10-05. Roadmap
-feature 024, after 015.*
+*Found by 024's measurement, 2026-10-06. Recorded, not fixed. Needs an owner
+call on what the app should say.*
 
-The spec and the engine were written against the 2019 manual. The 2026-27
-edition changes the planning times and the video rounds, and its scheduling
-criteria (p.20) are word-for-word those of 2019. The audit found that the
-spec departs from them in places without saying so.
+Suggest answers 103 strips for the NAC Vet/Div1/Junior template (the 66-event
+template in `src/engine/catalogue.ts`) at 4 days, a 9:00–19:00 day and 12 video
+strips. All 66 events place at 103. Before 024 the answer was 80, group A's
+pool and DE times took it to 90 and group B's 10-hour day and ÷ 14 floor took
+it to 103. It holds at 103 with 8, 12 or 16 video strips.
 
-**Spec first.** 024's first task drafts every METHODOLOGY.md amendment below,
-each citing its manual page, and updates source S1 to the 2026-27 edition.
-No code changes until the owner approves the spec diff.
+The owner's working ceiling is about 100 strips, because the largest event in
+the world is reported to run "over 100 strips" (a judgement, not a sourced
+figure). 103 is past it. The cause is not a bug. The manual's bout times make
+large-bracket DEs longer, and the shorter planning day leaves less room for
+them. 024 reports the number and does not tune it.
 
-**Planning times** (p.17, "Average Bout Timing in Minutes": a pool of 7 takes
-120 min for foil and épée and 60 for sabre, and a 15-touch bout takes
-15 / 15 / 8):
+The levers an organizer pulls come in this order: days, flighting, entry caps,
+and strips last. The first is already spent here, because the day count offers
+2, 3 and 4 (`TournamentPanel.tsx`) and this template is at 4. Flighting is
+modelled. Entry caps are not (§Per-event entry caps are not modelled). So the
+Suggested minimum has nothing left to offer but strips, and it says so with a
+bare number.
 
-- **Pools follow the manual.** A pool of N takes the pool-of-7 time ×
-  bouts(N) ÷ 21. That gives 86 / 86 / 43 min for a pool of 6, and 57 / 57 / 29
-  for a pool of 5. It replaces the default `pool_round_duration_table`
-  (`constants.ts:114-118`). That table gives foil, épée and sabre
-  105 / 120 / 75 for a pool of 6, which `poolDurationForSize`
-  (`pools.ts:62-71`) scales to 147 / 168 / 105 for a pool of 7. The table stays user-editable
-  and only its default changes. The youth calibration entry below is affected.
-- **DE bouts follow the manual plus changeover.** The manual's figures are
-  treated as fencing time, with the app's 5-minute strip changeover added:
-  20 / 20 / 13 per bout. DE length derives from that, and the empirical
-  `de_duration_table` goes. This lifts the design doc's "replacing the
-  empirical `de_duration_table`" out-of-scope line.
-- **The team match is 60 min for foil and épée and 30 for sabre.** That is
-  the figure §Team events (023) needs.
-- **Strips and the day.** The default day becomes 9:00–19:00 (today
-  8:00–22:00, `constants.ts:45-46`). Suggest takes competitors on the busiest
-  day ÷ 14 as its baseline, against about ÷ 5.6 today (`analysis.ts:74-75`).
-  A day that finishes after 19:00 raises a warning, which pairs with §Day-end
-  overrun (018). 024's plan decides how the ÷ 14 baseline combines with the
-  placement search that 011 and 012 built.
+What would fix it, for the owner to choose between: a note on the Suggested
+minimum when the answer passes about 100 that names the levers in order, a
+fifth day for the largest templates (METHODOLOGY §Inputs leaves longer events
+to a future version), or the entry-cap work named above. None is scheduled.
 
-**Video** (p.19): replay is guaranteed at NACs for every category.
+**Cost if ignored**: Suggest offers a venue the owner calls implausible for
+the largest template, which reads as a broken tool.
 
-- From the round of 16: Div I, Junior, Cadet.
-- From the round of 8: all other individual categories. The manual prints
-  "round of 8" for Div IA, II, III and Vet 40/80/Combined, which 2019 had at
-  round of 4, and the owner takes it as printed.
-- Teams: gold and bronze only (023).
+## `validation.ts` reads a percentage cut as the share that advances
 
-At NACs every individual category becomes REQUIRED. Today only Cadet, Junior
-and Div I are REQUIRED (`constants.ts:184-196`). `VIDEO_STAGE_ROUND`
-(`constants.ts:551-556`) gets the round of 8 for the third tier and is wired
-into the staged DE. Nothing in `src/` reads it today.
+*Found by 024's group E review, 2026-10-06. Recorded, not fixed. A comment in
+`validation.ts` names the mismatch.*
 
-**Same-day rules** (p.20, Groups 1–3):
+The cut-value-min-promotions check (`validation.ts`, near line 183) computes
+`round(fencer_count × cut_value / 100)` for a PERCENTAGE cut. That reads
+`cut_value` as the share that advances. `computeDeFencerCount` (`pools.ts`)
+computes `round(fencer_count × (1 − cut_value / 100))`, so it reads the same
+number as the share that is cut, and the DE field it builds is the one the
+schedule uses. The two disagree on every percentage.
 
-| Rule | Manual | Ruling |
-|---|---|---|
-| Div I vs Cadet, same weapon | Group 1, mandatory | **Soft block.** If they must share a day, one runs in the morning and the other in the afternoon, with minimal overlap or one finishing before the other starts. Today it is a soft penalty with no time-of-day rule (`constants.ts:480`), and the spec also lists it as hard (:110-114). |
-| Group 1 and gender | "for any one weapon" | **Per weapon and gender**, as the engine applies it today. The spec states this as its reading. |
-| Group 1 at regionals | titled "National" | **Soft at ROC, RYC, RJCC, SYC and SJCC**, with the Div I–Cadet treatment. This replaces the spec's unsourced "4+ hours apart" exception (:119-122). Today `crossover.ts:172` blocks at every type. |
-| Adjacent age groups | Group 1 | **Y8 with Y10, and the Vet co-day, stay.** The spec documents both as departures from the manual. |
-| Div I vs Div IA | not in the manual | **Stays a hard block**, documented as a departure because nearly the same fencers enter both. |
-| Junior–Cadet rest day | Group 2, Junior Olympics only | **Junior Olympics only.** It comes out of `REST_DAY_PAIRS` (`constants.ts:516-519`) because no template is a Junior Olympics. Junior–Div I keeps its rest day. |
-| First and last day shorter | Group 2 | **Planned, then checked.** Day assignment gives the first and last day less capacity. A warning fires from 3 days up when either isn't shorter. Today it is checked only at 4+ days, and only when longer (`concurrentScheduler.ts:1544, :1588`). |
-| Vet vs Div IA, same weapon | Group 2 | New soft separation. |
-| Div II vs Div III, same weapon | Group 2 | New soft separation. |
-| Y14, Cadet, Junior vs open team, same weapon | Group 2 | New soft separation. |
-| Same age group and gender, different weapon | Group 3 | A weak soft preference for every category. It replaces `CROSS_WEAPON_SAME_DEMOGRAPHIC_VET`, which nothing reads. |
-| Large foil and sabre starts staggered | Group 2 | **Declined.** Not modelled. |
+- **A 20% cut, the default for Cadet, Junior and Div 1**: the check's figure
+  is 20% of the field, so 2 to 7 fencers read as fewer than 2 promoted and the
+  event is excluded with a `cut-value-min-promotions` ERROR. The DE field would
+  have been 2 to 6 fencers, a real if tiny event. Real fields of 2 to 7 are
+  rare, but a what-if run or a hand-entered count hits it.
+- **A 99% cut**: the check's figure is 99% of the field, so it passes. The DE
+  field is 1% of the field, which `computeDeFencerCount` floors to 2. The
+  intended protection, an error when a cut leaves fewer than 2 fencers, does
+  not fire where it should.
 
-**Cuts.** The RYC regional cut and Y14 all-advance at NACs (§Policy tables)
-move here from 018.
+The rule is per-event (`PER_EVENT_ERROR_RULES` in `concurrentScheduler.ts`), so
+the damage is confined to the event. Fixing it means changing the check's
+PERCENTAGE arm to `round(fencer_count × (1 − cut_value / 100))` and then
+checking that no B1–B8 scenario moves. The check cannot simply call
+`computeDeFencerCount`, because that function floors its result at 2 and would
+hide the case the check exists to catch.
 
-**Not scheduling inputs:**
+**Cost if ignored**: a small event under a percentage cut is dropped from the
+schedule with an error that quotes the wrong count, and an extreme cut is
+accepted without the warning it was meant to draw.
 
-- Mixed-gender youth events (p.12). The app always plans single-gender events,
-  and a merge is an output decision like referee assignment.
-- Refs per pool. The manual links a separate Referee Requirements document,
-  and the per-type values stay as they are, unsourced.
+## The video-strip stepper accepts counts the manual does not offer
 
-**Drift.** Pool and DE times move every B1–B8 event, and the video and
-same-day rules move placement. 024 is measured against 015's converged ledger,
-with one drift review per rule group.
+*Found by 024's group C, 2026-10-06. Recorded, not fixed. Owner question below.*
+
+The "With video" stepper in `StripsPanel.tsx` runs from 0 to the strip count.
+METHODOLOGY §Inputs offers 4, 8, 12 and 16 video strips at a NAC, and
+§Resource Preconditions sets 4 as the minimum. Since 024 every individual event
+at a NAC is REQUIRED video, so under the default Staged mode its video stage
+asks `min(4, bracket / 2)` strips, which is 4 for any bracket of 8 or more. A
+NAC with 1, 2 or 3 video strips therefore draws a `video-r16-strip-shortfall`
+ERROR (`validation.ts`) on each such event. That rule is per-event
+(`PER_EVENT_ERROR_RULES`), so every individual event with a bracket of 8 or
+more is excluded from the schedule. The organizer who types 3 loses the board
+and has to read the Findings to learn why.
+
+**Owner question**: restrict the stepper to 4, 8, 12 and 16, or keep free entry
+and warn? Restricting matches the spec and makes the error unreachable, but it
+also stops an organizer from trying 6 or 10, which the engine accepts. Free
+entry with a note on the control keeps that and costs one more line of text.
+
+**Cost if ignored**: a NAC with fewer than 4 video strips loses every
+individual event, and the stepper gives no hint.
+
+## Team DEs spill onto idle video strips and delay individual video blocks
+
+*Found by 024's group A review fixes, 2026-10-06 (`dc0ee00c48`'s message, which
+corrects the plan's 1925 to 1895). Recorded, not fixed. METHODOLOGY allows it.*
+
+Since 024 every team DE runs Single Stage on general strips and bills no video
+strip-hours. A wide team DE can need more strips than the day's general strips
+leave free, so the strip allocator takes idle video strips as overflow.
+METHODOLOGY §Video Strip Preservation says exactly that: for "DE prelims /
+single-stage DEs: non-video strips selected first; video strips used as overflow
+when general strips are exhausted." The overflow is legal, and it costs the
+individual events that need those strips for their video block.
+
+Group A measured it on B1, in scheduler-axis minutes. On day 2 the Vet
+Women's Épée team DE (`VET-W-EPEE-TEAM`) runs from 1880 to 2120. It takes the
+4 free general strips and then all 12 video strips. On day 1, team DEs on
+general strips push individual prelims onto video overflow. The individual
+video blocks that start later because of it, before and after the team ruling:
+
+- Junior Women's Sabre: 1895 to 2120, a delay of 225 minutes.
+- Junior Women's Épée: 2020 to 2120.
+- Junior Men's Épée: 2040 to 2120.
+- Div 1 Men's Sabre: 1115 to 1165.
+- Div 1 Women's Foil: 1195 to 1220.
+
+No block started earlier. B1 stays at 24 placed, so no ledger count moved, and
+the spec allows the overflow, which is why the contention is recorded here and
+not corrected.
+
+What would fix it, for the owner to choose between: keep video strips out of
+the overflow on any day that holds a staged individual video block, which is a
+rule METHODOLOGY does not state and would amend §Video Strip Preservation, or
+leave it as the spec has it. Team events are 023's, so the decision could be
+made with that feature.
+
+**Cost if ignored**: individual video blocks at a NAC can start up to 225
+minutes later than they would without the team event on the same day.
+
+## Suggest's strip-hour floor and its ceiling read different inputs
+
+*Found by 024's group A review fixes (`dc0ee00c48`, the floor) and group B
+review (`61c9f60bc9`, the ceiling), 2026-10-06. Recorded, not fixed. Neither
+moves a measured number.*
+
+The strip search (`src/engine/stripSearch.ts`) runs from a floor to a ceiling.
+Two small mismatches sit in how those bounds are built.
+
+- **The floor counts general strip-hours only.** `stripSearchRange` reads
+  `total_strip_hours` from `aggregateStripHours` (`capacity.ts`) and ignores
+  `video_strip_hours`. For a staged event the video-stage bouts bill the video
+  budget alone, so they never enter the floor. METHODOLOGY §Strip Count
+  Suggestion says the floor covers "the competitions' total strip-hour draw",
+  which can be read as general hours or as general plus video. The floor only
+  seeds the search – the scan steps up one strip at a time until the scheduler
+  places every event – so a low floor costs extra candidates to scan and does
+  not return a wrong answer. The owner can settle the wording, and the code
+  follows it.
+- **The ceiling and the floor's busiest-day spread filter fencer counts
+  differently.** `suggestStripCount` (`analysis.ts`, the search's ceiling) skips
+  a competition only when `fencer_count <= 1`. `busiestDayCompetitors`
+  (`stripSearch.ts`) and `aggregateStripHours` keep only counts from
+  `MIN_FENCERS` (2) to `MAX_FENCERS` (500). The two agree for every count from 0
+  to 500. They differ for a count above 500, which `fencer-count-bounds`
+  rejects as an ERROR (`validation.ts`) and which the ceiling still counts.
+  The fix is to share one filter.
+
+**Cost if ignored**: low. A board with an out-of-range fencer count gets a
+ceiling that includes an event the floor ignores, and a video-heavy board scans
+a few more candidates than it needs to.
+
+## The Tournament panel's help text is vague and is not read by screen readers
+
+*Found by 024's group D reviews, 2026-10-06. Recorded, not fixed. The wording is
+an owner call.*
+
+The tournament-type control in `TournamentPanel.tsx` has a line under it:
+"Affects event grouping rules and scheduling priorities." It is accurate and
+says little. "Scheduling priorities" names nothing the type sets. Since 024 the
+type decides whether Group 1 pairs are hard or soft with a window, the video
+policy, the DE mode, referees per pool and the default cuts, and it also decides
+the rest-day rule the line used to name. 024's plan limited its edit to the
+rest-day phrase.
+
+The line is also not tied to its radio group. The group has an `aria-label` and
+no `aria-describedby`, so a screen reader never reads the help text, and tests
+can only find it by its wording. That was true before 024.
+
+What would fix it: the owner words a sentence that names what the type sets,
+and the line gets an id that the radio group points at with `aria-describedby`.
+`SettingsPanel.tsx` already does this for its own hints.
+
+**Cost if ignored**: an organizer picking a type does not learn what it changes,
+and a screen-reader user does not hear even the sentence there is.
 
 ## METHODOLOGY.md and the engine have diverged, and the doc is the spec
 
@@ -604,6 +696,15 @@ existed — these rules were built, then bypassed rather than removed.
 | Youth/vet −5 min DE bout delta | `de.ts:148` `perBoutDuration` + `YOUTH_VET_BOUT_DELTA` | no caller |
 | Strip count suggestion | `analysis.ts:22` `suggestStripCount` | the store's own `src/store/stripSuggestion.ts`, which under-recommends and empties `ROC Mega` |
 
+*2026-10-06, from 024: two rows of this table no longer describe the code.
+The soft-separation row now runs: `crossoverPenalty` (`crossover.ts`) reads
+`SOFT_SEPARATION_PAIRS`, which holds DIV1↔DIV2 and DIV1↔DIV3 at 3.0, and
+DIV1↔CADET left the table to become a Group 1 pair (`GROUP_1_MANDATORY`), hard
+at NAC, SYC and SJCC and `REGIONAL_GROUP_1_PAIR` (5.0) at ROC, RYC and RJCC.
+The bout-delta row is gone: `YOUTH_VET_BOUT_DELTA` no longer exists, and
+`perBoutDuration` has a caller (`de.ts`) that picks the 10-touch, 15-touch or
+team-match time. The other three rows were not re-checked by 024.*
+
 This is why the B1–B8 drift ledger never caught any of it: replacing a live
 hardcode with the constant it shadows *moves* numbers, so the divergence is
 invisible precisely because nobody attempted the fix. Expect a real snapshot
@@ -616,11 +717,15 @@ Audited by grepping `PENALTY_WEIGHTS.<KEY>` per key on 2026-09-01. Read:
 `INDIV_TEAM_DAY_AFTER`, `INDIV_TEAM_2_PLUS_DAYS`. The other fourteen split
 three ways, and the split is what decides the size of the work:
 
-- **Three are cheap engine fixes with no architectural blocker.**
+- **Three were cheap engine fixes with no architectural blocker.**
   `PROXIMITY_3_PLUS_DAYS`, `WEAPON_BALANCE`,
   `CROSS_WEAPON_SAME_DEMOGRAPHIC_VET` are all pure day-level properties that day
   coloring has every input to compute. `PROXIMITY_3_PLUS_DAYS` is the starkest –
   `PROXIMITY_1_DAY` is applied three lines above the guard that skips it.
+  *2026-10-06: 024 took the third. Group 3 replaced
+  `CROSS_WEAPON_SAME_DEMOGRAPHIC_VET` with `CROSS_WEAPON_SAME_DEMOGRAPHIC`
+  (0.2, every category), which `dayColoring.ts` reads. Only `WEAPON_BALANCE`
+  of the three has no reader as of 024 – 010 wired `PROXIMITY_3_PLUS_DAYS`.*
 - **Eight needed a decision – answered 2026-10-04: retire them from the doc
   as Phase D casualties.** That makes this a doc feature with three engine
   fixes, not a scheduler change. The analysis that framed the choice:
@@ -638,6 +743,21 @@ three ways, and the split is what decides the size of the work:
 - **Three need referee demand earlier than it is computed.** The
   `LAST_DAY_REF_SHORTAGE_*` trio. Referee demand is a post-schedule output
   today.
+
+*2026-10-06, from 024: `PENALTY_WEIGHTS` now has 20 keys and 8 have a reader
+outside `constants.ts`. The count was 5 of 19 on 2026-09-01. 010 wired
+`PROXIMITY_3_PLUS_DAYS`, and 024 added `REGIONAL_GROUP_1_PAIR` (read in
+`crossover.ts`) and swapped the Vet cross-weapon key for
+`CROSS_WEAPON_SAME_DEMOGRAPHIC`, which `dayColoring.ts` reads. The 12 with no
+reader are the eight time-of-day weights, `WEAPON_BALANCE` and the
+`LAST_DAY_REF_SHORTAGE_*` trio. That includes
+`EARLY_START_CONSECUTIVE_HIGH_CROSSOVER` (5.0), a gap against METHODOLOGY
+§Early-Start Conflicts that predates 024 and that 024 neither widened nor
+closed. That section's three bullets still state the early-start rules, and
+`EARLY_START_SAME_DAY_HIGH_CROSSOVER` and `EARLY_START_CONSECUTIVE_INDIV_TEAM`
+have no reader either. They are three of the eight the owner ruled to retire
+from the doc on 2026-10-04, so 021 either removes the section's bullets with
+the other time-of-day rules or wires the weights.*
 
 ### Where the doc is likely the wrong one
 
@@ -658,7 +778,10 @@ Three cases argue against "conform the engine", and each has evidence:
   and that no source was found in either direction. Conforming the engine to an
   uncorroborated table would encode a guess. Every staged event splits at
   `DE_ROUND_OF_16` today. **Settled 2026-10-05:** the 2026-27 Operations Manual
-  (p.19) sources the tiers, and 024 conforms the engine to them.
+  (p.19) sources the tiers. **Delivered 2026-10-06 by 024:** every staged
+  event splits at its category's tier (`videoStageRound` in `de.ts`), so the
+  "every staged event splits at `DE_ROUND_OF_16`" sentence describes the code
+  before 024.
 
 ### The doc also contradicts itself
 
@@ -668,13 +791,19 @@ no blocking decision.*
 
 - **DIV1↔CADET is listed as both hard and soft.** The hard-constraint section
   lists it under "always different days at NACs" while Soft Preferences gives
-  it penalty 5.0. The code says soft (`constants.ts:453,472`) – the
+  it penalty 5.0. The code said soft (`constants.ts:453,472`) – the
   hard-constraint bullet should move. Note this is entangled with the soft
   separation row in the table above: the doc's own soft value (5.0) is not the
   one applied (0.8), so fixing the hard/soft listing does not settle the number.
   **Owner ruling 2026-10-05:** soft, even though the 2026-27 manual makes it
   mandatory (p.20). If the two must share a day, they split morning and
-  afternoon (024).
+  afternoon (024). *2026-10-06, from 024: the contradiction is gone, and the
+  outcome differs from the ruling above. METHODOLOGY §Overlapping-Population
+  Separation (Group 1) lists DIV1 and CADET as a Group 1 pair, hard at NAC, SYC
+  and SJCC and soft at ROC, RYC and RJCC, and `GROUP_1_MANDATORY`
+  (`constants.ts`) and `crossoverPenalty` do the same. At a regional type the
+  older side's pools start no earlier than day start + 4 hours when a pair
+  shares a day, which is the morning and afternoon split.*
 - **Flighting text conflicts with itself.** The Flighting section says Flight
   A/B start/end times are not tracked, while Runtime Decomposition says the
   concurrent scheduler decomposes them into two timed phase nodes. The former
@@ -682,7 +811,12 @@ no blocking decision.*
 - **Day-end severity wording** ("soft boundary", warning-level Same-Day
   Completion) contradicts the runtime's ERROR-severity `SAME_DAY_VIOLATION` –
   resolve whichever way §Day-end overrun lands, but the doc and engine should
-  say the same thing.
+  say the same thing. *2026-10-06, from 024: resolved by amending the doc to match
+  the engine. METHODOLOGY §Same-Day Completion now makes 7:00 PM the soft target
+  that draws a WARN and 10:00 PM the hard end, where `SAME_DAY_VIOLATION` is an
+  ERROR, and the engine does both. What stays open is whether a phase that
+  would end past 10:00 PM should fail at all, which §Day-end overrun is a hard
+  failure asks.*
 
 ### Also outstanding, unverdicted
 
@@ -849,6 +983,13 @@ how mechanical the wiring is.
 *2026-10-05: 024 resets the default pool durations to the 2026-27 Operations
 Manual's planning times (p.17), which are shorter than today's. Re-measure B4
 after 024 before deciding anything here.*
+
+*2026-10-06, from 024: B4 (the SYC, 30 events) places 21 of 30 after 024, up
+from 18 before it. Group A's pool-of-7 times took it to 19 and group D's
+same-day rules to 21, with 9 ERRORs left (it had 12). A placed count is not a block
+length, and 024 did not re-read B4's Y8 and Y10 pool blocks against the 2–3
+hours the figures below describe, so whether the manual's times close that
+gap is still unmeasured.*
 
 B4 currently predicts 5–6 hours for Y8/Y10 events that finish in 2–3 hours in
 reality. Recalibrate `pool_round_duration_table`, or add a youth-event
@@ -1269,19 +1410,21 @@ before calling the product finished.*
 
 The engine gives every event a pool round before its DE, because the phase
 builder has no event-type branch (`concurrentScheduler.ts:538-557`). METHODOLOGY.md
-assumes the same (:64, :72, :130-145, :157-160, :197, :531, :600-601,
-:639-643, :707, :736-738), so this is a spec gap and the owner amends the spec
-first.
+assumes the same (§Outputs, §Single-Day Fit, §Resource Preconditions, §Team
+Events Cannot Use Cuts, §Individual/Team Separation, §Concurrent Phase
+Scheduler, §Phase 2: Pre-Scheduling Analysis, §Phase 5: Resource Allocation,
+§Strip Count Suggestion and §Strip-Hour Capacity), so this is a spec gap and
+the owner amends the spec first.
 
-What the owner saw: B1's 10-team Vet events (Men's and Women's Foil, Men's and
-Women's Sabre) run two 5-team pools on 2 strips, then a 4-strip "DE round of
-16". The Schedule view's Strips column prints `pool_strip_count`
+What the owner saw (before 024): B1's 10-team Vet events (Men's and Women's
+Foil, Men's and Women's Sabre) run two 5-team pools on 2 strips, then a 4-strip
+"DE round of 16". The Schedule view's Strips column prints `pool_strip_count`
 (`ScheduleOutput.tsx:183`), so the "2 strips" is the pool round. The 4-strip DE
-is the fixed `de_round_of_16_strips: 4` (`buildConfig.ts:218`) whatever the
-field. B8's real 4-team `D1-M-FOIL-TEAM` (`tournaments.ts:166`) gets a 1-strip
-pool and a 4-strip DE for two semifinal bouts. B1's counts are rounded to the
-nearest 10 (`tournaments.ts:2-3`), so a "10" may be anywhere from 5 to 14
-teams.
+was the fixed `de_round_of_16_strips: 4`, a field 024 removed. A team DE now
+asks `min(bracket / 2, 16)` general strips (`deStripFootprint` in `de.ts`).
+B8's real 4-team `D1-M-FOIL-TEAM` (`tournaments.ts:166`) still gets a 1-strip
+pool. B1's counts are rounded to the nearest 10 (`tournaments.ts:2-3`), so a
+"10" may be anywhere from 5 to 14 teams.
 
 Files that count team pools today: `concurrentScheduler.ts` (538-557, 771-783,
 1477-1484, 1526, 1691), `derive.ts` (144-203, 272-296), `capacity.ts`
@@ -1294,21 +1437,27 @@ and `serialization.ts:253-254`.
 
 Other gaps the same feature closes:
 
-- Team DE length comes from the individual DE table
-  (`concurrentScheduler.ts:403,582`), not a team match.
-- Div 1, Junior and Cadet team DEs ask for REQUIRED video
-  (`buildConfig.ts:206`) where METHODOLOGY.md:416 says gold and bronze only.
+- **Done by 024 (2026-10-06):** a team DE runs at the team match time (60 min
+  for foil and épée, 30 for sabre, `perBoutDuration` in `de.ts`) in place of
+  the individual DE table, and every team event plans Single Stage with
+  BEST_EFFORT video at every tournament type (`resolveDeMode` and
+  `resolveVideoPolicy` in `typeDefaults.ts`, which `buildConfig.ts:213-214`
+  calls). So no team DE asks for REQUIRED video or video strips any more. The
+  gold and bronze bouts are not scheduled, and the bout committee finds a
+  video strip for them on the day (METHODOLOGY §Video Replay Policy, Teams
+  row). What is left for 023 is the pool round and the "placed" definition
+  above.
 - The NAC team defaults (`constants.ts:218,228,238,288`) have no stated source,
-  and the regional ones are unreachable (METHODOLOGY.md:665 says only NACs have
-  team events).
-- Since 015 the ledger factory stages NAC team DEs as the app does, so 023 is
-  measured against the DE shape the app runs.
-- **Staging is right** (owner, 2026-10-05): at national events, team DEs are
-  staged, with video strips for the gold and bronze medal bouts. What 023
-  changes is the team DE's shape and which rounds take video, not its DE
-  mode.
+  and the regional ones are unreachable (METHODOLOGY §Tournament-Type Policies
+  says only NACs have team events).
+- Since 015 the ledger factory plans team DEs as the app does (Single Stage
+  since 024), so 023 is measured against the DE shape the app runs.
+- **Staging, superseded**: the owner's earlier 2026-10-05 ruling that team DEs
+  are staged at national events gave way to 024's D4 ruling (also 2026-10-05)
+  that team events run Single Stage at every type, so the ledger factory and
+  the app both plan them that way.
 - **Team match length.** The 2026-27 Operations Manual (p.17) gives 60 min for
-  foil and épée and 30 for sabre. 023 builds on 024's DE timing basis.
+  foil and épée and 30 for sabre. 024 built it in, and 023 builds on it.
 
 Cost if ignored: team events spend strips, time and referees on a round that
 does not exist, and the Strips column reports it.
@@ -1330,9 +1479,10 @@ reword the engine messages. Neither moves the drift ledger, which excludes
 message strings (`driftLedger.test.ts:13-15`). Some messages name two ids
 mid-text (`flighting.ts:57`, `analysis.ts:149,193,240`, `validation.ts:89`), so
 a fix must substitute every catalogue id, not only the target or a leading
-`<id>: `. B4, B5 and B6 also raise `validation.ts:217` warnings. The overlay at
-`CenterView.tsx:201-219` has no `print-hidden` class, so a dimmed-invalid board
-prints its codes. `ExportPopover.tsx:129-144` also prints ids from load errors.
+`<id>: `. Before 024's group C, B4, B5 and B6 also raised `validation.ts` video
+dead-config warnings, and regional events are BEST_EFFORT now, so they no longer
+do. The overlay at `CenterView.tsx:201-219` has no `print-hidden` class, so a
+dimmed-invalid board prints its codes. `ExportPopover.tsx:129-144` also prints ids from load errors.
 
 Since 014, every `Bottleneck` carries `subjects`, as `ValidationError` already
 did. For an engine finding these are exactly the competition ids its message

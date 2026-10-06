@@ -3,11 +3,13 @@ import type {
   TournamentConfig,
   PinnedPlacement,
 } from '../engine/types.ts'
-import { DeStripRequirement } from '../engine/types.ts'
+import { DAY_AXIS_SPACING_MINS, DeStripRequirement } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import {
   DAY_START_MINS,
   DAY_END_MINS,
+  DAY_HARD_END_MINS,
+  clockHardEnd,
   LATEST_START_MINS,
   LATEST_START_OFFSET,
   DAY_LENGTH_MINS,
@@ -18,8 +20,6 @@ import {
   MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS,
   MIN_FENCERS,
-  DEFAULT_DE_DURATION_TABLE,
-  DEFAULT_VIDEO_POLICY_BY_CATEGORY,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
   ADMIN_GAP_MINS,
@@ -27,21 +27,24 @@ import {
   THRESHOLD_MINS,
   SLOT_MINS,
   DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
+  DE_BOUT_DURATION_10_TOUCH,
+  TEAM_MATCH_DURATION,
   DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
 import { defaultCutForEntry } from './competitionDefaults.ts'
-import { TYPE_DEFAULTS, resolveVideoStrips } from './typeDefaults.ts'
+import { TYPE_DEFAULTS, resolveDeMode, resolveVideoPolicy, resolveVideoStrips } from './typeDefaults.ts'
 import { buildStrips } from '../engine/stripBudget.ts'
 
 /**
  * Calendar-day spacing between scheduler-axis day windows (research.md D5).
  * Day d's window is [d*DAY_AXIS_SPACING_MINS + start_d, d*DAY_AXIS_SPACING_MINS + end_d) —
  * see specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md). `runActions.ts` imports this to reverse the
- * conversion when a schedule result becomes a Placement (C2).
+ * conversion when a schedule result becomes a Placement (C2). Defined in the
+ * engine's types.ts since 024, whose empty-`dayConfigs` fallback axis uses the
+ * same spacing (D7), and re-exported here for the store's callers.
  */
-export const DAY_AXIS_SPACING_MINS = 1440
+export { DAY_AXIS_SPACING_MINS }
 
 /**
  * Bridges the Zustand store shape to the engine's TournamentConfig + Competition[] interfaces.
@@ -69,10 +72,13 @@ export function buildTournamentConfig(state: StoreState): {
     // d*DAY_AXIS_SPACING_MINS so no two days' windows overlap on the absolute
     // minute axis strip_allocations uses (specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)). The
     // store's own state.dayConfigs is left untouched — only this config copy
-    // carries the shift.
+    // carries the shift. Each window also gains the day's hard end: 10:00 PM,
+    // or the organizer's day end when they set it later (METHODOLOGY.md
+    // §Same-Day Completion, 024 D7). The store never holds it.
     dayConfigs: state.dayConfigs.map((day, d) => ({
       day_start_time: d * DAY_AXIS_SPACING_MINS + day.day_start_time,
       day_end_time: d * DAY_AXIS_SPACING_MINS + day.day_end_time,
+      day_hard_end_time: d * DAY_AXIS_SPACING_MINS + clockHardEnd(day.day_end_time),
     })),
 
     // These seven used to come from the store's global-overrides slice, which 013 T022
@@ -85,14 +91,16 @@ export function buildTournamentConfig(state: StoreState): {
     FLIGHT_BUFFER_MINS,
     THRESHOLD_MINS,
     SLOT_MINS,
-    // Copied so no consumer spreading the config can reach the module constant.
+    // Copied so no consumer spreading the config can reach the module constants.
     DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
-    YOUTH_VET_BOUT_DELTA,
+    DE_BOUT_DURATION_10_TOUCH: { ...DE_BOUT_DURATION_10_TOUCH },
+    TEAM_MATCH_DURATION: { ...TEAM_MATCH_DURATION },
     DEFAULT_DE_STRIP_FOOTPRINT,
 
     // Engine constants
     DAY_START_MINS,
     DAY_END_MINS,
+    DAY_HARD_END_MINS,
     LATEST_START_MINS,
     LATEST_START_OFFSET,
     DAY_LENGTH_MINS,
@@ -104,7 +112,6 @@ export function buildTournamentConfig(state: StoreState): {
     MAX_FENCERS,
     MIN_FENCERS,
     pool_round_duration_table: state.pool_round_duration_table,
-    de_duration_table: DEFAULT_DE_DURATION_TABLE,
 
     // Strip budget defaults — per-event UI overrides to be added in a future task
     max_pool_strip_pct: 0.80,
@@ -201,9 +208,10 @@ function buildCompetitions(state: StoreState): Competition[] {
       // Settings panel writes `de_mode_override`, `null` meaning follow the
       // type. Resolved here rather than in the store so the store keeps the
       // organizer's intent — "follow the type" — instead of a snapshot of what
-      // the type meant when they chose it.
-      de_mode: state.de_mode_override ?? typeDefaults.de_mode,
-      de_video_policy: DEFAULT_VIDEO_POLICY_BY_CATEGORY[entry.category],
+      // the type meant when they chose it. A team event runs Single Stage
+      // whatever the setting says (024 D4, METHODOLOGY.md §DE Modes).
+      de_mode: resolveDeMode(state.tournament_type, entry.event_type, state.de_mode_override),
+      de_video_policy: resolveVideoPolicy(state.tournament_type, entry.event_type),
       use_single_pool_override: false,
 
       // Sensible defaults
@@ -212,10 +220,9 @@ function buildCompetitions(state: StoreState): Competition[] {
       // old 9999 binds once a day's scheduler-axis end (d*DAY_AXIS_SPACING_MINS
       // + day_end_time) passes it, which under 1440-minute spacing starts at
       // day 7. Infinity can never be the minimum in
-      // Math.min(dayEnd(day, config), latest_end), for any day count.
+      // Math.min(dayHardEnd(day, config), latest_end), for any day count.
       latest_end: Infinity,
       optional: false,
-      de_round_of_16_strips: 4,
       de_round_of_16_requirement: DeStripRequirement.HARD,
       // The store's own flag. `flighted: true` with a null group is exactly the
       // shape `derive.ts` splits into Flight A and Flight B, so the flag needs
@@ -224,14 +231,12 @@ function buildCompetitions(state: StoreState): Competition[] {
       flighted: overrides.flighted,
       flighting_group_id: null,
       is_priority: false,
-      // The fourth seam specs/006-day-axis-parity/parity-exceptions.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names. A `0` here zeroes the DE
-      // term of `estimateCompetitionStripHours`
-      // (`strips_allocated × de_duration / 60`, src/engine/capacity.ts:146),
-      // so every individual event contributed nothing to the upfront
-      // feasibility estimate and the gate at src/engine/validation.ts:405
-      // never fired on the app path. This is the ledger factory's own
-      // pre-allocation (`__tests__/helpers/scenarios.ts:69`) — a default, not
-      // a decision.
+      // The fourth seam specs/006-day-axis-parity/parity-exceptions.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names. A `0` here once zeroed the DE
+      // term of `estimateCompetitionStripHours`. Since 024 that term bills DE
+      // bouts × bout time and no longer reads this field, but referee demand
+      // (`peakDeRefDemand`) and flighting-group validation still do. This is
+      // the ledger factory's own pre-allocation (`__tests__/helpers/scenarios.ts`)
+      // — a default, not a decision.
       strips_allocated: Math.max(2, Math.ceil(overrides.fencer_count / 7)),
 
       // Per-event strip budget overrides — always null until UI exposes them
@@ -240,8 +245,9 @@ function buildCompetitions(state: StoreState): Competition[] {
     })
   }
 
-  // For regional tournament types (ROC, SYC, RJCC, SJCC), force DISABLED cuts on categories
-  // that must advance all fencers to DEs per the USA Fencing Athlete Handbook.
+  // For regional tournament types (ROC, RYC, SYC, RJCC, SJCC), force DISABLED cuts on
+  // Cadet, Junior and Div 1, which advance all fencers to DEs there (METHODOLOGY.md
+  // §Default Cuts by Age Category). Y14 advances everyone by default at every type.
   if (REGIONAL_CUT_TOURNAMENT_TYPES.has(state.tournament_type)) {
     for (const comp of competitions) {
       const override = REGIONAL_CUT_OVERRIDES[comp.category]

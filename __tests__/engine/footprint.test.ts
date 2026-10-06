@@ -118,7 +118,7 @@ describe('estimateEventFootprint', () => {
   // the same result fields the function under test does — agreement there
   // cannot fail if that shared construction itself drifts from the tables.
   // These two cases are literals worked out by hand from
-  // DEFAULT_POOL_ROUND_DURATION_TABLE / DEFAULT_DE_DURATION_TABLE
+  // DEFAULT_POOL_ROUND_DURATION_TABLE / DE_BOUT_DURATION
   // (src/engine/constants.ts) and the pool/DE formulas (pools.ts, de.ts,
   // derive.ts), so a drift in the synthetic-placement contract itself would
   // show up here even though it can't show up above.
@@ -132,28 +132,27 @@ describe('estimateEventFootprint', () => {
     //   [6,6,6,6] (baseSize floor(24/4)=6, remainder 24%4=0). The synthetic
     //   placement requests strip_count = n_pools = 4, poolCap =
     //   floor(24*0.80) = 19, so grantedStrips(4, 19, 4) = 4.
-    // poolMinutes: poolDurationForSize(FOIL, 6, table) = round(105 *
-    //   BOUT_COUNTS[6]/BOUT_COUNTS[6]) = 105 for every pool (all size 6), so
-    //   weightedPoolDuration = 105. estimatePoolDuration(4, 105, strips=4, _):
-    //   staffableStrips = min(4,4) = 4, actual_batches = ceil(4/4) = 1,
-    //   actual_duration = ceil(105*1) = 105.
+    // poolMinutes: a pool of 6 is 15 bouts, so 15/21 of the foil pool-of-7
+    //   time: round(120 * 15/21) = round(85.71) = 86 for every pool (all size
+    //   6), so weightedPoolDuration = 86 (METHODOLOGY.md §Pool Duration
+    //   Estimation; Ops Manual 2026-27 p.17). estimatePoolDuration(4, 86,
+    //   strips=4, _): staffableStrips = min(4,4) = 4, actual_batches =
+    //   ceil(4/4) = 1, actual_duration = 86.
     // deMinutes: computeDeFencerCount(24, DISABLED, ...) = 24 (DISABLED
-    //   advances everyone). nextPowerOf2(24) = 32 (24 is not a power of 2;
-    //   1 << ceil(log2(24)) = 1 << 5 = 32) -> bracketSize 32.
-    //   calculateDeDuration(FOIL, 32, table) = 90 (DEFAULT_DE_DURATION_TABLE).
+    //   advances everyone). nextPowerOf2(24) = 32 -> bracketSize 32.
     //   deStripFootprint(32, 16) = max(1, min(floor(32/2)=16, 16)) = 16;
-    //   deCap = floor(24*0.80) = 19, so deStrips = grantedStrips(16, 19) = 16.
-    //   deSingleStageDuration(90, 32, 16, 16): totalBouts = floor(32/2) = 16,
-    //   adjustedTotal = 90*(16-1)/16 = 84.375, ratio = min(16/16,1) = 1 ->
-    //   round(84.375) = 84. deMinutes = deDuration (84) + tailEstimateMins
-    //   (INDIVIDUAL) 30 = 114 (de_total_end - de_start telescopes to
-    //   deDuration + tail; both add the same de_start/deStart offset).
+    //   deCap = floor(24*0.80) = 19, so deStrips = 16. Rounds (METHODOLOGY.md
+    //   §DE Duration, byes not bouts): R32 24 − 16 = 8 bouts, R16 8, QF 4,
+    //   SF 2 – one wave each on 16 strips, 4 waves × 20 (15-touch foil bout,
+    //   Ops Manual p.17 + the 5-minute changeover) = 80. deMinutes = 80 +
+    //   tailEstimateMins(INDIVIDUAL) 30 = 110 (de_total_end - de_start
+    //   telescopes to deDuration + tail; both add the same de_start offset).
     const competition = makeCompetition({ id: 'footprint-literal-default' })
 
     expect(estimateEventFootprint(competition, config)).toEqual({
       strips: 4,
-      poolMinutes: 105,
-      deMinutes: 114,
+      poolMinutes: 86,
+      deMinutes: 110,
     })
   })
 
@@ -164,25 +163,22 @@ describe('estimateEventFootprint', () => {
     //
     // strips: synthetic placement requests strip_count = n_pools = 1; poolCap
     //   = floor(24*0.80) = 19, so grantedStrips(1, 19, 1) = 1.
-    // poolMinutes: poolDurationForSize(FOIL, 7, table) = round(105 *
-    //   BOUT_COUNTS[7]/BOUT_COUNTS[6]) = round(105*21/15) = round(147) = 147
-    //   (weightedPoolDuration of a single pool is that pool's own duration).
-    //   estimatePoolDuration(1, 147, strips=1, _): staffableStrips = min(1,1)
-    //   = 1, actual_batches = ceil(1/1) = 1, actual_duration = ceil(147) = 147.
+    // poolMinutes: a pool of 7 is the table's own basis, 21 bouts, so the foil
+    //   pool-of-7 time itself: 120 (METHODOLOGY.md Appendix A §Pool Duration by
+    //   Weapon; Ops Manual 2026-27 p.17). estimatePoolDuration(1, 120,
+    //   strips=1, _): one batch, 120.
     // deMinutes: computeDeFencerCount(7, DISABLED, ...) = 7. nextPowerOf2(7)
-    //   = 8 (7 is not a power of 2; 1 << ceil(log2(7)) = 1 << 3 = 8) ->
-    //   bracketSize 8. calculateDeDuration(FOIL, 8, table) = 45.
-    //   deStripFootprint(8, 16) = max(1, min(floor(8/2)=4, 16)) = 4; deCap =
-    //   19, so deStrips = grantedStrips(4, 19) = 4.
-    //   deSingleStageDuration(45, 8, 4, 4): totalBouts = floor(8/2) = 4,
-    //   adjustedTotal = 45*(4-1)/4 = 33.75, ratio = min(4/4,1) = 1 ->
-    //   round(33.75) = 34. deMinutes = 34 + tailEstimateMins(INDIVIDUAL) 30 = 64.
+    //   = 8 -> bracketSize 8. deStripFootprint(8, 16) = max(1, min(floor(8/2)
+    //   = 4, 16)) = 4; deCap = 19, so deStrips = 4. Rounds (METHODOLOGY.md
+    //   §DE Duration, byes not bouts): R8 7 − 4 = 3 bouts, SF 2 – one wave
+    //   each on 4 strips, 2 waves × 20 = 40. deMinutes = 40 +
+    //   tailEstimateMins(INDIVIDUAL) 30 = 70.
     const competition = makeCompetition({ id: 'footprint-literal-one-pool', fencer_count: 7 })
 
     expect(estimateEventFootprint(competition, config)).toEqual({
       strips: 1,
-      poolMinutes: 147,
-      deMinutes: 64,
+      poolMinutes: 120,
+      deMinutes: 70,
     })
   })
 })

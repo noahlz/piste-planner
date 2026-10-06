@@ -5,7 +5,7 @@ import { ScheduleOutput } from '../../../src/components/sections/ScheduleOutput.
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { deriveEventSchedule } from '../../../src/engine/derive.ts'
 import type { DerivedEventSchedule } from '../../../src/engine/derive.ts'
-import type { Competition, DayConfig, Placement, TournamentConfig } from '../../../src/engine/types.ts'
+import type { Competition, DayWindow, Placement, TournamentConfig } from '../../../src/engine/types.ts'
 import { Category, DeMode, Gender, Weapon } from '../../../src/engine/types.ts'
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
 import { useStore } from '../../../src/store/store.ts'
@@ -100,11 +100,13 @@ function seedViewState(overrides: Partial<ViewState>): void {
 
 // Covers every block below: the latest, `staged`'s DE_ROUND_OF_16, ends at
 // 1030 and every day shares one axis span (research.md D3), so one wide
-// clock-time window for all three days is enough.
-const CANVAS_DAY_CONFIGS: DayConfig[] = [
-  { day_start_time: 480, day_end_time: 1320 },
-  { day_start_time: 480, day_end_time: 1320 },
-  { day_start_time: 480, day_end_time: 1320 },
+// clock-time window for all three days is enough. Since 024 group B the engine
+// takes a DayWindow, whose day_hard_end_time is the 22:00 hard end (1320, Ops
+// Manual p.17, METHODOLOGY §Inputs) that the axis reaches.
+const CANVAS_DAY_CONFIGS: DayWindow[] = [
+  { day_start_time: 480, day_end_time: 1320, day_hard_end_time: 1320 },
+  { day_start_time: 480, day_end_time: 1320, day_hard_end_time: 1320 },
+  { day_start_time: 480, day_end_time: 1320, day_hard_end_time: 1320 },
 ]
 const CANVAS_ZOOM = { zoomStep: 2, fitting: false }
 const EMPTY_FINDINGS: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
@@ -285,11 +287,17 @@ function matrixTuples(): string[] {
  * The literal tuple set. Every number here was read once from the engine's own
  * output and written down — never recomputed here from the same expressions
  * either view uses, which is the shape of assertion that cannot fail.
+ *
+ * 024 group A, 2026-10-06: re-read under the 2026-27 Ops Manual planning times
+ * (METHODOLOGY §Pool Duration Estimation, §DE Duration). A foil pool of 6 takes
+ * 86 min (was 105) and the 24-fencer DE runs 4 waves of 20 min on 16 strips, 80
+ * min (was 84). The staged event's prelims are R64 and R32 on 16 strips, 3
+ * waves, and its video phase is R16 to the semis on 4 strips, 80 min.
  */
 const EXPECTED_TUPLES = [
-  tuple('flighted', 1, 480, 720, 750, 834, 4),
-  tuple('plain', 0, 480, 585, 615, 699, 4),
-  tuple('staged', 0, 480, 846, 880, 1030, 4),
+  tuple('flighted', 1, 480, 686, 720, 800, 4),
+  tuple('plain', 0, 480, 566, 600, 680, 4),
+  tuple('staged', 0, 480, 780, 810, 980, 4),
 ].sort()
 
 function renderBothViews(model: DerivedSchedule): void {
@@ -358,9 +366,9 @@ describe('the matrix and the schedule table cannot disagree (FR-023)', () => {
 
     const blocks = blocksFor('flighted')
     expect(Array.from(blocks.keys()).sort()).toEqual(['DE', 'FLIGHT_A', 'FLIGHT_B'])
-    expect(blocks.get('FLIGHT_A')).toEqual({ day: 1, start: 480, end: 585, strips: 2 })
-    expect(blocks.get('FLIGHT_B')).toEqual({ day: 1, start: 615, end: 720, strips: 2 })
-    // No single POOLS block covering 480-720: that would paint the 585-615 gap
+    expect(blocks.get('FLIGHT_A')).toEqual({ day: 1, start: 480, end: 566, strips: 2 })
+    expect(blocks.get('FLIGHT_B')).toEqual({ day: 1, start: 600, end: 686, strips: 2 })
+    // No single POOLS block covering 480-686: that would paint the 566-600 gap
     // between the flights as pool time.
     expect(blocks.get('POOLS')).toBeUndefined()
   })
@@ -370,21 +378,21 @@ describe('the matrix and the schedule table cannot disagree (FR-023)', () => {
 
     const blocks = blocksFor('staged')
     expect(Array.from(blocks.keys()).sort()).toEqual(['DE_PRELIMS', 'DE_ROUND_OF_16', 'POOLS'])
-    expect(blocks.get('DE_PRELIMS')).toEqual({ day: 0, start: 880, end: 885, strips: 16 })
-    expect(blocks.get('DE_ROUND_OF_16')).toEqual({ day: 0, start: 915, end: 1030, strips: 4 })
+    expect(blocks.get('DE_PRELIMS')).toEqual({ day: 0, start: 810, end: 870, strips: 16 })
+    expect(blocks.get('DE_ROUND_OF_16')).toEqual({ day: 0, start: 900, end: 980, strips: 4 })
     expect(blocks.get('DE')).toBeUndefined()
   })
 
   it('stops the last block at the last scheduled minute, not at the medal-tail estimate', () => {
     renderBothViews(derivedModel(SHAPES))
 
-    // de_total_end is 729 on the plain event while its DE block ends at 699 —
+    // de_total_end is 710 on the plain event while its DE block ends at 680 —
     // tailEstimateMins() covers bouts the scheduler deliberately never places.
     // The table keeps that estimate in its own column; neither view may put it
     // in the DE End cell or in a block.
-    expect(requireBlock(blocksFor('plain'), 'DE', 'plain').end).toBe(699)
-    expect(cellText('plain', 'deEnd')).toBe('11:39')
-    expect(cellText('plain', 'finish')).toBe('12:09')
+    expect(requireBlock(blocksFor('plain'), 'DE', 'plain').end).toBe(680)
+    expect(cellText('plain', 'deEnd')).toBe('11:20')
+    expect(cellText('plain', 'finish')).toBe('11:50')
   })
 
   it('writes the table cells as clock strings, so the normalisation above has something to parse', () => {
@@ -393,18 +401,18 @@ describe('the matrix and the schedule table cannot disagree (FR-023)', () => {
     expect(cellText('plain', 'competition')).toBe("Div 1 Men's Foil Individual")
     expect(rowDay('plain')).toBe(0)
     expect(cellText('plain', 'poolStart')).toBe('8:00')
-    expect(cellText('plain', 'poolEnd')).toBe('9:45')
-    expect(cellText('plain', 'deStart')).toBe('10:15')
-    expect(cellText('plain', 'deEnd')).toBe('11:39')
+    expect(cellText('plain', 'poolEnd')).toBe('9:26')
+    expect(cellText('plain', 'deStart')).toBe('10:00')
+    expect(cellText('plain', 'deEnd')).toBe('11:20')
     expect(cellText('plain', 'strips')).toBe('4')
   })
 
   it('shows a staged event’s DE times rather than the em dash a null de_start renders', () => {
     renderBothViews(derivedModel(SHAPES))
 
-    expect(cellText('staged', 'deStart')).toBe('14:40')
-    expect(cellText('staged', 'deEnd')).toBe('17:10')
-    expect(cellText('staged', 'finish')).toBe('17:40')
+    expect(cellText('staged', 'deStart')).toBe('13:30')
+    expect(cellText('staged', 'deEnd')).toBe('16:20')
+    expect(cellText('staged', 'finish')).toBe('16:50')
   })
 })
 
@@ -440,7 +448,10 @@ describe('the Matrix ⇄ Schedule toggle (FR-023)', () => {
     const companionId = TEMPLATES['RYC Weekend'][1]
     useStore.getState().setDays(3)
     useStore.getState().setStrips(12)
-    useStore.getState().setVideoStrips(2)
+    // 4 video strips: the default NAC makes every individual event STAGED with video REQUIRED,
+    // a video stage asks min(4, bracketSize/2) = 4 strips, and fewer raises
+    // video-r16-strip-shortfall (024 D9).
+    useStore.getState().setVideoStrips(4)
     useStore.getState().addCompetition(id)
     useStore.getState().updateCompetition(id, { fencer_count: 8 })
     useStore.getState().addCompetition(companionId)

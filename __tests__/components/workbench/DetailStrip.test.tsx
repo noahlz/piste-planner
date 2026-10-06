@@ -12,7 +12,7 @@ import { eventTimeSegments } from '../../../src/layout/segments.ts'
 import { estimateEventFootprint } from '../../../src/engine/derive.ts'
 import { phaseDisplay, stripRangeLabel, stripAssignmentLabel } from '../../../src/lib/placementLabels.ts'
 import { formatClock, formatMinutes } from '../../../src/lib/time.ts'
-import { Phase, PlacementSource } from '../../../src/engine/types.ts'
+import { DeMode, Phase, PlacementSource } from '../../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 
 // 013 T028 (part b) — red tests for the detail strip (contract §4,
@@ -234,6 +234,44 @@ describe('DetailStrip phase pills, placed (contract §4 Phase pills)', () => {
         `${phaseDisplay(segment.phase)} ${formatClock(segment.startMinutes)}–${formatClock(segment.endMinutes)}`,
       )
     })
+  })
+
+  // The case above re-derives its text with phaseDisplay, so it cannot catch a
+  // wrong label. This one is written out by hand for a staged event.
+  it('reads "Video stage 14:00–15:30" on a staged event, with every pill literal', () => {
+    const config = makeConfig({ strips: makeStrips(20, 4) })
+    const staged = makeCompetition({ id: 'staged', fencer_count: 24, de_mode: DeMode.STAGED })
+    const schedule: DerivedSchedule = {
+      config,
+      competitions: [staged],
+      events: {
+        [staged.id]: {
+          result: {
+            ...makeScheduleResult(staged.id, 0),
+            pool_start: 480,
+            pool_end: 600,
+            pool_strip_count: 4,
+            de_prelims_start: 600,
+            de_prelims_end: 840,
+            de_prelims_strip_count: 4,
+            de_round_of_16_start: 840,
+            de_round_of_16_end: 930,
+            de_round_of_16_strip_count: 4,
+          },
+          day_out_of_range: false,
+        },
+      },
+    }
+    futureState().selectCompetition(staged.id)
+
+    render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    const pills = Array.from(document.querySelectorAll('[data-phase-pill]')).map((el) => el.textContent)
+    expect(pills).toEqual([
+      'Pools 08:00–10:00',
+      'DE prelims 10:00–14:00',
+      'Video stage 14:00–15:30',
+    ])
   })
 })
 

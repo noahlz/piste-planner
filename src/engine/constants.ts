@@ -1,4 +1,4 @@
-import { Category, CutMode, EventType, Gender, TournamentType, VetAgeGroup, VideoPolicy, Weapon } from './types.ts'
+import { Category, CutMode, EventType, Gender, TournamentType, VetAgeGroup, Weapon } from './types.ts'
 
 // ──────────────────────────────────────────────
 // Category start preferences and capacity weights.
@@ -42,16 +42,37 @@ export const CATEGORY_START_PREFERENCE = {
 // Scheduling time constants (all values in minutes from midnight)
 // ──────────────────────────────────────────────
 
-export const DAY_START_MINS = 480 // 8:00 AM
-export const DAY_END_MINS = 1320 // 10:00 PM
-export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start after this
-export const LATEST_START_OFFSET = 480 // offset from DAY_START to LATEST_START
+// The day of Ops Manual 2026-27 p.17 (METHODOLOGY.md Appendix A §Timing
+// Constants): start at 9:00 and aim to finish by 7:00 PM. 7:00 PM is a soft
+// target – work may run to the 10:00 PM hard end, which is unsourced and gives
+// way to an organizer day end set later (§Same-Day Completion).
+export const DAY_START_MINS = 540 // 9:00 AM
+export const DAY_END_MINS = 1140 // 7:00 PM — soft target
+export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase may end past it
+/** A clock-axis day's hard end: 10:00 PM, or the organizer's day end when set later (024 D7). */
+export function clockHardEnd(dayEndTime: number): number {
+  return Math.max(dayEndTime, DAY_HARD_END_MINS)
+}
+export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start after this (unsourced)
+export const LATEST_START_OFFSET = 420 // offset from DAY_START to LATEST_START
 export const SLOT_MINS = 5
-export const DAY_LENGTH_MINS = 840 // DAY_END_MINS - DAY_START_MINS
+// The 10-hour planning day, DAY_START_MINS to DAY_END_MINS, that strip-hour
+// capacity counts (METHODOLOGY.md §Strip-Hour Capacity). Not the hard window.
+export const DAY_LENGTH_MINS = 600
+// Divisor of the Strip Count Suggestion's manual baseline: competitors per
+// strip per day, not a day length, and fixed whatever hours the organizer sets
+// (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip Count Suggestion).
+export const COMPETITORS_PER_STRIP_PER_DAY = 14
+// Gap between a phase and its successor (pools to DE, DE prelims to the next
+// stage, Flight A to Flight B alongside FLIGHT_BUFFER_MINS, an older Vet
+// sibling to its younger one). Its floor is the results-review
+// period between rounds, 15 min national, 10 regional, 5 local (Ops Manual p.18,
+// METHODOLOGY §Timing Constants). No gap sits between DE rounds inside one DE
+// phase – the 5-minute changeover is already in the bout time.
 export const ADMIN_GAP_MINS = 30
 export const FLIGHT_BUFFER_MINS = 15
 export const THRESHOLD_MINS = 10
-// Pool rounds run 75-120 min (see DEFAULT_POOL_ROUND_DURATION_TABLE), so a 60-min wave can't accommodate the second event starting inside the wave.
+// Pool rounds run 60-120 min for a pool of 7 (see DEFAULT_POOL_ROUND_DURATION_TABLE), so a 60-min wave can't accommodate the second event starting inside the wave.
 export const MORNING_WAVE_WINDOW_MINS = 120
 
 // ──────────────────────────────────────────────
@@ -65,20 +86,34 @@ export const INDIV_TAIL_MINS = 30
 export const TEAM_TAIL_MINS = 60
 
 export const DE_REFS = 1
-// DE phase strip footprint cap (concurrentScheduler.ts). de_duration_table's
-// empirical durations are calibrated against this value — changing it
-// requires re-deriving the table.
+// Cap on the strips a single-stage DE or prelims block asks for:
+// min(bracketSize / 2, 16) (METHODOLOGY.md §DE Modes, Appendix A §Resource
+// Constants). The DE's length is derived at the strips granted (§DE Duration).
 export const DEFAULT_DE_STRIP_FOOTPRINT = 16
-// Per-bout time includes the 5-minute strip-changeover overhead, which is why
-// sabre is 15 rather than the pure fencing time.
+// Minutes per DE bout or team match (METHODOLOGY.md Appendix A §Timing
+// Constants, §DE Duration). de.ts's perBoutDuration picks the table.
+//
+// 15-touch: Ops Manual 2026-27 p.17 – Average Bout Timing (15/15/8), read as
+// fencing time, plus a 5-minute strip changeover.
 export const DE_BOUT_DURATION: Record<Weapon, number> = {
   [Weapon.EPEE]: 20,
   [Weapon.FOIL]: 20,
-  [Weapon.SABRE]: 15,
+  [Weapon.SABRE]: 13,
 }
-// Applied to DE_BOUT_DURATION for Y8/Y10 and all veteran age groups — shorter
-// bouts for these categories per USA Fencing rules.
-export const YOUTH_VET_BOUT_DELTA = -5
+// 10-touch, for Y8, Y10 and the Veteran category (any age group, Vet Combined
+// included): the 15-touch fencing time × 10⁄15, rounded, plus the changeover
+// (S8 p.38 and p.41). p.17 prints no 10-touch figure, and Y8 extends Y10.
+export const DE_BOUT_DURATION_10_TOUCH: Record<Weapon, number> = {
+  [Weapon.EPEE]: 15,
+  [Weapon.FOIL]: 15,
+  [Weapon.SABRE]: 10,
+}
+// Team match as printed, no changeover added (Ops Manual 2026-27 p.17 – Team Match).
+export const TEAM_MATCH_DURATION: Record<Weapon, number> = {
+  [Weapon.EPEE]: 60,
+  [Weapon.FOIL]: 60,
+  [Weapon.SABRE]: 30,
+}
 export const SAME_TIME_WINDOW_MINS = 30
 export const INDIV_TEAM_MIN_GAP_MINS = 120
 
@@ -90,6 +125,9 @@ export const EARLY_START_THRESHOLD = 10
 export const MAX_RESCHEDULE_ATTEMPTS = 3
 export const MAX_FENCERS = 500
 export const MIN_FENCERS = 2
+// Most fencers that advance from pools in any event, so no DE bracket exceeds 256
+// (S8 p.37 – "A maximum of 256 fencers will be promoted out of pools for all events")
+export const MAX_DE_FIELD = 256
 
 // ──────────────────────────────────────────────
 // Pool bout counts by pool size (n fencers → round-robin bouts)
@@ -108,13 +146,17 @@ export const BOUT_COUNTS: Record<number, number> = {
 }
 
 // ──────────────────────────────────────────────
-// Default pool round durations by weapon (minutes for a full pool round)
+// Default pool round durations by weapon (minutes for a pool of 7, 21 bouts)
 // ──────────────────────────────────────────────
 
+// Ops Manual 2026-27 p.17 – Average Bout Timing, Pool of 7 (METHODOLOGY.md
+// Appendix A §Pool Duration by Weapon). Other pool sizes scale by bout count
+// in pools.ts. The organizer-editable table holds pool-of-7 values, so an
+// override saved before 024 is read on this basis (no back-compat).
 export const DEFAULT_POOL_ROUND_DURATION_TABLE: Record<Weapon, number> = {
   [Weapon.EPEE]: 120,
-  [Weapon.FOIL]: 105,
-  [Weapon.SABRE]: 75,
+  [Weapon.FOIL]: 120,
+  [Weapon.SABRE]: 60,
 }
 
 // Validation bounds for user-supplied pool round durations (spec 002, research D5).
@@ -123,51 +165,17 @@ export const POOL_DURATION_MIN = 1
 export const POOL_DURATION_MAX = 999
 
 // ──────────────────────────────────────────────
-// Default DE bout durations by weapon and bracket size (minutes per round)
-// ──────────────────────────────────────────────
-
-export const DEFAULT_DE_DURATION_TABLE: Record<Weapon, Record<number, number>> = {
-  [Weapon.FOIL]: {
-    2: 15,
-    4: 30,
-    8: 45,
-    16: 60,
-    32: 90,
-    64: 120,
-    128: 180,
-    256: 240,
-  },
-  [Weapon.EPEE]: {
-    2: 15,
-    4: 30,
-    8: 45,
-    16: 60,
-    32: 90,
-    64: 120,
-    128: 180,
-    256: 240,
-  },
-  [Weapon.SABRE]: {
-    2: 15,
-    4: 20,
-    8: 30,
-    16: 45,
-    32: 60,
-    64: 90,
-    128: 120,
-    256: 120,
-  },
-}
-
-// ──────────────────────────────────────────────
 // Default cut-to-DE settings by category
 // ──────────────────────────────────────────────
 
+// Y14 advances everyone at every tournament type (S8 p.38 – Y14 SYC & NAC, 100%
+// promoted). S8's 80% advance belongs to the Y14 National Championship, which no
+// template models (METHODOLOGY.md §Default Cuts by Age Category).
 export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: number }> = {
   [Category.Y8]: { mode: CutMode.DISABLED, value: 100 },
   [Category.Y10]: { mode: CutMode.DISABLED, value: 100 },
   [Category.Y12]: { mode: CutMode.DISABLED, value: 100 },
-  [Category.Y14]: { mode: CutMode.PERCENTAGE, value: 20 },
+  [Category.Y14]: { mode: CutMode.DISABLED, value: 100 },
   [Category.CADET]: { mode: CutMode.PERCENTAGE, value: 20 },
   [Category.JUNIOR]: { mode: CutMode.PERCENTAGE, value: 20 },
   [Category.VETERAN]: { mode: CutMode.DISABLED, value: 100 },
@@ -175,24 +183,6 @@ export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: n
   [Category.DIV1A]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV2]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV3]: { mode: CutMode.DISABLED, value: 100 },
-}
-
-// ──────────────────────────────────────────────
-// Default video policy by category
-// ──────────────────────────────────────────────
-
-export const DEFAULT_VIDEO_POLICY_BY_CATEGORY: Record<Category, VideoPolicy> = {
-  [Category.Y8]: VideoPolicy.BEST_EFFORT,
-  [Category.Y10]: VideoPolicy.BEST_EFFORT,
-  [Category.Y12]: VideoPolicy.BEST_EFFORT,
-  [Category.Y14]: VideoPolicy.BEST_EFFORT,
-  [Category.CADET]: VideoPolicy.REQUIRED,
-  [Category.JUNIOR]: VideoPolicy.REQUIRED,
-  [Category.VETERAN]: VideoPolicy.BEST_EFFORT,
-  [Category.DIV1]: VideoPolicy.REQUIRED,
-  [Category.DIV1A]: VideoPolicy.BEST_EFFORT,
-  [Category.DIV2]: VideoPolicy.BEST_EFFORT,
-  [Category.DIV3]: VideoPolicy.BEST_EFFORT,
 }
 
 // ──────────────────────────────────────────────
@@ -412,8 +402,9 @@ export const REGIONAL_FENCER_DEFAULTS: Partial<Record<FencerDefaultKey, number>>
 // Maximum edge weight is 0.8 (capped per METHODOLOGY.md).
 // Two-hop indirect edges are computed in crossover.ts, capped at 0.3.
 export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>> = {
-  // Y8 has no edges. METHODOLOGY:118 states, in bold, that **Y8 CAN and SHOULD
-  // be on the same day as Y10**, and this graph used to carry Y8→Y10 at 0.8 –
+  // Y8 has no edges. METHODOLOGY §Departures From the Manual states, in bold,
+  // that **Y8 can and should share a day with Y10**, and this graph used to
+  // carry Y8→Y10 at 0.8 –
   // the largest finite same-day penalty – applied against the one pairing the
   // specification asks for. The note above GROUP_1_MANDATORY below records the
   // intent correctly; this line contradicted it. Removing the edge makes "CAN"
@@ -456,31 +447,95 @@ export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>
 }
 
 // ──────────────────────────────────────────────
-// Group 1 mandatory different-day separations (Ops Manual Ch.4, pp.26–27).
-// Pairs listed here return Infinity penalty for same-day placement.
-// Y8/Y10 intentionally omitted — Y8 CAN and SHOULD be on the same day as Y10.
-// DIV1/CADET moved to SOFT_SEPARATION_PAIRS — "allowed in rare cases."
+// Group 1 overlapping-population pairs (Ops Manual p.20 – Group 1, METHODOLOGY
+// §Overlapping-Population Separation (Group 1)). Each pair applies per weapon
+// and gender, keyed by category only, so it covers any mix of individual and
+// team events (024 D10). Hard at NAC, SYC and SJCC; at the GROUP_1_SOFT_TYPES
+// it costs PENALTY_WEIGHTS.REGIONAL_GROUP_1_PAIR, and the older side's pools
+// wait for the time-of-day window.
+// Y8/Y10 intentionally omitted – Y8 can and should share a day with Y10
+// (METHODOLOGY §Departures From the Manual).
 // ──────────────────────────────────────────────
 
-export const GROUP_1_MANDATORY: [Category, Category][] = [
-  [Category.DIV1, Category.JUNIOR],
-  [Category.JUNIOR, Category.CADET],
-  [Category.Y10, Category.Y12],
-  [Category.Y12, Category.Y14],
-  [Category.Y14, Category.CADET],
-  [Category.DIV1, Category.DIV1A],
+export const GROUP_1_MANDATORY: readonly { older: Category; younger: Category }[] = [
+  { older: Category.DIV1, younger: Category.JUNIOR },
+  { older: Category.JUNIOR, younger: Category.CADET },
+  { older: Category.DIV1, younger: Category.CADET },
+  { older: Category.Y12, younger: Category.Y10 },
+  { older: Category.Y14, younger: Category.Y12 },
+  { older: Category.CADET, younger: Category.Y14 },
 ]
 
+// Tournament types where Group 1 is soft, with a time-of-day window (METHODOLOGY
+// §Regional Types: Soft, With a Time-of-Day Window). Not REGIONAL_QUALIFIER_TYPES:
+// SYC and SJCC take the national criteria here (Appendix B).
+export const GROUP_1_SOFT_TYPES: ReadonlySet<TournamentType> = new Set<TournamentType>([
+  TournamentType.ROC,
+  TournamentType.RYC,
+  TournamentType.RJCC,
+])
+
+// The regional time-of-day window: when a Group 1 pair shares a day at a
+// GROUP_1_SOFT_TYPES tournament, the older side's pools may not start before
+// day start + 4 hours (METHODOLOGY §Regional Types: Soft, With a Time-of-Day
+// Window, §Cross-Event Dependency Edges).
+export const REGIONAL_GROUP_1_WINDOW_MINS = 240
+
+// Div 1 and Div 1A of one weapon and gender never share a day, at every type:
+// nearly the same fencers enter both. The manual does not list the pair
+// (METHODOLOGY Appendix B – Div 1 and Div 1A, hard).
+export const DIV1_DIV1A_HARD_PAIR: readonly [Category, Category] = [Category.DIV1, Category.DIV1A]
+
 // ──────────────────────────────────────────────
-// Soft separation pairs: high penalty but not hard-blocked.
-// DIV1↔CADET is "allowed in rare cases" per Ops Manual.
-// DIV1↔DIV2 and DIV1↔DIV3 are common enough to warrant soft separation only.
+// Soft separation pairs: high penalty but not hard-blocked (METHODOLOGY §Other
+// Soft Preferences). DIV1↔DIV2 and DIV1↔DIV3 are common enough to warrant soft
+// separation only. DIV1↔CADET is a Group 1 pair (GROUP_1_MANDATORY) and no
+// longer lives here.
 // ──────────────────────────────────────────────
 
 export const SOFT_SEPARATION_PAIRS: { pair: [Category, Category]; penalty: number }[] = [
-  { pair: [Category.DIV1, Category.CADET], penalty: 5.0 },
   { pair: [Category.DIV1, Category.DIV2], penalty: 3.0 },
   { pair: [Category.DIV1, Category.DIV3], penalty: 3.0 },
+]
+
+// ──────────────────────────────────────────────
+// Group 2 soft separations (Ops Manual p.20 – Group 2, METHODOLOGY §Other Soft
+// Preferences). Each applies per weapon and gender, as for Group 1. A side lists
+// its categories and, where the row is matched by event type, that type (null
+// = any type). crossoverPenalty checks these after the hard blocks and Group 1,
+// so a pair those already separate keeps their value: the open-team row scores
+// only Y14 against the Div 1 team (Cadet and Junior are Group 1 pairs with it).
+// ──────────────────────────────────────────────
+
+export type Group2Side = {
+  categories: readonly Category[]
+  eventType: EventType | null
+}
+
+export const GROUP_2_SOFT_SEPARATIONS: readonly { sides: readonly [Group2Side, Group2Side]; penalty: number }[] = [
+  // Every Veteran individual event (age-banded and Vet Combined) ↔ the Div 1A individual.
+  {
+    sides: [
+      { categories: [Category.VETERAN], eventType: EventType.INDIVIDUAL },
+      { categories: [Category.DIV1A], eventType: EventType.INDIVIDUAL },
+    ],
+    penalty: 3.0,
+  },
+  {
+    sides: [
+      { categories: [Category.DIV2], eventType: null },
+      { categories: [Category.DIV3], eventType: null },
+    ],
+    penalty: 3.0,
+  },
+  // The open (Div 1) team event only, so Div 1 individual events are unaffected.
+  {
+    sides: [
+      { categories: [Category.Y14, Category.CADET, Category.JUNIOR], eventType: null },
+      { categories: [Category.DIV1], eventType: EventType.TEAM },
+    ],
+    penalty: 3.0,
+  },
 ]
 
 // ──────────────────────────────────────────────
@@ -511,10 +566,12 @@ export const PROXIMITY_PENALTY_WEIGHTS: Record<number, number> = {
 
 // ──────────────────────────────────────────────
 // REST_DAY_PAIRS: category pairs that should have a rest day between them
+// (Ops Manual p.20 – Group 2, METHODOLOGY §Rest Day Preference). Junior–Cadet
+// is absent: the manual asks for that rest day only at the Junior Olympic
+// Championships, which no modelled tournament type is.
 // ──────────────────────────────────────────────
 
 export const REST_DAY_PAIRS: [Category, Category][] = [
-  [Category.JUNIOR, Category.CADET],
   [Category.JUNIOR, Category.DIV1],
 ]
 
@@ -531,9 +588,11 @@ export const REGIONAL_QUALIFIER_TYPES: ReadonlySet<string> = new Set<string>([
 ])
 
 // ──────────────────────────────────────────────
-// Video stage round: the DE round at which video replay begins per category.
-// At NACs these are guaranteed; at other tournaments they're best-effort.
-// (Ops Manual Ch.4, p.25)
+// Video stage round: the DE round at which video replay begins per category
+// (Ops Manual 2026-27 p.19 – Video Replay, METHODOLOGY.md §Video Replay Policy).
+// Every individual category is listed. Y8 is an interpretation: p.19 does not
+// list it, so it follows Y10. de.ts's videoStageRound falls back to the round
+// of 8 only for a VETERAN event with no age group.
 // ──────────────────────────────────────────────
 
 type VideoStageKey = Category | `${Category}:${VetAgeGroup}`
@@ -542,19 +601,27 @@ export const VIDEO_STAGE_ROUND: Partial<Record<VideoStageKey, number>> = {
   [Category.DIV1]: 16,
   [Category.JUNIOR]: 16,
   [Category.CADET]: 16,
+  [Category.Y8]: 8,
   [Category.Y10]: 8,
   [Category.Y12]: 8,
   [Category.Y14]: 8,
+  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: 8,
   [`${Category.VETERAN}:${VetAgeGroup.VET50}`]: 8,
   [`${Category.VETERAN}:${VetAgeGroup.VET60}`]: 8,
   [`${Category.VETERAN}:${VetAgeGroup.VET70}`]: 8,
-  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: 4,
-  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: 4,
-  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: 4,
-  [Category.DIV1A]: 4,
-  [Category.DIV2]: 4,
-  [Category.DIV3]: 4,
+  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: 8,
+  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: 8,
+  [Category.DIV1A]: 8,
+  [Category.DIV2]: 8,
+  [Category.DIV3]: 8,
 }
+
+// Video-stage round for a VETERAN event with no age group (METHODOLOGY.md
+// §Video Replay Policy: every Veteran tier is the round of 8).
+export const VIDEO_STAGE_ROUND_FALLBACK = 8
+
+// The most video strips one video block asks for (METHODOLOGY.md §DE Modes).
+export const VIDEO_BLOCK_STRIP_ASK = 4
 
 // ──────────────────────────────────────────────
 // Individual/Team relaxable blocks: pairs that MUST NOT be on the same day
@@ -572,12 +639,12 @@ export const INDIV_TEAM_RELAXABLE_BLOCKS: { indivCategory: Category; teamCategor
 ]
 
 // ──────────────────────────────────────────────
-// Regional cut overrides: at ROC/SYC/RJCC/SJCC, these categories use 100% advancement
-// instead of the default 20% cut. (METHODOLOGY.md §Default Cuts by Age Category)
+// Regional cut overrides: at ROC/RYC/SYC/RJCC/SJCC, these categories use 100% advancement
+// instead of the default 20% cut. Y14 needs no row, since it advances 100% by default.
+// (METHODOLOGY.md §Default Cuts by Age Category)
 // ──────────────────────────────────────────────
 
 export const REGIONAL_CUT_OVERRIDES: Partial<Record<Category, { mode: CutMode; value: number }>> = {
-  [Category.Y14]: { mode: CutMode.DISABLED, value: 100 },
   [Category.CADET]: { mode: CutMode.DISABLED, value: 100 },
   [Category.JUNIOR]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV1]: { mode: CutMode.DISABLED, value: 100 },
@@ -585,6 +652,7 @@ export const REGIONAL_CUT_OVERRIDES: Partial<Record<Category, { mode: CutMode; v
 
 export const REGIONAL_CUT_TOURNAMENT_TYPES: ReadonlySet<string> = new Set<string>([
   TournamentType.ROC,
+  TournamentType.RYC,
   TournamentType.SYC,
   TournamentType.RJCC,
   TournamentType.SJCC,
@@ -609,7 +677,9 @@ export const PENALTY_WEIGHTS = {
   EARLY_START_SAME_DAY_HIGH_CROSSOVER: 2.0,
   /** Early start consecutive days, ind+team same demographic */
   EARLY_START_CONSECUTIVE_INDIV_TEAM: 2.0,
-  /** Rest day violation (consecutive-day penalty for JUNIOR/CADET/DIV1) */
+  /** Regional Group 1 pair on one day: ROC, RYC and RJCC only (Ops Manual p.20 – Group 1) */
+  REGIONAL_GROUP_1_PAIR: 5.0,
+  /** Rest day violation (consecutive-day penalty for JUNIOR/DIV1, Ops Manual p.20 – Group 2) */
   REST_DAY_VIOLATION: 1.5,
   /** Team scheduled before individual (wrong order, proximity) */
   TEAM_BEFORE_INDIVIDUAL: 1.0,
@@ -625,8 +695,12 @@ export const PENALTY_WEIGHTS = {
   LAST_DAY_REF_SHORTAGE_LARGE_ROC: 0.3,
   /** Ind+team 2+ days apart (proximity) */
   INDIV_TEAM_2_PLUS_DAYS: 0.3,
-  /** Cross-weapon same demographic (Veteran only) */
-  CROSS_WEAPON_SAME_DEMOGRAPHIC_VET: 0.2,
+  /**
+   * Cross-weapon same demographic, every category: same category, gender and
+   * event type (Veterans: same age group), different weapon, same day
+   * (Ops Manual p.20 – Group 3, METHODOLOGY §Other Soft Preferences)
+   */
+  CROSS_WEAPON_SAME_DEMOGRAPHIC: 0.2,
   /** Last-day ref shortage: medium tournament (50-100 fencers) */
   LAST_DAY_REF_SHORTAGE_MEDIUM: 0.2,
   /** Proximity 1 day apart (bonus — negative) */
@@ -653,3 +727,11 @@ export const CAPACITY_PENALTY_CURVE = {
   /** Flat penalty when fill ratio exceeds the high threshold */
   OVERFLOW_PENALTY: 20.0,
 } as const
+
+/**
+ * Share of a middle day's strip-hours that day assignment gives the first and
+ * the last day, from 3 days up, so they are planned shorter (Ops Manual p.20 –
+ * Group 2; METHODOLOGY.md §First and Last Day Capacity, Appendix A §Capacity
+ * Model Constants).
+ */
+export const FIRST_LAST_DAY_CAPACITY_FACTOR = 0.8

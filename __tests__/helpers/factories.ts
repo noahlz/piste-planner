@@ -7,15 +7,17 @@ import {
 } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
-  DEFAULT_DE_DURATION_TABLE,
   DE_BOUT_DURATION,
-  YOUTH_VET_BOUT_DELTA,
+  DE_BOUT_DURATION_10_TOUCH,
+  TEAM_MATCH_DURATION,
   DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
 
-// Minutes-from-midnight constants used across test factories
-const DAY_START_8AM = 480
-const DAY_END_10PM = 1320
+// Minutes-from-midnight constants used across test factories: the 2026-27
+// Ops Manual p.17 day (METHODOLOGY.md Appendix A §Timing Constants).
+const DAY_START_9AM = 540
+const DAY_END_7PM = 1140
+const DAY_HARD_END_10PM = 1320
 const LATEST_START_4PM = 960
 
 export type CompetitionKey = Pick<Competition, 'category' | 'gender' | 'weapon' | 'event_type' | 'id' | 'vet_age_group'>
@@ -46,12 +48,13 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     strips,
     strips_total: strips.length,
     video_strips_total: strips.filter(s => s.video_capable).length,
-    DAY_START_MINS: DAY_START_8AM,
-    DAY_END_MINS: DAY_END_10PM,
+    DAY_START_MINS: DAY_START_9AM,
+    DAY_END_MINS: DAY_END_7PM,
+    DAY_HARD_END_MINS: DAY_HARD_END_10PM,
     LATEST_START_MINS: LATEST_START_4PM,
-    LATEST_START_OFFSET: 480,
+    LATEST_START_OFFSET: LATEST_START_4PM - DAY_START_9AM,
     SLOT_MINS: 5,
-    DAY_LENGTH_MINS: 840,
+    DAY_LENGTH_MINS: DAY_END_7PM - DAY_START_9AM,
     ADMIN_GAP_MINS: 30,
     FLIGHT_BUFFER_MINS: 15,
     THRESHOLD_MINS: 10,
@@ -63,13 +66,13 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     MAX_FENCERS: 500,
     MIN_FENCERS: 2,
     pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
-    de_duration_table: DEFAULT_DE_DURATION_TABLE,
     // T072: de.ts and capacity.ts read these off the config instead of
     // importing them, so every config needs them. Sourced from the constants
     // the engine used to import directly, which is what keeps the factory's
     // configs byte-identical in behavior to their pre-T072 selves.
     DE_BOUT_DURATION,
-    YOUTH_VET_BOUT_DELTA,
+    DE_BOUT_DURATION_10_TOUCH,
+    TEAM_MATCH_DURATION,
     DEFAULT_DE_STRIP_FOOTPRINT,
     dayConfigs: [],
     max_pool_strip_pct: 0.80,
@@ -96,7 +99,6 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
     cut_value: 100,
     de_mode: DeMode.SINGLE_STAGE,
     de_video_policy: VideoPolicy.BEST_EFFORT,
-    de_round_of_16_strips: 4,
     de_round_of_16_requirement: DeStripRequirement.HARD,
     flighted: false,
     flighting_group_id: null,
@@ -128,7 +130,7 @@ export function makeBottleneck(overrides: Partial<Bottleneck> = {}): Bottleneck 
 export function makePlacement(overrides: Partial<Placement> = {}): Placement {
   return {
     day: 0,
-    start_time: DAY_START_8AM,
+    start_time: DAY_START_9AM,
     strip_count: 4,
     strips: null,
     source: PlacementSource.AUTO,

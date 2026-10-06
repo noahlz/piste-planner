@@ -1,20 +1,47 @@
 import { describe, it, expect } from 'vitest'
-import { TournamentType, RefPolicy, DeMode } from '../../src/engine/types.ts'
-import { TYPE_DEFAULTS, resolveVideoStrips } from '../../src/store/typeDefaults.ts'
+import { TournamentType, RefPolicy, DeMode, EventType, VideoPolicy } from '../../src/engine/types.ts'
+import {
+  TYPE_DEFAULTS, resolveVideoStrips, resolveDeMode, resolveVideoPolicy,
+} from '../../src/store/typeDefaults.ts'
 
 /**
- * data-model.md §Per-type default table, transcribed as the expectation this
- * suite checks TYPE_DEFAULTS against. RefPolicy/DeMode values stand in for
- * "2 refs" / "1 ref" and "Staged" / "Single-stage" per the table's own key
- * (data-model.md §Per-type default table).
+ * METHODOLOGY.md §Tournament-Type Policies, transcribed as the expectation this
+ * suite checks TYPE_DEFAULTS against. RefPolicy/DeMode/VideoPolicy values stand
+ * in for "2 refs" / "1 ref", "Staged" / "Single-stage" and "Required" /
+ * "Best effort" per the table's own key. The individual video policy is
+ * REQUIRED at a NAC and BEST_EFFORT elsewhere (Ops Manual 2026-27 p.19; 024
+ * plan D9).
  */
-const EXPECTED_ROWS: Record<TournamentType, { ref_policy: RefPolicy; video_strips_total: number; de_mode: DeMode }> = {
-  [TournamentType.NAC]: { ref_policy: RefPolicy.TWO, video_strips_total: 8, de_mode: DeMode.STAGED },
-  [TournamentType.SJCC]: { ref_policy: RefPolicy.TWO, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.SYC]: { ref_policy: RefPolicy.TWO, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.ROC]: { ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.RYC]: { ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
-  [TournamentType.RJCC]: { ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE },
+const EXPECTED_ROWS: Record<TournamentType, {
+  ref_policy: RefPolicy
+  video_strips_total: number
+  de_mode: DeMode
+  individual_video_policy: VideoPolicy
+}> = {
+  [TournamentType.NAC]: {
+    ref_policy: RefPolicy.TWO, video_strips_total: 8, de_mode: DeMode.STAGED,
+    individual_video_policy: VideoPolicy.REQUIRED,
+  },
+  [TournamentType.SJCC]: {
+    ref_policy: RefPolicy.TWO, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.SYC]: {
+    ref_policy: RefPolicy.TWO, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.ROC]: {
+    ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.RYC]: {
+    ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
+  [TournamentType.RJCC]: {
+    ref_policy: RefPolicy.ONE, video_strips_total: 0, de_mode: DeMode.SINGLE_STAGE,
+    individual_video_policy: VideoPolicy.BEST_EFFORT,
+  },
 }
 
 describe('TYPE_DEFAULTS', () => {
@@ -24,7 +51,7 @@ describe('TYPE_DEFAULTS', () => {
     expect(Object.keys(TYPE_DEFAULTS).sort()).toEqual(Object.values(TournamentType).sort())
   })
 
-  it.each(Object.values(TournamentType))('resolves %s to its data-model.md row', (type) => {
+  it.each(Object.values(TournamentType))('resolves %s to its METHODOLOGY.md §Tournament-Type Policies row', (type) => {
     expect(TYPE_DEFAULTS[type]).toEqual(EXPECTED_ROWS[type])
   })
 
@@ -79,5 +106,50 @@ describe('resolveVideoStrips', () => {
     // silently flattens the per-type distinction fails here as well as above.
     expect(resolveVideoStrips(null, TournamentType.NAC)).toBe(8)
     expect(resolveVideoStrips(null, TournamentType.ROC)).toBe(0)
+  })
+})
+
+/**
+ * 024 D4, the owner's team ruling (METHODOLOGY.md §DE Modes, §Video Replay
+ * Policy): a team event runs Single Stage and plans BEST_EFFORT video at every
+ * tournament type, NACs included, even when the organizer's DE-mode setting
+ * is Staged. Individual events keep the type row (or the override) for DE
+ * mode, and the type row alone for video (024 D9).
+ */
+const DE_MODE_OVERRIDES: readonly (DeMode | null)[] = [null, DeMode.STAGED, DeMode.SINGLE_STAGE]
+const RESOLVER_CASES = Object.values(TournamentType).flatMap((type) =>
+  DE_MODE_OVERRIDES.map((override) => [type, override] as const),
+)
+
+describe('resolveDeMode', () => {
+  it.each(RESOLVER_CASES)('runs a team event Single Stage at %s with override %s', (type, override) => {
+    expect(resolveDeMode(type, EventType.TEAM, override)).toBe(DeMode.SINGLE_STAGE)
+  })
+
+  it.each(RESOLVER_CASES)(
+    'gives an individual event the override, else the type row, at %s with override %s',
+    (type, override) => {
+      expect(resolveDeMode(type, EventType.INDIVIDUAL, override)).toBe(override ?? EXPECTED_ROWS[type].de_mode)
+    },
+  )
+})
+
+describe('resolveVideoPolicy', () => {
+  // Guard (024 plan Task C, from A): a team event plans with no video at every type.
+  it.each(Object.values(TournamentType))('plans every team event BEST_EFFORT at %s', (type) => {
+    expect(resolveVideoPolicy(type, EventType.TEAM)).toBe(VideoPolicy.BEST_EFFORT)
+  })
+
+  it.each(Object.values(TournamentType))(
+    'plans every individual event with the type row at %s',
+    (type) => {
+      expect(resolveVideoPolicy(type, EventType.INDIVIDUAL)).toBe(EXPECTED_ROWS[type].individual_video_policy)
+    },
+  )
+
+  it('requires video for individual events at a NAC only', () => {
+    const required = Object.values(TournamentType)
+      .filter((type) => resolveVideoPolicy(type, EventType.INDIVIDUAL) === VideoPolicy.REQUIRED)
+    expect(required).toEqual([TournamentType.NAC])
   })
 })

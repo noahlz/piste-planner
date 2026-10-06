@@ -49,6 +49,15 @@ beforeEach(() => {
 // ──────────────────────────────────────────────
 
 describe('SettingsPanel — pool durations', () => {
+  // The table's figures are for a pool of 7 (METHODOLOGY §Pool Duration
+  // Estimation, 024 plan D6), so the caption names the basis. The per-weapon
+  // aria-labels stay as they are for the smoke driver's locators.
+  it('captions the table with its basis, a pool of 7', () => {
+    render(<SettingsPanel />)
+
+    expect(screen.getByText('Pool durations (pool of 7)')).toBeInTheDocument()
+  })
+
   it('mounts PoolDurationSettings, with one input per weapon', () => {
     render(<SettingsPanel />)
 
@@ -163,6 +172,22 @@ describe('SettingsPanel — DE mode', () => {
     for (const c of competitions) {
       expect(c.de_mode).toBe(TYPE_DEFAULTS[TournamentType.ROC].de_mode)
     }
+  })
+
+  // Team events run single stage whatever the mode (024 plan D4, owner ruling
+  // 2026-10-05), so the pills never move them. A separate note, outside the
+  // Default radio's description.
+  it('states that team events always run single stage', () => {
+    render(<SettingsPanel />)
+
+    expect(screen.getByText('Team events always run single stage.')).toBeInTheDocument()
+    expect(radio('Default')).not.toHaveAccessibleDescription(/team/i)
+  })
+
+  it('describes the DE mode group with the team-events note', () => {
+    render(<SettingsPanel />)
+
+    expect(deModeGroup()).toHaveAccessibleDescription('Team events always run single stage.')
   })
 
   it('describes the Default radio with the hint', () => {

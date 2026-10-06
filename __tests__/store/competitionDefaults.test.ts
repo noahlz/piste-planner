@@ -28,9 +28,10 @@ import { DEFAULT_CUT_BY_CATEGORY } from '../../src/engine/constants.ts'
 /**
  * A fencer count valid for every catalogue entry under either cut a category
  * might default to (PERCENTAGE/20 or DISABLED/100): the resulting DE bracket
- * size is covered by DEFAULT_DE_DURATION_TABLE for all three weapons either
- * way (32 fencers, DISABLED -> bracket 32; 32 fencers, PERCENTAGE/20 ->
- * round(32*0.2)=6 promoted -> bracket 8). C1's scope note: fencer_count is
+ * size takes a derived DE duration for all three weapons either way, as 024
+ * removed the lookup table (METHODOLOGY §DE Duration). 32 fencers, DISABLED ->
+ * bracket 32, and 32 fencers, PERCENTAGE/20 -> round(32*0.2)=6 promoted ->
+ * bracket 8. C1's scope note: fencer_count is
  * the user's input, not a store-chosen default, so the test supplies a valid
  * one and holds the store responsible only for the fields it picked.
  */

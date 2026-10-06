@@ -216,6 +216,61 @@ describe('Canvas zoom (FR-034, D3)', () => {
     }
   })
 
+  describe('axis span', () => {
+    // A lone one-day block from `start` to `end`, drawn under fitting so its
+    // left and width read as percentages of the axis span.
+    function blockExtent(days: DayConfig[], start: number, end: number) {
+      const config = makeConfig({ days_available: days.length, strips: makeStrips(4, 0) })
+      const schedule: DerivedSchedule = {
+        config,
+        competitions: [makeCompetition({ id: 'late' })],
+        events: {
+          late: {
+            result: { ...makeScheduleResult('late', 0), pool_start: start, pool_end: end, pool_strip_count: 2 },
+            day_out_of_range: false,
+          },
+        },
+      }
+      const findings: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
+      const dayConfigs = days
+
+      renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 2, fitting: true } })
+
+      const [block] = eventBlocks()
+      return { left: parseFloat(block.style.left), width: parseFloat(block.style.width) }
+    }
+
+    // Ops Manual 2026-27 p.17: the soft target is 19:00, but work may run to
+    // the 22:00 hard end (METHODOLOGY.md §Same-Day Completion, 024 D7).
+    it('spans 09:00 to the 22:00 hard end at the default hours', () => {
+      const { left, width } = blockExtent([{ day_start_time: 540, day_end_time: 1140 }], 540, 1320)
+
+      expect(left).toBeCloseTo(0, 1)
+      expect(width).toBeCloseTo(100, 1)
+    })
+
+    it('runs to 23:00 when the organizer ends the day there, past the hard end', () => {
+      const { left, width } = blockExtent([{ day_start_time: 540, day_end_time: 1380 }], 540, 1380)
+
+      expect(left).toBeCloseTo(0, 1)
+      expect(width).toBeCloseTo(100, 1)
+    })
+
+    it('takes the earliest start and the latest hard end across unequal days', () => {
+      const { left, width } = blockExtent(
+        [
+          { day_start_time: 540, day_end_time: 1380 },
+          { day_start_time: 600, day_end_time: 1140 },
+        ],
+        540,
+        1380,
+      )
+
+      expect(left).toBeCloseTo(0, 1)
+      expect(width).toBeCloseTo(100, 1)
+    })
+  })
+
   it('still draws every block at the fit fallback when the plot is never measured', () => {
     globalThis.ResizeObserver = NeverFiringResizeObserver as unknown as typeof ResizeObserver
 

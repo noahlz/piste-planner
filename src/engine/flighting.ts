@@ -1,5 +1,5 @@
 import { BottleneckCause, BottleneckRule, BottleneckSeverity, Phase } from './types.ts'
-import type { Competition, FlightingGroup, Bottleneck } from './types.ts'
+import type { Competition, FlightingGroup, Bottleneck, TournamentType } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { crossoverPenalty } from './crossover.ts'
 import { forEachCompetitionPair } from './pairs.ts'
@@ -121,12 +121,14 @@ export function calculateFlightedStrips(
  * 2. Warn (FLIGHTING_GROUP_NOT_LARGEST) if the flighted competition is not the
  *    largest by pool count among all competitions on that day.
  * 3. Warn (SAME_DAY_DEMOGRAPHIC_CONFLICT) if the grouped pair has a non-zero
- *    crossover penalty.
+ *    crossover penalty at `tournamentType` (a Group 1 pair is finite only at
+ *    the regional types, Ops Manual p.20 – Group 1).
  */
 export function validateFlightingGroup(
   group: FlightingGroup,
   competitions: Competition[],
   dayAssignments: Record<string, number>,
+  tournamentType: TournamentType,
 ): Bottleneck[] {
   const bottlenecks: Bottleneck[] = []
 
@@ -183,7 +185,7 @@ export function validateFlightingGroup(
   // Check 3: demographic conflict between the grouped pair
   // Infinity = hard conflict (same gender/weapon/category) — handled as an error upstream,
   // not a flighting-level warning. Only finite positive penalties warrant a soft warning here.
-  const penalty = crossoverPenalty(priorityComp, flightedComp)
+  const penalty = crossoverPenalty(priorityComp, flightedComp, tournamentType)
   if (penalty > 0 && penalty !== Infinity) {
     bottlenecks.push({
       competition_id: flightedComp.id,

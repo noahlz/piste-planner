@@ -1,9 +1,9 @@
 import { Weapon, CutMode, EventType, RefPolicy } from './types.ts'
 import type { PoolStructure, PoolDurationResult, RefResolution } from './types.ts'
-import { BOUT_COUNTS } from './constants.ts'
+import { BOUT_COUNTS, MAX_DE_FIELD } from './constants.ts'
 
-// BOUT_COUNTS[6] = 15 is the baseline pool size used to scale durations
-const BASELINE_POOL_SIZE = 6
+// BOUT_COUNTS[7] = 21 is the baseline pool size used to scale durations (Ops Manual p.17)
+const BASELINE_POOL_SIZE = 7
 
 /**
  * Computes the pool structure (number of pools and their sizes) for a given fencer count.
@@ -55,9 +55,10 @@ export function poolCountFor(fencerCount: number, useSinglePoolOverride = false)
  * Returns the estimated duration (minutes) for a single pool of a given size.
  *
  * Formula (METHODOLOGY.md §Pool Duration Estimation):
- *   round(baseDuration * BOUT_COUNTS[poolSize] / BOUT_COUNTS[6])
+ *   round(baseDuration * BOUT_COUNTS[poolSize] / BOUT_COUNTS[7])
  *
- * BOUT_COUNTS[6] = 15 is the canonical baseline (standard 6-person pool).
+ * `durationTable` holds pool-of-7 times (21 bouts), per Ops Manual 2026-27
+ * p.17 – Average Bout Timing, Pool of 7.
  */
 export function poolDurationForSize(
   weapon: Weapon,
@@ -123,11 +124,14 @@ export function estimatePoolDuration(
 /**
  * Computes the number of fencers advancing to DE after applying pool-round cuts.
  *
- * METHODOLOGY.md §Pool Composition:
- * - TEAM events always bypass cuts (return fencerCount unchanged)
+ * METHODOLOGY.md §Bracket Sizing. The result is min(max(promoted, 2), MAX_DE_FIELD)
+ * where promoted is:
+ * - TEAM events always bypass cuts (all fencers advance)
  * - DISABLED: all fencers advance
- * - PERCENTAGE: floor(fencerCount * value / 100), minimum 2
- * - COUNT: min(value, fencerCount), minimum 2
+ * - PERCENTAGE: round(fencerCount * (1 - value / 100)), where value is the % cut
+ * - COUNT: min(value, fencerCount)
+ * The 256 cap holds for every event, team or individual, and is silent (S8 p.37).
+ * Throws when fencerCount is 1 or fewer.
  */
 export function computeDeFencerCount(
   fencerCount: number,
@@ -138,10 +142,9 @@ export function computeDeFencerCount(
   if (fencerCount <= 1) {
     throw new Error(`computeDeFencerCount: fencerCount must be > 1, got ${fencerCount}`)
   }
-  if (eventType === EventType.TEAM) return fencerCount
 
   let promoted: number
-  if (cutMode === CutMode.DISABLED) {
+  if (eventType === EventType.TEAM || cutMode === CutMode.DISABLED) {
     promoted = fencerCount
   } else if (cutMode === CutMode.PERCENTAGE) {
     // cutValue is the % to CUT (e.g. 20 = cut 20%, keep 80%), so promoted = fencerCount × (1 - cutValue/100)
@@ -150,7 +153,7 @@ export function computeDeFencerCount(
     promoted = Math.min(cutValue, fencerCount)
   }
 
-  return Math.max(promoted, 2)
+  return Math.min(Math.max(promoted, 2), MAX_DE_FIELD)
 }
 
 /**

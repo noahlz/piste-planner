@@ -9,6 +9,7 @@ import type { Competition, Strip, TournamentConfig } from './types.ts'
 import { Weapon, DeMode } from './types.ts'
 import { poolCountFor } from './pools.ts'
 import { peakDeRefDemand } from './refs.ts'
+import { computeBracketSize, deVideoStripAsk } from './de.ts'
 
 /**
  * The one rule that turns a strip count into the engine's strip list:
@@ -25,11 +26,14 @@ export function buildStrips(total: number, videoCount: number): Strip[] {
 }
 
 /**
- * Peak strip count a staged DE will hold concurrently — the round-of-16 allocation.
- * Finals and beyond are run ad-hoc (stop-at-semis model) and not pre-allocated.
+ * Peak strip count a staged DE's video block will hold concurrently – its
+ * video ask, `min(4, bracketSize / 2)` (METHODOLOGY.md §DE Modes). Gold and
+ * bronze are run ad-hoc (stop-at-semis model) and not pre-allocated.
  */
 export function peakDeStripDemand(comp: Competition): number {
-  return comp.de_round_of_16_strips
+  return deVideoStripAsk(
+    computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type),
+  )
 }
 
 /**

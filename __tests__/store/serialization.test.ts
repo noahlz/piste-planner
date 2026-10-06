@@ -163,9 +163,12 @@ function withPlacement(overrides: Partial<Placement> = {}, eventId = FIXTURE_EVE
   return data
 }
 
-/** The default table as it appears in serialized form – the engine's `Weapon` keys (research D4). */
+/**
+ * The default table as it appears in serialized form – the engine's `Weapon` keys (research D4).
+ * Pool-of-7 basis since 024 (METHODOLOGY.md Appendix A §Pool Duration by Weapon, Ops Manual p.17).
+ */
 function validPoolDurationTable(): Record<string, number> {
-  return { EPEE: 120, FOIL: 105, SABRE: 75 }
+  return { EPEE: 120, FOIL: 120, SABRE: 60 }
 }
 
 /** The single override used by the mixed-table fixtures and their expectations. */

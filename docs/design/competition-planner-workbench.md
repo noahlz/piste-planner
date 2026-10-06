@@ -232,17 +232,20 @@ Features 001–012 are delivered and their spec folders removed – `git show
 0ab5bd2dc9:specs/<feature>/` recovers any of them. 013, the workbench redesign
 from the Claude Design mockup, is delivered and merged (`83168c7f2a`). 014,
 structured bottlenecks, is merged (`24d19f7ed6`). 015, the ledger converging
-with the store, is delivered on branch `015-ledger-convergence-impl`
-(`specs/015-ledger-convergence/handoff.md`), awaiting the user's merge.
+with the store, is merged (`7975e4efea`). 024, the 2026-27 Operations Manual
+conformance, is delivered on branch `024-ops-manual-conformance-impl`
+(`specs/024-ops-manual-conformance/handoff.md`), awaiting the user's merge.
 The original P1–P4 rows are all delivered: P1 as 001, P2 as 003, P3 as 004,
 and P4's manual placement and pre-seeded scheduling as 013 (pins, Move day,
 Auto-assign around pins – the pinned events are excluded from the loop's
 seed, not from `buildEventStates`, per 013 research D1). P5 (FLUID) stays
 deferred with no owner.
 
-Baseline (after 015): `tsc -b` and lint clean, 78 files / 1830 tests. Drift
-ledger B1–B8 scheduled 24 / 24 / 24 / 18 / 12 / 40 / 18 / 53, equal to the app
-path on all eight. Snapshot SHA-256 `a4a71e333c77…`.
+Baseline (after 024): `tsc -b` and lint clean, 81 files / 2148 tests. Drift
+ledger B1–B8 scheduled 24 / 24 / 24 / 21 / 12 / 45 / 18 / 53, equal to the app
+path on all eight, with 0 / 0 / 0 / 9 / 0 / 9 / 0 / 0 ERRORs. Snapshot SHA-256
+`7e2db75c38bb…`. (After 015 it was 78 files / 1830 tests, 24 / 24 / 24 / 18 /
+12 / 40 / 18 / 53 and `a4a71e333c77…`.)
 
 ### Owner decisions, 2026-10-04
 
@@ -256,7 +259,7 @@ path on all eight. Snapshot SHA-256 `a4a71e333c77…`.
 | T039 – "boot places 24 of 24" while the footer reads 19 / 5 | Pass on 24 schedule rows, record the footer; the overflow is fixed later | 013 phase 8, 017 |
 | The eight time-of-day penalty weights | Retire them from METHODOLOGY as Phase D casualties | 021 |
 
-**Owner decisions, 2026-10-05:** every finding of the 2026-27 Operations Manual audit is ruled on, and the rulings are recorded in [`backlog.md`](./backlog.md) §The engine's rules predate the 2026-27 Operations Manual. They become feature 024.
+**Owner decisions, 2026-10-05:** every finding of the 2026-27 Operations Manual audit is ruled on, and the rulings were recorded in `backlog.md` §The engine's rules predate the 2026-27 Operations Manual (removed once 024 delivered them – `git show 41e2b975ee:docs/design/backlog.md` recovers it). They became feature 024, and METHODOLOGY.md carries them now.
 
 ### The finish line
 
@@ -271,13 +274,13 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 | **015** | **Delivered 2026-10-05** – ledger converges with the store: the drift factory now applies the per-type cut, DE-mode and ref-policy rules, so B1–B8 are measured on what the app runs. `specs/015-ledger-convergence/handoff.md` | closed | M | 013 | re-baseline, measured |
 | **016** | Hand placements obey the rules – crossover hard edges checked on the current placements and shown as findings; one referee-peak number for the footer and the engine | §Hand-placed events, §The scorecard's peak-referee row | L | 014, 024 | if the referee fix touches the engine |
 | **017** | The canvas tells the truth – one strip model for engine and canvas so B1 boots 24 / 0; blocks become keyboard-operable buttons | §The canvas calls events unplaced, §A placed block cannot be selected | M | 024 | if the engine assigns strip ranges |
-| **018** | Engine correctness – DE prelims bout share, day-end overrun as a warning, Div 1 cut 25 %, the fencer-count ≤ 1 URL path verified. One drift review per fix | §DE prelims, §Day-end overrun, §Policy tables (Div 1 only), §A shared URL with a fencer count of 0 or 1 | M | 024 | one per fix |
+| **018** | Engine correctness – day-end overrun as a warning, Div 1 cut 25 %, the fencer-count ≤ 1 URL path verified. One drift review per fix. The DE prelims bout share left this row when 024's per-round DE derivation absorbed it | §Day-end overrun, §Policy tables (Div 1 only), §A shared URL with a fencer count of 0 or 1 | M | 024 | one per fix |
 | **019** | Default days per template – the three K₄ templates default to 4 days so they satisfy their own hard rules | §The store's default day count | S | 024 | parity only |
 | **020** | Re-run on parameter change – debounced, with a show-after-delay working indicator | §Changing a parameter should re-run the engine | M | 013, independent of 014–019 | no |
-| **021** | METHODOLOGY reconciliation – retire the eight time-of-day weights, the three cheap weight fixes, the doc's self-contradictions, the verdicts in [`methodology-reconciliation.md`](./methodology-reconciliation.md); delete `daySequencing.ts` and the dead constants; add the calibration scenario | §METHODOLOGY.md and the engine have diverged, §Dead code held back, §Calibration debt | M–L | 018 (day-end wording) | yes |
+| **021** | METHODOLOGY reconciliation – retire the eight time-of-day weights, the last cheap weight fix (`WEAPON_BALANCE` – 010 wired the proximity one and 024 the cross-weapon one as Group 3), the doc's self-contradictions, the verdicts in [`methodology-reconciliation.md`](./methodology-reconciliation.md) (minus L6 and L14, the video tiers and the DE prelims split, which 024 settled), delete `daySequencing.ts` and the dead constants, and add the calibration scenario | §METHODOLOGY.md and the engine have diverged, §Dead code held back, §Calibration debt | M–L | 018 (day-end wording) | yes |
 | **022** | Release housekeeping – README, dev port, stale settings, stale citations | §Release housekeeping | S | last | no |
 | **023** | Team events go straight to DE – see the scope below | §Team events are scheduled with a pool round | L | 015, 024 | B1, B2, B8 move, B3–B7 must not |
-| **024** | 2026-27 Operations Manual conformance – the spec amended first (drafted, owner approves), then pool and DE times from the manual, video for every NAC category from R16 or R8, a 9:00–19:00 day with a ÷ 14 strip baseline, the same-day rulings (Div I–Cadet soft with a morning/afternoon split, Group 1 soft at regionals, new Group 2 and 3 soft rules, first and last day shorter), the Y14 and RYC cuts | §The engine's rules predate the 2026-27 Operations Manual, §Policy tables (Y14 and RYC cuts) | L | 015 | one per rule group; every scenario moves |
+| **024** | **Delivered 2026-10-06** – 2026-27 Operations Manual conformance, one commit per rule group with its drift record: pool and DE times from the manual (A), a 9:00–19:00 day with a 22:00 hard end and a ÷ 14 strip baseline (B), the Y14 and RYC cuts and the 256-fencer DE cap (E), video required for every NAC individual event with team events Single Stage and best-effort (C), and the same-day rules by tournament type (D): Group 1, which now includes Div 1–Cadet, is hard at NAC, SYC and SJCC and soft at ROC, RYC and RJCC with a time-of-day window that holds the older side's pools until day start + 4 hours (METHODOLOGY §Overlapping-Population Separation (Group 1)), plus new Group 2 and 3 soft rules and shorter first and last days. `specs/024-ops-manual-conformance/handoff.md` | closed. Leftovers in §What 024 deliberately left unfixed | L | 015 | re-baseline, measured per group |
 
 020 can run beside any of 014–019 since it touches only the UI. Everything else
 runs in the order shown. 023 takes the next free number rather than renumbering
@@ -285,13 +288,14 @@ runs in the order shown. 023 takes the next free number rather than renumbering
 it runs before 022, which stays last. 024 likewise takes the next free number.
 It runs right after 015 and ahead of 016–019 and 023, so they are measured
 against the 2026-27 planning times rather than the ones it replaces. 023 also
-takes its team-match length from 024's DE timing basis.
+takes its team-match length from 024's DE timing basis, which 024 delivered.
 
 #### 023 scope (owner decisions, 2026-10-04)
 
-Team events have no pool round. Since 015 the ledger factory stages NAC team
-DEs as the app does, so team DEs are measured against the DE shape the app
-runs. One ledger move covers all of it, including the B1/B2 count replacement.
+Team events have no pool round. Since 015 the ledger factory plans team DEs as
+the app does, and since 024 that is Single Stage with no video at every
+tournament type, so team events already plan no video and run single-stage.
+One ledger move covers what is left, including the B1/B2 count replacement.
 
 - **No pool phase for teams.** Every place that counts team pools changes: the
   phase builder (`concurrentScheduler.ts:538-557`), `derive.ts`, `capacity.ts`,
@@ -301,18 +305,22 @@ runs. One ledger move covers all of it, including the B1/B2 count replacement.
 - **"Placed" stops meaning "has a pool start".** `runActions.ts:58`,
   `stripSearch.ts:146`, the `appPath.ts` helper, `serialization.ts:253-254`
   (rejects `strip_count` < 1) and the dock chip all anchor on the pool.
-- **The team DE is modelled for teams.** Strips sized to the field instead of
-  the fixed `de_round_of_16_strips: 4` (`buildConfig.ts:218`), a team match
-  length instead of the individual DE table, and video for gold and bronze only
-  (METHODOLOGY.md:416, where the code makes Div 1, Junior and Cadet team DEs
-  REQUIRED). The mockup's 260–300 minute team DEs are a calibration hint, not
-  data.
+- **The team DE is modelled for teams – done by 024.** The strips are sized to
+  the field (`min(bracket / 2, 16)`, `deStripFootprint` in `de.ts`) in place of
+  the fixed `de_round_of_16_strips: 4`, which is gone. The match length is the
+  team match time (60 min foil and épée, 30 sabre), and no team DE asks for
+  video (`resolveVideoPolicy` in `typeDefaults.ts`, METHODOLOGY §Video Replay
+  Policy, Teams row). The mockup's 260–300 minute team DEs are a calibration
+  hint, not data. What 023 still owes is the pool round, above.
 - **The Schedule view's Strips column** for a team row reports DE strips, since
   it prints `pool_strip_count` today (`ScheduleOutput.tsx:183`).
 - **Real B1/B2 team counts** from FencingTimeLive replace the rounded ones
   (`src/data/tournaments.ts:41-42`, `56-57`).
-- **Prerequisite**: the owner amends METHODOLOGY.md first – :64, :72,
-  :130-145, :157-160, :197, :531, :600-601, :639-643, :707 and :736-738.
+- **Prerequisite**: the owner amends METHODOLOGY.md first – §Outputs,
+  §Single-Day Fit, §Resource Preconditions, §Team Events Cannot Use Cuts,
+  §Individual/Team Separation, §Concurrent Phase Scheduler, §Phase 2:
+  Pre-Scheduling Analysis, §Phase 5: Resource Allocation, §Strip Count
+  Suggestion and §Strip-Hour Capacity.
 - **Ledger**: B1, B2 and B8 move. B3–B7 must not. The app-path counts
   (24 / 24 / 53) and the smoke's 24-row boot hold.
 
@@ -325,7 +333,8 @@ P5 (FLUID), and the experimental mode (rejected in 012). Five of them wait on
 an owner decision or on data first: vet co-day serialization, per-event entry
 caps, the strip non-monotonicity warning, youth pool calibration, and real
 2026-27 templates with the Elite/National split. The policy-tables entry's
-rows other than the Div 1 cut (018) and the Y14 cuts (024) sit here too.
+rows other than the Div 1 cut (018) sit here too, since 024 delivered the Y14
+and RYC cuts.
 
 ## Testing
 
@@ -347,7 +356,7 @@ rows other than the Div 1 cut (018) and the Y14 cuts (024) sit here too.
 - Mobile and touch drag.
 - Collaborative editing.
 - Export to PNG or PDF.
-- ~~Replacing the empirical `de_duration_table`.~~ Lifted 2026-10-05: 024 derives DE length from the 2026-27 Operations Manual's bout times.
+- ~~Replacing the empirical `de_duration_table`.~~ Lifted 2026-10-05, and done by 024: DE length derives from the 2026-27 Operations Manual's bout times, round by round.
 
 ## Open items carried forward
 

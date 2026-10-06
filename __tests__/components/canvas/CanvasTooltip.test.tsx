@@ -149,7 +149,7 @@ describe('CanvasTooltip contents (FR-022)', () => {
     expect(field('category')).toBe('Y10')
     expect(field('gender')).toBe("Women's")
     expect(field('day')).toBe('Day 3')
-    expect(field('phase')).toBe('DE round of 16')
+    expect(field('phase')).toBe('Video stage')
     expect(field('start')).toBe('15:15')
     expect(field('end')).toBe('17:10')
     expect(field('duration')).toBe('115 min')
@@ -162,11 +162,26 @@ describe('CanvasTooltip contents (FR-022)', () => {
     [Phase.FLIGHT_B, 'Flight B'],
     [Phase.DE, 'DE'],
     [Phase.DE_PRELIMS, 'DE prelims'],
-    [Phase.DE_ROUND_OF_16, 'DE round of 16'],
+    // Ops Manual p.19 puts the video stage at the round of 16 for some categories
+    // and the round of 8 for others, so the label names no round (024 plan D6).
+    [Phase.DE_ROUND_OF_16, 'Video stage'],
   ])('names the %s phase %s', (phase, label) => {
     render(<CanvasTooltip target={makeTarget({ placement: { ...POOL_PLACEMENT, phase } })} />)
 
     expect(field('phase')).toBe(label)
+  })
+
+  it('names the video stage for a round-of-8 event too (a Y14 competition)', () => {
+    render(
+      <CanvasTooltip
+        target={makeTarget({
+          competition: makeCompetition({ id: 'plain', category: Category.Y14 }),
+          placement: { ...POOL_PLACEMENT, phase: Phase.DE_ROUND_OF_16 },
+        })}
+      />,
+    )
+
+    expect(field('phase')).toBe('Video stage')
   })
 
   it('writes a one-strip block as a strip rather than as a range of one', () => {

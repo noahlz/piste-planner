@@ -47,6 +47,18 @@ describe('TournamentPanel — type', () => {
   })
 })
 
+describe('TournamentPanel — type help text', () => {
+  // REST_DAY_PAIRS is not keyed by tournament type (METHODOLOGY §Rest Day Preference),
+  // so the help text must not say the type sets rest-day requirements. 024 D.2 left
+  // Junior–Div 1 as the only pair.
+  it('says the type affects grouping and priorities, and claims no rest-day requirement', () => {
+    render(<TournamentPanel />)
+
+    expect(screen.getByText('Affects event grouping rules and scheduling priorities.')).toBeInTheDocument()
+    expect(screen.queryByText(/\brest\b/i)).toBeNull()
+  })
+})
+
 describe('TournamentPanel — day count', () => {
   it('renders a radiogroup with 2, 3 and 4, the current count checked', () => {
     useStore.getState().setDays(3)
@@ -94,10 +106,25 @@ describe('TournamentPanel — day hours', () => {
     const day2Start = screen.getByRole('combobox', { name: 'Day 2 start' })
     const day2End = screen.getByRole('combobox', { name: 'Day 2 end' })
 
-    expect(day1Start).toHaveTextContent('08:00')
-    expect(day1End).toHaveTextContent('22:00')
-    expect(day2Start).toHaveTextContent('08:00')
-    expect(day2End).toHaveTextContent('22:00')
+    // Ops Manual 2026-27 p.17: start 9:00, end the 7:00 PM soft target
+    // (METHODOLOGY.md §Inputs). The 10:00 PM hard end is not a control value.
+    expect(day1Start).toHaveTextContent('09:00')
+    expect(day1End).toHaveTextContent('19:00')
+    expect(day2Start).toHaveTextContent('09:00')
+    expect(day2End).toHaveTextContent('19:00')
+  })
+
+  it('offers an end time after the 22:00 hard end, which the organizer may choose', () => {
+    // The hard end gives way to an organizer day end set later (§Same-Day
+    // Completion), so the end control's list must reach past 22:00.
+    useStore.getState().setDays(1)
+    render(<TournamentPanel />)
+
+    // Radix Select opens on a key press on its trigger – jsdom has no pointer
+    // capture for a click.
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Day 1 end' }), { key: 'Enter' })
+
+    expect(screen.getByRole('option', { name: '23:00' })).toBeInTheDocument()
   })
 
   it('reflects a store edit to a day\'s hours in 24-hour form', () => {

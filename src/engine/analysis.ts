@@ -1,7 +1,7 @@
-import { BottleneckSeverity, CutMode, VideoPolicy, DeMode, BottleneckCause, BottleneckRule, Phase } from './types.ts'
+import { BottleneckSeverity, CutMode, VideoPolicy, BottleneckCause, BottleneckRule, Phase } from './types.ts'
 import type { AnalysisResult, Bottleneck, Competition, TournamentConfig } from './types.ts'
 import { computePoolStructure, computeDeFencerCount, poolCountFor } from './pools.ts'
-import { computeBracketSize } from './de.ts'
+import { computeBracketSize, demandsVideoStage } from './de.ts'
 import { suggestFlightingGroups } from './flighting.ts'
 import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
@@ -58,21 +58,34 @@ export function suggestStripCount(
   }
   if (poolDemands.length === 0) return null
 
+  const busiestDayPools = busiestDayLoad(poolDemands, daysAvailable)
+  return Math.ceil(busiestDayPools / maxPoolStripPct)
+}
+
+/**
+ * The largest-first spread both strip-search bounds use: `loads` (one per
+ * event) spread over `daysAvailable` days, biggest first, each whole into the
+ * day with the least so far, and the busiest day's total returned. Ties go to
+ * the earliest day. `suggestStripCount` spreads pool counts with it, and the
+ * Strip Count Suggestion's manual baseline spreads fencer counts
+ * (`stripSearch.ts`, METHODOLOGY.md §Strip Count Suggestion). An empty list
+ * gives 0. `loads` is not mutated.
+ */
+export function busiestDayLoad(loads: readonly number[], daysAvailable: number): number {
   // Longest-processing-time greedy: biggest events placed first, each into the
   // day that is emptiest at the time. One sort plus one pass over a fixed
   // group count — no iteration to convergence (constitution IV).
-  poolDemands.sort((a, b) => b - a)
+  const sorted = [...loads].sort((a, b) => b - a)
   const dayLoads: number[] = new Array<number>(Math.max(1, Math.floor(daysAvailable))).fill(0)
-  for (const demand of poolDemands) {
+  for (const load of sorted) {
     let emptiest = 0
     for (let day = 1; day < dayLoads.length; day++) {
       if (dayLoads[day] < dayLoads[emptiest]) emptiest = day
     }
-    dayLoads[emptiest] += demand
+    dayLoads[emptiest] += load
   }
 
-  const busiestDayPools = Math.max(...dayLoads)
-  return Math.ceil(busiestDayPools / maxPoolStripPct)
+  return Math.max(...dayLoads)
 }
 
 /**
@@ -204,11 +217,12 @@ export function initialAnalysis(
   }
 
   // ── Pass 4: video strip peak demand ──────────────────────────────────────
-  // Count STAGED + REQUIRED competitions per day as peak concurrent video demand.
-  // Each such competition needs video strips during its DE phase.
+  // Count STAGED + REQUIRED individual competitions per day as peak concurrent
+  // video demand. Each such competition needs video strips during its DE
+  // phase. Team events never count (024 D4, `demandsVideoStage`).
   const videoDemandByDay = new Map<number, number>()
   for (const comp of competitions) {
-    if (comp.de_mode === DeMode.STAGED && comp.de_video_policy === VideoPolicy.REQUIRED) {
+    if (demandsVideoStage(comp)) {
       const day = dayAssignments[comp.id]
       if (day === undefined) continue
       videoDemandByDay.set(day, (videoDemandByDay.get(day) ?? 0) + 1)

@@ -9,8 +9,8 @@
  * below. Start-time shifts, day reassignments, and referee changes are expected
  * churn and halt nothing. The floors are asserted, not merely snapshotted — a
  * snapshot alone is defeated by `vitest -u`.
- * The one admitted floor lowering is the input-correction case named in the
- * `SCHEDULED_FLOORS` docblock below.
+ * The two admitted floor lowerings are input correction and policy amendment,
+ * both named in the `SCHEDULED_FLOORS` docblock below. Any other drop still halts.
  *
  * What is deliberately NOT in the digest: bottleneck message strings. They embed
  * times that churn for uninteresting reasons and would drown every real finding.
@@ -40,7 +40,7 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * one is the regression the gate exists to catch: never edit a floor down to make
  * a red test pass — identify the cause first, and record both counts.
  *
- * The one exception is input correction: a floor may be lowered only when the
+ * The first exception is input correction: a floor may be lowered only when the
  * ledger's own inputs were wrong, and only when all four of these hold:
  *  - the old count was measured on a configuration the app never runs
  *  - the new count equals the app path's measured count
@@ -48,6 +48,19 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  *    proves the inputs now match. A count alone can match by coincidence, as
  *    B4's cut and DE mode showed when they cancelled.
  *  - the lowering commit records both counts and the isolation beside the floor
+ *
+ * The second exception is policy amendment (024's D3, owner ruling 2026-10-05):
+ * a floor may be lowered when an owner-approved METHODOLOGY.md amendment causes
+ * the drop, and only when all four of these hold:
+ *  - the drop is confined to one rule group's commit
+ *  - that commit's drift review names the amendment and the events lost, and cites
+ *    what isolates the cause – in 024, a control run for group B (the 8:00-start
+ *    run) and the sub-step attribution for group D
+ *  - the ledger equals the app path in that commit, and
+ *    `__tests__/store/factoryParity.test.ts` passes
+ *  - a dated entry beside the floor records both counts
+ *
+ * Any other drop still halts the task.
  *
  * B4's floor was 0 for as long as the upfront `validateFeasibility` gate aborted
  * its build. 011's T004 demoted that finding to a WARN, so B4 packs again and its
@@ -75,7 +88,7 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // 015, 2026-10-05 – B8 raised 52 → 53: the per-type DE mode alone places
   // JR-W-EPEE-IND, equal to the app path's 53. A raise under the rule above.
   //
-  // 015, 2026-10-05 – B6 lowered 45 → 40, the one deliberate lowering, under the
+  // 015, 2026-10-05 – B6 lowered 45 → 40, 015's one deliberate lowering, under the
   // input-correction exception above. The old 45 came from a factory that ran
   // B6 (an ROC) without the regional cut and with the wrong DE mode, a
   // configuration the app never runs. Measured in isolation: CUT alone gives 43,
@@ -85,7 +98,59 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // arrive (D1A-W-FOIL-IND, JR-M-EPEE-IND, JR-W-SABRE-IND): the all-advance
   // brackets cost the strip-hours the 20% cut hid. See
   // specs/015-ledger-convergence/plan.md §What planning measured and §D4.
-  B1: 24, B2: 24, B3: 24, B4: 18, B5: 12, B6: 40, B7: 18, B8: 53,
+  //
+  // 024, 2026-10-06 – B4 raised 18 → 19 by group A (planning times): pools
+  // rebased to the pool of 7 and DEs derived per round from the 2026-27 Ops
+  // Manual's bout times (METHODOLOGY §Pool Duration Estimation, §DE Duration).
+  // Out CDT-M-EPEE-IND, CDT-M-FOIL-IND. In CDT-W-FOIL-IND, Y12-W-SABRE-IND,
+  // Y14-W-EPEE-IND. Equal to the app path's 19. A raise under the rule above.
+  //
+  // 024, 2026-10-06 – B6 raised 40 → 50 by group A (planning times), the same
+  // rules. In CDT-W-FOIL-IND, D2-M-EPEE-IND, D2-M-FOIL-IND, D2-M-SABRE-IND,
+  // VET-M-EPEE-IND-VCMB, Y12-M-FOIL-IND, Y12-M-SABRE-IND, Y12-W-EPEE-IND,
+  // Y12-W-SABRE-IND, Y14-W-EPEE-IND. None leave. Equal to the app path's 50.
+  // A raise under the rule above. See specs/024-ops-manual-conformance/plan.md
+  // §Group A.
+  //
+  // 024 group B, 2026-10-06 – B8 lowered 53 → 52 under the policy-amendment
+  // exception above. The amendment is METHODOLOGY §Inputs' 9:00 day start
+  // (2026-27 Ops Manual p.17, owner-approved commit 6a4107b710). JR-W-EPEE-IND
+  // is lost: the 9:00 start shrinks the hard window from 840 minutes
+  // (8:00–22:00) to 780 (9:00–22:00), and the event no longer fits its day.
+  // The control isolates it: group B with an 8:00 start places B8 53 (and B6
+  // 52), so neither the 600-minute capacity day nor the 19:00 soft target
+  // costs the event (plan §Group B – the drift review re-runs that control).
+  // Equal to the app path's 52. Group D's first/last-day capacity is measured
+  // to place it again (plan §Group D).
+  //
+  // 024 group D, 2026-10-06 – B4 raised 19 → 21 by group D (same-day rules,
+  // Ops Manual p.20 Group 1 / Group 2 / Group 3, METHODOLOGY §Overlapping-
+  // Population Separation (Group 1), §First and Last Day Capacity). Out
+  // CDT-W-EPEE-IND, CDT-W-FOIL-IND, CDT-W-SABRE-IND, Y14-W-SABRE-IND. In
+  // CDT-M-SABRE-IND, Y12-M-SABRE-IND, Y12-W-EPEE-IND, Y12-W-FOIL-IND,
+  // Y12-W-SABRE-IND, Y14-W-FOIL-IND. By sub-step 19 / 19 / 19 / 18 / 21: Group 3
+  // (D.4) dips it to 18 and the first/last-day capacity (D.5) lifts it to 21.
+  // The group lands whole, so the dip never reaches a commit (plan D1). Equal to
+  // the app path's 21. A raise under the rule above.
+  //
+  // 024 group D, 2026-10-06 – B8 raised 52 → 53 by group D: the first/last-day
+  // capacity (D.5, METHODOLOGY §First and Last Day Capacity) places
+  // JR-W-EPEE-IND again, the event group B's 9:00 start cost. Equal to the app
+  // path's 53. A raise under the rule above.
+  //
+  // 024 group D, 2026-10-06 – B6 lowered 50 → 45 under the policy-amendment
+  // exception above. The amendments are METHODOLOGY's Group 1 by tournament type
+  // with the regional time-of-day window, the dropped Junior–Cadet rest day,
+  // Group 3 (cross-weapon same demographic) and the first/last-day capacity
+  // (Ops Manual p.20, owner-approved commit 6a4107b710). Out JR-M-FOIL-IND,
+  // JR-M-SABRE-IND, JR-W-EPEE-IND, JR-W-FOIL-IND, VET-M-FOIL-IND-VCMB,
+  // Y12-M-EPEE-IND, Y12-W-FOIL-IND. In D1A-W-EPEE-IND, Y12-M-FOIL-IND. The
+  // sub-step attribution isolates it, measured after each sub-step: D.1 Group 1
+  // by type and the window 50 → 49, D.2 the rest day removed 49 → 48, D.3
+  // Group 2 48 → 48, D.4 Group 3 48 → 46, D.5 the first/last-day capacity
+  // 46 → 45. The ledger equals the app path at every sub-step, 45 at the end.
+  // Both counts: 50 before group D, 45 after (plan §Group D).
+  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
 }
 
 /**
@@ -94,7 +159,8 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  * B4 was absent for as long as the upfront feasibility gate aborted its build
  * before any per-day packing ran, so `postScheduleDayBreakdown` never executed
  * for it. 011's T004 demoted that finding to a WARN and B4 packs again: it emits
- * three summary lines (days 1-3, peak demand 86 / 156 / 162, re-measured at 015)
+ * three summary lines (days 1-3, peak demand 86 / 156 / 162 at 015, 106 / 148 /
+ * 170 since 024's group A)
  * and `dayPeakRefDemands` reproduces all three, so B4 joins the list rather than
  * the comment being rewritten around its absence. B1/B2/B3/B5/B7/B8 stay out
  * because they emit no summary line at all – the scheduler only writes one for
@@ -102,6 +168,16 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  *
  * 015, 2026-10-05 – B8 left the list: with the per-type DE mode it places
  * JR-W-EPEE-IND too, so it places every event and emits no summary line.
+ *
+ * 024 group B, 2026-10-06 – B8 rejoins the list: the 9:00 day start (2026-27
+ * Ops Manual p.17, METHODOLOGY §Inputs) leaves JR-W-EPEE-IND unplaced (see
+ * the B8 floor entry above), so its day had a failure and emits a `Day N refs`
+ * line. B4's day peaks move to 154 / 106 / 158 under group B's re-pack.
+ *
+ * 024 group D, 2026-10-06 – B8 leaves the list again: group D's first/last-day
+ * capacity (METHODOLOGY §First and Last Day Capacity) places JR-W-EPEE-IND, so
+ * B8 places every event and emits no summary line. B4's day peaks move to
+ * 152 / 168 / 190 and B6's to 112 / 106 / 118 under group D's re-pack.
  *
  * Membership is asserted in both directions: the day-peaks test below fails if a
  * listed scenario emits no summary line or an unlisted one emits any.
@@ -302,6 +378,16 @@ describe('drift ledger', () => {
     //    015, 2026-10-05 – 17 → 18: the factory now applies the regional cut and
     //    the per-type DE mode, which together account for the +1 (cut alone 19,
     //    DE mode alone 20, both 18 – specs/015-ledger-convergence/plan.md).
+    //    024, 2026-10-06 – 18 → 19: group A's pool-of-7 and per-round DE times
+    //    (2026-27 Ops Manual) re-pack B4 – CDT-M-EPEE-IND and CDT-M-FOIL-IND out,
+    //    CDT-W-FOIL-IND, Y12-W-SABRE-IND and Y14-W-EPEE-IND in
+    //    (specs/024-ops-manual-conformance/plan.md §Group A).
+    //    024 group D, 2026-10-06 – 19 → 21: the same-day rules (Ops Manual p.20,
+    //    METHODOLOGY §Overlapping-Population Separation (Group 1), §First and
+    //    Last Day Capacity) re-pack B4 – CDT-W-EPEE-IND, CDT-W-FOIL-IND,
+    //    CDT-W-SABRE-IND and Y14-W-SABRE-IND out, CDT-M-SABRE-IND,
+    //    Y12-M-SABRE-IND, Y12-W-EPEE-IND, Y12-W-FOIL-IND, Y12-W-SABRE-IND and
+    //    Y14-W-FOIL-IND in (plan §Group D).
     //  - no ERROR-severity validation finding at all, and in particular neither
     //    feasibility rule id among them. This reads `validateConfig` directly
     //    because it pins the severity at the source: a severity re-escalation
@@ -319,16 +405,22 @@ describe('drift ledger', () => {
     //    was 481 (~29%,
     //    specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md))
     //    before the factory took the per-type DE mode and regional cut.
-    //  - no ERROR sits in Phase.VALIDATION. B4's 12 ERRORs are all
+    //    024, 2026-10-06 – the shortfall is now 348 strip-hours (~29%): group
+    //    A's bout-time billing (METHODOLOGY §DE Capacity Estimation) puts B4's
+    //    demand at 1548, and group B's 10-hour planning day (2026-27 Ops Manual
+    //    p.17, METHODOLOGY §Strip-Hour Capacity) holds 3d × 40s × 10h = 1200,
+    //    1380 with the 15% slack, so the WARN fires (1548 > 1380).
+    //  - no ERROR sits in Phase.VALIDATION. B4's 9 ERRORs (12 before 024's
+    //    group A, 11 before group D) are all
     //    DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the ordinary
     //    per-event degradation of an oversubscribed board, which is spec.md
     //    §Edge Cases' accepted cost. A validation-phase ERROR returning is the
     //    shape that empties the board, and it halts here whatever its rule id.
     if (id === 'B4') {
-      it('B4 packs under a demoted feasibility WARN — 18 scheduled, no validation ERROR', () => {
+      it('B4 packs with feasibility demoted to WARN — 21 scheduled, no validation ERROR', () => {
         const { competitions, config, bottlenecks } = runScenario(id)
 
-        expect(buildDigest(id).scheduledCount).toBe(18)
+        expect(buildDigest(id).scheduledCount).toBe(21)
 
         const findings = validateConfig(config, competitions, ValidationMode.BINDING)
         expect(findings.filter(f => f.severity === BottleneckSeverity.ERROR)).toEqual([])
