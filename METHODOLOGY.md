@@ -329,7 +329,7 @@ The scheduling system uses three tiers of constraints: **Hard** (never relaxed),
 
 ### Pool Composition
 
-Pool structure follows USA Fencing rules (S8 Table 2.16.1, pp.36–37, and pool sizes for smaller fields, pp.90–91). (see [`pools.ts`](src/engine/pools.ts))
+Pool structure follows USA Fencing rules (S8 Table 2.16.1, pp.37–38, and pool sizes for smaller fields, pp.85–86). (see [`pools.ts`](src/engine/pools.ts))
 
 #### Pool Sizing
 
@@ -414,7 +414,7 @@ Under the concurrent scheduler a flighted event's pools split into two dependent
   - **Promoted count**: `min(promotedValue, fencerCount)`
   - **Disabled**: all fencers advance
 - Minimum 2 fencers always advance
-- Maximum 256 fencers advance in every event: `promoted = min(advancing, 256)`, so no DE bracket is larger than 256 (S8 p.36 – "A maximum of 256 fencers will be promoted out of pools for all events")
+- Maximum 256 fencers advance in every event: `promoted = min(advancing, 256)`, so no DE bracket is larger than 256 (S8 p.37 – "A maximum of 256 fencers will be promoted out of pools for all events")
 - The bracket holds `bracketSize − promoted` byes. Byes are not bouts, so the first round has `promoted − bracketSize / 2` bouts and every later round is full (see [DE Duration](#de-duration))
 
 #### Default Cuts by Age Category
@@ -422,7 +422,7 @@ Under the concurrent scheduler a flighted event's pools split into two dependent
 | Age Category | Default Cut | Notes |
 |---|---|---|
 | Y8, Y10, Y12 | Disabled (100% advance) | |
-| Y14 | Disabled (100% advance) | At every tournament type (S8 p.37 – Y14 SYC & NAC, 100% promoted). S8's 80% advance belongs to the Y14 National Championship, which no template models. |
+| Y14 | Disabled (100% advance) | At every tournament type (S8 p.38 – Y14 SYC & NAC, 100% promoted). S8's 80% advance belongs to the Y14 National Championship, which no template models. |
 | Cadet, Junior, Div 1 | 20% cut (80% advance) | Except at ROC, RYC, SYC, RJCC and SJCC → 100% advance. Cadet and Junior at a NAC: S8 p.37. |
 | Div 1A | Disabled (100% advance) | Except at Summer Nationals → 80% advance |
 | Div 2, Div 3 | Disabled (100% advance) | |
@@ -788,7 +788,7 @@ Each tournament type sets the same-day rules, the video policy, the DE mode, ref
 - All possible events except Div 1A.
 - National same-day rules: every Group 1 pair is hard, Div 1–Cadet included (Ops Manual p.20 – Group 1).
 - Rest-day preference between Junior and Div 1 in the same weapon (Ops Manual p.20 – Group 2). The Junior–Cadet rest day is a Junior Olympics rule and does not apply.
-- Default cuts: Cadet, Junior and Div 1 at 80% advancement to DE. Y14 and every other category advance 100% (S8 p.37).
+- Default cuts: Cadet, Junior and Div 1 at 80% advancement to DE. Y14 and every other category advance 100% (S8 pp.37–38).
 - Staged DEs with video replay REQUIRED for every individual event: from the round of 16 for Div 1, Junior and Cadet, and from the round of 8 for every other category (Ops Manual p.19 – see [Video Replay Policy](#video-replay-policy)). Team events get video for gold and bronze only.
 - Two refs per pool.
 - Typically 3–4 day events with large fields (100+ fencers in major categories)
@@ -798,7 +798,7 @@ Each tournament type sets the same-day rules, the video policy, the DE mode, ref
 
 - Uses VET_COMBINED (no individual veteran age-group breakdown)
 - Div 1A and Veteran categories are the primary focus
-- 100% advancement to DE in every category (Div 1A, Div 2 and Veteran: S8 p.36)
+- 100% advancement to DE in every category (Div 1A, Div 2 and Veteran: S8 p.37)
 - Regional same-day rules: every Group 1 pair is soft, with the time-of-day window
 - Single Stage DEs. Video replay is BEST_EFFORT (Ops Manual p.19)
 - One ref per pool
@@ -807,7 +807,7 @@ Each tournament type sets the same-day rules, the video policy, the DE mode, ref
 ### RYC / SYC (Regional / Super Youth Circuit)
 
 - Youth categories (Y10, Y12, Y14)
-- 100% advancement to DE (S8 p.37 – Y10 and Y12 at RYC and SYC, Y14 at SYC). Y14 at RYC advances 100% under its [default cut](#default-cuts-by-age-category).
+- 100% advancement to DE (S8 p.38 – Y10 and Y12 at RYC and SYC, Y14 at SYC). Y14 at RYC advances 100% under its [default cut](#default-cuts-by-age-category).
 - Smaller fields; regional-scale fencer defaults
 - Y10 preferred in first time slot (Ops Manual p.20 – Group 2)
 - Single Stage DEs. Video replay is BEST_EFFORT (Ops Manual p.19)
@@ -963,7 +963,7 @@ For strip allocation and video strip preservation details, see [Strip Assignment
 | S5 | Fencing Parents: "How much notice should US Fencing give for NAC day schedules?" (Jun 2021) | [Link](https://www.fencingparents.org/whats-new-in-fencing/2021/6/28/how-much-notice-should-us-fencing-give-for-day-schedules-checkin-times-and-policy-changes) |
 | S6 | USA Fencing: "Take Note of These Updates to Events and Formats for the 2024-25 Tournament Season" (Jul 2024) | [Link](https://www.usafencing.org/news/2024/july/19/take-note-of-these-updates-to-events-and-formats-for-the-202425-tournament-season) |
 | S7 | USA Fencing: "Event Combinations Announced for 2023-24 NACs and Championships" (May 2023) | [Link](https://www.usafencing.org/news/2023/may/31/event-combinations-announced-for-202324-usa-fencing-nacs-and-championships) |
-| S8 | USA Fencing Athlete Handbook 2024-25 | [PDF](https://static1.squarespace.com/static/63d04398a7662e295f7c993a/t/6706d6a4b3f88e7f6a2a2467/1728501417355/USA_Fencing_Athlete_Handbook_2024-25.pdf) – Pool sizes, competition formats, gender equity. Cited pages: p.16 (§2.3.2 – SYC and SJCC listed as regional tournaments), pp.36–37 (Table 2.16.1 – the 256-fencer maximum DE field on p.36, promotion rates and 10-touch DE bouts by event), p.40 (bout format – Veteran, Y8 and Y10 DEs are 10-touch), pp.90–91 (pool sizes for smaller fields). Page numbers are the printed ones. |
+| S8 | USA Fencing Athlete Handbook 2026-27 | [PDF](https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt46a0168c9377fc1b/USA%20Fencing%20Athlete%20Handbook%202026-27) – Pool sizes, competition formats, gender equity. Cited pages: p.15 (§2.3.2 – SYC and SJCC listed as regional tournaments), pp.37–38 (Table 2.16.1 – the 256-fencer maximum DE field on p.37, promotion rates and 10-touch DE bouts by event), p.40 (bout format – Veteran, Y8 and Y10 DEs are 10-touch), pp.85–86 (pool sizes for smaller fields). Page numbers are the printed ones. |
 | S9 | Academy of Fencing Masters: "How to Make USA Fencing National Events Work for Everyone" | [Link](https://academyoffencingmasters.com/blog/how-to-make-usa-fencing-national-events-work-for-everyone/) |
 | S10 | Fencing Time tournament software documentation | [Link](https://www.fencingtime.com/Home/VerHistory) |
 
@@ -1071,7 +1071,7 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 | Video stage strip ask | `min(4, bracketSize / 2)` | Video strips a staged DE's video block asks for |
 | Fencer count bounds | 2–500 | Valid range per competition |
 | DE minimum advancement | 2 fencers | Minimum fencers advancing to DE bracket |
-| DE maximum advancement | 256 fencers | Maximum fencers promoted out of pools in any event (S8 p.36) |
+| DE maximum advancement | 256 fencers | Maximum fencers promoted out of pools in any event (S8 p.37) |
 | Pool size targets | 6–7 | Target pool size; `ceil(fencerCount / 7)` pools |
 | Maximum crossover weight | 0.8 | Crossover graph edge cap |
 | Two-hop crossover cap | 0.3 | Indirect relationship cap |
@@ -1107,7 +1107,7 @@ Where this spec departs from or extends the Operations Manual (S1), and the manu
 - **Div 1 and Div 1A, hard.** Ops Manual p.20 – Group 1 names "the Div I, Junior, and Cadet competitions", not Div 1A. The spec keeps Div 1 and Div 1A of the same weapon and gender on different days as a hard block, because nearly the same fencers enter both.
 - **Group 1 per gender.** Ops Manual p.20 – Group 1 applies "for any one weapon". The spec applies each Group 1 pair per weapon and gender, so a pair in different genders is not separated (see [Overlapping-Population Separation (Group 1)](#overlapping-population-separation-group-1)). The Group 2 soft separations in [Other Soft Preferences](#other-soft-preferences) are read the same way.
 - **Group 1 at regional types.** Ops Manual p.20 sets the criteria for national tournaments. At ROC, RYC and RJCC fencers enter several events a day, so the spec makes every Group 1 pair soft there, with a time-of-day window (see [Regional Types](#regional-types-soft-with-a-time-of-day-window)).
-- **SYC and SJCC.** Neither the Operations Manual nor S8 calls SYC or SJCC a national tournament, and S8 p.16 lists both under "Regional Tournaments". The spec applies Ops Manual p.20's national scheduling criteria to them (every Group 1 pair hard), while it treats them as regional for video (`BEST_EFFORT`, Ops Manual p.19). See [Tournament-Type Policies](#tournament-type-policies).
+- **SYC and SJCC.** Neither the Operations Manual nor S8 calls SYC or SJCC a national tournament, and S8 p.15 lists both under "Regional Tournaments". The spec applies Ops Manual p.20's national scheduling criteria to them (every Group 1 pair hard), while it treats them as regional for video (`BEST_EFFORT`, Ops Manual p.19). See [Tournament-Type Policies](#tournament-type-policies).
 - **Group 1 bullet 3 kept hard at regional types.** Ops Manual p.20 – Group 1 keeps team and individual events of the same age level and weapon off the same day. The spec keeps this hard at every type, regional types included, because the same fencers enter both by definition, and p.20 – Group 2 asks the same ("same day scheduling of individual and team competitions should be avoided when it is possible that a fencer could fence in both competitions"). See [Same-Population Conflicts](#same-population-conflicts). The cross-level blocks (Div 1 ind ↔ Junior team, Junior ind ↔ Div 1 team) stay as specified in [Individual/Team Separation](#individualteam-separation).
 - **Y8 in Y10's early-start and video tiers.** Ops Manual p.20 – Group 2 asks for Y10 events early in the day, and p.19 lists Y10, not Y8, in the round-of-8 video tier. The spec gives Y8 the same early-start preference as Y10 and, at a NAC, the same round-of-8 video stage.
 - **Proximity at every type.** Ops Manual p.20 – Group 2 asks that adjacent age groups not be widely separated at Summer Nationals only. The spec applies [Proximity Preference](#proximity-preference) at every tournament type.
