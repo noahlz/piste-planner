@@ -381,6 +381,20 @@ The durable fix is the one already on this backlog – promote policy tables
 described under "Global settings," rather than chasing each season in
 `constants.ts`.
 
+## The Y8 Developmental Format is not modelled
+
+*Found by 024 planning, 2026-10-05. Recorded, not fixed.*
+
+The 2026-27 Athlete Handbook (p.84) makes the Youth Developmental Format
+required for Y8 from 2025-26: two rounds of pools of 5 and 6, "with no direct
+elimination." The engine instead runs one pool round and a DE for every Y8
+event, with 10-touch DE bouts as a documented departure (METHODOLOGY.md,
+Appendix B).
+
+Modelling it needs a second pool round with seeded "shark" and "minnow" pools
+and no DE bracket for Y8. If ignored, Y8 events are planned with a DE that does
+not happen, so their time and strip use is wrong.
+
 ## The engine's rules predate the 2026-27 Operations Manual
 
 *Audited 2026-10-05 against the [USA Fencing Operations Manual
