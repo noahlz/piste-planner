@@ -110,10 +110,26 @@ describe('REGIONAL_CUT_TOURNAMENT_TYPES', () => {
   })
 })
 
-// S8 p.38 – Y14 SYC & NAC, 100% promoted. The default is type-independent.
+// METHODOLOGY.md §Default Cuts by Age Category. Exact contents, so a wrong or
+// added row fails here (024 plan D8). Y14 advances everyone by default: S8 p.38
+// – Y14 SYC & NAC, 100% promoted. The default is type-independent.
 describe('DEFAULT_CUT_BY_CATEGORY', () => {
-  it('advances Y14 100% by default (DISABLED / 100)', () => {
-    expect(DEFAULT_CUT_BY_CATEGORY[Category.Y14]).toEqual({ mode: CutMode.DISABLED, value: 100 })
+  it('holds exactly the spec table: Cadet, Junior and Div 1 cut 20%, every other category advances 100%', () => {
+    const allAdvance = { mode: CutMode.DISABLED, value: 100 }
+    const cut20 = { mode: CutMode.PERCENTAGE, value: 20 }
+    expect(DEFAULT_CUT_BY_CATEGORY).toEqual({
+      [Category.Y8]: allAdvance,
+      [Category.Y10]: allAdvance,
+      [Category.Y12]: allAdvance,
+      [Category.Y14]: allAdvance,
+      [Category.VETERAN]: allAdvance,
+      [Category.DIV1A]: allAdvance,
+      [Category.DIV2]: allAdvance,
+      [Category.DIV3]: allAdvance,
+      [Category.CADET]: cut20,
+      [Category.JUNIOR]: cut20,
+      [Category.DIV1]: cut20,
+    })
   })
 })
 

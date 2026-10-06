@@ -375,49 +375,33 @@ describe('buildTournamentConfig', () => {
       }
     }
 
-    it('overrides cut to DISABLED/100 for JUNIOR at ROC tournament', () => {
-      const state = storeWith(regionalCutState(TournamentType.ROC, 'JR-M-FOIL-IND'))
-      const { competitions } = buildTournamentConfig(state)
-      const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
-
+    // Builds the one competition down the app path and reads back its cut pair.
+    function cutFor(type: TournamentType, id: string) {
+      const { competitions } = buildTournamentConfig(storeWith(regionalCutState(type, id)))
+      const comp = competitions.find((c: Competition) => c.id === id)
       expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
-      expect(comp!.cut_value).toBe(100)
+      return { cut_mode: comp!.cut_mode, cut_value: comp!.cut_value }
+    }
+
+    it('overrides cut to DISABLED/100 for JUNIOR at ROC tournament', () => {
+      expect(cutFor(TournamentType.ROC, 'JR-M-FOIL-IND')).toEqual({ cut_mode: CutMode.DISABLED, cut_value: 100 })
     })
 
     // The discriminating pair: JUNIOR's catalogue default is PERCENTAGE/20, so
     // the ROC case above can only read DISABLED/100 if the override loop fired.
     it('does NOT override cut for JUNIOR at NAC tournament', () => {
-      const state = storeWith(regionalCutState(TournamentType.NAC, 'JR-M-FOIL-IND'))
-      const { competitions } = buildTournamentConfig(state)
-      const comp = competitions.find((c: Competition) => c.id === 'JR-M-FOIL-IND')
-
-      expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.PERCENTAGE)
-      expect(comp!.cut_value).toBe(20)
+      expect(cutFor(TournamentType.NAC, 'JR-M-FOIL-IND')).toEqual({ cut_mode: CutMode.PERCENTAGE, cut_value: 20 })
     })
 
     // RYC joined the regional types in 024 (METHODOLOGY.md §Default Cuts by Age
     // Category). Cadet's default is PERCENTAGE/20, so only the override loop
     // can make it all-advance. Y14 is all-advance by default at every type.
     it('forces a CADET event to DISABLED/100 at an RYC tournament', () => {
-      const state = storeWith(regionalCutState(TournamentType.RYC, 'CDT-M-FOIL-IND'))
-      const { competitions } = buildTournamentConfig(state)
-      const comp = competitions.find((c: Competition) => c.id === 'CDT-M-FOIL-IND')
-
-      expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
-      expect(comp!.cut_value).toBe(100)
+      expect(cutFor(TournamentType.RYC, 'CDT-M-FOIL-IND')).toEqual({ cut_mode: CutMode.DISABLED, cut_value: 100 })
     })
 
     it.each([TournamentType.RYC, TournamentType.NAC])('advances a Y14 event 100% (DISABLED/100) at %s', (type) => {
-      const state = storeWith(regionalCutState(type, 'Y14-M-FOIL-IND'))
-      const { competitions } = buildTournamentConfig(state)
-      const comp = competitions.find((c: Competition) => c.id === 'Y14-M-FOIL-IND')
-
-      expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
-      expect(comp!.cut_value).toBe(100)
+      expect(cutFor(type, 'Y14-M-FOIL-IND')).toEqual({ cut_mode: CutMode.DISABLED, cut_value: 100 })
     })
 
     // VETERAN is not in REGIONAL_CUT_OVERRIDES, and its catalogue default is
@@ -428,13 +412,7 @@ describe('buildTournamentConfig', () => {
     // The ordering itself is pinned by the derivation describe at the end of
     // this file, across all 66 competitions of the fixture template.
     it('leaves VETERAN at its catalogue default at a ROC tournament (category not in REGIONAL_CUT_OVERRIDES)', () => {
-      const state = storeWith(regionalCutState(TournamentType.ROC, 'VET-M-FOIL-IND-V40'))
-      const { competitions } = buildTournamentConfig(state)
-      const comp = competitions.find((c: Competition) => c.id === 'VET-M-FOIL-IND-V40')
-
-      expect(comp).toBeDefined()
-      expect(comp!.cut_mode).toBe(CutMode.DISABLED)
-      expect(comp!.cut_value).toBe(100)
+      expect(cutFor(TournamentType.ROC, 'VET-M-FOIL-IND-V40')).toEqual({ cut_mode: CutMode.DISABLED, cut_value: 100 })
     })
   })
 

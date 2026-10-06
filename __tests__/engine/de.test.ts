@@ -11,7 +11,6 @@ import {
   deVideoStripAsk,
   deStripFootprint,
 } from '../../src/engine/de.ts'
-import { computeDeFencerCount } from '../../src/engine/pools.ts'
 import { CutMode, DeMode, EventType, Weapon, Category, VetAgeGroup, tailEstimateMins } from '../../src/engine/types.ts'
 import {
   DE_BOUT_DURATION,
@@ -62,10 +61,17 @@ describe('computeBracketSize', () => {
   it('280 entries, DISABLED → bracket 256, not 512', () => {
     expect(computeBracketSize(280, CutMode.DISABLED, 0, EventType.INDIVIDUAL)).toBe(256)
   })
+})
 
-  it('280 entries, DISABLED → the round of 256 has 128 bouts and no byes', () => {
-    const promoted = computeDeFencerCount(280, CutMode.DISABLED, 0, EventType.INDIVIDUAL)
-    expect(deRounds(promoted)[0]).toEqual({ round: 256, bouts: 128 })
+// METHODOLOGY.md §Bracket Sizing: no DE bracket is larger than 256 (S8 p.37).
+describe('deBlocksFor – oversized field', () => {
+  it('280 fencers, cut disabled, single stage → bracket 256 whose first round has 128 bouts and no byes', () => {
+    const blocks = deBlocksFor(
+      makeCompetition({ fencer_count: 280, cut_mode: CutMode.DISABLED, de_mode: DeMode.SINGLE_STAGE }),
+      makeConfig(),
+    )
+    expect(blocks.bracketSize).toBe(256)
+    expect(blocks.general[0]).toEqual({ round: 256, bouts: 128 })
   })
 })
 

@@ -122,9 +122,11 @@ describe('factory parity with the app-path build', () => {
    * B1–B8 cover only four tournament types, so this rebuilds B1's roster under
    * every type down both paths to reach the other rows of the factory's
    * per-type table. Competitions only: the config side is the scenario test's.
-   * The regional cut data is shared by both paths, so a wrong row there cannot
-   * show up here. `__tests__/engine/constants.test.ts` pins only the rows
-   * present today, so an added row is caught by neither (plan.md D1).
+   * The regional cut data and DEFAULT_CUT_BY_CATEGORY are shared by both paths,
+   * so parity cannot catch a wrong row in them. `__tests__/engine/constants.test.ts`
+   * pins the exact contents of all three tables (REGIONAL_CUT_OVERRIDES,
+   * REGIONAL_CUT_TOURNAMENT_TYPES, DEFAULT_CUT_BY_CATEGORY), so a wrong or
+   * added row is caught there (024 plan D8).
    */
   it.each(Object.values(TournamentType))('%s: factory per-type rules match the app path on B1\'s roster', (type) => {
     const app = appPathBuild('B1', type)
