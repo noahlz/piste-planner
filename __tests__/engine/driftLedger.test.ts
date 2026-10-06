@@ -9,8 +9,8 @@
  * below. Start-time shifts, day reassignments, and referee changes are expected
  * churn and halt nothing. The floors are asserted, not merely snapshotted — a
  * snapshot alone is defeated by `vitest -u`.
- * The one admitted floor lowering is the input-correction case named in the
- * `SCHEDULED_FLOORS` docblock below.
+ * The two admitted floor lowerings are input correction and policy amendment,
+ * both named in the `SCHEDULED_FLOORS` docblock below. Any other drop still halts.
  *
  * What is deliberately NOT in the digest: bottleneck message strings. They embed
  * times that churn for uninteresting reasons and would drown every real finding.
@@ -40,7 +40,7 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * one is the regression the gate exists to catch: never edit a floor down to make
  * a red test pass — identify the cause first, and record both counts.
  *
- * The one exception is input correction: a floor may be lowered only when the
+ * The first exception is input correction: a floor may be lowered only when the
  * ledger's own inputs were wrong, and only when all four of these hold:
  *  - the old count was measured on a configuration the app never runs
  *  - the new count equals the app path's measured count
@@ -48,6 +48,19 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  *    proves the inputs now match. A count alone can match by coincidence, as
  *    B4's cut and DE mode showed when they cancelled.
  *  - the lowering commit records both counts and the isolation beside the floor
+ *
+ * The second exception is policy amendment (024's D3, owner ruling 2026-10-05):
+ * a floor may be lowered when an owner-approved METHODOLOGY.md amendment causes
+ * the drop, and only when all four of these hold:
+ *  - the drop is confined to one rule group's commit
+ *  - that commit's drift review names the amendment and the events lost, and cites
+ *    what isolates the cause – in 024, a control run for group B (the 8:00-start
+ *    run) and the sub-step attribution for group D
+ *  - the ledger equals the app path in that commit, and
+ *    `__tests__/store/factoryParity.test.ts` passes
+ *  - a dated entry beside the floor records both counts
+ *
+ * Any other drop still halts the task.
  *
  * B4's floor was 0 for as long as the upfront `validateFeasibility` gate aborted
  * its build. 011's T004 demoted that finding to a WARN, so B4 packs again and its
@@ -75,7 +88,7 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // 015, 2026-10-05 – B8 raised 52 → 53: the per-type DE mode alone places
   // JR-W-EPEE-IND, equal to the app path's 53. A raise under the rule above.
   //
-  // 015, 2026-10-05 – B6 lowered 45 → 40, the one deliberate lowering, under the
+  // 015, 2026-10-05 – B6 lowered 45 → 40, 015's one deliberate lowering, under the
   // input-correction exception above. The old 45 came from a factory that ran
   // B6 (an ROC) without the regional cut and with the wrong DE mode, a
   // configuration the app never runs. Measured in isolation: CUT alone gives 43,
