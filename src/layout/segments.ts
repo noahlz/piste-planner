@@ -65,9 +65,10 @@ export function eventTimeSegments(derived: DerivedEventSchedule): TimeSegment[] 
   // three pushes emit either the one DE block or the staged phases. A DE
   // block of 0 minutes – a bracket of 2, which has no counted round
   // (METHODOLOGY.md §DE Duration) – draws nothing and is skipped.
-  const pushDe = (phase: Phase, start: number | null, end: number | null, stripCount: number): void => {
-    if (start !== null && start === end) return
-    push(phase, start, end, stripCount)
+  const pushDe = (...args: Parameters<typeof push>): void => {
+    const [, start, end] = args
+    if (start === end) return
+    push(...args)
   }
   pushDe(Phase.DE, r.de_start, r.de_end, r.de_strip_count)
   pushDe(Phase.DE_PRELIMS, r.de_prelims_start, r.de_prelims_end, r.de_prelims_strip_count)

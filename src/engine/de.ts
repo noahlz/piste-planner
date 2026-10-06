@@ -32,15 +32,18 @@ export function computeBracketSize(
 
 /**
  * Strips a single-stage DE or prelims block asks for: `min(bracketSize / 2,
- * defaultFootprint)`, never below 1 (METHODOLOGY.md §DE Modes). Asking for
- * bracketSize/2 uncapped would let one event's DE claim 64+ strips and
- * serialize against every other event sharing the day.
+ * defaultFootprint)` (METHODOLOGY.md §DE Modes). Asking for bracketSize/2
+ * uncapped would let one event's DE claim 64+ strips and serialize against
+ * every other event sharing the day. A bracket with no counted round – a
+ * bracket of 2 – asks none (METHODOLOGY.md §DE Duration 'No counted round';
+ * 024 plan D5), keyed to its rounds rather than to the ask.
  *
  * `defaultFootprint` is `config.DEFAULT_DE_STRIP_FOOTPRINT` — required rather
  * than defaulted to the constant, so no caller can silently keep reading module
  * state past the organizer's override.
  */
 export function deStripFootprint(bracketSize: number, defaultFootprint: number): number {
+  if (deRounds(bracketSize).length === 0) return 0
   return Math.max(1, Math.min(Math.floor(bracketSize / 2), defaultFootprint))
 }
 
@@ -134,9 +137,12 @@ export function videoStageRound(category: Category, vet_age_group: VetAgeGroup |
 
 /**
  * Video strips one video block asks for: `min(4, bracket/2)` (METHODOLOGY.md
- * §DE Modes, §DE Phase Breakdown). The one reading of the video ask.
+ * §DE Modes, §DE Phase Breakdown), and none for a bracket with no counted
+ * round – a bracket of 2 (§DE Duration 'No counted round'; 024 plan D5). The
+ * one reading of the video ask.
  */
 export function deVideoStripAsk(bracketSize: number): number {
+  if (deRounds(bracketSize).length === 0) return 0
   return Math.min(VIDEO_BLOCK_STRIP_ASK, Math.floor(bracketSize / 2))
 }
 

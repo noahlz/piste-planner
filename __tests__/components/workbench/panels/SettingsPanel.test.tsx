@@ -184,6 +184,12 @@ describe('SettingsPanel — DE mode', () => {
     expect(radio('Default')).not.toHaveAccessibleDescription(/team/i)
   })
 
+  it('describes the DE mode group with the team-events note', () => {
+    render(<SettingsPanel />)
+
+    expect(deModeGroup()).toHaveAccessibleDescription('Team events always run single stage.')
+  })
+
   it('describes the Default radio with the hint', () => {
     useStore.getState().setTournamentType(TournamentType.NAC)
     render(<SettingsPanel />)

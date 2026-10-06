@@ -8,7 +8,6 @@ import {
   DE_BOUT_DURATION,
   DE_BOUT_DURATION_10_TOUCH,
   TEAM_MATCH_DURATION,
-  YOUTH_VET_BOUT_DELTA,
   CROSSOVER_GRAPH,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
 } from '../../src/engine/constants.ts'
@@ -101,12 +100,6 @@ describe('DE bout times', () => {
     { name: 'TEAM_MATCH_DURATION (as printed, no changeover)', table: () => TEAM_MATCH_DURATION, foil: 60, epee: 60, sabre: 30 },
   ])('$name is $foil foil / $epee épée / $sabre sabre', ({ table, foil, epee, sabre }) => {
     expect(table()).toEqual({ [Weapon.FOIL]: foil, [Weapon.EPEE]: epee, [Weapon.SABRE]: sabre })
-  })
-})
-
-describe('YOUTH_VET_BOUT_DELTA', () => {
-  it('is -5', () => {
-    expect(YOUTH_VET_BOUT_DELTA).toBe(-5)
   })
 })
 

@@ -9,6 +9,7 @@ import {
   splitAtVideoStage,
   videoStageRound,
   deVideoStripAsk,
+  deStripFootprint,
 } from '../../src/engine/de.ts'
 import { CutMode, DeMode, EventType, Weapon, Category, VetAgeGroup, tailEstimateMins } from '../../src/engine/types.ts'
 import {
@@ -96,9 +97,17 @@ describe('deBlocksFor – staged split', () => {
 
   it('a bracket of 2 has no counted round: no blocks and 0 minutes', () => {
     const blocks = staged(2)
-    expect({ general: blocks.general, video: blocks.video, minutes: blocks.baselineMinutes }).toEqual({
+    expect({
+      general: blocks.general,
+      video: blocks.video,
+      generalAsk: blocks.generalAsk,
+      videoAsk: blocks.videoAsk,
+      minutes: blocks.baselineMinutes,
+    }).toEqual({
       general: [],
       video: [],
+      generalAsk: 0,
+      videoAsk: 0,
       minutes: 0,
     })
   })
@@ -262,14 +271,28 @@ describe('videoStageRound', () => {
   })
 })
 
-// METHODOLOGY.md §DE Modes: a video block asks min(4, bracket/2) video strips.
+// METHODOLOGY.md §DE Modes: a video block asks min(4, bracket/2) video strips,
+// and a bracket of 2 – no counted round – asks none (§DE Duration 'No counted
+// round'; 024 plan D5).
 describe('deVideoStripAsk', () => {
   it.each([
     { bracket: 256, expected: 4 },
     { bracket: 8, expected: 4 },
     { bracket: 4, expected: 2 },
-    { bracket: 2, expected: 1 },
+    { bracket: 2, expected: 0 },
   ])('bracket $bracket → $expected', ({ bracket, expected }) => {
     expect(deVideoStripAsk(bracket)).toBe(expected)
+  })
+})
+
+// METHODOLOGY.md §DE Modes: a general DE block asks min(bracket/2, footprint),
+// and a bracket of 2 asks none (§DE Duration 'No counted round'; 024 plan D5).
+describe('deStripFootprint', () => {
+  it('bracket 4 asks min(4/2, 16) = 2 strips', () => {
+    expect(deStripFootprint(4, 16)).toBe(2)
+  })
+
+  it('a bracket of 2 has no counted round and asks no strips', () => {
+    expect(deStripFootprint(2, 16)).toBe(0)
   })
 })

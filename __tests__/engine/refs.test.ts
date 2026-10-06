@@ -33,6 +33,13 @@ describe('peakDeRefDemand', () => {
     const comp = makeCompetition({ fencer_count: 3, de_mode: DeMode.STAGED })
     expect(peakDeRefDemand(comp, config)).toBe(2)
   })
+
+  // METHODOLOGY.md §DE Duration 'No counted round': a bracket of 2 asks no
+  // strips, so its DE needs no referee (024 plan D5).
+  it('a bracket of 2 has no DE and demands no DE refs', () => {
+    const comp = makeCompetition({ fencer_count: 2, de_mode: DeMode.STAGED })
+    expect(peakDeRefDemand(comp, config)).toBe(0)
+  })
 })
 
 

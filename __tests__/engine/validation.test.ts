@@ -76,7 +76,7 @@ function findingIdentity(finding: ValidationError): string {
 //     automatically regardless; this is a heads-up, not a gate.
 //   - video-dead-config (de_video_policy: REQUIRED + SINGLE_STAGE) — a soft
 //     "this setting has no effect" hint, blocks nothing.
-//   - r16-over-cap (de_round_of_16_strips over the DE strip cap) — soft
+//   - r16-over-cap (the video ask over the DE strip cap) — soft
 //     resource-tuning guidance; the code's own comment already calls these
 //     "soft warnings... the user may have intentionally overridden." Fires 0
 //     times across B1–B8 (no drift risk of its own) but moved for
@@ -355,6 +355,20 @@ describe('validateConfig — video R16 strip shortfall (structural: resource imp
     expect(binding.filter(e => e.field === 'de_video_policy' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
     expect(advisory.filter(e => e.field === 'de_video_policy' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
   })
+
+  it('a bracket of 2 asks no video strips, so 0 available is no shortfall', () => {
+    // METHODOLOGY.md §DE Duration 'No counted round': a bracket of 2 asks no
+    // strips, general or video (024 plan D5).
+    const config = makeConfig({ video_strips_total: 0 })
+    const comp = makeCompetition({
+      fencer_count: 2,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const { binding, advisory } = validateBoth(config, [comp])
+    expect(binding.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+    expect(advisory.filter(e => e.rule === 'video-r16-strip-shortfall')).toEqual([])
+  })
 })
 
 // 024 D4, the owner's team ruling (METHODOLOGY.md §DE Modes, §Video Replay
@@ -581,12 +595,13 @@ describe('validateConfig — DE strip cap (notice: r16-over-cap)', () => {
   // §DE Phase Breakdown), so at 24 fencers (bracket 32) it asks 4, and only a
   // DE cap below 4 can be exceeded.
   it('WARN in both modes when the video ask exceeds DE strip cap', () => {
+    // The field names the per-event lever that clears the notice.
     // strips_total=24, max_de_strip_pct=0.1 → cap=floor(24*0.1)=2. R16 asks 4.
     const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.1 })
     const comp = makeCompetition({ id: 'comp-r16-over' })
     const { binding, advisory } = validateBoth(config, [comp])
-    expectNoticePair('de_round_of_16_strips', binding, advisory)
-    const bFinding = binding.find(e => e.field === 'de_round_of_16_strips')!
+    expectNoticePair('max_de_strip_pct_override', binding, advisory)
+    const bFinding = binding.find(e => e.field === 'max_de_strip_pct_override')!
     expect(bFinding.message).toContain('comp-r16-over')
     expect(bFinding.message).toContain('R16')
   })
@@ -596,8 +611,8 @@ describe('validateConfig — DE strip cap (notice: r16-over-cap)', () => {
     const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.80 })
     const comp = makeCompetition({ id: 'comp-r16-ok' })
     const { binding, advisory } = validateBoth(config, [comp])
-    expect(binding.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
+    expect(binding.filter(e => e.field === 'max_de_strip_pct_override')).toHaveLength(0)
+    expect(advisory.filter(e => e.field === 'max_de_strip_pct_override')).toHaveLength(0)
   })
 
   it('per-competition max_de_strip_pct_override takes precedence over global pct', () => {
@@ -605,8 +620,22 @@ describe('validateConfig — DE strip cap (notice: r16-over-cap)', () => {
     const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0.1 })
     const comp = makeCompetition({ id: 'comp-de-override', max_de_strip_pct_override: 0.80 })
     const { binding, advisory } = validateBoth(config, [comp])
-    expect(binding.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'de_round_of_16_strips')).toHaveLength(0)
+    expect(binding.filter(e => e.field === 'max_de_strip_pct_override')).toHaveLength(0)
+    expect(advisory.filter(e => e.field === 'max_de_strip_pct_override')).toHaveLength(0)
+  })
+
+  it('a bracket of 2 asks no strips, so a DE cap of 0 is not exceeded', () => {
+    // max_de_strip_pct=0 → cap=0. A bracket of 2 has no counted round and asks
+    // nothing (METHODOLOGY.md §DE Duration 'No counted round'; 024 plan D5).
+    const config = makeConfig({ strips_total: 24, max_de_strip_pct: 0 })
+    const comp = makeCompetition({
+      fencer_count: 2,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const { binding, advisory } = validateBoth(config, [comp])
+    expect(binding.filter(e => e.rule === 'r16-over-cap')).toEqual([])
+    expect(advisory.filter(e => e.rule === 'r16-over-cap')).toEqual([])
   })
 })
 
@@ -696,7 +725,7 @@ describe('validateConfig — feasibility demotes to notice in every mode (011 FR
     // against 2 × 2 × 14 = 56: shortfall 2385 (4259.5% → 4260), and
     // ceil(2385.3 / 28) = 86 more days or strips.
     expect(b.message).toBe(
-      'RESOURCE_INSUFFICIENT: 2441 strip-hours needed over 20 events; 56 available (2d × 2s × 14h). Shortfall 2385 (~4260%). Add 86 more day(s) OR 86 more strip(s).',
+      'RESOURCE_INSUFFICIENT: 2441 general strip-hours needed over 20 events; 56 available (2d × 2s × 14h). Shortfall 2385 (~4260%). Add 86 more day(s) OR 86 more strip(s).',
     )
   })
 })
@@ -756,7 +785,7 @@ describe('validateConfig — rule catalogue is equal across modes', () => {
     // A config firing several structural, policy, and notice rules at once
     // (days_available=1 is a notice — outside 2–4, inside structural 1–14;
     // strips_total=0 also drops the DE strip cap to 0, so the default
-    // de_round_of_16_strips=4 on every competition fires the r16-over-cap
+    // the video block's ask of 4 strips on every competition fires the r16-over-cap
     // notice too).
     const config = makeConfig({ days_available: 1, strips_total: 0, strips: [] })
     const { individual, team } = makeIndividualTeamPair({ team: { cut_mode: CutMode.PERCENTAGE, cut_value: 50 } })

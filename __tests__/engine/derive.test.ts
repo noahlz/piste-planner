@@ -213,6 +213,7 @@ describe('deriveEventSchedule — a bracket of 2 has no counted round', () => {
 
     expect(derived.result.bracket_size).toBe(2)
     expect(derived.result.de_strip_count).toBe(0)
+    expect(derived.result.de_start).not.toBeNull()
     expect(derived.result.de_end).toBe(derived.result.de_start)
     expect(derived.result.de_total_end).toBe((derived.result.de_end ?? 0) + tailEstimateMins(event_type))
   })
@@ -227,6 +228,7 @@ describe('deriveEventSchedule — a bracket of 2 has no counted round', () => {
     expectGeometryMatches(derived.result, oracle)
     expect(derived.result.de_prelims_start).toBeNull()
     expect(derived.result.de_round_of_16_strip_count).toBe(0)
+    expect(derived.result.de_round_of_16_start).not.toBeNull()
     expect(derived.result.de_round_of_16_end).toBe(derived.result.de_round_of_16_start)
   })
 })

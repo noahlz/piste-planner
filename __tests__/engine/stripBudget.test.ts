@@ -4,6 +4,7 @@ import {
   recommendRefCount,
   flagFlightingCandidates,
   buildStrips,
+  peakDeStripDemand,
 } from '../../src/engine/stripBudget.ts'
 import { makeCompetition, makeConfig } from '../helpers/factories.ts'
 import { Weapon, DeMode } from '../../src/engine/types.ts'
@@ -184,6 +185,23 @@ describe('flagFlightingCandidates', () => {
     // at a cap of 1, but the real pool count is 1 so it should not be flagged at cap=1.
     const comps = [makeCompetition({ id: 'tiny', fencer_count: 9 })]
     expect(flagFlightingCandidates(comps, 1)).toEqual([])
+  })
+})
+
+// ──────────────────────────────────────────────
+// peakDeStripDemand
+// ──────────────────────────────────────────────
+
+// A staged DE's peak strip demand is its video ask, min(4, bracket/2)
+// (METHODOLOGY.md §DE Modes), and a bracket of 2 asks none (§DE Duration
+// 'No counted round'; 024 plan D5).
+describe('peakDeStripDemand', () => {
+  it('bracket 32 → min(4, 16) = 4', () => {
+    expect(peakDeStripDemand(makeCompetition({ fencer_count: 24, de_mode: DeMode.STAGED }))).toBe(4)
+  })
+
+  it('a bracket of 2 has no counted round and demands no strips', () => {
+    expect(peakDeStripDemand(makeCompetition({ fencer_count: 2, de_mode: DeMode.STAGED }))).toBe(0)
   })
 })
 

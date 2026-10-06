@@ -6,11 +6,12 @@ import { runScheduleAll } from '../../src/store/runActions.ts'
 import { makePlacement } from '../helpers/factories.ts'
 import { assignStripLanes } from '../../src/layout/lanes.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
-import { DeMode } from '../../src/engine/types.ts'
+import { DeMode, Phase } from '../../src/engine/types.ts'
 import { selectDerivedSchedule, selectDerivedFindings } from '../../src/store/derived.ts'
 import * as derivedModule from '../../src/store/derived.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { competitionLabel } from '../../src/lib/competitionLabels.ts'
+import { formatClock } from '../../src/lib/time.ts'
 import { phaseDisplay } from '../../src/lib/placementLabels.ts'
 
 /**
@@ -387,6 +388,26 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
     expect(comp).toBeDefined()
     expect(row?.where).toBe(`Day 1 · ${competitionLabel(comp!)}`)
     expect(row?.message).toContain(`${close - finish} minutes before`)
+  })
+
+  it('names the video stage when the day ends on one', () => {
+    threeEventsOverlappingOnDayZero()
+    useStore.getState().setDeModeOverride(DeMode.STAGED)
+    useStore.getState().setVideoStrips(4)
+    const preState = useStore.getState()
+    const preBlocks = assignStripLanes(selectDerivedSchedule(preState).events, preState.strips_total)
+    const day0Blocks = preBlocks.filter((b) => b.day === 0)
+    const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
+    const last = day0Blocks.filter((b) => b.endMinutes === finish)
+    expect(
+      last.every((b) => b.phase === Phase.DE_ROUND_OF_16),
+      'expected the day to end on a video-stage block',
+    ).toBe(true)
+
+    useStore.getState().updateDayConfig(0, { day_end_time: finish + 20 })
+
+    const row = selectFindings(useStore.getState()).find((r) => r.id === 'late-finish:day:0')
+    expect(row?.message).toContain(`Video stage finishes at ${formatClock(finish)}, 20 minutes before`)
   })
 
   it('raises no row at the boundary — finish exactly window-minutes before close is not late (strict >)', () => {

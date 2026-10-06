@@ -26,25 +26,15 @@ export function peakPoolRefDemand(comp: Competition, ref_policy: RefPolicy): num
 /**
  * Estimates peak concurrent DE referee demand for a single competition.
  *
- * With infinite refs, the DE phase uses all allocated strips concurrently.
- * DE always requires 1 ref per strip (DE_REFS = 1).
+ * The peak DE referee demand is the video block's ask, min(4, bracketSize / 2)
+ * (METHODOLOGY.md §DE Modes), at DE_REFS (1) per strip. It does not depend on
+ * `strips_allocated`.
  */
 export function peakDeRefDemand(comp: Competition, config: TournamentConfig): number {
-  // The video block's ask, min(4, bracketSize / 2) (METHODOLOGY.md §DE Modes).
   const videoAsk = deVideoStripAsk(
     computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type),
   )
-
-  // Use the larger of the video ask and overall allocation as representative peak.
-  // Stop-at-semis: there is no separate finals phase to consider.
-  const deStrips = Math.max(videoAsk, comp.strips_allocated)
-
-  // DE refs: 1 per strip for the video-stage phase (the terminal scheduled phase).
-  const dePhasePeakStrips = videoAsk
-
-  // Strips for DE: the peak concurrent active strips
-  const activeStrips = Math.min(dePhasePeakStrips, deStrips)
-  return config.DE_REFS * activeStrips
+  return config.DE_REFS * videoAsk
 }
 
 /**

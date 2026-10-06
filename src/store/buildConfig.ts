@@ -27,7 +27,6 @@ import {
   DE_BOUT_DURATION,
   DE_BOUT_DURATION_10_TOUCH,
   TEAM_MATCH_DURATION,
-  YOUTH_VET_BOUT_DELTA,
   DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../engine/constants.ts'
 import type { StoreState } from './store.ts'
@@ -89,7 +88,6 @@ export function buildTournamentConfig(state: StoreState): {
     DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
     DE_BOUT_DURATION_10_TOUCH: { ...DE_BOUT_DURATION_10_TOUCH },
     TEAM_MATCH_DURATION: { ...TEAM_MATCH_DURATION },
-    YOUTH_VET_BOUT_DELTA,
     DEFAULT_DE_STRIP_FOOTPRINT,
 
     // Engine constants

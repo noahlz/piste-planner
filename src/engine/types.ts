@@ -282,7 +282,6 @@ export interface TournamentConfig {
   DE_BOUT_DURATION: Record<Weapon, number>
   DE_BOUT_DURATION_10_TOUCH: Record<Weapon, number>
   TEAM_MATCH_DURATION: Record<Weapon, number>
-  YOUTH_VET_BOUT_DELTA: number
   DEFAULT_DE_STRIP_FOOTPRINT: number
   dayConfigs: DayConfig[]
   max_pool_strip_pct: number

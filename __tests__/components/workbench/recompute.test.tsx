@@ -305,7 +305,7 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     // end from 967 to 915, both for D6's reason above: under NAC's resolved
     // STAGED de_mode this fixture draws no `DE` block at all, so the old query
     // returned null rather than a wrong number. DE_ROUND_OF_16 is the terminal
-    // drawn DE phase and 915 is the value the table cases read.
+    // drawn DE phase and its end (915 then, 850 since 024) is the value the table cases read.
     expect(poolEndBefore).not.toBe(682)
     expect(blockEnd(id, 'POOLS')).toBe(682)
     expect(blockEnd(id, 'DE_ROUND_OF_16')).toBe(850)

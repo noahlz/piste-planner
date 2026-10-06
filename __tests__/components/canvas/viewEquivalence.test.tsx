@@ -366,7 +366,7 @@ describe('the matrix and the schedule table cannot disagree (FR-023)', () => {
     expect(Array.from(blocks.keys()).sort()).toEqual(['DE', 'FLIGHT_A', 'FLIGHT_B'])
     expect(blocks.get('FLIGHT_A')).toEqual({ day: 1, start: 480, end: 566, strips: 2 })
     expect(blocks.get('FLIGHT_B')).toEqual({ day: 1, start: 600, end: 686, strips: 2 })
-    // No single POOLS block covering 480-720: that would paint the 566-600 gap
+    // No single POOLS block covering 480-686: that would paint the 566-600 gap
     // between the flights as pool time.
     expect(blocks.get('POOLS')).toBeUndefined()
   })

@@ -63,6 +63,12 @@ describe('Block identity and accessibility (ui-contract §Canvas)', () => {
     expect(el.getAttribute('aria-label')?.startsWith(FULL_LABEL)).toBe(true)
   })
 
+  it('names a staged DE block by its video stage in the accessible name', () => {
+    const el = renderBlock({ placement: { ...PLACEMENT, phase: Phase.DE_ROUND_OF_16 } })
+
+    expect(el.getAttribute('aria-label')).toContain(`${FULL_LABEL}, Video stage, Day 1, `)
+  })
+
   it('carries every kept data attribute with its value', () => {
     const el = renderBlock({
       placement: { ...PLACEMENT, day: 1, firstStrip: 6, phase: Phase.DE, startMinutes: 615, endMinutes: 699, stripCount: 16 },

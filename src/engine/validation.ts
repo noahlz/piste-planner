@@ -207,14 +207,14 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
 
     // DE strip requests exceed the computed DE cap. Soft resource-tuning
     // guidance (research D3 correction) because the user may have
-    // intentionally overridden.
+    // intentionally overridden. The field is the per-event lever that clears it.
     const deStripCap = computeStripCap(
       config.strips_total,
       config.max_de_strip_pct,
       comp.max_de_strip_pct_override,
     )
     if (videoAsk > deStripCap) {
-      errors.push(notice('de_round_of_16_strips', `${comp.id}: R16 requests ${videoAsk} strips but DE cap is ${deStripCap}`, 'r16-over-cap', [comp.id]))
+      errors.push(notice('max_de_strip_pct_override', `${comp.id}: R16 requests ${videoAsk} strips but DE cap is ${deStripCap}`, 'r16-over-cap', [comp.id]))
     }
 
     // Resource precondition checks — skip competitions with invalid fencer counts
@@ -353,7 +353,7 @@ export function validateFeasibility(
     const extraStrips = Math.ceil(shortfall / perExtraStrip)
     errors.push(feasibilityErr(
       'feasibility',
-      `RESOURCE_INSUFFICIENT: ${Math.round(totalNeeded)} strip-hours needed over ${competitions.length} events; ` +
+      `RESOURCE_INSUFFICIENT: ${Math.round(totalNeeded)} general strip-hours needed over ${competitions.length} events; ` +
       `${Math.round(totalAvailable)} available (${config.days_available}d × ${config.strips_total}s × ${dayLengthHours}h). ` +
       `Shortfall ${Math.round(shortfall)} (~${pct}%). Add ${extraDays} more day(s) OR ${extraStrips} more strip(s).`,
       FeasibilityRule.STRIP_HOURS,

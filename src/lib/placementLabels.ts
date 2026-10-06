@@ -29,7 +29,7 @@ const PHASE_DISPLAY: Partial<Record<Phase, string>> = {
   // The code keeps the r16 name, but the stage is the round of 16 only for Div 1,
   // Junior and Cadet – every other individual category starts it at the round
   // of 8 (Ops Manual p.19, METHODOLOGY §Video Replay Policy).
-  [Phase.DE_ROUND_OF_16]: 'video stage',
+  [Phase.DE_ROUND_OF_16]: 'Video stage',
   [Phase.DE]: 'DE',
 }
 

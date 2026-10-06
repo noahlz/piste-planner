@@ -185,7 +185,10 @@ const MAX_DEFERS_PER_PHASE = 16
  * never be excluded: a schedule keyed by id cannot be built from a set with
  * duplicates in it, and dropping both copies discards a real event to fix a
  * naming problem. `strips-total-positive` is structural too, with a field name
- * in `subjects`. The list admits neither.
+ * in `subjects`. The list admits neither. `team-staged-or-video` is left off
+ * deliberately (024 plan D4): the app never builds a STAGED or REQUIRED team,
+ * so one marks a hand-built config rather than a bad event, and it rejects the
+ * whole tournament.
  */
 const PER_EVENT_ERROR_RULES: ReadonlySet<string> = new Set([
   'fencer-count-bounds',

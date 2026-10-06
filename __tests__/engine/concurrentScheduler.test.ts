@@ -838,6 +838,22 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
       assertEmptyWithRuleError(competitions, config, 'strips-total-positive')
     })
 
+    it('team-staged-or-video: one STAGED team among valid events still empties the schedule and reports the ERROR', () => {
+      // Deliberately global, not per-event (024 plan D4): the app never builds
+      // a STAGED team, so one marks a hand-built config, not a bad event.
+      // The team's individual counterpart is valid-1 (DIV1 / MEN / FOIL).
+      const stagedTeam = comp('staged-team', {
+        category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL,
+        event_type: EventType.TEAM, de_mode: DeMode.STAGED,
+      })
+      const competitions = [...validTrio(), stagedTeam]
+      const config = smallConfig()
+
+      assertEmptyWithRuleError(competitions, config, 'team-staged-or-video')
+      const { bottlenecks } = scheduleAllConcurrent(competitions, config)
+      expect(bottlenecks.some(b => b.rule === 'team-staged-or-video' && b.severity === BottleneckSeverity.ERROR)).toBe(true)
+    })
+
     it('duplicate-competition-id: two competitions sharing an id still empties the schedule', () => {
       const dupe = comp('valid-1', { category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE })
       const competitions = [...validTrio(), dupe]
@@ -1201,8 +1217,8 @@ describe('scheduleAllConcurrent — DE phases derive per round at the granted st
   })
 
   it('(guard) asks 4 video strips for a staged video block once the bracket reaches 8', () => {
-    const s = scheduleAlone({ fencer_count: 24, de_mode: DeMode.STAGED })
-    expect(s.bracket_size).toBe(32)
+    const s = scheduleAlone({ fencer_count: 8, de_mode: DeMode.STAGED })
+    expect(s.bracket_size).toBe(8)
     expect(s.de_round_of_16_strip_count).toBe(4)
   })
 })
@@ -1237,6 +1253,7 @@ describe('scheduleAllConcurrent — a bracket of 2 has no counted round', () => 
     const { s, deClaims } = scheduleBracketOf2(DeMode.SINGLE_STAGE)
     expect(s.bracket_size).toBe(2)
     expect(s.de_strip_count).toBe(0)
+    expect(s.de_start).not.toBeNull()
     expect(s.de_end).toBe(s.de_start)
     expect(s.de_total_end).toBe((s.de_end ?? 0) + tailEstimateMins(EventType.INDIVIDUAL))
     expect(deClaims).toEqual([])
@@ -1246,6 +1263,7 @@ describe('scheduleAllConcurrent — a bracket of 2 has no counted round', () => 
     const { s, deClaims } = scheduleBracketOf2(DeMode.STAGED)
     expect(s.de_prelims_start).toBeNull()
     expect(s.de_round_of_16_strip_count).toBe(0)
+    expect(s.de_round_of_16_start).not.toBeNull()
     expect(s.de_round_of_16_end).toBe(s.de_round_of_16_start)
     expect(s.de_total_end).toBe((s.de_round_of_16_end ?? 0) + tailEstimateMins(EventType.INDIVIDUAL))
     expect(deClaims).toEqual([])

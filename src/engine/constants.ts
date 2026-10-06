@@ -93,9 +93,6 @@ export const TEAM_MATCH_DURATION: Record<Weapon, number> = {
   [Weapon.FOIL]: 60,
   [Weapon.SABRE]: 30,
 }
-// Superseded by DE_BOUT_DURATION_10_TOUCH: −5 cannot give sabre's 10 from 13.
-// No longer read by de.ts.
-export const YOUTH_VET_BOUT_DELTA = -5
 export const SAME_TIME_WINDOW_MINS = 30
 export const INDIV_TEAM_MIN_GAP_MINS = 120
 

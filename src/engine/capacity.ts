@@ -11,7 +11,7 @@
  * budgets: a staged event's video-stage bouts bill video only.
  */
 
-import { Category, EventType } from './types.ts'
+import { Category } from './types.ts'
 import type { Competition, DeRound, TournamentConfig, GlobalState } from './types.ts'
 import { CATEGORY_START_PREFERENCE } from './constants.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
@@ -60,8 +60,9 @@ function deBoutStripHours(rounds: readonly DeRound[], boutMinutes: number): numb
  *   only `video_strip_hours`. A bracket at or below its video-stage round has
  *   no prelims bill (§DE Phase Breakdown).
  * - Team: every match bills `total_strip_hours` at the team match time and
- *   none bills video, whatever the DE mode (§DE Capacity Estimation → Team
- *   Events; Ops Manual p.19 – teams have video only for the gold/bronze).
+ *   none bills video, because a team runs SINGLE_STAGE (§DE Capacity Estimation
+ *   → Team Events; Ops Manual p.19 – teams have video only for the gold/bronze).
+ *   A STAGED team is a validation ERROR (024 D4), not billed here.
  *   METHODOLOGY's `teamDeStripHours` is this same model.
  */
 export function estimateCompetitionStripHours(
@@ -82,16 +83,13 @@ export function estimateCompetitionStripHours(
   const pool_strip_hours = poolStructure.n_pools * (poolDuration / 60)
 
   // `general` is every round for SINGLE_STAGE and the prelims for STAGED;
-  // `video` is empty unless STAGED. A team event folds any video rounds back
-  // into general, so a team under a STAGED setting still bills no video.
+  // `video` is empty unless STAGED. A team event arrives SINGLE_STAGE (024 D4),
+  // so all its rounds are general and it bills no video.
   const { general, video, boutMinutes } = deBlocksFor(competition, config)
-  const isTeam = competition.event_type === EventType.TEAM
-  const generalRounds = isTeam ? [...general, ...video] : general
-  const videoRounds = isTeam ? [] : video
 
   return {
-    total_strip_hours: pool_strip_hours + deBoutStripHours(generalRounds, boutMinutes),
-    video_strip_hours: deBoutStripHours(videoRounds, boutMinutes),
+    total_strip_hours: pool_strip_hours + deBoutStripHours(general, boutMinutes),
+    video_strip_hours: deBoutStripHours(video, boutMinutes),
   }
 }
 

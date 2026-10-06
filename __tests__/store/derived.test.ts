@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import { BottleneckRule } from '../../src/engine/types.ts'
+import { BottleneckRule, Weapon } from '../../src/engine/types.ts'
 import type { Placement } from '../../src/engine/types.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
-import { makePlacement } from '../helpers/factories.ts'
+import { makeCompetition, makeConfig, makePlacement, makeScheduleResult } from '../helpers/factories.ts'
+import type { DerivedSchedule } from '../../src/store/derived.ts'
 import {
+  buildRefDemandByDay,
   selectDerivedSchedule,
   selectDerivedFindings,
   selectDerivedRefRequirements,
@@ -209,5 +211,43 @@ describe('selectDerivedRefRequirements', () => {
       expect(r.peak_total_refs).toBe(0)
       expect(r.peak_saber_refs).toBe(0)
     }
+  })
+})
+
+describe('buildRefDemandByDay', () => {
+  // A bracket of 2 has no counted round, so its DE draws 0 strips over a zero-length
+  // span (METHODOLOGY.md §DE Duration). It asks no referee, so it adds no interval.
+  function bracketOfTwoSchedule(poolRefs: number | null): DerivedSchedule {
+    const competition = makeCompetition({ id: 'duel', fencer_count: 2 })
+    const pools =
+      poolRefs === null ? {} : { pool_start: 480, pool_end: 540, pool_strip_count: 1, pool_refs_count: poolRefs }
+    return {
+      config: makeConfig(),
+      competitions: [competition],
+      events: {
+        [competition.id]: {
+          result: {
+            ...makeScheduleResult(competition.id, 1),
+            ...pools,
+            de_start: 600,
+            de_end: 600,
+            de_strip_count: 0,
+          },
+          day_out_of_range: false,
+        },
+      },
+    }
+  }
+
+  it('gives a day whose only DE is a bracket of 2 no interval at all', () => {
+    expect(buildRefDemandByDay(bracketOfTwoSchedule(null))).toEqual({})
+  })
+
+  it('keeps the same event\'s pool interval and drops only the 0-count DE', () => {
+    const byDay = buildRefDemandByDay(bracketOfTwoSchedule(2))
+
+    expect(byDay[1].intervals).toEqual([
+      { startTime: 480, endTime: 540, count: 2, weapon: Weapon.FOIL },
+    ])
   })
 })

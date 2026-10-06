@@ -162,6 +162,13 @@ describe('pinned scheduling (T033)', () => {
     const sourceConfig = tournamentConfig(4, 48, 8, SCENARIOS.B1.tournamentType)
     const source = scheduleAll(comps, sourceConfig)
 
+    // Premises, asserted rather than left in comments: the source board places
+    // every event with no ERROR bottleneck, and its placement differs from the
+    // natural (4, 80, 12) one for enough ids that a pass cannot be coincidence.
+    expect(new Set(Object.keys(source.schedule))).toEqual(new Set(comps.map(c => c.id)))
+    expect(comps.every(c => source.schedule[c.id].pool_start !== null), 'source board places every event').toBe(true)
+    expect(source.bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)).toEqual([])
+
     const pins: PinnedPlacement[] = comps.map((c) => {
       const sr = source.schedule[c.id]
       return {
@@ -171,8 +178,11 @@ describe('pinned scheduling (T033)', () => {
         strip_count: sr.pool_strip_count,
       }
     })
-    // [M] all 24 B1 events place with a non-null pool_start under (4, 48, 8).
-    expect(pins.every(p => p.start_time !== null)).toBe(true)
+    const natural = scheduleAll(comps, config)
+    const differing = pins.filter(p =>
+      natural.schedule[p.competition_id].assigned_day !== p.day
+      || natural.schedule[p.competition_id].pool_start !== p.start_time)
+    expect(differing.length, 'pins that differ from the natural placement').toBeGreaterThanOrEqual(10) // [M] 15
 
     const withPins = scheduleAllWithPins(comps, config, pins)
     for (const pin of pins) {
@@ -180,14 +190,10 @@ describe('pinned scheduling (T033)', () => {
       expect(sr?.assigned_day, `${pin.competition_id} day`).toBe(pin.day)
       expect(sr?.pool_start, `${pin.competition_id} start`).toBe(pin.start_time)
     }
-    // [M] all 24 hold day/start at (4, 80, 12) even though two
-    // (JR-W-EPEE-IND POOLS, D1-W-FOIL-IND POOLS) carry a PINNED_UNCLAIMED
-    // warning — guarantee 1 (day/start from the seed) does not require the
-    // phase to have claimed strips.
-    // 015, 2026-10-05 – re-measured under the converged factory: was three,
-    // with VET-W-FOIL-IND-VCMB DE.
-    // 024, 2026-10-06 – on the (4, 48, 8) source board three carry one:
-    // JR-W-EPEE-IND, JR-W-SABRE-IND and JR-W-FOIL-IND, all POOLS.
+    // [M] all 24 hold day/start at (4, 80, 12) even though three
+    // (JR-W-EPEE-IND, JR-W-SABRE-IND and JR-W-FOIL-IND, all POOLS) carry a
+    // PINNED_UNCLAIMED warning — guarantee 1 (day/start from the seed) does not
+    // require the phase to have claimed strips.
     expect(new Set(Object.keys(withPins.schedule))).toEqual(new Set(comps.map(c => c.id)))
   })
 
@@ -195,12 +201,17 @@ describe('pinned scheduling (T033)', () => {
     const comps = buildCompetitions(SCENARIOS.B1.fencerCounts, SCENARIOS.B1.tournamentType)
     // [M] computeStripCap(80, 0.80) = 64 (b1()'s config): no pair of B1's
     // pool phases needs more than 64 strips each, so 80-strip B1 can never
-    // show two pins colliding on strip count. Dropping to 48 strips still
-    // places all 24 events with zero ERROR bottlenecks when nothing is pinned [M], and
+    // show two pins colliding on strip count. Dropping to 48 strips,
     // computeStripCap(48, 0.80) = 38 leaves room to force a collision with
     // two pins that individually stay under cap but jointly exceed the board.
-    // [M] With both pins below the run places 23 of 24: VET-W-FOIL-IND-VCMB is
-    // unscheduled with an ERROR (both attempts failed at DE_ROUND_OF_16).
+    //
+    // 024 group A review, 2026-10-06 – the board stays at (4, 48, 7) on purpose.
+    // [M] With nothing pinned it places 23 of 24 (D1-W-FOIL-IND is unscheduled,
+    // DEADLINE_BREACH_UNRESOLVABLE at DEADLINE_CHECK), which does not matter
+    // here: the two pins below put the run at 24 of 24 with no ERROR
+    // bottleneck. At (4, 48, 8) the pools collision still holds, but the
+    // second pin's DE_ROUND_OF_16 video collision (see below) disappears, so
+    // moving the board would drop half of what this case covers.
     const config = tournamentConfig(4, 48, 7, SCENARIOS.B1.tournamentType)
     expect(computeStripCap(48, config.max_pool_strip_pct)).toBe(38)
 
@@ -245,8 +256,10 @@ describe('pinned scheduling (T033)', () => {
     // *video* strips rather than a restatement of the pools one. Both events are
     // Division 1, so both carry a REQUIRED DE video policy and a 4-strip round
     // of 16, and this board has 7 video strips. EPEE's R16 holds video strips
-    // 0-3 over 635-695 while FOIL's R16 wants 4 video strips over 585-645; the
-    // windows overlap on 635-645, where only 3 video strips are left. 4 + 4 > 7.
+    // 0-3 over 655-735 while FOIL's R16 wants 4 video strips over 590-670; the
+    // windows overlap on 655-670, where only 3 video strips are left. 4 + 4 > 7.
+    // 024 group A review, 2026-10-06 – re-measured under the 2026-27 bout times
+    // (was 635-695 and 585-645).
     //
     // Asserted on shape rather than on that exact list, so a fixture whose DE
     // phases happen to fit still passes: every row names a distinct phase, so no
@@ -259,15 +272,21 @@ describe('pinned scheduling (T033)', () => {
       expect(warn.message).toContain(warn.phase)
     }
 
+    // [M] 024 group A review, 2026-10-06: the premise for keeping this board at
+    // (4, 48, 7) – the second pin also collides on the round-of-16 video strips.
+    expect(pin2Warns.map(b => b.phase)).toContain(Phase.DE_ROUND_OF_16)
+
     // Board not emptied. [M] In this pinned run, day 0 shows pool starts for
-    // both pins plus one event not pinned here, VET-M-SABRE-IND-VCMB (015
-    // re-measure, 2026-10-05). At least one event not pinned here must still
-    // show a pool start on day 0. The `>= 1` is a floor on purpose: it guards
-    // an emptied day 0, not the exact count, which moves with the factory.
+    // both pins plus four events not pinned here (VET-W-FOIL-IND-VCMB,
+    // VET-M-SABRE-IND-VCMB, VET-W-EPEE-IND-VCMB, D1-W-SABRE-IND). At least one
+    // event not pinned here must still show a pool start on day 0. The `>= 1`
+    // is a floor on purpose: it guards an emptied day 0, not the exact count,
+    // which moves with the factory.
     //
-    // 015, 2026-10-05 – aside: the no-pins board at (4, 48, 7) carries
-    // D1-M-EPEE-IND, D1-W-EPEE-IND and VET-W-SABRE-TEAM on day 0 (3 events;
-    // was 4 with VET-M-SABRE-IND-VCMB).
+    // 024 group A review, 2026-10-06 – re-measured (was one, VET-M-SABRE-IND-VCMB,
+    // at 015). Aside: the no-pins board at (4, 48, 7) carries six events on
+    // day 0 (VET-M-SABRE-IND-VCMB, VET-W-FOIL-IND-VCMB, D1-M-EPEE-IND,
+    // D1-W-EPEE-IND, D1-W-SABRE-IND, VET-M-FOIL-IND-VCMB).
     const others = Object.keys(result.schedule)
       .filter(id => id !== pin1.competition_id && id !== pin2.competition_id)
     const day0OthersPlaced = others.filter(id =>

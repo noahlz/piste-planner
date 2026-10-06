@@ -148,7 +148,7 @@ export const selectDerivedFindings = memoizeOnDeps(scheduleDeps, computeDerivedF
  * Out-of-range placements are skipped: their `assigned_day` cannot address a
  * day bucket in `config.days_available`.
  */
-function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDemandByDay> {
+export function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDemandByDay> {
   const byDay: Record<number, RefDemandByDay> = {}
   const compById = new Map(schedule.competitions.map((c) => [c.id, c]))
 

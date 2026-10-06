@@ -10,7 +10,6 @@ import {
   DE_BOUT_DURATION,
   DE_BOUT_DURATION_10_TOUCH,
   TEAM_MATCH_DURATION,
-  YOUTH_VET_BOUT_DELTA,
   DEFAULT_DE_STRIP_FOOTPRINT,
 } from '../../src/engine/constants.ts'
 
@@ -71,7 +70,6 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     DE_BOUT_DURATION,
     DE_BOUT_DURATION_10_TOUCH,
     TEAM_MATCH_DURATION,
-    YOUTH_VET_BOUT_DELTA,
     DEFAULT_DE_STRIP_FOOTPRINT,
     dayConfigs: [],
     max_pool_strip_pct: 0.80,

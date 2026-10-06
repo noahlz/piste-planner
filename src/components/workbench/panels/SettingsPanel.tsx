@@ -49,6 +49,7 @@ export function SettingsPanel() {
   const setDeModeOverride = useStore((s) => s.setDeModeOverride)
 
   const hintId = useId()
+  const teamNoteId = useId()
 
   return (
     <section aria-label="Settings" className="flex flex-col gap-4 py-0.5 text-[12.5px]">
@@ -64,6 +65,7 @@ export function SettingsPanel() {
         <div className="flex flex-col gap-[5px]">
           <RadioGroupPrimitive.Root
             aria-label="DE mode"
+            aria-describedby={teamNoteId}
             value={deModeOverride ?? FOLLOW_TYPE}
             onValueChange={(value: string) =>
               setDeModeOverride(value === FOLLOW_TYPE ? null : (value as DeMode))
@@ -101,7 +103,9 @@ export function SettingsPanel() {
           </p>
           {/* Team events ignore the mode (METHODOLOGY §DE Modes). Not in the
               Default radio's description, which names what Default resolves to. */}
-          <p className="text-[11.5px] text-neutral-700">Team events always run single stage.</p>
+          <p id={teamNoteId} className="text-[11.5px] text-neutral-700">
+            Team events always run single stage.
+          </p>
         </div>
       </div>
     </section>

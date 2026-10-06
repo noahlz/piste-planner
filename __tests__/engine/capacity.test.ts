@@ -25,19 +25,29 @@ function poolStripHours(comp: Competition, config: TournamentConfig): number {
 // DE strip-hours = DE bouts × bout time (METHODOLOGY.md §DE Capacity Estimation)
 // ──────────────────────────────────────────────
 
+/** A Div 1 foil bout takes 20 minutes (METHODOLOGY.md §DE Duration). */
+const FOIL_BOUT = 20
+
+/** A Div 1 foil event with the cut off, so the bracket follows the fencer count alone. */
+function divOneFoil(overrides: Partial<Competition>): Competition {
+  return makeCompetition({
+    category: Category.DIV1,
+    weapon: Weapon.FOIL,
+    cut_mode: CutMode.DISABLED,
+    cut_value: 100,
+    ...overrides,
+  })
+}
+
 describe('estimateCompetitionStripHours — DE bills bouts × bout time', () => {
   it('bills the worked example single-stage: foil, 248 promoted, 246 bouts × 20 min = 82 strip-hours', () => {
     const config = makeConfig()
     // R256 120 + R128 64 + R64 32 + R32 16 + R16 8 + QF 4 + SF 2 = 246 bouts.
     // strips_allocated is deliberately unlike the 16-strip ask: each bout bills
     // one strip for one bout time, whatever the grant.
-    const comp = makeCompetition({
+    const comp = divOneFoil({
       id: 'worked-example',
-      category: Category.DIV1,
-      weapon: Weapon.FOIL,
       fencer_count: 248,
-      cut_mode: CutMode.DISABLED,
-      cut_value: 100,
       de_mode: DeMode.SINGLE_STAGE,
       strips_allocated: 36,
     })
@@ -71,34 +81,26 @@ describe('estimateCompetitionStripHours — DE bills bouts × bout time', () => 
     // Div 1 stages at the round of 16. Prelims R256–R32: 120 + 64 + 32 + 16 =
     // 232 bouts × 20 = 77.3 general strip-hours. Video R16–SF: 8 + 4 + 2 = 14
     // bouts × 20 = 4.7 video strip-hours, none of it billed to general.
-    const comp = makeCompetition({
+    const comp = divOneFoil({
       id: 'worked-example-staged',
-      category: Category.DIV1,
-      weapon: Weapon.FOIL,
       fencer_count: 248,
-      cut_mode: CutMode.DISABLED,
-      cut_value: 100,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
     })
 
     const result = estimateCompetitionStripHours(comp, config)
 
-    expect(result.total_strip_hours - poolStripHours(comp, config)).toBeCloseTo(232 * 20 / 60, 10)
-    expect(result.video_strip_hours).toBeCloseTo(14 * 20 / 60, 10)
+    expect(result.total_strip_hours - poolStripHours(comp, config)).toBeCloseTo(232 * FOIL_BOUT / 60, 10)
+    expect(result.video_strip_hours).toBeCloseTo(14 * FOIL_BOUT / 60, 10)
   })
 
   it('bills no general DE hours for a staged bracket at or below its video-stage round', () => {
     const config = makeConfig()
     // 12 Div 1 fencers → bracket of 16, the round-of-16 video stage: every
     // round runs on video. R16 4 + QF 4 + SF 2 = 10 bouts × 20 = 3.33 video h.
-    const comp = makeCompetition({
+    const comp = divOneFoil({
       id: 'staged-at-video-round',
-      category: Category.DIV1,
-      weapon: Weapon.FOIL,
       fencer_count: 12,
-      cut_mode: CutMode.DISABLED,
-      cut_value: 100,
       de_mode: DeMode.STAGED,
       de_video_policy: VideoPolicy.REQUIRED,
     })
@@ -106,22 +108,23 @@ describe('estimateCompetitionStripHours — DE bills bouts × bout time', () => 
     const result = estimateCompetitionStripHours(comp, config)
 
     expect(result.total_strip_hours - poolStripHours(comp, config)).toBe(0)
-    expect(result.video_strip_hours).toBeCloseTo(10 * 20 / 60, 10)
+    expect(result.video_strip_hours).toBeCloseTo(10 * FOIL_BOUT / 60, 10)
   })
 
-  it('bills every team match to general and none to video, even under a STAGED de_mode', () => {
+  it('bills every team match to general and none to video', () => {
     const config = makeConfig()
     // §Team Events: R32 16 + R16 8 + QF 4 + SF 2 = 30 matches × 60 = 30 general h.
+    // Built as the app builds a team (024 D4): SINGLE_STAGE, BEST_EFFORT.
     const comp = makeCompetition({
-      id: 'team-staged-mode',
+      id: 'team-single-stage',
       category: Category.DIV1,
       weapon: Weapon.EPEE,
       event_type: EventType.TEAM,
       fencer_count: 32,
       cut_mode: CutMode.DISABLED,
       cut_value: 100,
-      de_mode: DeMode.STAGED,
-      de_video_policy: VideoPolicy.REQUIRED,
+      de_mode: DeMode.SINGLE_STAGE,
+      de_video_policy: VideoPolicy.BEST_EFFORT,
     })
 
     const result = estimateCompetitionStripHours(comp, config)
@@ -778,7 +781,7 @@ describe('aggregateStripHours', () => {
     const findings = validateFeasibility(config, comps)
     const finding = findings.find(f => f.field === 'feasibility')
     expect(finding).toBeDefined()
-    const match = finding!.message.match(/(\d+) strip-hours needed/)
+    const match = finding!.message.match(/(\d+) general strip-hours needed/)
     expect(match).not.toBeNull()
     const reported = Number(match![1])
 

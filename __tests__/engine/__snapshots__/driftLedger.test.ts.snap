@@ -3678,7 +3678,7 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
       "de_start": null,
       "de_strip_count": 0,
       "de_total_end": 2630,
-      "peak_de_ref_demand": 1,
+      "peak_de_ref_demand": 0,
       "pool_end": 2568,
       "pool_start": 2565,
       "pool_strip_count": 1,
