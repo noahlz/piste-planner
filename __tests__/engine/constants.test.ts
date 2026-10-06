@@ -10,8 +10,36 @@ import {
   TEAM_MATCH_DURATION,
   CROSSOVER_GRAPH,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
+  DAY_START_MINS,
+  DAY_END_MINS,
+  DAY_HARD_END_MINS,
+  DAY_LENGTH_MINS,
+  COMPETITORS_PER_STRIP_PER_DAY,
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
+
+// METHODOLOGY.md Appendix A §Timing Constants – the 2026-27 Ops Manual p.17 day.
+describe('day timing constants', () => {
+  it('DAY_START_MINS is 540 (9:00 AM)', () => {
+    expect(DAY_START_MINS).toBe(540)
+  })
+
+  it('DAY_END_MINS is 1140 (7:00 PM, the soft target)', () => {
+    expect(DAY_END_MINS).toBe(1140)
+  })
+
+  it('DAY_HARD_END_MINS is 1320 (10:00 PM)', () => {
+    expect(DAY_HARD_END_MINS).toBe(1320)
+  })
+
+  it('DAY_LENGTH_MINS is 600, the 10-hour planning day', () => {
+    expect(DAY_LENGTH_MINS).toBe(600)
+  })
+
+  it('COMPETITORS_PER_STRIP_PER_DAY is 14', () => {
+    expect(COMPETITORS_PER_STRIP_PER_DAY).toBe(14)
+  })
+})
 
 describe('DEFAULT_POOL_ROUND_DURATION_TABLE', () => {
   it('holds the pool-of-7 defaults: 120 foil, 120 épée, 60 sabre (Ops Manual p.17)', () => {

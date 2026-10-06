@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
 import { SLOT_MINS } from '../../src/engine/constants.ts'
-import type { DayConfig } from '../../src/engine/types.ts'
+import type { DayConfig, DayWindow } from '../../src/engine/types.ts'
 import { TournamentType } from '../../src/engine/types.ts'
 
 /**
@@ -101,8 +101,11 @@ function assertSlotAligned(windows: DayConfig[]): void {
  * d*1440 + start_d for every d) passes all four of them. This assertion is
  * what a shift like that fails.
  */
-function assertDayZeroUnshifted(windows: DayConfig[], storeDayConfigs: DayConfig[]): void {
-  expect(windows[0], 'day 0 must equal the store\'s own day-0 window, unshifted').toEqual(
+function assertDayZeroUnshifted(windows: DayWindow[], storeDayConfigs: DayConfig[]): void {
+  // Since 024 D7 the scheduler-axis window also carries `day_hard_end_time`,
+  // which the store never holds, so compare the two fields the store does.
+  const { day_start_time, day_end_time } = windows[0]
+  expect({ day_start_time, day_end_time }, 'day 0 must equal the store\'s own day-0 window, unshifted').toEqual(
     storeDayConfigs[0],
   )
 }
@@ -116,7 +119,7 @@ describe('day axis invariants (day-axis C1)', () => {
       { day_start_time: 480, day_end_time: 1320 },
     ]
 
-    function buildWindows(): DayConfig[] {
+    function buildWindows(): DayWindow[] {
       const state = storeWith(stateWithDayConfigs(storeDayConfigs))
       const { config } = buildTournamentConfig(state)
       return config.dayConfigs
@@ -126,12 +129,13 @@ describe('day axis invariants (day-axis C1)', () => {
     // full array to absolute values. The property checks below it (disjoint,
     // ordered, congruent, slot-aligned) do not — see assertDayZeroUnshifted's
     // comment. Do not replace this with the property checks alone.
+    // Hard end (024 D7): d × 1440 + max(1320, 1320) = d × 1440 + 1320.
     it('emits the exact scheduler-axis windows (literal expectation)', () => {
       const windows = buildWindows()
       expect(windows).toEqual([
-        { day_start_time: 480, day_end_time: 1320 },
-        { day_start_time: 1920, day_end_time: 2760 },
-        { day_start_time: 3360, day_end_time: 4200 },
+        { day_start_time: 480, day_end_time: 1320, day_hard_end_time: 1320 },
+        { day_start_time: 1920, day_end_time: 2760, day_hard_end_time: 2760 },
+        { day_start_time: 3360, day_end_time: 4200, day_hard_end_time: 4200 },
       ])
     })
 
@@ -163,7 +167,7 @@ describe('day axis invariants (day-axis C1)', () => {
       { day_start_time: 420, day_end_time: 1080 }, // 07:00-18:00
     ]
 
-    function buildWindows(): DayConfig[] {
+    function buildWindows(): DayWindow[] {
       const state = storeWith(stateWithDayConfigs(storeDayConfigs))
       const { config } = buildTournamentConfig(state)
       return config.dayConfigs
@@ -173,12 +177,14 @@ describe('day axis invariants (day-axis C1)', () => {
     // full array to absolute values. The property checks below it (disjoint,
     // ordered, congruent, slot-aligned) do not — see assertDayZeroUnshifted's
     // comment. Do not replace this with the property checks alone.
+    // Hard ends (024 D7), d × 1440 + max(day_end, 1320): 0 + 1320,
+    // 1440 + max(1320, 1320) = 2760 and 2880 + max(1080, 1320) = 4200.
     it('emits the exact scheduler-axis windows (literal expectation)', () => {
       const windows = buildWindows()
       expect(windows).toEqual([
-        { day_start_time: 480, day_end_time: 1200 },
-        { day_start_time: 1980, day_end_time: 2760 },
-        { day_start_time: 3300, day_end_time: 3960 },
+        { day_start_time: 480, day_end_time: 1200, day_hard_end_time: 1320 },
+        { day_start_time: 1980, day_end_time: 2760, day_hard_end_time: 2760 },
+        { day_start_time: 3300, day_end_time: 3960, day_hard_end_time: 4200 },
       ])
     })
 
@@ -212,7 +218,7 @@ describe('day axis invariants (day-axis C1)', () => {
       { day_start_time: 540, day_end_time: 1260 }, // 09:00-21:00
     ]
 
-    function buildWindows(): DayConfig[] {
+    function buildWindows(): DayWindow[] {
       const state = storeWith(stateWithDayConfigs(storeDayConfigs))
       const { config } = buildTournamentConfig(state)
       return config.dayConfigs
@@ -222,10 +228,11 @@ describe('day axis invariants (day-axis C1)', () => {
     // full array to absolute values. The property checks below it (congruent,
     // slot-aligned) do not — see assertDayZeroUnshifted's comment. Do not
     // replace this with the property checks alone.
+    // Hard end (024 D7): 0 × 1440 + max(1260, 1320) = 1320.
     it('emits the store\'s own window unshifted (literal expectation)', () => {
       const windows = buildWindows()
       expect(windows).toEqual([
-        { day_start_time: 540, day_end_time: 1260 },
+        { day_start_time: 540, day_end_time: 1260, day_hard_end_time: 1320 },
       ])
     })
 
@@ -240,5 +247,43 @@ describe('day axis invariants (day-axis C1)', () => {
     it('anchors day 0 to a zero offset', () => {
       assertDayZeroUnshifted(buildWindows(), storeDayConfigs)
     })
+  })
+})
+
+// 024 D7: each scheduler-axis window carries the day's hard end,
+// d × 1440 + max(day_end, 22:00) (METHODOLOGY.md §Same-Day Completion,
+// Appendix A §Timing Constants).
+describe('day hard end on the scheduler-axis windows', () => {
+  function windowsFor(storeDayConfigs: DayConfig[]) {
+    const state = storeWith(stateWithDayConfigs(storeDayConfigs))
+    return buildTournamentConfig(state).config.dayConfigs
+  }
+
+  it('at the store\'s default hours, 9:00 to the 19:00 target, each day\'s hard end is 22:00', () => {
+    const initial = useStore.getState()
+    useStore.getState().setDays(2)
+    const defaultHours = useStore.getState().dayConfigs
+    useStore.setState(initial)
+
+    expect(windowsFor(defaultHours)).toEqual([
+      { day_start_time: 540, day_end_time: 1140, day_hard_end_time: 1320 },
+      { day_start_time: 1980, day_end_time: 2580, day_hard_end_time: 2760 },
+    ])
+  })
+
+  it('an organizer day end after 22:00 becomes that day\'s hard end', () => {
+    expect(windowsFor([
+      { day_start_time: 540, day_end_time: 1380 }, // 09:00-23:00
+      { day_start_time: 540, day_end_time: 1140 },
+    ])).toEqual([
+      { day_start_time: 540, day_end_time: 1380, day_hard_end_time: 1380 },
+      { day_start_time: 1980, day_end_time: 2580, day_hard_end_time: 2760 },
+    ])
+  })
+
+  it('an organizer day end between 19:00 and 22:00 keeps the 22:00 hard end', () => {
+    expect(windowsFor([{ day_start_time: 540, day_end_time: 1200 }])).toEqual([
+      { day_start_time: 540, day_end_time: 1200, day_hard_end_time: 1320 },
+    ])
   })
 })

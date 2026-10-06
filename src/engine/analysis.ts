@@ -58,21 +58,34 @@ export function suggestStripCount(
   }
   if (poolDemands.length === 0) return null
 
+  const busiestDayPools = busiestDayLoad(poolDemands, daysAvailable)
+  return Math.ceil(busiestDayPools / maxPoolStripPct)
+}
+
+/**
+ * The largest-first spread both strip-search bounds use: `loads` (one per
+ * event) spread over `daysAvailable` days, biggest first, each whole into the
+ * day with the least so far, and the busiest day's total returned. Ties go to
+ * the earliest day. `suggestStripCount` spreads pool counts with it, and the
+ * Strip Count Suggestion's manual baseline spreads fencer counts
+ * (`stripSearch.ts`, METHODOLOGY.md §Strip Count Suggestion). An empty list
+ * gives 0. `loads` is not mutated.
+ */
+export function busiestDayLoad(loads: readonly number[], daysAvailable: number): number {
   // Longest-processing-time greedy: biggest events placed first, each into the
   // day that is emptiest at the time. One sort plus one pass over a fixed
   // group count — no iteration to convergence (constitution IV).
-  poolDemands.sort((a, b) => b - a)
+  const sorted = [...loads].sort((a, b) => b - a)
   const dayLoads: number[] = new Array<number>(Math.max(1, Math.floor(daysAvailable))).fill(0)
-  for (const demand of poolDemands) {
+  for (const load of sorted) {
     let emptiest = 0
     for (let day = 1; day < dayLoads.length; day++) {
       if (dayLoads[day] < dayLoads[emptiest]) emptiest = day
     }
-    dayLoads[emptiest] += demand
+    dayLoads[emptiest] += load
   }
 
-  const busiestDayPools = Math.max(...dayLoads)
-  return Math.ceil(busiestDayPools / maxPoolStripPct)
+  return Math.max(...dayLoads)
 }
 
 /**

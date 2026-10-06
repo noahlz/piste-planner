@@ -21,7 +21,10 @@ function derive(overrides: Parameters<typeof makeCompetition>[0]): DerivedEventS
 
 describe('eventTimeSegments', () => {
   // Every minute below is the engine's own output for the factory defaults
-  // (24 foil fencers, 4 pools of 6, 4 strips, 08:00 start, 30-minute admin gap).
+  // (24 foil fencers, 4 pools of 6, 4 strips, 09:00 start, 30-minute admin gap).
+  // 024 group B moved `makePlacement`'s default start from 8:00 to the 9:00 day
+  // start (Ops Manual 2026-27 p.17, METHODOLOGY.md §Inputs), so every minute
+  // below is 60 later than group A's and every length is unchanged.
   // Since 024 a foil pool of 6 takes round(120 × 15/21) = 86 minutes
   // (METHODOLOGY.md §Pool Duration Estimation, Ops Manual p.17), and the DE is
   // derived per round at 20 minutes a bout (§DE Duration): 24 promoted into a
@@ -29,19 +32,19 @@ describe('eventTimeSegments', () => {
   // so 4 × 20 = 80 minutes.
   it('splits a plain event into its pool block and its single-stage DE block', () => {
     expect(eventTimeSegments(derive({ id: 'plain' }))).toEqual([
-      { phase: Phase.POOLS, startMinutes: 480, endMinutes: 566, stripCount: 4 },
-      { phase: Phase.DE, startMinutes: 600, endMinutes: 680, stripCount: 16 },
+      { phase: Phase.POOLS, startMinutes: 540, endMinutes: 626, stripCount: 4 },
+      { phase: Phase.DE, startMinutes: 660, endMinutes: 740, stripCount: 16 },
     ])
   })
 
   it('splits a flighted event into flight A, flight B and the DE block', () => {
     // pool_start/pool_end still span both flights on the result, so a naive
-    // implementation that checks pool_start first would emit an 480-686 block
+    // implementation that checks pool_start first would emit an 540-746 block
     // covering the gap between the flights.
     expect(eventTimeSegments(derive({ id: 'flighted', flighted: true }))).toEqual([
-      { phase: Phase.FLIGHT_A, startMinutes: 480, endMinutes: 566, stripCount: 2 },
-      { phase: Phase.FLIGHT_B, startMinutes: 600, endMinutes: 686, stripCount: 2 },
-      { phase: Phase.DE, startMinutes: 720, endMinutes: 800, stripCount: 16 },
+      { phase: Phase.FLIGHT_A, startMinutes: 540, endMinutes: 626, stripCount: 2 },
+      { phase: Phase.FLIGHT_B, startMinutes: 660, endMinutes: 746, stripCount: 2 },
+      { phase: Phase.DE, startMinutes: 780, endMinutes: 860, stripCount: 16 },
     ])
   })
 
@@ -53,9 +56,9 @@ describe('eventTimeSegments', () => {
   it('splits a staged DE event into pools, prelims and the round of 16', () => {
     const staged = derive({ id: 'staged', de_mode: DeMode.STAGED, fencer_count: 64 })
     expect(eventTimeSegments(staged)).toEqual([
-      { phase: Phase.POOLS, startMinutes: 480, endMinutes: 780, stripCount: 4 },
-      { phase: Phase.DE_PRELIMS, startMinutes: 810, endMinutes: 870, stripCount: 16 },
-      { phase: Phase.DE_ROUND_OF_16, startMinutes: 900, endMinutes: 980, stripCount: 4 },
+      { phase: Phase.POOLS, startMinutes: 540, endMinutes: 840, stripCount: 4 },
+      { phase: Phase.DE_PRELIMS, startMinutes: 870, endMinutes: 930, stripCount: 16 },
+      { phase: Phase.DE_ROUND_OF_16, startMinutes: 960, endMinutes: 1040, stripCount: 4 },
     ])
   })
 
@@ -73,8 +76,9 @@ describe('eventTimeSegments', () => {
     const plain = derive({ id: 'plain' })
     const segments = eventTimeSegments(plain)
 
-    expect(plain.result.de_total_end).toBe(710)
-    expect(segments[segments.length - 1].endMinutes).toBe(680)
+    // 740 + the 30-minute individual tail = 770
+    expect(plain.result.de_total_end).toBe(770)
+    expect(segments[segments.length - 1].endMinutes).toBe(740)
   })
 
   it('returns no segments when every start and end field is null', () => {

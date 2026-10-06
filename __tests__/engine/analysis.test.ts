@@ -60,7 +60,9 @@ describe('initialAnalysis — Pass 0: capacity warning', () => {
     const config = makeConfig({
       strips: makeStrips(8, 0),
       days_available: 1,
-      dayConfigs: [{ day_start_time: 480, day_end_time: 1320 }],
+      // The 2026-27 default day: 9:00 start (Ops Manual p.17), 19:00 target and
+      // 22:00 hard end (METHODOLOGY.md §Inputs). Pass 0 does not read the window.
+      dayConfigs: [{ day_start_time: 540, day_end_time: 1140, day_hard_end_time: 1320 }],
     })
     const competitions = Array.from({ length: 4 }, (_, i) =>
       makeCompetition({
@@ -88,7 +90,9 @@ describe('initialAnalysis — Pass 0: capacity warning', () => {
     const config = makeConfig({
       strips: makeStrips(10, 0),
       days_available: 1,
-      dayConfigs: [{ day_start_time: 480, day_end_time: 1320 }],
+      // The 2026-27 default day: 9:00 start (Ops Manual p.17), 19:00 target and
+      // 22:00 hard end (METHODOLOGY.md §Inputs). Pass 0 does not read the window.
+      dayConfigs: [{ day_start_time: 540, day_end_time: 1140, day_hard_end_time: 1320 }],
     })
     const competitions = [
       makeCompetition({ id: 'A', fencer_count: 24 }),

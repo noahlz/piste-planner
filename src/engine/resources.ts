@@ -4,7 +4,7 @@ import type {
   TournamentConfig,
   StripAllocation,
 } from './types.ts'
-import { dayStart, dayEnd } from './types.ts'
+import { dayHardEnd, DAY_AXIS_SPACING_MINS } from './types.ts'
 import { SLOT_MINS } from './constants.ts'
 
 // ──────────────────────────────────────────────
@@ -184,21 +184,21 @@ function earliestFreeStartFor(state: GlobalState, stripIdx: number, startTime: n
  *   `null` when fewer than `count` candidate strips exist.
  *
  * The optional `day` parameter is the tournament day index used to compute the
- * day-end clamp via `dayEnd(day, config)`. Both call sites inside a scheduling
+ * day-end clamp via `dayHardEnd(day, config)` – the hard end, not the 7:00 PM
+ * soft target, since work may run past the target (METHODOLOGY.md §Same-Day
+ * Completion). Both call sites inside a scheduling
  * run (`concurrentScheduler.ts` `tryAllocate`, the STAGED-DE pre-check and the
  * strip-claim call every phase kind uses) always pass it explicitly — `day` is
  * optional for direct callers only, such as this file's own tests.
  *
- * When `day` is omitted, the helper falls back to inferring the day from
- * `floor(startTime / DAY_LENGTH_MINS)` and computing the day-end as
- * `dayStart(inferredDay, config) + DAY_LENGTH_MINS`. That inference assumes a
- * *compacted* axis — days packed back-to-back at `d * DAY_LENGTH_MINS` with no
- * gap between them — and is wrong once days are spaced at a fixed 1440
- * minutes instead, which is the axis the store's config now emits (see
- * specs/006-day-axis-parity/research.md D3 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/research.md)). Because every real call site
- * supplies `day`, this fallback is unreachable from an actual scheduling run;
- * it is exercised only by resources.test.ts, and even there its result only
- * ever selects the `STRIPS`-vs-`TIME` label on a miss.
+ * When `day` is omitted, the helper falls back to inferring the day as
+ * `floor(startTime / DAY_AXIS_SPACING_MINS)` and clamping at that day's
+ * `dayHardEnd`. The inference holds on the 1440-spaced axis that both the
+ * store's config and the empty-`dayConfigs` fallback use (024 D7), provided
+ * no day's window crosses a calendar-day boundary. Because every real call
+ * site supplies `day`, this fallback is unreachable from an actual scheduling
+ * run; it is exercised only by tests, and even there its result only ever
+ * selects the `STRIPS`-vs-`TIME` label on a miss.
  */
 export function findAvailableStripsInWindow(
   state: GlobalState,
@@ -249,19 +249,15 @@ export function findAvailableStripsInWindow(
 
   // Determine reason: TIME if the candidate would push us past the assigned
   // day's hard end, STRIPS otherwise. When `day` is supplied we honor per-day
-  // overrides via dayEnd(); otherwise we fall back to inferring the day from
-  // startTime and computing dayStart(inferredDay) + DAY_LENGTH_MINS. That
-  // fallback assumes a compacted axis (days packed at DAY_LENGTH_MINS with no
-  // gap) and is wrong under the store's 1440-spaced axis — see the `day`
-  // parameter's doc comment above and research.md D3. It is unreachable in
-  // practice: both real call sites pass `day` explicitly.
-  const dayHardEnd = day !== undefined
-    ? dayEnd(day, config)
-    : dayStart(
-        Math.max(0, Math.floor(startTime / Math.max(config.DAY_LENGTH_MINS, 1))),
-        config,
-      ) + config.DAY_LENGTH_MINS
-  const reason: 'STRIPS' | 'TIME' = candidate + duration > dayHardEnd ? 'TIME' : 'STRIPS'
+  // windows via dayHardEnd(day); otherwise we infer the day from startTime on
+  // the 1440-spaced axis the store's config and the empty-dayConfigs fallback
+  // share (024 D7). The inference is unreachable in practice: both real call
+  // sites pass `day` explicitly.
+  const hardEnd = dayHardEnd(
+    day ?? Math.max(0, Math.floor(startTime / DAY_AXIS_SPACING_MINS)),
+    config,
+  )
+  const reason: 'STRIPS' | 'TIME' = candidate + duration > hardEnd ? 'TIME' : 'STRIPS'
 
   return { fit: 'none', earliest_next_start: candidate, reason }
 }

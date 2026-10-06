@@ -305,14 +305,14 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
     )
 
     const before = rowCells(id)
-    expect(before[2]).toBe('9:26') // pool end at strips_total=12: one 86-min wave, a foil pool of 6 (024 group A, was 105)
+    expect(before[2]).toBe('10:26') // pool end at strips_total=12: 9:00 start + one 86-min wave, a foil pool of 6 (024 group B: 9:00 start, was 9:26 from 8:00)
     expect(before[5]).toBe('5') // pool_strip_count at strips_total=12
 
     act(() => {
       // strips_total 12 -> 3: n_pools (5) > strips_total raises
       // resource_precondition, and also lowers the pool strip cap, so the
       // derived pool geometry actually changes (5 strips -> 2, pool end
-      // 9:26 -> 12:18) — a dirty edit, not one the debounce would have
+      // 10:26 -> 13:18) — a dirty edit, not one the debounce would have
       // reproduced unchanged anyway.
       useStore.getState().setStrips(3)
     })
@@ -328,7 +328,7 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
     })
 
     // Past the settle point, still the pre-edit row — never replaced by the
-    // ERROR-state derived values (pool_strip_count 2, pool end 12:18).
+    // ERROR-state derived values (pool_strip_count 2, pool end 13:18).
     expect(rowCells(id)).toEqual(before)
   })
 
@@ -369,7 +369,7 @@ describe('CenterView suppresses the settle-timer commit while blocking (FR-009)'
 
     const after = rowCells(id)
     expect(after).not.toEqual(before)
-    expect(after[2]).toBe('10:52') // pool end at strips_total=6: two 86-min waves (was 11:30 at 105)
+    expect(after[2]).toBe('11:52') // pool end at strips_total=6: 9:00 start + two 86-min waves (024 group B: 9:00 start, was 10:52 from 8:00)
     expect(after[5]).toBe('4') // pool_strip_count at strips_total=6
   })
 

@@ -53,6 +53,15 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * (specs/024-ops-manual-conformance/plan.md §Group A). Every entry still equals
  * its app-path pin.
  *
+ * 024 group B, 2026-10-06 – B8 53 → 52, read from the drift ledger's re-taken
+ * snapshot: the 9:00 start loses JR-W-EPEE-IND on both paths. The day moved to
+ * 9:00 with a 19:00 soft target and a 22:00 hard end (Ops Manual 2026-27 p.17,
+ * METHODOLOGY.md §Inputs and §Same-Day Completion), so the hard window shrinks
+ * from 840 to 780 minutes. Planning's 8:00-start control isolates the start as
+ * the cause: under group B with an 8:00 start B8 places 53
+ * (specs/024-ops-manual-conformance/plan.md §Group B, D3). Every entry still
+ * equals its app-path pin.
+ *
  * The table is still typed out, but it is no longer trusted as typed: the
  * "matches the live drift ledger" test below re-measures every entry by the
  * drift ledger's own route. Until 015 it was a hand-typed copy that nothing
@@ -60,7 +69,7 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
  * ledger's real counts had moved.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 52,
 }
 
 interface ParityException {
@@ -124,9 +133,15 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {}
  * 024 group A, 2026-10-06 – B4 re-measured 18 → 19 and B6 40 → 50, the same
  * moves as the ledger's, and their copies in `appPath.test.ts` moved with them
  * in the same commit. No other pin moved.
+ *
+ * 024 group B, 2026-10-06 – B8 re-measured 53 → 52, the same move as the
+ * ledger's: the 9:00 start loses JR-W-EPEE-IND on both paths (the 780-minute
+ * hard window, Ops Manual 2026-27 p.17, METHODOLOGY.md §Same-Day Completion).
+ * Its copy in `appPath.test.ts` moved with it in the same commit. No other pin
+ * moved.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 52,
 }
 
 // specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)

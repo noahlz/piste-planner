@@ -1,4 +1,4 @@
-import { BottleneckSeverity, CutMode, DeMode, EventType, RuleKind, ValidationMode, VideoPolicy } from './types.ts'
+import { BottleneckSeverity, CutMode, DeMode, EventType, RuleKind, ValidationMode, VideoPolicy, dayHardEnd, dayStart } from './types.ts'
 import type { Competition, TournamentConfig, ValidationError } from './types.ts'
 import { computePoolStructure, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, deBlocksFor, deVideoStripAsk } from './de.ts'
@@ -47,7 +47,14 @@ export function findingIdentity(finding: ValidationError): string {
  * Computes the worst-case single-day duration for a competition:
  * pool round + admin gap + full DE, each DE block at its full strip ask
  * (METHODOLOGY.md §DE Duration).
- * Returns a ValidationError if it exceeds DAY_LENGTH_MINS, null otherwise.
+ * Returns a ValidationError if it exceeds the hard window, null otherwise.
+ *
+ * Single-Day Fit measures against the day's hard window, start to hard end
+ * (9:00 AM to 10:00 PM, 780 minutes, by default), not the 10-hour planning
+ * day: running past the 7:00 PM soft target is a warning, not a violation
+ * (METHODOLOGY.md §Single-Day Fit, §Same-Day Completion; Ops Manual 2026-27
+ * p.17). When the organizer edits hours, the widest day's window applies,
+ * since the competition only has to fit on one of them (024 D7).
  */
 export function validateSameDayCompletion(
   competition: Competition,
@@ -59,16 +66,30 @@ export function validateSameDayCompletion(
   const poolDuration = weightedPoolDuration(poolStructure, weapon, config.pool_round_duration_table)
   const deDuration = deBlocksFor(competition, config).baselineMinutes
   const total = poolDuration + config.ADMIN_GAP_MINS + deDuration
+  const window = widestHardWindow(config)
 
-  if (total > config.DAY_LENGTH_MINS) {
+  if (total > window) {
     return err(
       'same_day_completion',
-      `Competition ${competition.id} worst-case duration ${total} min exceeds DAY_LENGTH_MINS ${config.DAY_LENGTH_MINS} min (pool=${poolDuration}, admin=${config.ADMIN_GAP_MINS}, DE=${deDuration})`,
+      `Competition ${competition.id} worst-case duration ${total} min exceeds the day's hard window ${window} min (pool=${poolDuration}, admin=${config.ADMIN_GAP_MINS}, DE=${deDuration})`,
       'same-day-completion',
       [competition.id],
     )
   }
   return null
+}
+
+/**
+ * The widest day's start-to-hard-end window. A day with no `dayConfigs` entry
+ * takes the default window, `DAY_HARD_END_MINS - DAY_START_MINS`, through
+ * `dayStart`/`dayHardEnd`'s own fallback.
+ */
+function widestHardWindow(config: TournamentConfig): number {
+  let widest = 0
+  for (let d = 0; d < config.days_available; d++) {
+    widest = Math.max(widest, dayHardEnd(d, config) - dayStart(d, config))
+  }
+  return widest
 }
 
 // ── Sub-validators ─────────────────────────────────────────────────────────────

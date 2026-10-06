@@ -55,9 +55,11 @@ describe('tournamentSlice', () => {
       const state = useStore.getState()
       expect(state.days_available).toBe(4)
       expect(state.dayConfigs).toHaveLength(4)
+      // 9:00 start (540) and the 19:00 soft target (1140): 2026-27 Ops Manual
+      // p.17, METHODOLOGY.md §Inputs and Appendix A §Timing Constants (024 B).
       for (const dc of state.dayConfigs) {
-        expect(dc.day_start_time).toBe(480)
-        expect(dc.day_end_time).toBe(1320)
+        expect(dc.day_start_time).toBe(540)
+        expect(dc.day_end_time).toBe(1140)
       }
     })
   })
@@ -66,11 +68,13 @@ describe('tournamentSlice', () => {
     it('updates a specific day start time', () => {
       useStore.getState().setDays(3)
 
-      useStore.getState().updateDayConfig(1, { day_start_time: 540 })
+      // 10:00 (600), not the 9:00 default, so the update is observable (024 B
+      // moved the default start to 540). The end keeps the 19:00 default, 1140.
+      useStore.getState().updateDayConfig(1, { day_start_time: 600 })
 
       const state = useStore.getState()
-      expect(state.dayConfigs[1].day_start_time).toBe(540)
-      expect(state.dayConfigs[1].day_end_time).toBe(1320)
+      expect(state.dayConfigs[1].day_start_time).toBe(600)
+      expect(state.dayConfigs[1].day_end_time).toBe(1140)
     })
 
     it('updates a specific day end time', () => {
@@ -80,7 +84,8 @@ describe('tournamentSlice', () => {
 
       const state = useStore.getState()
       expect(state.dayConfigs[2].day_end_time).toBe(1200)
-      expect(state.dayConfigs[2].day_start_time).toBe(480)
+      // the 9:00 default start (540) is untouched
+      expect(state.dayConfigs[2].day_start_time).toBe(540)
     })
   })
 

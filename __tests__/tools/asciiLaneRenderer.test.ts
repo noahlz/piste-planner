@@ -135,10 +135,11 @@ describe('renderAsciiLanes — multi-phase event on same strip', () => {
 describe('renderAsciiLanes — multi-day rendering', () => {
   const config = makeConfig({ days_available: 3, strips: makeStrips(2, 0) })
   const stripAllocs = emptyStripAllocations(2)
-  // Day 0 = mins 0-840; day 1 = 840-1680; day 2 = 1680-2520.
+  // Fallback axis (024 D7): day d starts at d x 1440, so day 0 = mins 0-1440,
+  // day 1 = 1440-2880, day 2 = 2880-4320.
   stripAllocs[0].push(alloc('E1', Phase.POOLS, 0, 60))
-  stripAllocs[0].push(alloc('E2', Phase.POOLS, 900, 960)) // Day 1
-  stripAllocs[0].push(alloc('E3', Phase.POOLS, 1740, 1800)) // Day 2
+  stripAllocs[0].push(alloc('E2', Phase.POOLS, 1500, 1560)) // Day 1
+  stripAllocs[0].push(alloc('E3', Phase.POOLS, 2940, 3000)) // Day 2
 
   const out = renderAsciiLanes({
     schedule: {
@@ -228,9 +229,33 @@ describe('renderAsciiLanes — column width budget', () => {
     }
   })
 
-  it('time axis labels include both day endpoints', () => {
+  it('time axis labels run from the 9:00 start to the 22:00 hard end', () => {
     const axis = out.split('\n')[1]
-    expect(axis).toContain('08:00')
-    expect(axis).toContain('21:00')
+    expect(axis).toContain('09:00')
+    expect(axis).toContain('19:00')
+    expect(axis).toContain('22:00')
+  })
+
+  it('keeps the axis within the width budget with the 22:00 label', () => {
+    expect(out.split('\n')[1].length).toBeLessThanOrEqual(120)
+  })
+})
+
+describe('renderAsciiLanes — a phase between the 19:00 target and the 22:00 hard end', () => {
+  const config = makeConfig({ days_available: 1, strips: makeStrips(1, 0) })
+  const comp = makeCompetition({ id: 'LATE' })
+  // Fallback axis: minute 0 is 9:00, so 600..720 is 19:00-21:00.
+  const stripAllocs = [[alloc('LATE', Phase.DE, 600, 720)]]
+  const out = renderAsciiLanes({
+    schedule: { LATE: { ...makeScheduleResult('LATE', 0), pool_start: 0, pool_end: 60 } },
+    strip_allocations: stripAllocs,
+    bottlenecks: [],
+    config,
+    competitions: [comp],
+  })
+
+  it('draws the phase inside the lane', () => {
+    const lane = findLineStartingWith(out, 'S01')
+    expect(lane).toContain('[DE-LATE')
   })
 })

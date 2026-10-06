@@ -111,7 +111,18 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // Y12-W-SABRE-IND, Y14-W-EPEE-IND. None leave. Equal to the app path's 50.
   // A raise under the rule above. See specs/024-ops-manual-conformance/plan.md
   // §Group A.
-  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 53,
+  //
+  // 024 group B, 2026-10-06 – B8 lowered 53 → 52 under the policy-amendment
+  // exception above. The amendment is METHODOLOGY §Inputs' 9:00 day start
+  // (2026-27 Ops Manual p.17, owner-approved commit 6a4107b710). JR-W-EPEE-IND
+  // is lost: the 9:00 start shrinks the hard window from 840 minutes
+  // (8:00–22:00) to 780 (9:00–22:00), and the event no longer fits its day.
+  // The control isolates it: group B with an 8:00 start places B8 53 (and B6
+  // 52), so neither the 600-minute capacity day nor the 19:00 soft target
+  // costs the event (plan §Group B – the drift review re-runs that control).
+  // Equal to the app path's 52. Group D's first/last-day capacity is measured
+  // to place it again (plan §Group D).
+  B1: 24, B2: 24, B3: 24, B4: 19, B5: 12, B6: 50, B7: 18, B8: 52,
 }
 
 /**
@@ -130,10 +141,15 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  * 015, 2026-10-05 – B8 left the list: with the per-type DE mode it places
  * JR-W-EPEE-IND too, so it places every event and emits no summary line.
  *
+ * 024 group B, 2026-10-06 – B8 rejoins the list: the 9:00 day start (2026-27
+ * Ops Manual p.17, METHODOLOGY §Inputs) leaves JR-W-EPEE-IND unplaced (see
+ * the B8 floor entry above), so its day had a failure and emits a `Day N refs`
+ * line. B4's day peaks move to 154 / 106 / 158 under group B's re-pack.
+ *
  * Membership is asserted in both directions: the day-peaks test below fails if a
  * listed scenario emits no summary line or an unlisted one emits any.
  */
-const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6']
+const SCENARIOS_WITH_DAY_SUMMARY: ScenarioId[] = ['B4', 'B6', 'B8']
 
 /** Matches the refs line built by `postScheduleDayBreakdown` in `concurrentScheduler.ts`. */
 const DAY_REFS_SUMMARY = /^Day (\d+) refs: peak demand (\d+)\.$/
@@ -350,14 +366,11 @@ describe('drift ledger', () => {
     //    was 481 (~29%,
     //    specs/011-feasibility-and-strip-suggestion/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/011-feasibility-and-strip-suggestion/baseline.md))
     //    before the factory took the per-type DE mode and regional cut.
-    //    024, 2026-10-06 – suspended for group A only. Billing DE bouts × bout
-    //    time (METHODOLOGY §DE Capacity Estimation) drops B4's demand to 1548
-    //    strip-hours, under the 1680 its 14-hour days hold, so no feasibility
-    //    finding fires (the ledger's RESOURCE_EXHAUSTION 7 → 6). Group B's
-    //    600-minute capacity day (1200 available, 1380 with slack) brings the
-    //    WARN back, and Task B restores both presence assertions. Until then the
-    //    test holds only that any feasibility finding is a WARN, and never pins
-    //    its absence.
+    //    024, 2026-10-06 – the shortfall is now 348 strip-hours (~29%): group
+    //    A's bout-time billing (METHODOLOGY §DE Capacity Estimation) puts B4's
+    //    demand at 1548, and group B's 10-hour planning day (2026-27 Ops Manual
+    //    p.17, METHODOLOGY §Strip-Hour Capacity) holds 3d × 40s × 10h = 1200,
+    //    1380 with the 15% slack, so the WARN fires (1548 > 1380).
     //  - no ERROR sits in Phase.VALIDATION. B4's 11 ERRORs (12 before 024's
     //    group A) are all
     //    DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the ordinary
@@ -372,16 +385,17 @@ describe('drift ledger', () => {
 
         const findings = validateConfig(config, competitions, ValidationMode.BINDING)
         expect(findings.filter(f => f.severity === BottleneckSeverity.ERROR)).toEqual([])
+        expect(
+          findings.filter(f => f.rule === 'feasibility-strip-hours' && f.severity === BottleneckSeverity.WARN),
+        ).toHaveLength(1)
 
         const errors = bottlenecks.filter(b => b.severity === BottleneckSeverity.ERROR)
         expect(errors.filter(b => b.phase === Phase.VALIDATION)).toEqual([])
 
-        // 024 group A: the presence pins are suspended (see the note above).
-        // Task B restores `toHaveLength(1)` on both copies.
         expect(
-          bottlenecks.filter(b => b.rule === FeasibilityRule.STRIP_HOURS && b.severity !== BottleneckSeverity.WARN),
-          'any feasibility finding the scheduler carries is a WARN',
-        ).toEqual([])
+          bottlenecks.filter(b => b.rule === FeasibilityRule.STRIP_HOURS && b.severity === BottleneckSeverity.WARN),
+          'the scheduler\'s own bottlenecks carry the feasibility WARN too',
+        ).toHaveLength(1)
       })
     }
 

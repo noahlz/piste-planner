@@ -216,6 +216,30 @@ describe('Canvas zoom (FR-034, D3)', () => {
     }
   })
 
+  it('extends the axis to the 22:00 hard end, so a block ending at 21:00 lies inside the drawn span', () => {
+    // Ops Manual 2026-27 p.17: the day's soft target is 19:00, but work may run
+    // to the 22:00 hard end (METHODOLOGY.md §Same-Day Completion, 024 D7).
+    const config = makeConfig({ days_available: 1, strips: makeStrips(4, 0) })
+    const schedule: DerivedSchedule = {
+      config,
+      competitions: [makeCompetition({ id: 'late' })],
+      events: {
+        late: {
+          result: { ...makeScheduleResult('late', 0), pool_start: 1140, pool_end: 1260, pool_strip_count: 2 },
+          day_out_of_range: false,
+        },
+      },
+    }
+    const findings: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
+    const dayConfigs: DayConfig[] = [{ day_start_time: 540, day_end_time: 1140 }]
+
+    renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 2, fitting: true } })
+
+    const [block] = eventBlocks()
+    const rightEdgePct = parseFloat(block.style.left) + parseFloat(block.style.width)
+    expect(rightEdgePct).toBeLessThanOrEqual(100)
+  })
+
   it('still draws every block at the fit fallback when the plot is never measured', () => {
     globalThis.ResizeObserver = NeverFiringResizeObserver as unknown as typeof ResizeObserver
 

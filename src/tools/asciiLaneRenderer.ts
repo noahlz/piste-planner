@@ -12,7 +12,7 @@
  * DE_ROUND_OF_16=R16, DE=DE.
  */
 
-import { Phase, BottleneckSeverity, dayStart, dayEnd } from '../engine/types.ts'
+import { Phase, BottleneckSeverity, dayStart, dayHardEnd } from '../engine/types.ts'
 import type {
   Bottleneck,
   Competition,
@@ -23,6 +23,7 @@ import type {
 
 const MINS_PER_CHAR = 10
 const PREFIX_WIDTH = 9 // "S001-S080" worst case + trailing space
+const AXIS_LABEL_WIDTH = 5 // "HH:MM"
 
 export interface AsciiLaneRenderInput {
   schedule: Record<string, ScheduleResult>
@@ -58,7 +59,9 @@ function renderDay(
   competitions: Competition[],
 ): string[] {
   const dStart = dayStart(d, config)
-  const dEnd = dayEnd(d, config)
+  // The lane reaches the hard end, not the 7:00 PM soft target, so a phase
+  // placed between them draws (METHODOLOGY.md §Same-Day Completion).
+  const dEnd = dayHardEnd(d, config)
   const dDur = dEnd - dStart
   const laneWidth = Math.ceil(dDur / MINS_PER_CHAR)
 
@@ -74,7 +77,7 @@ function renderDay(
   out.push(
     `DAY ${d + 1}  (${wallStart}-${wallEnd})   strips: ${config.strips_total}   video: ${config.video_strips_total}   scheduled: ${dayCompCount}`,
   )
-  out.push(renderTimeAxis(config, laneWidth))
+  out.push(renderTimeAxis(config, dDur, laneWidth))
 
   // Build per-strip lane strings for this day.
   const lanes: string[] = []
@@ -95,10 +98,11 @@ function renderDay(
   return out
 }
 
-function renderTimeAxis(config: TournamentConfig, laneWidth: number): string {
-  const buf = new Array<string>(PREFIX_WIDTH + laneWidth).fill(' ')
-  const dayLenMins = config.DAY_END_MINS - config.DAY_START_MINS
-  for (let h = 0; h * 60 < dayLenMins; h++) {
+function renderTimeAxis(config: TournamentConfig, windowMins: number, laneWidth: number): string {
+  // Room for the closing label, which starts at the lane's last column.
+  const buf = new Array<string>(PREFIX_WIDTH + laneWidth + AXIS_LABEL_WIDTH).fill(' ')
+  // Hourly labels run from the day start through the hard end inclusive.
+  for (let h = 0; h * 60 <= windowMins; h++) {
     const mins = config.DAY_START_MINS + h * 60
     const label = formatHM(mins)
     const col = PREFIX_WIDTH + Math.floor((h * 60) / MINS_PER_CHAR)

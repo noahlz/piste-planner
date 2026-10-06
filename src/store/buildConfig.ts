@@ -3,11 +3,12 @@ import type {
   TournamentConfig,
   PinnedPlacement,
 } from '../engine/types.ts'
-import { DeStripRequirement } from '../engine/types.ts'
+import { DAY_AXIS_SPACING_MINS, DeStripRequirement } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import {
   DAY_START_MINS,
   DAY_END_MINS,
+  DAY_HARD_END_MINS,
   LATEST_START_MINS,
   LATEST_START_OFFSET,
   DAY_LENGTH_MINS,
@@ -38,9 +39,11 @@ import { buildStrips } from '../engine/stripBudget.ts'
  * Calendar-day spacing between scheduler-axis day windows (research.md D5).
  * Day d's window is [d*DAY_AXIS_SPACING_MINS + start_d, d*DAY_AXIS_SPACING_MINS + end_d) —
  * see specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md). `runActions.ts` imports this to reverse the
- * conversion when a schedule result becomes a Placement (C2).
+ * conversion when a schedule result becomes a Placement (C2). Defined in the
+ * engine's types.ts since 024, whose empty-`dayConfigs` fallback axis uses the
+ * same spacing (D7), and re-exported here for the store's callers.
  */
-export const DAY_AXIS_SPACING_MINS = 1440
+export { DAY_AXIS_SPACING_MINS }
 
 /**
  * Bridges the Zustand store shape to the engine's TournamentConfig + Competition[] interfaces.
@@ -68,10 +71,13 @@ export function buildTournamentConfig(state: StoreState): {
     // d*DAY_AXIS_SPACING_MINS so no two days' windows overlap on the absolute
     // minute axis strip_allocations uses (specs/006-day-axis-parity/contracts/day-axis.md C1 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)). The
     // store's own state.dayConfigs is left untouched — only this config copy
-    // carries the shift.
+    // carries the shift. Each window also gains the day's hard end: 10:00 PM,
+    // or the organizer's day end when they set it later (METHODOLOGY.md
+    // §Same-Day Completion, 024 D7). The store never holds it.
     dayConfigs: state.dayConfigs.map((day, d) => ({
       day_start_time: d * DAY_AXIS_SPACING_MINS + day.day_start_time,
       day_end_time: d * DAY_AXIS_SPACING_MINS + day.day_end_time,
+      day_hard_end_time: d * DAY_AXIS_SPACING_MINS + Math.max(day.day_end_time, DAY_HARD_END_MINS),
     })),
 
     // These seven used to come from the store's global-overrides slice, which 013 T022
@@ -93,6 +99,7 @@ export function buildTournamentConfig(state: StoreState): {
     // Engine constants
     DAY_START_MINS,
     DAY_END_MINS,
+    DAY_HARD_END_MINS,
     LATEST_START_MINS,
     LATEST_START_OFFSET,
     DAY_LENGTH_MINS,

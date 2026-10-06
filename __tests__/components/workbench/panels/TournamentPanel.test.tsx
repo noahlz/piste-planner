@@ -4,6 +4,8 @@ import { TournamentPanel } from '../../../../src/components/workbench/panels/Tou
 import { Header } from '../../../../src/components/workbench/Header.tsx'
 import { useStore } from '../../../../src/store/store.ts'
 import { TournamentType } from '../../../../src/engine/types.ts'
+import { DAY_HARD_END_MINS } from '../../../../src/engine/constants.ts'
+import { TIME_OPTIONS } from '../../../../src/lib/time.ts'
 
 // 013 T016 (FR-013–FR-015, ui-contract.md §Inspector panel — Tournament):
 // takes over the tournament-setup section's type, day-count and day-hours cases from
@@ -94,10 +96,18 @@ describe('TournamentPanel — day hours', () => {
     const day2Start = screen.getByRole('combobox', { name: 'Day 2 start' })
     const day2End = screen.getByRole('combobox', { name: 'Day 2 end' })
 
-    expect(day1Start).toHaveTextContent('08:00')
-    expect(day1End).toHaveTextContent('22:00')
-    expect(day2Start).toHaveTextContent('08:00')
-    expect(day2End).toHaveTextContent('22:00')
+    // Ops Manual 2026-27 p.17: start 9:00, end the 7:00 PM soft target
+    // (METHODOLOGY.md §Inputs). The 10:00 PM hard end is not a control value.
+    expect(day1Start).toHaveTextContent('09:00')
+    expect(day1End).toHaveTextContent('19:00')
+    expect(day2Start).toHaveTextContent('09:00')
+    expect(day2End).toHaveTextContent('19:00')
+  })
+
+  it('offers an end time after the 22:00 hard end, which the organizer may choose', () => {
+    // The hard end gives way to an organizer day end set later (§Same-Day
+    // Completion), so the end control's list must reach past 22:00.
+    expect(Math.max(...TIME_OPTIONS)).toBeGreaterThan(DAY_HARD_END_MINS)
   })
 
   it('reflects a store edit to a day\'s hours in 24-hour form', () => {

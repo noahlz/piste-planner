@@ -31,7 +31,11 @@ export class SchedulingError extends Error {
  *
  * Components:
  * - crossover_count: how many other competitions conflict with this one
- * - window_tightness: 840 / (latest_end - earliest_start)
+ * - window_tightness: day window / (latest_end - earliest_start), where the
+ *   day window is day start to hard end (780 minutes, 9:00–22:00 by default –
+ *   METHODOLOGY.md Appendix A §Timing Constants). Inert in the app and the
+ *   drift ledger: both set `latest_end` to Infinity, so the term is 0 whatever
+ *   the numerator.
  * - video_scarcity: for a STAGED_DE + REQUIRED individual event — ratio of such events to video strips
  */
 export function constraintScore(
@@ -43,9 +47,10 @@ export function constraintScore(
     c2 => c2.id !== competition.id && crossoverPenalty(competition, c2) > 0,
   ).length
 
+  const dayWindowMins = config.DAY_HARD_END_MINS - config.DAY_START_MINS
   const windowMins = competition.latest_end - competition.earliest_start
   // Guard: avoid divide-by-zero for competitions with zero-width windows
-  const windowTightness = windowMins > 0 ? 840 / windowMins : 840
+  const windowTightness = windowMins > 0 ? dayWindowMins / windowMins : dayWindowMins
 
   // Team events never add video demand (024 D4, `demandsVideoStage`).
   const videoCompsRequiring = allCompetitions.filter(demandsVideoStage).length

@@ -969,7 +969,13 @@ await shot('06c-nacyouth-schedule')
 // §Group A, row A.4) replaced the old DE duration table, and the probe
 // (a throwaway Vitest run of the same store actions, in this driver's order)
 // read Suggest 90 for NAC Vet/Div1/Junior at 12 video strips, 4 days, NAC.
-// Group B's day-hours change moves it again, to 103.
+//
+// `[M]` 024 group B, 2026-10-06: the suggested count moves from 90 to 103. The
+// 9:00-19:00 planning day (Ops Manual p.17, METHODOLOGY §Inputs) and the
+// ÷ 14 manual baseline (§Strip Count Suggestion) replaced the 8:00-22:00 day, and
+// the probe (same store actions, this driver's order) read Suggest 103 for
+// NAC Vet/Div1/Junior at 12 video strips, 4 days, NAC (specs/024-ops-manual-conformance/plan.md
+// §Group B, row B.2).
 await choosePreset('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior template applied')
 
@@ -980,8 +986,8 @@ log('NAC Vet/Div1/Junior video strips before Suggest =', vetVideoStrips)
 const vetStrips = await pressSuggest('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior suggested strips =', vetStrips)
 await shot('06d-vet-configured')
-if (Number(vetStrips) !== 90) {
-  throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 90 at ${vetVideoStrips} video strips (tmp/probe-t014-video.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
+if (Number(vetStrips) !== 103) {
+  throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 103 at ${vetVideoStrips} video strips (tmp/probe-t014-video.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
 }
 
 const vetGen = page.getByRole('button', { name: 'Auto-assign' })

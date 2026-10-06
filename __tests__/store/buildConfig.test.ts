@@ -115,9 +115,11 @@ describe('buildTournamentConfig', () => {
       const state = storeWith({ ...minimalState(), dayConfigs })
       const { config } = buildTournamentConfig(state)
 
+      // Hard ends (024 D7), d × 1440 + max(day_end, 1320): 0 + max(1200, 1320)
+      // = 1320 and 1440 + max(1320, 1320) = 2760.
       expect(config.dayConfigs).toEqual([
-        { day_start_time: 480, day_end_time: 1200 },
-        { day_start_time: 1980, day_end_time: 2760 },
+        { day_start_time: 480, day_end_time: 1200, day_hard_end_time: 1320 },
+        { day_start_time: 1980, day_end_time: 2760, day_hard_end_time: 2760 },
       ])
       // The store's own state (read back independently of the config we just
       // built) is clock axis and unshifted — buildTournamentConfig must not
@@ -130,7 +132,8 @@ describe('buildTournamentConfig', () => {
       const state = storeWith({ ...minimalState(), dayConfigs, days_available: 1 })
       const { config } = buildTournamentConfig(state)
 
-      expect(config.dayConfigs).toEqual([{ day_start_time: 540, day_end_time: 1260 }])
+      // Hard end (024 D7): 0 × 1440 + max(1260, 1320) = 1320.
+      expect(config.dayConfigs).toEqual([{ day_start_time: 540, day_end_time: 1260, day_hard_end_time: 1320 }])
     })
   })
 
@@ -194,16 +197,18 @@ describe('buildTournamentConfig', () => {
     it('leaves latest_end unbinding at a day count beyond the UI\'s current maximum of 4 (research.md D6)', () => {
       // The old 9999 sentinel started truncating at day 7: 7 * 1440 + 1320 =
       // 11400 > 9999. Use an 8-day tournament (day indices 0-7) so day 7's
-      // scheduler-axis end actually exceeds that old bound.
+      // scheduler-axis end actually exceeds that old bound. Since 024 D7 the
+      // scheduler clamps the day's hard end, 7 * 1440 + max(1320, 1320) =
+      // 11400, against latest_end (METHODOLOGY.md §Same-Day Completion).
       const dayConfigs = Array.from({ length: 8 }, () => ({ day_start_time: 480, day_end_time: 1320 }))
       const state = storeWith({ ...minimalState(), days_available: 8, dayConfigs })
       const { config, competitions } = buildTournamentConfig(state)
       const comp = competitions[0]
 
-      const day7End = config.dayConfigs![7].day_end_time
+      const day7End = config.dayConfigs![7].day_hard_end_time
       expect(day7End).toBe(11400)
       // This is concurrentScheduler.ts's own clamp expression: it must return
-      // dayEnd unchanged, never the latest_end sentinel.
+      // the hard end unchanged, never the latest_end sentinel.
       expect(Math.min(day7End, comp.latest_end)).toBe(day7End)
     })
 

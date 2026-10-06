@@ -171,8 +171,9 @@ describe('ScheduleOutput', () => {
     render(<ScheduleOutput />)
 
     expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
-    // Pool start derives straight from the placement's start_time (480 = 8:00)
-    expect(screen.getAllByText('8:00').length).toBeGreaterThan(0)
+    // Pool start derives straight from the placement's start_time. makePlacement
+    // defaults to the 2026-27 Ops Manual p.17 day start (540 = 9:00).
+    expect(screen.getAllByText('9:00').length).toBeGreaterThan(0)
     expect(screen.queryByText('No events placed yet.')).not.toBeInTheDocument()
   })
 
@@ -187,7 +188,7 @@ describe('ScheduleOutput', () => {
     const id = seedPlacedCompetition()
     render(<ScheduleOutput />)
 
-    expect(screen.getAllByText('8:00').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('9:00').length).toBeGreaterThan(0)
 
     await act(async () => {
       useStore.getState().updatePlacement(id, { start_time: 600 })
@@ -195,7 +196,7 @@ describe('ScheduleOutput', () => {
 
     // 600 minutes = 10:00 — the derived row moved without touching Regenerate
     expect(screen.getAllByText('10:00').length).toBeGreaterThan(0)
-    expect(screen.queryAllByText('8:00')).toHaveLength(0)
+    expect(screen.queryAllByText('9:00')).toHaveLength(0)
   })
 
   it('a placement on a day past days_available is flagged, not hidden', () => {

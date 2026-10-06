@@ -23,6 +23,7 @@ export const CAUSE_OF_RULE: Record<BottleneckRule, BottleneckCause> = {
   [BottleneckRule.PHASE_OVERRUNS_DAY_END]: BottleneckCause.SAME_DAY_VIOLATION,
   [BottleneckRule.VIDEO_PHASE_DELAYED]: BottleneckCause.VIDEO_STRIP_CONTENTION,
   [BottleneckRule.FLIGHT_B_DELAYED]: BottleneckCause.FLIGHT_B_DELAYED,
+  [BottleneckRule.DAY_ENDS_PAST_TARGET]: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
   [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE]: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
   [BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
   [BottleneckRule.RESOURCE_LEVERS]: BottleneckCause.RESOURCE_RECOMMENDATION,

@@ -149,6 +149,10 @@ export function dayConsumedCapacity(
  *
  * Total capacity: strips_total × DAY_LENGTH_MINS / 60
  * Video capacity: video_strips_total × DAY_LENGTH_MINS / 60
+ *
+ * DAY_LENGTH_MINS is the 10-hour planning day, 9:00 to the 7:00 PM soft target
+ * (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip-Hour Capacity). Capacity
+ * plans to the target, not to the 10:00 PM hard end the scheduler may use.
  */
 export function dayRemainingCapacity(
   day: number,

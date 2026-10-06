@@ -418,6 +418,11 @@ describe('deriveEventSchedule — oracle: reproduces scheduleAll geometry', () =
   // restore it: every block starts at its ready time, and multi-a's DE is still
   // strip-capped (14 granted of 16 asked, 100 minutes against an 80 baseline),
   // as it was on 12.
+  // 024 group B, 2026-10-06 – unchanged under the 9:00–19:00 day: multi-a's DE
+  // still starts at 130 on 14 strips, with no bottleneck. The old 12-strip
+  // board would pass again too. The 600-minute capacity day (METHODOLOGY
+  // §Strip-Hour Capacity) has day assignment move multi-b to day 2, which
+  // removes the contention. That is why planning saw it pass again under B.
   it('reproduces one event geometry from a busier multi-event schedule (research D1)', () => {
     const config = makeConfig({
       days_available: 2,

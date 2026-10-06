@@ -58,7 +58,7 @@ describe('constraintScore', () => {
     const looseScore = constraintScore(looseComp, allComps, config)
 
     expect(score).toBeGreaterThan(looseScore)
-    // Absolute lower bound: crossoverCount(4) + windowTightness(840/360≈2.33) + videoScarcity(0) ≈ 6.33
+    // Absolute lower bound: crossoverCount(4) + windowTightness(780/360≈2.17) + videoScarcity(0) ≈ 6.17
     // A refactor that scales scores to near-zero would fail this check.
     expect(score).toBeGreaterThan(5)
   })

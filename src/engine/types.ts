@@ -168,6 +168,7 @@ export const BottleneckRule = {
   PHASE_OVERRUNS_DAY_END: 'phase-overruns-day-end',
   VIDEO_PHASE_DELAYED: 'video-phase-delayed',
   FLIGHT_B_DELAYED: 'flight-b-delayed',
+  DAY_ENDS_PAST_TARGET: 'day-ends-past-target',
   FIRST_DAY_LONGER_THAN_MIDDLE: 'first-day-longer-than-middle',
   LAST_DAY_LONGER_THAN_MIDDLE: 'last-day-longer-than-middle',
   RESOURCE_LEVERS: 'resource-levers',
@@ -247,9 +248,25 @@ export interface Competition {
   max_de_strip_pct_override: number | null
 }
 
+/**
+ * One day's hours as the organizer sets them: start, and the end that is the
+ * day's soft target (METHODOLOGY.md §Inputs). The store holds and serializes
+ * this shape on the clock axis.
+ */
 export interface DayConfig {
   day_start_time: number
   day_end_time: number
+}
+
+/**
+ * One day's window on the scheduler axis, as the engine reads it. Beyond the
+ * organizer's hours it carries the day's hard end: no phase may end past it,
+ * while ending past `day_end_time` only draws a warning (METHODOLOGY.md
+ * §Same-Day Completion). `buildConfig.ts` sets it to
+ * `d × 1440 + max(day_end, DAY_HARD_END_MINS)` (024 D7).
+ */
+export interface DayWindow extends DayConfig {
+  day_hard_end_time: number
 }
 
 export interface TournamentConfig {
@@ -260,6 +277,7 @@ export interface TournamentConfig {
   video_strips_total: number
   DAY_START_MINS: number
   DAY_END_MINS: number
+  DAY_HARD_END_MINS: number
   LATEST_START_MINS: number
   LATEST_START_OFFSET: number
   SLOT_MINS: number
@@ -283,7 +301,7 @@ export interface TournamentConfig {
   DE_BOUT_DURATION_10_TOUCH: Record<Weapon, number>
   TEAM_MATCH_DURATION: Record<Weapon, number>
   DEFAULT_DE_STRIP_FOOTPRINT: number
-  dayConfigs: DayConfig[]
+  dayConfigs: DayWindow[]
   max_pool_strip_pct: number
   max_de_strip_pct: number
 }
@@ -529,34 +547,63 @@ export function tailEstimateMins(eventType: EventType): number {
 }
 
 /**
- * Returns the absolute minute offset from T=0 for the start of the given day.
- * Uses per-day config when available, otherwise uses the uniform day length.
+ * Calendar-day spacing between scheduler-axis day windows. `buildConfig.ts`
+ * places day d's window at `d × DAY_AXIS_SPACING_MINS` plus its clock hours,
+ * and a config with no `dayConfigs` falls back to the same spacing (024 D7),
+ * so the drift ledger and the app lay days out alike. Defined here rather than
+ * in constants.ts, which imports this module.
  */
+export const DAY_AXIS_SPACING_MINS = 1440
+
+// Without `dayConfigs`, the day helpers below fall back to a uniform axis:
+// day d starts at d × DAY_AXIS_SPACING_MINS, minute 0 of each day standing for
+// DAY_START_MINS (9:00), and its soft target and hard end sit at the same
+// offsets from that start as DAY_END_MINS and DAY_HARD_END_MINS do from
+// DAY_START_MINS (600 and 780 by default – METHODOLOGY.md Appendix A §Timing
+// Constants).
+
+/** Returns the absolute minute offset from T=0 for the start of the given day. */
 export function dayStart(d: number, config: TournamentConfig): number {
   if (config.dayConfigs && config.dayConfigs[d]) {
     return config.dayConfigs[d].day_start_time
   }
-  return d * config.DAY_LENGTH_MINS
+  return d * DAY_AXIS_SPACING_MINS
 }
 
 /**
- * Returns the absolute minute offset from T=0 for the end of the given day.
- * Uses per-day config when available, otherwise uses the uniform day length.
+ * Returns the absolute minute for the given day's end – its soft target
+ * (default 7:00 PM): a day ending later draws a warning, not a violation
+ * (METHODOLOGY.md §Same-Day Completion).
  */
 export function dayEnd(d: number, config: TournamentConfig): number {
   if (config.dayConfigs && config.dayConfigs[d]) {
     return config.dayConfigs[d].day_end_time
   }
-  return d * config.DAY_LENGTH_MINS + config.DAY_LENGTH_MINS
+  return dayStart(d, config) + (config.DAY_END_MINS - config.DAY_START_MINS)
 }
 
 /**
- * Returns the day index d such that dayStart(d) <= t < dayEnd(d), or null when
- * no day in [0, days_available) contains t.
+ * Returns the absolute minute for the given day's hard end (default 10:00 PM):
+ * no phase may end past it (`SAME_DAY_VIOLATION`, METHODOLOGY.md §Bottlenecks
+ * Specific to the Concurrent Scheduler).
+ */
+export function dayHardEnd(d: number, config: TournamentConfig): number {
+  if (config.dayConfigs && config.dayConfigs[d]) {
+    return config.dayConfigs[d].day_hard_end_time
+  }
+  return dayStart(d, config) + (config.DAY_HARD_END_MINS - config.DAY_START_MINS)
+}
+
+/**
+ * Returns the day index d such that dayStart(d) <= t < dayHardEnd(d), or null
+ * when no day in [0, days_available) contains t. It reads the hard end because
+ * the scheduler places work past the soft target (METHODOLOGY.md §Same-Day
+ * Completion), and that work still belongs to its day – the post-schedule ref
+ * demand keys every phase by it.
  */
 export function findDayForTime(config: TournamentConfig, t: number): number | null {
   for (let d = 0; d < config.days_available; d++) {
-    if (dayStart(d, config) <= t && t < dayEnd(d, config)) return d
+    if (dayStart(d, config) <= t && t < dayHardEnd(d, config)) return d
   }
   return null
 }

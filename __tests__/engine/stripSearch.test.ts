@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   stripSearchRange, scanStripCounts, searchStripCount,
+  busiestDayCompetitors, manualBaselineStrips,
   type StripCandidate,
 } from '../../src/engine/stripSearch.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
@@ -9,7 +10,7 @@ import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { buildStrips } from '../../src/engine/stripBudget.ts'
 import { makeConfig, makeCompetition } from '../helpers/factories.ts'
 import { buildCompetitions, tournamentConfig, SCENARIOS } from '../helpers/scenarios.ts'
-import { dayStart } from '../../src/engine/types.ts'
+import { dayStart, EventType } from '../../src/engine/types.ts'
 import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
@@ -22,12 +23,17 @@ import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/e
 // ──────────────────────────────────────────────
 
 /**
- * [MIN] B1 (24 events, days=4) — specs/012-actionable-strip-suggestion/baseline.md §1 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) shows every one of the ten
- * measured templates undershoots at its floor, so the floor and the answer
- * differ by construction on any of them. B1 is the cheapest scenario fixture
- * available through the test helpers: floor=25, ceiling=135, answer=45,
- * placed@floor(25)=0, placed@44=0, placed@45=24. A full 25→45 scan (21
- * candidates) (re-measured 024, 2026-10-06).
+ * [MIN] B1 (24 events, days=4): strip-hour floor 34, manual baseline 53,
+ * floor=53, ceiling=135, answer=53, so the scan is one candidate (53: 24/24).
+ *
+ * 024 group B, 2026-10-06 – floor 25 → 53 and answer 45 → 53. The floor is
+ * now max(strip-hour floor, manual baseline) (Ops Manual 2026-27 p.17,
+ * METHODOLOGY.md §Strip Count Suggestion). B1's 2910 competitors spread
+ * largest-first over 4 days give 730 | 730 | 730 | 720, so the baseline is
+ * ceil(730 / 14) = 53. The strip-hour floor moves 25 → 34 on the 600-minute
+ * planning day (§Strip-Hour Capacity): ceil(1358.1 / (4 × 10)) = 34. 53 is
+ * the plan's measured B1 `stripRecommendation` at row B.2. The floor no longer
+ * undershoots on B1, so the minimality test runs on `undershootBoard` (B4).
  *
  * 024, 2026-10-06 – floor 35 → 25 and answer 48 → 45 under the 2026-27 Ops
  * Manual planning times (p.17; METHODOLOGY.md §Pool Duration Estimation, §DE
@@ -51,6 +57,23 @@ function minBoard(): { comps: Competition[], config: TournamentConfig } {
   return {
     comps: buildCompetitions(SCENARIOS.B1.fencerCounts, SCENARIOS.B1.tournamentType),
     config: tournamentConfig(4, 80, 12, SCENARIOS.B1.tournamentType),
+  }
+}
+
+/**
+ * [UNDER] B4 (30 events, days=3, SYC): the board whose floor still undershoots
+ * under group B. Its 1030-competitor busiest day (3 days, largest first) gives
+ * a manual baseline of ceil(1030 / 14) = 74, above the strip-hour floor
+ * ceil(1547.65 / (3 × 10)) = 52, so floor=74. The answer is 75, the plan's
+ * measured B4 `stripRecommendation` at row B.2, and [M] placed@74 = 29 of 30.
+ * A two-candidate scan, the cheapest scenario where floor and answer differ
+ * (B8, the other one, has 53 events: floor 56, answer 62).
+ */
+function undershootBoard(): { comps: Competition[], config: TournamentConfig } {
+  const s = SCENARIOS.B4
+  return {
+    comps: buildCompetitions(s.fencerCounts, s.tournamentType),
+    config: tournamentConfig(s.days, s.strips, s.videoStrips, s.tournamentType),
   }
 }
 
@@ -92,6 +115,19 @@ function emptyBoard(): { comps: Competition[], config: TournamentConfig } {
   return { comps, config }
 }
 
+/**
+ * [BASE] Ten 20-fencer events (3 pools each) on one day: 200 competitors, so a
+ * manual baseline of ceil(200 / 14) = 15, and a pool ceiling of
+ * ceil(30 / 0.80) = 38. The baseline test asserts the strip-hour floor sits
+ * below 15 rather than pinning it.
+ */
+function baselineBoard(): { comps: Competition[], config: TournamentConfig } {
+  const config = makeConfig({ days_available: 1 })
+  const comps = Array.from({ length: 10 }, (_, i) =>
+    makeCompetition({ id: `base-${i}`, fencer_count: 20 }))
+  return { comps, config }
+}
+
 /** Drives a `scanStripCounts` generator to completion, collecting every candidate. */
 function drain(
   gen: Generator<StripCandidate, number | null, void>,
@@ -106,11 +142,11 @@ function drain(
 }
 
 describe('stripSearchRange', () => {
-  it('is the two named rules — strip-hours floor and the old concurrency ceiling', () => {
+  it('is the named rules — max(strip-hours floor, manual baseline) and the old concurrency ceiling', () => {
     const { comps, config } = minBoard()
     const range = stripSearchRange(comps, config)
     expect(range).not.toBeNull()
-    const expectedFloor = Math.max(
+    const stripHourFloor = Math.max(
       1,
       Math.ceil(
         aggregateStripHours(comps, config).total_strip_hours
@@ -118,7 +154,7 @@ describe('stripSearchRange', () => {
       ),
     )
     const expectedCeiling = suggestStripCount(comps, config.days_available, config.max_pool_strip_pct)
-    expect(range!.floor).toBe(expectedFloor)
+    expect(range!.floor).toBe(Math.max(stripHourFloor, manualBaselineStrips(comps, config)))
     expect(range!.ceiling).toBe(expectedCeiling)
     expect(range!.floor).toBeLessThanOrEqual(range!.ceiling)
 
@@ -129,7 +165,11 @@ describe('stripSearchRange', () => {
     // converged factory stages every NAC event's DE (see `minBoard`).
     // 024, 2026-10-06 – floor 35 → 25, ceiling unchanged: the 2026-27 planning
     // times (see `minBoard`).
-    expect(range!.floor).toBe(25)
+    // 024 group B, 2026-10-06 – floor 25 → 53, ceiling unchanged: the
+    // strip-hour floor is ceil(1358.1 / (4 × 10)) = 34 on the 600-minute day,
+    // and the manual baseline ceil(730 / 14) = 53 is above it (see `minBoard`).
+    expect(stripHourFloor).toBe(34)
+    expect(range!.floor).toBe(53)
     expect(range!.ceiling).toBe(135)
   })
 
@@ -137,11 +177,94 @@ describe('stripSearchRange', () => {
     const { comps, config } = emptyBoard()
     expect(stripSearchRange(comps, config)).toBeNull()
   })
+
+  // 024, 2026-10-06 – the floor is max(strip-hour floor, manual baseline)
+  // (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip Count Suggestion).
+  it('starts at the manual baseline when it is above the strip-hour floor', () => {
+    const { comps, config } = baselineBoard()
+    const stripHourFloor = Math.ceil(
+      aggregateStripHours(comps, config).total_strip_hours
+      / (config.days_available * config.DAY_LENGTH_MINS / 60),
+    )
+    // Precondition: the baseline, ceil(200 / 14) = 15, is the larger of the two,
+    // so a range that kept the strip-hour floor alone would start lower.
+    expect(stripHourFloor).toBeLessThan(15)
+
+    const range = stripSearchRange(comps, config)!
+    expect(range.floor).toBe(15)
+    // Ten 20-fencer events, 3 pools each, one day: ceil(30 / 0.80) = 38.
+    expect(range.ceiling).toBe(38)
+  })
+
+  it('widens the window to [floor, floor + pool ceiling] when the floor is above the pool ceiling', () => {
+    // A one-hour capacity day pushes the strip-hour floor far above the 38-strip
+    // pool ceiling. The window then runs from the floor for one pool ceiling
+    // more (024 D7), where it used to be a backwards range that threw.
+    const { comps, config: base } = baselineBoard()
+    const config: TournamentConfig = { ...base, DAY_LENGTH_MINS: 60 }
+    const stripHourFloor = Math.ceil(aggregateStripHours(comps, config).total_strip_hours / 1)
+    expect(stripHourFloor).toBeGreaterThan(38)
+
+    const range = stripSearchRange(comps, config)!
+    expect(range).toEqual({ floor: stripHourFloor, ceiling: stripHourFloor + 38 })
+    const first = scanStripCounts(comps, config, range).next()
+    expect(first.done).toBe(false)
+    expect((first.value as StripCandidate).count).toBe(stripHourFloor)
+  })
+})
+
+describe('busiestDayCompetitors', () => {
+  it('spreads largest first, each event into the day with the fewest competitors so far', () => {
+    // Listed smallest first on purpose. Largest first over 2 days: 70 | 42 + 35,
+    // busiest 77. Filling in list order would give 35 + 70 | 42 = 105, and an
+    // even split of the total would give 73.5.
+    const comps = [35, 42, 70].map((n, i) => makeCompetition({ id: `c${i}`, fencer_count: n }))
+    expect(busiestDayCompetitors(comps, makeConfig({ days_available: 2 }))).toBe(77)
+  })
+
+  it('counts a team event its entries as stored, one per team', () => {
+    const comps = [
+      makeCompetition({ id: 'team', event_type: EventType.TEAM, fencer_count: 12 }),
+      makeCompetition({ id: 'ind', fencer_count: 20 }),
+    ]
+    expect(busiestDayCompetitors(comps, makeConfig({ days_available: 1 }))).toBe(32)
+  })
+
+  it('leaves out every competition outside MIN_FENCERS–MAX_FENCERS, as aggregateStripHours does', () => {
+    const config = makeConfig({ days_available: 1 })
+    const comps = [
+      makeCompetition({ id: 'zero', fencer_count: 0 }),
+      makeCompetition({ id: 'one', fencer_count: 1 }),
+      makeCompetition({ id: 'over', fencer_count: config.MAX_FENCERS + 1 }),
+      makeCompetition({ id: 'fine', fencer_count: 40 }),
+    ]
+    expect(busiestDayCompetitors(comps, config)).toBe(40)
+  })
+})
+
+describe('manualBaselineStrips', () => {
+  it('is the busiest day ÷ 14 rounded up, and does not scale when the organizer edits the hours', () => {
+    // 150 competitors on one day: 150 / 14 = 10.7, so 11.
+    const comps = [80, 70].map((n, i) => makeCompetition({ id: `m${i}`, fencer_count: n }))
+    const config = makeConfig({ days_available: 1 })
+    expect(manualBaselineStrips(comps, config)).toBe(11)
+
+    // A widened 8:00–21:00 day changes the capacity day and the window, never
+    // the divisor: 14 is competitors per strip per day, not a day length.
+    const widened: TournamentConfig = {
+      ...config,
+      DAY_LENGTH_MINS: 780,
+      dayConfigs: [{ day_start_time: 480, day_end_time: 1260, day_hard_end_time: 1320 }],
+    }
+    expect(manualBaselineStrips(comps, widened)).toBe(11)
+  })
 })
 
 describe('scanStripCounts', () => {
   it('minimality from both sides: the floor undershoots and the answer is tight in both directions', () => {
-    const { comps, config } = minBoard()
+    // B4, not B1: under group B's manual baseline B1's floor is its answer
+    // (see `minBoard` and `undershootBoard`).
+    const { comps, config } = undershootBoard()
     const range = stripSearchRange(comps, config)!
     const { candidates, result } = drain(scanStripCounts(comps, config, range))
 
@@ -262,14 +385,19 @@ describe('search and schedule threading pins (T033)', () => {
     const { comps, config } = minBoard()
 
     // [M] measured directly against this worktree, never predicted. The
-    // no-pins answer on this board is 45. These two events' natural placement
-    // there is D1-M-EPEE-IND day0@0 and D1-M-FOIL-IND day1@840, so neither is
+    // no-pins answer on this board is 53. These two events' natural placement
+    // there is D1-M-EPEE-IND day0@0 and D1-M-FOIL-IND day1@1440, so neither is
     // at day0@180 and pinning both there genuinely relocates both.
+    //
+    // 024 group B, 2026-10-06 – the no-pins answer 45 → 53, the manual
+    // baseline ceil(730 / 14) (see `minBoard`), and FOIL's natural start
+    // day1@840 → day1@1440 because the fallback day axis is now spaced 1440
+    // apart (D7). The pinned answer stays 83.
     //
     // Their pool asks are 45 and 38 strips — `strips_allocated` and `n_pools`
     // agree here, since the ledger factory sizes both from the fencer count
     // (310 and 260 fencers). Pinned to the same minute they want 45 + 38 = 83
-    // strips at once, well past the 45 the unpinned board needs, and [M] 83 is
+    // strips at once, well past the 53 the unpinned board needs, and [M] 83 is
     // exactly what the search returns: at 83 the pool cap is floor(0.8 × 83) =
     // 66, so neither ask is capped and the two fit the board exactly. At 82 the
     // board is one strip short and the later pin in (day, start, id) order —
@@ -298,7 +426,7 @@ describe('search and schedule threading pins (T033)', () => {
     expect(pins.map(p => p.strip_count)).toEqual([45, 38])
 
     const noPinsAnswer = searchStripCount(comps, config)
-    expect(noPinsAnswer).toBe(45)
+    expect(noPinsAnswer).toBe(53)
 
     const n = searchStripCount(comps, config, pins)
     expect(typeof n).toBe('number')

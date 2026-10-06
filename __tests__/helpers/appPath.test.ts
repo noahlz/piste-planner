@@ -65,6 +65,12 @@ describe('runAppPath', () => {
   // (pool of 7, DEs derived per round from bout time, team events single stage
   // without video) shorten most events, so more fit their days
   // (specs/024-ops-manual-conformance/plan.md §Group A).
+  //
+  // 024 group B, 2026-10-06 – B8's placed count moved 53 → 52, with the parity
+  // file's pins and the ledger's count in the same commit: the 9:00 start loses
+  // JR-W-EPEE-IND on both paths, because the day's hard window shrinks from 840
+  // to 780 minutes (Ops Manual 2026-27 p.17, METHODOLOGY.md §Inputs and
+  // §Same-Day Completion; specs/024-ops-manual-conformance/plan.md §Group B).
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
@@ -73,7 +79,7 @@ describe('runAppPath', () => {
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
     B6: { selected: 54, placed: 50 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
-    B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4
+    B8: { selected: 53, placed: 52 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4; 53 until 024 group B (JR-W-EPEE-IND lost to the 9:00 start)
   }
 
   // specs/006-day-axis-parity/baseline.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)
@@ -121,14 +127,21 @@ describe('runAppPath', () => {
     // minute each peak falls on. Planning measured the 210 independently
     // (specs/024-ops-manual-conformance/plan.md §Group A).
     //
+    // 024 group B, 2026-10-06 – every peak time moved 60 minutes later and
+    // every count held. The day now starts at 9:00 (540), not 8:00 (Ops Manual
+    // 2026-27 p.17, METHODOLOGY.md §Inputs), and B1 places the same 24 events
+    // on the same days, so each day's schedule shifts whole: days 0–2 peak at
+    // their day start, d × 1440 + 540 (540, 1980 → 2040, 3420), and day 3's
+    // peak 4860 → 4920.
+    //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.
     const result = runAppPath('B1')
     expect(result.refRequirementsByDay).toEqual([
-      { day: 0, peak_total_refs: 154, peak_saber_refs: 64, peak_time: 480 },
-      { day: 1, peak_total_refs: 210, peak_saber_refs: 64, peak_time: 1980 },
-      { day: 2, peak_total_refs: 160, peak_saber_refs: 50, peak_time: 3360 },
-      { day: 3, peak_total_refs: 202, peak_saber_refs: 76, peak_time: 4860 },
+      { day: 0, peak_total_refs: 154, peak_saber_refs: 64, peak_time: 540 },
+      { day: 1, peak_total_refs: 210, peak_saber_refs: 64, peak_time: 2040 },
+      { day: 2, peak_total_refs: 160, peak_saber_refs: 50, peak_time: 3420 },
+      { day: 3, peak_total_refs: 202, peak_saber_refs: 76, peak_time: 4920 },
     ])
   })
 
@@ -141,7 +154,7 @@ describe('runAppPath', () => {
   })
 
   it('does not let one scenario contaminate the next', () => {
-    // B8 (53 selected, 53 placed) run before B1 must not shift B1's own numbers.
+    // B8 (53 selected, 52 placed) run before B1 must not shift B1's own numbers.
     runAppPath('B8')
     const b1 = runAppPath('B1')
     expect(b1.selectedCount).toBe(BASELINE.B1.selected)

@@ -1012,6 +1012,11 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     // the 224 that 2 days × 8 strips × 14 hours hold, so the feasibility WARN –
     // this test's premise – stopped firing. 48 fencers demand 326, past the
     // 258 band. The dead `de_round_of_16_strips` override is dropped (024 D6).
+    // 024 group B, 2026-10-06 – the 10-hour planning day (2026-27 Ops Manual
+    // p.17, METHODOLOGY §Strip-Hour Capacity) holds 2d × 8s × 10h = 160, 184
+    // with the 15% slack, so 326 still trips it. The old 32-fencer board (208)
+    // would trip it again too, which is why planning saw this test pass again
+    // under group B.
     const combos: Array<[Category, Gender, Weapon]> = [
       [Category.DIV1, Gender.MEN, Weapon.FOIL],
       [Category.DIV1, Gender.WOMEN, Weapon.EPEE],
@@ -1055,7 +1060,11 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
     // 13-event board fits into 8 strips is packing detail this test has no
     // stake in, while zero is the outcome R5 exists to prevent. The drift
     // ledger pins exact counts; this pins the absence of a collapse. 024,
-    // 2026-10-06 – 6 of 13 on the rebuilt 48-fencer board.
+    // 2026-10-06 – 6 of 13 on the rebuilt 48-fencer board, and 5 since group B.
+    // Only the 9:00 start costs the sixth (METHODOLOGY §Inputs, Ops Manual
+    // p.17): the 9:00–22:00 hard window is 780 minutes, not 840. An 8:00 start
+    // alone places 6 again, while the 10-hour capacity or a 22:00 soft target
+    // alone leaves it at 5.
     expect(
       Object.keys(schedule).length,
       'a board whose only finding is a feasibility WARN must not come back empty (FR-003)',

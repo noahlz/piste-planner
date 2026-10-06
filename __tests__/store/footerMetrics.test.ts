@@ -8,6 +8,7 @@ import {
   type FooterMetric,
 } from '../../src/store/derived.ts'
 import { makePlacement } from '../helpers/factories.ts'
+import { DeMode } from '../../src/engine/types.ts'
 
 /**
  * T011b — `selectFooterMetrics` and `selectPlacementCounts` (research D7;
@@ -34,6 +35,14 @@ import { makePlacement } from '../helpers/factories.ts'
  * by hand from those sections and the scheduler's placements, then confirmed
  * against the engine. B5's placements (days, 08:00 starts, strip budgets) did
  * not move, only their durations.
+ *
+ * 024 group B, 2026-10-06 – the day moved to 9:00 with a 19:00 soft target
+ * and a 600-minute planning day (Ops Manual 2026-27 p.17, METHODOLOGY.md
+ * §Inputs and Appendix A §Timing Constants). B5's events start at 9:00, so
+ * every finish moves 60 minutes later while each block's length and strip
+ * count, and so the strip-minutes used, do not. Utilization's denominator
+ * moves from 840-minute days to 600-minute days. The hand-placed fixtures
+ * start at the new 9:00 day start (540), as they started at 8:00 before.
  */
 
 // ──────────────────────────────────────────────
@@ -73,8 +82,8 @@ function zeroStrips(): void {
     useStore.getState().updateCompetition(id, { fencer_count: 8 })
   }
   useStore.getState().setPlacementsFromAuto({
-    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 1 }),
-    'JR-W-EPEE-IND': makePlacement({ day: 1, start_time: 480, strip_count: 1 }),
+    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 1 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 1, start_time: 540, strip_count: 1 }),
   })
 }
 
@@ -99,8 +108,8 @@ function oneOverflowBlock(): void {
     useStore.getState().updateCompetition(id, { fencer_count: 8 })
   }
   useStore.getState().setPlacementsFromAuto({
-    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 2 }),
-    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 2 }),
+    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 2 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 2 }),
   })
 }
 
@@ -132,8 +141,8 @@ function twoSegmentOverflow(): void {
     s.updateCompetition(id, { fencer_count: 24 })
   }
   s.setPlacementsFromAuto({
-    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 2 }),
-    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 480, strip_count: 3 }),
+    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 2 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 3 }),
   })
 }
 
@@ -180,17 +189,17 @@ describe('selectFooterMetrics — the three rows', () => {
   })
 
   /**
-   * 850 is `ScheduleResult.de_total_end` for JR-M-EPEE-IND (872 before 024).
-   * 120 épée fencers make 12 pools of 7 and 6 of 6, averaging round(108.67) =
-   * 109 minutes in one wave on 18 strips: pools 480–589. The DE starts at the
-   * next slot after the 30-minute gap, 620, and a bracket of 128 with 120
-   * promoted runs R128 (56 bouts, 4 waves on 16 strips), R64 (2), then R32
-   * through the semis (1 each), 10 × 20 = 200 minutes to 820, plus the
-   * 30-minute tail.
+   * 910 is `ScheduleResult.de_total_end` for JR-M-EPEE-IND (872 before 024,
+   * 850 after group A's 8:00 start). 120 épée fencers make 12 pools of 7 and 6
+   * of 6, averaging round(108.67) = 109 minutes in one wave on 18 strips: pools
+   * 540–649 from the 9:00 start. The DE starts at the next slot after the
+   * 30-minute gap, 680, and a bracket of 128 with 120 promoted runs R128 (56
+   * bouts, 4 waves on 16 strips), R64 (2), then R32 through the semis (1
+   * each), 10 × 20 = 200 minutes to 880, plus the 30-minute tail.
    */
   it('finish:tournament is the latest de_total_end', () => {
     b5()
-    expect(metric('finish:tournament').value).toBe(850)
+    expect(metric('finish:tournament').value).toBe(910)
   })
 
   /** `selectDerivedRefRequirements` for B5 peaks at 116, on day 0. */
@@ -200,13 +209,52 @@ describe('selectFooterMetrics — the three rows', () => {
   })
 
   /**
-   * 43975 strip-minutes used against 151200 available (3 days x 60 strips x
-   * 840-minute window). 52348 before 024. The 43975 is the sum of each event's
-   * pool block (minutes × its strip budget) and DE block (minutes × 16).
+   * 43975 strip-minutes used against 108000 available (3 days x 60 strips x
+   * 600-minute day, 9:00–19:00; 151200 on 840-minute days before 024 group B).
+   * 52348 used before 024. The 43975 is the sum of each event's pool block
+   * (minutes × its strip budget) and DE block (minutes × 16).
    */
   it('strips:utilization is used strip-minutes over available, across all in-range blocks', () => {
     b5()
-    expect(metric('strips:utilization').value).toBeCloseTo(29.08399470899471, 10)
+    expect(metric('strips:utilization').value).toBeCloseTo((43975 / 108000) * 100, 10)
+  })
+})
+
+// ──────────────────────────────────────────────
+// A day that runs past its 19:00 target (024 D7)
+// ──────────────────────────────────────────────
+
+describe('selectFooterMetrics — a day that runs past the 19:00 target', () => {
+  /**
+   * The denominator stays the day window, 9:00 to the 19:00 soft target, even
+   * though work may run on to the 22:00 hard end (METHODOLOGY.md §Same-Day
+   * Completion). A day past 19:00 can then read above 100%, which is the honest
+   * signal (024 D7).
+   *
+   * One Junior épée event of 8 on 4 strips at the default 9:00–19:00 hours,
+   * placed at 17:10. Measured (throwaway probe, 2026-10-06): its pool of 8
+   * runs 1030–1190 on 1 strip (160 minutes), and after the 30-minute gap its
+   * single-stage DE runs R8 and the semis in one 20-minute wave each on 3
+   * strips (the 80% DE cap of 4), 1220–1260, the block ending at 21:00. Used:
+   * 160 × 1 + 40 × 3 = 280 strip-minutes. Available: 4 strips × 600 minutes
+   * = 2400, so 11.67% – not 280 / (4 × 780) = 8.97% against the hard window.
+   */
+  it('keeps strips × 600 minutes as the denominator for a block ending at 21:00', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    const s = useStore.getState()
+    s.setTournamentType('NAC')
+    s.setDays(1)
+    s.setStrips(4)
+    s.setVideoStrips(0)
+    s.selectCompetitions(['JR-M-EPEE-IND'])
+    s.updateCompetition('JR-M-EPEE-IND', { fencer_count: 8 })
+    s.setDeModeOverride(DeMode.SINGLE_STAGE)
+    s.setPlacementsFromAuto({
+      'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 1030, strip_count: 1 }),
+    })
+    expect(useStore.getState().dayConfigs).toEqual([{ day_start_time: 540, day_end_time: 1140 }])
+
+    expect(metric('strips:utilization').value).toBeCloseTo((280 / 2400) * 100, 10)
   })
 })
 
@@ -226,16 +274,17 @@ describe('selectFooterMetrics — null values', () => {
    * Zero strips: no strip-minutes available at all. The finish metric still
    * reads — only the denominator-dependent one goes null.
    *
-   * 780 (905 before 024): one épée pool of 8 is 28 bouts, round(120 × 28/21) =
-   * 160 minutes, 480–640. A NAC Junior event promotes 6 of 8 into a bracket of
-   * 8, below its round-of-16 video stage, so the whole DE is the video block.
-   * Its R8 (2 bouts) and semis (2) each take 2 waves on the one strip a grant
-   * of 0 counts as, 4 × 20 = 80 minutes from 670, plus the 30-minute tail.
+   * 840 (905 before 024, 780 from an 8:00 start after group A): one épée pool
+   * of 8 is 28 bouts, round(120 × 28/21) = 160 minutes, 540–700 from the 9:00
+   * start. A NAC Junior event promotes 6 of 8 into a bracket of 8, below its
+   * round-of-16 video stage, so the whole DE is the video block. Its R8 (2
+   * bouts) and semis (2) each take 2 waves on the one strip a grant of 0
+   * counts as, 4 × 20 = 80 minutes from 730 to 810, plus the 30-minute tail.
    */
   it('nulls strips:utilization when no strip-minutes are available, while finish still reads', () => {
     zeroStrips()
     expect(metric('strips:utilization').value).toBeNull()
-    expect(metric('finish:tournament').value).toBe(780)
+    expect(metric('finish:tournament').value).toBe(840)
   })
 })
 
@@ -245,39 +294,41 @@ describe('selectFooterMetrics — null values', () => {
 
 describe('selectFooterMetrics — a placement pushed out of range', () => {
   /**
-   * `strips:utilization` moves from 29.08399470899471 (B5 in full) to
-   * 26.808862433862434 once CDT-W-FOIL-IND's own 3440 strip-minutes (pools
-   * 120 × 10, DE 140 × 16) drop out of the sum: 40535 / 151200.
+   * `strips:utilization` moves from 43975 / 108000 (B5 in full) to
+   * 40535 / 108000 once CDT-W-FOIL-IND's own 3440 strip-minutes (pools
+   * 120 × 10, DE 140 × 16) drop out of the sum. 108000 is 3 days × 60 strips
+   * × the 600-minute day (024 group B).
    */
   it('drops strips:utilization\'s value once the event is out of range', () => {
     b5()
     const before = metric('strips:utilization').value
-    expect(before).toBeCloseTo(29.08399470899471, 10)
+    expect(before).toBeCloseTo((43975 / 108000) * 100, 10)
 
     useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 3 })
     const after = metric('strips:utilization').value
 
-    expect(after).toBeCloseTo(26.808862433862434, 10)
+    expect(after).toBeCloseTo((40535 / 108000) * 100, 10)
     expect(after).not.toBe(before)
   })
 
   /**
-   * B5's finish column ties three ways at 850 (JR-M-EPEE-IND, JR-M-FOIL-IND,
+   * B5's finish column ties three ways at 910 (JR-M-EPEE-IND, JR-M-FOIL-IND,
    * CDT-M-EPEE-IND, the three 120-fencer foil and épée events, whose pool and
    * DE times are equal since 024); moving any one of them out of range leaves
-   * `finish:tournament` at 850. All three have to move to see it drop, to 800 —
+   * `finish:tournament` at 910. All three have to move to see it drop, to 860 —
    * the next-highest in-range finish, JR-W-FOIL-IND's and CDT-W-FOIL-IND's
-   * (10 pools of 7 to 600, then 7 DE waves to 770, plus the tail).
+   * (10 pools of 7 from 540 to 660, the DE from 690, 7 waves to 830, plus the
+   * tail).
    */
   it('drops finish:tournament to the next in-range finish once every event tied at the top has moved', () => {
     b5()
-    expect(metric('finish:tournament').value).toBe(850)
+    expect(metric('finish:tournament').value).toBe(910)
 
     for (const id of ['JR-M-EPEE-IND', 'JR-M-FOIL-IND', 'CDT-M-EPEE-IND']) {
       useStore.getState().updatePlacement(id, { day: 3 })
     }
 
-    expect(metric('finish:tournament').value).toBe(800)
+    expect(metric('finish:tournament').value).toBe(860)
   })
 })
 
@@ -309,9 +360,10 @@ describe('selectFooterMetrics — pure function of store inputs', () => {
     const second = selectFooterMetrics(useStore.getState())
 
     expect(second).not.toBe(first)
-    // Halving the strips halves the denominator: 43975 / 75600 = 58.1679…
+    // Halving the strips halves the denominator: 43975 / (3 × 30 × 600) =
+    // 43975 / 54000 = 81.435…
     expect(second.find((m) => m.id === 'strips:utilization')?.value)
-      .toBeCloseTo(58.16798941798942, 10)
+      .toBeCloseTo((43975 / 54000) * 100, 10)
   })
 
   it('writes nothing back to the store', () => {

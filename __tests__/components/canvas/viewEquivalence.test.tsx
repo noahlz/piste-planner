@@ -5,7 +5,7 @@ import { ScheduleOutput } from '../../../src/components/sections/ScheduleOutput.
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { deriveEventSchedule } from '../../../src/engine/derive.ts'
 import type { DerivedEventSchedule } from '../../../src/engine/derive.ts'
-import type { Competition, DayConfig, Placement, TournamentConfig } from '../../../src/engine/types.ts'
+import type { Competition, DayWindow, Placement, TournamentConfig } from '../../../src/engine/types.ts'
 import { Category, DeMode, Gender, Weapon } from '../../../src/engine/types.ts'
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
 import { useStore } from '../../../src/store/store.ts'
@@ -100,11 +100,13 @@ function seedViewState(overrides: Partial<ViewState>): void {
 
 // Covers every block below: the latest, `staged`'s DE_ROUND_OF_16, ends at
 // 1030 and every day shares one axis span (research.md D3), so one wide
-// clock-time window for all three days is enough.
-const CANVAS_DAY_CONFIGS: DayConfig[] = [
-  { day_start_time: 480, day_end_time: 1320 },
-  { day_start_time: 480, day_end_time: 1320 },
-  { day_start_time: 480, day_end_time: 1320 },
+// clock-time window for all three days is enough. Since 024 group B the engine
+// takes a DayWindow, whose day_hard_end_time is the 22:00 hard end (1320, Ops
+// Manual p.17, METHODOLOGY §Inputs) that the axis reaches.
+const CANVAS_DAY_CONFIGS: DayWindow[] = [
+  { day_start_time: 480, day_end_time: 1320, day_hard_end_time: 1320 },
+  { day_start_time: 480, day_end_time: 1320, day_hard_end_time: 1320 },
+  { day_start_time: 480, day_end_time: 1320, day_hard_end_time: 1320 },
 ]
 const CANVAS_ZOOM = { zoomStep: 2, fitting: false }
 const EMPTY_FINDINGS: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }

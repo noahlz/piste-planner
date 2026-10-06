@@ -389,10 +389,11 @@ describe('findAvailableStripsInWindow', () => {
   })
 
   it('reason=TIME when earliest_next_start + duration would push past the day-end', () => {
-    // Use a config where DAY_LENGTH_MINS=120 so dayHardEnd(0) = 120.
+    // A hard end 120 minutes after the day start, so on the fallback axis
+    // dayHardEnd(0) = 120 (024 D7 – the hard end, not the day length, clamps).
     const config = makeConfig({
       strips: makeStrips(2, 0),
-      DAY_LENGTH_MINS: 120,
+      DAY_HARD_END_MINS: 540 + 120,
     })
     const state = createGlobalState(config)
     // Both strips busy until t=200 (past day 0 end of 120).
@@ -406,37 +407,53 @@ describe('findAvailableStripsInWindow', () => {
     }
   })
 
-  it('explicit day parameter honors non-uniform dayConfigs day_end_time', () => {
-    // dayConfigs override: day 0 ends early (at t=300) while DAY_LENGTH_MINS=840.
-    // Without `day` the helper would infer day 0 and clamp at 0+840=840 — wrong.
-    // With `day=0` explicitly supplied, the helper uses dayEnd(0)=300 instead.
-    const config = makeConfig({
-      strips: makeStrips(2, 0),
-      DAY_LENGTH_MINS: 840,
-      dayConfigs: [
-        { day_start_time: 0, day_end_time: 300 },
-        { day_start_time: 840, day_end_time: 1680 },
-      ],
-    })
-    const state = createGlobalState(config)
-    // Both strips busy until t=400 — past day 0's overridden end of 300.
-    allocateInterval(state, 'evt-prior', Phase.POOLS, [0], 0, 400)
-    allocateInterval(state, 'evt-prior', Phase.POOLS, [1], 0, 400)
-    const result = findAvailableStripsInWindow(state, config, 2, 50, 60, false, 0)
-    expect(result.fit).toBe('none')
-    if (result.fit === 'none') {
-      expect(result.reason).toBe('TIME')
-      expect(result.earliest_next_start).toBe(400)
+  // An explicit `day` clamps at that day's configured hard end, not its soft
+  // target: work may run past the target (METHODOLOGY.md §Same-Day Completion).
+  // Day 0's window is short and non-uniform – target 300, hard end 480 – so
+  // neither the target nor the fallback axis's hard end (780) gives the answer.
+  describe('explicit day parameter clamps at the dayConfigs hard end', () => {
+    function missOnDay0(duration: number) {
+      const config = makeConfig({
+        strips: makeStrips(2, 0),
+        dayConfigs: [
+          { day_start_time: 0, day_end_time: 300, day_hard_end_time: 480 },
+          { day_start_time: 1440, day_end_time: 2040, day_hard_end_time: 2220 },
+        ],
+      })
+      const state = createGlobalState(config)
+      // Both strips busy until t=400 – past day 0's target, before its hard end.
+      allocateInterval(state, 'evt-prior', Phase.POOLS, [0], 0, 400)
+      allocateInterval(state, 'evt-prior', Phase.POOLS, [1], 0, 400)
+      return findAvailableStripsInWindow(state, config, 2, 50, duration, false, 0)
     }
+
+    it('a next window ending past the target but by the hard end is a STRIPS miss', () => {
+      const result = missOnDay0(60) // next window [400, 460]
+      expect(result.fit).toBe('none')
+      if (result.fit === 'none') {
+        expect(result.reason).toBe('STRIPS')
+        expect(result.earliest_next_start).toBe(400)
+      }
+    })
+
+    // guard: past the hard end is TIME today as well.
+    it('a next window ending past the hard end is a TIME miss', () => {
+      const result = missOnDay0(100) // next window [400, 500]
+      expect(result.fit).toBe('none')
+      if (result.fit === 'none') {
+        expect(result.reason).toBe('TIME')
+        expect(result.earliest_next_start).toBe(400)
+      }
+    })
   })
 })
 
 // ──────────────────────────────────────────────
 // findAvailableStripsInWindow — day-inference precondition (T015)
 //
-// The day-end clamp's inference fallback (`floor(startTime / DAY_LENGTH_MINS)`,
-// used only when `day` is omitted) assumes a compacted axis and is wrong under
-// the store's 1440-spaced axis (research.md D3). Both call sites in
+// The day-end clamp's inference fallback (`floor(startTime / 1440)`, used only
+// when `day` is omitted) infers a day from the time alone and ignores per-day
+// windows, so the scheduler must never rely on it. Both call sites in
 // concurrentScheduler.ts's `tryAllocate` always pass `day` explicitly, so the
 // fallback is unreachable from a real scheduling run.
 //

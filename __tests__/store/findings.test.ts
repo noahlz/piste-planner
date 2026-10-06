@@ -495,6 +495,82 @@ describe('selectFindings — late finish overrun via a hand move, Blocking count
   })
 })
 
+/**
+ * Two Junior épée events of 8 on the one day at the store's default hours,
+ * 9:00 to the 19:00 target, each placed so its last block ends at the minute
+ * given. Measured (throwaway probe, 2026-10-06): each runs 230 minutes from
+ * its start to its last block end – a pool of 8 takes 160 minutes (§Pool
+ * Duration Estimation), the 30-minute admin gap, then R8 and the semis in one
+ * 20-minute wave each on 4 of the 8 strips, so neither overflows.
+ */
+const EPEE_OF_8_SPAN_MINS = 230
+
+function twoEpeeEventsFinishingAt(mFinish: number, wFinish: number): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(1)
+  s.setStrips(8)
+  s.setVideoStrips(0)
+  s.selectCompetitions(['JR-M-EPEE-IND', 'JR-W-EPEE-IND'])
+  for (const id of ['JR-M-EPEE-IND', 'JR-W-EPEE-IND']) {
+    s.updateCompetition(id, { fencer_count: 8 })
+  }
+  s.setDeModeOverride(DeMode.SINGLE_STAGE)
+  s.setPlacementsFromAuto({
+    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: mFinish - EPEE_OF_8_SPAN_MINS, strip_count: 1 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: wFinish - EPEE_OF_8_SPAN_MINS, strip_count: 1 }),
+  })
+
+  // Premise: the default day ends at its 19:00 target, and the day's last
+  // block ends where the fixture put it.
+  const state = useStore.getState()
+  expect(state.dayConfigs[0].day_end_time).toBe(1140)
+  const blocks = assignStripLanes(selectDerivedSchedule(state).events, state.strips_total)
+  expect(blocks.some((b) => b.overflow)).toBe(false)
+  expect(Math.max(...blocks.map((b) => b.endMinutes))).toBe(Math.max(mFinish, wFinish))
+}
+
+/**
+ * 024 D7, the app's late-day row: the store's late-finish row keeps comparing
+ * the day's last block end against `day_end_time`, which is now the 19:00 soft
+ * target, not the 22:00 hard end (METHODOLOGY.md §Same-Day Completion). It
+ * keeps the 45-minute lead, so it warns of no slack from 18:15 and of a late
+ * finish after 19:00, one row per late day, and it calls 19:00 the day's
+ * target rather than its close, since work may run on to 22:00.
+ */
+describe('selectFindings — late finish against the 19:00 target (024 D7)', () => {
+  function lateFinishRows(): Finding[] {
+    return selectFindings(useStore.getState()).filter((r) => r.id.startsWith('late-finish:'))
+  }
+
+  it('raises one row for a day ending at 20:00, 60 minutes past the 19:00 target', () => {
+    twoEpeeEventsFinishingAt(1200, 1170)
+
+    const rows = lateFinishRows()
+    expect(rows.map((r) => r.id)).toEqual(['late-finish:day:0'])
+    expect(rows[0].target).toBe('JR-M-EPEE-IND')
+    expect(rows[0].message).toContain(`finishes at ${formatClock(1200)}, 60 minutes past the day's target of ${formatClock(1140)}.`)
+  })
+
+  it('raises the no-slack row for a day ending at 18:30, inside the 45-minute lead', () => {
+    twoEpeeEventsFinishingAt(1110, 1080)
+
+    const rows = lateFinishRows()
+    expect(rows.map((r) => r.id)).toEqual(['late-finish:day:0'])
+    expect(rows[0].message).toContain(
+      `finishes at ${formatClock(1110)}, 30 minutes before the day's target of ${formatClock(1140)}. No slack for a delayed round.`,
+    )
+  })
+
+  // guard: 18:00 is 60 minutes before the target, outside the lead – no row today either.
+  it('raises no row for a day ending at 18:00', () => {
+    twoEpeeEventsFinishingAt(1080, 1050)
+
+    expect(lateFinishRows()).toEqual([])
+  })
+})
+
 describe('selectFindings — no referee comparison (FR-026)', () => {
   it('never mentions referees, on B1 after a full schedule run', () => {
     applyPreset('B1')

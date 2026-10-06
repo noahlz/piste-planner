@@ -7,6 +7,7 @@ import {
   BottleneckSeverity, RuleKind, ValidationMode,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
+import { deBlocksFor } from '../../src/engine/de.ts'
 
 /**
  * `findingIdentity` — the identity helper T021 adds to validation.ts
@@ -722,10 +723,11 @@ describe('validateConfig — feasibility demotes to notice in every mode (011 FR
     // 29) = 116 min, so 29 × 116 / 60 = 56.07 pool strip-hours. Its single
     // stage DE: 200 promoted, bracket 256, 72 + 64 + 32 + 16 + 8 + 4 + 2 = 198
     // bouts × 20 min / 60 = 66 (§DE Capacity Estimation). 20 × 122.07 = 2441,
-    // against 2 × 2 × 14 = 56: shortfall 2385 (4259.5% → 4260), and
-    // ceil(2385.3 / 28) = 86 more days or strips.
+    // against 2 days × 2 strips × the 10-hour planning day (§Strip-Hour
+    // Capacity, Ops Manual p.17) = 40: shortfall 2401 (6003.3% → 6003), and
+    // ceil(2401.3 / 20) = 121 more days or strips.
     expect(b.message).toBe(
-      'RESOURCE_INSUFFICIENT: 2441 general strip-hours needed over 20 events; 56 available (2d × 2s × 14h). Shortfall 2385 (~4260%). Add 86 more day(s) OR 86 more strip(s).',
+      'RESOURCE_INSUFFICIENT: 2441 general strip-hours needed over 20 events; 40 available (2d × 2s × 10h). Shortfall 2401 (~6003%). Add 121 more day(s) OR 121 more strip(s).',
     )
   })
 })
@@ -754,10 +756,11 @@ describe('validateConfig — feasibility_video demotes to notice in every mode (
     // → Individual Events: a staged Div 1 event's video stage starts at the
     // round of 16 (Ops Manual 2026-27 p.19), so only R16 + QF + SF = 8 + 4 + 2
     // = 14 bouts bill video, × 20 min / 60 = 4.67 h. 40 × 4.67 = 187 against
-    // 4 × 1 × 14 = 56: shortfall 131, ceil(130.7 / 14) = 10 more days,
-    // ceil(130.7 / 56) = 3 more video strips.
+    // 4 × 1 × 10 = 40 (the 10-hour planning day, §Strip-Hour Capacity):
+    // shortfall 147, ceil(146.7 / 10) = 15 more days, ceil(146.7 / 40) = 4
+    // more video strips.
     expect(b.message).toBe(
-      'RESOURCE_INSUFFICIENT (video): 187 video strip-hours needed; 56 available (4d × 1vs × 14h). Shortfall 131. 10 more day(s) OR 3 more video strip(s).',
+      'RESOURCE_INSUFFICIENT (video): 187 video strip-hours needed; 40 available (4d × 1vs × 10h). Shortfall 147. 15 more day(s) OR 4 more video strip(s).',
     )
   })
 })
@@ -942,27 +945,67 @@ describe('finding identity — rule and subjects per kind (US3, data-model.md §
 
 // ──────────────────────────────────────────────
 // validateSameDayCompletion — exported but not wired into validateConfig's
-// pipeline (no callers in src/); out of scope for the kind/mode split.
-// Signature and behavior unchanged by this feature.
+// pipeline (no callers in src/, 024 D14); out of scope for the kind/mode split.
+//
+// 024 D7: Single-Day Fit measures the worst case (pool round + admin gap + full
+// DE) against the day's hard window, start to hard end – 9:00 to 22:00, 780
+// minutes, at default hours – or the widest day's when the organizer edits
+// hours. Running past the 19:00 soft target is a warning elsewhere, not a
+// Single-Day Fit failure (METHODOLOGY.md §Single-Day Fit, §Same-Day Completion).
 // ──────────────────────────────────────────────
 
-describe('validateSameDayCompletion', () => {
-  it('returns null when competition fits comfortably within DAY_LENGTH_MINS', () => {
-    const comp = makeCompetition({ fencer_count: 24, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED })
-    const result = validateSameDayCompletion(comp, makeConfig())
-    expect(result).toBeNull()
+describe('validateSameDayCompletion — the hard window (024 D7)', () => {
+  const ID = 'X-M-FOIL-IND'
+
+  /**
+   * A competition whose worst case is exactly `total` minutes. Seven fencers
+   * make one pool of 7, which takes the table's own entry (§Pool Duration
+   * Estimation), so the foil entry is set to `total` less the admin gap and
+   * the DE's full-ask minutes.
+   */
+  function worstCaseOf(total: number, overrides: Partial<TournamentConfig> = {}) {
+    const base = makeConfig(overrides)
+    const competition = makeCompetition({
+      id: ID, fencer_count: 7, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED, de_mode: DeMode.SINGLE_STAGE,
+    })
+    const de = deBlocksFor(competition, base).baselineMinutes
+    const config: TournamentConfig = {
+      ...base,
+      pool_round_duration_table: { ...base.pool_round_duration_table, [Weapon.FOIL]: total - base.ADMIN_GAP_MINS - de },
+    }
+    return validateSameDayCompletion(competition, config)
+  }
+
+  // Day 2 opens at 9:00 and ends at 23:00, which is also its hard end:
+  // an 840-minute window, the widest of the two.
+  const WIDENED = {
+    days_available: 2,
+    dayConfigs: [
+      { day_start_time: 540, day_end_time: 1140, day_hard_end_time: 1320 },
+      { day_start_time: 1980, day_end_time: 2820, day_hard_end_time: 2820 },
+    ],
+  }
+
+  it('passes a 700-minute worst case at default hours, past the 600-minute target day', () => {
+    expect(worstCaseOf(700)).toBeNull()
   })
 
-  it('returns error when pool + admin + DE exceeds DAY_LENGTH_MINS', () => {
-    // Craft a config with a very short day but normal competition size
-    const config = makeConfig({ DAY_LENGTH_MINS: 10 })
-    const comp = makeCompetition({ id: 'X-M-EPEE-IND', fencer_count: 64, weapon: Weapon.EPEE, cut_mode: CutMode.DISABLED })
-    const result = validateSameDayCompletion(comp, config)
+  it('fails a 790-minute worst case at default hours, naming the 780-minute hard window', () => {
+    const result = worstCaseOf(790)
     expect(result).not.toBeNull()
     expect(result?.severity).toBe(BottleneckSeverity.ERROR)
     expect(result?.field).toBe('same_day_completion')
     expect(result?.rule).toBe('same-day-completion')
-    expect(result?.subjects).toEqual(['X-M-EPEE-IND'])
+    expect(result?.subjects).toEqual([ID])
+    expect(result?.message).toMatch(/\b790 min\b.*\b780 min\b/)
+  })
+
+  it('allows more when the organizer widens a day: 830 minutes fit the widest day\'s 840', () => {
+    expect(worstCaseOf(830, WIDENED)).toBeNull()
+  })
+
+  it('still fails past the widest day\'s hard window', () => {
+    expect(worstCaseOf(850, WIDENED)?.message).toMatch(/\b850 min\b.*\b840 min\b/)
   })
 })
 

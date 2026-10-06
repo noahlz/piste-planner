@@ -445,7 +445,9 @@ describe('dayRemainingCapacity', () => {
     expect(result.video_strip_hours_remaining).toBeCloseTo(expectedVideo, 5)
   })
 
-  it('80 strips × 14 hours = 1120 strip-hours total capacity on empty day', () => {
+  // METHODOLOGY.md §Strip-Hour Capacity: the 10-hour planning day, 9:00 to the
+  // 7:00 PM target (Ops Manual 2026-27 p.17), not the 22:00 hard window.
+  it('80 strips × 10 hours = 800 strip-hours total capacity on empty day', () => {
     const config = makeConfig({
       strips: Array.from({ length: 80 }, (_, i) => ({ id: `strip-${i+1}`, video_capable: i < 4 })),
     })
@@ -453,8 +455,8 @@ describe('dayRemainingCapacity', () => {
 
     const result = dayRemainingCapacity(0, state, [], config)
 
-    // 80 strips × 840 mins / 60 = 80 × 14 = 1120 strip-hours
-    expect(result.strip_hours_remaining).toBeCloseTo(1120, 5)
+    // 80 strips × 600 mins / 60 = 80 × 10 = 800 strip-hours
+    expect(result.strip_hours_remaining).toBeCloseTo(800, 5)
   })
 
   it('remaining capacity decreases after scheduling competitions', () => {

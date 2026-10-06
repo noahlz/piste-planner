@@ -674,6 +674,8 @@ export function assignDaysByColoring(
     totalStripHours += weighted
   }
 
+  // The 10-hour planning day, not the hard window (METHODOLOGY.md §Strip-Hour
+  // Capacity, Ops Manual 2026-27 p.17).
   const dayCapacity = config.strips_total * (config.DAY_LENGTH_MINS / 60)
 
   // The pins, as a colouring both passes start from. Empty when there are no

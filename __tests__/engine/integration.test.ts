@@ -379,12 +379,18 @@ describe('Realistic tournament integration', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 4)
       assertIndTeamSeparation(schedule, competitions)
-      // B8: all 53 events placed, with every NAC event on the per-type DE mode the
-      // app builds (staged DEs).
+      // B8: 52 of 53 events placed, with every NAC event on the per-type DE mode
+      // the app builds (staged DEs).
       // T024 re-baseline 2026-08-29 — floor raised from 35 to the then-measured 52 (research.md D7).
       // 015, 2026-10-05 – floor raised 52 → 53: the converged factory stages every
       // NAC event's DE, and JR-W-EPEE-IND, unplaced before, is now placed.
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(53)
+      // 024 group B, 2026-10-06 – floor lowered 53 → 52 under the policy-amendment
+      // rule in driftLedger.test.ts's SCHEDULED_FLOORS docblock: METHODOLOGY
+      // §Inputs' 9:00 day start (2026-27 Ops Manual p.17, owner-approved commit
+      // 6a4107b710) shrinks the hard window from 840 to 780 minutes and
+      // JR-W-EPEE-IND is unplaced again. Group B with an 8:00 start places 53
+      // (plan §Group B's control).
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(52)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()

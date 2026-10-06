@@ -42,12 +42,23 @@ export const CATEGORY_START_PREFERENCE = {
 // Scheduling time constants (all values in minutes from midnight)
 // ──────────────────────────────────────────────
 
-export const DAY_START_MINS = 480 // 8:00 AM
-export const DAY_END_MINS = 1320 // 10:00 PM
-export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start after this
-export const LATEST_START_OFFSET = 480 // offset from DAY_START to LATEST_START
+// The day of Ops Manual 2026-27 p.17 (METHODOLOGY.md Appendix A §Timing
+// Constants): start at 9:00 and aim to finish by 7:00 PM. 7:00 PM is a soft
+// target – work may run to the 10:00 PM hard end, which is unsourced and gives
+// way to an organizer day end set later (§Same-Day Completion).
+export const DAY_START_MINS = 540 // 9:00 AM
+export const DAY_END_MINS = 1140 // 7:00 PM — soft target
+export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase may end past it
+export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start after this (unsourced)
+export const LATEST_START_OFFSET = 420 // offset from DAY_START to LATEST_START
 export const SLOT_MINS = 5
-export const DAY_LENGTH_MINS = 840 // DAY_END_MINS - DAY_START_MINS
+// The 10-hour planning day, DAY_START_MINS to DAY_END_MINS, that strip-hour
+// capacity counts (METHODOLOGY.md §Strip-Hour Capacity). Not the hard window.
+export const DAY_LENGTH_MINS = 600
+// Divisor of the Strip Count Suggestion's manual baseline: competitors per
+// strip per day, not a day length, and fixed whatever hours the organizer sets
+// (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip Count Suggestion).
+export const COMPETITORS_PER_STRIP_PER_DAY = 14
 export const ADMIN_GAP_MINS = 30
 export const FLIGHT_BUFFER_MINS = 15
 export const THRESHOLD_MINS = 10
