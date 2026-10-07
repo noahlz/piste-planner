@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { DAY_HARD_END_MINS, DAY_START_MINS, clockHardEnd } from '../../engine/constants.ts'
-import type { Competition, DayConfig, Phase } from '../../engine/types.ts'
+import type { Bottleneck, Competition, DayConfig, Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
 import { assignStripLanes, type BlockPlacement } from '../../layout/lanes.ts'
 import { useStore } from '../../store/store.ts'
@@ -160,8 +160,15 @@ function findingsForBlock(
     if (error.subjects.includes(competitionId)) messages.push(error.message)
   }
 
+  // A finding naming two or more events marks every block of each of them, in
+  // every phase (016 spec §4, R3): the rule is about the pair, not one phase.
+  const isPair = (warning: Bottleneck): boolean => warning.subjects.length >= 2
+  for (const warning of findings.analysis.warnings) {
+    if (isPair(warning) && warning.subjects.includes(competitionId)) messages.push(warning.message)
+  }
+
   const forEvent = findings.analysis.warnings.filter(
-    (warning) => warning.competition_id === competitionId,
+    (warning) => warning.competition_id === competitionId && !(isPair(warning) && warning.subjects.includes(competitionId)),
   )
   const forPhase = forEvent.filter((warning) => warning.phase === phase)
   for (const warning of forPhase.length > 0 ? forPhase : forEvent) {
@@ -182,6 +189,7 @@ function flaggedTargets(findingRows: Finding[]): Set<string> {
   const flagged = new Set<string>()
   for (const row of findingRows) {
     if (row.target !== null) flagged.add(row.target)
+    for (const id of row.subjects) flagged.add(id)
   }
   return flagged
 }

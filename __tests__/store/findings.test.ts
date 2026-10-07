@@ -52,6 +52,8 @@ interface Finding {
   target: string | null
   /** 016 Task C: false for Blocking, Note and `hard-separation-violated` rows. */
   dismissable: boolean
+  /** 016 Task D: every on-board competition the row names, sorted and unique. */
+  subjects: string[]
 }
 
 function selectFindings(state: StoreState): Finding[] {
@@ -1058,5 +1060,35 @@ describe('selectFindings — the engine late-day finding stays out (016 R2)', ()
     expect(late[0].message).toBe(
       `DE finishes at ${formatClock(1200)}, 60 minutes past the day's target of ${formatClock(1140)}.`,
     )
+  })
+})
+
+describe('selectFindings — a row carries every event it names (016 spec §4, Task D)', () => {
+  it('lists both events of a hand-made hard pair, sorted', () => {
+    juniorAndCadetFoil('NAC', { day: 1, start: 540 }, { day: 1, start: 540 })
+
+    const [row] = analysisRows(HARD_PREFIX)
+    expect(row.subjects).toEqual([CDT_FOIL, JR_FOIL])
+  })
+
+  it('lists just the target for a single-event row', () => {
+    threeEventsOverlappingOnDayZero()
+    useStore.getState().updatePlacement('JR-W-EPEE-IND', { day: 5 })
+
+    const row = selectFindings(useStore.getState()).find((r) => r.id === 'unplaced:JR-W-EPEE-IND:day')
+    expect(row?.subjects).toEqual(['JR-W-EPEE-IND'])
+  })
+
+  it('lists no event for a global validation row', () => {
+    setupB5()
+    useStore.getState().setStrips(0)
+    const state = useStore.getState()
+    const stripsError = selectDerivedFindings(state).validationErrors.find(
+      (e) => e.rule === 'strips-total-positive',
+    )
+    expect(stripsError, 'expected the strips-total-positive structural error').toBeDefined()
+
+    const row = selectFindings(state).find((r) => r.id === findingIdentity(stripsError!))
+    expect(row?.subjects).toEqual([])
   })
 })

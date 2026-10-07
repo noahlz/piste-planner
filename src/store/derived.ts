@@ -476,6 +476,12 @@ export interface Finding {
   /** Competition id when the row names one, for the canvas jump and the gutter flag. */
   target: string | null
   /**
+   * Every competition on the board the row names, sorted and unique, so the
+   * gutter flag and the findings edge mark both events of a two-event finding.
+   * `target` stays the single event the jump goes to.
+   */
+  subjects: string[]
+  /**
    * Whether the organizer may wave the row off: Warning and Unplaced rows, except
    * a `hard-separation-violated` Warning (016 R1). Blocking and Note rows never.
    * `dismissFinding` and the panel's dismiss control both read this.
@@ -555,6 +561,11 @@ function computeAllFindings(state: StoreState): Finding[] {
     return `Day ${day + 1} · ${labelOf(target)}`
   }
 
+  /** The on-board competitions among `ids`, sorted and unique. */
+  function subjectsOf(ids: string[]): string[] {
+    return [...new Set(ids.filter((id) => competitionsById.has(id)))].sort()
+  }
+
   const rows: Finding[] = []
 
   // ── §1.1 validation errors ──
@@ -568,6 +579,7 @@ function computeAllFindings(state: StoreState): Finding[] {
       day,
       message: error.message,
       target,
+      subjects: subjectsOf(error.subjects),
       dismissable: dismissableOf(severityOf(error.severity)),
     })
   }
@@ -604,6 +616,7 @@ function computeAllFindings(state: StoreState): Finding[] {
       day,
       message: warning.message,
       target,
+      subjects: subjectsOf([warning.competition_id, ...warning.subjects]),
       dismissable: dismissableOf(severity, warning.rule),
     })
   }
@@ -627,6 +640,7 @@ function computeAllFindings(state: StoreState): Finding[] {
         `and none are free for ${formatClock(block.startMinutes)}–${formatClock(block.endMinutes)}. ` +
         'It is drawn at strip 1, over the events that hold those strips.',
       target: block.competitionId,
+      subjects: [block.competitionId],
       dismissable: true,
     })
   }
@@ -648,6 +662,7 @@ function computeAllFindings(state: StoreState): Finding[] {
         `${labelOf(id)} is placed on Day ${assignedDay + 1}, which the tournament no longer has. ` +
         'The next Auto-assign places it afresh.',
       target: id,
+      subjects: subjectsOf([id]),
       dismissable: true,
     })
   }
@@ -702,6 +717,7 @@ function computeAllFindings(state: StoreState): Finding[] {
       day,
       message,
       target: culprit.competitionId,
+      subjects: [culprit.competitionId],
       dismissable: true,
     })
   }

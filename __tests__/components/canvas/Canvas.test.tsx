@@ -9,6 +9,7 @@ import { selectDerivedSchedule, selectDerivedFindings, selectFindings, FindingSe
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
 import { assignStripLanes } from '../../../src/layout/lanes.ts'
 import type { DayConfig } from '../../../src/engine/types.ts'
+import { BottleneckRule, Phase } from '../../../src/engine/types.ts'
 import { makeBottleneck, makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 import { installStubResizeObserver, NeverFiringResizeObserver } from '../../helpers/resizeObserver.ts'
 import { NO_PINS } from '../../helpers/canvasQueries.ts'
@@ -335,6 +336,8 @@ interface Finding {
   message: string
   target: string | null
   dismissable: boolean
+  /** 016 Task D: every on-board competition the row names. */
+  subjects: string[]
 }
 
 describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
@@ -375,6 +378,7 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
     message: 'flagged waited for strips',
     target: 'flagged',
     dismissable: true,
+    subjects: ['flagged'],
   }
 
   it('flags the strip row a findingRows entry targets, and leaves an uninvolved row alone', () => {
@@ -543,6 +547,7 @@ describe('Canvas findings edge (FR-042, 013 T048)', () => {
       message: `${severity} for ${target}`,
       target,
       dismissable: severity === 'Warning' || severity === 'Unplaced',
+      subjects: [target],
     }
   }
 
@@ -666,5 +671,154 @@ describe('Canvas pin badge (FR-042, 013 T046)', () => {
     expect(otherBlocks.length).toBeGreaterThan(0)
     expect(pinnedBlocks.every((b) => b.dataset.pinned === 'true')).toBe(true)
     expect(otherBlocks.every((b) => b.dataset.pinned === 'false')).toBe(true)
+  })
+})
+
+describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
+  const OWNER = 'owner'
+  const PARTNER = 'partner'
+  const BYSTANDER = 'bystander'
+  const PAIR_MESSAGE = 'owner and partner may never share a day'
+
+  /** Three events with a pool and a DE block each, on separate strips of one day. */
+  function pairBoard(bottlenecks: ReturnType<typeof makeBottleneck>[]): {
+    schedule: DerivedSchedule
+    findings: DerivedFindings
+    dayConfigs: DayConfig[]
+  } {
+    const config = makeConfig({ days_available: 1, strips: makeStrips(12, 0) })
+    const events: DerivedSchedule['events'] = {}
+    const ids = [OWNER, PARTNER, BYSTANDER]
+    ids.forEach((id, i) => {
+      events[id] = {
+        result: {
+          ...makeScheduleResult(id, 0),
+          pool_start: 480 + i * 10,
+          pool_end: 600 + i * 10,
+          pool_strip_count: 2,
+          de_start: 660 + i * 10,
+          de_end: 780 + i * 10,
+          de_strip_count: 2,
+        },
+        day_out_of_range: false,
+      }
+    })
+    return {
+      schedule: { config, competitions: ids.map((id) => makeCompetition({ id })), events },
+      findings: { validationErrors: [], analysis: { warnings: bottlenecks, suggestions: [] } },
+      dayConfigs: [{ day_start_time: 480, day_end_time: 1320 }],
+    }
+  }
+
+  function pairBottleneck(rule: string, message: string): ReturnType<typeof makeBottleneck> {
+    return makeBottleneck({
+      competition_id: OWNER,
+      subjects: [OWNER, PARTNER],
+      phase: Phase.POOLS,
+      rule,
+      message,
+    })
+  }
+
+  function pairRow(rule: string, message: string): Finding {
+    return {
+      id: `analysis:${rule}:${OWNER}:${OWNER}+${PARTNER}:0`,
+      severity: 'Warning',
+      where: `Day 1 · ${OWNER}`,
+      day: 0,
+      message,
+      target: OWNER,
+      dismissable: false,
+      subjects: [OWNER, PARTNER],
+    }
+  }
+
+  function blocksOf(id: string): HTMLElement[] {
+    return eventBlocks().filter((b) => b.dataset.eventId === id)
+  }
+
+  /** Opens the tooltip on one block and returns the text of its findings field. */
+  function findingsText(block: HTMLElement): string {
+    fireEvent.pointerEnter(block)
+    const el = document.querySelector('[data-tooltip-field="findings"]')
+    if (!el) throw new Error('no findings field rendered')
+    const text = el.textContent ?? ''
+    fireEvent.pointerLeave(block)
+    return text
+  }
+
+  function occurrences(text: string, needle: string): number {
+    return text.split(needle).length - 1
+  }
+
+  it.each([
+    BottleneckRule.HARD_SEPARATION_VIOLATED,
+    BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO,
+  ])('shows a %s finding on every block of both events, in every phase', (rule) => {
+    const { schedule, findings, dayConfigs } = pairBoard([pairBottleneck(rule, PAIR_MESSAGE)])
+    renderCanvas({ schedule, findings, dayConfigs })
+
+    for (const id of [OWNER, PARTNER]) {
+      const blocks = blocksOf(id)
+      expect(new Set(blocks.map((b) => b.dataset.phase)).size, `${id} phases`).toBeGreaterThan(1)
+      for (const block of blocks) {
+        expect(findingsText(block), `${id} ${block.dataset.phase}`).toContain(PAIR_MESSAGE)
+      }
+    }
+    for (const block of blocksOf(BYSTANDER)) {
+      expect(findingsText(block)).not.toContain(PAIR_MESSAGE)
+    }
+  })
+
+  it('lists a two-event message once per block, even when the event also owns a matching phase', () => {
+    const { schedule, findings, dayConfigs } = pairBoard([
+      pairBottleneck(BottleneckRule.HARD_SEPARATION_VIOLATED, PAIR_MESSAGE),
+    ])
+    renderCanvas({ schedule, findings, dayConfigs })
+
+    for (const block of [...blocksOf(OWNER), ...blocksOf(PARTNER)]) {
+      expect(occurrences(findingsText(block), PAIR_MESSAGE), block.dataset.eventId).toBe(1)
+    }
+  })
+
+  it('flags the gutter rows and the findings edge of both events a two-event row names', () => {
+    const { schedule, findings, dayConfigs } = pairBoard([])
+    renderCanvas(
+      { schedule, findings, dayConfigs },
+      { findingRows: [pairRow(BottleneckRule.HARD_SEPARATION_VIOLATED, PAIR_MESSAGE)] },
+    )
+
+    for (const id of [OWNER, PARTNER]) {
+      for (const block of blocksOf(id)) {
+        expect(block.dataset.warned, `${id} ${block.dataset.phase}`).toBe('true')
+      }
+    }
+    for (const block of blocksOf(BYSTANDER)) expect(block.dataset.warned).toBe('false')
+
+    const flaggedCount = () => stripRowsInDay(0).filter((r) => r.dataset.flagged === 'true').length
+    const bothFlagged = flaggedCount()
+    cleanup()
+    renderCanvas(
+      { schedule, findings, dayConfigs },
+      { findingRows: [{ ...pairRow(BottleneckRule.HARD_SEPARATION_VIOLATED, PAIR_MESSAGE), subjects: [OWNER] }] },
+    )
+    // The partner's strips add rows the owner alone does not flag.
+    expect(bothFlagged).toBeGreaterThan(flaggedCount())
+  })
+
+  it('still narrows a single-subject bottleneck to the block phase', () => {
+    const { schedule, findings, dayConfigs } = pairBoard([
+      makeBottleneck({ competition_id: OWNER, phase: Phase.POOLS, message: 'pools only' }),
+      makeBottleneck({ competition_id: OWNER, phase: Phase.DE, message: 'de only' }),
+    ])
+    renderCanvas({ schedule, findings, dayConfigs })
+
+    const pool = blocksOf(OWNER).find((b) => b.dataset.phase === Phase.POOLS)
+    const de = blocksOf(OWNER).find((b) => b.dataset.phase === Phase.DE)
+    if (!pool || !de) throw new Error('fixture lacks a pool or DE block')
+    expect(findingsText(pool)).toContain('pools only')
+    expect(findingsText(pool)).not.toContain('de only')
+    expect(findingsText(de)).toContain('de only')
+    expect(findingsText(de)).not.toContain('pools only')
   })
 })
