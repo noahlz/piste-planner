@@ -8,6 +8,11 @@
  * start, and the strip budget, and every duration comes from the same helpers
  * the scheduler calls.
  *
+ * The canvas uses this only for events moved by hand and while the board is
+ * stale (017). After a run, kept events draw the scheduler's own times, waits
+ * included, so the DE here starts at pool end plus the admin gap, earlier than
+ * the scheduler's on a busy day.
+ *
  * Three `ScheduleResult` fields have no input derivation and are left neutral:
  * `conflict_score`, `constraint_relaxation_level`, `accepted_warnings`. They
  * are scheduler diagnostics about contention, not geometry.
