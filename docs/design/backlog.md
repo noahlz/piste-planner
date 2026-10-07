@@ -230,15 +230,16 @@ and the footer did not move (B1's boot footer still reads 218). The cost is
 named in
 [§The canvas draws phases without the scheduler's waits](#the-canvas-draws-phases-without-the-schedulers-waits):
 the one number is the drawn one, so it inherits that entry's optimism.
+
+Sabre peaks and peak times moved with the totals, and one move fell outside the
+13 days (B8 day 1's sabre peak 56 to 64, total and time unchanged). The owner
+accepted all of them on 2026-10-07 as the same cause.
+
 **017 then fixed that entry (2026-10-07).** The scheduler reports the peak of its
 own timeline again and the footer counts the board it draws, which right after a
 run is the same timeline. The 14 scenario-days that moved are in
 `specs/017-canvas-tells-truth/spec.md` §Expected drift, and the ledger snapshot
 returned byte for byte to the pre-016 one.
-
-Sabre peaks and peak times moved with the totals, and one move fell outside the
-13 days (B8 day 1's sabre peak 56 to 64, total and time unchanged). The owner
-accepted all of them on 2026-10-07 as the same cause.
 
 ## The canvas draws phases without the scheduler's waits
 
@@ -261,8 +262,8 @@ pre-016 one (`7e2db75c38bb…`, `b84be7e291`).
 **Rejected alternatives, measured by 017's planning on B1–B8:**
 
 - **A no-wait engine** (the scheduler stops waiting for strips, so derived
-  times are right by construction): the floors fall to 24/19/23/19/12/40/16/53
-  scheduled, and ERRORs rise to 0/5/1/11/0/14/2/0.
+  times are right by construction): the scheduled counts become
+  24/19/23/19/12/40/16/53 (from 24/24/24/21/12/45/18/53), and ERRORs rise to 0/5/1/11/0/14/2/0.
 - **Close-gaps** (closing the scheduler's waits where possible): closes 32 of 200
   waits, and B1 reaches only 17 placed, 7 unplaced.
 - **Replay without a run record** (a shared link carrying placements only): B6
@@ -282,10 +283,9 @@ documented since `a889885424`.*
 
 `sweepLine` (`src/engine/refs.ts`) processes a start before an end at the same
 minute, so a block that ends at t and a block that starts at t both count at t.
-The comment justifies it as an instant referee handoff. With a half-open sweep
-(end first) the peaks would read lower. Measured on the scheduler's timeline:
-B6 day 0 would read 48, not 78, B6 day 1 48, not 68, and B4 day 2's sabre peak
-38, not 54.
+The comment (`refs.ts:49`) justifies it as an instant referee handoff. With a
+half-open sweep (end first) the peaks would read lower. How much lower was not
+measured, so this entry carries no figures.
 
 **What it needs**: an owner call on whether an instantaneous handoff should
 count both blocks. It changes the footer's referee peak and the scheduler's
@@ -293,7 +293,7 @@ count both blocks. It changes the footer's referee peak and the scheduler's
 METHODOLOGY line.
 
 **Cost if ignored**: on days where many phases chain end to start the peak reads
-well above the referees on the floor at any one moment, so the staffing advice
+above the referees on the floor at any one moment, so the staffing advice
 is generous. It errs toward more referees, never fewer.
 
 ## Day-end overrun is a hard failure the methodology calls a warning
@@ -1433,7 +1433,8 @@ is not enough to reproduce a board.
 
 **Cost if ignored**: an organizer who pins everything to protect a good board,
 then re-runs after a change, loses events with the unseated pins listed in
-Findings. Pinning only the events that matter avoids it.
+Findings. Pinning fewer events shrinks the loss but does not remove it: pin-half
+still left 0/1/0/2/0/9/0/10 phases unseated on B1–B8.
 
 ## The engine and the store both report a pin collision
 
@@ -1464,8 +1465,9 @@ Findings panel carry the count, so nothing is wrong on screen today.
 
 **What it needs**: the owner picks the wording and the spot in the band.
 
-**Cost if ignored**: none beyond a computed value nobody reads. An organizer
-scanning a crowded day cannot see at a glance that it holds an unplaced event.
+**Cost if ignored**: an organizer scanning a crowded day cannot see at a glance
+that it holds an unplaced event, and must read the footer or the Findings panel.
+Nothing on screen is wrong.
 
 ## A stale board's detail strip can show no strips for an event
 
@@ -1474,7 +1476,7 @@ scanning a crowded day cannot see at a glance that it holds an unplaced event.
 While the board is stale, unseated phases are unknown, not unplaced, so they
 get no count and no Unplaced row. An event whose every phase is unseated on a
 stale board then has no strips to name, and the detail strip shows no strip
-label for it. That bends 013 handoff item 12, "the strips fact always reads".
+label for it. That bends 013 handoff item 12, "the strips fact always renders".
 
 **What it needs**: an owner call between showing nothing, as now, and a line
 that says the strips are unknown until the next run.
@@ -1490,8 +1492,9 @@ The mockup's video gutter and camera icon are not built. 017 draws strips from
 the kept run and leaves video marking as it was, and the alignment doc's D2 row
 still says the camera icon waits for a later feature.
 
-**Cost if ignored**: cosmetic. The board draws no video marking beyond what the
-mockup's gutter and icon were meant to show.
+**Cost if ignored**: cosmetic. The board has no gutter or icon marking which
+strips carry video, so an organizer reads video strips from the strip numbers
+alone.
 
 ## The mockup's remaining visual gaps
 
