@@ -784,6 +784,19 @@ describe('selectFindings — a hand-made hard pair (016 spec §1, R1)', () => {
     expect(row.where).toBe(`Day 2 · ${labelOfId(CDT_FOIL)}`)
   })
 
+  it('names both events by their label and says they may never share a day', () => {
+    juniorAndCadetFoil('NAC', { day: 1, start: 540 }, { day: 1, start: 540 })
+
+    const [row] = analysisRows(HARD_PREFIX)
+    const jr = labelOfId(JR_FOIL)
+    const cdt = labelOfId(CDT_FOIL)
+    expect(row.message).toContain(jr)
+    expect(row.message).toContain(cdt)
+    expect(row.message).toContain('may never share a day')
+    expect(row.message).not.toContain(JR_FOIL)
+    expect(row.message).not.toContain(CDT_FOIL)
+  })
+
   it('clears once one event is moved to another day', () => {
     juniorAndCadetFoil('NAC', { day: 1, start: 540 }, { day: 1, start: 540 })
     expect(analysisRows(HARD_PREFIX), 'premise: the pair is flagged while it shares Day 2').toHaveLength(1)

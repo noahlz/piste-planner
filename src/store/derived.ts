@@ -178,6 +178,7 @@ function placementFindings(schedule: DerivedSchedule, tournamentType: Tournament
       placed,
       tournamentType,
       (day) => clockConfig.dayConfigs[day].day_start_time,
+      competitionLabel,
     ),
     ...firstLastDayWarnings(inRange, clockConfig),
   ]

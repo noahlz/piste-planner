@@ -20,7 +20,7 @@ export type PlacedEvent = { competition_id: string; day: number; pool_start: num
  * Judges hand placements against the same rules the scheduler enforces: hard
  * same-day separations (via `crossoverPenalty`) and the regional Group 1
  * window. The two checks are independent, so a pair can carry both findings.
- * The caller filters out unplaced and out-of-range events. A placed id with no
+ * `labelOf` names events in messages (default: the id). The caller filters out unplaced and out-of-range events. A placed id with no
  * competition is skipped. Output is sorted by day, then subjects, then rule.
  */
 export function checkPlacementRules(
@@ -28,6 +28,7 @@ export function checkPlacementRules(
   placed: PlacedEvent[],
   tournamentType: TournamentType,
   dayStartClock: (day: number) => number,
+  labelOf: (competition: Competition) => string = c => c.id,
 ): Bottleneck[] {
   const byId = new Map(competitions.map(c => [c.id, c]))
   const known = placed.filter(p => byId.has(p.competition_id))
@@ -44,6 +45,7 @@ export function checkPlacementRules(
       const c2 = byId.get(p2.competition_id)!
       const day = p1.day
       const subjects = [c1.id, c2.id].sort()
+      const [first, second] = subjects.map(id => labelOf(byId.get(id)!))
 
       if (crossoverPenalty(c1, c2, tournamentType) === Infinity) {
         findings.push({
@@ -55,7 +57,7 @@ export function checkPlacementRules(
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
           day,
-          message: `${subjects[0]} and ${subjects[1]} are both on Day ${day + 1}: they may never share a day`,
+          message: `${first} and ${second} are both on Day ${day + 1}: they may never share a day`,
         })
       }
 
@@ -69,9 +71,9 @@ export function checkPlacementRules(
         const floor = dayStartClock(day) + REGIONAL_GROUP_1_WINDOW_MINS
         const honoured = op.pool_start >= floor && yp.pool_start < floor
         const starts =
-          `${younger.id} starts at ${formatClockMins(yp.pool_start)} and ${older.id}'s pools at ` +
+          `${labelOf(younger)} starts at ${formatClockMins(yp.pool_start)} and ${labelOf(older)}'s pools at ` +
           `${formatClockMins(op.pool_start)}, window floor ${formatClockMins(floor)}`
-        const shared = `${older.id} and ${younger.id} share Day ${day + 1}`
+        const shared = `${labelOf(older)} and ${labelOf(younger)} share Day ${day + 1}`
         findings.push({
           competition_id: older.id,
           phase: Phase.SEQUENCING,

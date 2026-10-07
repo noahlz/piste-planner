@@ -419,3 +419,52 @@ describe('checkPlacementRules: output order', () => {
     expect(backward).toEqual(forward)
   })
 })
+
+describe('checkPlacementRules: messages name events by the supplied label', () => {
+  const labelOf = (c: Competition) => `Label for ${c.id.toUpperCase()}`
+
+  it('names both events of a hard pair by label, not id', () => {
+    const findings = checkPlacementRules(
+      [comp('zeta', { category: Category.JUNIOR }), comp('alpha', { category: Category.CADET })],
+      [at('zeta', 2), at('alpha', 2)],
+      TournamentType.NAC,
+      dayStartClock,
+      labelOf,
+    )
+    const [f] = hard(findings)
+    expect(f.message).toBe('Label for ALPHA and Label for ZETA are both on Day 3: they may never share a day')
+    expect(f.message).not.toMatch(/\b(alpha|zeta)\b/)
+    expect(f.subjects).toEqual(['alpha', 'zeta'])
+  })
+
+  const pair = [comp('older-jun', { category: Category.JUNIOR }), comp('young-cad', { category: Category.CADET })]
+
+  it('names both events of a honoured window by label, not id', () => {
+    const [f] = checkPlacementRules(
+      pair,
+      [at('young-cad', 1, 540), at('older-jun', 1, 780)],
+      TournamentType.ROC,
+      dayStartClock,
+      labelOf,
+    )
+    expect(f.message).toBe(
+      "Label for OLDER-JUN and Label for YOUNG-CAD share Day 2 inside the regional Group 1 window: Label for YOUNG-CAD starts at 09:00 and Label for OLDER-JUN's pools at 13:00, window floor 12:00",
+    )
+    expect(f.message).not.toMatch(/older-jun|young-cad/)
+    expect(f.competition_id).toBe('older-jun')
+  })
+
+  it('names both events of a broken window by label, not id', () => {
+    const [f] = checkPlacementRules(
+      pair,
+      [at('young-cad', 1, 780), at('older-jun', 1, 780)],
+      TournamentType.ROC,
+      dayStartClock,
+      labelOf,
+    )
+    expect(f.rule).toBe(BottleneckRule.REGIONAL_WINDOW_NOT_HONOURED)
+    expect(f.message).toContain('Label for OLDER-JUN and Label for YOUNG-CAD share Day 2 and')
+    expect(f.message).toContain("Label for YOUNG-CAD starts at 13:00 and Label for OLDER-JUN's pools")
+    expect(f.message).not.toMatch(/older-jun|young-cad/)
+  })
+})
