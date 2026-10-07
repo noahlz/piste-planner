@@ -1562,6 +1562,71 @@ if (!/warning/i.test(regionalSeverity ?? '') || !regionalMessage.includes('not h
 log('016 check 2: saw the Warning (regional-window-not-honoured) for the hand-moved pair')
 await shot('016-check2-regional')
 
+// ── 017 T8: a shared link replays the sender's run ──
+// The share-link steps above run on a board the fencer-count edit left stale, and a stale
+// sender writes no `run`, so those receivers open stale by design. This block shares a FRESH
+// board: Auto-assign, then a `#config=` link opened in a second page must draw the same
+// `[data-event-block]` set as the sender (id, phase, strips, start) and show no stale banner.
+// Then one Move day on the sender and a second link must still agree.
+async function blockSet(pg) {
+  return pg.$$eval('[data-event-block]', (els) =>
+    els
+      .map((e) => [e.getAttribute('data-event-block'), e.getAttribute('data-phase'), e.getAttribute('data-strips'), e.getAttribute('data-start')].join('|'))
+      .sort(),
+  )
+}
+
+async function linkFromSender() {
+  await closePanel()
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await page.getByRole('button', { name: 'Generate Link', exact: true }).click()
+  const url = await page.locator('input[readonly]').first().inputValue()
+  await page.keyboard.press('Escape')
+  return url
+}
+
+async function expectReceiverMatches(label, url) {
+  if (!url.includes('#config=')) throw new Error(`017 T8 ${label}: the share link has no #config= payload: ${url.slice(0, 60)}`)
+  const senderSet = await blockSet(page)
+  const senderStale = await page.locator('[data-stale-banner]').count()
+  if (senderStale !== 0) throw new Error(`017 T8 ${label}: the sender shows a stale banner on a board it just ran`)
+  const rx = await ctx.newPage()
+  rx.on('pageerror', (e) => errors.push('t8 receiver: ' + e))
+  await rx.goto(url)
+  await rx.getByRole('button', { name: 'Export', exact: true }).waitFor()
+  await rx.getByRole('region', { name: 'Matrix canvas' }).waitFor()
+  await rx.waitForTimeout(500)
+  const rxSet = await blockSet(rx)
+  const rxStale = await rx.locator('[data-stale-banner]').count()
+  if (rxStale !== 0) {
+    await rx.screenshot({ path: `${SHOTS}017-t8-${label}-receiver-stale.png`, fullPage: FULLPAGE })
+    throw new Error(`017 T8 ${label}: the receiver shows ${rxStale} [data-stale-banner] on a link from a fresh sender (app defect)`)
+  }
+  const missing = senderSet.filter((x) => !rxSet.includes(x))
+  const extra = rxSet.filter((x) => !senderSet.includes(x))
+  if (senderSet.length === 0) throw new Error(`017 T8 ${label}: the sender draws no blocks, so nothing was compared`)
+  if (missing.length || extra.length || senderSet.length !== rxSet.length) {
+    await rx.screenshot({ path: `${SHOTS}017-t8-${label}-receiver.png`, fullPage: FULLPAGE })
+    throw new Error(
+      `017 T8 ${label}: receiver blocks differ from the sender (${senderSet.length} vs ${rxSet.length}); missing ${missing.slice(0, 3).join(' ; ')} | extra ${extra.slice(0, 3).join(' ; ')} (app defect)`,
+    )
+  }
+  await rx.close()
+  log(`017 T8 ${label}: the receiver drew the sender's ${senderSet.length} blocks and shows no stale banner`)
+}
+
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await closePanel()
+await page.getByRole('button', { name: 'Auto-assign', exact: true }).click()
+await page.waitForTimeout(500)
+await expectReceiverMatches('fresh', await linkFromSender())
+
+const t8Day = await poolDayOf(a)
+await moveEventToDay(a, (t8Day + 1) % 4)
+if ((await poolDayOf(a)) === t8Day) throw new Error('017 T8: the Move day did not move the event')
+await expectReceiverMatches('after-move', await linkFromSender())
+await shot('017-t8-link-replay')
+
 await browser.close()
 log('console errors =', errors.length, errors.slice(0, 3))
 if (errors.length) throw new Error('console errors: ' + errors.join(' | '))
