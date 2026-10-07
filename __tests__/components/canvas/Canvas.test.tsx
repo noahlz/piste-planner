@@ -1027,29 +1027,48 @@ describe('Canvas draws the scheduler\'s strips (017 T6b, spec §6)', () => {
     expect(rectsOf('B')[0].dataset.unseated).toBe('false')
   })
 
-  it('stacks unseated phases that overlap in time on separate lane rows', () => {
+  it('stacks unseated phases that overlap in time on separate lane rows and reuses a row once its phase has ended', () => {
+    // C starts exactly when A ends, so it takes A's row back (the interval is half-open).
     draw(board([
       ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
       ['A', 630, 690, 2, null],
       ['B', 650, 710, 2, null],
+      ['C', 690, 750, 2, null],
     ]))
 
-    const [a] = rectsOf('A')
-    const [b] = rectsOf('B')
-    expect(a.style.top).not.toBe(b.style.top)
-    expect(a.parentElement).toBe(b.parentElement)
+    const lane = document.querySelector<HTMLElement>('[data-overflow-lane][data-day="0"]')
+    const tops = ['A', 'B', 'C'].map((id) => rectsOf(id)[0].style.top)
+    expect(tops).toEqual(['2px', `${ROW + 2}px`, '2px'])
+    for (const id of ['A', 'B', 'C']) expect(lane?.contains(rectsOf(id)[0])).toBe(true)
+    // Two rows, so the second cannot spill into the next day group.
+    expect(lane?.style.height).toBe(`${2 * ROW}px`)
   })
 
   it('still draws an unseated phase in the lane on a stale board, where it counts as nothing', () => {
-    draw(board([
+    const schedule = board([
       ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
       ['A', 630, 690, 2, null],
-    ], RunState.STALE))
+    ], RunState.STALE)
+    draw(schedule)
 
     const lane = document.querySelector<HTMLElement>('[data-overflow-lane][data-day="0"]')
     const [rect] = rectsOf('A')
     expect(lane?.contains(rect)).toBe(true)
     expect(rect.dataset.unseated).toBe('true')
+    expect(schedule.unplacedIds.size).toBe(0)
+    expect(schedule.blocks.filter((block) => block.unseated).every((block) => !block.countsAsUnplaced)).toBe(true)
+  })
+
+  it('runs the plot\'s hour lines on through the overflow lane', () => {
+    draw(board([
+      ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
+      ['A', 630, 690, 2, null],
+    ]))
+
+    const lane = document.querySelector<HTMLElement>('[data-overflow-lane][data-day="0"]')
+    const plot = document.querySelector<HTMLElement>('[data-day-plot="0"]')
+    expect(plot?.style.backgroundImage).not.toBe('')
+    expect(lane?.style.backgroundImage).toBe(plot?.style.backgroundImage)
   })
 
   it('flags the strip rows of every run of a flagged phase and no row between them', () => {
@@ -1062,6 +1081,45 @@ describe('Canvas draws the scheduler\'s strips (017 T6b, spec §6)', () => {
 
     const flagged = stripRowsInDay(0).map((strip) => strip.dataset.flagged === 'true')
     expect(flagged).toEqual([true, true, false, false, false, true, true, false])
+  })
+
+  describe('a continuation run', () => {
+    const SPLIT = board([['K', 600, 700, 4, [0, 1, 5, 6]]])
+    const warnedRow: Finding = {
+      id: 'test:Warning:K', severity: 'Warning', where: 'Day 1 · K', day: 0,
+      message: 'K', target: 'K', dismissable: true, subjects: ['K'],
+    }
+
+    it('draws the findings edge, as the first run does', () => {
+      renderCanvas({ schedule: SPLIT, findings: NO_FINDINGS, dayConfigs: DAY_CONFIGS }, { findingRows: [warnedRow] })
+
+      const continuation = rectsOf('K')[1]
+      expect({
+        width: continuation.style.borderWidth,
+        style: continuation.style.borderStyle,
+        color: continuation.style.borderColor,
+      }).toEqual({ width: '2px', style: 'solid', color: 'var(--flash)' })
+    })
+
+    it('selects its competition on click, and both rects wear the selection ring', () => {
+      draw(SPLIT)
+
+      fireEvent.click(rectsOf('K')[1])
+
+      expect(useStore.getState().selectedCompetitionId).toBe('K')
+      const [first, continuation] = rectsOf('K')
+      expect(first.dataset.selected).toBe('true')
+      expect(first.querySelector('[data-ring]')).not.toBeNull()
+      expect(continuation.querySelector('[data-ring]')).not.toBeNull()
+    })
+
+    it('opens its phase\'s tooltip on hover, naming every run of the strips', () => {
+      draw(SPLIT)
+
+      fireEvent.pointerEnter(rectsOf('K')[1])
+
+      expect(document.querySelector('[data-tooltip-field="strips"]')?.textContent).toBe('Strips 1–2, 6–7')
+    })
   })
 
   it('draws no overflow lane for a board that was run', () => {

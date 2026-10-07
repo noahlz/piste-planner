@@ -65,20 +65,13 @@ export function stripSetLabel(strips: readonly number[]): string {
 }
 
 /**
- * What a block says about its strips, overflow included.
- *
- * An overflowed block was granted no run at all. Naming a range for it would
- * claim strips the block was never given — "Strips 1–4" over a day that had no
+ * What an unseated block says about its strips: how many it needs, with no
+ * range. An unseated block was granted no run at all, and naming a range for it
+ * would claim strips it was never given – "Strips 1–4" over a day that had no
  * room for it, which is fiction on exactly the over-capacity day an organizer
- * opened the tool to find. So the count is reported without a range, and the
- * failure is named.
+ * opened the tool to find.
  */
-export function stripAssignmentLabel(
-  firstStrip: number,
-  stripCount: number,
-  overflow: boolean,
-): string {
-  if (!overflow) return stripRangeLabel(firstStrip, stripCount)
+export function unseatedStripsLabel(stripCount: number): string {
   return stripCount === 1 ? 'Unplaced, needs 1 strip' : `Unplaced, needs ${stripCount} strips`
 }
 
@@ -90,5 +83,5 @@ export function stripAssignmentLabel(
 export function drawnStripsLabel(block: { strips: readonly number[]; stripCount: number }): string {
   return block.strips.length > 0
     ? stripSetLabel(block.strips)
-    : stripAssignmentLabel(0, block.stripCount, true)
+    : unseatedStripsLabel(block.stripCount)
 }

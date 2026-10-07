@@ -499,6 +499,35 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
         `repeating-linear-gradient(to bottom, var(--row-line) 0 1px, transparent 1px ${rowHeightPx}px)`
       : undefined
 
+  /**
+   * One rect of a drawn phase: a seated run at its strips, or the unseated
+   * phase's single rect in the overflow lane. Both draw through here so a prop
+   * added to one cannot be missed on the other.
+   */
+  function renderRect(block: ResolvedBlock, key: string, topPx: number, heightPx: number, runIndex = 0) {
+    const { placement } = block
+    return (
+      <Block
+        key={key}
+        competition={block.competition}
+        label={block.label}
+        placement={placement}
+        runIndex={runIndex}
+        pinned={pinnedIds.has(placement.competitionId)}
+        warned={warned.has(placement.competitionId)}
+        selected={selectedCompetitionId === placement.competitionId}
+        flash={flashId === placement.competitionId}
+        widthPx={(placement.endMinutes - placement.startMinutes) * pixelsPerMinute}
+        heightPx={heightPx}
+        style={blockStyle(placement, topPx, heightPx)}
+        findings={block.findings}
+        onPointerEnter={(e) => handleEnter(block, e)}
+        onPointerLeave={() => setHovered(null)}
+        onClick={() => selectCompetition(placement.competitionId)}
+      />
+    )
+  }
+
   const days = Array.from({ length: daysAvailable }, (_, day) => day)
 
   return (
@@ -661,29 +690,15 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                     }}
                   >
                     {seatedBlocks.flatMap((block) =>
-                      block.placement.runs.map((run, runIndex) => (
-                        <Block
-                          key={`${block.placement.competitionId}:${block.placement.phase}:${runIndex}`}
-                          competition={block.competition}
-                          label={block.label}
-                          placement={block.placement}
-                          runIndex={runIndex}
-                          pinned={pinnedIds.has(block.placement.competitionId)}
-                          warned={warned.has(block.placement.competitionId)}
-                          selected={selectedCompetitionId === block.placement.competitionId}
-                          flash={flashId === block.placement.competitionId}
-                          widthPx={
-                            (block.placement.endMinutes - block.placement.startMinutes) *
-                            pixelsPerMinute
-                          }
-                          heightPx={run.count * rowHeightPx}
-                          style={blockStyle(block.placement, run.first * rowHeightPx, run.count * rowHeightPx)}
-                          findings={block.findings}
-                          onPointerEnter={(e) => handleEnter(block, e)}
-                          onPointerLeave={() => setHovered(null)}
-                          onClick={() => selectCompetition(block.placement.competitionId)}
-                        />
-                      )),
+                      block.placement.runs.map((run, runIndex) =>
+                        renderRect(
+                          block,
+                          `${block.placement.competitionId}:${block.placement.phase}:${runIndex}`,
+                          run.first * rowHeightPx,
+                          run.count * rowHeightPx,
+                          runIndex,
+                        ),
+                      ),
                     )}
                   </div>
                 </div>
@@ -724,6 +739,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                         position: 'relative',
                         height: lane.rowCount * rowHeightPx,
                         backgroundColor: 'var(--plot)',
+                        backgroundImage: plotGridImage,
                         borderTop: '1.5px dashed var(--chrome-border)',
                         boxSizing: 'content-box',
                         ...(zoom.fitting
@@ -731,28 +747,14 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                           : { width: plotWidthAtRung, flexShrink: 0 }),
                       }}
                     >
-                      {unseatedBlocks.map((block) => (
-                        <Block
-                          key={`${block.placement.competitionId}:${block.placement.phase}:lane`}
-                          competition={block.competition}
-                          label={block.label}
-                          placement={block.placement}
-                          pinned={pinnedIds.has(block.placement.competitionId)}
-                          warned={warned.has(block.placement.competitionId)}
-                          selected={selectedCompetitionId === block.placement.competitionId}
-                          flash={flashId === block.placement.competitionId}
-                          widthPx={
-                            (block.placement.endMinutes - block.placement.startMinutes) *
-                            pixelsPerMinute
-                          }
-                          heightPx={rowHeightPx}
-                          style={blockStyle(block.placement, (lane.rowOf.get(block) ?? 0) * rowHeightPx, rowHeightPx)}
-                          findings={block.findings}
-                          onPointerEnter={(e) => handleEnter(block, e)}
-                          onPointerLeave={() => setHovered(null)}
-                          onClick={() => selectCompetition(block.placement.competitionId)}
-                        />
-                      ))}
+                      {unseatedBlocks.map((block) =>
+                        renderRect(
+                          block,
+                          `${block.placement.competitionId}:${block.placement.phase}:lane`,
+                          (lane.rowOf.get(block) ?? 0) * rowHeightPx,
+                          rowHeightPx,
+                        ),
+                      )}
                     </div>
                   </div>
                 )}

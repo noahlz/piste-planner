@@ -403,9 +403,9 @@ describe('Block draws one rect per strip run (017 spec §6)', () => {
     expect(document.querySelectorAll('[data-event-block]')).toHaveLength(1)
     expect(rects[0].hasAttribute('data-event-block')).toBe(true)
     expect(rects[0].hasAttribute('data-block-run')).toBe(false)
-    expect(rects[1].hasAttribute('data-event-block')).toBe(false)
-    expect(rects[1].hasAttribute('data-block-run')).toBe(true)
-    expect(rects[1].hasAttribute('data-event-id')).toBe(false)
+    // A continuation carries data-block-run and nothing else: no identity, state or geometry attribute.
+    expect(Object.keys(rects[1].dataset)).toEqual(['blockRun'])
+    expect(rects[1].dataset.blockRun).toBe('plain:POOLS')
   })
 
   it('keeps a continuation out of the accessibility tree and gives it no name of its own', () => {

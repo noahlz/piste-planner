@@ -141,8 +141,14 @@ export function Block({
 }: BlockProps) {
   const kind = phaseKind(placement.phase)
   const isContinuation = runIndex > 0
-  // An unseated block has no run: it draws one row in the overflow lane.
-  const rows = Math.max(1, placement.runs[runIndex]?.count ?? 1)
+  // An unseated block has no run: it draws one row in the overflow lane. A
+  // seated block with no run at this index is a caller bug, so it fails loudly
+  // rather than drawing a one-row rect with mis-sized label furniture.
+  const run = placement.runs[runIndex]
+  if (!placement.unseated && run === undefined) {
+    throw new RangeError(`Block: run ${runIndex} of ${placement.competitionId}:${placement.phase} does not exist`)
+  }
+  const rows = Math.max(1, run?.count ?? 1)
 
   const name = [
     label,

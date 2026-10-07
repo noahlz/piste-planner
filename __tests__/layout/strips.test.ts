@@ -451,7 +451,7 @@ describe('assignStrips: capacity edges (moved from the retired lane packer)', ()
   it('leaves every phase unseated on a day with no strips', () => {
     const events = { a: derived(poolResult('a', 0, 600, 700, 1)) }
     const block = only(assignStrips(events, smallConfig(0, 0), comps('a')), 'a')
-    expect(block.unseated).toBe(true)
+    expect(block).toMatchObject({ unseated: true, strips: [], runs: [], stripCount: 1 })
   })
 })
 

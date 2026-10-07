@@ -6,7 +6,7 @@ import { findCompetition } from '../../engine/catalogue.ts'
 import { competitionLabel } from '../../lib/competitionLabels.ts'
 import { estimateEventFootprint } from '../../engine/derive.ts'
 import { eventTimeSegments } from '../../layout/segments.ts'
-import { phaseDisplay, stripAssignmentLabel, stripSetLabel } from '../../lib/placementLabels.ts'
+import { phaseDisplay, stripSetLabel, unseatedStripsLabel } from '../../lib/placementLabels.ts'
 import { formatClock, formatMinutes } from '../../lib/time.ts'
 import { Phase } from '../../engine/types.ts'
 import { weaponVar, WeaponTokenPart } from '../canvas/weaponTokens.ts'
@@ -63,10 +63,9 @@ const ICON_BUTTON =
  *
  * ## The same helpers the block and the tooltip use, not new arithmetic
  *
- * `stripSetLabel`/`stripAssignmentLabel`/`phaseDisplay` are the shared block
+ * `stripSetLabel`/`unseatedStripsLabel`/`phaseDisplay` are the shared block
  * vocabulary in `src/lib/placementLabels.ts`. `Block` and `CanvasTooltip` read
- * `stripAssignmentLabel` and `phaseDisplay` too, and move to `stripSetLabel`
- * when they draw the scheduler's strips (017 T6b). The strip label reads the
+ * the same helpers through `drawnStripsLabel`. The strip label reads the
  * committed model's own `blocks` and the pills its `events` (017 spec §6):
  * right after a run, the strips and times the run gave the event.
  */
@@ -104,7 +103,7 @@ export function DetailStrip({
       // no strip to report because the block's day does not exist, not
       // because a day that does had no room. Naming the count would claim
       // strips the event was never given, the same fiction
-      // `stripAssignmentLabel`'s docblock rules out for an unseated block.
+      // `unseatedStripsLabel`'s docblock rules out for an unseated block.
       stripsLabel = 'Unplaced, day out of range'
     } else {
       const blocks = schedule.blocks.filter((b) => b.competitionId === id)
@@ -114,7 +113,7 @@ export function DetailStrip({
       const unplaced = blocks.filter((b) => b.countsAsUnplaced)
       const held = blocks.flatMap((b) => b.strips)
       if (unplaced.length > 0) {
-        stripsLabel = stripAssignmentLabel(0, Math.max(...unplaced.map((b) => b.stripCount)), true)
+        stripsLabel = unseatedStripsLabel(Math.max(...unplaced.map((b) => b.stripCount)))
       } else if (held.length > 0) {
         stripsLabel = stripSetLabel(held)
       }
