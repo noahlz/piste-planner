@@ -118,10 +118,9 @@ export interface UiSlice {
 
   /**
    * The last `runScheduleAll`, kept whole so the canvas can draw the
-   * scheduler's own times and strips (017 spec §1). `null` before any run, after
-   * a run that threw, and after a load with no valid run. Not serialized.
-   * Written only by `runScheduleAll` (through `setPlacementsFromAuto`) and a
-   * state load.
+   * scheduler's own times and strips (017 spec §1). `null` before any run and
+   * after a run that threw. Not serialized. Written by `runScheduleAll` (through
+   * `setPlacementsFromAuto`). A state load will replay or clear it from T8 on.
    */
   lastRun: KeptRun | null
 
@@ -134,7 +133,7 @@ export interface UiSlice {
 
   setLoadedPresetId: (id: PresetId | null) => void
   setLastAutoRun: (run: LastAutoRun | null) => void
-  /** Replaces the kept run alone, for a state load that replays one (017 spec §5). */
+  /** Replaces the kept run alone. A run that threw clears it here, and T8's state load replays one (017 spec §5). */
   setLastRun: (run: KeptRun | null) => void
   selectCompetition: (id: string | null) => void
   /** Selects `id` and asks the canvas to scroll to it, in one update. */
@@ -154,7 +153,8 @@ export interface PlacementsSlice {
    * `lastRun` is written in the same update (017 spec §1), so no subscriber
    * sees the new placements against the old run. A caller with no run to keep
    * (`null`, the default) clears it: placements set from outside a run never
-   * match a kept one.
+   * match a kept one. The plan declares the run as required, and it is optional
+   * here only so the many one-argument test callers still compile.
    */
   setPlacementsFromAuto: (
     placements: Record<string, Placement>,

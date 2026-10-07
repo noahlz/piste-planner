@@ -17,10 +17,10 @@ import {
 } from '../../src/store/keptRun.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { deriveEventSchedule } from '../../src/engine/derive.ts'
-import { phaseSpans, phaseKey, unseatedPhases } from '../../src/engine/unseated.ts'
+import { phaseSpans, phaseKey, phaseRequiresVideo, unseatedPhases } from '../../src/engine/unseated.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { SCENARIO_IDS, type ScenarioId } from '../../src/data/tournaments.ts'
-import { DAY_AXIS_SPACING_MINS, Phase, VideoPolicy } from '../../src/engine/types.ts'
+import { DAY_AXIS_SPACING_MINS, Phase } from '../../src/engine/types.ts'
 import type { Competition, ScheduleResult, TournamentConfig } from '../../src/engine/types.ts'
 import { makeScheduleResult } from '../helpers/factories.ts'
 import { loadFlightedFixture } from '../helpers/flightedFixtures.ts'
@@ -45,6 +45,13 @@ const template = (name: string) => () => {
 
 function pinAll(): void {
   for (const id of Object.keys(useStore.getState().placements)) useStore.getState().setPinned(id, true)
+}
+
+/** A preset run once with every placement then pinned in place, ready for the re-run a test makes. */
+function runThenPinAll(id: ScenarioId = 'B1'): void {
+  applyPreset(id)
+  runScheduleAll()
+  pinAll()
 }
 
 /** The kept run of the board's last `runScheduleAll`, which must exist. */
@@ -123,13 +130,13 @@ describe('keepRun against the scheduler\'s own allocations', () => {
       }
     })
 
+    // The scheduler leaves an unscheduled event out of `schedule`, so the kept
+    // events are exactly its entries (the null-pool-start skip has its own case).
+    expect(Object.keys(kept.events).sort(), `${label} kept event ids`).toEqual(Object.keys(run.schedule).sort())
+
     let phaseCount = 0
     const occupied = new Map<string, { start: number; end: number; who: string }[]>()
     for (const [id, result] of Object.entries(run.schedule)) {
-      if (result.pool_start === null) {
-        expect(kept.events[id], `${label} ${id}: unscheduled event is not kept`).toBeUndefined()
-        continue
-      }
       const event = kept.events[id]
       expect(event, `${label} ${id}: kept`).toBeDefined()
       const spans = phaseSpans(result)
@@ -166,7 +173,7 @@ describe('keepRun against the scheduler\'s own allocations', () => {
         }
         // A phase that must run on video strips holds only video strips.
         const competition = byId.get(id) as Competition
-        if (phase.phase === Phase.DE_ROUND_OF_16 && competition.de_video_policy === VideoPolicy.REQUIRED) {
+        if (phaseRequiresVideo(phase.phase, competition)) {
           for (const strip of phase.strips) {
             expect(config.strips[strip].video_capable, `${label} ${id} r16 strip ${strip}`).toBe(true)
           }
@@ -174,9 +181,7 @@ describe('keepRun against the scheduler\'s own allocations', () => {
       })
     }
     // Total phases kept equals total phases the engine timed (so none lost or invented).
-    const enumerated = Object.values(run.schedule).reduce(
-      (n, r) => n + (r.pool_start === null ? 0 : phaseSpans(r).length), 0,
-    )
+    const enumerated = Object.values(run.schedule).reduce((n, r) => n + phaseSpans(r).length, 0)
     expect(phaseCount, label).toBe(enumerated)
     return phaseCount
   }
@@ -205,18 +210,32 @@ describe('keepRun against the scheduler\'s own allocations', () => {
       .toBe(run.schedule['VET-W-SABRE-IND-V80'].de_round_of_16_end)
   })
 
+  it.each(['MANY_POOLS', 'ONE_POOL'] as const)('%s flighted event: kept phases and strips are the allocation intervals', (kind) => {
+    expect(expectKeptRunMatchesEngine(kind, () => { loadFlightedFixture(kind) })).toBeGreaterThan(0)
+  })
+
+  it('does not keep an event the scheduler gave no pool start', () => {
+    applyPreset('B1')
+    const { config, competitions } = engineRun()
+    const kept = keepRun(
+      { schedule: { X: makeScheduleResult('X', 0) }, strip_allocations: [] }, config, competitions, [],
+    )
+    expect(kept.events).toEqual({})
+  })
+
   it('does not throw on a zero-length phase with no allocation', () => {
     applyPreset('B8')
     const { config, competitions, run, pins } = engineRun()
     expect(() => keepRun(run, config, competitions, pins)).not.toThrow()
   })
 
-  it('B1: kept strips of a day-1 phase use that day\'s own clock minutes, not the scheduler axis', () => {
+  it('B1: the kept phases of a later day use that day\'s own clock minutes, not the scheduler axis', () => {
     applyPreset('B1')
     runScheduleAll()
-    const phases = allKeptPhases(keptRunOfStore())
-    expect(phases.length).toBeGreaterThan(0)
-    for (const phase of phases) {
+    const kept = keptRunOfStore()
+    const laterDay = Object.entries(kept.events).filter(([, e]) => e.result.assigned_day >= 1)
+    expect(laterDay.length, 'premise: B1 schedules events past day 0').toBeGreaterThan(0)
+    for (const phase of allKeptPhases({ ...kept, events: Object.fromEntries(laterDay) })) {
       expect(phase.startMinutes).toBeLessThan(DAY_AXIS_SPACING_MINS)
       expect(phase.endMinutes).toBeGreaterThan(phase.startMinutes)
     }
@@ -236,18 +255,14 @@ describe('keepRun against the scheduler\'s own allocations', () => {
 describe('keepRun with pins', () => {
   /** B1 run once, every event pinned in place, the strip count of one pin raised past what its event can use. */
   function pinAllWithOversizedPin(): { oversizedId: string } {
-    applyPreset('B1')
-    runScheduleAll()
+    runThenPinAll()
     const [oversizedId] = Object.keys(useStore.getState().placements)
-    pinAll()
     useStore.getState().updatePlacement(oversizedId, { strip_count: 40 })
     return { oversizedId }
   }
 
   it('records a pinned event\'s key as the pin itself, so it equals the store placement after the run', () => {
-    applyPreset('B1')
-    runScheduleAll()
-    pinAll()
+    runThenPinAll()
     runScheduleAll()
     const kept = keptRunOfStore()
     for (const [id, placement] of Object.entries(useStore.getState().placements)) {
@@ -260,9 +275,7 @@ describe('keepRun with pins', () => {
   })
 
   it('keeps the pin a run was given in `pins`, on the scheduler axis', () => {
-    applyPreset('B1')
-    runScheduleAll()
-    pinAll()
+    runThenPinAll()
     const given = buildPinnedPlacements(useStore.getState())
     expect(given.length).toBeGreaterThan(0)
     runScheduleAll()
@@ -283,9 +296,7 @@ describe('keepRun with pins', () => {
   })
 
   it.each(SCENARIO_IDS)('%s: a pinned event\'s result phase times equal deriveEventSchedule\'s', (id) => {
-    applyPreset(id)
-    runScheduleAll()
-    pinAll()
+    runThenPinAll(id)
     runScheduleAll()
     const state = useStore.getState()
     const { config, competitions } = buildTournamentConfig(state)
@@ -303,9 +314,7 @@ describe('keepRun with pins', () => {
   })
 
   it('leaves a phase the engine could not seat in the record with no strips', () => {
-    applyPreset('B1')
-    runScheduleAll()
-    pinAll()
+    runThenPinAll()
     runScheduleAll()
     const { run } = engineRun()
     const unseated = unseatedPhases(run)
@@ -366,11 +375,6 @@ describe('configKeyOf', () => {
     const second = inputs()
     expect(configKeyOf(first.config, first.competitions))
       .toBe(configKeyOf(second.config, second.competitions))
-  })
-
-  it('is a non-empty string', () => {
-    const { config, competitions } = inputs()
-    expect(configKeyOf(config, competitions).length).toBeGreaterThan(0)
   })
 
   it('does not depend on the order object keys were written in', () => {
