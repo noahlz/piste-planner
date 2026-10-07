@@ -36,6 +36,7 @@ function errorMessage(err: unknown): string {
 export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [droppedPlacements, setDroppedPlacements] = useState<string[]>([])
+  const [runRefused, setRunRefused] = useState<string | null>(null)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -50,11 +51,14 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
       if ('error' in result) {
         setLoadError(result.error)
       } else {
-        applyLoadedState(result.state)
+        applyLoadedState(result.state, result.run)
         setLoadError(null)
         // A lenient load keeps going but says what it threw away, so a
         // silently shorter schedule never looks like the saved one.
         setDroppedPlacements(result.droppedPlacements)
+        // A carried run that failed validation is thrown away whole, and the
+        // board opens stale – said here the way the drops above are.
+        setRunRefused(result.runRefused)
       }
     } catch (err) {
       // parseTournamentFile's readFileText rejects when FileReader fires
@@ -134,7 +138,11 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
           {/* Always mounted: a live region only announces changes if it exists
               in the DOM before the content lands. */}
           <p
-            className={droppedPlacements.length > 0 ? 'mt-2 text-sm text-finding-badge-text' : undefined}
+            className={
+              droppedPlacements.length > 0 || runRefused !== null
+                ? 'mt-2 text-sm text-finding-badge-text'
+                : undefined
+            }
             role="status"
           >
             {droppedPlacements.length > 0 && (
@@ -143,6 +151,10 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
                 {droppedPlacements.length === 1 ? '' : 's'} for events not in this
                 configuration: {droppedPlacements.join(', ')}
               </>
+            )}
+            {droppedPlacements.length > 0 && runRefused !== null && ' '}
+            {runRefused !== null && (
+              <>The saved run could not be replayed ({runRefused}), so the board opens stale.</>
             )}
           </p>
         </div>

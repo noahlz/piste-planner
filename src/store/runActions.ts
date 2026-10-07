@@ -3,7 +3,7 @@ import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import { scheduleAll } from '../engine/scheduler.ts'
 import { placementFromResult } from '../engine/derive.ts'
 import { keepRun } from './keptRun.ts'
-import type { Placement, ScheduleResult, StripAllocation } from '../engine/types.ts'
+import type { Placement, PinnedPlacement, ScheduleResult, StripAllocation } from '../engine/types.ts'
 
 /** What `runScheduleAll` found: how many of the attempted competitions it placed. */
 export interface AutoRunCounts {
@@ -80,4 +80,21 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
   }
   state.setLastAutoRun({ at: Date.now(), ...counts })
   return counts
+}
+
+/**
+ * Replays `pins` through the scheduler and keeps the run, the way a link or a
+ * file rebuilds the sender's board (017 R6, P6). Writes `lastRun` only, never a
+ * placement: the placements are the ones the payload carried. A replay that
+ * throws leaves no run, so the board opens stale rather than drawing a run it
+ * did not reproduce.
+ */
+export function replayRun(state: StoreState, pins: readonly PinnedPlacement[]): void {
+  const { config, competitions } = buildTournamentConfig(state)
+  try {
+    const run = scheduleAll(competitions, config, [...pins])
+    state.setLastRun(keepRun(run, config, competitions, pins))
+  } catch {
+    state.setLastRun(null)
+  }
 }

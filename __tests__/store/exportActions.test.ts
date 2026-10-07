@@ -3,6 +3,9 @@ import { useStore } from '../../src/store/store.ts'
 import { serializeState } from '../../src/store/serialization.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { makePlacement } from '../helpers/factories.ts'
+import { selectDrawnSchedule, RunState } from '../../src/store/derived.ts'
+import { moveHeadline } from '../helpers/drawnFixtures.ts'
+import { payloadWithRefusedRun, resetReceiver, sendBoard, sentPayload } from '../helpers/replayFixtures.ts'
 import {
   URL_SIZE_WARNING_BYTES,
   SAVE_FILE_NAME,
@@ -125,7 +128,7 @@ describe('parseTournamentFile', () => {
     // if the store still reads its untouched initial 0 here, then 27 once
     // applyLoadedState actually writes the parsed state.
     expect(useStore.getState().strips_total).toBe(0)
-    applyLoadedState(result.state)
+    applyLoadedState(result.state, result.run)
     expect(useStore.getState().strips_total).toBe(27)
   })
 
@@ -182,7 +185,7 @@ describe('parseTournamentFile', () => {
 
 describe('applyLoadedState', () => {
   it('writes the given partial state onto the store', () => {
-    applyLoadedState({ strips_total: 27 })
+    applyLoadedState({ strips_total: 27 }, null)
     expect(useStore.getState().strips_total).toBe(27)
   })
 })
@@ -236,5 +239,104 @@ describe('copyToClipboard', () => {
     vi.stubGlobal('navigator', { clipboard: { writeText } })
 
     await expect(copyToClipboard('some text')).resolves.toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────
+// 017 T8: a saved file replays the sender's run (P6)
+// ──────────────────────────────────────────────
+
+async function receiveFile(json: string) {
+  const result = await parseTournamentFile(new File([json], SAVE_FILE_NAME, { type: 'application/json' }))
+  if ('error' in result) throw new Error(result.error)
+  applyLoadedState(result.state, result.run)
+  return result
+}
+
+describe('applyLoadedState with a run (017 T8)', () => {
+  it.each([
+    ['as saved', false],
+    ['after one Move day', true],
+  ])('draws the sender\'s board from a saved file %s', async (_name, moved) => {
+    const sent = sendBoard({ moved })
+    resetReceiver()
+
+    await receiveFile(sent.json)
+
+    expect(selectDrawnSchedule(useStore.getState())).toEqual(sent.drawn)
+    expect(useStore.getState().lastRun).not.toBeNull()
+  })
+
+  it('replays the pins a pinned board was run with', async () => {
+    const sent = sendBoard({ pinned: true, moved: true })
+    const pins = useStore.getState().lastRun?.pins
+    resetReceiver()
+
+    await receiveFile(sent.json)
+
+    expect(useStore.getState().lastRun?.pins).toEqual(pins)
+    expect(selectDrawnSchedule(useStore.getState())).toEqual(sent.drawn)
+  })
+
+  it('writes no placement of its own, the loaded ones stay as saved', async () => {
+    const sent = sendBoard({ moved: true })
+    const saved = sentPayload(sent).placements
+    resetReceiver()
+
+    await receiveFile(sent.json)
+
+    expect(useStore.getState().placements).toEqual(saved)
+  })
+
+  it('clears the previous run when the file carries none, even with an equal config key', async () => {
+    const sent = sendBoard()
+    const payload = sentPayload(sent)
+    delete payload.run
+    expect(useStore.getState().lastRun, 'premise: the sender still holds its run').not.toBeNull()
+
+    await receiveFile(JSON.stringify(payload))
+
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+
+  it('clears the previous run and opens stale when the carried run is refused', async () => {
+    const sent = sendBoard({ pinned: true })
+    const payload = payloadWithRefusedRun(sent)
+
+    const result = await receiveFile(JSON.stringify(payload))
+
+    expect(result.runRefused).not.toBeNull()
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+
+  it('opens stale on a file saved after an input changed, as the sender would see it', async () => {
+    const sent = sendBoard()
+    useStore.getState().setStrips(useStore.getState().strips_total + 1)
+    const json = serializeState(useStore.getState())
+    expect(sent.drawn.runState, 'premise').toBe(RunState.FRESH)
+    resetReceiver()
+
+    await receiveFile(json)
+
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+
+  it('leaves the board as it was after a Move day on the receiver, kept events untouched', async () => {
+    const sent = sendBoard()
+    resetReceiver()
+    await receiveFile(sent.json)
+    const before = selectDrawnSchedule(useStore.getState())
+
+    moveHeadline()
+
+    const after = selectDrawnSchedule(useStore.getState())
+    expect(after.runState).toBe(RunState.FRESH)
+    const keptBefore = before.blocks.filter((b) => before.events[b.competitionId].source === 'kept')
+    const unmoved = keptBefore.filter((b) => after.events[b.competitionId].source === 'kept')
+    expect(unmoved.length).toBeGreaterThan(0)
+    for (const block of unmoved) expect(after.blocks).toContainEqual(expect.objectContaining({ ...block, countsAsUnplaced: false }))
   })
 })

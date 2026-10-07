@@ -10,7 +10,13 @@ import type { SerializedState } from '../../src/store/serialization.ts'
 import { useStore } from '../../src/store/store.ts'
 import type { StoreState } from '../../src/store/store.ts'
 import { DeMode, PlacementSource } from '../../src/engine/types.ts'
-import type { Placement } from '../../src/engine/types.ts'
+import type { Placement, PinnedPlacement } from '../../src/engine/types.ts'
+import { DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
+import { CATALOGUE } from '../../src/engine/catalogue.ts'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { sendBoard, sentPayload } from '../helpers/replayFixtures.ts'
+import { runPreset } from '../helpers/drawnFixtures.ts'
 
 // ──────────────────────────────────────────────
 // P2 types not yet on StoreState/SerializedState (T008 adds the store slices,
@@ -924,8 +930,8 @@ describe('encodeToUrl', () => {
   })
 })
 
-describe('the kept run is not part of the payload yet (017 T2)', () => {
-  it('encodes and serializes identically with a kept run and without one', () => {
+describe('a kept run for other inputs writes no run (017 T8)', () => {
+  it('encodes and serializes identically with a kept run of another config key and without one', () => {
     const state = populatedState()
     const withRun = { ...state, lastRun: { configKey: 'k', pins: [], events: {} } }
     const withoutRun = { ...state, lastRun: null }
@@ -1218,5 +1224,133 @@ describe('the retired override record is gone from the payload (013 T022)', () =
         'video_strips_total',
       ].sort(),
     )
+  })
+})
+
+// ──────────────────────────────────────────────
+// 017 T8: the sender's run travels with the payload (spec §5, R6, P6)
+// ──────────────────────────────────────────────
+
+describe('the run in the payload (017 T8)', () => {
+  it('writes the pins the last run was given, for a link and for a file alike', () => {
+    const board = sendBoard({ pinned: true })
+    const pins = useStore.getState().lastRun?.pins
+    expect(pins?.length).toBeGreaterThan(0)
+    expect(sentPayload(board).run).toEqual(pins)
+    const fromLink = JSON.parse(atob(board.hash.slice('#config='.length).replace(/-/g, '+').replace(/_/g, '/')))
+    expect(fromLink.run).toEqual(pins)
+  })
+
+  it('writes an empty run when the last run was given no pins', () => {
+    expect(sentPayload(sendBoard()).run).toEqual([])
+  })
+
+  it('writes no run once an input the run read has changed', () => {
+    runPreset('B1')
+    useStore.getState().setStrips(useStore.getState().strips_total + 1)
+    expect(JSON.parse(serializeState(useStore.getState()))).not.toHaveProperty('run')
+  })
+
+  it('writes no run from an empty board, and does not throw', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    expect(() => serializeState(useStore.getState())).not.toThrow()
+    expect(JSON.parse(serializeState(useStore.getState()))).not.toHaveProperty('run')
+  })
+
+  it('writes no run when a run is kept but nothing is placed', () => {
+    runPreset('B1')
+    useStore.setState({ placements: {} })
+    expect(JSON.parse(serializeState(useStore.getState()))).not.toHaveProperty('run')
+  })
+
+  it('accepts a payload that carries a run, and one that does not', () => {
+    const payload = sentPayload(sendBoard({ pinned: true }))
+    expect(validateSchema(payload).valid).toBe(true)
+    delete payload.run
+    expect(validateSchema(payload).valid).toBe(true)
+  })
+
+  it('does not import the drawn model, so serialization and derived stay acyclic', () => {
+    const source = readFileSync(resolve(__dirname, '../../src/store/serialization.ts'), 'utf-8')
+    expect(source).not.toMatch(/from '\.\/derived\.ts'/)
+  })
+})
+
+describe('deserializeState with a run (017 T8)', () => {
+  function pinnedPayload() {
+    const payload = sentPayload(sendBoard({ pinned: true }))
+    // The run comes from the store, not the payload, so a corrupted entry tests
+    // the reader whatever the writer does.
+    const run = (useStore.getState().lastRun?.pins ?? []).map((pin) => ({ ...pin }))
+    payload.run = run
+    return { payload, run, days: payload.tournament.days_available }
+  }
+  const unselectedId = () => {
+    const selected = new Set(Object.keys(useStore.getState().selectedCompetitions))
+    return CATALOGUE.find((entry) => !selected.has(entry.id))!.id
+  }
+
+  it('hands back a valid run unchanged and refuses nothing', () => {
+    const { payload, run } = pinnedPayload()
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toEqual(run)
+    expect(result.runRefused).toBeNull()
+  })
+
+  it('hands back no run and no refusal when the payload carries none', () => {
+    const { payload } = pinnedPayload()
+    delete payload.run
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toBeNull()
+    expect(result.runRefused).toBeNull()
+  })
+
+  it('accepts an empty run', () => {
+    const { payload } = pinnedPayload()
+    payload.run = []
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toEqual([])
+    expect(result.runRefused).toBeNull()
+  })
+
+  const INVALID: [string, (run: PinnedPlacement[], days: number) => unknown, RegExp][] = [
+    ['an unknown event id', (run) => [{ ...run[0], competition_id: 'NO-SUCH-EVENT' }, ...run.slice(1)], /NO-SUCH-EVENT/],
+    ['an unselected event id', (run) => [{ ...run[0], competition_id: unselectedId() }, ...run.slice(1)], /not selected/],
+    ['a duplicate event id', (run) => [...run, run[0]], /more than once/],
+    ['a day out of range', (run, days) => [{ ...run[0], day: days }, ...run.slice(1)], /day/],
+    ['a negative day', (run) => [{ ...run[0], day: -1 }, ...run.slice(1)], /day/],
+    [
+      'a start_time off its day axis',
+      (run) => [{ ...run[0], start_time: run[0].start_time + DAY_AXIS_SPACING_MINS }, ...run.slice(1)],
+      /start_time/,
+    ],
+    ['a strip_count below 1', (run) => [{ ...run[0], strip_count: 0 }, ...run.slice(1)], /strip_count/],
+    ['a fractional strip_count', (run) => [{ ...run[0], strip_count: 1.5 }, ...run.slice(1)], /strip_count/],
+    ['an entry that is not an object', (run) => [null, ...run.slice(1)], /object/],
+    ['a run that is not an array', () => ({ not: 'an array' }), /array/],
+  ]
+
+  it.each(INVALID)('refuses the whole run for %s, keeps the rest of the load, and says why', (_name, corrupt, reason) => {
+    const { payload, run, days } = pinnedPayload()
+    ;(payload as unknown as Record<string, unknown>).run = corrupt(run, days)
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toBeNull()
+    expect(result.runRefused).toMatch(reason)
+    expect(result.state.strips_total).toBe(payload.tournament.strips_total)
+    expect(Object.keys(result.state.placements ?? {}).length).toBeGreaterThan(0)
+  })
+
+  it('carries the refusal through decodeFromUrl as it does through a file', () => {
+    const { payload, run } = pinnedPayload()
+    payload.run = [{ ...run[0], strip_count: 0 }]
+    const hash = `#config=${btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
+    const result = decodeFromUrl(hash)
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toBeNull()
+    expect(result.runRefused).toMatch(/strip_count/)
   })
 })

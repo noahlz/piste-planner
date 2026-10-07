@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
-import { runScheduleAll } from '../../src/store/runActions.ts'
+import { runScheduleAll, replayRun } from '../../src/store/runActions.ts'
 import { DAY_AXIS_SPACING_MINS, buildTournamentConfig, buildPinnedPlacements } from '../../src/store/buildConfig.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { placementFromResult } from '../../src/engine/derive.ts'
@@ -306,5 +306,53 @@ describe('runScheduleAll keeps the run', () => {
 
     expect(useStore.getState().lastRun).toBeNull()
     expect(useStore.getState().placements).toBe(placements)
+  })
+})
+
+describe('replayRun (017 T8)', () => {
+  it('rebuilds the kept run from its pins and writes no placement', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const kept = useStore.getState().lastRun
+    const placements = useStore.getState().placements
+    expect(kept, 'premise: the run was kept').not.toBeNull()
+    useStore.getState().setLastRun(null)
+
+    replayRun(useStore.getState(), kept!.pins)
+
+    expect(useStore.getState().lastRun).toEqual(kept)
+    expect(useStore.getState().placements).toBe(placements)
+  })
+
+  it('hands the scheduler the pins it was given', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const [id, placement] = Object.entries(useStore.getState().placements)[0]
+    const pins = [
+      {
+        competition_id: id,
+        day: placement.day,
+        start_time: placement.day * DAY_AXIS_SPACING_MINS + placement.start_time,
+        strip_count: placement.strip_count,
+      },
+    ]
+    vi.mocked(scheduleAll).mockClear()
+
+    replayRun(useStore.getState(), pins)
+
+    expect(scheduleAll).toHaveBeenCalledTimes(1)
+    expect(thirdArgOfCall(0)).toEqual(pins)
+  })
+
+  it('clears the kept run when the replay throws', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    vi.mocked(scheduleAll).mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+
+    replayRun(useStore.getState(), [])
+
+    expect(useStore.getState().lastRun).toBeNull()
   })
 })

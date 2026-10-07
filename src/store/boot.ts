@@ -1,7 +1,7 @@
-import { useStore } from './store.ts'
 import { decodeFromUrl } from './serialization.ts'
 import { applyPreset } from './presets.ts'
 import { runScheduleAll } from './runActions.ts'
+import { applyLoadedState } from './exportActions.ts'
 import type { ScenarioId } from '../data/tournaments.ts'
 
 /** The preset the app opens on when no shared link says otherwise. */
@@ -13,7 +13,10 @@ export const DEFAULT_PRESET_ID: ScenarioId = 'B1'
  *
  * A readable `#config=` fragment wins outright — the sender's tournament is
  * the tournament, so no preset is loaded over it and the auto-scheduler does
- * not run, leaving whatever placements the link carried. Everything else,
+ * not run, leaving whatever placements the link carried. When the link also
+ * carries the sender's `run`, boot replays it (017 R6), so the receiver's
+ * board is the sender's, and a link without a valid run opens stale.
+ * Everything else,
  * an unreadable fragment included, falls through to the default preset and
  * auto-schedules it, so the center shows a populated schedule with no user
  * action rather than an empty form.
@@ -26,12 +29,15 @@ export function bootstrap(hash: string = window.location.hash): void {
     if ('error' in result) {
       console.error('Failed to load config from URL:', result.error)
     } else {
-      useStore.setState(result.state)
+      applyLoadedState(result.state, result.run)
       if (result.droppedPlacements.length > 0) {
         console.warn(
           'Dropped placements for events not in the shared configuration:',
           result.droppedPlacements.join(', '),
         )
+      }
+      if (result.runRefused !== null) {
+        console.warn('Ignored the shared run, the board opens stale:', result.runRefused)
       }
       return
     }

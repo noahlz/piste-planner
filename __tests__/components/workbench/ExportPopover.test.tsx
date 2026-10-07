@@ -5,6 +5,8 @@ import { useStore } from '../../../src/store/store.ts'
 import { serializeState } from '../../../src/store/serialization.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { selectDrawnSchedule, RunState } from '../../../src/store/derived.ts'
+import { payloadWithRefusedRun, resetReceiver, sendBoard } from '../../helpers/replayFixtures.ts'
 
 // 013 T010 — re-targets the deleted __tests__/components/saveLoadShare.test.tsx
 // at ExportPopover, the Header's Popover wrapper over the same
@@ -289,5 +291,58 @@ describe('ExportPopover share tests', () => {
       expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
     })
     expect(writeText).toHaveBeenCalledOnce()
+  })
+})
+
+// ──────────────────────────────────────────────
+// 017 T8: a saved file replays the sender's run
+// ──────────────────────────────────────────────
+
+describe('ExportPopover load with a run (017 T8)', () => {
+  it('replays a valid run, so the board is the sender\'s and the notice stays empty', async () => {
+    const sent = sendBoard({ moved: true })
+    resetReceiver()
+    render(<ExportPopover defaultOpen />)
+
+    uploadJson(sent.json)
+
+    await waitFor(() => {
+      expect(useStore.getState().lastRun).not.toBeNull()
+    })
+    expect(selectDrawnSchedule(useStore.getState())).toEqual(sent.drawn)
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+  })
+
+  it('says the run was refused, with the reason, and opens the board stale', async () => {
+    const sent = sendBoard({ pinned: true })
+    const payload = payloadWithRefusedRun(sent)
+    resetReceiver()
+    render(<ExportPopover defaultOpen />)
+
+    uploadJson(JSON.stringify(payload))
+
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toMatch(/saved run/i)
+    })
+    expect(screen.getByRole('status').textContent).toMatch(/strip_count/)
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+
+  it('clears the refusal notice on the next good load', async () => {
+    const sent = sendBoard({ pinned: true })
+    const bad = payloadWithRefusedRun(sent)
+    resetReceiver()
+    render(<ExportPopover defaultOpen />)
+    uploadJson(JSON.stringify(bad))
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toMatch(/saved run/i)
+    })
+
+    uploadJson(sent.json)
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
   })
 })
