@@ -17,6 +17,11 @@
  * validation rules list ids their message does not name) and couples to wording
  * on purpose, as a one-time cross-check that subjects name what the message names. A future switch to
  * display names in messages must update it.
+ *
+ * Since 016 the oracle also bounds a set `day` to the scenario's days and
+ * requires every day-scoped rule the scenarios reach to carry a day. B1-B8 emit
+ * no hard-separation-violated finding, so that rule's day is pinned only in
+ * concurrentScheduler.test.ts.
  */
 import { describe, it, expect, beforeAll } from 'vitest'
 import { BottleneckRule, Phase, ValidationMode } from '../../src/engine/types.ts'
@@ -64,7 +69,7 @@ function runScenario(id: (typeof SCENARIO_IDS)[number]) {
   const validationRules = new Set<string>(
     validateConfig(config, competitions, ValidationMode.BINDING).map(ve => ve.rule),
   )
-  return { competitions, bottlenecks, warnings: analysis.warnings, validationRules, days, schedule }
+  return { competitions, bottlenecks, warnings: analysis.warnings, validationRules, days }
 }
 
 describe('Bottleneck rule and subjects invariants', () => {
@@ -117,19 +122,6 @@ describe('Bottleneck rule and subjects invariants', () => {
       .filter(b => dayScoped.has(b.rule))
     expect(reached.length).toBeGreaterThan(0)
     for (const b of reached) expect(b.day, `day of ${b.rule} "${b.message}"`).toBeTypeOf('number')
-  })
-
-  // Ties the field to the day map rather than to a constant: both subjects of a
-  // violated pair share the day the finding names.
-  it('every hard-separation-violated finding names the day both its subjects were assigned', () => {
-    for (const id of SCENARIO_IDS) {
-      const { bottlenecks, schedule } = scenarios[id]
-      for (const b of bottlenecks.filter(x => x.rule === BottleneckRule.HARD_SEPARATION_VIOLATED)) {
-        for (const subject of b.subjects) {
-          expect(b.day, `${id} day of ${b.message}`).toBe(schedule[subject].assigned_day)
-        }
-      }
-    }
   })
 
   it('the scenarios between them check at least one validation-derived bottleneck', () => {

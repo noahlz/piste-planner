@@ -611,10 +611,10 @@ describe('initialAnalysis – day-scoped findings carry their 0-based day (016 T
     })
 
     it('prints the day 1-based, as Day 3', () => {
-      for (const w of findings()) {
-        expect(w.message).toMatch(/Day 3\b/)
-        expect(w.message).not.toMatch(/day 2\b/i)
-      }
+      expect(findings().map((w) => w.message)).toEqual([
+        'Multiple flighted competitions on Day 3: flt-1, flt-2',
+        'Multiple flighted competitions on Day 3: flt-1, flt-2',
+      ])
     })
   })
 
