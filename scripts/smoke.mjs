@@ -292,14 +292,17 @@ log('footer metrics all present at boot')
 // moved that function's body into the engine without changing the store path,
 // so B1's boot figure must stay at what planning measured before it
 // (specs/016-hand-placement-rules/spec.md §What planning measured: store B1
-// day 1 = 218, day 2 = 140, so the peak is 218).
+// day 1 = 218, day 2 = 140, so the peak was 218).
+// 017 T9: 218 became 210. The peak is now the scheduler's own timeline, waits
+// included, rather than the store's separate demand estimate
+// (specs/017-canvas-tells-truth/spec.md §7 Referee demand, §Expected drift).
 const bootRefsPeak = Number(
   (await footer.locator('[data-metric="refs"] > span').last().textContent())?.trim(),
 )
-if (bootRefsPeak !== 218) {
-  throw new Error(`B1 boot footer peak referees changed: expected 218 (planning's store figure), got ${bootRefsPeak}`)
+if (bootRefsPeak !== 210) {
+  throw new Error(`B1 boot footer peak referees changed: expected 210 (017 T9, the timeline's peak), got ${bootRefsPeak}`)
 }
-log('016: B1 boot footer peak referees =', bootRefsPeak, '(unchanged from before Task E)')
+log('017 T9: B1 boot footer peak referees =', bootRefsPeak, '(the timeline peak, was 218)')
 
 const summaryAtBoot = (await page.locator('[data-summary]').textContent()) ?? ''
 const dayCount = Number(summaryAtBoot.match(/(\d+) days/)?.[1])
