@@ -710,11 +710,16 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
     }
   }
 
-  function pairBottleneck(rule: string, message: string): ReturnType<typeof makeBottleneck> {
+  function pairBottleneck(
+    rule: string,
+    message: string,
+    phase: Phase = Phase.POOLS,
+    owner: string = OWNER,
+  ): ReturnType<typeof makeBottleneck> {
     return makeBottleneck({
-      competition_id: OWNER,
+      competition_id: owner,
       subjects: [OWNER, PARTNER],
-      phase: Phase.POOLS,
+      phase,
       rule,
       message,
     })
@@ -752,10 +757,10 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
   }
 
   it.each([
-    BottleneckRule.HARD_SEPARATION_VIOLATED,
-    BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO,
-  ])('shows a %s finding on every block of both events, in every phase', (rule) => {
-    const { schedule, findings, dayConfigs } = pairBoard([pairBottleneck(rule, PAIR_MESSAGE)])
+    { rule: BottleneckRule.HARD_SEPARATION_VIOLATED, phase: Phase.DAY_ASSIGNMENT, owner: OWNER },
+    { rule: BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO, phase: Phase.DE, owner: PARTNER },
+  ])('shows a $rule finding on every block of both events, in every phase', ({ rule, phase, owner }) => {
+    const { schedule, findings, dayConfigs } = pairBoard([pairBottleneck(rule, PAIR_MESSAGE, phase, owner)])
     renderCanvas({ schedule, findings, dayConfigs })
 
     for (const id of [OWNER, PARTNER]) {
@@ -770,6 +775,42 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
     }
   })
 
+  it("keeps the pair message on the owner's blocks when the owner also has a single-subject finding", () => {
+    const { schedule, findings, dayConfigs } = pairBoard([
+      pairBottleneck(BottleneckRule.HARD_SEPARATION_VIOLATED, PAIR_MESSAGE),
+      makeBottleneck({ competition_id: OWNER, phase: Phase.DE, message: 'de only' }),
+    ])
+    renderCanvas({ schedule, findings, dayConfigs })
+
+    for (const block of blocksOf(OWNER)) {
+      expect(findingsText(block), block.dataset.phase).toContain(PAIR_MESSAGE)
+    }
+    const de = blocksOf(OWNER).find((b) => b.dataset.phase === Phase.DE)
+    if (!de) throw new Error('fixture lacks a DE block')
+    expect(findingsText(de)).toContain('de only')
+  })
+
+  it.each([2, 3])('lists a shared message once per block when %i mirrored warnings carry it', (count) => {
+    const ids = [OWNER, PARTNER, BYSTANDER].slice(0, count)
+    const mirrored = ids.map((id) =>
+      makeBottleneck({
+        competition_id: id,
+        subjects: ids,
+        phase: Phase.DE,
+        rule: BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY,
+        message: PAIR_MESSAGE,
+      }),
+    )
+    const { schedule, findings, dayConfigs } = pairBoard(mirrored)
+    renderCanvas({ schedule, findings, dayConfigs })
+
+    for (const id of ids) {
+      for (const block of blocksOf(id)) {
+        expect(occurrences(findingsText(block), PAIR_MESSAGE), `${id} ${block.dataset.phase}`).toBe(1)
+      }
+    }
+  })
+
   it('lists a two-event message once per block, even when the event also owns a matching phase', () => {
     const { schedule, findings, dayConfigs } = pairBoard([
       pairBottleneck(BottleneckRule.HARD_SEPARATION_VIOLATED, PAIR_MESSAGE),
@@ -781,7 +822,7 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
     }
   })
 
-  it('flags the gutter rows and the findings edge of both events a two-event row names', () => {
+  it('draws the findings edge on every block of both events a two-event row names', () => {
     const { schedule, findings, dayConfigs } = pairBoard([])
     renderCanvas(
       { schedule, findings, dayConfigs },
@@ -794,16 +835,30 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
       }
     }
     for (const block of blocksOf(BYSTANDER)) expect(block.dataset.warned).toBe('false')
+  })
 
-    const flaggedCount = () => stripRowsInDay(0).filter((r) => r.dataset.flagged === 'true').length
-    const bothFlagged = flaggedCount()
-    cleanup()
+  it('flags exactly the strip rows of both events a two-event row names', () => {
+    const { schedule, findings, dayConfigs } = pairBoard([])
     renderCanvas(
       { schedule, findings, dayConfigs },
-      { findingRows: [{ ...pairRow(BottleneckRule.HARD_SEPARATION_VIOLATED, PAIR_MESSAGE), subjects: [OWNER] }] },
+      { findingRows: [pairRow(BottleneckRule.HARD_SEPARATION_VIOLATED, PAIR_MESSAGE)] },
     )
-    // The partner's strips add rows the owner alone does not flag.
-    expect(bothFlagged).toBeGreaterThan(flaggedCount())
+
+    const stripsOf = (id: string): string[] =>
+      blocksOf(id).flatMap((block) => {
+        const first = Number(block.dataset.firstStrip)
+        return Array.from({ length: Number(block.dataset.strips) }, (_, i) => String(first + i))
+      })
+    const expected = [...new Set([...stripsOf(OWNER), ...stripsOf(PARTNER)])].sort()
+    const flagged = stripRowsInDay(0)
+      .filter((r) => r.dataset.flagged === 'true')
+      .map((r) => r.dataset.stripRow as string)
+      .sort()
+
+    expect(flagged).toEqual(expected)
+    for (const strip of stripsOf(BYSTANDER)) {
+      expect(flagged, `bystander strip ${strip}`).not.toContain(strip)
+    }
   })
 
   it('still narrows a single-subject bottleneck to the block phase', () => {

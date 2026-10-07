@@ -255,6 +255,7 @@ describe('selectFindings — target/day/where for a competition-subject validati
     const row = rows.find((r) => r.id === id)
     expect(row).toBeDefined()
     expect(row?.target).toBe('JR-M-EPEE-IND')
+    expect(row?.subjects).toEqual(['JR-M-EPEE-IND'])
     expect(row?.day).toBe(0)
 
     const schedule = selectDerivedSchedule(state)

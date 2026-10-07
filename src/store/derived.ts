@@ -473,7 +473,7 @@ export interface Finding {
   /** 0-based store day, or null when the row belongs to no drawn day. */
   day: number | null
   message: string
-  /** Competition id when the row names one, for the canvas jump and the gutter flag. */
+  /** Competition id when the row names one, for the canvas jump. */
   target: string | null
   /**
    * Every competition on the board the row names, sorted and unique, so the
