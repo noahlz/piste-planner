@@ -287,6 +287,20 @@ for (const metric of ['finish', 'refs', 'strips']) {
 }
 log('footer metrics all present at boot')
 
+// 016 task S, check 3: the footer's "Peak referees" is `refs:peak-total`, the
+// tournament peak (max over days) off the store's `buildRefDemandByDay`. Task E
+// moved that function's body into the engine without changing the store path,
+// so B1's boot figure must stay at what planning measured before it
+// (specs/016-hand-placement-rules/spec.md §What planning measured: store B1
+// day 1 = 218, day 2 = 140, so the peak is 218).
+const bootRefsPeak = Number(
+  (await footer.locator('[data-metric="refs"] > span').last().textContent())?.trim(),
+)
+if (bootRefsPeak !== 218) {
+  throw new Error(`B1 boot footer peak referees changed: expected 218 (planning's store figure), got ${bootRefsPeak}`)
+}
+log('016: B1 boot footer peak referees =', bootRefsPeak, '(unchanged from before Task E)')
+
 const summaryAtBoot = (await page.locator('[data-summary]').textContent()) ?? ''
 const dayCount = Number(summaryAtBoot.match(/(\d+) days/)?.[1])
 if (!dayCount) throw new Error(`could not read the header day count (got "${summaryAtBoot}")`)
@@ -1243,6 +1257,149 @@ if ((await videoField.inputValue()) !== '0') {
 }
 log('type NAC → ROC: referees per pool and video strips re-resolved')
 await shot('08b-advanced-roc')
+
+// ── 016 task S: hand-made rule breaks ──
+// The app has no canvas drag. A hand placement is the Selected-event strip's
+// "Move day" menu: click a block, press "Move day", pick "Day N" (DetailStrip.tsx).
+// Blocks carry `data-event-id` and `data-day`; a POOLS block is the one per
+// event whose day is the event's pool day.
+async function poolDayOf(id) {
+  const blk = page.locator(`[data-event-block="${id}:POOLS"]`).first()
+  return Number(await blk.getAttribute('data-day'))
+}
+
+async function moveEventToDay(id, day) {
+  await closePanel()
+  const blk = page.locator(`[data-event-block="${id}:POOLS"]`).first()
+  await blk.scrollIntoViewIfNeeded()
+  // A dispatched click, not a pointer click: an overflowing (dashed) block of
+  // another event can be drawn over this one and intercept the pointer.
+  await blk.dispatchEvent('click')
+  const strip = page.getByRole('region', { name: 'Selected event' })
+  await strip.waitFor()
+  await strip.getByRole('button', { name: 'Move day' }).click()
+  await strip.getByRole('menuitem', { name: `Day ${day + 1}`, exact: true }).click()
+  await page.waitForTimeout(500)
+}
+
+async function setTournamentType(type) {
+  await openPanel('Tournament')
+  await page
+    .getByRole('radiogroup', { name: 'Tournament type' })
+    .getByRole('radio', { name: type, exact: true })
+    .click()
+  await page.waitForTimeout(400)
+}
+
+async function eventIds() {
+  return page.$$eval('[data-event-block]', (els) => [...new Set(els.map((e) => e.getAttribute('data-event-id')))])
+}
+
+// Check 1: NAC Cadet/Junior has CADET and JUNIOR × 3 weapons × 2 genders. At a
+// NAC Cadet and Junior of one weapon and gender are a hard Group 1 pair.
+await setTournamentType('NAC')
+await choosePreset('NAC Cadet/Junior')
+await pressSuggest('016 NAC Cadet/Junior')
+await page.getByRole('button', { name: 'Auto-assign' }).click()
+await page.waitForTimeout(500)
+await closePanel()
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(300)
+const nacIds = await eventIds()
+log('016 NAC event ids sample:', nacIds.slice(0, 8).join(','))
+const junFoil = nacIds.find((id) => id === 'JR-M-FOIL-IND')
+const cadFoil = nacIds.find((id) => id === 'CDT-M-FOIL-IND')
+if (!junFoil || !cadFoil) throw new Error(`016 check 1: could not find Junior/Cadet Men's Foil among ${nacIds.join(',')}`)
+const junDay = await poolDayOf(junFoil)
+const cadDay = await poolDayOf(cadFoil)
+log('016 check 1:', junFoil, 'day', junDay + 1, '|', cadFoil, 'day', cadDay + 1)
+if (junDay === cadDay) throw new Error(`016 check 1: ${junFoil} and ${cadFoil} already share day ${junDay + 1} before the move`)
+await moveEventToDay(cadFoil, junDay)
+if ((await poolDayOf(cadFoil)) !== junDay) throw new Error('016 check 1: the Move day did not put the Cadet event on the Junior event\'s day')
+
+await openPanel('Findings')
+const findingsList = page.getByRole('complementary', { name: 'Inspector panel' })
+const hardRow = findingsList
+  .locator('[data-finding-id]')
+  .filter({ hasText: 'may never share a day' })
+if ((await hardRow.count()) !== 1) {
+  await shot('016-check1-no-row')
+  throw new Error(`016 check 1: expected one "may never share a day" row, found ${await hardRow.count()}`)
+}
+const hardSeverity = await hardRow.getAttribute('data-severity')
+const hardMessage = (await hardRow.locator('[data-message]').textContent()) ?? ''
+if (!/warning/i.test(hardSeverity ?? '')) throw new Error(`016 check 1: hard-pair row severity is "${hardSeverity}", not Warning`)
+for (const word of ["Junior", "Cadet"]) {
+  if (!hardMessage.includes(word)) throw new Error(`016 check 1: row message does not name ${word}: "${hardMessage}"`)
+}
+if ((await hardRow.getByRole('button', { name: 'Dismiss finding' }).count()) !== 0) {
+  throw new Error('016 check 1: the hard-pair Warning row carries a dismiss control')
+}
+log('016 check 1: Warning row names both events, no dismiss control:', hardMessage)
+
+await closePanel()
+for (const id of [junFoil, cadFoil]) {
+  const warnedFlags = await page.$$eval(`[data-event-id="${id}"]`, (els) => els.map((e) => e.getAttribute('data-warned')))
+  if (!warnedFlags.includes('true')) {
+    await shot('016-check1-no-marker')
+    throw new Error(`016 check 1: no block of ${id} carries data-warned="true" (saw ${warnedFlags.join(',')})`)
+  }
+}
+log('016 check 1: both events carry the findings marker (data-warned)')
+await shot('016-check1-hard-pair')
+
+// Check 2: a ROC template, then the regional Group 1 window row. The soft
+// types read the pair as a Note when the younger event starts inside the
+// window ("regional-window-honoured") and as a Warning when it does not.
+await setTournamentType('ROC')
+await choosePreset('ROC Mega')
+await pressSuggest('016 ROC Mega')
+await closePanel()
+await openPanel('Findings')
+const regionalRows = () =>
+  page
+    .getByRole('complementary', { name: 'Inspector panel' })
+    .locator('[data-finding-id]')
+    .filter({ hasText: 'regional Group 1 window' })
+let regionalSeen = await regionalRows().count()
+log('016 check 2: regional rows after the ROC auto-run =', regionalSeen)
+if (regionalSeen === 0) {
+  // Move one member of a Group 1 pair onto the other's day by hand.
+  await closePanel()
+  const rocIds = await eventIds()
+  // ROC Mega is the ROC template with Cadet and Junior (a Group 1 pair) of
+  // every weapon and gender; ROC Div1A/Vet has none.
+  const pairs = []
+  for (const w of ['FOIL', 'EPEE', 'SABRE']) {
+    for (const g of ['M', 'W']) {
+      const jr = `JR-${g}-${w}-IND`
+      const cdt = `CDT-${g}-${w}-IND`
+      if (rocIds.includes(jr) && rocIds.includes(cdt)) pairs.push([jr, cdt])
+    }
+  }
+  log('016 check 2: candidate pairs', pairs.slice(0, 4).map((p) => p.join('~')).join(' | '))
+  if (!pairs.length) throw new Error(`016 check 2: no Group 1 pair among ${rocIds.join(',')}`)
+  const [a, b] = pairs[0]
+  const target = await poolDayOf(a)
+  if ((await poolDayOf(b)) !== target) await moveEventToDay(b, target)
+  await openPanel('Findings')
+  regionalSeen = await regionalRows().count()
+}
+if (regionalSeen === 0) {
+  await shot('016-check2-no-row')
+  throw new Error('016 check 2: no regional Group 1 window row with a Group 1 pair on one day')
+}
+const regionalSeverity = await regionalRows().first().getAttribute('data-severity')
+const regionalMessage = (await regionalRows().first().locator('[data-message]').textContent()) ?? ''
+log('016 check 2: regional row severity =', regionalSeverity, '|', regionalMessage)
+if (/note/i.test(regionalSeverity ?? '')) {
+  log('016 check 2: saw the Note (regional-window-honoured)')
+} else if (/warning/i.test(regionalSeverity ?? '') && regionalMessage.includes('not honoured')) {
+  log('016 check 2: saw the Warning (regional-window-not-honoured), the accepted alternative')
+} else {
+  throw new Error(`016 check 2: regional row is neither a Note nor the not-honoured Warning: ${regionalSeverity} "${regionalMessage}"`)
+}
+await shot('016-check2-regional')
 
 await browser.close()
 log('console errors =', errors.length, errors.slice(0, 3))
