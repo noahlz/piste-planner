@@ -52,10 +52,11 @@ export function stripRangeLabel(firstStrip: number, stripCount: number): string 
  * The strips a set of 0-based indices names, 1-based, one run per maximal
  * stretch of consecutive indices. A drawn phase may hold strips that are not
  * contiguous (the scheduler's own index sets, 017 spec §6). An unseated
- * phase holds none, so callers name that case themselves and pass a non-empty
- * set.
+ * phase holds none, so callers name that case themselves: an empty set throws
+ * a `RangeError` rather than printing "Strips " with nothing after it.
  */
 export function stripSetLabel(strips: readonly number[]): string {
+  if (strips.length === 0) throw new RangeError('stripSetLabel: an empty strip set names no strips')
   const sorted = [...new Set(strips)].sort((a, b) => a - b)
   const runs: { first: number; count: number }[] = []
   for (const strip of sorted) {

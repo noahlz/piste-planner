@@ -9,6 +9,7 @@ import { findingIdentity } from '../../src/engine/validation.ts'
 import { DeMode, Weapon } from '../../src/engine/types.ts'
 import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
 import {
+  RunState,
   selectDaySummaries,
   selectDerivedFindings,
   selectDrawnSchedule,
@@ -101,25 +102,25 @@ function twoJuniorEpeeOnSeparateDays(): void {
   })
 }
 
-/** Expected events/finish/unplaced for one day, read off the drawn blocks — never typed by hand.
+/** Expected events/finish for one day, read off the drawn blocks — never typed by hand.
  *
  * `peakStrips` is deliberately not computed here (test-quality-reviewer
  * finding on 05103d5ff4): this used to re-implement `peakStripsOnDay`'s own
  * half-open interval-overlap loop, so an off-by-one shared by both
  * implementations would have passed unnoticed. It is asserted separately
- * below as a literal, reasoned out from the fixture's own block times. */
+ * below as a literal, reasoned out from the fixture's own block times.
+ * `unplaced` is likewise asserted as a literal, not computed here. */
 function expectedBlockFields(
   blocks: readonly DrawnScheduleBlock[],
   day: number,
-): Pick<DaySummary, 'events' | 'finish' | 'unplaced'> {
+): Pick<DaySummary, 'events' | 'finish'> {
   const dayBlocks = blocks.filter((b) => b.day === day)
   if (dayBlocks.length === 0) {
-    return { events: 0, finish: null, unplaced: 0 }
+    return { events: 0, finish: null }
   }
   const events = new Set(dayBlocks.map((b) => b.competitionId)).size
   const finish = Math.max(...dayBlocks.map((b) => b.endMinutes))
-  const unplaced = new Set(dayBlocks.filter((b) => b.countsAsUnplaced).map((b) => b.competitionId)).size
-  return { events, finish, unplaced }
+  return { events, finish }
 }
 
 /**
@@ -160,9 +161,11 @@ describe('selectDaySummaries — per-day fields, read off the drawn blocks', () 
     const summaries = selectDaySummaries(state)
     expect(summaries).toHaveLength(3)
 
+    // The board was never run, so it is stale, and the unseated JR-M-FOIL-IND
+    // DE on day 0 does not count as unplaced (P4 (a)): every day reads 0.
     for (let day = 0; day < 3; day++) {
       const expected = expectedBlockFields(blocks, day)
-      expect(summaries[day], `day ${day}`).toMatchObject({ day, ...expected })
+      expect(summaries[day], `day ${day}`).toMatchObject({ day, ...expected, unplaced: 0 })
     }
   })
 
@@ -185,6 +188,10 @@ describe('selectDaySummaries — per-day fields, read off the drawn blocks', () 
     expect(summaries[2].peakStrips).toBe(0)
   })
 
+  // A bound, not an exact value. No B1–B8 board has an unseated phase at
+  // boot, so the boot half is a characterisation check that held before 017
+  // too; only the after-move half can tell held strips from requested ones.
+  // The exact value is pinned by the next test.
   it.each(SCENARIO_IDS)('never claims more strips at peak than %s has, at boot or after the headline move', (scenario) => {
     runPreset(scenario)
     const atBoot = selectDaySummaries(useStore.getState())
@@ -195,6 +202,16 @@ describe('selectDaySummaries — per-day fields, read off the drawn blocks', () 
     for (const summary of selectDaySummaries(useStore.getState())) {
       expect(summary.peakStrips, `moved day ${summary.day}`).toBeLessThanOrEqual(stripsTotal)
     }
+  })
+
+  it('reads 80 at peak on the day B1\'s headline move lands on', () => {
+    const { day } = runAndMoveHeadline('B1')
+
+    // D1-M-EPEE-IND's unseated POOLS (45 strips asked) and DE_PRELIMS (16)
+    // hold nothing and add nothing. The day's busiest instant holds all 80
+    // strips. Counting what the phases asked for would read 122.
+    expect(day).toBe(1)
+    expect(selectDaySummaries(useStore.getState())[day].peakStrips).toBe(80)
   })
 
   it('reports events 0, finish null and peakStrips 0 for a day with nothing placed on it', () => {
@@ -259,6 +276,10 @@ describe('selectDaySummaries — findings, re-pointed to selectFindings (013 T03
   })
 })
 
+// The band's `unplaced` is a data field with no display yet: the band text
+// (Canvas.tsx `dayBandText`) prints events, finish, peak strips and findings,
+// as it did before 017. Whether it should print "N unplaced" is an owner
+// question raised at T6a review, so these cases pin the field only.
 describe('selectDaySummaries — unplaced counts the drawn model\'s events (017 spec §4)', () => {
   it('after the headline move, the moved event\'s band and the footer both count 1', () => {
     const { id, day } = runAndMoveHeadline('B1')
@@ -277,7 +298,7 @@ describe('selectDaySummaries — unplaced counts the drawn model\'s events (017 
     setPoolRoundDuration(Weapon.EPEE, pool_round_duration_table[Weapon.EPEE] + 30)
     const state = useStore.getState()
     const model = selectDrawnSchedule(state)
-    expect(model.runState, 'premise: the settings edit makes the board stale').toBe('stale')
+    expect(model.runState, 'premise: the settings edit makes the board stale').toBe(RunState.STALE)
     expect(model.blocks.some((b) => b.unseated), 'premise: the stale board has unseated phases').toBe(true)
 
     expect(selectDaySummaries(state).map((s) => s.unplaced)).toEqual(Array.from({ length: state.days_available }, () => 0))

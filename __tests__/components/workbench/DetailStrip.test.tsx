@@ -16,9 +16,9 @@ import { eventTimeSegments } from '../../../src/layout/segments.ts'
 import { estimateEventFootprint } from '../../../src/engine/derive.ts'
 import { phaseDisplay, stripSetLabel } from '../../../src/lib/placementLabels.ts'
 import { formatClock, formatMinutes } from '../../../src/lib/time.ts'
-import { DeMode, Phase, PlacementSource } from '../../../src/engine/types.ts'
+import { DeMode, Phase, PlacementSource, Weapon } from '../../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
-import { drawnFromDerived, runAndMoveHeadline } from '../../helpers/drawnFixtures.ts'
+import { drawnFromDerived, runAndMoveHeadline, runPreset } from '../../helpers/drawnFixtures.ts'
 
 // 013 T028 (part b) — red tests for the detail strip (contract §4,
 // phase4-contract.md). DetailStrip.tsx does not exist yet (T029 writes it),
@@ -225,17 +225,137 @@ describe('DetailStrip facts (contract §4 Facts)', () => {
   it('names the strips an event the model counts unplaced still needs', () => {
     const { id } = runAndMoveHeadline('B1')
     const schedule = selectDrawnSchedule(useStore.getState())
-    const unplacedBlocks = schedule.blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced)
-    expect(unplacedBlocks.length, 'premise: the headline move leaves the event unplaced').toBeGreaterThan(0)
+    expect(
+      schedule.blocks.some((b) => b.competitionId === id && b.countsAsUnplaced),
+      'premise: the headline move leaves the event unplaced',
+    ).toBe(true)
     futureState().selectCompetition(id)
 
     render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
 
-    const needed = Math.max(...unplacedBlocks.map((b) => b.stripCount))
+    // D1-M-EPEE-IND on its new day: POOLS asks 45 strips and DE_PRELIMS 16,
+    // both unseated, while DE_ROUND_OF_16 sits on 4. The widest unseated ask is 45.
     expect(screen.getByRole('region', { name: 'Selected event' })).toHaveAttribute(
       'data-selected-strips',
-      `Unplaced, needs ${needed} strips`,
+      'Unplaced, needs 45 strips',
     )
+  })
+
+  it('takes "needs N strips" from the unseated phase, not a wider seated one', () => {
+    const config = makeConfig({ strips: makeStrips(20, 0) })
+    const blocker = makeCompetition({ id: 'aaa-blocker', fencer_count: 24 })
+    const selected = makeCompetition({ id: 'bbb-selected', fencer_count: 24 })
+    const schedule = drawnFromDerived(
+      {
+        config,
+        competitions: [blocker, selected],
+        events: {
+          [blocker.id]: {
+            result: {
+              ...makeScheduleResult(blocker.id, 0),
+              pool_start: 400, pool_end: 460, pool_strip_count: 2,
+              de_start: 600, de_end: 700, de_strip_count: 15,
+            },
+            day_out_of_range: false,
+          },
+          [selected.id]: {
+            result: {
+              ...makeScheduleResult(selected.id, 0),
+              pool_start: 480, pool_end: 600, pool_strip_count: 10,
+              de_start: 600, de_end: 700, de_strip_count: 8,
+            },
+            day_out_of_range: false,
+          },
+        },
+      },
+      RunState.FRESH,
+    )
+    const selectedBlocks = schedule.blocks.filter((b) => b.competitionId === selected.id)
+    expect(
+      selectedBlocks.map((b) => [b.phase, b.strips.length, b.countsAsUnplaced]),
+      'premise: the 10-strip pools seat and the 8-strip DE does not',
+    ).toEqual([[Phase.POOLS, 10, false], [Phase.DE, 0, true]])
+    futureState().selectCompetition(selected.id)
+
+    render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    // By hand: the blocker starts first, so it is seated first, and its DE takes
+    // 15 of the 20 strips at 600-700. The selected pools (480-600) end as that
+    // DE begins, so they seat on 10 strips. The selected DE needs 8 at 600-700
+    // where only 5 are free. The label names the unseated DE's 8, not the 10.
+    expect(screen.getByRole('region', { name: 'Selected event' })).toHaveAttribute(
+      'data-selected-strips',
+      'Unplaced, needs 8 strips',
+    )
+  })
+})
+
+/**
+ * B1 run, then a settings edit (as daySummaries.test.ts does), so the board
+ * is stale and some events keep phases the assigner could not seat at the
+ * edited times.
+ */
+function staleB1Board(): DrawnSchedule {
+  runPreset('B1')
+  const { setPoolRoundDuration, pool_round_duration_table } = useStore.getState()
+  setPoolRoundDuration(Weapon.EPEE, pool_round_duration_table[Weapon.EPEE] + 30)
+  return selectDrawnSchedule(useStore.getState())
+}
+
+// P4 (a) makes an unseated phase on a stale board unknown, not unplaced. The
+// spec does not say what the strip label reads then, so these cases pin what
+// the detail strip does today. The owner decides the wording, and changing it
+// means changing these on purpose.
+describe('DetailStrip strip label on a stale board (P4 (a))', () => {
+  it('names the strips the seated phases hold, not "Unplaced", when the pools are unseated', () => {
+    const schedule = staleB1Board()
+    const id = 'JR-W-EPEE-IND'
+    expect(schedule.runState, 'premise: the settings edit makes the board stale').toBe(RunState.STALE)
+    expect(
+      schedule.blocks.filter((b) => b.competitionId === id).map((b) => [b.phase, b.unseated]),
+      'premise: only the pools are unseated',
+    ).toEqual([[Phase.POOLS, true], [Phase.DE_PRELIMS, false], [Phase.DE_ROUND_OF_16, false]])
+    futureState().selectCompetition(id)
+
+    render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    // DE_PRELIMS holds 0-based strips 12-27 and DE_ROUND_OF_16 holds 4-7.
+    expect(screen.getByRole('region', { name: 'Selected event' })).toHaveAttribute(
+      'data-selected-strips',
+      'Strips 5–8, 13–28',
+    )
+  })
+
+  it('renders no strip label for an event with every phase unseated', () => {
+    const config = makeConfig({ strips: makeStrips(20, 0) })
+    const blocker = makeCompetition({ id: 'aaa-blocker', fencer_count: 24 })
+    const selected = makeCompetition({ id: 'bbb-selected', fencer_count: 24 })
+    // Stale by default. The blocker takes all 20 strips over the selected pools.
+    const schedule = drawnFromDerived({
+      config,
+      competitions: [blocker, selected],
+      events: {
+        [blocker.id]: {
+          result: { ...makeScheduleResult(blocker.id, 0), pool_start: 480, pool_end: 600, pool_strip_count: 20 },
+          day_out_of_range: false,
+        },
+        [selected.id]: {
+          result: { ...makeScheduleResult(selected.id, 0), pool_start: 480, pool_end: 600, pool_strip_count: 5 },
+          day_out_of_range: false,
+        },
+      },
+    })
+    expect(
+      schedule.blocks.filter((b) => b.competitionId === selected.id).map((b) => [b.unseated, b.countsAsUnplaced]),
+      'premise: the selected event\'s one phase is unseated and, stale, not unplaced',
+    ).toEqual([[true, false]])
+    futureState().selectCompetition(selected.id)
+
+    render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    const section = screen.getByRole('region', { name: 'Selected event' })
+    expect(section).toHaveAttribute('data-selected-day', '1')
+    expect(section).not.toHaveAttribute('data-selected-strips')
   })
 })
 

@@ -64,10 +64,11 @@ const ICON_BUTTON =
  * ## The same helpers the block and the tooltip use, not new arithmetic
  *
  * `stripSetLabel`/`stripAssignmentLabel`/`phaseDisplay` are the shared block
- * vocabulary in `src/lib/placementLabels.ts` that `Block` and `CanvasTooltip` also
- * read. The strip label reads the committed model's own `blocks` and the pills
- * its `events` (017 spec §6): right after a run, the strips and times the run
- * gave the event.
+ * vocabulary in `src/lib/placementLabels.ts`. `Block` and `CanvasTooltip` read
+ * `stripAssignmentLabel` and `phaseDisplay` too, and move to `stripSetLabel`
+ * when they draw the scheduler's strips (017 T6b). The strip label reads the
+ * committed model's own `blocks` and the pills its `events` (017 spec §6):
+ * right after a run, the strips and times the run gave the event.
  */
 export function DetailStrip({
   schedule,

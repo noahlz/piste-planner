@@ -7,12 +7,12 @@ import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { Category, Gender, Weapon } from '../../src/engine/types.ts'
 import type { Competition, Placement } from '../../src/engine/types.ts'
-import type { DerivedSchedule } from '../../src/store/derived.ts'
+import type { DrawnSchedule } from '../../src/store/derived.ts'
 import { selectDerivedSchedule } from '../../src/store/derived.ts'
 import type { ScheduleResult } from '../../src/engine/types.ts'
 import { formatMinutes } from '../../src/lib/time.ts'
 import { makeCompetition, makeConfig, makePlacement, makeStrips } from '../helpers/factories.ts'
-import { runPreset } from '../helpers/drawnFixtures.ts'
+import { drawnFromDerived, runPreset } from '../helpers/drawnFixtures.ts'
 
 // 005 T011: schedule-output rows moved out of the two departing layout test
 // files (specs/005-consolidate-domain-logic/triage-record.md (removed; git show 0ab5bd2dc9:specs/005-consolidate-domain-logic/triage-record.md) rows: one departing file's rows 22, 23, 24, 25, 26,
@@ -86,20 +86,23 @@ function competitionCell(rowId: string): string {
  * A committed model handed to `ScheduleOutput` as its `schedule` prop. Each
  * event is derived from its competition, but `listed` decides which
  * competitions the model's `competitions` array carries, so a case can leave
- * an event's competition out of it.
+ * an event's competition out of it. It is the drawn model the prop takes:
+ * seated with every event's own competition (the strip assigner needs each
+ * one), then `competitions` replaced by `listed`.
  */
 function committedModel(
   events: Array<{ competition: Competition; placement: Placement }>,
   listed: Competition[],
-): DerivedSchedule {
+): DrawnSchedule {
   const config = makeConfig({ days_available: 3, strips: makeStrips(24, 4) })
-  return {
+  const drawn = drawnFromDerived({
     config,
-    competitions: listed,
+    competitions: events.map((e) => e.competition),
     events: Object.fromEntries(
       events.map((e) => [e.competition.id, deriveEventSchedule(e.placement, e.competition, config)]),
     ),
-  }
+  })
+  return { ...drawn, competitions: listed }
 }
 
 /** Places the catalogue's team veteran event in the live store. */

@@ -766,8 +766,9 @@ function computeAllFindings(state: StoreState): Finding[] {
   // ── §1.4 Late finish: at most one row per day ──
   //
   // `finish` is the maximum block end on the day — the number the day band
-  // prints, since both read the drawn blocks — never `de_total_end`, which is the footer's tournament-wide
-  // fact and would let the panel warn about a time the grid does not show.
+  // prints, since both read the drawn blocks — never `de_total_end`, which is
+  // the footer's tournament-wide fact and would let the panel warn about a
+  // time the grid does not show.
   // `target` is the day's `day_end_time` in `state.dayConfigs`, the store's
   // clock-time day hours: the soft target (default 7:00 PM, Ops Manual 2026-27
   // p.17), not the 10:00 PM hard end. Work may run past it, so this row is the

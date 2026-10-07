@@ -29,4 +29,10 @@ describe('stripSetLabel', () => {
   ])('labels %j as "%s"', (strips, label) => {
     expect(stripSetLabel(strips)).toBe(label)
   })
+
+  // An unseated phase holds no strips. Naming them would print "Strips " with
+  // nothing after it, so an empty set is refused rather than labelled.
+  it('refuses an empty strip set', () => {
+    expect(() => stripSetLabel([])).toThrow(RangeError)
+  })
 })

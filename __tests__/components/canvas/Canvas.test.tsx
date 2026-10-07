@@ -197,6 +197,19 @@ describe('Canvas day bands (FR-039)', () => {
     for (const peak of peaks()) expect(peak).toBeLessThanOrEqual(80)
   })
 
+  // The band the canvas renders from its committed model, not the live
+  // selector: D1-M-EPEE-IND's unseated POOLS (45 asked) and DE_PRELIMS (16)
+  // add nothing on the day it moved to, which holds all 80 strips at its
+  // busiest instant. The band shows no unplaced count (an owner question at
+  // T6a review), so peak strips is the band fact the move changes.
+  it('reads "80 of 80 strips at peak" on the day the headline move lands on', () => {
+    const { day } = runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    renderCanvas({ schedule: selectDrawnSchedule(state), findings: selectDerivedFindings(state), dayConfigs: state.dayConfigs })
+
+    expect(day).toBe(1)
+    expect(dayBand(day).textContent).toContain('· 80 of 80 strips at peak ·')
+  })
 })
 
 describe('Canvas zoom (FR-034, D3)', () => {
