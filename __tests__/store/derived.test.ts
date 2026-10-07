@@ -8,7 +8,7 @@ import { phaseKey } from '../../src/engine/unseated.ts'
 import type { KeptRun } from '../../src/store/keptRun.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makeCompetition, makeConfig, makePlacement, makeScheduleResult } from '../helpers/factories.ts'
-import { drawnFromDerived, runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
+import { drawnFromDerived, moveDay, runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
@@ -298,22 +298,31 @@ describe('selectDerivedRefRequirements counts the drawn board (017 T9)', () => {
     return computeRefRequirements(refDemandFromSchedule(results, config, competitions, skip), config.days_available)
   }
 
+  // Not the headline move: on B1 that leaves only its DE_ROUND_OF_16 seated,
+  // which moves no peak, so derived and kept times would sweep alike. This
+  // mover's POOLS seats on day 2 and its DEs do not, so both halves count.
   it('counts a hand-moved event at its derived times, less the phases that find no strips', () => {
-    const { id } = runAndMoveHeadline('B1')
+    const id = 'VET-M-SABRE-IND-VCMB'
+    runPreset('B1')
+    expect(useStore.getState().placements[id].day, 'premise: the run puts the mover off day 2').not.toBe(2)
+    moveDay(id, 2)
     const state = useStore.getState()
     const model = selectDrawnSchedule(state)
     const unseated = model.blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced).map((b) => b.phase)
-    expect(unseated, 'premise: the mover\'s POOLS and DE_PRELIMS find no strips').toEqual([Phase.POOLS, Phase.DE_PRELIMS])
+    expect(unseated, 'premise: the mover\'s DEs find no strips').toEqual([Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16])
 
     const kept = state.lastRun as KeptRun
     const competition = model.competitions.find((c) => c.id === id) as Competition
-    const results = Object.keys(model.events).map((eventId) => {
-      if (eventId === id) return deriveEventSchedule(state.placements[id], competition, model.config).result
+    const resultsWithMoverAt = (mover: ScheduleResult) => Object.keys(model.events).map((eventId) => {
+      if (eventId === id) return mover
       expect(model.events[eventId].source, `premise: ${eventId} stays kept`).toBe('kept')
       return kept.events[eventId].result
     })
+    const results = resultsWithMoverAt(deriveEventSchedule(state.placements[id], competition, model.config).result)
     const skip = new Set(unseated.map((phase) => phaseKey(id, phase)))
     expect(sweep(results, skip), 'premise: the unseated phases would move a peak').not.toEqual(sweep(results, new Set()))
+    expect(sweep(resultsWithMoverAt(kept.events[id].result), skip), 'premise: the mover\'s derived times move a peak')
+      .not.toEqual(sweep(results, skip))
 
     expect(selectDerivedRefRequirements(state)).toEqual(sweep(results, skip))
   })
@@ -324,6 +333,9 @@ describe('selectDerivedRefRequirements counts the drawn board (017 T9)', () => {
     const state = useStore.getState()
     const model = selectDrawnSchedule(state)
     expect(model.runState, 'premise: a fencer-count edit makes the board stale').toBe(RunState.STALE)
+    for (const [eventId, event] of Object.entries(model.events)) {
+      expect(event.source, `premise: ${eventId} is derived while stale`).toBe('derived')
+    }
     const unseated = new Set(model.blocks.filter((b) => b.unseated).map((b) => phaseKey(b.competitionId, b.phase)))
     expect(unseated.size, 'premise: the stale board draws unseated phases').toBeGreaterThan(0)
 

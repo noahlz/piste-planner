@@ -307,9 +307,12 @@ describe('scheduleAll reports the peak of its own timeline (017 T9)', () => {
     return { config, competitions, ...scheduleAll(competitions, config) }
   }
 
-  it.each(SCENARIO_IDS)('%s: every day\'s peak is a sweep of the scheduler\'s own intervals', (id) => {
+  // An unpinned run seats every phase, so this leaves the skip untested: the
+  // store's pinned cases (appPathParity.test.ts) pin it.
+  it.each(SCENARIO_IDS)('%s: every day\'s peak is a sweep of the scheduler\'s own intervals, waits included', (id) => {
     const { config, competitions, ...result } = run(id)
-    const timeline = refDemandFromSchedule(Object.values(result.schedule), config, competitions, unseatedPhases(result))
+    expect(unseatedPhases(result).size, 'premise: an unpinned run seats every phase').toBe(0)
+    const timeline = refDemandFromSchedule(Object.values(result.schedule), config, competitions, new Set())
     expect(result.ref_requirements_by_day).toEqual(computeRefRequirements(timeline, config.days_available))
   })
 

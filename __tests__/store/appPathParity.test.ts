@@ -481,9 +481,11 @@ describe('the footer\'s referee peak is the scheduler\'s (016 Task E)', () => {
     expect(footerOnSchedulerAxis()).toEqual(engine)
   })
 
-  // The scheduler counts a pinned event from its own result for it, the
-  // footer from the organizer's pin. The two agree only while the scheduler
-  // honors the pin's day, start and strip count, which this case holds it to.
+  // Both sides count the scheduler's result for a pinned event: the footer
+  // reads it from the kept run while the event sits where kept. They agree
+  // only while the run honors the pin's day, start and strip count, which
+  // this case holds it to, since otherwise the event no longer sits where kept
+  // and the footer draws it derived.
   it.each(['B1', 'B2', 'B6', 'B8'] as const)('%s: the two still match with four hand-moved pins', (id) => {
     runAppPath(id)
     const moved = Object.keys(useStore.getState().placements).slice(0, 4)
