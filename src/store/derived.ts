@@ -2,7 +2,7 @@ import { deriveEventSchedule } from '../engine/derive.ts'
 import type { DerivedEventSchedule } from '../engine/derive.ts'
 import { validateConfig } from '../engine/validation.ts'
 import { initialAnalysis } from '../engine/analysis.ts'
-import { computeRefRequirements } from '../engine/refs.ts'
+import { computeRefRequirements, refDemandFromSchedule } from '../engine/refs.ts'
 import { checkPlacementRules } from '../engine/placementRules.ts'
 import type { PlacedEvent } from '../engine/placementRules.ts'
 import { firstLastDayWarnings } from '../engine/concurrentScheduler.ts'
@@ -14,7 +14,6 @@ import type {
   ScheduleResult,
   TournamentType,
   RefDemandByDay,
-  RefDemandInterval,
   RefRequirementsByDay,
   TournamentConfig,
   ValidationError,
@@ -213,69 +212,18 @@ function computeDerivedFindings(state: StoreState): DerivedFindings {
 export const selectDerivedFindings = memoizeOnDeps(scheduleDeps, computeDerivedFindings)
 
 /**
- * Builds ref-demand intervals directly from the derived per-event
- * `ScheduleResult`s (pool/flight/DE start-end-refs, already computed by
- * `deriveEventSchedule`) rather than re-deriving them. This is the
- * placement-driven counterpart to `concurrentScheduler.ts`'s
- * `computePostScheduleRefDemand`: that function additionally resolves
- * cross-event strip contention via `peakConcurrentStrips`, which only exists
- * inside a live scheduler run's `GlobalState` — no such state exists here, so
- * demand is summed per placed event instead of peak-measured across events.
- * Out-of-range placements are skipped: their `assigned_day` cannot address a
- * day bucket in `config.days_available`.
+ * Ref-demand intervals for the placements as drawn: the derived per-event
+ * `ScheduleResult`s handed to the engine's `refDemandFromSchedule`, the same
+ * function the scheduler calls on its own schedule (016 spec §5), so the
+ * footer's peak and the reported peak are one number. Out-of-range placements
+ * are skipped here: their `assigned_day` cannot address a day bucket in
+ * `config.days_available`.
  */
 export function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDemandByDay> {
-  const byDay: Record<number, RefDemandByDay> = {}
-  const compById = new Map(schedule.competitions.map((c) => [c.id, c]))
-
-  // A block that asks no referee – a bracket of 2's DE draws 0 strips
-  // (METHODOLOGY.md §DE Duration 'No counted round') – emits no interval.
-  function push(day: number, interval: RefDemandInterval): void {
-    if (interval.count === 0) return
-    if (!byDay[day]) byDay[day] = { intervals: [] }
-    byDay[day].intervals.push(interval)
-  }
-
-  for (const [id, { result, day_out_of_range }] of Object.entries(schedule.events)) {
-    if (day_out_of_range) continue
-    const competition = compById.get(id)
-    if (!competition) continue
-
-    const day = result.assigned_day
-    const weapon = competition.weapon
-    const deRefCount = (strips: number) => strips * schedule.config.DE_REFS
-
-    if (result.flight_a_start !== null && result.flight_a_end !== null) {
-      push(day, { startTime: result.flight_a_start, endTime: result.flight_a_end, count: result.flight_a_refs, weapon })
-      if (result.flight_b_start !== null && result.flight_b_end !== null) {
-        push(day, { startTime: result.flight_b_start, endTime: result.flight_b_end, count: result.flight_b_refs, weapon })
-      }
-    } else if (result.pool_start !== null && result.pool_end !== null) {
-      push(day, { startTime: result.pool_start, endTime: result.pool_end, count: result.pool_refs_count, weapon })
-    }
-
-    if (result.de_start !== null && result.de_end !== null) {
-      push(day, { startTime: result.de_start, endTime: result.de_end, count: deRefCount(result.de_strip_count), weapon })
-    }
-    if (result.de_prelims_start !== null && result.de_prelims_end !== null) {
-      push(day, {
-        startTime: result.de_prelims_start,
-        endTime: result.de_prelims_end,
-        count: deRefCount(result.de_prelims_strip_count),
-        weapon,
-      })
-    }
-    if (result.de_round_of_16_start !== null && result.de_round_of_16_end !== null) {
-      push(day, {
-        startTime: result.de_round_of_16_start,
-        endTime: result.de_round_of_16_end,
-        count: deRefCount(result.de_round_of_16_strip_count),
-        weapon,
-      })
-    }
-  }
-
-  return byDay
+  const inRange = Object.values(schedule.events)
+    .filter(({ day_out_of_range }) => !day_out_of_range)
+    .map(({ result }) => result)
+  return refDemandFromSchedule(inRange, schedule.config, schedule.competitions)
 }
 
 function computeDerivedRefRequirements(state: StoreState): RefRequirementsByDay[] {

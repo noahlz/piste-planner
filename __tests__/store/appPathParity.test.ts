@@ -7,8 +7,8 @@ import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
-import { selectAllFindings } from '../../src/store/derived.ts'
-import { BottleneckRule } from '../../src/engine/types.ts'
+import { selectAllFindings, selectDerivedRefRequirements } from '../../src/store/derived.ts'
+import { BottleneckRule, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
 
 /**
  * The app-path parity check (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), FR-004): for each of
@@ -434,5 +434,33 @@ describe('a hard pair the scheduler breaks reaches the app\'s findings (016 revi
     const { pairs, missing } = hardPairsAfterRun()
     expect(pairs.length, 'the template must break hard pairs, or this check is vacuous').toBeGreaterThan(0)
     expect(missing).toEqual([])
+  })
+})
+
+/**
+ * 016 Task E (spec §5, R5): one referee number. After a run, the footer's
+ * per-day referee figures (`selectDerivedRefRequirements`, from the schedule
+ * as the workbench draws it) equal the scheduler's own
+ * `ref_requirements_by_day` on every B1–B8 day.
+ *
+ * The store's `peak_time` is on the clock axis of its day, the engine's on the
+ * scheduler axis (day d shifted by d × DAY_AXIS_SPACING_MINS), so the store's
+ * is shifted onto the scheduler axis before comparing. A day with no demand
+ * reads peak_time 0 on both sides and is compared unshifted.
+ *
+ * Planning measured the two disagreeing on 13 days of B1, B2, B4, B6, B7 and
+ * B8 (spec §'What planning measured'): the scheduler counted phases at the
+ * times it allocated them, the store at the times it draws them.
+ */
+describe('the footer\'s referee peak is the scheduler\'s (016 Task E)', () => {
+  it.each(SCENARIO_IDS)('%s: every day\'s referee requirements match the scheduler\'s', (id) => {
+    const engine = runAppPath(id).refRequirementsByDay
+    const store = selectDerivedRefRequirements(useStore.getState())
+
+    const onSchedulerAxis = store.map((row) => ({
+      ...row,
+      peak_time: row.peak_total_refs > 0 ? row.peak_time + row.day * DAY_AXIS_SPACING_MINS : row.peak_time,
+    }))
+    expect(onSchedulerAxis).toEqual(engine)
   })
 })

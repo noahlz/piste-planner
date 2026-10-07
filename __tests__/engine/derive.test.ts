@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { deriveEventSchedule } from '../../src/engine/derive.ts'
+import { deriveEventSchedule, placementFromResult as enginePlacementFromResult } from '../../src/engine/derive.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import {
   BottleneckCause, DeMode, CutMode, EventType, Gender, Weapon, PlacementSource, VideoPolicy, tailEstimateMins,
+  DAY_AXIS_SPACING_MINS,
 } from '../../src/engine/types.ts'
 import type { Placement, Competition, TournamentConfig, ScheduleResult } from '../../src/engine/types.ts'
 import {
   computePoolStructure, estimatePoolDuration, resolveRefsPerPool, weightedPoolDuration,
 } from '../../src/engine/pools.ts'
-import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
+import { makeCompetition, makeConfig, makeStrips, makeScheduleResult } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -454,5 +455,36 @@ describe('deriveEventSchedule — oracle: reproduces scheduleAll geometry', () =
 
     expectGeometryMatches(derived.result, oracle)
     expect(derived.day_out_of_range).toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────
+// placementFromResult (016 Task E, spec §5)
+// ──────────────────────────────────────────────
+
+// `runScheduleAll`'s result → placement conversion, shared with the scheduler
+// so both count referees from the same drawn schedule. Not this file's local
+// `placementFromResult` oracle helper above, which keeps the scheduler axis
+// and throws on a null pool_start.
+describe('placementFromResult', () => {
+  it('places the event on its assigned day at its pool start on that day\'s clock axis', () => {
+    const result: ScheduleResult = {
+      ...makeScheduleResult('ev', 2),
+      pool_start: 2 * DAY_AXIS_SPACING_MINS + 540,
+      pool_end: 2 * DAY_AXIS_SPACING_MINS + 660,
+      pool_strip_count: 7,
+    }
+    expect(enginePlacementFromResult(result)).toEqual({
+      day: 2,
+      start_time: 540,
+      strip_count: 7,
+      strips: null,
+      source: PlacementSource.AUTO,
+      pinned: false,
+    })
+  })
+
+  it('returns null for an event the scheduler left without a pool start', () => {
+    expect(enginePlacementFromResult(makeScheduleResult('ev', 1))).toBeNull()
   })
 })
