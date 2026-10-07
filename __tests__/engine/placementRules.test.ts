@@ -32,6 +32,7 @@ interface HardCase {
   name: string
   a: Partial<Competition>
   b: Partial<Competition>
+  type?: TournamentType
 }
 
 const HARD_CASES: HardCase[] = [
@@ -46,9 +47,10 @@ const HARD_CASES: HardCase[] = [
     b: { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET50 },
   },
   {
-    name: 'the relaxable individual/team block (Div 1 individual, Junior team)',
+    name: 'at ROC, where Group 1 is soft: the relaxable individual/team block (Div 1 individual, Junior team)',
     a: { category: Category.DIV1, event_type: EventType.INDIVIDUAL },
     b: { category: Category.JUNIOR, event_type: EventType.TEAM },
+    type: TournamentType.ROC,
   },
   {
     name: 'Div 1 and Div 1A',
@@ -62,13 +64,13 @@ const HARD_CASES: HardCase[] = [
   },
 ]
 
-describe('checkPlacementRules: hard same-day pairs at NAC', () => {
-  it.each(HARD_CASES)('$name yields one WARN naming both events and the 1-based day', ({ a, b }) => {
+describe('checkPlacementRules: hard same-day pairs', () => {
+  it.each(HARD_CASES)('$name yields one WARN naming both events and the 1-based day', ({ a, b, type }) => {
     const competitions = [comp('zeta', a), comp('alpha', b)]
     const findings = checkPlacementRules(
       competitions,
       [at('zeta', 2), at('alpha', 2)],
-      TournamentType.NAC,
+      type ?? TournamentType.NAC,
       dayStartClock,
     )
     expect(hard(findings)).toHaveLength(1)
@@ -116,11 +118,11 @@ describe('checkPlacementRules: hard same-day pairs at NAC', () => {
     expect(findings[0].rule).toBe(BottleneckRule.HARD_SEPARATION_VIOLATED)
   })
 
-  it('gives no window finding at a national type', () => {
+  it.each([TournamentType.NAC, TournamentType.SYC, TournamentType.SJCC])('gives no window finding at %s', type => {
     const findings = checkPlacementRules(
       [comp('J', { category: Category.JUNIOR }), comp('C', { category: Category.CADET })],
       [at('J', 2, 900), at('C', 2, 540)],
-      TournamentType.NAC,
+      type,
       dayStartClock,
     )
     expect(windows(findings)).toEqual([])
@@ -254,7 +256,7 @@ describe('checkPlacementRules: the regional Group 1 window', () => {
   })
 
   it.each([
-    ['the older side starts before the floor', 600, 540, '10:00', '09:00'],
+    ['the older side starts one minute before the floor', 719, 540, '11:59', '09:00'],
     ['the younger side starts at the floor', 780, 720, '13:00', '12:00'],
   ])('reports a WARN when %s', (_name, olderStart, youngerStart, olderClock, youngerClock) => {
     const findings = checkPlacementRules(
@@ -371,14 +373,14 @@ describe('checkPlacementRules: output order', () => {
     comp('d1a', { category: Category.DIV1A }),
     comp('j', { category: Category.JUNIOR }),
     comp('c', { category: Category.CADET }),
-    comp('d2-m', { category: Category.DIV2 }),
-    comp('d2-t', { category: Category.DIV2, event_type: EventType.TEAM }),
+    comp('a-m', { category: Category.DIV2 }),
+    comp('a-t', { category: Category.DIV2, event_type: EventType.TEAM }),
   ]
   const placed = [
-    at('d2-t', 2),
+    at('a-t', 2),
     at('c', 1),
     at('d1a', 1),
-    at('d2-m', 2),
+    at('a-m', 2),
     at('j', 1),
     at('d1', 1),
   ]
@@ -391,7 +393,7 @@ describe('checkPlacementRules: output order', () => {
       [1, 'c,j'],
       [1, 'd1,d1a'],
       [1, 'd1,j'],
-      [2, 'd2-m,d2-t'],
+      [2, 'a-m,a-t'],
     ])
   })
 
