@@ -3,6 +3,12 @@ import { runAppPath } from '../helpers/appPath.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
+import { useStore } from '../../src/store/store.ts'
+import { applyPreset } from '../../src/store/presets.ts'
+import { runScheduleAll } from '../../src/store/runActions.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { selectAllFindings } from '../../src/store/derived.ts'
+import { BottleneckRule } from '../../src/engine/types.ts'
 
 /**
  * The app-path parity check (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), FR-004): for each of
@@ -370,5 +376,57 @@ describe('a pin may leave its ledger count only with an exception', () => {
 
   it('accepts an on-ledger pin with no exception', () => {
     expect(() => assertPinAgreesWithLedger('BX', SYNTHETIC_LEDGER, SYNTHETIC_LEDGER, undefined)).not.toThrow()
+  })
+})
+
+/**
+ * 016 review focus 5: a run that had to break a hard edge. Every
+ * `hard-separation-violated` pair the scheduler reports for the app's own
+ * config must also appear in the app's findings after `runScheduleAll`, as a
+ * row naming both events – the hand-placement check reads the placements the
+ * run wrote back, so it must reach the same verdict.
+ *
+ * B1–B8 break no hard edge (measured in 016 Task A), so their loop holds
+ * vacuously and is kept only so a scenario that starts breaking one is
+ * checked. The NAC Cadet/Junior template at 3 days / 80 strips / 12 video
+ * breaks six through the app config (`concurrentScheduler.test.ts`'s
+ * hard-edge suite), and is the case that actually exercises the check.
+ */
+describe('a hard pair the scheduler breaks reaches the app\'s findings (016 review focus 5)', () => {
+  /** Scheduler pairs for the store's current config, and the ones the app's findings miss after a run. */
+  function hardPairsAfterRun(): { pairs: string[][]; missing: string[][] } {
+    const { config, competitions } = buildTournamentConfig(useStore.getState())
+    const pairs = scheduleAll(competitions, config).bottlenecks
+      .filter((b) => b.rule === BottleneckRule.HARD_SEPARATION_VIOLATED)
+      .map((b) => [...b.subjects].sort())
+
+    runScheduleAll()
+    const appIds = selectAllFindings(useStore.getState())
+      .map((row) => row.id)
+      .filter((id) => id.startsWith(`analysis:${BottleneckRule.HARD_SEPARATION_VIOLATED}:`))
+    const missing = pairs.filter((pair) => !appIds.some((id) => id.includes(`:${pair.join('+')}:`)))
+    return { pairs, missing }
+  }
+
+  it.each(SCENARIO_IDS)('%s: every scheduler hard-separation pair shows in the app after a run', (id) => {
+    useStore.setState(useStore.getInitialState(), true)
+    applyPreset(id)
+
+    const { missing } = hardPairsAfterRun()
+    expect(Object.keys(useStore.getState().placements).length, 'premise: the run placed events').toBe(PINNED_APP_PATH_COUNTS[id])
+    expect(missing).toEqual([])
+  })
+
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: all six broken pairs show in the app after a run', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    const state = () => useStore.getState()
+    state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does
+    state().applyTemplate('NAC Cadet/Junior')
+    state().setStrips(80)
+    state().setVideoStrips(12)
+
+    const { pairs, missing } = hardPairsAfterRun()
+    expect(pairs.length, 'the template must break hard pairs, or this check is vacuous').toBeGreaterThan(0)
+    expect(missing).toEqual([])
   })
 })

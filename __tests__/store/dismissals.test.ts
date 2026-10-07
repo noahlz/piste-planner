@@ -270,3 +270,91 @@ describe('dismissFinding — widened to the unified findings list (013 T030, con
     expect(selectFindings(useStore.getState()).some((f) => f.id === blocking!.id)).toBe(true)
   })
 })
+
+// ──────────────────────────────────────────────
+// 016 Task C – a hard same-day rule break cannot be dismissed (R1), and a
+// day-scoped dismissal stays with its day (spec §2, review focus 4).
+// ──────────────────────────────────────────────
+
+describe('dismissFinding — refuses a hard-separation row (016 R1)', () => {
+  it('records no dismissal and leaves the row in the list', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    const s = useStore.getState()
+    s.setTournamentType('NAC')
+    s.setDays(3)
+    s.setStrips(40)
+    s.setVideoStrips(8)
+    s.selectCompetitions(['JR-M-FOIL-IND', 'CDT-M-FOIL-IND'])
+    s.updateCompetition('JR-M-FOIL-IND', { fencer_count: 24 })
+    s.updateCompetition('CDT-M-FOIL-IND', { fencer_count: 24 })
+    s.setPlacementsFromAuto({
+      'JR-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
+      'CDT-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
+    })
+    const id = 'analysis:hard-separation-violated:CDT-M-FOIL-IND:CDT-M-FOIL-IND+JR-M-FOIL-IND:0'
+    const row = selectFindings(useStore.getState()).find((f) => f.id === id)
+    expect(row, `premise: the hand-made pair raises ${id}`).toBeDefined()
+    expect(row?.severity, 'a Warning, so the severity guard alone would let it through').toBe('Warning')
+
+    useStore.getState().dismissFinding(id)
+
+    expect(useStore.getState().dismissedFindings).toEqual({})
+    expect(selectFindings(useStore.getState()).some((f) => f.id === id)).toBe(true)
+  })
+})
+
+/**
+ * Men's and Women's Div 1 épée of 60 against one strip: nine pools each, so
+ * every day an event sits on raises its own `day-pools-exceed-strips` venue
+ * warning (Pass 0 of `initialAnalysis`).
+ */
+function overCapacityEpee(days: Record<string, number>): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(3)
+  s.setStrips(1)
+  s.setVideoStrips(0)
+  s.selectCompetitions(Object.keys(days))
+  for (const id of Object.keys(days)) s.updateCompetition(id, { fencer_count: 60 })
+  s.setPlacementsFromAuto(
+    Object.fromEntries(
+      Object.entries(days).map(([id, day]) => [id, makePlacement({ day, start_time: 540, strip_count: 1 })]),
+    ),
+  )
+}
+
+const POOLS_DAY_2 = 'analysis:day-pools-exceed-strips:::1'
+const POOLS_DAY_3 = 'analysis:day-pools-exceed-strips:::2'
+
+function shownIds(): string[] {
+  return selectFindings(useStore.getState()).map((f) => f.id)
+}
+
+// Review focus 4.
+describe('dismissFinding — a day-scoped dismissal stays with its day (016 spec §2)', () => {
+  it('hides the Day 2 instance and not the Day 3 one, even once Day 2 no longer raises it', () => {
+    overCapacityEpee({ 'D1-M-EPEE-IND': 1, 'D1-W-EPEE-IND': 2 })
+    expect(shownIds(), 'premise: both days raise the warning').toEqual(expect.arrayContaining([POOLS_DAY_2, POOLS_DAY_3]))
+
+    useStore.getState().dismissFinding(POOLS_DAY_2)
+    expect(shownIds()).not.toContain(POOLS_DAY_2)
+    expect(shownIds()).toContain(POOLS_DAY_3)
+
+    // One pool of 6 fits the strip, so Day 2's instance goes away. Under the
+    // old ordinal ids Day 3's instance took over Day 2's dismissed id here.
+    useStore.getState().updateCompetition('D1-M-EPEE-IND', { fencer_count: 6 })
+    expect(shownIds()).toContain(POOLS_DAY_3)
+  })
+
+  it('shows the warning again when its event moves from the dismissed day to another', () => {
+    overCapacityEpee({ 'D1-M-EPEE-IND': 1 })
+    expect(shownIds(), 'premise: Day 2 raises the warning').toContain(POOLS_DAY_2)
+    useStore.getState().dismissFinding(POOLS_DAY_2)
+    expect(shownIds()).not.toContain(POOLS_DAY_2)
+
+    useStore.getState().updatePlacement('D1-M-EPEE-IND', { day: 2 })
+
+    expect(shownIds()).toContain(POOLS_DAY_3)
+  })
+})

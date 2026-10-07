@@ -1669,8 +1669,12 @@ export function postScheduleWarnings(
  * last end (`de_total_end`, or `pool_end` with no DE) minus its day start.
  * Day assignment plans for this with the reduced first/last day capacity
  * (`dayColoring.ts`, §First and Last Day Capacity).
+ *
+ * Exported for the store (016 Task C), which runs it over the placements as
+ * drawn. It reads days only through `dayStart`, so the results and the config's
+ * `dayConfigs` must share one axis.
  */
-function firstLastDayWarnings(
+export function firstLastDayWarnings(
   schedule: Record<string, ScheduleResult>,
   config: TournamentConfig,
 ): Bottleneck[] {

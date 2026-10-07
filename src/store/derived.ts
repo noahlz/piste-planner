@@ -3,10 +3,16 @@ import type { DerivedEventSchedule } from '../engine/derive.ts'
 import { validateConfig } from '../engine/validation.ts'
 import { initialAnalysis } from '../engine/analysis.ts'
 import { computeRefRequirements } from '../engine/refs.ts'
-import { BottleneckSeverity, ValidationMode } from '../engine/types.ts'
+import { checkPlacementRules } from '../engine/placementRules.ts'
+import type { PlacedEvent } from '../engine/placementRules.ts'
+import { firstLastDayWarnings } from '../engine/concurrentScheduler.ts'
+import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS, ValidationMode } from '../engine/types.ts'
 import type {
   AnalysisResult,
+  Bottleneck,
   Competition,
+  ScheduleResult,
+  TournamentType,
   RefDemandByDay,
   RefDemandInterval,
   RefRequirementsByDay,
@@ -113,8 +119,73 @@ function computeDerivedSchedule(state: StoreState): DerivedSchedule {
 /** Derived schedule view model: per-event `ScheduleResult` + `day_out_of_range`, from placements. */
 export const selectDerivedSchedule = memoizeOnDeps(scheduleDeps, computeDerivedSchedule)
 
+/**
+ * The derived results (`deriveEventSchedule`) sit on the clock axis – minutes
+ * from midnight of their own store day – while `buildTournamentConfig`'s
+ * `dayConfigs` sit on the scheduler axis (day d shifted by
+ * d × DAY_AXIS_SPACING_MINS, `buildConfig.ts`). This is the one place the two
+ * meet: a copy of the config whose day windows are shifted back onto the clock
+ * axis, so every engine function handed derived results reads a day start the
+ * results can be measured from. A day with no window (no `setDays` yet) falls
+ * back to the default clock hours.
+ */
+function clockAxisConfig(config: TournamentConfig): TournamentConfig {
+  return {
+    ...config,
+    dayConfigs: Array.from({ length: config.days_available }, (_, d) => {
+      const window = config.dayConfigs[d]
+      if (window === undefined) {
+        return {
+          day_start_time: config.DAY_START_MINS,
+          day_end_time: config.DAY_END_MINS,
+          day_hard_end_time: config.DAY_HARD_END_MINS,
+        }
+      }
+      const shift = d * DAY_AXIS_SPACING_MINS
+      return {
+        day_start_time: window.day_start_time - shift,
+        day_end_time: window.day_end_time - shift,
+        day_hard_end_time: window.day_hard_end_time - shift,
+      }
+    }),
+  }
+}
+
+/**
+ * Engine findings over the placements as drawn (016 spec §1, §3): the
+ * same-day rule check (`checkPlacementRules`) and the first/last day WARN
+ * (`firstLastDayWarnings`, the scheduler's own function). Events with no
+ * placement or with a day the tournament no longer has are left out of both
+ * (review focus 1). The engine's late-day finding is not run here: the store's
+ * `late-finish:day:<n>` row is the app's late-day finding (R2).
+ */
+function placementFindings(schedule: DerivedSchedule, tournamentType: TournamentType): Bottleneck[] {
+  const clockConfig = clockAxisConfig(schedule.config)
+  const inRange: Record<string, ScheduleResult> = {}
+  const placed: PlacedEvent[] = []
+  for (const [id, { result, day_out_of_range }] of Object.entries(schedule.events)) {
+    if (day_out_of_range) continue
+    inRange[id] = result
+    // A flighted event's pools start with flight A.
+    const poolStart = result.flight_a_start ?? result.pool_start
+    if (poolStart === null) continue
+    placed.push({ competition_id: id, day: result.assigned_day, pool_start: poolStart })
+  }
+
+  return [
+    ...checkPlacementRules(
+      schedule.competitions,
+      placed,
+      tournamentType,
+      (day) => clockConfig.dayConfigs[day].day_start_time,
+    ),
+    ...firstLastDayWarnings(inRange, clockConfig),
+  ]
+}
+
 function computeDerivedFindings(state: StoreState): DerivedFindings {
-  const { config, competitions } = buildTournamentConfig(state)
+  const schedule = selectDerivedSchedule(state)
+  const { config, competitions } = schedule
 
   // initialAnalysis needs a day per competition. A placed event uses its
   // placement's day; an unplaced one falls back to a round-robin spread
@@ -128,7 +199,11 @@ function computeDerivedFindings(state: StoreState): DerivedFindings {
 
   // Binding mode in P2 — tasks.md T017: advisory-mode UI wiring is later work.
   const validationErrors = validateConfig(config, competitions, ValidationMode.BINDING)
-  const analysis = initialAnalysis(config, competitions, dayAssignments)
+  const preSchedule = initialAnalysis(config, competitions, dayAssignments)
+  const analysis: AnalysisResult = {
+    ...preSchedule,
+    warnings: [...preSchedule.warnings, ...placementFindings(schedule, state.tournament_type)],
+  }
 
   return { validationErrors, analysis }
 }
@@ -399,6 +474,12 @@ export interface Finding {
   message: string
   /** Competition id when the row names one, for the canvas jump and the gutter flag. */
   target: string | null
+  /**
+   * Whether the organizer may wave the row off: Warning and Unplaced rows, except
+   * a `hard-separation-violated` Warning (016 R1). Blocking and Note rows never.
+   * `dismissFinding` and the panel's dismiss control both read this.
+   */
+  dismissable: boolean
 }
 
 /** ERROR → Blocking, WARN → Warning, INFO → Note (contract §1.1, shared by §1.2). */
@@ -406,6 +487,12 @@ function severityOf(severity: BottleneckSeverity): FindingSeverity {
   if (severity === BottleneckSeverity.ERROR) return FindingSeverity.BLOCKING
   if (severity === BottleneckSeverity.WARN) return FindingSeverity.WARNING
   return FindingSeverity.NOTE
+}
+
+/** Warning and Unplaced rows may be dismissed, unless their rule says otherwise (016 R1). */
+function dismissableOf(severity: FindingSeverity, rule?: string): boolean {
+  if (rule === BottleneckRule.HARD_SEPARATION_VIOLATED) return false
+  return severity === FindingSeverity.WARNING || severity === FindingSeverity.UNPLACED
 }
 
 /**
@@ -480,34 +567,43 @@ function computeAllFindings(state: StoreState): Finding[] {
       day,
       message: error.message,
       target,
+      dismissable: dismissableOf(severityOf(error.severity)),
     })
   }
 
   // ── §1.2 bottleneck warnings ──
   //
-  // The row id is built from cause + competition_id plus an ordinal among the
-  // rows sharing those two (research D6), not from `rule` + `subjects`. Per-day
-  // venue findings (e.g. two `day-pools-exceed-strips` warnings for different
-  // days) share rule and subjects and differ only by the day in their message,
-  // so those two fields cannot tell them apart – see the backlog entry "Day-level
-  // findings have no structured day" (docs/design/backlog.md). The ordinal also
-  // keeps two venue-level warnings of the same cause, both with an empty
-  // `competition_id`, distinct and separately dismissable.
-  const ordinalPerKey = new Map<string, number>()
+  // The row id is `analysis:<rule>:<competition_id>:<subjects joined by +>:<day or ->`
+  // (016 spec §2): the condition itself, so a dismissal stays with its finding
+  // when a sibling appears or goes away, and a day-scoped warning dismissed on
+  // one day does not hide the same warning on another. The day is the raw
+  // `Bottleneck.day`, even outside `days_available`: two stranded day-scoped
+  // findings (days 4 and 5 after the days are cut) stay distinct.
+  //
+  // No two producers reaching these rows share rule, owner, subjects and day,
+  // so the id needs no tie-break: each `initialAnalysis` pass emits at most one
+  // finding per day (venue passes), per competition, per competition and day,
+  // or per unordered pair; `checkPlacementRules` one per pair and rule, owned
+  // by the older side for the window; `firstLastDayWarnings` one per rule.
+  //
+  // `day` and `where` come from `Bottleneck.day` when it names a day the board
+  // has, so a Day 2 venue warning reads "Day 2"; otherwise from the target's
+  // placement, as before.
   for (const warning of derivedFindings.analysis.warnings) {
-    const key = `${warning.cause}:${warning.competition_id}`
-    const ordinal = ordinalPerKey.get(key) ?? 0
-    ordinalPerKey.set(key, ordinal + 1)
-
     const target = resolveTarget(warning.competition_id)
-    const day = target === null ? null : dayOf(target)
+    const ownDay =
+      warning.day !== undefined && warning.day >= 0 && warning.day < state.days_available ? warning.day : null
+    const day = ownDay ?? (target === null ? null : dayOf(target))
+    const severity = severityOf(warning.severity)
+    const venue = day === null ? 'Venue' : `Day ${day + 1}`
     rows.push({
-      id: `analysis:${key}:${ordinal}`,
-      severity: severityOf(warning.severity),
-      where: whereOf(target, day, 'Venue'),
+      id: `analysis:${warning.rule}:${warning.competition_id}:${warning.subjects.join('+')}:${warning.day ?? '-'}`,
+      severity,
+      where: whereOf(target, day, venue),
       day,
       message: warning.message,
       target,
+      dismissable: dismissableOf(severity, warning.rule),
     })
   }
 
@@ -530,6 +626,7 @@ function computeAllFindings(state: StoreState): Finding[] {
         `and none are free for ${formatClock(block.startMinutes)}–${formatClock(block.endMinutes)}. ` +
         'It is drawn at strip 1, over the events that hold those strips.',
       target: block.competitionId,
+      dismissable: true,
     })
   }
 
@@ -550,6 +647,7 @@ function computeAllFindings(state: StoreState): Finding[] {
         `${labelOf(id)} is placed on Day ${assignedDay + 1}, which the tournament no longer has. ` +
         'The next Auto-assign places it afresh.',
       target: id,
+      dismissable: true,
     })
   }
 
@@ -603,6 +701,7 @@ function computeAllFindings(state: StoreState): Finding[] {
       day,
       message,
       target: culprit.competitionId,
+      dismissable: true,
     })
   }
 

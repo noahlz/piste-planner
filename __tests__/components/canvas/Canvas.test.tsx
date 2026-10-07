@@ -334,6 +334,7 @@ interface Finding {
   day: number | null
   message: string
   target: string | null
+  dismissable: boolean
 }
 
 describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
@@ -366,12 +367,14 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
   }
 
   const row: Finding = {
-    id: 'analysis:STRIP_CONTENTION:flagged:0',
+    // 016 Task C row id: analysis:<rule>:<owner>:<subjects>:<day or ->.
+    id: 'analysis:strip-contention-deferral:flagged:flagged:-',
     severity: 'Warning',
     where: 'Day 1 · flagged',
     day: 0,
     message: 'flagged waited for strips',
     target: 'flagged',
+    dismissable: true,
   }
 
   it('flags the strip row a findingRows entry targets, and leaves an uninvolved row alone', () => {
@@ -539,6 +542,7 @@ describe('Canvas findings edge (FR-042, 013 T048)', () => {
       day: 0,
       message: `${severity} for ${target}`,
       target,
+      dismissable: severity === 'Warning' || severity === 'Unplaced',
     }
   }
 

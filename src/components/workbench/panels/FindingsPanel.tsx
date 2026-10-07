@@ -63,8 +63,7 @@ function FindingRow({
   onJump: (id: string) => void
   onDismiss: (id: string) => void
 }) {
-  const dismissable =
-    row.severity === FindingSeverity.WARNING || row.severity === FindingSeverity.UNPLACED
+  const { dismissable } = row
   const hasControls = row.target !== null || dismissable
 
   return (

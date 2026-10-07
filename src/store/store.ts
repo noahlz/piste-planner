@@ -14,7 +14,7 @@ import type { ScenarioId } from '../data/tournaments.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
-import { FindingSeverity, selectAllFindings } from './derived.ts'
+import { selectAllFindings } from './derived.ts'
 import { DAY_END_MINS, DAY_START_MINS, DEFAULT_POOL_ROUND_DURATION_TABLE } from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
@@ -443,9 +443,10 @@ function createDismissalsSlice(set: SetState, get: GetState): DismissalsSlice {
 
     // Advisory-only guard (data-model.md §Dismissals, spec clarification
     // 2026-08-28, widened by 013 T031 / research D6): an id only takes effect
-    // when it currently matches a row of the findings list whose underlying
-    // engine severity is WARN — Warning and Unplaced rows. Blocking and Note
-    // rows and unknown ids are silent no-ops, no state change.
+    // when it currently matches a row of the findings list marked
+    // `dismissable` — Warning and Unplaced rows, less the hard same-day rule
+    // break (016 R1). Blocking and Note rows, the hard-separation Warning and
+    // unknown ids are silent no-ops, no state change.
     //
     // The guard reads `selectAllFindings`, the *unfiltered* list, because
     // `selectFindings` has already dropped every dismissed row: reading the
@@ -457,13 +458,10 @@ function createDismissalsSlice(set: SetState, get: GetState): DismissalsSlice {
     dismissFinding: (id) => {
       const state = get()
       if (state.dismissedFindings[id]) return
-      const isCurrentWarn = selectAllFindings(state).some(
-        (finding) =>
-          finding.id === id &&
-          (finding.severity === FindingSeverity.WARNING ||
-            finding.severity === FindingSeverity.UNPLACED),
+      const isDismissable = selectAllFindings(state).some(
+        (finding) => finding.id === id && finding.dismissable,
       )
-      if (!isCurrentWarn) return
+      if (!isDismissable) return
       set((current) => ({ dismissedFindings: { ...current.dismissedFindings, [id]: true } }))
     },
 
