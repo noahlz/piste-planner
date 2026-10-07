@@ -274,11 +274,11 @@ const countsText = (await footer.locator('[data-counts]').textContent()) ?? ''
 const countsMatch = countsText.match(/^(\d+) placed · (\d+) unplaced · (\d+) pinned$/)
 if (!countsMatch) throw new Error(`could not parse footer counts: "${countsText}"`)
 const [footerPlaced, footerUnplaced, footerPinned] = countsMatch.slice(1).map(Number)
-// Logged beside the schedule-table boot count above, not asserted equal to
-// it — the lane packer (footer) and the scheduler (schedule table) can
-// legitimately disagree about what counts as "placed".
-// `[M]` 024 task S, 2026-10-06 (logged, not asserted – D13): boot read 24 schedule
-// rows with the footer at 15 placed / 9 unplaced / 0 pinned.
+// 017 T5a: the footer counts what the drawn model leaves unplaced, so B1's boot
+// reads 24 placed · 0 unplaced (the lane packer used to read 15 / 9 here).
+if (footerPlaced !== 24 || footerUnplaced !== 0) {
+  throw new Error(`B1 boot footer expected "24 placed · 0 unplaced", got "${countsText}"`)
+}
 log('boot placed count: schedule table', bootPlacedCount, 'vs footer', footerPlaced, 'placed /', footerUnplaced, 'unplaced /', footerPinned, 'pinned')
 
 for (const metric of ['finish', 'refs', 'strips']) {
