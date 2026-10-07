@@ -1381,11 +1381,6 @@ await choosePreset('ROC Mega')
 await pressSuggest('016 ROC Mega')
 await closePanel()
 await openPanel('Findings')
-const regionalRows = () =>
-  page
-    .getByRole('complementary', { name: 'Inspector panel' })
-    .locator('[data-finding-id]')
-    .filter({ hasText: 'regional Group 1 window' })
 // The auto-run may or may not emit a regional row of its own, so the pair is
 // always moved by hand and the row is selected for that pair alone.
 await closePanel()
@@ -1402,9 +1397,22 @@ for (const w of ['FOIL', 'EPEE', 'SABRE']) {
 }
 log('016 check 2: candidate pairs', pairs.slice(0, 4).map((p) => p.join('~')).join(' | '))
 if (!pairs.length) throw new Error(`016 check 2: no Group 1 pair among ${rocIds.join(',')}`)
-const [a, b] = pairs[0]
-const target = await poolDayOf(a)
-if ((await poolDayOf(b)) !== target) await moveEventToDay(b, target)
+// Like check 1, only a pair on different days counts, so the hand move always
+// changes the placement and cannot pass on one the auto-run made.
+let rocPick = null
+for (const [x, y] of pairs) {
+  const dx = await poolDayOf(x)
+  const dy = await poolDayOf(y)
+  log('016 check 2: candidate', x, 'day', dx + 1, '|', y, 'day', dy + 1)
+  if (dx !== dy) {
+    rocPick = [x, y, dx]
+    break
+  }
+}
+if (!rocPick) throw new Error('016 check 2: no Group 1 pair with pools on different days, so the hand move cannot be proven')
+const [a, b, target] = rocPick
+log('016 check 2: using', a, 'day', target + 1, '|', b, 'day', (await poolDayOf(b)) + 1, 'before the move')
+await moveEventToDay(b, target)
 if ((await poolDayOf(b)) !== target) throw new Error(`016 check 2: the Move day did not put ${b} on ${a}'s day`)
 await openPanel('Findings')
 const pairRows = page
