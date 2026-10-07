@@ -625,7 +625,7 @@ This setting changes how many refs the engine reports as needed. It does not gat
 
 #### Ref Demand Derivation
 
-Ref demand is derived post-schedule from the schedule as the workbench draws it: each scheduled event's day, start and strip budget, with its phases laid end to end by the same duration rules the scheduler uses. The workbench and the scheduler count the same intervals, so the footer's peak and the reported peak are one number. A phase the scheduler delayed for strips is counted at its drawn time, so the reported peak can sit above the peak of the scheduler's internal timeline (see backlog §The canvas draws phases without the scheduler's waits). **DE phases require one referee per allocated strip.** Pool phases follow `refs_per_pool`. Per-day peaks come from a sweep over those intervals.
+Ref demand is derived post-schedule. The scheduler reports the peak of its own timeline: each phase at the times and on the strips it allocated, waits included, leaving out a phase that holds no strips. The workbench footer counts the board it draws. Right after a run that is the same timeline, so the two are one number. An event moved by hand after the run is counted with its phases laid end to end from its new day and start by the scheduler's duration rules – the times the next run would try to claim for it as a pin – less any phase that finds no free strip. While the engine's inputs differ from the last run's, every event is counted that way, every phase included, until the next run. **DE phases require one referee per allocated strip.** Pool phases follow `refs_per_pool`. Per-day peaks come from a sweep over those intervals.
 
 This corrected a prior under-count on staged DE events – the earlier model reported roughly one referee per 4-strip group, so the fix raised staged-DE referee demand by roughly 4×.
 
@@ -750,7 +750,7 @@ Per-event phase decomposition:
 
 If strips are unavailable at the ideal time, the loop **defers** the phase to the earliest moment the right number of strips become simultaneously free, using `findAvailableStripsInWindow`'s `earliest_next_start`. If no slot exists that ends by the day's hard end (default 10:00 PM), the event fails and retries from `dayStart`, and a second failure marks the event permanently unscheduled. A phase that ends after the 7:00 PM soft target but before the hard end is placed (see [Same-Day Completion](#same-day-completion)). See [Concurrent Phase Scheduler](#concurrent-phase-scheduler) for the full lifecycle.
 
-Ref demand is **derived post-schedule** from the drawn schedule (see [Ref Demand Derivation](#ref-demand-derivation)), not maintained incrementally by the loop. It is summarized into per-day peak totals in Phase 7.
+Ref demand is **derived post-schedule** from the scheduler's own timeline (see [Ref Demand Derivation](#ref-demand-derivation)), not maintained incrementally by the loop. It is summarized into per-day peak totals in Phase 7.
 
 ### Phase 6: State Update
 
