@@ -29,9 +29,11 @@ const BADGE_CLASSES: Record<FindingSeverity, string> = {
  * (contract §1) — Blocking, Unplaced, Warning and Note in that order.
  *
  * "Show on grid" jumps the canvas to the row's target (`jumpToCompetition`,
- * store contract §2.1); "Dismiss finding" waves off a Warning or Unplaced row
- * (`dismissFinding`, contract §2.2 — a no-op on any other severity, so the
- * button is not even offered for those).
+ * store contract §2.1). "Dismiss finding" waves off a row marked `dismissable`
+ * (`dismissFinding`, contract §2.2). Those are Warning and Unplaced rows,
+ * except the hard same-day rule break (`hard-separation-violated`, 016 R1).
+ * `dismissFinding` refuses every other row, so the button is not offered for
+ * those.
  */
 export function FindingsPanel() {
   const findings = useStore(selectFindings)

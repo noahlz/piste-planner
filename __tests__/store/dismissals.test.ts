@@ -276,22 +276,29 @@ describe('dismissFinding — widened to the unified findings list (013 T030, con
 // day-scoped dismissal stays with its day (spec §2, review focus 4).
 // ──────────────────────────────────────────────
 
+const HARD_PAIR_DAY_ONE = 'analysis:hard-separation-violated:CDT-M-FOIL-IND:CDT-M-FOIL-IND+JR-M-FOIL-IND:0'
+
+/** Junior and Cadet Men's Foil placed by hand together on Day 1 of a NAC: a hard pair (R1). */
+function hardPairOnDayOne(): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(3)
+  s.setStrips(40)
+  s.setVideoStrips(8)
+  s.selectCompetitions(['JR-M-FOIL-IND', 'CDT-M-FOIL-IND'])
+  s.updateCompetition('JR-M-FOIL-IND', { fencer_count: 24 })
+  s.updateCompetition('CDT-M-FOIL-IND', { fencer_count: 24 })
+  s.setPlacementsFromAuto({
+    'JR-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
+    'CDT-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
+  })
+}
+
 describe('dismissFinding — refuses a hard-separation row (016 R1)', () => {
   it('records no dismissal and leaves the row in the list', () => {
-    useStore.setState(useStore.getInitialState(), true)
-    const s = useStore.getState()
-    s.setTournamentType('NAC')
-    s.setDays(3)
-    s.setStrips(40)
-    s.setVideoStrips(8)
-    s.selectCompetitions(['JR-M-FOIL-IND', 'CDT-M-FOIL-IND'])
-    s.updateCompetition('JR-M-FOIL-IND', { fencer_count: 24 })
-    s.updateCompetition('CDT-M-FOIL-IND', { fencer_count: 24 })
-    s.setPlacementsFromAuto({
-      'JR-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
-      'CDT-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
-    })
-    const id = 'analysis:hard-separation-violated:CDT-M-FOIL-IND:CDT-M-FOIL-IND+JR-M-FOIL-IND:0'
+    hardPairOnDayOne()
+    const id = HARD_PAIR_DAY_ONE
     const row = selectFindings(useStore.getState()).find((f) => f.id === id)
     expect(row, `premise: the hand-made pair raises ${id}`).toBeDefined()
     expect(row?.severity, 'a Warning, so the severity guard alone would let it through').toBe('Warning')
@@ -300,6 +307,23 @@ describe('dismissFinding — refuses a hard-separation row (016 R1)', () => {
 
     expect(useStore.getState().dismissedFindings).toEqual({})
     expect(selectFindings(useStore.getState()).some((f) => f.id === id)).toBe(true)
+  })
+
+  // A save or shared URL can carry any dismissed id as a sticky record, so the
+  // read side must hold R1 too, not only dismissFinding.
+  it('stays shown when a loaded save already carries its id as dismissed', () => {
+    hardPairOnDayOne()
+    const parsed = JSON.parse(serializeState(useStore.getState())) as { dismissedFindings: string[] }
+    parsed.dismissedFindings = [HARD_PAIR_DAY_ONE]
+    const result = deserializeState(JSON.stringify(parsed))
+    if ('error' in result) throw new Error(`deserializeState failed: ${result.error}`)
+
+    useStore.setState(result.state)
+    expect(useStore.getState().dismissedFindings, 'premise: the load kept the dismissal').toEqual({
+      [HARD_PAIR_DAY_ONE]: true,
+    })
+
+    expect(selectFindings(useStore.getState()).some((f) => f.id === HARD_PAIR_DAY_ONE)).toBe(true)
   })
 })
 

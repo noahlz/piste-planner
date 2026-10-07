@@ -389,22 +389,28 @@ describe('a pin may leave its ledger count only with an exception', () => {
  * B1–B8 break no hard edge (measured in 016 Task A), so their loop holds
  * vacuously and is kept only so a scenario that starts breaking one is
  * checked. The NAC Cadet/Junior template at 3 days / 80 strips / 12 video
- * breaks six through the app config (`concurrentScheduler.test.ts`'s
- * hard-edge suite), and is the case that actually exercises the check.
+ * breaks hard pairs through the app config (six today, pinned in
+ * `concurrentScheduler.test.ts`'s hard-edge suite), and is the case that
+ * actually exercises the check. A pair matches only an app row on the same
+ * day, so a row that names the pair on the wrong day counts as missing.
  */
 describe('a hard pair the scheduler breaks reaches the app\'s findings (016 review focus 5)', () => {
-  /** Scheduler pairs for the store's current config, and the ones the app's findings miss after a run. */
-  function hardPairsAfterRun(): { pairs: string[][]; missing: string[][] } {
+  type HardPair = { pair: string[]; day: number | undefined }
+
+  /** Scheduler pairs (with their day) for the store's current config, and the ones the app's findings miss after a run. */
+  function hardPairsAfterRun(): { pairs: HardPair[]; missing: HardPair[] } {
     const { config, competitions } = buildTournamentConfig(useStore.getState())
     const pairs = scheduleAll(competitions, config).bottlenecks
       .filter((b) => b.rule === BottleneckRule.HARD_SEPARATION_VIOLATED)
-      .map((b) => [...b.subjects].sort())
+      .map((b) => ({ pair: [...b.subjects].sort(), day: b.day }))
 
     runScheduleAll()
     const appIds = selectAllFindings(useStore.getState())
       .map((row) => row.id)
       .filter((id) => id.startsWith(`analysis:${BottleneckRule.HARD_SEPARATION_VIOLATED}:`))
-    const missing = pairs.filter((pair) => !appIds.some((id) => id.includes(`:${pair.join('+')}:`)))
+    const missing = pairs.filter(
+      ({ pair, day }) => !appIds.some((id) => id.endsWith(`:${pair.join('+')}:${day ?? '-'}`)),
+    )
     return { pairs, missing }
   }
 
@@ -417,7 +423,7 @@ describe('a hard pair the scheduler breaks reaches the app\'s findings (016 revi
     expect(missing).toEqual([])
   })
 
-  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: all six broken pairs show in the app after a run', () => {
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: every broken pair shows in the app after a run', () => {
     useStore.setState(useStore.getInitialState(), true)
     const state = () => useStore.getState()
     state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does

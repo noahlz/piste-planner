@@ -745,17 +745,20 @@ function labelOfId(id: string): string {
  * Junior and Cadet Men's Foil, placed by hand. At a NAC the pair is Group 1
  * and hard: they may never share a day (Ops Manual p.20, METHODOLOGY.md
  * §Overlapping-Population Separation). At a ROC it is windowed instead. Three
- * days at 9:00, 40 strips, so nothing else about the pair is tight.
+ * days at 9:00, 40 strips, so nothing else about the pair is tight. With
+ * `withDayWindows: false` it skips `setDays`, so the store keeps its default
+ * three days and no day windows at all.
  */
 function juniorAndCadetFoil(
   tournamentType: 'NAC' | 'ROC',
   jr: { day: number; start: number },
   cdt: { day: number; start: number },
+  { withDayWindows = true }: { withDayWindows?: boolean } = {},
 ): void {
   useStore.setState(useStore.getInitialState(), true)
   const s = useStore.getState()
   s.setTournamentType(tournamentType)
-  s.setDays(3)
+  if (withDayWindows) s.setDays(3)
   s.setStrips(40)
   s.setVideoStrips(8)
   s.selectCompetitions([JR_FOIL, CDT_FOIL])
@@ -802,6 +805,7 @@ describe('selectFindings — a hand-made hard pair (016 spec §1, R1)', () => {
     // The stranded events still say so – the rule check skipped them, the store did not lose them.
     expect(rows.some((r) => r.id === `unplaced:${JR_FOIL}:day`)).toBe(true)
     expect(rows.some((r) => r.id === `unplaced:${CDT_FOIL}:day`)).toBe(true)
+    expect(rows.find((r) => r.id === `unplaced:${JR_FOIL}:day`)?.dismissable).toBe(true)
   })
 })
 
@@ -832,6 +836,29 @@ describe('selectFindings — the regional Group 1 window on a hand-made ROC pair
     expect(rows[0].severity).toBe('Warning')
     expect(rows[0].dismissable).toBe(true)
   })
+
+  // The floor follows the store's own Day 2 window: opening at 10:00 moves it
+  // to 10:00 + 4 h = 14:00, so 13:00 no longer waits it out and 14:00 does.
+  it.each([
+    { olderStart: 780, outcome: 'not-honoured' },
+    { olderStart: 840, outcome: 'honoured' },
+  ])('reads the floor off a Day 2 that opens at 10:00 (older at $olderStart: $outcome)', ({ olderStart, outcome }) => {
+    juniorAndCadetFoil('ROC', { day: 1, start: olderStart }, { day: 1, start: 600 })
+    useStore.getState().updateDayConfig(1, { day_start_time: 600 })
+
+    expect(analysisRows('analysis:regional-window-').map((r) => r.id)).toEqual([
+      `analysis:regional-window-${outcome}:${OWNER_AND_SUBJECTS}`,
+    ])
+  })
+
+  it('falls back to the default day start when the store has no day windows yet', () => {
+    juniorAndCadetFoil('ROC', { day: 1, start: 780 }, { day: 1, start: 540 }, { withDayWindows: false })
+    expect(useStore.getState().dayConfigs, 'premise: no setDays, so no day windows').toEqual([])
+
+    expect(analysisRows('analysis:regional-window-').map((r) => r.id)).toEqual([
+      `analysis:regional-window-honoured:${OWNER_AND_SUBJECTS}`,
+    ])
+  })
 })
 
 describe('selectFindings — a day-scoped venue row reads its day (016 spec §2)', () => {
@@ -848,7 +875,7 @@ describe('selectFindings — a day-scoped venue row reads its day (016 spec §2)
 
   // guard: passes today. initialAnalysis takes a placed event's day as is, so a
   // stranded event raises a pools warning on a day the board does not have.
-  it('falls back to the target lookup when Bottleneck.day is outside days_available', () => {
+  it('reads a null day and Venue when an ownerless Bottleneck.day is outside days_available', () => {
     twoDaysOverCapacity()
     useStore.getState().updatePlacement('D1-W-EPEE-IND', { day: 5 })
 
@@ -924,6 +951,28 @@ describe('selectFindings — first and last day WARN from the placements (016 sp
     useStore.getState().updatePlacement(FIRST_DAY_EVENT, { start_time: 720 })
 
     expect(analysisRows(FIRST).map((r) => [r.id, r.day, r.where])).toEqual([[`${FIRST}::1`, 1, 'Day 2']])
+  })
+
+  // Review focus 1: a stranded event must not count as a used day. Read on its
+  // own, Day 6 would become the "last" day with a hugely negative length and
+  // the real Day 4 WARN would go.
+  it('leaves a stranded event out of the used days', () => {
+    oneJuniorEventOnEachOfDaysTwoToFour()
+    const STRANDED = 'JR-W-FOIL-IND'
+    const s = useStore.getState()
+    s.addCompetition(STRANDED)
+    s.updateCompetition(STRANDED, { fencer_count: 8 })
+    s.setPlacementsFromAuto({
+      ...useStore.getState().placements,
+      [STRANDED]: makePlacement({ day: 5, start_time: 540, strip_count: 1 }),
+    })
+    expect(
+      selectFindings(useStore.getState()).some((r) => r.id === `unplaced:${STRANDED}:day`),
+      'premise: the event sits on a day the tournament does not have',
+    ).toBe(true)
+
+    expect(analysisRows(LAST).map((r) => r.id)).toEqual([`${LAST}::3`])
+    expect(analysisRows(FIRST)).toEqual([])
   })
 })
 

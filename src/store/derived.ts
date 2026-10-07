@@ -728,11 +728,17 @@ function daySummaryDeps(state: StoreState): unknown[] {
   return [...scheduleDeps(state), state.dismissedFindings]
 }
 
+/**
+ * A stored dismissal hides only a row that is dismissable now. A save or shared
+ * URL may carry any id as a sticky record (`serialization.ts`), so the read side
+ * holds 016 R1 too: a hard same-day rule break, a Blocking or a Note row stays
+ * shown whatever `dismissedFindings` says.
+ */
 function computeFindings(state: StoreState): Finding[] {
-  return selectAllFindings(state).filter((row) => !state.dismissedFindings[row.id])
+  return selectAllFindings(state).filter((row) => !row.dismissable || !state.dismissedFindings[row.id])
 }
 
-/** The rows the UI shows: every current finding the user has not waved off, severity-ordered. */
+/** The rows the UI shows: every current finding, severity-ordered, less the dismissable ones the user has waved off. */
 export const selectFindings = memoizeOnDeps(daySummaryDeps, computeFindings)
 
 // ──────────────────────────────────────────────
