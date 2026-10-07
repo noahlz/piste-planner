@@ -5,15 +5,15 @@ import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
 import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
-import { selectDerivedSchedule, selectDerivedFindings, selectFindings, FindingSeverity } from '../../../src/store/derived.ts'
-import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
+import { selectDrawnSchedule, selectDerivedFindings, selectFindings, FindingSeverity } from '../../../src/store/derived.ts'
+import type { DerivedFindings, DerivedSchedule, DrawnSchedule } from '../../../src/store/derived.ts'
 import { assignStripLanes } from '../../../src/layout/lanes.ts'
 import type { DayConfig } from '../../../src/engine/types.ts'
 import { BottleneckRule, Phase } from '../../../src/engine/types.ts'
 import { makeBottleneck, makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 import { installStubResizeObserver, NeverFiringResizeObserver } from '../../helpers/resizeObserver.ts'
 import { NO_PINS } from '../../helpers/canvasQueries.ts'
-import { runAndMoveHeadline } from '../../helpers/drawnFixtures.ts'
+import { drawnFromDerived, runAndMoveHeadline } from '../../helpers/drawnFixtures.ts'
 
 // 013 T025 (part a) — red tests for the redesigned canvas (D2, D3, FR-032 to
 // FR-043, contracts/ui-contract.md §Canvas). Canvas.tsx does not exist yet
@@ -73,12 +73,12 @@ function futureState(): FutureState {
 }
 
 /** Preset B1, run through the auto-scheduler, read back as the committed model. */
-function b1Board(): { schedule: DerivedSchedule; findings: DerivedFindings; dayConfigs: DayConfig[] } {
+function b1Board(): { schedule: DrawnSchedule; findings: DerivedFindings; dayConfigs: DayConfig[] } {
   applyPreset('B1')
   runScheduleAll()
   const state = useStore.getState()
   return {
-    schedule: selectDerivedSchedule(state),
+    schedule: selectDrawnSchedule(state),
     findings: selectDerivedFindings(state),
     dayConfigs: state.dayConfigs,
   }
@@ -180,6 +180,23 @@ describe('Canvas day bands (FR-039)', () => {
       expect(text.startsWith(`Day ${day + 1} ·`)).toBe(true)
     }
   })
+
+  // 017 T6a: the bands read the committed model's blocks and count the strips
+  // a block holds, so no band claims more strips than the day has (spec §4).
+  it('never states more strips at peak than the board has, after a run or after the headline move', () => {
+    const peaks = (): number[] =>
+      [0, 1, 2, 3].map((day) => Number(/· (\d+) of 80 strips at peak/.exec(dayBand(day).textContent ?? '')?.[1]))
+
+    renderCanvas(b1Board())
+    for (const peak of peaks()) expect(peak).toBeLessThanOrEqual(80)
+    cleanup()
+
+    runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    renderCanvas({ schedule: selectDrawnSchedule(state), findings: selectDerivedFindings(state), dayConfigs: state.dayConfigs })
+    for (const peak of peaks()) expect(peak).toBeLessThanOrEqual(80)
+  })
+
 })
 
 describe('Canvas zoom (FR-034, D3)', () => {
@@ -223,7 +240,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
     // left and width read as percentages of the axis span.
     function blockExtent(days: DayConfig[], start: number, end: number) {
       const config = makeConfig({ days_available: days.length, strips: makeStrips(4, 0) })
-      const schedule: DerivedSchedule = {
+      const schedule = drawnFromDerived({
         config,
         competitions: [makeCompetition({ id: 'late' })],
         events: {
@@ -232,7 +249,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
             day_out_of_range: false,
           },
         },
-      }
+      })
       const findings: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
       const dayConfigs = days
 
@@ -277,7 +294,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
     globalThis.ResizeObserver = NeverFiringResizeObserver as unknown as typeof ResizeObserver
 
     const config = makeConfig({ days_available: 1, strips: makeStrips(4, 0) })
-    const schedule: DerivedSchedule = {
+    const schedule = drawnFromDerived({
       config,
       competitions: [makeCompetition({ id: 'flagged' })],
       events: {
@@ -286,7 +303,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
           day_out_of_range: false,
         },
       },
-    }
+    })
     const findings: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
     const dayConfigs: DayConfig[] = [{ day_start_time: 480, day_end_time: 1320 }]
     const expectedBlocks = assignStripLanes(schedule.events, config.strips_total).length
@@ -345,9 +362,9 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
   /** One event on two of four strips, so the day also has rows with no
    *  block on them at all — the "another row is not flagged" half of both
    *  cases below. */
-  function flaggedFixture(): { schedule: DerivedSchedule; findings: DerivedFindings; dayConfigs: DayConfig[] } {
+  function flaggedFixture(): { schedule: DrawnSchedule; findings: DerivedFindings; dayConfigs: DayConfig[] } {
     const config = makeConfig({ days_available: 1, strips: makeStrips(4, 0) })
-    const schedule: DerivedSchedule = {
+    const schedule = drawnFromDerived({
       config,
       competitions: [makeCompetition({ id: 'flagged' })],
       events: {
@@ -356,7 +373,7 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
           day_out_of_range: false,
         },
       },
-    }
+    })
     const findings: DerivedFindings = {
       validationErrors: [],
       analysis: {
@@ -621,7 +638,7 @@ describe('Canvas findings edge (FR-042, 013 T048)', () => {
     // the headline Move day, whose moved event finds no free strips.
     runAndMoveHeadline('B1')
     const state = useStore.getState()
-    const schedule = selectDerivedSchedule(state)
+    const schedule = selectDrawnSchedule(state)
     const findings = selectDerivedFindings(state)
     const dayConfigs = state.dayConfigs
     // The live store rates this event Unplaced, but the committed list does not.
@@ -689,7 +706,7 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
 
   /** Three events with a pool and a DE block each, on separate strips of one day. */
   function pairBoard(bottlenecks: ReturnType<typeof makeBottleneck>[]): {
-    schedule: DerivedSchedule
+    schedule: DrawnSchedule
     findings: DerivedFindings
     dayConfigs: DayConfig[]
   } {
@@ -711,7 +728,7 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
       }
     })
     return {
-      schedule: { config, competitions: ids.map((id) => makeCompetition({ id })), events },
+      schedule: drawnFromDerived({ config, competitions: ids.map((id) => makeCompetition({ id })), events }),
       findings: { validationErrors: [], analysis: { warnings: bottlenecks, suggestions: [] } },
       dayConfigs: [{ day_start_time: 480, day_end_time: 1320 }],
     }

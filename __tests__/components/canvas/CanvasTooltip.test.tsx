@@ -9,6 +9,7 @@ import { Block } from '../../../src/components/canvas/Block.tsx'
 import type { BlockPlacement } from '../../../src/layout/lanes.ts'
 import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
+import { drawnFromDerived } from '../../helpers/drawnFixtures.ts'
 import { Category, Gender, Phase, Weapon } from '../../../src/engine/types.ts'
 import type { DayConfig } from '../../../src/engine/types.ts'
 import { VIEW_STATE_STORAGE_KEY } from '../../../src/store/viewState.ts'
@@ -440,7 +441,7 @@ const AXIS_START = 480
 function renderCanvas(schedule: DerivedSchedule = scheduleWithTwoEvents()): void {
   render(
     <Canvas
-      schedule={schedule}
+      schedule={drawnFromDerived(schedule)}
       findings={EMPTY_FINDINGS}
       findingRows={[]}
       dayConfigs={CANVAS_DAY_CONFIGS}

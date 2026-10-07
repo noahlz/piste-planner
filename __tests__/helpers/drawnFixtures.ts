@@ -7,6 +7,21 @@ import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import type { ScenarioId } from '../../src/data/tournaments.ts'
+import { drawnScheduleFrom, RunState } from '../../src/store/derived.ts'
+import type { DerivedSchedule, DrawnEventSchedule, DrawnSchedule } from '../../src/store/derived.ts'
+
+/**
+ * A hand-built derived model as the board would draw it with no run behind
+ * it: every event derived, seated by `assignStrips` through the selector's own
+ * builder. Stale by default, as a run-less board is (spec §2).
+ */
+export function drawnFromDerived(model: DerivedSchedule, runState: RunState = RunState.STALE): DrawnSchedule {
+  const events: Record<string, DrawnEventSchedule> = {}
+  for (const [id, event] of Object.entries(model.events)) {
+    events[id] = { ...event, keptStrips: null, source: 'derived' }
+  }
+  return drawnScheduleFrom(model.config, model.competitions, events, runState)
+}
 
 /**
  * The Unplaced and stale texts, verbatim from the spec (R4/R7, P3, P4). Copied

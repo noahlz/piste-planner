@@ -49,6 +49,26 @@ export function stripRangeLabel(firstStrip: number, stripCount: number): string 
 }
 
 /**
+ * The strips a set of 0-based indices names, 1-based, one run per maximal
+ * stretch of consecutive indices. A drawn phase may hold strips that are not
+ * contiguous (the scheduler's own index sets, 017 spec §6). An unseated
+ * phase holds none, so callers name that case themselves and pass a non-empty
+ * set.
+ */
+export function stripSetLabel(strips: readonly number[]): string {
+  const sorted = [...new Set(strips)].sort((a, b) => a - b)
+  const runs: { first: number; count: number }[] = []
+  for (const strip of sorted) {
+    const last = runs[runs.length - 1]
+    if (last && last.first + last.count === strip) last.count++
+    else runs.push({ first: strip, count: 1 })
+  }
+  if (runs.length === 1) return stripRangeLabel(runs[0].first, runs[0].count)
+  const parts = runs.map(({ first, count }) => (count === 1 ? `${first + 1}` : `${first + 1}–${first + count}`))
+  return `Strips ${parts.join(', ')}`
+}
+
+/**
  * What a block says about its strips, overflow included.
  *
  * An overflowed block was granted no run at all: `assignStripLanes` reports it

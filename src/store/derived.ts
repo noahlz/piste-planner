@@ -20,12 +20,8 @@ import type {
   TournamentConfig,
   ValidationError,
 } from '../engine/types.ts'
-// Only the day bands (`computeDaySummaries`) still read the lane packer, until
-// 017 T6a moves them onto the drawn model's blocks. Everything else here reads
-// `selectDrawnSchedule`. `layout/lanes.ts` is pure arithmetic with no React and
-// no store read, so the import carries nothing back the other way.
-import { assignStripLanes } from '../layout/lanes.ts'
-import type { BlockPlacement } from '../layout/lanes.ts'
+// `layout/strips.ts` is pure, with no React and no store read, so the import
+// carries nothing back the other way.
 import { assignStrips } from '../layout/strips.ts'
 import type { DrawnBlock, DrawnEventInput } from '../layout/strips.ts'
 import { configKeyOf } from './keptRun.ts'
@@ -214,6 +210,21 @@ function computeDrawnSchedule(state: StoreState): DrawnSchedule {
     }
   }
 
+  return drawnScheduleFrom(config, competitions, events, runState)
+}
+
+/**
+ * Seats `events` with `assignStrips` and applies the model's one unplaced
+ * predicate: a block counts as unplaced when it is unseated and the board is
+ * fresh. Pure, so a committed model built by hand (a component test) goes
+ * through the same rule as the selector.
+ */
+export function drawnScheduleFrom(
+  config: TournamentConfig,
+  competitions: Competition[],
+  events: Record<string, DrawnEventSchedule>,
+  runState: RunState,
+): DrawnSchedule {
   const fresh = runState === RunState.FRESH
   const blocks: DrawnScheduleBlock[] = assignStrips(events, config, competitions).map((block) => {
     const countsAsUnplaced = block.unseated && fresh
@@ -755,9 +766,7 @@ function computeAllFindings(state: StoreState): Finding[] {
   // ── §1.4 Late finish: at most one row per day ──
   //
   // `finish` is the maximum block end on the day — the number the day band
-  // prints once 017 T6a moves the bands onto the drawn blocks (until then the
-  // band reads the lane packer at derived times and can print an earlier
-  // finish) — never `de_total_end`, which is the footer's tournament-wide
+  // prints, since both read the drawn blocks — never `de_total_end`, which is the footer's tournament-wide
   // fact and would let the panel warn about a time the grid does not show.
   // `target` is the day's `day_end_time` in `state.dayConfigs`, the store's
   // clock-time day hours: the soft target (default 7:00 PM, Ops Manual 2026-27
@@ -856,14 +865,14 @@ export const selectFindings = memoizeOnDeps(daySummaryDeps, computeFindings)
 /**
  * What one day band on the canvas says about its day (FR-039).
  *
- * Every field is read off the same `assignStripLanes` output the canvas draws
- * and the footer measures (constitution, "each fact has exactly one home"), so
- * a band cannot claim a peak the grid does not show — provided the caller
- * hands `daySummariesFromBlocks` its own committed blocks, which is what
- * `Canvas` does. `selectDaySummaries` below is the *live* convenience
- * wrapper: it packs the live schedule itself, so a caller that mixes it with
- * a committed set of blocks (as `Canvas` used to) is the one place this
- * guarantee can still be broken.
+ * Every field is read off the drawn model's blocks, the same blocks the footer
+ * measures and the Findings panel counts (017 spec §4, constitution "each fact
+ * has exactly one home") — provided the caller hands `daySummariesFromBlocks`
+ * the blocks of the model it draws, which is what `Canvas` does with its
+ * committed model. `selectDaySummaries` below is the *live* convenience
+ * wrapper over `selectDrawnSchedule`, so a caller that mixes it with a
+ * committed model (as `Canvas` once did) is the one place this guarantee can
+ * still be broken.
  */
 export interface DaySummary {
   day: number
@@ -871,32 +880,34 @@ export interface DaySummary {
   events: number
   /** The latest block end on this day, or null when nothing is on it. */
   finish: number | null
-  /** Peak concurrent strip demand, sampled at every block start. */
+  /** Peak strips held at once, sampled at every block start. Never above the strip count. */
   peakStrips: number
-  /** Blocks the lane packer could not fit. */
+  /** Distinct events on this day the drawn model counts as unplaced (its one predicate). */
   unplaced: number
   /** Undismissed `selectFindings` rows whose `day` is this day (contract §1.7). */
   findings: number
 }
 
 /**
- * Peak concurrent strip demand on one day, sampled at every block start.
+ * Peak strips held at once on one day, sampled at every block start.
  *
- * Demand is a step function that only ever rises where a block begins, so the
- * maximum is attained at one of those instants and sampling them all finds it.
- * Bounded by construction: the outer loop runs once per block of the day and
- * the inner once per block, never on a condition that has to converge
- * (constitution IV). The interval is half-open — a block ending exactly where
- * another starts is not concurrent with it, matching `assignStripLanes`'s own
- * overlap rule.
+ * A block adds the strips it holds, `strips.length`, never the `stripCount` it
+ * asked for, so an unseated phase adds nothing and the peak cannot exceed the
+ * strips the day has (017 spec §4). Holding is a step function that only ever
+ * rises where a block begins, so the maximum is attained at one of those
+ * instants and sampling them all finds it. Bounded by construction: the outer
+ * loop runs once per block of the day and the inner once per block, never on a
+ * condition that has to converge (constitution IV). The interval is half-open
+ * — a block ending exactly where another starts is not concurrent with it,
+ * matching the engine's own overlap rule that seated them.
  */
-function peakStripsOnDay(dayBlocks: BlockPlacement[]): number {
+function peakStripsOnDay(dayBlocks: readonly DrawnScheduleBlock[]): number {
   let peak = 0
   for (const sample of dayBlocks) {
     let at = 0
     for (const block of dayBlocks) {
       if (block.startMinutes <= sample.startMinutes && block.endMinutes > sample.startMinutes) {
-        at += block.stripCount
+        at += block.strips.length
       }
     }
     if (at > peak) peak = at
@@ -917,13 +928,18 @@ function peakStripsOnDay(dayBlocks: BlockPlacement[]): number {
  *
  * This is what makes the day band safe to draw from a *committed* model
  * (FR-042, react-code-reviewer finding 1 on 05103d5ff4): `Canvas` calls this
- * directly with the same `assignStripLanes` output it draws blocks from, so
- * the band's numbers and the grid's blocks can never disagree about which
- * schedule they describe. `selectDaySummaries` below is the thin live
- * wrapper other callers use when there is no committed model to prefer.
+ * directly with its committed model's blocks, so the band's numbers and the
+ * grid's blocks can never disagree about which schedule they describe.
+ * `selectDaySummaries` below is the thin live wrapper other callers use when
+ * there is no committed model to prefer.
+ *
+ * `unplaced` counts events, not blocks, with the model's own predicate
+ * (`countsAsUnplaced`, whose events are `unplacedIds`), so a moved event with
+ * three unseated phases reads 1 here and 1 in the footer, and a stale board
+ * reads 0 (spec §4, P4 (a)).
  */
 export function daySummariesFromBlocks(
-  blocks: BlockPlacement[],
+  blocks: readonly DrawnScheduleBlock[],
   daysAvailable: number,
   findings: Finding[],
 ): DaySummary[] {
@@ -949,7 +965,7 @@ export function daySummariesFromBlocks(
       events,
       finish,
       peakStrips: peakStripsOnDay(dayBlocks),
-      unplaced: dayBlocks.filter((block) => block.overflow).length,
+      unplaced: new Set(dayBlocks.filter((block) => block.countsAsUnplaced).map((block) => block.competitionId)).size,
       findings: findingsOnDay.get(day) ?? 0,
     })
   }
@@ -958,9 +974,7 @@ export function daySummariesFromBlocks(
 }
 
 function computeDaySummaries(state: StoreState): DaySummary[] {
-  const schedule = selectDerivedSchedule(state)
-  const blocks = assignStripLanes(schedule.events, state.strips_total)
-  return daySummariesFromBlocks(blocks, state.days_available, selectFindings(state))
+  return daySummariesFromBlocks(selectDrawnSchedule(state).blocks, state.days_available, selectFindings(state))
 }
 
 /** One summary per day in `[0, days_available)`, day ascending (data-model.md §9). */

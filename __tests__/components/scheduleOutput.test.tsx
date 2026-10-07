@@ -8,7 +8,11 @@ import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { Category, Gender, Weapon } from '../../src/engine/types.ts'
 import type { Competition, Placement } from '../../src/engine/types.ts'
 import type { DerivedSchedule } from '../../src/store/derived.ts'
+import { selectDerivedSchedule } from '../../src/store/derived.ts'
+import type { ScheduleResult } from '../../src/engine/types.ts'
+import { formatMinutes } from '../../src/lib/time.ts'
 import { makeCompetition, makeConfig, makePlacement, makeStrips } from '../helpers/factories.ts'
+import { runPreset } from '../helpers/drawnFixtures.ts'
 
 // 005 T011: schedule-output rows moved out of the two departing layout test
 // files (specs/005-consolidate-domain-logic/triage-record.md (removed; git show 0ab5bd2dc9:specs/005-consolidate-domain-logic/triage-record.md) rows: one departing file's rows 22, 23, 24, 25, 26,
@@ -323,6 +327,46 @@ describe('ScheduleOutput', () => {
 
     expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument()
     expect(screen.getByText('No events placed yet.')).toBeInTheDocument()
+  })
+})
+
+/** One row's cell text, found by row id and the cell's `data-cell`. */
+function cellText(rowId: string, cell: string): string {
+  const el = document.querySelector(`[data-schedule-row="${rowId}"] [data-cell="${cell}"]`)
+  if (!el) throw new Error(`no ${cell} cell in schedule row ${rowId}`)
+  return el.textContent ?? ''
+}
+
+/** The four time cells a result fills, in the table's own text. */
+function timeCells(r: ScheduleResult): Record<string, string> {
+  return {
+    poolStart: formatMinutes(r.pool_start),
+    poolEnd: formatMinutes(r.pool_end),
+    deStart: formatMinutes(r.de_start ?? r.de_prelims_start ?? r.de_round_of_16_start),
+    deEnd: formatMinutes(r.de_end ?? r.de_round_of_16_end),
+  }
+}
+
+describe('the table reads the drawn model (017 T6a, spec §6)', () => {
+  it('shows the run\'s own times for every event right after a run, DE waits included', () => {
+    runPreset('B1')
+    const state = useStore.getState()
+    const kept = state.lastRun?.events ?? {}
+    const derived = selectDerivedSchedule(state).events
+    const ids = Object.keys(kept).sort()
+    expect(
+      ids.some((id) => timeCells(kept[id].result).deStart !== timeCells(derived[id].result).deStart),
+      'premise: some B1 DE starts later than the derived layout puts it',
+    ).toBe(true)
+
+    render(<ScheduleOutput />)
+
+    for (const id of ids) {
+      const shown = Object.fromEntries(
+        ['poolStart', 'poolEnd', 'deStart', 'deEnd'].map((cell) => [cell, cellText(id, cell)]),
+      )
+      expect(shown, id).toEqual(timeCells(kept[id].result))
+    }
   })
 })
 

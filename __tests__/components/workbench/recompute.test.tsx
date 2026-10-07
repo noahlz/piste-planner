@@ -13,6 +13,12 @@ import {
   saveViewState,
 } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { runPreset } from '../../helpers/drawnFixtures.ts'
+import { selectDerivedSchedule } from '../../../src/store/derived.ts'
+import { phaseSpans } from '../../../src/engine/unseated.ts'
+import { phaseDisplay } from '../../../src/lib/placementLabels.ts'
+import { formatClock, formatMinutes } from '../../../src/lib/time.ts'
+import type { ScheduleResult } from '../../../src/engine/types.ts'
 import { pinBadges } from '../../helpers/canvasQueries.ts'
 import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
@@ -443,5 +449,69 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     })
 
     expect(band()).not.toBe(before)
+  })
+})
+
+/**
+ * 017 T6a — the committed model is the drawn model (spec §2, §6). Right after a
+ * run the center draws the run's own times, DE waits included, in whichever
+ * view is up, and the detail strip under it reads the same model.
+ */
+describe('the center commits the drawn model (017 T6a)', () => {
+  let restoreResizeObserver: () => void
+
+  beforeEach(() => {
+    restoreResizeObserver = installStubResizeObserver(900, 480)
+  })
+
+  afterEach(() => {
+    restoreResizeObserver()
+  })
+
+  /** The DE's first minute, as the table's DE Start column reads it. */
+  function deStartOf(r: ScheduleResult): number | null {
+    return r.de_start ?? r.de_prelims_start ?? r.de_round_of_16_start
+  }
+
+  /** B1 after a run, and the first event whose kept DE starts later than its derived layout's. */
+  function runB1WithWaitedDe(): { id: string; kept: ScheduleResult } {
+    runPreset('B1')
+    const state = useStore.getState()
+    const derived = selectDerivedSchedule(state).events
+    const kept = state.lastRun?.events ?? {}
+    const id = Object.keys(kept)
+      .sort()
+      .find((eventId) => deStartOf(kept[eventId].result) !== deStartOf(derived[eventId].result))
+    if (!id) throw new Error('premise: some B1 DE waits for strips after its pools')
+    return { id, kept: kept[id].result }
+  }
+
+  function renderCenter(viewMode: ViewMode): void {
+    render(
+      <CenterView
+        viewMode={viewMode}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
+  }
+
+  it('the schedule table shows the run\'s DE start, not the derived one', () => {
+    const { id, kept } = runB1WithWaitedDe()
+    renderCenter(ViewMode.SCHEDULE)
+
+    expect(centerRowCells(id)[3]).toBe(formatMinutes(deStartOf(kept)))
+  })
+
+  it('the detail strip\'s pills show the run\'s phase times', () => {
+    const { id, kept } = runB1WithWaitedDe()
+    useStore.getState().selectCompetition(id)
+    renderCenter(ViewMode.MATRIX)
+
+    const pills = Array.from(document.querySelectorAll('[data-phase-pill]')).map((el) => el.textContent)
+    expect(pills).toEqual(
+      phaseSpans(kept).map((span) => `${phaseDisplay(span.phase)} ${formatClock(span.start)}–${formatClock(span.end)}`),
+    )
   })
 })

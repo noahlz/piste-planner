@@ -3,10 +3,10 @@ import { useStore } from '../../store/store.ts'
 import type { DayConfig, Placement } from '../../engine/types.ts'
 import {
   selectDerivedFindings,
-  selectDerivedSchedule,
+  selectDrawnSchedule,
   selectFindings,
   type DerivedFindings,
-  type DerivedSchedule,
+  type DrawnSchedule,
   type Finding,
 } from '../../store/derived.ts'
 import { ScheduleOutput } from '../sections/ScheduleOutput.tsx'
@@ -32,9 +32,15 @@ function pinnedIdsOf(placements: Record<string, Placement>): ReadonlySet<string>
   )
 }
 
-/** The derived model the center is currently drawing, whichever view is up. */
+/**
+ * The model the center is currently drawing, whichever view is up. `schedule`
+ * is the drawn model (`selectDrawnSchedule`, 017 spec §2): right after a run it
+ * carries the run's own times and strips, so the canvas, its day bands, the
+ * schedule table and the detail strip all describe the schedule the engine
+ * built, and they settle and freeze together.
+ */
 interface CommittedModel {
-  schedule: DerivedSchedule
+  schedule: DrawnSchedule
   findings: DerivedFindings
   /**
    * The unified findings list (`selectFindings`, contract §1), committed
@@ -65,7 +71,7 @@ interface CommittedModel {
  * ## One model, two views (FR-023)
  *
  * The matrix and the schedule table are handed the *same* committed
- * `DerivedSchedule`, so they cannot disagree about when an event runs — the
+ * `DrawnSchedule`, so they cannot disagree about when an event runs — the
  * contract `contracts/ui-contract.md` §View equivalence states and
  * `viewEquivalence.test.tsx` holds. Neither view is given a live store
  * subscription of its own here: that would put one of them ahead of the other
@@ -133,7 +139,7 @@ export function CenterView({
   detailCollapsed: boolean
   onToggleDetailCollapsed: () => void
 }) {
-  const live = useStore(selectDerivedSchedule)
+  const live = useStore(selectDrawnSchedule)
   const liveFindings = useStore(selectDerivedFindings)
   const liveFindingRows = useStore(selectFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)

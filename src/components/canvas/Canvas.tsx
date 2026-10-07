@@ -8,7 +8,7 @@ import {
   daySummariesFromBlocks,
   type DaySummary,
   type DerivedFindings,
-  type DerivedSchedule,
+  type DrawnSchedule,
   type Finding,
   FindingSeverity,
 } from '../../store/derived.ts'
@@ -61,8 +61,10 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  * which for a scheduled tournament may carry the scheduler's own day axis
  * rather than clock time (specs/006-day-axis-parity/contracts/day-axis.md C4 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), research D4/D5).
  *
- * The day bands are computed here too, by `daySummariesFromBlocks` over this
- * component's own `lanes` — the same committed blocks the grid draws — plus
+ * The day bands are computed here too, by `daySummariesFromBlocks` over the
+ * committed model's own `blocks` (017 T6a: the strips each phase holds, so a
+ * band never claims more strips than the day has, and the unplaced events the
+ * footer counts) — plus
  * `findingRows`, a fourth prop `CenterView` commits alongside the other three
  * on the same settle (013 T032, contract §4.3). The pin badge reads
  * `pinnedIds`, the pinned set committed with the schedule since 013 T046
@@ -105,7 +107,8 @@ const TICK_STEPS_MINUTES: readonly number[] = [15, 30, 60, 120, 180, 360]
 const MIN_TICK_GAP_PX = 72
 
 export interface CanvasProps {
-  schedule: DerivedSchedule
+  /** The committed drawn model. The grid still packs `events` (`lanes`) until 017 T6b; the bands read `blocks`. */
+  schedule: DrawnSchedule
   /** Still feeds the tooltip's per-block messages (`findingsForBlock`). */
   findings: DerivedFindings
   /** The unified findings list (contract §1), committed with the other three (§4.1). */
@@ -372,8 +375,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
   )
 
   const summaries = useMemo(
-    () => daySummariesFromBlocks(lanes, daysAvailable, findingRows),
-    [lanes, daysAvailable, findingRows],
+    () => daySummariesFromBlocks(schedule.blocks, daysAvailable, findingRows),
+    [schedule.blocks, daysAvailable, findingRows],
   )
 
   const competitionsById = useMemo(

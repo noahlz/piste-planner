@@ -4,16 +4,21 @@ import { DetailStrip } from '../../../src/components/workbench/DetailStrip.tsx'
 import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
-import { selectDerivedSchedule, type DerivedSchedule } from '../../../src/store/derived.ts'
+import {
+  drawnScheduleFrom,
+  RunState,
+  selectDrawnSchedule,
+  type DrawnSchedule,
+} from '../../../src/store/derived.ts'
 import { findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/lib/competitionLabels.ts'
-import { assignStripLanes } from '../../../src/layout/lanes.ts'
 import { eventTimeSegments } from '../../../src/layout/segments.ts'
 import { estimateEventFootprint } from '../../../src/engine/derive.ts'
-import { phaseDisplay, stripRangeLabel, stripAssignmentLabel } from '../../../src/lib/placementLabels.ts'
+import { phaseDisplay, stripSetLabel } from '../../../src/lib/placementLabels.ts'
 import { formatClock, formatMinutes } from '../../../src/lib/time.ts'
 import { DeMode, Phase, PlacementSource } from '../../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
+import { drawnFromDerived, runAndMoveHeadline } from '../../helpers/drawnFixtures.ts'
 
 // 013 T028 (part b) — red tests for the detail strip (contract §4,
 // phase4-contract.md). DetailStrip.tsx does not exist yet (T029 writes it),
@@ -44,16 +49,29 @@ afterEach(() => {
 
 /** Preset B1, run through the auto-scheduler, read back as the committed model
  *  (same fixture Canvas.test.tsx's b1Board() builds — all 24 events place). */
-function b1Board(): DerivedSchedule {
+function b1Board(): DrawnSchedule {
   applyPreset('B1')
   runScheduleAll()
-  return selectDerivedSchedule(useStore.getState())
+  return selectDrawnSchedule(useStore.getState())
+}
+
+/** Every strip the last run kept for `id`, across its phases. */
+function keptStripsOf(id: string): number[] {
+  const kept = useStore.getState().lastRun?.events[id]
+  if (!kept) throw new Error(`the last run kept no ${id}`)
+  return kept.phases.flatMap((phase) => [...phase.strips])
+}
+
+/** How many separate runs of consecutive indices a strip set has. */
+function runCount(strips: readonly number[]): number {
+  const sorted = [...new Set(strips)].sort((a, b) => a - b)
+  return sorted.filter((strip, i) => i === 0 || sorted[i - 1] !== strip - 1).length
 }
 
 /** The sorted-first placed event id, optionally excluding one assigned day —
  *  used by the Move day case so the day it moves *to* is guaranteed to be
  *  one of the "other" days offered. */
-function placedEventId(schedule: DerivedSchedule, opts: { excludeDay?: number } = {}): string {
+function placedEventId(schedule: DrawnSchedule, opts: { excludeDay?: number } = {}): string {
   const ids = Object.keys(schedule.events).sort()
   const match = ids.find(
     (id) => opts.excludeDay === undefined || schedule.events[id].result.assigned_day !== opts.excludeDay,
@@ -111,16 +129,9 @@ describe('DetailStrip facts (contract §4 Facts)', () => {
     expect(section).toHaveAttribute('data-selected-day', String(day + 1))
     expect(section).toHaveTextContent(`Day ${day + 1}`)
 
-    const lanes = assignStripLanes(schedule.events, Math.max(0, Math.floor(schedule.config.strips_total)))
-    const blocks = lanes.filter((b) => b.competitionId === id)
-    const overflowed = blocks.some((b) => b.overflow)
-    const expectedStrips = overflowed
-      ? stripAssignmentLabel(0, Math.max(...blocks.map((b) => b.stripCount)), true)
-      : stripRangeLabel(
-          Math.min(...blocks.map((b) => b.firstStrip)),
-          Math.max(...blocks.map((b) => b.firstStrip + b.stripCount)) -
-            Math.min(...blocks.map((b) => b.firstStrip)),
-        )
+    // Right after a run every event is kept, so its label names the strips the
+    // run gave it (017 spec §6), read off the kept run rather than the blocks.
+    const expectedStrips = stripSetLabel(keptStripsOf(id))
     expect(section).toHaveAttribute('data-selected-strips', expectedStrips)
     expect(section).toHaveTextContent(expectedStrips)
 
@@ -133,11 +144,11 @@ describe('DetailStrip facts (contract §4 Facts)', () => {
   // component calls, so a conceptual mistake shared by both would pass
   // unnoticed. This fixture is built so the answer is provable by hand
   // instead, and the assertion below is the literal, not the formula.
-  it('reads "Strips 12–16" for a block packed behind an 11-strip blocker at the same start time', () => {
+  it('reads "Strips 12–16" for a block seated behind an 11-strip blocker at the same start time', () => {
     const config = makeConfig({ strips: makeStrips(20, 0) })
     const blocker = makeCompetition({ id: 'aaa-blocker', fencer_count: 24 })
     const selected = makeCompetition({ id: 'bbb-selected', fencer_count: 24 })
-    const schedule: DerivedSchedule = {
+    const schedule = drawnFromDerived({
       config,
       competitions: [blocker, selected],
       events: {
@@ -150,7 +161,7 @@ describe('DetailStrip facts (contract §4 Facts)', () => {
           day_out_of_range: false,
         },
       },
-    }
+    })
     useStore.setState({
       selectedCompetitions: {
         [blocker.id]: { fencer_count: blocker.fencer_count, flighted: blocker.flighted },
@@ -162,12 +173,69 @@ describe('DetailStrip facts (contract §4 Facts)', () => {
     render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
 
     const section = screen.getByRole('region', { name: 'Selected event' })
-    // By hand: both events start at the same minute on the same day, so
-    // compareCandidates orders them by id — "aaa-blocker" first. firstFit packs
-    // it into 0-based strips 0-10 (11 strips), leaving "bbb-selected"'s 5-strip
-    // run to start at 0-based strip 11 and run through 15, i.e. 1-based 12-16.
+    // By hand: both events start at the same minute on the same day, so the
+    // strip assigner seats them by id — "aaa-blocker" first — on the first
+    // free strips in the engine's candidate order (no video strips here, so
+    // index order). The blocker takes 0-based strips 0-10 (11 strips), leaving
+    // "bbb-selected"'s 5 strips at 0-based 11-15, i.e. 1-based 12-16.
     expect(section).toHaveAttribute('data-selected-strips', 'Strips 12–16')
     expect(section).toHaveTextContent('Strips 12–16')
+  })
+
+  it('names a kept split strip set by its runs, "Strips 1–4, 9–10"', () => {
+    const config = makeConfig({ strips: makeStrips(20, 0) })
+    const selected = makeCompetition({ id: 'split', fencer_count: 24 })
+    const schedule = drawnScheduleFrom(
+      config,
+      [selected],
+      {
+        [selected.id]: {
+          result: { ...makeScheduleResult(selected.id, 0), pool_start: 480, pool_end: 600, pool_strip_count: 6 },
+          day_out_of_range: false,
+          keptStrips: { [Phase.POOLS]: [0, 1, 2, 3, 8, 9] },
+          source: 'kept',
+        },
+      },
+      RunState.FRESH,
+    )
+    futureState().selectCompetition(selected.id)
+
+    render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    const section = screen.getByRole('region', { name: 'Selected event' })
+    expect(section).toHaveAttribute('data-selected-strips', 'Strips 1–4, 9–10')
+    expect(section).toHaveTextContent('Strips 1–4, 9–10')
+  })
+
+  it('names the strips the run drew for a B1 event whose kept strips are not contiguous', () => {
+    const schedule = b1Board()
+    const id = Object.keys(schedule.events)
+      .sort()
+      .find((eventId) => runCount(keptStripsOf(eventId)) > 1)
+    if (!id) throw new Error('premise: B1 keeps at least one event on a split strip set')
+    futureState().selectCompetition(id)
+
+    render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    const label = screen.getByRole('region', { name: 'Selected event' }).getAttribute('data-selected-strips')
+    expect(label).toBe(stripSetLabel(keptStripsOf(id)))
+    expect(label).toContain(', ')
+  })
+
+  it('names the strips an event the model counts unplaced still needs', () => {
+    const { id } = runAndMoveHeadline('B1')
+    const schedule = selectDrawnSchedule(useStore.getState())
+    const unplacedBlocks = schedule.blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced)
+    expect(unplacedBlocks.length, 'premise: the headline move leaves the event unplaced').toBeGreaterThan(0)
+    futureState().selectCompetition(id)
+
+    render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
+
+    const needed = Math.max(...unplacedBlocks.map((b) => b.stripCount))
+    expect(screen.getByRole('region', { name: 'Selected event' })).toHaveAttribute(
+      'data-selected-strips',
+      `Unplaced, needs ${needed} strips`,
+    )
   })
 })
 
@@ -188,7 +256,7 @@ describe('DetailStrip, a placed event on a day outside the tournament (react rev
     expect(useStore.getState().placements[id]?.pinned).toBe(false)
 
     useStore.getState().setDays(lastDay)
-    const outOfRangeSchedule = selectDerivedSchedule(useStore.getState())
+    const outOfRangeSchedule = selectDrawnSchedule(useStore.getState())
     expect(outOfRangeSchedule.events[id].day_out_of_range).toBe(true)
     expect(useStore.getState().placements[id]?.pinned).toBe(false)
 
@@ -241,7 +309,7 @@ describe('DetailStrip phase pills, placed (contract §4 Phase pills)', () => {
   it('reads "Video stage 14:00–15:30" on a staged event, with every pill literal', () => {
     const config = makeConfig({ strips: makeStrips(20, 4) })
     const staged = makeCompetition({ id: 'staged', fencer_count: 24, de_mode: DeMode.STAGED })
-    const schedule: DerivedSchedule = {
+    const schedule = drawnFromDerived({
       config,
       competitions: [staged],
       events: {
@@ -261,7 +329,7 @@ describe('DetailStrip phase pills, placed (contract §4 Phase pills)', () => {
           day_out_of_range: false,
         },
       },
-    }
+    })
     futureState().selectCompetition(staged.id)
 
     render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
@@ -411,7 +479,7 @@ describe('DetailStrip, no placement (contract §4 "Placed vs unplaced")', () => 
   it('shows name, fencer count and footprint duration pills, a Flight button, and no Pin or Move day', () => {
     const config = makeConfig()
     const competition = makeCompetition({ id: 'unplaced-comp', fencer_count: 32 })
-    const schedule: DerivedSchedule = { config, competitions: [competition], events: {} }
+    const schedule = drawnFromDerived({ config, competitions: [competition], events: {} })
 
     useStore.setState({
       selectedCompetitions: {

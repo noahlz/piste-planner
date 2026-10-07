@@ -1,21 +1,20 @@
 import { useState, type ReactElement } from 'react'
 import { ChevronDown, ChevronUp, Pin as PinIcon, Split, X } from 'lucide-react'
 import { useStore } from '../../store/store.ts'
-import type { DerivedSchedule } from '../../store/derived.ts'
+import type { DrawnSchedule } from '../../store/derived.ts'
 import { findCompetition } from '../../engine/catalogue.ts'
 import { competitionLabel } from '../../lib/competitionLabels.ts'
 import { estimateEventFootprint } from '../../engine/derive.ts'
-import { assignStripLanes } from '../../layout/lanes.ts'
 import { eventTimeSegments } from '../../layout/segments.ts'
-import { phaseDisplay, stripRangeLabel, stripAssignmentLabel } from '../../lib/placementLabels.ts'
+import { phaseDisplay, stripAssignmentLabel, stripSetLabel } from '../../lib/placementLabels.ts'
 import { formatClock, formatMinutes } from '../../lib/time.ts'
 import { Phase } from '../../engine/types.ts'
 import { weaponVar, WeaponTokenPart } from '../canvas/weaponTokens.ts'
 import { cn } from '@/lib/utils'
 
 export interface DetailStripProps {
-  /** The committed schedule `CenterView` is drawing (FR-042: never the live store). */
-  schedule: DerivedSchedule
+  /** The committed drawn model `CenterView` is drawing (FR-042: never the live store). */
+  schedule: DrawnSchedule
   detailCollapsed: boolean
   onToggleDetailCollapsed: () => void
 }
@@ -64,11 +63,11 @@ const ICON_BUTTON =
  *
  * ## The same helpers the block and the tooltip use, not new arithmetic
  *
- * `stripRangeLabel`/`stripAssignmentLabel`/`phaseDisplay` are the shared block
+ * `stripSetLabel`/`stripAssignmentLabel`/`phaseDisplay` are the shared block
  * vocabulary in `src/lib/placementLabels.ts` that `Block` and `CanvasTooltip` also
- * read, and `assignStripLanes` is the exact call
- * `Canvas.tsx` makes over the same committed `schedule.events` — so the strip
- * can never describe a placement or a strip run the canvas draws differently.
+ * read. The strip label reads the committed model's own `blocks` and the pills
+ * its `events` (017 spec §6): right after a run, the strips and times the run
+ * gave the event.
  */
 export function DetailStrip({
   schedule,
@@ -100,24 +99,23 @@ export function DetailStrip({
   let stripsLabel: string | null = null
   if (placed) {
     if (derived.day_out_of_range) {
-      // assignStripLanes (lanes.ts:148) skips a day_out_of_range event outright —
-      // there is no strip run to report because the block's day does not exist,
-      // not because it overflowed a day that does. Naming the count would claim
+      // The strip assigner skips a day_out_of_range event outright — there is
+      // no strip to report because the block's day does not exist, not
+      // because a day that does had no room. Naming the count would claim
       // strips the event was never given, the same fiction
-      // `stripAssignmentLabel`'s docblock rules out for an overflowed block.
+      // `stripAssignmentLabel`'s docblock rules out for an unseated block.
       stripsLabel = 'Unplaced, day out of range'
     } else {
-      const lanes = assignStripLanes(schedule.events, Math.max(0, Math.floor(schedule.config.strips_total)))
-      const blocks = lanes.filter((b) => b.competitionId === id)
-      if (blocks.length > 0) {
-        const overflowed = blocks.some((b) => b.overflow)
-        stripsLabel = overflowed
-          ? stripAssignmentLabel(0, Math.max(...blocks.map((b) => b.stripCount)), true)
-          : stripRangeLabel(
-              Math.min(...blocks.map((b) => b.firstStrip)),
-              Math.max(...blocks.map((b) => b.firstStrip + b.stripCount)) -
-                Math.min(...blocks.map((b) => b.firstStrip)),
-            )
+      const blocks = schedule.blocks.filter((b) => b.competitionId === id)
+      // The model's one predicate, as the footer and the Findings panel read
+      // it: on a stale board an unseated phase is not unplaced (P4 (a)), so the
+      // label names whatever the event's other phases hold.
+      const unplaced = blocks.filter((b) => b.countsAsUnplaced)
+      const held = blocks.flatMap((b) => b.strips)
+      if (unplaced.length > 0) {
+        stripsLabel = stripAssignmentLabel(0, Math.max(...unplaced.map((b) => b.stripCount)), true)
+      } else if (held.length > 0) {
+        stripsLabel = stripSetLabel(held)
       }
     }
   }
