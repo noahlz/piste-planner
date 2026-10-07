@@ -605,7 +605,12 @@ describe('boot invariants: the drawn board is the scheduler\'s run (017 T5b)', (
 
     expect(model.runState).toBe(RunState.FRESH)
     expect(model.blocks.filter((b) => b.unseated).map((b) => `${b.competitionId} ${b.phase}`), 'unseated phases').toEqual([])
-    expect(model.blocks.length, 'one block per scheduler phase').toBe(expected.size)
+    // Sorted keys, not just a count: a phase drawn twice and another missing
+    // would keep the count.
+    expect(
+      model.blocks.map((b) => `${b.competitionId}|${b.phase}`).sort(),
+      'one block per scheduler phase',
+    ).toEqual([...expected.keys()].sort())
     for (const block of model.blocks) {
       const phase = expected.get(`${block.competitionId}|${block.phase}`)
       expect(

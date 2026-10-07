@@ -63,6 +63,11 @@ export function moveDay(id: string, day: number): void {
  */
 export function runAndMoveHeadline(scenario: ScenarioId = 'B1'): { id: string; day: number } {
   runPreset(scenario)
+  return moveHeadline()
+}
+
+/** The headline move on the board as it stands, for a test that reads the run before moving. */
+export function moveHeadline(): { id: string; day: number } {
   const { placements, days_available } = useStore.getState()
   const id = Object.keys(placements).sort()[0]
   const day = (placements[id].day + 1) % days_available

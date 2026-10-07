@@ -269,7 +269,7 @@ function clockAxisConfig(config: TournamentConfig): TournamentConfig {
  * (review focus 1). The engine's late-day finding is not run here: the store's
  * `late-finish:day:<n>` row is the app's late-day finding (R2).
  */
-function placementFindings(schedule: DerivedSchedule, tournamentType: TournamentType): Bottleneck[] {
+function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentType): Bottleneck[] {
   const clockConfig = clockAxisConfig(schedule.config)
   const inRange: Record<string, ScheduleResult> = {}
   const placed: PlacedEvent[] = []

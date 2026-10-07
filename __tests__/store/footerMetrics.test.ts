@@ -12,7 +12,7 @@ import {
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { makePlacement } from '../helpers/factories.ts'
-import { runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
+import { moveHeadline, runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
 import { DAY_AXIS_SPACING_MINS, DeMode } from '../../src/engine/types.ts'
 import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
 
@@ -443,7 +443,7 @@ describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () =>
     const keptBefore = useStore.getState().lastRun
     expect(keptBefore, 'premise: the run was kept').not.toBeNull()
 
-    const { id } = runAndMoveHeadline('B5')
+    const { id } = moveHeadline()
     const moverBlocks = selectDrawnSchedule(useStore.getState()).blocks.filter((b) => b.competitionId === id)
     expect(moverBlocks.length, 'premise: the mover is drawn').toBeGreaterThan(0)
     expect(moverBlocks.every((b) => b.unseated), 'premise: every phase of the mover is unseated').toBe(true)
@@ -454,6 +454,52 @@ describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () =>
     )
     expect(moverKept, 'premise: the run gave the mover strips').toBeGreaterThan(0)
     expect(metric('strips:utilization').value).toBeCloseTo(before! - (moverKept / available()) * 100, 10)
+  })
+
+  /**
+   * A fresh board with a hand-moved event (spec §5, Move day): the mover is
+   * derived at its new day while every other event keeps its run, and the
+   * finish reads both. B1's headline move puts D1-M-EPEE-IND on day 1, where
+   * its derived DE_ROUND_OF_16 ends at 1100 and its DE at 1130 with the tail,
+   * above every kept event's 1090 (measured 2026-10-07).
+   */
+  it('finish reads a hand-moved event\'s derived DE end on a fresh board', () => {
+    const { id } = runAndMoveHeadline('B1')
+    const drawn = selectDrawnSchedule(useStore.getState())
+    expect(drawn.runState, 'premise: Move day keeps the board fresh').toBe(RunState.FRESH)
+    expect(drawn.events[id].source, 'premise: the mover is derived').toBe('derived')
+    // The drawn model's results are on the clock axis already.
+    let keptLatest = -1
+    for (const event of Object.values(drawn.events)) {
+      if (event.source !== 'kept' || event.result.de_total_end === null) continue
+      keptLatest = Math.max(keptLatest, event.result.de_total_end)
+    }
+    expect(keptLatest, 'premise: the kept events finish at 1090').toBe(1090)
+
+    expect(metric('finish:tournament').value).toBe(1130)
+  })
+
+  /**
+   * A stale board counts no block as unplaced (P4 (a)), yet an unseated block
+   * there still holds no strips, so utilization still adds `strips.length`,
+   * never `stripCount` (spec §4). B5 after a run, then strips 60 -> 30: the
+   * board lays out derived times on 30 strips, where 15 phases find no free
+   * run. Measured 2026-10-07: the blocks hold 13983 strip-minutes against the
+   * 43975 they request, over 3 days × 30 strips × 600 minutes.
+   */
+  it('never counts an unseated block\'s strips on a stale board', () => {
+    runPreset('B5')
+    useStore.getState().setStrips(30)
+    const { runState, blocks } = selectDrawnSchedule(useStore.getState())
+    expect(runState, 'premise: a settings edit after the run makes the board stale').toBe(RunState.STALE)
+    expect(blocks.filter((b) => b.unseated).length, 'premise: the stale board has unseated phases').toBe(15)
+    expect(blocks.some((b) => b.countsAsUnplaced), 'premise: a stale board counts nothing unplaced').toBe(false)
+
+    const held = blocks.reduce((sum, b) => sum + (b.endMinutes - b.startMinutes) * b.strips.length, 0)
+    const requested = blocks.reduce((sum, b) => sum + (b.endMinutes - b.startMinutes) * b.stripCount, 0)
+    expect([held, requested], 'premise: measured strip-minutes held and requested').toEqual([13983, 43975])
+
+    expect(metric('strips:utilization').value).toBeCloseTo((13983 / (3 * 30 * 600)) * 100, 10)
   })
 })
 

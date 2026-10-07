@@ -10,6 +10,7 @@ import { phaseSpans } from '../../src/engine/unseated.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
 import { DAY_AXIS_SPACING_MINS, DeMode, Phase, Weapon } from '../../src/engine/types.ts'
 import {
+  RunState,
   selectDerivedSchedule,
   selectDerivedFindings,
   selectDrawnSchedule,
@@ -650,8 +651,11 @@ describe('selectFindings — late finish tie-break picks the lower competition i
   })
 })
 
-describe('selectFindings — late finish overrun via a hand move, Blocking count unchanged (FR-025)', () => {
-  it('reports minutes past close after a move pushes the finish beyond it, without adding a Blocking row', () => {
+// The board here was never run, so it is stale and the start-time edit is one
+// more stale edit, not a hand move on a run (017 T5b review). The fresh-board
+// hand move is pinned in 'late finish reads a hand-moved event' below.
+describe('selectFindings — late finish overrun after a start-time edit, Blocking count unchanged (FR-025)', () => {
+  it('reports minutes past close after an edit pushes the finish beyond it, without adding a Blocking row', () => {
     threeEventsOverlappingOnDayZero()
     // A real Blocking witness (013 T032 review follow-up): STAGED de mode
     // plus the fixture's default video_strips_total of 0 trips
@@ -803,6 +807,63 @@ describe('selectFindings — late finish follows the kept DE ends (017 T5b)', ()
       .filter((r) => r.id.startsWith('late-finish:'))
       .map((r) => ({ id: r.id, target: r.target, finishesAt: /finishes at (.+?),/.exec(r.message)?.[1] }))
     expect(rows).toEqual(expected)
+  })
+})
+
+/**
+ * 017 T5b review: a fresh board with a hand-moved event (spec §5, Move day).
+ * The mover is derived at its new day and every other event keeps its run, and
+ * the day's late-finish row reads both. Measured 2026-10-07.
+ */
+describe('selectFindings — late finish reads a hand-moved event on a fresh board (017 T5b)', () => {
+  function lateRow(day: number): Finding | undefined {
+    return selectFindings(useStore.getState()).find((r) => r.id === `late-finish:day:${day}`)
+  }
+
+  /** Every block on `day` other than `id`'s, and its latest end. */
+  function othersLatest(id: string, day: number): number {
+    const blocks = selectDrawnSchedule(useStore.getState()).blocks
+    return Math.max(...blocks.filter((b) => b.day === day && b.competitionId !== id).map((b) => b.endMinutes))
+  }
+
+  /**
+   * B1's headline move puts D1-M-EPEE-IND on day 1. Its derived
+   * DE_ROUND_OF_16 ends at 1100 (18:20), inside the 45-minute lead before the
+   * 19:00 target, while the kept events on day 1 end by 1060, outside it. So
+   * only the mover makes day 1 late.
+   */
+  it('names the mover when only its derived end makes the day late', () => {
+    const { id, day } = runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    expect(selectDrawnSchedule(state).runState, 'premise: Move day keeps the board fresh').toBe(RunState.FRESH)
+    expect(selectDrawnSchedule(state).events[id].source, 'premise: the mover is derived').toBe('derived')
+    const kept = othersLatest(id, day)
+    expect(kept, 'premise: the kept events on the day end at 1060').toBe(1060)
+    expect(kept, 'premise: 1060 is outside the lead, so not late').toBeLessThanOrEqual(state.dayConfigs[day].day_end_time - lateFinishWindowMins())
+
+    const row = lateRow(day)
+    expect(row?.target).toBe('D1-M-EPEE-IND')
+    expect(row?.message).toContain(`finishes at ${formatClock(1100)}, 40 minutes before the day's target`)
+  })
+
+  /**
+   * An unseated block still ends where it is drawn, so it still counts toward
+   * the day's finish (derived.ts's late-finish comment). B2 after a run, with
+   * CDT-M-EPEE-TEAM moved to day 0 at 12:00: its DE finds no free strips and
+   * ends at 1205 (20:05), above the kept events' 1185 on that day.
+   */
+  it('counts an unseated block\'s end toward the day\'s finish', () => {
+    runPreset('B2')
+    useStore.getState().updatePlacement('CDT-M-EPEE-TEAM', { day: 0, start_time: 720 })
+    const drawn = selectDrawnSchedule(useStore.getState())
+    expect(drawn.runState, 'premise: a hand move keeps the board fresh').toBe(RunState.FRESH)
+    const last = drawn.blocks.filter((b) => b.competitionId === 'CDT-M-EPEE-TEAM' && b.endMinutes === 1205)
+    expect(last.map((b) => [b.phase, b.unseated]), 'premise: the mover\'s DE is unseated and ends at 1205').toEqual([[Phase.DE, true]])
+    expect(othersLatest('CDT-M-EPEE-TEAM', 0), 'premise: the kept events on day 0 end earlier').toBe(1185)
+
+    const row = lateRow(0)
+    expect(row?.target).toBe('CDT-M-EPEE-TEAM')
+    expect(row?.message).toContain(`finishes at ${formatClock(1205)}, 65 minutes past the day's target`)
   })
 })
 
