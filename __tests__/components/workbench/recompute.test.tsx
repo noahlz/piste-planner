@@ -453,6 +453,17 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
   })
 })
 
+function renderCenter(viewMode: ViewMode = ViewMode.MATRIX): void {
+  render(
+    <CenterView
+      viewMode={viewMode}
+      zoom={{ zoomStep: 2, fitting: false }}
+      detailCollapsed={false}
+      onToggleDetailCollapsed={() => {}}
+    />,
+  )
+}
+
 /**
  * 017 T6a — the committed model is the drawn model (spec §2, §6). Right after a
  * run the center draws the run's own times, DE waits included, in whichever
@@ -487,17 +498,6 @@ describe('the center commits the drawn model (017 T6a)', () => {
     return { id, kept: kept[id].result }
   }
 
-  function renderCenter(viewMode: ViewMode): void {
-    render(
-      <CenterView
-        viewMode={viewMode}
-        zoom={{ zoomStep: 2, fitting: false }}
-        detailCollapsed={false}
-        onToggleDetailCollapsed={() => {}}
-      />,
-    )
-  }
-
   it('the schedule table shows the run\'s DE start, not the derived one', () => {
     const { id, kept } = runB1WithWaitedDe()
     renderCenter(ViewMode.SCHEDULE)
@@ -522,6 +522,8 @@ describe('the center commits the drawn model (017 T6a)', () => {
  * state, so it appears and goes when the board redraws, not on the keystroke.
  */
 describe('the stale banner follows the committed model (017 T7)', () => {
+  const STALE_STRIPS = 79 // one under B1's 80: valid, but not the count the run used
+  const BLOCKING_STRIPS = 0 // strips_total 0 is a Blocking ERROR
   let restoreResizeObserver: () => void
 
   beforeEach(() => {
@@ -532,17 +534,6 @@ describe('the stale banner follows the committed model (017 T7)', () => {
   afterEach(() => {
     restoreResizeObserver()
   })
-
-  function renderCenter(viewMode: ViewMode = ViewMode.MATRIX): void {
-    render(
-      <CenterView
-        viewMode={viewMode}
-        zoom={{ zoomStep: 2, fitting: false }}
-        detailCollapsed={false}
-        onToggleDetailCollapsed={() => {}}
-      />,
-    )
-  }
 
   function banner(): HTMLElement | null {
     return document.querySelector<HTMLElement>('[data-stale-banner]')
@@ -565,7 +556,7 @@ describe('the stale banner follows the committed model (017 T7)', () => {
     renderCenter(viewMode)
 
     act(() => {
-      useStore.getState().setStrips(79)
+      useStore.getState().setStrips(STALE_STRIPS)
     })
     // The live model is stale already, but the center has not redrawn yet.
     expect(banner()).toBeNull()
@@ -574,14 +565,15 @@ describe('the stale banner follows the committed model (017 T7)', () => {
 
     const shown = banner()
     expect(shown).not.toBeNull()
-    expect(shown).toHaveAttribute('role', 'status')
+    // The live region is mounted all along, so the text arrives inside a region that exists.
+    expect(shown?.parentElement).toHaveAttribute('role', 'status')
     expect(shown?.textContent).toBe(UNPLACED_WORDING.STALE)
   })
 
   it('goes once Auto-assign has run and the center has settled', () => {
     renderCenter()
     act(() => {
-      useStore.getState().setStrips(79)
+      useStore.getState().setStrips(STALE_STRIPS)
     })
     settle()
     expect(banner()).not.toBeNull()
@@ -601,7 +593,7 @@ describe('the stale banner follows the committed model (017 T7)', () => {
 
     // strips_total 0 is both a stale edit and a Blocking ERROR: the center commits nothing.
     act(() => {
-      useStore.getState().setStrips(0)
+      useStore.getState().setStrips(BLOCKING_STRIPS)
     })
     settle()
     expect(screen.getByRole('region', { name: 'Blocking findings' })).toBeInTheDocument()
@@ -609,11 +601,44 @@ describe('the stale banner follows the committed model (017 T7)', () => {
 
     // Valid again but not the strip count the run used: the board is stale, and says so.
     act(() => {
-      useStore.getState().setStrips(79)
+      useStore.getState().setStrips(STALE_STRIPS)
     })
     settle()
 
     expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
     expect(banner()).not.toBeNull()
+  })
+
+  it('keeps the banner up when a Blocking finding then freezes a board that was already stale', () => {
+    renderCenter()
+    act(() => {
+      useStore.getState().setStrips(STALE_STRIPS)
+    })
+    settle()
+    expect(banner()).not.toBeNull()
+
+    act(() => {
+      useStore.getState().setStrips(BLOCKING_STRIPS)
+    })
+    settle()
+
+    expect(screen.getByRole('region', { name: 'Blocking findings' })).toBeInTheDocument()
+    expect(banner()?.textContent).toBe(UNPLACED_WORDING.STALE)
+  })
+
+  it('takes the frozen board out of the tab order and the accessibility tree', () => {
+    renderCenter()
+    const dimmed = document.querySelector<HTMLElement>('[data-dimmed]')
+    expect(dimmed).not.toHaveAttribute('inert')
+
+    act(() => {
+      useStore.getState().setStrips(BLOCKING_STRIPS)
+    })
+    settle()
+
+    expect(dimmed).toHaveAttribute('inert')
+    const blocks = document.querySelectorAll<HTMLElement>('[data-event-block]')
+    expect(blocks.length).toBeGreaterThan(0)
+    blocks.forEach((block) => expect(block.closest('[inert]')).not.toBeNull())
   })
 })

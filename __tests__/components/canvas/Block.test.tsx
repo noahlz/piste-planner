@@ -82,12 +82,16 @@ describe('Block identity and accessibility (ui-contract §Canvas)', () => {
     expect(classes.some((c) => c.includes('ring-'))).toBe(false)
   })
 
-  it('takes keyboard focus', () => {
-    const el = renderBlock()
+  it('reports focus and blur from the button, so a keyboard user gets what hover shows', () => {
+    const onFocus = vi.fn()
+    const onBlur = vi.fn()
+    const el = renderBlock({ onFocus, onBlur })
 
-    el.focus()
+    fireEvent.focus(el)
+    fireEvent.blur(el)
 
-    expect(document.activeElement).toBe(el)
+    expect(onFocus).toHaveBeenCalledTimes(1)
+    expect(onBlur).toHaveBeenCalledTimes(1)
   })
 
   it('names a staged DE block by its video stage in the accessible name', () => {
@@ -480,6 +484,14 @@ describe('Block draws one rect per strip run (017 spec §6)', () => {
     expect(first.querySelector('[data-pin-glyph]')).not.toBeNull()
     expect(continuation.querySelector('[data-label]')).toBeNull()
     expect(continuation.querySelector('[data-pin-glyph]')).toBeNull()
+  })
+
+  it('keeps a press on a continuation from taking focus into a hidden rect, and leaves the button\'s alone', () => {
+    const [first, continuation] = renderRuns(SPLIT)
+
+    // fireEvent returns false when the event's default was prevented.
+    expect(fireEvent.mouseDown(continuation)).toBe(false)
+    expect(fireEvent.mouseDown(first)).toBe(true)
   })
 
   it('selects on a click of a continuation too', () => {

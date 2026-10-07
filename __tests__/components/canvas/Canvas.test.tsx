@@ -1125,9 +1125,11 @@ describe('Canvas draws the scheduler\'s strips (017 T6b, spec §6)', () => {
   describe('blocks are keyboard buttons (017 T7, spec §6)', () => {
     /** Every element a Tab press can land on, in document order. */
     function tabStops(): HTMLElement[] {
-      return Array.from(document.querySelectorAll<HTMLElement>('button, [tabindex]')).filter(
-        (el) => el.tabIndex >= 0,
-      )
+      return Array.from(
+        document.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input, select, textarea, summary, [contenteditable], [tabindex]',
+        ),
+      ).filter((el) => el.tabIndex >= 0)
     }
 
     it('offers one button per phase and none for a continuation run', () => {
@@ -1159,7 +1161,61 @@ describe('Canvas draws the scheduler\'s strips (017 T6b, spec §6)', () => {
       expect(tabStops()).toContain(lane)
     })
 
-    it('tabs through every phase of a run board, day by day, and through nothing else', () => {
+    it('draws the findings edge on a warned overflow-lane block', () => {
+      const warnedRow: Finding = {
+        id: 'test:Warning:A', severity: 'Warning', where: 'Day 1 · A', day: 0,
+        message: 'A', target: 'A', dismissable: true, subjects: ['A'],
+      }
+      renderCanvas(
+        {
+          schedule: board([
+            ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
+            ['A', 630, 690, 2, null],
+          ]),
+          findings: NO_FINDINGS,
+          dayConfigs: DAY_CONFIGS,
+        },
+        { findingRows: [warnedRow] },
+      )
+
+      const [lane] = rectsOf('A')
+      expect(lane.dataset.unseated).toBe('true')
+      expect(lane.dataset.warned).toBe('true')
+      expect(lane.style.borderWidth).toBe('2px')
+      expect(lane.style.borderStyle).toBe('dashed')
+      expect(lane.style.borderColor).toBe('var(--flash)')
+    })
+
+    it('selects the competition when its button is activated', () => {
+      draw(board([['K', 600, 700, 4, [0, 1, 5, 6]]]))
+
+      fireEvent.click(rectsOf('K')[0])
+
+      expect(useStore.getState().selectedCompetitionId).toBe('K')
+    })
+
+    it('opens the tooltip on keyboard focus and closes it on blur, as hover does', () => {
+      draw(board([['K', 600, 700, 4, [0, 1, 5, 6]]]))
+      const [first] = rectsOf('K')
+
+      fireEvent.focus(first)
+      expect(document.querySelector('[data-tooltip-field="strips"]')?.textContent).toBe('Strips 1–2, 6–7')
+
+      fireEvent.blur(first)
+      expect(document.querySelector('[data-tooltip-field="strips"]')).toBeNull()
+    })
+
+    it('scrolls a focused block clear of the sticky time axis, day band and strip gutter', () => {
+      draw(board([['K', 600, 700, 4, [0, 1, 5, 6]]]))
+
+      const scroller = document.querySelector<HTMLElement>('[data-canvas-scroller]')
+      const axis = parseFloat(document.querySelector<HTMLElement>('[data-time-axis]')?.style.height ?? '')
+      const band = parseFloat(dayBand(0).style.height)
+      expect(parseFloat(scroller?.style.scrollPaddingTop ?? '')).toBeGreaterThanOrEqual(axis + band)
+      expect(parseFloat(scroller?.style.scrollPaddingLeft ?? '')).toBeGreaterThanOrEqual(58)
+    })
+
+    it('tabs through every phase of a run board once, days in order, and through nothing else', () => {
       const { schedule, findings, dayConfigs } = b1Board()
       renderCanvas({ schedule, findings, dayConfigs })
 

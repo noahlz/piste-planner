@@ -1,4 +1,4 @@
-import type { CSSProperties, MouseEvent, PointerEvent } from 'react'
+import type { CSSProperties, FocusEvent, MouseEvent, PointerEvent } from 'react'
 import type { Competition } from '../../engine/types.ts'
 import { Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
@@ -127,6 +127,9 @@ export interface BlockProps {
   onPointerEnter?: (e: PointerEvent<HTMLElement>) => void
   onPointerLeave?: (e: PointerEvent<HTMLElement>) => void
   onClick?: (e: MouseEvent<HTMLElement>) => void
+  /** Focus and blur reach the button only, so a keyboard user gets the tooltip a pointer user gets from hover. */
+  onFocus?: (e: FocusEvent<HTMLElement>) => void
+  onBlur?: (e: FocusEvent<HTMLElement>) => void
 }
 
 export function Block({
@@ -145,6 +148,8 @@ export function Block({
   onPointerEnter,
   onPointerLeave,
   onClick,
+  onFocus,
+  onBlur,
 }: BlockProps) {
   const kind = phaseKind(placement.phase)
   const isContinuation = runIndex > 0
@@ -229,10 +234,6 @@ export function Block({
   const displayIconPx = showIcon ? iconPx : iconAlonePx
   const renderIcon = displayIconPx > 0
 
-  // Every warned block draws the findings edge, the overflow lane's included
-  // (spec §6), so `data-warned` is simply the prop.
-  const warnedEdge = warned
-
   // The four paint channels travel as custom properties so the styles below
   // can consume them; React types style as CSSProperties, which has no index
   // signature for custom properties.
@@ -249,9 +250,10 @@ export function Block({
     // Warning, Unplaced or Blocking finding (mockup lines 1283 and 1287). Written
     // as longhands: a `border` shorthand beside `borderStyle` makes React warn
     // whenever only one of them changes between renders.
-    borderWidth: placement.unseated || warnedEdge ? 2 : 1.5,
+    // `warned` covers the overflow lane's blocks too (spec §6).
+    borderWidth: placement.unseated || warned ? 2 : 1.5,
     borderStyle: placement.unseated ? 'dashed' : 'solid',
-    borderColor: placement.unseated || warnedEdge ? 'var(--flash)' : 'var(--block-edge)',
+    borderColor: placement.unseated || warned ? 'var(--flash)' : 'var(--block-edge)',
     borderRadius: 9,
     boxSizing: 'border-box',
     overflow: 'hidden',
@@ -274,7 +276,7 @@ export function Block({
         'data-unseated': placement.unseated ? 'true' : 'false',
         'data-weapon': competition.weapon,
         'data-pinned': pinned ? 'true' : 'false',
-        'data-warned': warnedEdge ? 'true' : 'false',
+        'data-warned': warned ? 'true' : 'false',
         'data-selected': selected ? 'true' : 'false',
         'data-flash': flash ? 'true' : 'false',
       }
@@ -359,13 +361,21 @@ export function Block({
     </>
   )
 
-  const handlers = { style: blockStyle, onPointerEnter, onPointerLeave, onClick }
+  const rootProps = { style: blockStyle, onPointerEnter, onPointerLeave, onClick }
 
   // A continuation is a non-button sibling: it is out of the accessibility tree and the tab order,
-  // so the phase is one tab stop and one name however many rects it takes.
+  // so the phase is one tab stop and one name however many rects it takes. `tabIndex={-1}` makes a
+  // div mouse-focusable, so a press is default-prevented: focus must not land inside an
+  // `aria-hidden` rect, where it would vanish from the page for assistive tech.
   if (isContinuation) {
     return (
-      <div {...identity} {...handlers} tabIndex={-1} className="cursor-pointer">
+      <div
+        {...identity}
+        {...rootProps}
+        tabIndex={-1}
+        onMouseDown={(e) => e.preventDefault()}
+        className="cursor-pointer"
+      >
         {content}
       </div>
     )
@@ -378,7 +388,9 @@ export function Block({
     <button
       type="button"
       {...identity}
-      {...handlers}
+      {...rootProps}
+      onFocus={onFocus}
+      onBlur={onBlur}
       className="cursor-pointer focus-visible:z-[5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {content}

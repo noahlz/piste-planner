@@ -14,7 +14,7 @@ import { selectDerivedSchedule } from '../../src/store/derived.ts'
 import type { ScheduleResult } from '../../src/engine/types.ts'
 import { formatMinutes } from '../../src/lib/time.ts'
 import { makeCompetition, makeConfig, makePlacement, makeStrips } from '../helpers/factories.ts'
-import { drawnFromDerived, runPreset } from '../helpers/drawnFixtures.ts'
+import { drawnFromDerived, runPreset, UNPLACED_WORDING } from '../helpers/drawnFixtures.ts'
 
 // 005 T011: schedule-output rows moved out of the two departing layout test
 // files (specs/005-consolidate-domain-logic/triage-record.md (removed; git show 0ab5bd2dc9:specs/005-consolidate-domain-logic/triage-record.md) rows: one departing file's rows 22, 23, 24, 25, 26,
@@ -196,7 +196,9 @@ describe('ScheduleOutput', () => {
     renderCenterTable()
 
     expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('Stale – re-run Auto-assign')
+    const banner = document.querySelector('[data-stale-banner]')
+    expect(banner?.closest('[role="status"]')).not.toBeNull()
+    expect(banner?.textContent).toBe(UNPLACED_WORDING.STALE)
     // The notice is the stale state's only wording: the retired phrasing stays retired.
     expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
     expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()

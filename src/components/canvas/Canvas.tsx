@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import { DAY_HARD_END_MINS, DAY_START_MINS, clockHardEnd } from '../../engine/constants.ts'
 import type { Bottleneck, Competition, DayConfig, Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
@@ -83,6 +83,8 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
 const GUTTER_WIDTH_PX = 58
 /** The sticky time axis across the top (mockup line 277). */
 const AXIS_HEIGHT_PX = 26
+/** Room kept past the sticky chrome for a focused block's 2px outline and its offset. */
+const SCROLL_CLEARANCE_PX = 4
 /** Day band heights, by detail tier (mockup `TIER`). */
 const BAND_HEIGHT_OVERVIEW_PX = 22
 const BAND_HEIGHT_PX = 30
@@ -457,7 +459,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
    * The anchor is the block's own top centre, in viewport pixels, so the
    * tooltip stays put while the pointer moves within one block.
    */
-  function handleEnter(block: ResolvedBlock, e: PointerEvent<HTMLElement>): void {
+  function handleEnter(block: ResolvedBlock, e: SyntheticEvent<HTMLElement>): void {
     const rect = e.currentTarget.getBoundingClientRect()
     setHovered({
       competitionId: block.placement.competitionId,
@@ -523,6 +525,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
         findings={block.findings}
         onPointerEnter={(e) => handleEnter(block, e)}
         onPointerLeave={() => setHovered(null)}
+        onFocus={(e) => handleEnter(block, e)}
+        onBlur={() => setHovered(null)}
         onClick={() => selectCompetition(placement.competitionId)}
       />
     )
@@ -536,7 +540,16 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
         ref={scrollerRef}
         data-canvas-scroller="true"
         className="pp-scroll"
-        style={{ position: 'absolute', inset: 0, overflow: 'auto', background: 'var(--background)' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          overflow: 'auto',
+          background: 'var(--background)',
+          // A focused block scrolls into view at the scroller's edge, which is under the sticky
+          // axis, day band and strip gutter. The padding keeps it, and its outline, clear of them.
+          scrollPaddingTop: AXIS_HEIGHT_PX + bandHeightPx + SCROLL_CLEARANCE_PX,
+          scrollPaddingLeft: GUTTER_WIDTH_PX + SCROLL_CLEARANCE_PX,
+        }}
       >
         <div style={{ minWidth: zoom.fitting ? '100%' : GUTTER_WIDTH_PX + plotWidthAtRung }}>
           {/* The time axis. Sticky on the vertical, with its own corner cell
