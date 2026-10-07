@@ -6,13 +6,19 @@ import { runScheduleAll } from '../../src/store/runActions.ts'
 import { makePlacement } from '../helpers/factories.ts'
 import { assignStripLanes } from '../../src/layout/lanes.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
-import { DeMode, Phase } from '../../src/engine/types.ts'
-import { selectDerivedSchedule, selectDerivedFindings } from '../../src/store/derived.ts'
+import { DeMode, Phase, Weapon } from '../../src/engine/types.ts'
+import {
+  selectDerivedSchedule,
+  selectDerivedFindings,
+  selectDrawnSchedule,
+  selectPlacementCounts,
+} from '../../src/store/derived.ts'
 import * as derivedModule from '../../src/store/derived.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
+import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
+import { UNPLACED_WORDING, moveDay, runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
 import { competitionLabel } from '../../src/lib/competitionLabels.ts'
 import { formatClock } from '../../src/lib/time.ts'
-import { phaseDisplay } from '../../src/lib/placementLabels.ts'
 
 /**
  * 013 T030 (phase-5 contract, contracts/phase5-contract.md §1) — the unified
@@ -321,28 +327,140 @@ describe('selectFindings — INFO bottleneck maps to a Note row (contract §1.2,
   })
 })
 
-describe('selectFindings — Unplaced rows from lane overflow (contract §1.3)', () => {
-  it('emits one Unplaced row per overflowing block, naming the strip count from the block itself', () => {
+/**
+ * 017 T5a (spec §4): the Unplaced rows read the drawn model, one row per event
+ * it counts as unplaced, never the lane packer's overflow. Before T5a these
+ * rows came one per overflowing block of `assignStripLanes`, with ids
+ * `unplaced:<id>:<phase>`; the run-less overflow fixture's
+ * `unplaced:JR-M-FOIL-IND:DE` was the case this describe used to pin.
+ */
+describe('selectFindings — Unplaced rows read the drawn model (017 T5a, spec §4)', () => {
+  const unplacedRows = (): Finding[] => selectFindings(useStore.getState()).filter((r) => r.severity === 'Unplaced')
+
+  it('gives the headline move one re-run row naming the event on its new day', () => {
+    const { id, day } = runAndMoveHeadline('B1')
+
+    expect(unplacedRows()).toEqual([{
+      id: `unplaced:${id}:room`,
+      severity: 'Unplaced',
+      where: `Day ${day + 1} · ${labelOfId(id)}`,
+      day,
+      message: UNPLACED_WORDING.RERUN,
+      target: id,
+      subjects: [id],
+      dismissable: true,
+    }])
+  })
+
+  it('clears the headline move\'s row once Auto-assign runs again', () => {
+    runAndMoveHeadline('B1')
+    expect(unplacedRows(), 'premise: the move left a row').toHaveLength(1)
+
+    runScheduleAll()
+
+    expect(unplacedRows()).toEqual([])
+  })
+
+  /** Every drawn block of the model as one comparable line, sorted. */
+  function geometry(blocks: { competitionId: string; phase: string; day: number; startMinutes: number; endMinutes: number; strips: readonly number[] }[]): string[] {
+    return blocks
+      .map((b) => `${b.competitionId}|${b.phase}|d${b.day}|${b.startMinutes}-${b.endMinutes}|${b.strips.join(',')}`)
+      .sort()
+  }
+
+  it.each(SCENARIO_IDS)('%s: Move day of every event to every other day moves no kept event and gives an unseated mover one re-run row', (scenario) => {
+    runPreset(scenario)
+    const saved = useStore.getState().placements
+    const days = useStore.getState().days_available
+    const before = geometry(selectDrawnSchedule(useStore.getState()).blocks)
+
+    let unseatedMoves = 0
+    for (const id of Object.keys(saved).sort()) {
+      for (let day = 0; day < days; day++) {
+        if (day === saved[id].day) continue
+        useStore.setState({ placements: saved })
+        moveDay(id, day)
+        const model = selectDrawnSchedule(useStore.getState())
+        const move = `${id} → day ${day + 1}`
+
+        const others = model.blocks.filter((b) => b.competitionId !== id)
+        expect(geometry(others), `${move}: kept events hold their times and strips`)
+          .toEqual(before.filter((line) => !line.startsWith(`${id}|`)))
+
+        const unseated = model.unplacedIds.has(id)
+        if (unseated) unseatedMoves++
+        expect(
+          unplacedRows().map((r) => [r.id, r.message]),
+          `${move}: ${unseated ? 'one re-run row' : 'no row'}`,
+        ).toEqual(unseated ? [[`unplaced:${id}:room`, UNPLACED_WORDING.RERUN]] : [])
+      }
+    }
+    expect(unseatedMoves, 'premise: some moves leave the mover unseated').toBeGreaterThan(0)
+  })
+
+  it.each(SCENARIO_IDS)('%s: a pin-all re-run gives one pin-wording row per event with an unseated phase', (scenario) => {
+    runPreset(scenario)
+    for (const id of Object.keys(useStore.getState().placements)) useStore.getState().setPinned(id, true)
+    runScheduleAll()
+    const model = selectDrawnSchedule(useStore.getState())
+    const unseated = [...model.unplacedIds].sort()
+    expect(unseated.length, 'premise: the re-run leaves pinned phases unseated').toBeGreaterThan(0)
+    for (const id of unseated) expect(model.events[id].source, `${id} stays kept`).toBe('kept')
+
+    const rows = unplacedRows().map((r) => [r.id, r.message]).sort()
+    expect(rows).toEqual(unseated.map((id) => [`unplaced:${id}:room`, UNPLACED_WORDING.PIN]))
+  })
+
+  /**
+   * P4 (a) and (b): while stale the board is not a schedule, so its unseated
+   * phases raise no row. The out-of-range row stays, the events with no
+   * placement still count in the footer, and one non-dismissable stale row
+   * stands where the per-event rows were.
+   */
+  it('shows no unseated row after a settings edit, keeps the out-of-range row and adds the stale row', () => {
+    runPreset('B4')
+    for (const id of Object.keys(useStore.getState().placements)) useStore.getState().setPinned(id, true)
+    runScheduleAll()
+    expect(unplacedRows().length, 'premise: the fresh board has unseated rows').toBeGreaterThan(0)
+    const stranded = Object.keys(useStore.getState().placements).sort()[0]
+    useStore.getState().updatePlacement(stranded, { day: 9 })
+
+    // A setting B4's foil events read. B4 is a youth event set whose DE mode
+    // already defaults to single stage, so a DE-mode override would change nothing.
+    useStore.getState().setPoolRoundDuration(Weapon.FOIL, useStore.getState().pool_round_duration_table[Weapon.FOIL] + 15)
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: the settings edit makes the board stale').toBe('stale')
+    expect(model.blocks.some((b) => b.unseated), 'premise: the stale board has unseated phases').toBe(true)
+
+    expect(unplacedRows().map((r) => r.id).sort()).toEqual(['stale:run', `unplaced:${stranded}:day`])
+    expect(unplacedRows().find((r) => r.id === 'stale:run')).toEqual({
+      id: 'stale:run',
+      severity: 'Unplaced',
+      where: 'Board',
+      day: null,
+      message: UNPLACED_WORDING.STALE,
+      target: null,
+      subjects: [],
+      dismissable: false,
+    })
+
+    const selected = Object.keys(state.selectedCompetitions)
+    const inRange = selected.filter((id) => {
+      const placement = state.placements[id]
+      return placement !== undefined && placement.day >= 0 && placement.day < state.days_available
+    })
+    expect(selected.length - inRange.length, 'premise: one stranded event plus events with no placement').toBeGreaterThan(1)
+    const { placed, unplaced } = selectPlacementCounts(state)
+    expect({ placed, unplaced }).toEqual({ placed: inRange.length, unplaced: selected.length - inRange.length })
+  })
+
+  it('shows no unseated row on a board that was never run, only the stale row', () => {
     threeEventsOverlappingOnDayZero()
     const state = useStore.getState()
-    const schedule = selectDerivedSchedule(state)
-    const blocks = assignStripLanes(schedule.events, state.strips_total)
-    const overflow = blocks.filter((b) => b.overflow)
-    expect(overflow).toHaveLength(1)
-    const block = overflow[0]
-    expect(block.competitionId).toBe('JR-M-FOIL-IND')
+    expect(selectDrawnSchedule(state).blocks.some((b) => b.unseated), 'premise: an unseated phase is drawn').toBe(true)
 
-    const rows = selectFindings(state)
-    const unplacedRows = rows.filter((r) => r.severity === 'Unplaced')
-    expect(unplacedRows).toHaveLength(1)
-
-    const row = rows.find((r) => r.id === `unplaced:${block.competitionId}:${block.phase}`)
-    expect(row).toBeDefined()
-    expect(row?.id).toBe('unplaced:JR-M-FOIL-IND:DE')
-    expect(row?.target).toBe(block.competitionId)
-    expect(row?.day).toBe(block.day)
-    expect(row?.where).toBe(`Day ${block.day + 1} · ${phaseDisplay(block.phase)}`)
-    expect(row?.message).toContain(`${block.stripCount} strip`)
+    expect(unplacedRows().map((r) => r.id)).toEqual(['stale:run'])
   })
 })
 
@@ -591,11 +709,13 @@ describe('selectFindings — no referee comparison (FR-026)', () => {
 })
 
 describe('selectFindings — dismissal filtering (contract §2.2)', () => {
+  // 017 T5a: the row comes from the headline move's unseated derived event,
+  // not from the run-less overflow fixture, which now raises only the stale row.
   it('filters a dismissed Unplaced row from the list but records the dismissal', () => {
-    threeEventsOverlappingOnDayZero()
+    const { id } = runAndMoveHeadline('B1')
     const before = selectFindings(useStore.getState())
     const unplacedRow = before.find((r) => r.severity === 'Unplaced')
-    expect(unplacedRow, 'expected an Unplaced row from the overflow fixture').toBeDefined()
+    expect(unplacedRow?.id, 'expected the headline move\'s Unplaced row').toBe(`unplaced:${id}:room`)
 
     useStore.getState().dismissFinding(unplacedRow!.id)
 
@@ -714,14 +834,14 @@ describe('selectFindings — a pinned collision survives Auto-assign, naming the
 
     const rows = selectFindings(state)
     const unplacedRows = rows.filter((r) => r.severity === 'Unplaced')
-    // The packer's own tie order — day, then start minute, then competition id
-    // (lanes.ts:84-89) — gives the lower id (JR-M-EPEE-IND) the strip run first,
-    // so the greater id (JR-W-EPEE-IND) is the one left over.
-    expect(unplacedRows).toHaveLength(1)
-    expect(unplacedRows[0]?.target).toBe('JR-W-EPEE-IND')
-    expect(
-      rows.some((r) => r.severity === 'Unplaced' && r.target === 'JR-M-EPEE-IND'),
-    ).toBe(false)
+    // 017 T5a: the row reads the kept run. The engine pre-claims pins in
+    // (day, start, id) order (`compareIds`), so the lower id (JR-M-EPEE-IND)
+    // claims its pool strips first and the greater id (JR-W-EPEE-IND) is the
+    // pin it could not seat. It stays kept, so its row carries the pin
+    // wording (P3), not the re-run wording.
+    expect(unplacedRows.map((r) => [r.id, r.target, r.message])).toEqual([
+      ['unplaced:JR-W-EPEE-IND:room', 'JR-W-EPEE-IND', UNPLACED_WORDING.PIN],
+    ])
   })
 })
 
@@ -1026,18 +1146,30 @@ describe('selectFindings — a bottleneck row id survives its sibling disappeari
 })
 
 describe('selectFindings — dismissable by severity and rule (016 spec §2, R1)', () => {
-  it('is true for Warning and Unplaced rows and false for Blocking and Note rows', () => {
+  it('is true for Warning and per-event Unplaced rows and false for Blocking, Note and the stale row', () => {
     threeEventsOverlappingOnDayZero()
     useStore.getState().updateDayConfig(0, { day_end_time: 760 }) // a late-finish Warning
     const rows = selectFindings(useStore.getState())
     const bySeverity = (severity: string) => rows.filter((r) => r.severity === severity)
-    expect(bySeverity('Unplaced').length).toBeGreaterThan(0)
     expect(bySeverity('Warning').length).toBeGreaterThan(0)
     expect(bySeverity('Note').length).toBeGreaterThan(0)
-    for (const row of [...bySeverity('Unplaced'), ...bySeverity('Warning')]) {
-      expect(row.dismissable, row.id).toBe(true)
-    }
+    for (const row of bySeverity('Warning')) expect(row.dismissable, row.id).toBe(true)
     for (const row of bySeverity('Note')) expect(row.dismissable, row.id).toBe(false)
+    // The board was never run, so its one Unplaced row is the stale row (P4 (b)).
+    expect(bySeverity('Unplaced').map((r) => [r.id, r.dismissable])).toEqual([['stale:run', false]])
+
+    // The per-event rows: the headline move's re-run row, and a stranded event's
+    // row. The stranded event leaves another day, so the strips it frees cannot
+    // seat the mover.
+    const { id, day } = runAndMoveHeadline('B1')
+    const { placements } = useStore.getState()
+    const stranded = Object.keys(placements).sort().find((other) => other !== id && placements[other].day !== day)!
+    useStore.getState().updatePlacement(stranded, { day: 9 })
+    const perEvent = selectFindings(useStore.getState()).filter((r) => r.severity === 'Unplaced')
+    expect(perEvent.map((r) => [r.id, r.dismissable]).sort()).toEqual([
+      [`unplaced:${id}:room`, true],
+      [`unplaced:${stranded}:day`, true],
+    ])
 
     setupB5()
     useStore.getState().setStrips(0)

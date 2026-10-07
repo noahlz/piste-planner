@@ -4,6 +4,7 @@ import type { StoreState } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { makePlacement } from '../helpers/factories.ts'
+import { runAndMoveHeadline } from '../helpers/drawnFixtures.ts'
 import { assignStripLanes } from '../../src/layout/lanes.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
 import { DeMode } from '../../src/engine/types.ts'
@@ -229,14 +230,16 @@ describe('selectDaySummaries — findings, re-pointed to selectFindings (013 T03
     expect(after[1].findings).toBe(before[1].findings)
   })
 
-  it('counts an Unplaced row on the day its overflowing block sits on', () => {
-    threeEventsOverlappingOnDayZero()
+  // 017 T5a: the Unplaced row comes from the headline Move day's unseated
+  // event on its new day. The run-less overflow fixture this used is stale
+  // now, and its one stale row belongs to no day.
+  it('counts an Unplaced row on the day its unseated event sits on', () => {
+    const { id, day } = runAndMoveHeadline('B1')
     const summaries = selectDaySummaries(useStore.getState())
     const findings = selectFindings(useStore.getState())
 
-    const day0Findings = findings.filter((f) => f.day === 0)
-    expect(day0Findings.some((f) => f.severity === 'Unplaced'), 'expected an Unplaced row on day 0').toBe(true)
-    expect(summaries[0].findings).toBeGreaterThanOrEqual(1)
-    expect(summaries[0].findings).toBe(day0Findings.length)
+    const dayFindings = findings.filter((f) => f.day === day)
+    expect(dayFindings.some((f) => f.id === `unplaced:${id}:room`), `expected the mover's Unplaced row on day ${day}`).toBe(true)
+    expect(summaries[day].findings).toBe(dayFindings.length)
   })
 })

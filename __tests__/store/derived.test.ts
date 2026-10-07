@@ -1,15 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import { BottleneckRule, Weapon } from '../../src/engine/types.ts'
+import { BottleneckRule, DeMode, Weapon } from '../../src/engine/types.ts'
 import type { Placement } from '../../src/engine/types.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makeCompetition, makeConfig, makePlacement, makeScheduleResult } from '../helpers/factories.ts'
+import { runAndMoveHeadline } from '../helpers/drawnFixtures.ts'
+import { runScheduleAll } from '../../src/store/runActions.ts'
 import type { DerivedSchedule } from '../../src/store/derived.ts'
 import {
+  RunState,
   buildRefDemandByDay,
   selectDerivedSchedule,
   selectDerivedFindings,
   selectDerivedRefRequirements,
+  selectDrawnSchedule,
+  selectPlacementCounts,
 } from '../../src/store/derived.ts'
 
 // Smallest drift-ledger scenario (12 events) — realistic roster for exercising
@@ -249,5 +254,40 @@ describe('buildRefDemandByDay', () => {
     expect(byDay[1].intervals).toEqual([
       { startTime: 480, endTime: 540, count: 2, weapon: Weapon.FOIL },
     ])
+  })
+})
+
+/**
+ * 017 T5a (spec §2, §4): the footer's counts read the drawn model's one
+ * unplaced predicate, never the lane packer. An event is unplaced when it has
+ * no in-range placement or a block the model counts as unplaced.
+ */
+describe('selectPlacementCounts reads the drawn model (017 T5a)', () => {
+  it('counts the headline move\'s event once, though two of its phases find no strips', () => {
+    const { id } = runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    const counted = selectDrawnSchedule(state).blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced)
+    expect(counted.length, 'premise: the mover has more than one unseated phase').toBeGreaterThan(1)
+
+    expect(selectPlacementCounts(state)).toEqual({ placed: 23, unplaced: 1, pinned: 1 })
+  })
+
+  it('reads 24 placed again once Auto-assign runs after the headline move', () => {
+    runAndMoveHeadline('B1')
+
+    runScheduleAll()
+
+    expect(selectPlacementCounts(useStore.getState())).toEqual({ placed: 24, unplaced: 0, pinned: 1 })
+  })
+
+  it('counts no unseated phase as unplaced on a stale board (review focus 10)', () => {
+    runAndMoveHeadline('B1')
+    useStore.getState().setDeModeOverride(DeMode.SINGLE_STAGE)
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: a settings edit makes the board stale').toBe(RunState.STALE)
+    expect(model.blocks.some((b) => b.unseated), 'premise: the stale board draws unseated phases').toBe(true)
+
+    expect(selectPlacementCounts(state)).toEqual({ placed: 24, unplaced: 0, pinned: 1 })
   })
 })

@@ -13,6 +13,7 @@ import { BottleneckRule, Phase } from '../../../src/engine/types.ts'
 import { makeBottleneck, makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 import { installStubResizeObserver, NeverFiringResizeObserver } from '../../helpers/resizeObserver.ts'
 import { NO_PINS } from '../../helpers/canvasQueries.ts'
+import { runAndMoveHeadline } from '../../helpers/drawnFixtures.ts'
 
 // 013 T025 (part a) — red tests for the redesigned canvas (D2, D3, FR-032 to
 // FR-043, contracts/ui-contract.md §Canvas). Canvas.tsx does not exist yet
@@ -616,7 +617,13 @@ describe('Canvas findings edge (FR-042, 013 T048)', () => {
   })
 
   it('follows the committed findingRows prop, not the store', () => {
-    const { schedule, findings, dayConfigs } = b1Board()
+    // 017 T5a: a run leaves B1 with no Unplaced row, so the live one comes from
+    // the headline Move day, whose moved event finds no free strips.
+    runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    const schedule = selectDerivedSchedule(state)
+    const findings = selectDerivedFindings(state)
+    const dayConfigs = state.dayConfigs
     // The live store rates this event Unplaced, but the committed list does not.
     const live = selectFindings(useStore.getState()).find(
       (r) => r.severity === FindingSeverity.UNPLACED && r.target !== null,

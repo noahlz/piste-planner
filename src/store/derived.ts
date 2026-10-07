@@ -460,19 +460,11 @@ export interface PlacementCounts {
 }
 
 function computePlacementCounts(state: StoreState): PlacementCounts {
-  // An event the packer could not fit is unplaced from the canvas's point of
-  // view even though its own placement is in range (data-model.md §10: "an
-  // event the packer could not fit is unplaced whatever the store says") — so
-  // it counts once, in `unplaced`, and is excluded from `placed`, never both.
-  // A single event can emit up to three segments (`eventTimeSegments`), so
-  // this is keyed by competition id, not block count, or one event with two
-  // overflowing segments would count twice.
-  const schedule = selectDerivedSchedule(state)
-  const overflowing = new Set(
-    assignStripLanes(schedule.events, state.strips_total)
-      .filter((block) => block.overflow)
-      .map((block) => block.competitionId),
-  )
+  // An event is unplaced when it has no in-range placement, or when the drawn
+  // model counts one of its blocks as unplaced (017 spec §2, §4). `unplacedIds`
+  // is keyed by competition id, so an event with several unseated phases
+  // counts once, and on a stale board it is empty (P4 (a)).
+  const { unplacedIds } = selectDrawnSchedule(state)
 
   let placed = 0
   let unplaced = 0
@@ -482,12 +474,10 @@ function computePlacementCounts(state: StoreState): PlacementCounts {
     const placement = state.placements[id]
     const inRange =
       placement !== undefined && placement.day >= 0 && placement.day < state.days_available
-    if (inRange && !overflowing.has(id)) placed++
-    else if (!inRange) unplaced++
+    if (inRange && !unplacedIds.has(id)) placed++
+    else unplaced++
     if (placement?.pinned) pinned++
   }
-
-  unplaced += overflowing.size
 
   return { placed, unplaced, pinned }
 }
@@ -521,6 +511,20 @@ export type FindingSeverity = (typeof FindingSeverity)[keyof typeof FindingSever
  */
 export const LATE_FINISH_WINDOW_MINS = 45
 
+/** The Unplaced row of a hand-moved event the kept run leaves no room for (017 R4/R7). */
+const UNPLACED_RERUN_MESSAGE =
+  'No room here with the current schedule – re-run Auto-assign to schedule around it.'
+
+/** The Unplaced row of a kept event, a pin the engine could not seat (017 P3). */
+const UNPLACED_PIN_MESSAGE =
+  'Pinned here, but no strips are free at this time – move or unpin it, then re-run Auto-assign.'
+
+/** The one row a stale board shows where the per-event Unplaced rows were (017 P4 (b)). */
+const STALE_MESSAGE = 'Stale – re-run Auto-assign'
+
+/** The stale row's id. It is never dismissable, so a stored dismissal of it hides nothing. */
+export const STALE_FINDING_ID = 'stale:run'
+
 /** One row of the Findings panel — every surface that shows a finding reads this shape. */
 export interface Finding {
   /** Stable across recomputes of the same condition, so a dismissal keeps matching. */
@@ -541,7 +545,8 @@ export interface Finding {
   subjects: string[]
   /**
    * Whether the organizer may wave the row off: Warning and Unplaced rows, except
-   * a `hard-separation-violated` Warning (016 R1). Blocking and Note rows never.
+   * a `hard-separation-violated` Warning (016 R1) and the stale row (017 P4 (b)).
+   * Blocking and Note rows never.
    * `dismissFinding` and the panel's dismiss control both read this.
    */
   dismissable: boolean
@@ -576,8 +581,9 @@ const SEVERITY_RANK: Record<FindingSeverity, number> = {
  *
  * Four sources, appended in a fixed order (contract §1.6) and then stably
  * sorted by severity, so within a severity group the source order survives:
- * validation errors, then bottleneck warnings, then the lane packer's
- * overflow and out-of-range events, then one late-finish row per day.
+ * validation errors, then bottleneck warnings, then the events the drawn model
+ * leaves unplaced (or the one stale row) and out-of-range events, then one
+ * late-finish row per day.
  *
  * Bounded by construction (constitution IV): every loop runs once over a list
  * whose length is already fixed — the errors, the warnings, the blocks, the
@@ -679,36 +685,53 @@ function computeAllFindings(state: StoreState): Finding[] {
     })
   }
 
-  // ── §1.3 Unplaced: one row per overflowing block ──
+  // ── §1.3 Unplaced: one row per event the drawn model leaves unplaced ──
   //
-  // The same `assignStripLanes` call the canvas draws from and the footer
-  // measures, so a row can never claim an overflow the grid does not show.
-  const blocks = assignStripLanes(schedule.events, state.strips_total)
-  for (const block of blocks) {
-    if (!block.overflow) continue
-    const phase = phaseDisplay(block.phase)
-    const strips = `${block.stripCount} strip${block.stripCount === 1 ? '' : 's'}`
+  // Read off the model's one predicate (`countsAsUnplaced`, collected in
+  // `unplacedIds`), the same answer the footer counts (017 spec §4). Rows
+  // follow the blocks' fixed order, one per event however many of its phases
+  // are unseated. A derived (hand-moved) event can be re-seated by a re-run
+  // (R4/R7); a kept one is a pin the engine could not seat (P3).
+  //
+  // While stale (P4 (a), (b)) the board is not a schedule, so `unplacedIds`
+  // is empty and one non-dismissable notice stands in for these rows.
+  const drawn = selectDrawnSchedule(state)
+  const unplacedRowFor = new Set<string>()
+  for (const block of drawn.blocks) {
+    const id = block.competitionId
+    if (!drawn.unplacedIds.has(id) || unplacedRowFor.has(id)) continue
+    unplacedRowFor.add(id)
     rows.push({
-      id: `unplaced:${block.competitionId}:${block.phase}`,
+      id: `unplaced:${id}:room`,
       severity: FindingSeverity.UNPLACED,
-      where: `Day ${block.day + 1} · ${phase}`,
+      where: `Day ${block.day + 1} · ${labelOf(id)}`,
       day: block.day,
-      message:
-        `${labelOf(block.competitionId)} needs ${strips} for ${phase} on Day ${block.day + 1} ` +
-        `and none are free for ${formatClock(block.startMinutes)}–${formatClock(block.endMinutes)}. ` +
-        'It is drawn at strip 1, over the events that hold those strips.',
-      target: block.competitionId,
-      subjects: [block.competitionId],
+      message: drawn.events[id].source === 'kept' ? UNPLACED_PIN_MESSAGE : UNPLACED_RERUN_MESSAGE,
+      target: id,
+      subjects: [id],
       dismissable: true,
+    })
+  }
+  if (drawn.runState === RunState.STALE) {
+    rows.push({
+      id: STALE_FINDING_ID,
+      severity: FindingSeverity.UNPLACED,
+      where: 'Board',
+      day: null,
+      message: STALE_MESSAGE,
+      target: null,
+      subjects: [],
+      dismissable: false,
     })
   }
 
   // ── §1.3 Unplaced: one row per stranded event (FR-060) ──
   //
-  // `assignStripLanes` skips these outright — there is no day row to draw them
-  // on — so they raise no overflow row and would otherwise be invisible.
-  // `day` is null for the same reason: no band can carry the count.
-  for (const [id, derived] of Object.entries(schedule.events)) {
+  // The strip assigner skips these outright — there is no day row to draw them
+  // on — so they raise no unseated row and would otherwise be invisible.
+  // `day` is null for the same reason: no band can carry the count. They stay
+  // while stale (P4 (a)).
+  for (const [id, derived] of Object.entries(drawn.events)) {
     if (!derived.day_out_of_range) continue
     const assignedDay = derived.result.assigned_day
     rows.push({
@@ -740,6 +763,10 @@ function computeAllFindings(state: StoreState): Finding[] {
   // Warning, so the Blocking count — and therefore Auto-assign's disabled
   // state — is untouched by the move (FR-025). Nothing here compares referees
   // needed against referees available either (FR-026).
+  //
+  // Still the lane packer's blocks over derived times until 017 T5b moves the
+  // late-finish rows onto the drawn model.
+  const blocks = assignStripLanes(schedule.events, state.strips_total)
   for (let day = 0; day < state.days_available; day++) {
     const dayBlocks = blocks.filter((block) => block.day === day)
     if (dayBlocks.length === 0) continue

@@ -7,7 +7,7 @@ import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from '../../src/store/buildConfig.ts'
-import { selectAllFindings, selectDerivedRefRequirements } from '../../src/store/derived.ts'
+import { selectAllFindings, selectDerivedRefRequirements, selectFooterMetrics } from '../../src/store/derived.ts'
 import { BottleneckRule, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
 
 /**
@@ -487,5 +487,49 @@ describe('the footer\'s referee peak is the scheduler\'s (016 Task E)', () => {
     const { config, competitions } = buildTournamentConfig(state)
     const engine = scheduleAll(competitions, config, buildPinnedPlacements(state)).ref_requirements_by_day ?? []
     expect(footerOnSchedulerAxis()).toEqual(engine)
+  })
+})
+
+/**
+ * 017 T5a (spec §4, §Pass conditions): the footer counts what the drawn model
+ * leaves unplaced. Right after a run every event the engine placed is kept on
+ * its own strips, so the footer reads the engine's scheduled and unscheduled
+ * counts. Before T5a the footer counted the lane packer's overflow over
+ * derived times and read 15/9, 13/11, 14/10, 11/19, 8/4, 17/37, 11/7, 30/23.
+ */
+describe('the footer counts the engine\'s placements at boot (017 T5a)', () => {
+  const BOOT_FOOTERS: Record<ScenarioId, { placed: number; unplaced: number }> = {
+    B1: { placed: 24, unplaced: 0 },
+    B2: { placed: 24, unplaced: 0 },
+    B3: { placed: 24, unplaced: 0 },
+    B4: { placed: 21, unplaced: 9 },
+    B5: { placed: 12, unplaced: 0 },
+    B6: { placed: 45, unplaced: 9 },
+    B7: { placed: 18, unplaced: 0 },
+    B8: { placed: 53, unplaced: 0 },
+  }
+
+  it.each(SCENARIO_IDS)('%s reads its pinned boot footer, equal to the engine\'s counts', (id) => {
+    const { footer, placedCount, selectedCount } = runAppPath(id)
+    const { placed, unplaced } = footer
+    expect({ placed, unplaced }).toEqual(BOOT_FOOTERS[id])
+    expect({ placed, unplaced }, 'the engine\'s scheduled and unscheduled counts')
+      .toEqual({ placed: placedCount, unplaced: selectedCount - placedCount })
+  })
+
+  /**
+   * Referee ordering (plan, Global constraints): T5a moves what the footer
+   * counts as unplaced, never the referee peak, which stays on the derived
+   * schedule until T9. Measured at the T4 commit (316d041578), must pass before
+   * and after.
+   */
+  const BOOT_REF_PEAKS: Record<ScenarioId, number> = {
+    B1: 218, B2: 244, B3: 226, B4: 104, B5: 118, B6: 112, B7: 228, B8: 236,
+  }
+
+  it.each(SCENARIO_IDS)('%s keeps its boot referee peak', (id) => {
+    runAppPath(id)
+    const refs = selectFooterMetrics(useStore.getState()).find((m) => m.id === 'refs:peak-total')
+    expect(refs?.value).toBe(BOOT_REF_PEAKS[id])
   })
 })

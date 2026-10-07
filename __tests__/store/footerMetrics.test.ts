@@ -3,11 +3,14 @@ import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import {
+  RunState,
+  selectDrawnSchedule,
   selectFooterMetrics,
   selectPlacementCounts,
   type FooterMetric,
 } from '../../src/store/derived.ts'
 import { makePlacement } from '../helpers/factories.ts'
+import { runAndMoveHeadline } from '../helpers/drawnFixtures.ts'
 import { DeMode } from '../../src/engine/types.ts'
 
 /**
@@ -119,39 +122,6 @@ function oneOverflowBlock(): void {
   useStore.getState().setPlacementsFromAuto({
     'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 2 }),
     'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 2 }),
-  })
-}
-
-/**
- * One event, two overflowing segments, against a 4-strip total. Both events
- * carry the same 24-fencer, single-stage-DE shape (4 pools, bracket 32), so
- * their pool durations and DE start times land identically — `JR-M-EPEE-IND`
- * (sorted first) asks for 2 pool strips and 3 DE strips and fits both; `JR-W-
- * EPEE-IND` asks for 3 pool strips (only 2 left after JR-M's pool) and 3 DE
- * strips (only 1 left after JR-M's DE) and overflows both times. Measured:
- * `assignStripLanes` marks both of JR-W's segments `overflow: true` and both
- * of JR-M's `false` — one event, two overflowing blocks, the case
- * `computePlacementCounts` must not double-count into `unplaced`.
- */
-function twoSegmentOverflow(): void {
-  useStore.setState(useStore.getInitialState(), true)
-  const s = useStore.getState()
-  // ROC, not NAC, since 013 T020: the shape this fixture needs — cut disabled
-  // and a single-stage DE — used to be set per event, and both are derived now.
-  // A JUNIOR event at a regional type takes REGIONAL_CUT_OVERRIDES' DISABLED/100
-  // and TYPE_DEFAULTS[ROC].de_mode's SINGLE_STAGE, which is the same pair the
-  // two `updateCompetition` calls used to write by hand.
-  s.setTournamentType('ROC')
-  s.setDays(1)
-  s.setStrips(4)
-  s.setVideoStrips(0)
-  s.selectCompetitions(['JR-M-EPEE-IND', 'JR-W-EPEE-IND'])
-  for (const id of ['JR-M-EPEE-IND', 'JR-W-EPEE-IND']) {
-    s.updateCompetition(id, { fencer_count: 24 })
-  }
-  s.setPlacementsFromAuto({
-    'JR-M-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 2 }),
-    'JR-W-EPEE-IND': makePlacement({ day: 0, start_time: 540, strip_count: 3 }),
   })
 }
 
@@ -393,120 +363,81 @@ describe('selectFooterMetrics — pure function of store inputs', () => {
 // selectPlacementCounts (data-model.md §10)
 // ──────────────────────────────────────────────
 
+/**
+ * 017 T5a (spec §2, §4): the counts read the drawn model. An event is unplaced
+ * when it has no in-range placement, or a block the model counts as unplaced
+ * (unseated on a fresh board). The lane packer's overflow no longer counts, so
+ * the B5 run that read 8 / 4 (four 16-strip DE blocks with no contiguous free
+ * run among 60 strips) reads the engine's 12 / 0.
+ */
 describe('selectPlacementCounts', () => {
   it('measures placed, unplaced and pinned on B5', () => {
     b5()
     const counts = selectPlacementCounts(useStore.getState())
     const selectedCount = Object.keys(useStore.getState().selectedCompetitions).length
     expect(selectedCount).toBe(12)
-    // Re-measured 2026-09-07 against the fixed selector (data-model.md §10:
-    // "an event the packer could not fit is unplaced whatever the store
-    // says"). Each overflowing event is excluded from `placed` and counted
-    // once in `unplaced` instead of twice, so `placed + unplaced` equals the
-    // selected count exactly rather than exceeding it.
-    //
-    // 024 group D, 2026-10-06 – 9 placed / 3 unplaced → 8 / 4. Group D's day
-    // re-colouring (see the header) leaves four 16-strip DE blocks with no
-    // contiguous free run of 16 among the 60 strips when they start, one per
-    // event, so `overflowing.size` is 4. `assignStripLanes` packs first-fit,
-    // pools first in start order:
-    //   - day 0: pools hold 0–12, 13–30, 31–48, 49–58. JR-M-SABRE-IND's DE at
-    //     625 takes 31–46. CDT-W-SABRE-IND's at 630 finds only 0–12, 47–48 and
-    //     59 free, and JR-W-FOIL-IND's at 690 only 16–30 and 47–59.
-    //   - day 1: pools hold 0–17, 18–29, 30–41, 42–57. At 680 the épée and foil
-    //     DEs take 0–15 and 16–31, so CDT-W-EPEE-IND's finds 32–41 and 58–59.
-    //   - day 2: pools hold 0–14, 15–24, 25–42, 43–54. CDT-M-SABRE-IND's DE at
-    //     625, before any other pool ends, finds 0–14 and 55–59.
-    expect(counts).toEqual({ placed: 8, unplaced: 4, pinned: 0 })
-    expect(counts.placed + counts.unplaced).toBe(selectedCount)
+    expect(counts).toEqual({ placed: 12, unplaced: 0, pinned: 0 })
   })
 
   /**
    * `updatePlacement` always marks its target `pinned: true` (`store.ts`'s
    * `updatePlacement`, unconditionally, regardless of the partial passed) —
    * the same call a hand-drag or a hand-edit makes. Pinning an event in place
-   * – day and time unchanged – counts it once in `pinned` and moves neither
-   * `placed` nor `unplaced`, whether it is in range or overflowing.
-   *
-   * 024 group D, 2026-10-06 – JR-M-EPEE-IND used to be the overflowing row
-   * (9 placed before group D, when it overflowed and stayed out of `placed`).
-   * Group D put it in range, so CDT-W-SABRE-IND, still one of the four
-   * overflowing events, keeps the premise the overflowing pin exercises: an
-   * overflowing event is counted in `pinned` and stays out of `placed`.
+   * – day and time unchanged – keeps it on the run's strips (the pin flag is
+   * not part of the kept key), so it counts once in `pinned` and moves neither
+   * `placed` nor `unplaced`.
    */
-  it.each([
-    // In range: not one of B5's four overflowing DE blocks (see the case
-    // above), so it stays in `placed`.
-    'JR-M-EPEE-IND',
-    // Overflowing: its DE at 630 on day 0 finds no free run of 16 strips (see
-    // the case above), so it stays out of `placed` and in `unplaced`.
-    'CDT-W-SABRE-IND',
-  ])('counts a pinned placement of %s once in pinned, leaving placed and unplaced unchanged', (id) => {
+  it('counts a pinned placement once in pinned, leaving placed and unplaced unchanged', () => {
     b5()
-    useStore.getState().updatePlacement(id, {})
+    useStore.getState().updatePlacement('JR-M-EPEE-IND', {})
 
-    expect(selectPlacementCounts(useStore.getState())).toEqual({ placed: 8, unplaced: 4, pinned: 1 })
+    expect(selectPlacementCounts(useStore.getState())).toEqual({ placed: 12, unplaced: 0, pinned: 1 })
+  })
+
+  /**
+   * B5's headline move (CDT-M-EPEE-IND to the next day) leaves its POOLS and
+   * DE without free strips around the kept events. One event with two
+   * unseated phases counts once, in `unplaced`, and once in `pinned`, since
+   * Move day pins it. Before 017 the same once-per-event rule was pinned
+   * against two overflowing packer segments (`twoSegmentOverflow`).
+   */
+  it('counts a hand-moved event with two unseated phases once, in unplaced and in pinned', () => {
+    const { id } = runAndMoveHeadline('B5')
+    const state = useStore.getState()
+    const counted = selectDrawnSchedule(state).blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced)
+    expect(counted.length, 'premise: two of the mover\'s phases are unseated').toBe(2)
+
+    expect(selectPlacementCounts(state)).toEqual({ placed: 11, unplaced: 1, pinned: 1 })
   })
 
   /**
    * `days_available` is 3 for B5, so day 9 is out of range. Moving
-   * JR-M-EPEE-IND there drops it from `placed` and adds it to `unplaced` from
-   * the placements loop alone — but it also removes its own segments from
-   * `assignStripLanes`'s packing for its day (`day_out_of_range` events are
-   * skipped there). Since 024 group D, day 0's three remaining pools pack into
-   * 0–40 and leave 41–59 free. Day 0 re-packs with no overflow: JR-M-SABRE-IND's
-   * DE takes 0–15, CDT-W-SABRE-IND's 41–56 and JR-W-FOIL-IND's 16–31. Days 1
-   * and 2 keep their overflow (CDT-W-EPEE-IND, CDT-M-SABRE-IND). Net: 9 placed
-   * (12 selected minus the 1 out-of-range minus the 2 remaining overflow) and 3
-   * unplaced (1 out-of-range plus 2 overflow), not the 11-placed figure a
-   * packing-independent count would give. This 9 / 3 is unchanged from before
-   * group D by coincidence, because the composition changed: day 0 has no
-   * overflow now, while days 1 and 2 keep theirs.
+   * JR-M-EPEE-IND there drops it from `placed` and adds it to `unplaced`.
+   * Every other event stays kept on its run strips, so nothing else moves.
    */
   it('counts an out-of-range day in unplaced, not placed', () => {
     b5()
     useStore.getState().updatePlacement('JR-M-EPEE-IND', { day: 9 })
 
     const counts = selectPlacementCounts(useStore.getState())
-    expect(counts.placed).toBe(9)
-    expect(counts.unplaced).toBe(3)
+    expect(counts.placed).toBe(11)
+    expect(counts.unplaced).toBe(1)
   })
 
   /**
-   * `oneOverflowBlock` above is built so exactly one segment — one of
-   * JR-W-EPEE-IND's — has nowhere to fit. Its placement is in-range, but the
-   * overflowing segment excludes it from `placed`: 1 placed (JR-M-EPEE-IND
-   * only), 1 unplaced (JR-W-EPEE-IND, once, via `overflowing.size`), and the
-   * sum equals the two selected events exactly — an overflowing event is
-   * unplaced, not double-counted as both placed and unplaced.
+   * `oneOverflowBlock` above is built so one of JR-W-EPEE-IND's phases has
+   * nowhere to fit. Its placements are written with no run, so the board is
+   * stale, and a stale board is not a schedule: its unseated phases are not
+   * counted as unplaced (017 P4 (a)). Before 017 this case read 1 / 1 from
+   * the packer's overflow.
    */
-  it('adds exactly one overflow block to unplaced', () => {
+  it('counts an unseated event as placed on a stale board', () => {
     oneOverflowBlock()
-    const counts = selectPlacementCounts(useStore.getState())
-    const selectedCount = Object.keys(useStore.getState().selectedCompetitions).length
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: a board that was never run is stale').toBe(RunState.STALE)
+    expect(model.blocks.some((b) => b.competitionId === 'JR-W-EPEE-IND' && b.unseated), 'premise: JR-W-EPEE-IND draws unseated').toBe(true)
 
-    expect(selectedCount).toBe(2)
-    expect(counts.placed).toBe(1)
-    expect(counts.unplaced).toBe(1)
-    expect(counts.placed + counts.unplaced).toBe(selectedCount)
-  })
-
-  /**
-   * `twoSegmentOverflow` above is built so JR-W-EPEE-IND's pool *and* DE
-   * segments both overflow. Before the fix, `unplaced` summed overflowing
-   * *blocks* and would have counted it twice; the fix keys overflow by
-   * competition id, so it counts once, in `unplaced`, and is excluded from
-   * `placed` — `placed + unplaced` equals the two selected events exactly,
-   * the same invariant the single-segment case above measures.
-   */
-  it('counts an event with two overflowing segments once, in unplaced only', () => {
-    twoSegmentOverflow()
-    const counts = selectPlacementCounts(useStore.getState())
-    const selectedCount = Object.keys(useStore.getState().selectedCompetitions).length
-
-    expect(selectedCount).toBe(2)
-    expect(counts.placed).toBe(1)
-    expect(counts.unplaced).toBe(1)
-    expect(counts.placed + counts.unplaced).toBe(selectedCount)
+    expect(selectPlacementCounts(state)).toEqual({ placed: 2, unplaced: 0, pinned: 0 })
   })
 })
