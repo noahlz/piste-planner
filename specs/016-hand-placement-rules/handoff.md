@@ -293,7 +293,15 @@ the factory's copy (`__tests__/helpers/scenarios.ts`, and
 
 ## Merge
 
-To be filled by Task M.
+Checked 2026-10-07 at `2294591716`. `main` had moved to `64344bd405` (the
+2026-10-06 owner rulings in `backlog.md`), past the branch's merge base
+`b84be7e291`. `git merge-tree --write-tree main 016-hand-placement-rules`
+returns `f45ced19ffee00001b51756d6cb5d770618e0e9f` with no conflict – the
+backlog edits merge cleanly and keep `main`'s rulings. On that tree, checked out
+in a detached throwaway worktree, the full suite passes (82 files / 2278 tests),
+`tsc -b` and lint are clean, and the snapshot SHA-256 is `cd484a89c7c9…`, the
+branch's own. If `main` moves again before the merge, re-run the check there
+first. The user merges with `merge-with-costs`.
 
 ## Resume prompt (after the merge)
 
