@@ -5,6 +5,7 @@ import type {
   RefDemandInterval,
   RefDemandByDay,
   RefRequirementsByDay,
+  ScheduleResult,
 } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { computeBracketSize, deVideoStripAsk } from './de.ts'
@@ -98,4 +99,74 @@ export function computeRefRequirements(
   }
 
   return result
+}
+
+/**
+ * Turns a set of scheduled events into per-day referee demand intervals
+ * (METHODOLOGY.md §Ref Demand Derivation, 016 spec §5): pools by
+ * `pool_refs_count`, a flighted event by its two flights' own refs instead,
+ * and each DE block (single-stage, prelims, round of 16) by its strips ×
+ * `DE_REFS`. Each result is keyed by its `assigned_day` and takes its weapon
+ * from its competition. The store's footer and the scheduler both call this on
+ * the schedule as the workbench draws it, so they count the same intervals.
+ *
+ * Interval times are whatever axis the results are on: the store passes
+ * clock-axis results, the scheduler shifts its own back to the scheduler axis.
+ * A result whose competition is not given is skipped, and so is a block that
+ * asks no referee – a bracket of 2's DE draws 0 strips (METHODOLOGY.md §DE
+ * Duration 'No counted round').
+ */
+export function refDemandFromSchedule(
+  results: ScheduleResult[],
+  config: TournamentConfig,
+  competitions: Competition[],
+): Record<number, RefDemandByDay> {
+  const byDay: Record<number, RefDemandByDay> = {}
+  const compById = new Map(competitions.map((c) => [c.id, c]))
+
+  function push(day: number, interval: RefDemandInterval): void {
+    if (interval.count === 0) return
+    if (!byDay[day]) byDay[day] = { intervals: [] }
+    byDay[day].intervals.push(interval)
+  }
+
+  for (const result of results) {
+    const competition = compById.get(result.competition_id)
+    if (!competition) continue
+
+    const day = result.assigned_day
+    const weapon = competition.weapon
+    const deRefCount = (strips: number) => strips * config.DE_REFS
+
+    if (result.flight_a_start !== null && result.flight_a_end !== null) {
+      push(day, { startTime: result.flight_a_start, endTime: result.flight_a_end, count: result.flight_a_refs, weapon })
+      if (result.flight_b_start !== null && result.flight_b_end !== null) {
+        push(day, { startTime: result.flight_b_start, endTime: result.flight_b_end, count: result.flight_b_refs, weapon })
+      }
+    } else if (result.pool_start !== null && result.pool_end !== null) {
+      push(day, { startTime: result.pool_start, endTime: result.pool_end, count: result.pool_refs_count, weapon })
+    }
+
+    if (result.de_start !== null && result.de_end !== null) {
+      push(day, { startTime: result.de_start, endTime: result.de_end, count: deRefCount(result.de_strip_count), weapon })
+    }
+    if (result.de_prelims_start !== null && result.de_prelims_end !== null) {
+      push(day, {
+        startTime: result.de_prelims_start,
+        endTime: result.de_prelims_end,
+        count: deRefCount(result.de_prelims_strip_count),
+        weapon,
+      })
+    }
+    if (result.de_round_of_16_start !== null && result.de_round_of_16_end !== null) {
+      push(day, {
+        startTime: result.de_round_of_16_start,
+        endTime: result.de_round_of_16_end,
+        count: deRefCount(result.de_round_of_16_strip_count),
+        weapon,
+      })
+    }
+  }
+
+  return byDay
 }

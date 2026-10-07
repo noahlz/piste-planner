@@ -34,7 +34,8 @@ import { phaseDisplay } from '../../src/lib/placementLabels.ts'
  *   summary, `analysis.ts:245-258`) emits one `BottleneckSeverity.INFO`
  *   warning per cut-enabled competition, unconditionally. `threeEventsOverlappingOnDayZero`
  *   below is JUNIOR-category and cut-enabled by default, so it already raises
- *   three of them — `analysis:CUT_SUMMARY:<id>:0` per competition. Both cases
+ *   three of them — `analysis:cut-summary:<id>:<id>:-` per competition (016
+ *   Task C id format). Both cases
  *   are written below against that row rather than dropped.
  */
 
@@ -49,6 +50,10 @@ interface Finding {
   day: number | null
   message: string
   target: string | null
+  /** 016 Task C: false for Blocking, Note and `hard-separation-violated` rows. */
+  dismissable: boolean
+  /** 016 Task D: every on-board competition the row names, sorted and unique. */
+  subjects: string[]
 }
 
 function selectFindings(state: StoreState): Finding[] {
@@ -155,14 +160,12 @@ function tiedEpeeEventsOnDayZero(): void {
  * Two individually-placed epee events, one per day, each grossly over strip
  * capacity (60 fencers → 9 pools against 1 strip). Measured with a
  * throwaway scratch script, not predicted: this raises the venue-level
- * STRIP_CONTENTION bottleneck (`Bottleneck.competition_id === ''`, Pass 0 of
- * `initialAnalysis`) once per over-capacity day, so the two warnings share a
- * cause and an (empty) competition_id — the case §1.2's id rule needs a
- * trailing ordinal to disambiguate. The same setup also raises one
- * STRIP_DEFICIT_NO_FLIGHTING and one VIDEO_STRIP_CONTENTION warning per
- * competition/day, each a unique cause+competition_id pair on its own, so
- * this fixture exercises both the duplicate and non-duplicate branches of
- * the id rule together.
+ * `day-pools-exceed-strips` bottleneck (`Bottleneck.competition_id === ''`,
+ * Pass 0 of `initialAnalysis`) once per over-capacity day, so the two warnings
+ * share rule, an (empty) competition_id and (empty) subjects, and differ only
+ * by `Bottleneck.day` – the field 016 Task C's row id ends in. The same setup
+ * also raises one `pools-exceed-strip-cap-unflighted` warning per competition
+ * (owner and subject set, no day) and one video-demand warning per day.
  */
 function twoDaysOverCapacity(): void {
   useStore.setState(useStore.getInitialState(), true)
@@ -196,6 +199,7 @@ describe('selectFindings — row shape (contract §1)', () => {
       expect(row.message.length).toBeGreaterThan(0)
       expect(row.day === null || typeof row.day === 'number').toBe(true)
       expect(row.target === null || typeof row.target === 'string').toBe(true)
+      expect(typeof row.dismissable, `row ${row.id} carries a boolean dismissable`).toBe('boolean')
     }
   })
 })
@@ -251,6 +255,7 @@ describe('selectFindings — target/day/where for a competition-subject validati
     const row = rows.find((r) => r.id === id)
     expect(row).toBeDefined()
     expect(row?.target).toBe('JR-M-EPEE-IND')
+    expect(row?.subjects).toEqual(['JR-M-EPEE-IND'])
     expect(row?.day).toBe(0)
 
     const schedule = selectDerivedSchedule(state)
@@ -260,8 +265,13 @@ describe('selectFindings — target/day/where for a competition-subject validati
   })
 })
 
-describe('selectFindings — bottleneck ids disambiguate duplicate cause+competition_id (contract §1.2)', () => {
-  it('assigns a 0-based ordinal per cause+competition_id, keeps every analysis id unique, and reads target/day for a named competition', () => {
+/**
+ * 016 Task C (spec §2): the §1.2 row id is
+ * `analysis:<rule>:<competition_id>:<subjects joined by +>:<day or ->`,
+ * replacing `analysis:<cause>:<competition_id>:<ordinal>`.
+ */
+describe('selectFindings — bottleneck row id is rule, owner, subjects and day (016 spec §2)', () => {
+  it('builds every analysis id from rule, owner, subjects and day, keeps them unique, and reads target/day for a named competition', () => {
     twoDaysOverCapacity()
     const state = useStore.getState()
     const warnings = selectDerivedFindings(state).analysis.warnings
@@ -269,28 +279,26 @@ describe('selectFindings — bottleneck ids disambiguate duplicate cause+competi
 
     const rows = selectFindings(state)
 
-    const seenPerKey = new Map<string, number>()
     for (const warning of warnings) {
-      const key = `${warning.cause}:${warning.competition_id}`
-      const n = seenPerKey.get(key) ?? 0
-      const expectedId = `analysis:${warning.cause}:${warning.competition_id}:${n}`
+      const expectedId =
+        `analysis:${warning.rule}:${warning.competition_id}:${warning.subjects.join('+')}:${warning.day ?? '-'}`
       expect(
         rows.some((r) => r.id === expectedId),
         `expected a row with id ${expectedId}`,
       ).toBe(true)
-      seenPerKey.set(key, n + 1)
     }
 
-    // The duplicate branch: two STRIP_CONTENTION warnings (one per
-    // over-capacity day) share cause and an empty competition_id.
-    expect(rows.some((r) => r.id === 'analysis:STRIP_CONTENTION::0')).toBe(true)
-    expect(rows.some((r) => r.id === 'analysis:STRIP_CONTENTION::1')).toBe(true)
+    // Two venue warnings sharing rule, empty owner and empty subjects differ by day alone.
+    expect(rows.some((r) => r.id === 'analysis:day-pools-exceed-strips:::0')).toBe(true)
+    expect(rows.some((r) => r.id === 'analysis:day-pools-exceed-strips:::1')).toBe(true)
 
     const analysisIds = rows.filter((r) => r.id.startsWith('analysis:')).map((r) => r.id)
     expect(new Set(analysisIds).size).toBe(analysisIds.length)
 
-    // The non-duplicate, non-empty-competition_id branch.
-    const deficitRow = rows.find((r) => r.id === 'analysis:STRIP_DEFICIT_NO_FLIGHTING:D1-M-EPEE-IND:0')
+    // An owned, single-subject warning with no day ends in "-".
+    const deficitRow = rows.find(
+      (r) => r.id === 'analysis:pools-exceed-strip-cap-unflighted:D1-M-EPEE-IND:D1-M-EPEE-IND:-',
+    )
     expect(deficitRow).toBeDefined()
     expect(deficitRow?.target).toBe('D1-M-EPEE-IND')
     expect(deficitRow?.day).toBe(0)
@@ -298,7 +306,7 @@ describe('selectFindings — bottleneck ids disambiguate duplicate cause+competi
 })
 
 describe('selectFindings — INFO bottleneck maps to a Note row (contract §1.2, corrected header comment above)', () => {
-  it('reads the cut-summary INFO warning as a Note row at the analysis:CUT_SUMMARY id', () => {
+  it('reads the cut-summary INFO warning as a Note row at the analysis:cut-summary id', () => {
     threeEventsOverlappingOnDayZero()
     const state = useStore.getState()
     const warnings = selectDerivedFindings(state).analysis.warnings
@@ -307,7 +315,7 @@ describe('selectFindings — INFO bottleneck maps to a Note row (contract §1.2,
     expect(cutSummaries.every((w) => w.severity === 'INFO')).toBe(true)
 
     const rows = selectFindings(state)
-    const row = rows.find((r) => r.id === 'analysis:CUT_SUMMARY:JR-M-EPEE-IND:0')
+    const row = rows.find((r) => r.id === 'analysis:cut-summary:JR-M-EPEE-IND:JR-M-EPEE-IND:-')
     expect(row).toBeDefined()
     expect(row?.severity).toBe('Note')
   })
@@ -620,7 +628,7 @@ describe('selectFindings — dismissal filtering (contract §2.2)', () => {
 
   it('leaves a Note row in the list and records no dismissal for it (guard no-op, corrected header comment above)', () => {
     threeEventsOverlappingOnDayZero()
-    const noteId = 'analysis:CUT_SUMMARY:JR-M-EPEE-IND:0'
+    const noteId = 'analysis:cut-summary:JR-M-EPEE-IND:JR-M-EPEE-IND:-'
     const before = selectFindings(useStore.getState())
     const noteRow = before.find((r) => r.id === noteId)
     expect(noteRow).toBeDefined()
@@ -714,5 +722,374 @@ describe('selectFindings — a pinned collision survives Auto-assign, naming the
     expect(
       rows.some((r) => r.severity === 'Unplaced' && r.target === 'JR-M-EPEE-IND'),
     ).toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────
+// 016 Task C – hand placements are checked against the same-day rules, and
+// day-scoped findings carry their day (spec §1–§3, plan Task C).
+// ──────────────────────────────────────────────
+
+const JR_FOIL = 'JR-M-FOIL-IND'
+const CDT_FOIL = 'CDT-M-FOIL-IND'
+const HARD_PREFIX = 'analysis:hard-separation-violated:'
+
+function analysisRows(prefix: string): Finding[] {
+  return selectFindings(useStore.getState()).filter((r) => r.id.startsWith(prefix))
+}
+
+function labelOfId(id: string): string {
+  const competition = selectDerivedSchedule(useStore.getState()).competitions.find((c) => c.id === id)
+  if (!competition) throw new Error(`fixture: ${id} is not selected`)
+  return competitionLabel(competition)
+}
+
+/**
+ * Junior and Cadet Men's Foil, placed by hand. At a NAC the pair is Group 1
+ * and hard: they may never share a day (Ops Manual p.20, METHODOLOGY.md
+ * §Overlapping-Population Separation). At a ROC it is windowed instead. Three
+ * days at 9:00, 40 strips, so nothing else about the pair is tight. With
+ * `withDayWindows: false` it skips `setDays`, so the store keeps its default
+ * three days and no day windows at all.
+ */
+function juniorAndCadetFoil(
+  tournamentType: 'NAC' | 'ROC',
+  jr: { day: number; start: number },
+  cdt: { day: number; start: number },
+  { withDayWindows = true }: { withDayWindows?: boolean } = {},
+): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType(tournamentType)
+  if (withDayWindows) s.setDays(3)
+  s.setStrips(40)
+  s.setVideoStrips(8)
+  s.selectCompetitions([JR_FOIL, CDT_FOIL])
+  s.updateCompetition(JR_FOIL, { fencer_count: 24 })
+  s.updateCompetition(CDT_FOIL, { fencer_count: 24 })
+  s.setPlacementsFromAuto({
+    [JR_FOIL]: makePlacement({ day: jr.day, start_time: jr.start, strip_count: 4 }),
+    [CDT_FOIL]: makePlacement({ day: cdt.day, start_time: cdt.start, strip_count: 4 }),
+  })
+}
+
+describe('selectFindings — a hand-made hard pair (016 spec §1, R1)', () => {
+  it('shows exactly one non-dismissable Warning naming both events, on their shared day', () => {
+    juniorAndCadetFoil('NAC', { day: 1, start: 540 }, { day: 1, start: 540 })
+
+    const rows = analysisRows(HARD_PREFIX)
+    expect(rows.map((r) => r.id)).toEqual([`${HARD_PREFIX}${CDT_FOIL}:${CDT_FOIL}+${JR_FOIL}:1`])
+    const [row] = rows
+    expect(row.severity).toBe('Warning')
+    expect(row.dismissable).toBe(false)
+    expect(row.day).toBe(1)
+    expect(row.target).toBe(CDT_FOIL)
+    expect(row.where).toBe(`Day 2 · ${labelOfId(CDT_FOIL)}`)
+  })
+
+  it('names both events by their label and says they may never share a day', () => {
+    juniorAndCadetFoil('NAC', { day: 1, start: 540 }, { day: 1, start: 540 })
+
+    const [row] = analysisRows(HARD_PREFIX)
+    const jr = labelOfId(JR_FOIL)
+    const cdt = labelOfId(CDT_FOIL)
+    expect(row.message).toContain(jr)
+    expect(row.message).toContain(cdt)
+    expect(row.message).toContain('may never share a day')
+    expect(row.message).not.toContain(JR_FOIL)
+    expect(row.message).not.toContain(CDT_FOIL)
+  })
+
+  it('clears once one event is moved to another day', () => {
+    juniorAndCadetFoil('NAC', { day: 1, start: 540 }, { day: 1, start: 540 })
+    expect(analysisRows(HARD_PREFIX), 'premise: the pair is flagged while it shares Day 2').toHaveLength(1)
+
+    useStore.getState().updatePlacement(JR_FOIL, { day: 2 })
+
+    expect(analysisRows(HARD_PREFIX)).toEqual([])
+  })
+
+  // Review focus 1: days are reduced after the pair was placed on a dropped day.
+  it('raises no rule finding for events left outside days_available, and does not crash', () => {
+    juniorAndCadetFoil('NAC', { day: 2, start: 540 }, { day: 2, start: 540 })
+    expect(analysisRows(HARD_PREFIX), 'premise: the pair is flagged on Day 3').toHaveLength(1)
+
+    useStore.getState().setDays(2)
+
+    const rows = selectFindings(useStore.getState())
+    expect(rows.filter((r) => r.id.startsWith(HARD_PREFIX))).toEqual([])
+    // The stranded events still say so – the rule check skipped them, the store did not lose them.
+    expect(rows.some((r) => r.id === `unplaced:${JR_FOIL}:day`)).toBe(true)
+    expect(rows.some((r) => r.id === `unplaced:${CDT_FOIL}:day`)).toBe(true)
+    expect(rows.find((r) => r.id === `unplaced:${JR_FOIL}:day`)?.dismissable).toBe(true)
+  })
+})
+
+/**
+ * The regional Group 1 window (spec §1, R4). The pair shares Day 2 (index 1),
+ * so a window floor read off the scheduler axis (1440 × day + 9:00 + 4 h)
+ * instead of the store's clock axis (9:00 + 4 h = 13:00) would misjudge it.
+ */
+describe('selectFindings — the regional Group 1 window on a hand-made ROC pair (016 spec §1, R4)', () => {
+  const OWNER_AND_SUBJECTS = `${JR_FOIL}:${CDT_FOIL}+${JR_FOIL}:1`
+
+  it('shows a Note when the older side waits out the window', () => {
+    juniorAndCadetFoil('ROC', { day: 1, start: 780 }, { day: 1, start: 540 })
+
+    const rows = analysisRows('analysis:regional-window-')
+    expect(rows.map((r) => r.id)).toEqual([`analysis:regional-window-honoured:${OWNER_AND_SUBJECTS}`])
+    expect(rows[0].severity).toBe('Note')
+    expect(rows[0].dismissable).toBe(false)
+    expect(rows[0].day).toBe(1)
+    expect(analysisRows(HARD_PREFIX), 'Group 1 is not hard at a regional type').toEqual([])
+  })
+
+  it('shows a dismissable Warning when both sides start before the window floor', () => {
+    juniorAndCadetFoil('ROC', { day: 1, start: 540 }, { day: 1, start: 540 })
+
+    const rows = analysisRows('analysis:regional-window-')
+    expect(rows.map((r) => r.id)).toEqual([`analysis:regional-window-not-honoured:${OWNER_AND_SUBJECTS}`])
+    expect(rows[0].severity).toBe('Warning')
+    expect(rows[0].dismissable).toBe(true)
+  })
+
+  // The floor follows the store's own Day 2 window: opening at 10:00 moves it
+  // to 10:00 + 4 h = 14:00, so 13:00 no longer waits it out and 14:00 does.
+  it.each([
+    { olderStart: 780, outcome: 'not-honoured' },
+    { olderStart: 840, outcome: 'honoured' },
+  ])('reads the floor off a Day 2 that opens at 10:00 (older at $olderStart: $outcome)', ({ olderStart, outcome }) => {
+    juniorAndCadetFoil('ROC', { day: 1, start: olderStart }, { day: 1, start: 600 })
+    useStore.getState().updateDayConfig(1, { day_start_time: 600 })
+
+    expect(analysisRows('analysis:regional-window-').map((r) => r.id)).toEqual([
+      `analysis:regional-window-${outcome}:${OWNER_AND_SUBJECTS}`,
+    ])
+  })
+
+  it('falls back to the default day start when the store has no day windows yet', () => {
+    juniorAndCadetFoil('ROC', { day: 1, start: 780 }, { day: 1, start: 540 }, { withDayWindows: false })
+    expect(useStore.getState().dayConfigs, 'premise: no setDays, so no day windows').toEqual([])
+
+    expect(analysisRows('analysis:regional-window-').map((r) => r.id)).toEqual([
+      `analysis:regional-window-honoured:${OWNER_AND_SUBJECTS}`,
+    ])
+  })
+})
+
+describe('selectFindings — a day-scoped venue row reads its day (016 spec §2)', () => {
+  it('reads "Day N" for the where and the day off Bottleneck.day, not "Venue"', () => {
+    twoDaysOverCapacity()
+
+    // Located by message, so this case fails on day and where alone, not on the id format.
+    const rows = analysisRows('analysis:').filter((r) => r.message.includes('pools assigned'))
+    expect(rows.map((r) => [r.message.slice(0, 6), r.day, r.where])).toEqual([
+      ['Day 1:', 0, 'Day 1'],
+      ['Day 2:', 1, 'Day 2'],
+    ])
+  })
+
+  // guard: passes today. initialAnalysis takes a placed event's day as is, so a
+  // stranded event raises a pools warning on a day the board does not have.
+  it('reads a null day and Venue when an ownerless Bottleneck.day is outside days_available', () => {
+    twoDaysOverCapacity()
+    useStore.getState().updatePlacement('D1-W-EPEE-IND', { day: 5 })
+
+    const stranded = selectFindings(useStore.getState()).find(
+      (r) => r.id.startsWith('analysis:') && r.message.startsWith('Day 6:'),
+    )
+    expect(stranded, 'premise: analysis warns about the stranded event\'s Day 6').toBeDefined()
+    expect(stranded?.day).toBeNull()
+    expect(stranded?.where).toBe('Venue')
+  })
+
+  // The id names the condition with the raw Bottleneck.day, so two stranded
+  // days stay apart where a "-" would merge them into one dismissal.
+  it('keeps the raw out-of-range day in the id, so two stranded days stay distinct', () => {
+    twoDaysOverCapacity()
+    useStore.getState().updatePlacement('D1-M-EPEE-IND', { day: 4 })
+    useStore.getState().updatePlacement('D1-W-EPEE-IND', { day: 5 })
+
+    const poolsIds = selectFindings(useStore.getState())
+      .map((r) => r.id)
+      .filter((id) => id.startsWith('analysis:day-pools-exceed-strips:'))
+    expect(poolsIds).toEqual(['analysis:day-pools-exceed-strips:::4', 'analysis:day-pools-exceed-strips:::5'])
+  })
+})
+
+/**
+ * Three Junior events of 8, one on each of Days 2–4 (indices 1–3), Day 1
+ * empty. Every event takes the same time from its start, so a day's length is
+ * its start offset plus that span: Day 2 starts at 9:00 (offset 0), Day 3 at
+ * 10:00 (60), Day 4 at 11:00 (120). The last day (120) is not shorter than the
+ * shortest middle day (60), the first (0) is. On the scheduler axis the
+ * lengths would come out near −1440 × day instead and flag the first day, not
+ * the last – the axis trap this fixture is built to catch.
+ */
+const FIRST_DAY_EVENT = 'JR-M-EPEE-IND'
+
+function oneJuniorEventOnEachOfDaysTwoToFour(): void {
+  useStore.setState(useStore.getInitialState(), true)
+  const s = useStore.getState()
+  s.setTournamentType('NAC')
+  s.setDays(4)
+  s.setStrips(8)
+  s.setVideoStrips(0)
+  const ids = [FIRST_DAY_EVENT, 'JR-W-EPEE-IND', 'JR-M-FOIL-IND']
+  s.selectCompetitions(ids)
+  for (const id of ids) s.updateCompetition(id, { fencer_count: 8 })
+  s.setDeModeOverride(DeMode.SINGLE_STAGE)
+  s.setPlacementsFromAuto({
+    [FIRST_DAY_EVENT]: makePlacement({ day: 1, start_time: 540, strip_count: 1 }),
+    'JR-W-EPEE-IND': makePlacement({ day: 2, start_time: 600, strip_count: 1 }),
+    'JR-M-FOIL-IND': makePlacement({ day: 3, start_time: 660, strip_count: 1 }),
+  })
+}
+
+describe('selectFindings — first and last day WARN from the placements (016 spec §3)', () => {
+  const FIRST = 'analysis:first-day-longer-than-middle:'
+  const LAST = 'analysis:last-day-longer-than-middle:'
+
+  it('flags the last day, on its own day, when the first used day is not day 0', () => {
+    oneJuniorEventOnEachOfDaysTwoToFour()
+
+    const rows = analysisRows(LAST)
+    expect(rows.map((r) => [r.id, r.day, r.where, r.severity])).toEqual([
+      [`${LAST}::3`, 3, 'Day 4', 'Warning'],
+    ])
+    expect(analysisRows(FIRST)).toEqual([])
+  })
+
+  it('follows a hand move that makes the first day as long as the middle one', () => {
+    oneJuniorEventOnEachOfDaysTwoToFour()
+    expect(analysisRows(FIRST), 'premise: the first day starts out shorter').toEqual([])
+
+    useStore.getState().updatePlacement(FIRST_DAY_EVENT, { start_time: 720 })
+
+    expect(analysisRows(FIRST).map((r) => [r.id, r.day, r.where])).toEqual([[`${FIRST}::1`, 1, 'Day 2']])
+  })
+
+  // Review focus 1: a stranded event must not count as a used day. Read on its
+  // own, Day 6 would become the "last" day with a hugely negative length and
+  // the real Day 4 WARN would go.
+  it('leaves a stranded event out of the used days', () => {
+    oneJuniorEventOnEachOfDaysTwoToFour()
+    const STRANDED = 'JR-W-FOIL-IND'
+    const s = useStore.getState()
+    s.addCompetition(STRANDED)
+    s.updateCompetition(STRANDED, { fencer_count: 8 })
+    s.setPlacementsFromAuto({
+      ...useStore.getState().placements,
+      [STRANDED]: makePlacement({ day: 5, start_time: 540, strip_count: 1 }),
+    })
+    expect(
+      selectFindings(useStore.getState()).some((r) => r.id === `unplaced:${STRANDED}:day`),
+      'premise: the event sits on a day the tournament does not have',
+    ).toBe(true)
+
+    expect(analysisRows(LAST).map((r) => r.id)).toEqual([`${LAST}::3`])
+    expect(analysisRows(FIRST)).toEqual([])
+  })
+})
+
+describe('selectFindings — a bottleneck row id survives its sibling disappearing (016 spec §2)', () => {
+  it('keeps the Day 3 pools row at the same id when the Day 2 one goes away', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    const s = useStore.getState()
+    s.setTournamentType('NAC')
+    s.setDays(3)
+    s.setStrips(1)
+    s.setVideoStrips(0)
+    s.selectCompetitions(['D1-M-EPEE-IND', 'D1-W-EPEE-IND'])
+    s.updateCompetition('D1-M-EPEE-IND', { fencer_count: 60 })
+    s.updateCompetition('D1-W-EPEE-IND', { fencer_count: 60 })
+    s.setPlacementsFromAuto({
+      'D1-M-EPEE-IND': makePlacement({ day: 1, start_time: 540, strip_count: 1 }),
+      'D1-W-EPEE-IND': makePlacement({ day: 2, start_time: 540, strip_count: 1 }),
+    })
+    // Located by message, not id, so the old ordinal id is what fails below.
+    // Each day also raises a video-demand warning that starts "Day N:", so the
+    // match is on the pools wording too.
+    const poolsRow = (day: string) =>
+      selectFindings(useStore.getState()).find(
+        (r) => r.id.startsWith('analysis:') && r.message.startsWith(`${day}:`) && r.message.includes('pools assigned'),
+      )
+    const dayThreeId = () => poolsRow('Day 3')?.id
+    expect(dayThreeId()).toBe('analysis:day-pools-exceed-strips:::2')
+
+    // One pool of 6 fits the one strip, so the Day 2 warning goes away.
+    useStore.getState().updateCompetition('D1-M-EPEE-IND', { fencer_count: 6 })
+    expect(poolsRow('Day 2'), 'premise: the Day 2 sibling is gone').toBeUndefined()
+
+    expect(dayThreeId()).toBe('analysis:day-pools-exceed-strips:::2')
+  })
+})
+
+describe('selectFindings — dismissable by severity and rule (016 spec §2, R1)', () => {
+  it('is true for Warning and Unplaced rows and false for Blocking and Note rows', () => {
+    threeEventsOverlappingOnDayZero()
+    useStore.getState().updateDayConfig(0, { day_end_time: 760 }) // a late-finish Warning
+    const rows = selectFindings(useStore.getState())
+    const bySeverity = (severity: string) => rows.filter((r) => r.severity === severity)
+    expect(bySeverity('Unplaced').length).toBeGreaterThan(0)
+    expect(bySeverity('Warning').length).toBeGreaterThan(0)
+    expect(bySeverity('Note').length).toBeGreaterThan(0)
+    for (const row of [...bySeverity('Unplaced'), ...bySeverity('Warning')]) {
+      expect(row.dismissable, row.id).toBe(true)
+    }
+    for (const row of bySeverity('Note')) expect(row.dismissable, row.id).toBe(false)
+
+    setupB5()
+    useStore.getState().setStrips(0)
+    const blocking = selectFindings(useStore.getState()).filter((r) => r.severity === 'Blocking')
+    expect(blocking.length).toBeGreaterThan(0)
+    for (const row of blocking) expect(row.dismissable, row.id).toBe(false)
+  })
+})
+
+// guard: passes today. R2 keeps the engine's late-day finding out of the panel.
+describe('selectFindings — the engine late-day finding stays out (016 R2)', () => {
+  it('adds no day-ends-past-target row and keeps the late-finish row as it was', () => {
+    twoEpeeEventsFinishingAt(1200, 1170)
+
+    const rows = selectFindings(useStore.getState())
+    expect(rows.filter((r) => r.id.startsWith('analysis:day-ends-past-target:'))).toEqual([])
+    const late = rows.filter((r) => r.id.startsWith('late-finish:'))
+    expect(late.map((r) => [r.id, r.severity, r.day, r.target])).toEqual([
+      ['late-finish:day:0', 'Warning', 0, 'JR-M-EPEE-IND'],
+    ])
+    expect(late[0].message).toBe(
+      `DE finishes at ${formatClock(1200)}, 60 minutes past the day's target of ${formatClock(1140)}.`,
+    )
+  })
+})
+
+describe('selectFindings — a row carries every event it names (016 spec §4, Task D)', () => {
+  it('lists both events of a hand-made hard pair, sorted', () => {
+    juniorAndCadetFoil('NAC', { day: 1, start: 540 }, { day: 1, start: 540 })
+
+    const [row] = analysisRows(HARD_PREFIX)
+    expect(row.subjects).toEqual([CDT_FOIL, JR_FOIL])
+  })
+
+  it('lists just the target for a single-event row', () => {
+    threeEventsOverlappingOnDayZero()
+    useStore.getState().updatePlacement('JR-W-EPEE-IND', { day: 5 })
+
+    const row = selectFindings(useStore.getState()).find((r) => r.id === 'unplaced:JR-W-EPEE-IND:day')
+    expect(row?.subjects).toEqual(['JR-W-EPEE-IND'])
+  })
+
+  it('lists no event for a global validation row', () => {
+    setupB5()
+    useStore.getState().setStrips(0)
+    const state = useStore.getState()
+    const stripsError = selectDerivedFindings(state).validationErrors.find(
+      (e) => e.rule === 'strips-total-positive',
+    )
+    expect(stripsError, 'expected the strips-total-positive structural error').toBeDefined()
+
+    const row = selectFindings(state).find((r) => r.id === findingIdentity(stripsError!))
+    expect(row?.subjects).toEqual([])
   })
 })

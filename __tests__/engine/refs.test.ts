@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { computeRefRequirements, peakDeRefDemand } from '../../src/engine/refs.ts'
+import { computeRefRequirements, peakDeRefDemand, refDemandFromSchedule } from '../../src/engine/refs.ts'
 import { DeMode, Weapon } from '../../src/engine/types.ts'
-import type { RefDemandByDay } from '../../src/engine/types.ts'
-import { makeConfig, makeCompetition } from '../helpers/factories.ts'
+import type { Competition, RefDemandByDay, ScheduleResult } from '../../src/engine/types.ts'
+import { makeConfig, makeCompetition, makeScheduleResult } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
 // peakDeRefDemand
@@ -156,5 +156,95 @@ describe('computeRefRequirements', () => {
     const result = computeRefRequirements(demand, 1)
     expect(result[0].peak_total_refs).toBe(7)
     expect(result[0].peak_time).toBe(660)
+  })
+})
+
+// ──────────────────────────────────────────────
+// refDemandFromSchedule (016 Task E, spec §5)
+// ──────────────────────────────────────────────
+
+// The store's `buildRefDemandByDay` body moved into the engine so the footer
+// and the scheduler count the same intervals. Pools by `pool_refs_count`,
+// flights by their own refs, DE phases by strips × DE_REFS, keyed by
+// `assigned_day`, weapon from the competition, 0-count intervals dropped.
+describe('refDemandFromSchedule', () => {
+  const config = makeConfig({ DE_REFS: 2 })
+  const foil = makeCompetition({ id: 'foil', weapon: Weapon.FOIL })
+
+  function result(id: string, day: number, fields: Partial<ScheduleResult>): ScheduleResult {
+    return { ...makeScheduleResult(id, day), ...fields }
+  }
+
+  function intervalsOn(results: ScheduleResult[], competitions: Competition[], day: number) {
+    return refDemandFromSchedule(results, config, competitions)[day]?.intervals
+  }
+
+  it('counts a pool round by its pool_refs_count', () => {
+    const pools = result('foil', 0, { pool_start: 480, pool_end: 600, pool_refs_count: 6 })
+    expect(intervalsOn([pools], [foil], 0)).toEqual([
+      { startTime: 480, endTime: 600, count: 6, weapon: Weapon.FOIL },
+    ])
+  })
+
+  it('counts a flighted event by its two flights instead of its pool round', () => {
+    const flighted = result('foil', 0, {
+      pool_start: 480, pool_end: 720, pool_refs_count: 10,
+      flight_a_start: 480, flight_a_end: 590, flight_a_refs: 5,
+      flight_b_start: 605, flight_b_end: 720, flight_b_refs: 4,
+    })
+    expect(intervalsOn([flighted], [foil], 0)).toEqual([
+      { startTime: 480, endTime: 590, count: 5, weapon: Weapon.FOIL },
+      { startTime: 605, endTime: 720, count: 4, weapon: Weapon.FOIL },
+    ])
+  })
+
+  it.each([
+    ['single-stage DE', { de_start: 700, de_end: 820, de_strip_count: 8 }, 700, 820, 16],
+    ['DE prelims', { de_prelims_start: 700, de_prelims_end: 760, de_prelims_strip_count: 6 }, 700, 760, 12],
+    ['DE round of 16', { de_round_of_16_start: 780, de_round_of_16_end: 840, de_round_of_16_strip_count: 4 }, 780, 840, 8],
+  ] as const)('counts a %s by its strips × DE_REFS', (_, fields, startTime, endTime, count) => {
+    expect(intervalsOn([result('foil', 0, fields)], [foil], 0)).toEqual([
+      { startTime, endTime, count, weapon: Weapon.FOIL },
+    ])
+  })
+
+  // A bracket of 2 has no counted round, so its DE draws 0 strips over a
+  // zero-length span (METHODOLOGY.md §DE Duration). It asks no referee.
+  it('emits nothing for a block that asks no referee', () => {
+    const duel = result('foil', 1, { de_start: 600, de_end: 600, de_strip_count: 0 })
+    expect(refDemandFromSchedule([duel], config, [foil])).toEqual({})
+  })
+
+  it('drops only the 0-count block and keeps the same event\'s pool round', () => {
+    const duel = result('foil', 1, {
+      pool_start: 480, pool_end: 540, pool_refs_count: 2,
+      de_start: 600, de_end: 600, de_strip_count: 0,
+    })
+    expect(intervalsOn([duel], [foil], 1)).toEqual([
+      { startTime: 480, endTime: 540, count: 2, weapon: Weapon.FOIL },
+    ])
+  })
+
+  it('takes the weapon from the result\'s competition', () => {
+    const sabre = makeCompetition({ id: 'sabre', weapon: Weapon.SABRE })
+    const pools = result('sabre', 0, { pool_start: 480, pool_end: 600, pool_refs_count: 3 })
+    expect(intervalsOn([pools], [foil, sabre], 0)?.map((i) => i.weapon)).toEqual([Weapon.SABRE])
+  })
+
+  it('keys each result by its assigned_day', () => {
+    const sabre = makeCompetition({ id: 'sabre', weapon: Weapon.SABRE })
+    const byDay = refDemandFromSchedule([
+      result('foil', 0, { pool_start: 480, pool_end: 600, pool_refs_count: 3 }),
+      result('sabre', 2, { pool_start: 540, pool_end: 660, pool_refs_count: 4 }),
+    ], config, [foil, sabre])
+    expect(Object.keys(byDay).map(Number)).toEqual([0, 2])
+    expect(byDay[2].intervals).toEqual([
+      { startTime: 540, endTime: 660, count: 4, weapon: Weapon.SABRE },
+    ])
+  })
+
+  it('skips a result whose competition is not given', () => {
+    const orphan = result('missing', 0, { pool_start: 480, pool_end: 600, pool_refs_count: 3 })
+    expect(refDemandFromSchedule([orphan], config, [foil])).toEqual({})
   })
 })

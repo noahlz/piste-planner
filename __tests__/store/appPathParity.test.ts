@@ -3,6 +3,12 @@ import { runAppPath } from '../helpers/appPath.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
+import { useStore } from '../../src/store/store.ts'
+import { applyPreset } from '../../src/store/presets.ts'
+import { runScheduleAll } from '../../src/store/runActions.ts'
+import { buildTournamentConfig, buildPinnedPlacements } from '../../src/store/buildConfig.ts'
+import { selectAllFindings, selectDerivedRefRequirements } from '../../src/store/derived.ts'
+import { BottleneckRule, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
 
 /**
  * The app-path parity check (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), FR-004): for each of
@@ -370,5 +376,116 @@ describe('a pin may leave its ledger count only with an exception', () => {
 
   it('accepts an on-ledger pin with no exception', () => {
     expect(() => assertPinAgreesWithLedger('BX', SYNTHETIC_LEDGER, SYNTHETIC_LEDGER, undefined)).not.toThrow()
+  })
+})
+
+/**
+ * 016 review focus 5: a run that had to break a hard edge. Every
+ * `hard-separation-violated` pair the scheduler reports for the app's own
+ * config must also appear in the app's findings after `runScheduleAll`, as a
+ * row naming both events – the hand-placement check reads the placements the
+ * run wrote back, so it must reach the same verdict.
+ *
+ * B1–B8 break no hard edge (measured in 016 Task A), so their loop holds
+ * vacuously and is kept only so a scenario that starts breaking one is
+ * checked. The NAC Cadet/Junior template at 3 days / 80 strips / 12 video
+ * breaks hard pairs through the app config (six today, pinned in
+ * `concurrentScheduler.test.ts`'s hard-edge suite), and is the case that
+ * actually exercises the check. A pair matches only an app row on the same
+ * day, so a row that names the pair on the wrong day counts as missing.
+ */
+describe('a hard pair the scheduler breaks reaches the app\'s findings (016 review focus 5)', () => {
+  type HardPair = { pair: string[]; day: number | undefined }
+
+  /** Scheduler pairs (with their day) for the store's current config, and the ones the app's findings miss after a run. */
+  function hardPairsAfterRun(): { pairs: HardPair[]; missing: HardPair[] } {
+    const { config, competitions } = buildTournamentConfig(useStore.getState())
+    const pairs = scheduleAll(competitions, config).bottlenecks
+      .filter((b) => b.rule === BottleneckRule.HARD_SEPARATION_VIOLATED)
+      .map((b) => ({ pair: [...b.subjects].sort(), day: b.day }))
+
+    runScheduleAll()
+    const appIds = selectAllFindings(useStore.getState())
+      .map((row) => row.id)
+      .filter((id) => id.startsWith(`analysis:${BottleneckRule.HARD_SEPARATION_VIOLATED}:`))
+    const missing = pairs.filter(
+      ({ pair, day }) => !appIds.some((id) => id.endsWith(`:${pair.join('+')}:${day ?? '-'}`)),
+    )
+    return { pairs, missing }
+  }
+
+  it.each(SCENARIO_IDS)('%s: every scheduler hard-separation pair shows in the app after a run', (id) => {
+    useStore.setState(useStore.getInitialState(), true)
+    applyPreset(id)
+
+    const { missing } = hardPairsAfterRun()
+    expect(Object.keys(useStore.getState().placements).length, 'premise: the run placed events').toBe(PINNED_APP_PATH_COUNTS[id])
+    expect(missing).toEqual([])
+  })
+
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: every broken pair shows in the app after a run', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    const state = () => useStore.getState()
+    state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does
+    state().applyTemplate('NAC Cadet/Junior')
+    state().setStrips(80)
+    state().setVideoStrips(12)
+
+    const { pairs, missing } = hardPairsAfterRun()
+    expect(pairs.length, 'the template must break hard pairs, or this check is vacuous').toBeGreaterThan(0)
+    expect(missing).toEqual([])
+  })
+})
+
+/**
+ * 016 Task E (spec §5, R5): one referee number. After a run, the footer's
+ * per-day referee figures (`selectDerivedRefRequirements`, from the schedule
+ * as the workbench draws it) equal the scheduler's own
+ * `ref_requirements_by_day` on every B1–B8 day.
+ *
+ * The store's `peak_time` is on the clock axis of its day, the engine's on the
+ * scheduler axis (day d shifted by d × DAY_AXIS_SPACING_MINS), so the store's
+ * is shifted onto the scheduler axis before comparing. A day with no demand
+ * reads peak_time 0 on both sides and is compared unshifted.
+ *
+ * Before Task E this comparison is red on 14 days: the 13 days of B1, B2, B4,
+ * B6, B7 and B8 where the totals differ (spec §'What planning measured', whose
+ * table counts totals only), plus B8 day 1, where the total held at 146 and
+ * only peak_saber_refs differed (56 vs 64). The scheduler counted phases at the
+ * times it allocated them, the store at the times it draws them.
+ */
+describe('the footer\'s referee peak is the scheduler\'s (016 Task E)', () => {
+  /** The footer's per-day figures, with each non-empty day's peak_time moved onto the scheduler axis. */
+  const footerOnSchedulerAxis = () => selectDerivedRefRequirements(useStore.getState()).map((row) => ({
+    ...row,
+    peak_time: row.peak_total_refs > 0 ? row.peak_time + row.day * DAY_AXIS_SPACING_MINS : row.peak_time,
+  }))
+
+  it.each(SCENARIO_IDS)('%s: every day\'s referee requirements match the scheduler\'s', (id) => {
+    const engine = runAppPath(id).refRequirementsByDay
+    expect(footerOnSchedulerAxis()).toEqual(engine)
+  })
+
+  // The scheduler counts a pinned event from its own result for it, the
+  // footer from the organizer's pin. The two agree only while the scheduler
+  // honors the pin's day, start and strip count, which this case holds it to.
+  it.each(['B1', 'B2', 'B6', 'B8'] as const)('%s: the two still match with four hand-moved pins', (id) => {
+    runAppPath(id)
+    const moved = Object.keys(useStore.getState().placements).slice(0, 4)
+    expect(moved, 'premise: the run placed at least four events').toHaveLength(4)
+    moved.forEach((eventId, i) => {
+      useStore.getState().updatePlacement(eventId, { day: i % 2, start_time: 600 + 45 * i, strip_count: 3 + i })
+    })
+    const pins = Object.fromEntries(moved.map((eventId) => [eventId, useStore.getState().placements[eventId]]))
+
+    runScheduleAll()
+    const after = useStore.getState().placements
+    expect(Object.fromEntries(moved.map((eventId) => [eventId, after[eventId]])), 'the run kept every pin').toEqual(pins)
+
+    // The same inputs runScheduleAll just passed the engine, pins included.
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    const engine = scheduleAll(competitions, config, buildPinnedPlacements(state)).ref_requirements_by_day ?? []
+    expect(footerOnSchedulerAxis()).toEqual(engine)
   })
 })

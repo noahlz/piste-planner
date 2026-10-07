@@ -24,6 +24,8 @@ interface Finding {
   day: number | null
   message: string
   target: string | null
+  /** 016 Task C: whether the row offers a dismiss control. */
+  dismissable: boolean
 }
 
 function selectFindings(state: StoreState): Finding[] {
@@ -180,20 +182,46 @@ describe('FindingsPanel — jump to grid (contract §2.1, §3)', () => {
 })
 
 describe('FindingsPanel — dismiss finding (contract §3)', () => {
-  it('appears only on Warning/Unplaced rows, across every row', () => {
+  // 016 Task C: the row's own `dismissable` decides the control, not its severity.
+  it('appears exactly on the rows marked dismissable, across every row', () => {
     threeEventsOverlappingOnDayZero()
     const { container } = render(<FindingsPanel />)
 
     const rows = selectFindings(useStore.getState())
     for (const row of rows) {
+      expect(typeof row.dismissable, `finding ${row.id} carries dismissable`).toBe('boolean')
       const li = container.querySelector(`[data-finding-id="${row.id}"]`) as HTMLElement
       const button = within(li).queryByRole('button', { name: 'Dismiss finding' })
-      const expected = row.severity === 'Warning' || row.severity === 'Unplaced'
       expect(
         button !== null,
-        `finding ${row.id} (severity ${row.severity}) Dismiss finding mismatch`,
-      ).toBe(expected)
+        `finding ${row.id} (severity ${row.severity}, dismissable ${row.dismissable}) Dismiss finding mismatch`,
+      ).toBe(row.dismissable)
     }
+  })
+
+  // 016 R1: a hand-made hard same-day pair is a Warning the organizer cannot dismiss.
+  it('offers no dismiss control on a hard-separation Warning, but still offers Show on grid', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    const s = useStore.getState()
+    s.setTournamentType('NAC')
+    s.setDays(3)
+    s.setStrips(40)
+    s.setVideoStrips(8)
+    s.selectCompetitions(['JR-M-FOIL-IND', 'CDT-M-FOIL-IND'])
+    s.updateCompetition('JR-M-FOIL-IND', { fencer_count: 24 })
+    s.updateCompetition('CDT-M-FOIL-IND', { fencer_count: 24 })
+    s.setPlacementsFromAuto({
+      'JR-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
+      'CDT-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
+    })
+    const { container } = render(<FindingsPanel />)
+
+    const id = 'analysis:hard-separation-violated:CDT-M-FOIL-IND:CDT-M-FOIL-IND+JR-M-FOIL-IND:0'
+    const li = container.querySelector(`[data-finding-id="${id}"]`) as HTMLElement | null
+    expect(li, `expected a listitem for ${id}`).not.toBeNull()
+    expect(li).toHaveAttribute('data-severity', 'Warning')
+    expect(within(li!).queryByRole('button', { name: 'Dismiss finding' })).toBeNull()
+    expect(within(li!).getByRole('button', { name: 'Show on grid' })).toBeInTheDocument()
   })
 
   it('clicking Dismiss finding on the Unplaced row removes it from the list and records the dismissal', () => {

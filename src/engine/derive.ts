@@ -13,7 +13,7 @@
  * are scheduler diagnostics about contention, not geometry.
  */
 
-import { DeMode, PlacementSource, tailEstimateMins } from './types.ts'
+import { DAY_AXIS_SPACING_MINS, DeMode, PlacementSource, tailEstimateMins } from './types.ts'
 import type { Competition, DeRound, Placement, ScheduleResult, TournamentConfig } from './types.ts'
 import { snapToSlot } from './resources.ts'
 import {
@@ -49,6 +49,30 @@ function grantedStrips(desired: number, ...bounds: number[]): number {
  */
 function grantedDeStrips(rounds: readonly DeRound[], desired: number, deCap: number): number {
   return rounds.length === 0 ? 0 : grantedStrips(desired, deCap)
+}
+
+/**
+ * The placement a scheduler result becomes: its day, its pool start, and its
+ * pool strip budget, marked auto and unpinned. `runScheduleAll` records these,
+ * and the scheduler derives them back (`deriveEventSchedule`) to count
+ * referees from the schedule as the workbench draws it (016 spec §5).
+ *
+ * `result.pool_start` is on the scheduler axis, where day d's times are
+ * shifted by d × DAY_AXIS_SPACING_MINS. That shift comes back off here, since
+ * a placement's `start_time` is on its own day's clock axis. A Placement has
+ * no way to say "somewhere on this day, time unknown", so a result with no
+ * pool start has none (null).
+ */
+export function placementFromResult(result: ScheduleResult): Placement | null {
+  if (result.pool_start === null) return null
+  return {
+    day: result.assigned_day,
+    start_time: result.pool_start - result.assigned_day * DAY_AXIS_SPACING_MINS,
+    strip_count: result.pool_strip_count,
+    strips: null,
+    source: PlacementSource.AUTO,
+    pinned: false,
+  }
 }
 
 /**

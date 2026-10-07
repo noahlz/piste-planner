@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { DAY_HARD_END_MINS, DAY_START_MINS, clockHardEnd } from '../../engine/constants.ts'
-import type { Competition, DayConfig, Phase } from '../../engine/types.ts'
+import type { Bottleneck, Competition, DayConfig, Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
 import { assignStripLanes, type BlockPlacement } from '../../layout/lanes.ts'
 import { useStore } from '../../store/store.ts'
@@ -137,17 +137,23 @@ interface HoveredBlock {
   anchorY: number
 }
 
+/** A bottleneck naming two or more events is about the pair, not one phase. */
+const isPair = (warning: Bottleneck): boolean => warning.subjects.length >= 2
+
 /**
  * The findings that belong to one block.
  *
  * A `ValidationError` names its competitions in `subjects`, so it attaches to
  * every block of that event — the rules it expresses (a shared population, a
  * day's capacity) are about the event, not about one of its phases. A
- * `Bottleneck` does carry a `phase`, so when any of an event's bottlenecks name
- * this block's phase the list narrows to those: a delay in the DE is not a fact
- * about the pools that ran that morning. An event whose bottlenecks all name
- * other phases still shows them, because the alternative is a block that
- * reports nothing while its event is in trouble.
+ * `Bottleneck` whose `subjects` name two or more events attaches to every block
+ * of each of them in every phase (016 spec §4). Only single-subject
+ * bottlenecks narrow by phase: they carry a `phase`, so when any of an event's
+ * bottlenecks name this block's phase the list narrows to those, because a
+ * delay in the DE is not a fact about the pools that ran that morning. An event
+ * whose bottlenecks all name other phases still shows them, because the
+ * alternative is a block that reports nothing while its event is in trouble.
+ * The same message is listed once per block.
  */
 function findingsForBlock(
   findings: DerivedFindings,
@@ -160,28 +166,34 @@ function findingsForBlock(
     if (error.subjects.includes(competitionId)) messages.push(error.message)
   }
 
+  const pairs = findings.analysis.warnings.filter(
+    (warning) => isPair(warning) && warning.subjects.includes(competitionId),
+  )
+  for (const warning of pairs) messages.push(warning.message)
+
   const forEvent = findings.analysis.warnings.filter(
-    (warning) => warning.competition_id === competitionId,
+    (warning) => warning.competition_id === competitionId && !pairs.includes(warning),
   )
   const forPhase = forEvent.filter((warning) => warning.phase === phase)
   for (const warning of forPhase.length > 0 ? forPhase : forEvent) {
     messages.push(warning.message)
   }
 
-  return messages
+  // Mirrored warnings (one per event, same text) would otherwise repeat.
+  return [...new Set(messages)]
 }
 
 /**
- * Every competition a `findingRows` row names (013 T032, contract §4.2).
- * Replaces the old `flaggedCompetitions(findings)`, which read the raw
- * `DerivedFindings` pair directly — the gutter now flags exactly what the
- * Findings panel lists, dismissed rows excluded, rather than a superset the
- * panel has already waved off.
+ * Every competition a `findingRows` row names in `subjects` (013 T032, contract
+ * §4.2). Reads the committed `findingRows`, not the raw `DerivedFindings` pair,
+ * so the gutter flags exactly what the Findings panel lists, dismissed rows
+ * excluded. `target` is the jump only and adds nothing the subjects omit.
  */
-function flaggedTargets(findingRows: Finding[]): Set<string> {
+function flaggedCompetitions(findingRows: Finding[]): Set<string> {
   const flagged = new Set<string>()
   for (const row of findingRows) {
     if (row.target !== null) flagged.add(row.target)
+    for (const id of row.subjects) flagged.add(id)
   }
   return flagged
 }
@@ -199,8 +211,8 @@ const WARNED_SEVERITIES: ReadonlySet<Finding['severity']> = new Set([
  * would mark nearly everything. Read from the same committed `findingRows` as
  * the gutter, never the live store.
  */
-function warnedTargets(findingRows: Finding[]): Set<string> {
-  return flaggedTargets(findingRows.filter((row) => WARNED_SEVERITIES.has(row.severity)))
+function warnedCompetitions(findingRows: Finding[]): Set<string> {
+  return flaggedCompetitions(findingRows.filter((row) => WARNED_SEVERITIES.has(row.severity)))
 }
 
 /** How long a jump's flash stays on a block before clearing (013 T032, contract §4.4). */
@@ -381,8 +393,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
     })
   }
 
-  const flagged = flaggedTargets(findingRows)
-  const warned = warnedTargets(findingRows)
+  const flagged = flaggedCompetitions(findingRows)
+  const warned = warnedCompetitions(findingRows)
   /** Per day, the strip rows a flagged event has a block on. */
   const flaggedRowsByDay = new Map<number, Set<number>>()
   for (const { placement } of drawn) {

@@ -1,7 +1,8 @@
 import { useStore, type StoreState } from './store.ts'
-import { buildTournamentConfig, buildPinnedPlacements, DAY_AXIS_SPACING_MINS } from './buildConfig.ts'
+import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import { scheduleAll } from '../engine/scheduler.ts'
-import { PlacementSource, type Placement, type ScheduleResult } from '../engine/types.ts'
+import { placementFromResult } from '../engine/derive.ts'
+import type { Placement, ScheduleResult } from '../engine/types.ts'
 
 /** What `runScheduleAll` found: how many of the attempted competitions it placed. */
 export interface AutoRunCounts {
@@ -53,22 +54,10 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
     // A pinned event's placement is the organizer's, not this run's output:
     // `setPlacementsFromAuto` carries the existing one over verbatim below.
     if (pinnedIds.has(id)) continue
-    // A Placement has no way to say "somewhere on this day, time unknown", so an
-    // event the scheduler left without a pool start simply gets no placement.
-    if (result.pool_start === null) continue
-    placements[id] = {
-      day: result.assigned_day,
-      // result.pool_start is on the scheduler axis (specs/006-day-axis-parity/contracts/day-axis.md C2 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md))
-      // — day d's times are shifted by d*DAY_AXIS_SPACING_MINS. Subtract that
-      // shift back off before it becomes a clock-axis Placement.start_time,
-      // which is the only axis the store, the shared link, and the canvas
-      // ever see.
-      start_time: result.pool_start - result.assigned_day * DAY_AXIS_SPACING_MINS,
-      strip_count: result.pool_strip_count,
-      strips: null,
-      source: PlacementSource.AUTO,
-      pinned: false,
-    }
+    // `placementFromResult` takes the scheduler-axis shift back off and gives
+    // no placement to an event the scheduler left without a pool start.
+    const placement = placementFromResult(result)
+    if (placement !== null) placements[id] = placement
   }
 
   state.setPlacementsFromAuto(placements, pinnedIds)

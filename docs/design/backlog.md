@@ -19,15 +19,12 @@ feature directory is created for one only when it is assigned a phase.
 feature that owns it is in [`competition-planner-workbench.md`](./competition-planner-workbench.md)
 §Roadmap.*
 
-- Sequencing onto a pin, and crossover between pins or through Move day (the
-  design alignment's E3) –
-  [§Auto-assign does not hold an unpinned predecessor before a pinned successor](#auto-assign-does-not-hold-an-unpinned-predecessor-before-a-pinned-successor)
-  and
+- Sequencing onto a pin (the design alignment's E3) –
+  [§Auto-assign does not hold an unpinned predecessor before a pinned successor](#auto-assign-does-not-hold-an-unpinned-predecessor-before-a-pinned-successor).
+  Unscheduled. Crossover between pins or through Move day is now checked, by 016 –
   [§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph).
-  Feature 016.
-- The referee model divergence (E5) –
+- The referee model divergence (E5) – fixed by 016 –
   [§The scorecard's peak-referee row reads higher than the scheduler's own](#the-scorecards-peak-referee-row-reads-higher-than-the-schedulers-own).
-  Feature 016.
 - The engine and the store both reporting a pin collision –
   [§The engine and the store both report a pin collision](#the-engine-and-the-store-both-report-a-pin-collision).
   Feature 017.
@@ -100,120 +97,151 @@ bracket's time and §The engine's rules predate the 2026-27 Operations Manual
 - The type's help text in the Tournament panel –
   [§The Tournament panel's help text is vague and is not read by screen readers](#the-tournament-panels-help-text-is-vague-and-is-not-read-by-screen-readers).
   An owner wording call, unscheduled.
-- The late-day WARN's raw minutes and shared dismissal key –
+- The late-day WARN's raw minutes and shared dismissal key – fixed by 016 –
   [§Day-level findings have no structured day](#day-level-findings-have-no-structured-day).
-  Feature 016.
 - A penalty weight with no reader, `EARLY_START_CONSECUTIVE_HIGH_CROSSOVER` –
   [§Penalty weights: 5 of 19 are read](#penalty-weights-5-of-19-are-read).
   Feature 021, and it predates 024.
 
+## What 016 deliberately left unfixed
+
+*Recorded by 016, 2026-10-07. It closed §Hand-placed events and §The scorecard's
+peak-referee row and mostly closed §Day-level findings. Its handoff,
+`specs/016-hand-placement-rules/handoff.md`, has the rest.*
+
+- Phases drawn without the scheduler's waits, which the one referee number now
+  inherits –
+  [§The canvas draws phases without the scheduler's waits](#the-canvas-draws-phases-without-the-schedulers-waits).
+  Roadmap row 025.
+- The Vet age-group co-day rule unchecked for hand placements, the regional Note
+  unreachable by hand and the overflow block that never draws the findings edge –
+  [§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph).
+  The overflow edge goes with 017.
+- Phase-repeating scheduler findings out of the panel, and the scheduler's own
+  messages still printing ids –
+  [§Day-level findings have no structured day](#day-level-findings-have-no-structured-day).
+  Unscheduled.
+
 ## Day-level findings have no structured day
 
-*Found while planning 014, 2026-10-04. Recorded, not fixed – 014 kept every
-user-visible surface unchanged.*
+*Found while planning 014, 2026-10-04. **Mostly fixed by 016, 2026-10-07.** What
+is left is the phase-repeating scheduler findings, below.*
 
-014 gave `Bottleneck` a `rule` and `subjects`, and neither carries a day.
-Venue findings scoped to one day name no competition, so they share `rule` and
-`subjects` (`[]`) and differ only by the day in their message text, for
-example `day-pools-exceed-strips` and `day-video-demand-exceeds-video-strips`
-from `initialAnalysis`. Two consequences in the Findings panel:
+**Fixed by 016.** `Bottleneck` has an optional 0-based `day`, filled by every
+day-scoped producer: the hard-pair and regional-window findings,
+`day-pools-exceed-strips`, `day-video-demand-exceeds-video-strips`,
+`multiple-flighted-same-day`, the three `DAY_RESOURCE_SUMMARY` lines (message
+text unchanged, since the ledger parses them), `day-ends-past-target` and the
+first and last day WARN. The Findings panel's row id is now
+`analysis:<rule>:<competition_id>:<subjects joined by +>:<day or ->`, so a
+dismissal no longer passes to another finding when the list changes. No two
+producers can emit the same id, and a stranded day outside the day range keeps
+its raw day in the id. A venue row reads "Day N" instead of "Venue". Two-event
+findings, `flighting-group-both-video` among them, mark both blocks and both
+gutter flags, through a new `Finding.subjects`. The two 0-based day messages now
+print "Day N" 1-based. The late-day WARN prints clock times from the day's own
+start (`Day 3 ends at 20:00, 60 min past its target 19:00`), and the first and
+last day WARN now reaches the panel. The engine's `day-ends-past-target` is
+deliberately not in the panel (owner ruling R2), since the store's
+`late-finish:day:<n>` row stays the app's late-day finding.
 
-- The Findings panel's bottleneck row id stays
-  `analysis:<cause>:<competition_id>:<ordinal>` (`store/derived.ts`, §1.2).
-  When one of two same-cause venue warnings disappears, the survivor's ordinal
-  drops to 0 and it inherits the other's dismissal.
-- These rows show `day: null` and `where: 'Venue'`, so a Day 2 strip warning is
-  not tied to Day 2 in the panel or on the canvas.
+**Still open.**
 
-The scheduler's three `DAY_RESOURCE_SUMMARY` lines (`postScheduleDayBreakdown`)
-have the same shape. Scheduler bottlenecks never reach the panel, though,
-because `runActions.ts` keeps only placements, so only the ledger's day-summary
-check meets them.
-
-The fix is a structured `day` on `Bottleneck`, filled by every day-scoped
-producer. The row id must then combine `rule`, `competition_id`, `subjects` and
-`day`. `rule` + `subjects` + `day` alone is not unique: `multiple-flighted-same-day`
-emits one warning per flighted event on a day, all with the same rule, the same
-`subjects` and the same day, and only `competition_id` tells them apart.
-Scheduler findings that repeat per phase (`phase-deferred`,
-`strip-contention-deferral`, `pinned-phase-unclaimed`) would also need `phase`
-if they ever reach the panel. That changes dismissal identity, so it needs its
-own decision. The ledger's day-summary
-check (`driftLedger.test.ts`, "day peaks match …") could then filter by rule and
-day, though the peak value it parses from the message has no structured home
-either.
-
-**Two-subject findings show on one block only.** `findingsForBlock`
-(`Canvas.tsx`) attaches a bottleneck to the block whose `competition_id`
-matches. A finding naming two events, such as `flighting-group-both-video`
-(`analysis.ts` pass 5), appears only on its owner's block. Matching on
-`subjects` would show it on both, which is a user-visible change.
-
-**Sequencing delays name no predecessor.** A `cross-event-dependency-delay`
-bottleneck lists only its owner in `subjects`, because its message does not
-name the event it waited for. `predecessorReadyTime` returns a time, not the
-predecessor's id.
-
-**024's new findings add two cases for 016.** *Found by 024, 2026-10-06.* 024
-added three engine findings (the late-day WARN `day-ends-past-target`, the
-regional window INFO and WARN, and the first and last day WARN) and kept them
-out of the app on purpose, since 016 shows them. Two things about the late-day
-WARN will matter then:
-
-- **Its message prints scheduler-axis minutes, not clock times.**
-  `lateDayWarnings` (`concurrentScheduler.ts`) writes `Day N ends at <finish>,
-  <m> min past its target <target>` with both numbers as they sit on the
-  scheduler's axis, where each day starts a multiple of 1440 minutes along. A
-  late day 3 reads "ends at 4080 … target 4020", not "ends at 20:00 … target
-  19:00". An organizer cannot read that. The fix is to print the clock time
-  from the day's own start, or to carry `day` and the finish as structured
-  fields (the fix above) and let the Findings panel format them.
-- **It shares a dismissal key with every other finding of its cause.** The
-  warning has `competition_id: ''`, so the panel's row id is
-  `analysis:<cause>::<ordinal>` (`store/derived.ts`, an empty id between the
-  colons) with only the ordinal to tell two late days apart. The first and last
-  day WARNs have the same cause and the same empty id, so they sit in the same
-  ordinal sequence. Dismissing a
-  late Day 2 and then fixing it hands that dismissal to whichever finding
-  moves into its slot. The structured `day` above, folded into the row id,
-  closes both this and the venue case.
-
-Cost if ignored: when 016 shows them, a late-day warning reads as an
-unexplained number, and a dismissed one can hide a different day's warning.
+- **Scheduler findings that repeat per phase stay out of the panel.**
+  `phase-deferred`, `strip-contention-deferral` and `pinned-phase-unclaimed`
+  would need `phase` in the row id if they ever reach it, which changes
+  dismissal identity and needs its own decision. A run keeps only placements,
+  so the scheduler's bottlenecks never reach the panel today. The ledger's
+  "day peaks match" check still parses a peak value out of a message that has
+  no structured home for it.
+- **Sequencing delays name no predecessor.** A `cross-event-dependency-delay`
+  bottleneck lists only its owner in `subjects`, because
+  `predecessorReadyTime` returns a time and not the predecessor's id.
+- **The scheduler's own messages still print ids and scheduler-axis minutes.**
+  `hard-separation-violated` and the regional window messages from the
+  scheduler print competition ids, and its regional message prints scheduler
+  minutes and a lowercase "day N". 016 left them so the scheduler's findings do
+  not change. Only the app's own rule check (`checkPlacementRules`) names events
+  by label. Cost if ignored: none in the app today, since those findings never
+  reach it.
+- **No fixture puts a scheduler-reported hard-separation violation on a
+  non-zero day**, so that producer's `day` is pinned only on day 0. B1–B8 emit
+  none, and the NAC Cadet/Junior template (6 broken pairs) is the only case.
 
 ## The scorecard's peak-referee row reads higher than the scheduler's own
 
-*Measured by 004's S6 on 2026-09-01, re-measured by S8 after US4 landed the
-per-type defaults. Recorded, not fixed — the store-side path is the one the UI
-shows.*
+*Measured by 004's S6 on 2026-09-01 and re-measured by S8. **Corrected and fixed
+by 016, 2026-10-07.** The cause recorded here until then was wrong.*
 
-For B1, `refs:peak-total` and the scheduler's own `ref_requirements_by_day`
-agree exactly on days 0, 1 and 3 (**160, 182, 194** both ways) and diverge on
-**day 2 only**: the store reads **164**, the engine **156**. The store path is
-always the higher of the two.
+The two figures did not differ because the engine clamps. `computePostScheduleRefDemand`'s
+clamp (`stripsForEvent > peak.total`) fired zero times on B1–B8 and removing it
+left every `refRequirementsByDay` byte-identical (an orchestrator observation, not recorded in a branch commit). The store and the engine
+emitted the same referee intervals with the same counts and differed only in
+**time**. The store derived each phase back to back from the placement, while
+the scheduler's allocations sat later where a phase waited for strips, so later
+phases were drawn 25–60+ minutes earlier than scheduled and overlapped
+more. Engine and store on every day that differed, before 016:
 
-S6's earlier reading of 220 store / 212 engine on day 0 was pre-US4 and no
-longer holds — US4's per-type defaults moved the numbers and moved the
-divergence off day 0 entirely. The divergence itself did not close, only
-relocated, so the reconciliation below is still open.
+| Scenario | Day | Engine | Store |
+|---|---:|---:|---:|
+| B1 | 1 / 2 | 210 / 134 | 218 / 140 |
+| B2 | 0 / 3 | 228 / 136 | 244 / 140 |
+| B4 | 1 / 2 | 80 / 80 | 90 / 104 |
+| B6 | 0 / 1 / 2 | 78 / 68 / 64 | 98 / 90 / 112 |
+| B7 | 0 / 2 | 156 / 156 | 164 / 168 |
+| B8 | 0 / 2 | 212 / 136 | 236 / 172 |
 
-The two numbers come from two different demand models:
+016 made it one number. The scheduler now counts referees from the schedule as
+the workbench draws it (`refDemandFromSchedule`, `src/engine/refs.ts`, called by
+the store's `buildRefDemandByDay` and by the scheduler's own
+`ref_requirements_by_day`), under the METHODOLOGY §Ref Demand Derivation
+amendment the owner made first. `computePostScheduleRefDemand` and its inert
+clamp are gone. The engine's totals rose to the store's on all 13 days above,
+and the footer did not move (B1's boot footer still reads 218). The cost is
+named in
+[§The canvas draws phases without the scheduler's waits](#the-canvas-draws-phases-without-the-schedulers-waits):
+the one number is the drawn one, so it inherits that entry's optimism.
 
-- `buildRefDemandByDay` (`src/store/derived.ts:160`) sums referee demand **per
-  placed event**, so two events overlapping in time add their strips together
-  whether or not the day has the strips to run them concurrently.
-- `computePostScheduleRefDemand` (`src/engine/concurrentScheduler.ts:1200`)
-  measures each window with `peakConcurrentStrips`, which **clamps** to the
-  strips actually concurrent in that window.
+Sabre peaks and peak times moved with the totals, and one move fell outside the
+13 days (B8 day 1's sabre peak 56 to 64, total and time unchanged). The owner
+accepted all of them on 2026-10-07 as the same cause.
 
-On a day that is not saturated the two agree by construction, which is why only
-the saturated day moves. Neither is wrong for its own purpose — the store's is
-an upper bound on referees a day could need, the engine's is what the schedule it
-produced actually demands — but the app shows one number and the scheduler
-reasons with the other, so an organizer staffing from the drawer staffs above
-the schedule's own requirement. Worth reconciling when the referee model is next
-opened; until then the divergence is bounded, one-directional, and confined to
-saturated days.
+## The canvas draws phases without the scheduler's waits
+
+*Found by 016's planning probe, 2026-10-06, and confirmed by its referee
+change. Recorded, not fixed. Roadmap row 025.*
+
+After a run the app keeps each event's day, start and strip count, and
+re-derives the phase times without resource contention (`derive.ts`, "minus
+resource contention"). The scheduler planned them with contention, so a phase
+that waited for strips starts later in the scheduler's timeline than on the
+canvas. On a busy day later phases are drawn 25–60+ minutes earlier than the
+scheduler planned them. The referee peak is now counted from the drawn
+intervals (016, by design), so it inherits the same optimism. Measured on B1–B8
+at `b84be7e291`, the drawn schedule counts more referees at once than the
+scheduler's timeline on 13 days, because phases drawn early overlap more:
+
+| Scenario | Day | Scheduler's timeline | As drawn |
+|---|---:|---:|---:|
+| B1 | 1 / 2 | 210 / 134 | 218 / 140 |
+| B2 | 0 / 3 | 228 / 136 | 244 / 140 |
+| B4 | 1 / 2 | 80 / 80 | 90 / 104 |
+| B6 | 0 / 1 / 2 | 78 / 68 / 64 | 98 / 90 / 112 |
+| B7 | 0 / 2 | 156 / 156 | 164 / 168 |
+| B8 | 0 / 2 | 212 / 136 | 236 / 172 |
+
+The sabre peaks move on the same days (app path: B1 day 1 64 to 68, B4 day 2
+54 to 60, B6 day 1 20 to 24, B6 day 2 32 to 58, B7 day 2 70 to 86, B8 day 0 56
+to 66), and so does B8 day 1's (56 to 64) with its total held at 146.
+
+**Cost if ignored**: an organizer reads DE start times that are early, and the
+referee peak (the footer and the scheduler's report) is an upper bound rather
+than what the scheduled day needs. B6 day 2 shows the size, 64 against 112.
+
+**What it needs**: keep each phase's times after a run, and decide what a hand
+move does to them (shift the whole event, or fall back to derived times for the
+moved event only). Proposed as its own feature, row 025. Fixing it changes the
+referee peak again, so its drift review starts from the ledger 016 left.
 
 ## Day-end overrun is a hard failure the methodology calls a warning
 
@@ -337,6 +365,10 @@ manual's adjacent-age-group rule (024). This entry's serialization question
 stays open. The edge has never bound – see
 [The Vet sibling and individual-to-team edges never hold an event back](#the-vet-sibling-and-individual-to-team-edges-never-hold-an-event-back).
 A staggered start keeps B8 whole while strict serialization loses eight events.*
+
+*2026-10-07: 016 checks hand placements against the hard and regional rules but
+not this co-day rule. A hand-split Vet co-day raises nothing – see
+[§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph).*
 
 ## The Vet sibling and individual-to-team edges never hold an event back
 
@@ -1141,42 +1173,39 @@ cost to the product surface.
 
 ## Hand-placed events are never checked against the crossover constraint graph
 
-*Found 2026-09-06 during 012's brainstorming, by grep. This is the largest gap
-between the workbench as built and the workbench as described.*
+*Found 2026-09-06 during 012's brainstorming. **Fixed by 016, 2026-10-07**
+(`specs/016-hand-placement-rules/handoff.md`).*
 
-The engine models demographic crossover properly – `crossover.ts` computes a
-penalty between any two competitions, `constraintGraph.ts` turns those into
-weighted edges, and `dayColoring.ts` reads `hardEdgeDegree` when it assigns days.
-That machinery is what stops Cadet and Junior Men's Foil landing on one day when
-the auto-scheduler runs.
+A hand placement is now judged by the rules the auto-scheduler enforces.
+`checkPlacementRules` (`src/engine/placementRules.ts`) reads `crossoverPenalty`,
+the function the constraint graph uses, and `computeDerivedFindings` feeds the
+result to the Findings panel. Two events that may never share a day raise one
+`hard-separation-violated` Warning naming both by label. The organizer cannot
+dismiss it, Auto-schedule stays enabled, and moving one event off the day
+clears it. At ROC, RYC and RJCC the Group 1 pair raises the regional window
+finding instead, a Note when the 4-hour split holds and a Warning when it does
+not.
 
-**None of it is reachable from a hand placement.** `grep` over `src/store` and
-`src/components` returns no reference to `constraintGraph.ts`, `crossover.ts`, or
-`hardEdgeDegree`. `selectDerivedFindings` recomputes from placements – so a
-hand-edited placement does re-validate – but what it recomputes is
-`validateConfig`, which checks fencer counts, strips, refs and dependencies. It
-has no notion of two events being wrong *together on a day*.
+Still open from this entry:
 
-The consequence is asymmetric and easy to miss: press **Auto-schedule all** and
-the crossover rules are enforced. Drag the same two events onto the same day by
-hand and the app says nothing. `TopBar.tsx:103` disables the auto-schedule button
-on hard errors, which makes the app look like it is guarding placements when the
-guard covers only configuration.
-
-**What it needs**: a derived selector that evaluates the current placements
-against the constraint graph and emits a finding per violated hard edge, wired
-into the same findings surface `validateConfig` already feeds, so a manual
-placement and an auto placement are judged by one rule set. Since 014 a
-`Bottleneck` names both competitions of a violated pair in `subjects`, as the
-engine's own `hard-separation-violated` finding already does, so the finding
-has a structured place for its second subject.
-
-**Cost if ignored**: the drag-drop half of the product silently permits exactly
-the schedule USA Fencing rules forbid, and the organizer finds out at the
-tournament. It also makes the two halves of the app disagree about what is legal,
-which is worse than either rule alone.
-
-012 recorded this in its handoff §8 as something it did not fix. Still open.
+- **The Vet age-group co-day rule is not checked for hand placements.** Age-banded
+  Vet individuals of one gender and weapon must share a day, and only the
+  scheduler's day colouring enforces it (`vetCoDayRequiredColor` in
+  `dayColoring.ts`). Hand-moving one Vet band to another day raises nothing.
+  The rule is itself unsourced – see
+  [§Vet co-day serialization is unsourced and never fit-checked](#vet-co-day-serialization-is-unsourced-and-never-fit-checked).
+  Cost if ignored: an organizer can split a Vet co-day by hand and hear
+  nothing, the one same-day rule the two halves of the app still judge
+  differently.
+- **The regional Note cannot be reached by hand in the live app.** No control
+  sets an event's start time (Move day keeps the start), so a hand move rarely
+  lands a pair on a window the scheduler would call honoured. The live smoke
+  asserts the not-honoured Warning on ROC Mega and the store tests cover the
+  Note.
+- **An overflowing block never draws the findings edge** (`Block.tsx`,
+  `warnedEdge = warned && !overflow`), so on a board with overflow one event of
+  a hard pair can show its marker on some phases only. It predates 016, and 017
+  (one strip model, no overflow) removes the cause.
 
 ## Templates are invented numbers, not a real season
 
@@ -1319,12 +1348,12 @@ makes a team event wait for its individual counterpart and a Vet sibling wait
 for the previous one. A pinned *successor* is committed in the pre-claim pass
 before its unpinned predecessor is placed, so the engine does not hold the
 predecessor before the pin, and the loop may place it after. Crossover between
-two pins, and between a pin and an event moved through Move day, is unchecked
-for the same reason.
+two pins, and between a pin and an event moved through Move day, was unchecked
+for the same reason until 016, which now checks the current placements.
 
 **What it needs**: `Competition.latest_end` is the mechanism the research names
-for expressing "this must finish before that pin". It belongs with roadmap
-feature 016, which already owns the crossover check on current placements.
+for expressing "this must finish before that pin". 016 delivered only the crossover
+check on current placements, so this sequencing part is unscheduled.
 
 **Cost if ignored**: Auto-assign around pins can return a board where a team
 event precedes its individual event or a Vet sibling runs out of order, with no

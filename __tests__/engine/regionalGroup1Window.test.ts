@@ -180,6 +180,21 @@ describe('regional Group 1 window – the older side waits for day start + 4 hou
     expect(finding.severity).toBe(BottleneckSeverity.WARN)
   })
 
+  it('sets day on the window finding to the pair\'s shared day (016 Task A)', () => {
+    // Both events are pinned to day index 1 so the pair shares a non-zero day.
+    const config = oneDay(TournamentType.ROC, { days_available: 2 })
+    const ds = dayStart(1, config)
+    const pins: PinnedPlacement[] = [
+      { competition_id: 'y12', day: 1, start_time: ds, strip_count: 2 },
+      { competition_id: 'y14', day: 1, start_time: ds + WINDOW_MINS, strip_count: 2 },
+    ]
+    const result = scheduleAllConcurrent([event('y12', Category.Y12), event('y14', Category.Y14)], config, pins)
+
+    expect(result.schedule['y12']?.assigned_day).toBe(1)
+    expect(result.schedule['y14']?.assigned_day).toBe(1)
+    expect(findingFor(result.bottlenecks, 'y12', 'y14').day).toBe(1)
+  })
+
   it('restarts a retried older side at the floor, never at day start', () => {
     // 40 fencers on 9 strips, pools capped at 3 strips and DEs at 2: the event
     // spans 630 minutes from its start. From day start it fits the 780-minute

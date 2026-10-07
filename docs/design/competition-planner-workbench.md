@@ -233,19 +233,21 @@ Features 001–012 are delivered and their spec folders removed – `git show
 from the Claude Design mockup, is delivered and merged (`83168c7f2a`). 014,
 structured bottlenecks, is merged (`24d19f7ed6`). 015, the ledger converging
 with the store, is merged (`7975e4efea`). 024, the 2026-27 Operations Manual
-conformance, is delivered on branch `024-ops-manual-conformance-impl`
-(`specs/024-ops-manual-conformance/handoff.md`), awaiting the user's merge.
+conformance, is merged (`b84be7e291`). 016, hand placements obey the rules, is
+delivered on branch `016-hand-placement-rules`
+(`specs/016-hand-placement-rules/handoff.md`), awaiting the user's merge.
 The original P1–P4 rows are all delivered: P1 as 001, P2 as 003, P3 as 004,
 and P4's manual placement and pre-seeded scheduling as 013 (pins, Move day,
 Auto-assign around pins – the pinned events are excluded from the loop's
 seed, not from `buildEventStates`, per 013 research D1). P5 (FLUID) stays
 deferred with no owner.
 
-Baseline (after 024): `tsc -b` and lint clean, 81 files / 2148 tests. Drift
+Baseline (after 016): `tsc -b` and lint clean, 82 files / 2278 tests. Drift
 ledger B1–B8 scheduled 24 / 24 / 24 / 21 / 12 / 45 / 18 / 53, equal to the app
 path on all eight, with 0 / 0 / 0 / 9 / 0 / 9 / 0 / 0 ERRORs. Snapshot SHA-256
-`7e2db75c38bb…`. (After 015 it was 78 files / 1830 tests, 24 / 24 / 24 / 18 /
-12 / 40 / 18 / 53 and `a4a71e333c77…`.)
+`cd484a89c7c9…`. (After 024 it was 81 files / 2148 tests and `7e2db75c38bb…`,
+and after 015 it was 78 files / 1830 tests, 24 / 24 / 24 / 18 / 12 / 40 / 18 /
+53 and `a4a71e333c77…`.) 016 moved only the referee peaks.
 
 ### Owner decisions, 2026-10-04
 
@@ -272,7 +274,7 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 | **013** | Phase 8 close-out – polish, docs, the three decided fixes above, the retired-surface grep, live smoke, the full check twice, the owner's print check, handoff. `specs/013-workbench-redesign/sessions/S11.md` | – | M | – | no engine change |
 | **014** | **Delivered 2026-10-04** – structured bottlenecks: `Bottleneck` gains a rule id and `subjects`, every producer fills them, the message-text readers move to them. `specs/014-structured-bottlenecks/handoff.md` | closed. Leftovers in §Day-level findings have no structured day | S–M | 013 | zero movement, measured |
 | **015** | **Delivered 2026-10-05** – ledger converges with the store: the drift factory now applies the per-type cut, DE-mode and ref-policy rules, so B1–B8 are measured on what the app runs. `specs/015-ledger-convergence/handoff.md` | closed | M | 013 | re-baseline, measured |
-| **016** | Hand placements obey the rules – crossover hard edges checked on the current placements and shown as findings; one referee-peak number for the footer and the engine | §Hand-placed events, §The scorecard's peak-referee row | L | 014, 024 | if the referee fix touches the engine |
+| **016** | **Delivered 2026-10-07** – hand placements obey the rules: hard same-day pairs and the regional Group 1 window are checked on the current placements and shown as findings (a hard break is a Warning the organizer cannot dismiss), findings carry their day and the panel's row ids combine rule, owner, subjects and day, two-event findings mark both blocks, the first and last day WARN reaches the panel, and the footer's referee peak and the scheduler's `ref_requirements_by_day` are one number counted from the schedule as drawn. `specs/016-hand-placement-rules/handoff.md` | closed. Leftovers in §What 016 deliberately left unfixed | L | 014, 024 | referee peaks rose on 13 days (14 with a sabre move), counts and ERRORs unmoved |
 | **017** | The canvas tells the truth – one strip model for engine and canvas so B1 boots 24 / 0; blocks become keyboard-operable buttons | §The canvas calls events unplaced, §A placed block cannot be selected | M | 024 | if the engine assigns strip ranges |
 | **018** | Engine correctness – day-end overrun as a warning, Div 1 cut 25 %, the fencer-count ≤ 1 URL path verified. One drift review per fix. The DE prelims bout share left this row when 024's per-round DE derivation absorbed it | §Day-end overrun, §Policy tables (Div 1 only), §A shared URL with a fencer count of 0 or 1 | M | 024 | one per fix |
 | **019** | Default days per template – the three K₄ templates default to 4 days so they satisfy their own hard rules | §The store's default day count | S | 024 | parity only |
@@ -281,6 +283,7 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 | **022** | Release housekeeping – README, dev port, stale settings, stale citations | §Release housekeeping | S | last | no |
 | **023** | Team events go straight to DE – see the scope below | §Team events are scheduled with a pool round | L | 015, 024 | B1, B2, B8 move, B3–B7 must not |
 | **024** | **Delivered 2026-10-06** – 2026-27 Operations Manual conformance, one commit per rule group with its drift record: pool and DE times from the manual (A), a 9:00–19:00 day with a 22:00 hard end and a ÷ 14 strip baseline (B), the Y14 and RYC cuts and the 256-fencer DE cap (E), video required for every NAC individual event with team events Single Stage and best-effort (C), and the same-day rules by tournament type (D): Group 1, which now includes Div 1–Cadet, is hard at NAC, SYC and SJCC and soft at ROC, RYC and RJCC with a time-of-day window that holds the older side's pools until day start + 4 hours (METHODOLOGY §Overlapping-Population Separation (Group 1)), plus new Group 2 and 3 soft rules and shorter first and last days. `specs/024-ops-manual-conformance/handoff.md` | closed. Leftovers in §What 024 deliberately left unfixed | L | 015 | re-baseline, measured per group |
+| **025** | The canvas draws phases the way the scheduler planned them – keep each phase's times after a run and decide what a hand move does to them, so DE starts and the referee peak stop reading early on busy days | §The canvas draws phases without the scheduler's waits | M | 016 (the referee peak is counted from the drawn schedule) | yes, the referee peak moves again |
 
 020 can run beside any of 014–019 since it touches only the UI. Everything else
 runs in the order shown. 023 takes the next free number rather than renumbering
@@ -289,6 +292,9 @@ it runs before 022, which stays last. 024 likewise takes the next free number.
 It runs right after 015 and ahead of 016–019 and 023, so they are measured
 against the 2026-27 planning times rather than the ones it replaces. 023 also
 takes its team-match length from 024's DE timing basis, which 024 delivered.
+025 takes the next free number too, for the canvas timing gap 016's referee change
+made visible. It has no schedule slot yet, and it moves the referee peak 016
+fixed, so it is measured against the ledger 016 left.
 
 #### 023 scope (owner decisions, 2026-10-04)
 

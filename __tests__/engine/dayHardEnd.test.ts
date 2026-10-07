@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayStart, dayEnd, dayHardEnd, findDayForTime } from '../../src/engine/types.ts'
+import { dayStart, dayEnd, dayHardEnd, findDayForTime, clockOnDay } from '../../src/engine/types.ts'
 import { DAY_AXIS_SPACING_MINS } from '../../src/store/buildConfig.ts'
 import {
   allocateInterval,
@@ -95,6 +95,22 @@ describe('findAvailableStripsInWindow day inference on the fallback axis', () =>
     }
   })
 })
+
+const NINE_AM = 540
+const SEVEN_PM = 1140
+const TEN_PM = 1320
+
+/** The app's axis: each day's window shifted by d × DAY_AXIS_SPACING_MINS, as `buildConfig.ts` does. */
+function appAxisConfig(days: number) {
+  return makeConfig({
+    days_available: days,
+    dayConfigs: Array.from({ length: days }, (_, d) => ({
+      day_start_time: d * DAY_AXIS_SPACING_MINS + NINE_AM,
+      day_end_time: d * DAY_AXIS_SPACING_MINS + SEVEN_PM,
+      day_hard_end_time: d * DAY_AXIS_SPACING_MINS + TEN_PM,
+    })),
+  })
+}
 
 /**
  * The scheduler places work until the day's hard end, not its soft target
@@ -227,8 +243,10 @@ describe('late-day WARN (day-ends-past-target)', () => {
       expect(b.phase).toBe(Phase.POST_SCHEDULE)
       expect(b.competition_id).toBe('')
     }
-    expect(late[0].message).toMatch(/^Day 1 .*\b700\b/)
-    expect(late[1].message).toMatch(/^Day 3 .*\b3500\b/)
+    // Clock times on the fallback axis, where minute 0 of each day is 9:00:
+    // 700 is 20:40 on day 1 and 3500 is 19:20 on day 3 (2880 + 620).
+    expect(late[0].message).toMatch(/^Day 1 ends at 20:40, /)
+    expect(late[1].message).toMatch(/^Day 3 ends at 19:20, /)
   })
 
   it('still warns about each late day on a 4-day run whose first and last days also run long', () => {
@@ -263,8 +281,41 @@ describe('late-day WARN (day-ends-past-target)', () => {
     expect(late).toHaveLength(1)
     expect(late[0].subjects).toEqual(['late-evt'])
     expect(late[0].delay_mins).toBe(s.de_total_end! - LATE_WINDOW.day_end_time)
-    expect(late[0].message).toContain(String(s.de_total_end))
+    // The one window is on day index 0, so its clock is the scheduler minute.
+    const clock = `${String(Math.floor(s.de_total_end! / 60)).padStart(2, '0')}:${String(s.de_total_end! % 60).padStart(2, '0')}`
+    expect(late[0].message).toContain(`ends at ${clock},`)
     checkInvariants(late[0], ['late-evt'], new Set())
+  })
+
+  describe('day and clock times (016 Task A)', () => {
+    it('sets day to the late day\'s 0-based index', () => {
+      const [warn] = lateDayWarnings(postScheduleWarnings({ 'X-LATE': finishing('X-LATE', 2, 4080, 3800) }, appAxisConfig(3)))
+
+      expect(warn.day).toBe(2)
+    })
+
+    it('reads clock times on the app axis for a day-index-2 overrun', () => {
+      // Day index 2's target is 4020 (19:00 after 2880 + 1140), and finish 4080 is 20:00.
+      const [warn] = lateDayWarnings(postScheduleWarnings({ 'X-LATE': finishing('X-LATE', 2, 4080, 3800) }, appAxisConfig(3)))
+
+      expect(warn.message).toBe('Day 3 ends at 20:00, 60 min past its target 19:00: X-LATE finish after it')
+    })
+
+    // No dayConfigs: day index 2 starts at 2880 and minute 0 stands for 9:00,
+    // so target 3480 is 19:00 and finish 3500 is 19:20.
+    const fallbackLate = () => {
+      const config = makeConfig({ days_available: 3 })
+      expect(config.DAY_START_MINS).toBe(540)
+      return lateDayWarnings(postScheduleWarnings({ 'E-LATE': finishing('E-LATE', 2, 3500, 3300) }, config))[0]
+    }
+
+    it('reads clock times on the fallback axis, where minute 0 of a day stands for DAY_START_MINS', () => {
+      expect(fallbackLate().message).toBe('Day 3 ends at 19:20, 20 min past its target 19:00: E-LATE finish after it')
+    })
+
+    it('sets day on the fallback axis too', () => {
+      expect(fallbackLate().day).toBe(2)
+    })
   })
 
   // guard: no event ends past the target, so nothing fires – today as well.
@@ -301,10 +352,13 @@ describe('first/last-day WARN', () => {
     return schedule
   }
 
-  function firstLastRules(schedule: Record<string, ScheduleResult>, daysAvailable: number): string[] {
+  function firstLastWarnings(schedule: Record<string, ScheduleResult>, daysAvailable: number): Bottleneck[] {
     return postScheduleWarnings(schedule, makeConfig({ days_available: daysAvailable }))
-      .map((b) => b.rule as string)
-      .filter((rule) => FIRST_LAST_RULES.includes(rule))
+      .filter((b) => FIRST_LAST_RULES.includes(b.rule))
+  }
+
+  function firstLastRules(schedule: Record<string, ScheduleResult>, daysAvailable: number): string[] {
+    return firstLastWarnings(schedule, daysAvailable).map((b) => b.rule)
   }
 
   it('warns when the first day is as long as the only middle day of 3', () => {
@@ -323,9 +377,9 @@ describe('first/last-day WARN', () => {
 
   it('reads the last used day, not the last available one', () => {
     // 4 days available, day 3 empty: days 0–2 are used, so day 2 is the last.
-    expect(firstLastRules(daysOfLength({ 0: 300, 1: 400, 2: 450 }), 4)).toEqual([
-      BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
-    ])
+    expect(
+      firstLastWarnings(daysOfLength({ 0: 300, 1: 400, 2: 450 }), 4).map(({ rule, day }) => ({ rule, day })),
+    ).toEqual([{ rule: BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE, day: 2 }])
   })
 
   it('takes the shortest middle day from the used days only, skipping an empty one', () => {
@@ -336,6 +390,16 @@ describe('first/last-day WARN', () => {
 
   it('stays silent with fewer than 3 used days, however long they run', () => {
     expect(firstLastRules(daysOfLength({ 0: 700, 3: 700 }), 4)).toEqual([])
+  })
+
+  it('sets day to the first used day, not day 0, on the first-day finding', () => {
+    // Day 0 is empty, so days 1–3 are used and day 1 is the first, as long as
+    // the shortest middle day (500).
+    const schedule = daysOfLength({ 1: 500, 2: 500, 3: 400 })
+
+    expect(firstLastWarnings(schedule, 4).map(({ rule, day }) => ({ rule, day }))).toEqual([
+      { rule: BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, day: 1 },
+    ])
   })
 
   // guard: both edge days strictly shorter than the middle – silent today too.
@@ -361,5 +425,43 @@ describe('findDayForTime reads the day\'s hard end', () => {
   // guard: past the hard end belongs to no day, today as well.
   it('places a time at or past the hard end on no day', () => {
     expect(findDayForTime(config, 1320)).toBeNull()
+  })
+})
+
+/**
+ * `clockOnDay(t, d, config)` (016 Task A): an absolute scheduler-axis minute on
+ * day d as a zero-padded 24-hour `HH:MM`, measured from the day's own start. With
+ * `dayConfigs` the app axis applies (t - d × DAY_AXIS_SPACING_MINS). Without
+ * them minute 0 of each day stands for `DAY_START_MINS`, so the clock is
+ * t - dayStart(d) + DAY_START_MINS.
+ */
+describe('clockOnDay', () => {
+  const appAxis = appAxisConfig(3)
+  const fallback = makeConfig({ days_available: 3 })
+
+  it.each([
+    { t: 4080, d: 2, clock: '20:00' },
+    { t: 4020, d: 2, clock: '19:00' },
+    { t: 1440 + 65, d: 1, clock: '01:05' },
+    { t: 540, d: 0, clock: '09:00' },
+    { t: 4080.6, d: 2, clock: '20:01' },
+    { t: 1440 + 1500, d: 1, clock: '01:00' },
+  ])('app axis: minute $t on day $d is $clock', ({ t, d, clock }) => {
+    expect(clockOnDay(t, d, appAxis)).toBe(clock)
+  })
+
+  it.each([
+    { t: 3500, d: 2, clock: '19:20' },
+    { t: 3480, d: 2, clock: '19:00' },
+    { t: 0, d: 0, clock: '09:00' },
+    { t: 1440 + 60, d: 1, clock: '10:00' },
+  ])('fallback axis: minute $t on day $d is $clock', ({ t, d, clock }) => {
+    expect(clockOnDay(t, d, fallback)).toBe(clock)
+  })
+
+  it('fallback axis: a non-default DAY_START_MINS shifts the clock', () => {
+    const cfg = makeConfig({ days_available: 3, DAY_START_MINS: 480 })
+    expect(clockOnDay(0, 0, cfg)).toBe('08:00')
+    expect(clockOnDay(1440 + 60, 1, cfg)).toBe('09:00')
   })
 })

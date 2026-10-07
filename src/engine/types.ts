@@ -426,6 +426,12 @@ export interface Bottleneck {
   rule: string
   /** Sorted, unique ids of every competition the finding names, `[field]` for a global validation rule, `[]` when it names none. */
   subjects: string[]
+  /**
+   * 0-based day index on the producer's own day axis: the store's day for `analysis.ts` (the store passes store days),
+   * the scheduler's `assigned_day` for scheduler findings. The two are the same number (`buildConfig.ts` shifts each
+   * day's minutes by `d × DAY_AXIS_SPACING_MINS` and keeps the index). Unset for findings not scoped to one day.
+   */
+  day?: number
   attempt_id?: number  // Phase C concurrent scheduler tags retry-emitted bottlenecks
 }
 
@@ -594,6 +600,25 @@ export function dayHardEnd(d: number, config: TournamentConfig): number {
     return config.dayConfigs[d].day_hard_end_time
   }
   return dayStart(d, config) + (config.DAY_HARD_END_MINS - config.DAY_START_MINS)
+}
+
+/**
+ * Turns an absolute scheduler-axis minute `t` on day `d` into a zero-padded 24-hour `HH:MM` clock string.
+ * With `dayConfigs` the axis is the app's (`buildConfig.ts`): clock minute = t − d × DAY_AXIS_SPACING_MINS.
+ * Without it (uniform fallback axis, minute 0 of each day standing for DAY_START_MINS):
+ * clock minute = t − dayStart(d) + DAY_START_MINS.
+ */
+export function clockOnDay(t: number, d: number, config: TournamentConfig): string {
+  const clockMins = config.dayConfigs && config.dayConfigs[d]
+    ? t - d * DAY_AXIS_SPACING_MINS
+    : t - dayStart(d, config) + config.DAY_START_MINS
+  return formatClockMins(clockMins)
+}
+
+/** Formats a clock minute (minutes from midnight, wrapped into one day) as zero-padded `HH:MM`. */
+export function formatClockMins(clockMins: number): string {
+  const m = ((Math.round(clockMins) % 1440) + 1440) % 1440
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
 }
 
 /**

@@ -27,10 +27,11 @@ import {
   Category,
   VetAgeGroup,
   dayStart,
+  clockOnDay,
   dayEnd,
   dayHardEnd,
-  findDayForTime,
   tailEstimateMins,
+  DAY_AXIS_SPACING_MINS,
   ValidationMode,
 } from './types.ts'
 import type {
@@ -52,7 +53,6 @@ import {
   findAvailableStripsInWindow,
   allocateInterval,
   releaseEventAllocations,
-  peakConcurrentStrips,
   snapToSlot,
 } from './resources.ts'
 import {
@@ -64,7 +64,8 @@ import {
 } from './pools.ts'
 import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
-import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand } from './refs.ts'
+import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand, refDemandFromSchedule } from './refs.ts'
+import { deriveEventSchedule, placementFromResult } from './derive.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS } from './constants.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
@@ -357,17 +358,17 @@ export function scheduleAllConcurrent(
       subjects: [violation.id, violation.targetId].sort(),
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
+      day: dayMap.get(violation.id),
       message: `${violation.id} and ${violation.targetId} share a day: a hard separation could not be honored within the available days`,
     })
   }
 
-  // Post-schedule ref demand via peakConcurrentStrips: one RefDemandInterval
-  // per (event, phase) allocation window, scaled by refs_per_pool (pools,
-  // flights) or DE_REFS (DE, DE_PRELIMS, DE_ROUND_OF_16).
-  // `remaining`, not `competitions`: an excluded event has no allocations, so
-  // counting it here would report demand and diagnostics for a board it is
-  // absent from.
-  state.ref_demand_by_day = computePostScheduleRefDemand(state, config, remaining)
+  // Post-schedule ref demand from the schedule as the workbench draws it
+  // (METHODOLOGY.md §Ref Demand Derivation, 016 spec §5), so the footer and
+  // this report count the same intervals. Nothing in the scheduler reads it.
+  // `remaining`, not `competitions`: an excluded event has no schedule entry,
+  // so counting it here would report demand for a board it is absent from.
+  state.ref_demand_by_day = drawnRefDemand(state.schedule, config, remaining)
 
   // Standard post-schedule pipeline.
   const diagnostics = postScheduleDiagnostics(remaining, config, state.bottlenecks)
@@ -787,6 +788,7 @@ function regionalWindowFindings(pairs: RegionalWindowPair[], state: GlobalState)
       subjects: [oId, yId].sort(),
       severity: honoured ? BottleneckSeverity.INFO : BottleneckSeverity.WARN,
       delay_mins: 0,
+      day: o.assigned_day,
       message: honoured
         ? `${oId} and ${yId} share day ${o.assigned_day + 1} inside the regional Group 1 window: ${starts}`
         : `${oId} and ${yId} share day ${o.assigned_day + 1} and the regional Group 1 window is not honoured: ${starts}`,
@@ -1555,90 +1557,40 @@ function predecessorReadyTime(node: PhaseNode, events: EventState[]): number | n
 // ──────────────────────────────────────────────
 
 /**
- * Builds ref_demand_by_day from final allocation state.
+ * Referee demand per day from the schedule as the workbench draws it: each
+ * scheduled event becomes the placement `runScheduleAll` would record
+ * (`placementFromResult`), is laid out end to end by `deriveEventSchedule`,
+ * and the drawn results are counted by `refDemandFromSchedule`, exactly as the
+ * store's footer counts them. A phase the scheduler delayed for strips is
+ * therefore counted at its drawn time, not its allocated one.
  *
- * One RefDemandInterval per allocation interval, where `count` is sourced from
- * `peakConcurrentStrips` for that interval's window, scaled by `refs_per_pool`
- * (POOLS/FLIGHT_A/FLIGHT_B) or `DE_REFS` (DE, DE_PRELIMS, DE_ROUND_OF_16 —
- * staged and single-stage DE alike). Plan line 102: peakConcurrentStrips drives
- * the post-schedule ref output and replaces the older sweep-line on
- * RefDemandInterval[].
+ * `deriveEventSchedule` works on the placement's own day's clock axis, so its
+ * intervals come back shifted by the day's d × DAY_AXIS_SPACING_MINS: every
+ * engine time, `ref_requirements_by_day.peak_time` included, stays on the
+ * scheduler axis. This is the one place that shift is added back.
  */
-function computePostScheduleRefDemand(
-  state: GlobalState,
+function drawnRefDemand(
+  schedule: Record<string, ScheduleResult>,
   config: TournamentConfig,
   competitions: Competition[],
 ): Record<number, RefDemandByDay> {
-  const result: Record<number, RefDemandByDay> = {}
-
-  // Allocations keyed by (event_id, phase, start, end). Each unique window
-  // represents one phase block; we use peakConcurrentStrips to measure the
-  // actual concurrent strip occupancy in that window.
-  const seen = new Set<string>()
-  type Window = { event_id: string; phase: Phase; start: number; end: number }
-  const windows: Window[] = []
-  for (let i = 0; i < state.strip_allocations.length; i++) {
-    const list = state.strip_allocations[i]
-    for (const a of list) {
-      const key = `${a.event_id}|${a.phase}|${a.start_time}|${a.end_time}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      windows.push({ event_id: a.event_id, phase: a.phase, start: a.start_time, end: a.end_time })
-    }
+  const drawn: ScheduleResult[] = []
+  for (const competition of competitions) {
+    const result = schedule[competition.id]
+    if (result === undefined) continue
+    const placement = placementFromResult(result)
+    if (placement === null) continue
+    drawn.push(deriveEventSchedule(placement, competition, config).result)
   }
 
-  const compById = new Map(competitions.map(c => [c.id, c]))
-  for (const w of windows) {
-    const comp = compById.get(w.event_id)
-    if (!comp) continue
-    const day = findDayForTime(config, w.start)
-    if (day === null) continue
-    if (!result[day]) result[day] = { intervals: [] }
-
-    // Use peakConcurrentStrips to count how many strips this event occupies
-    // across the window, then scale to ref demand. We restrict the peak read
-    // by filtering allocations down to this event's contribution: we re-walk
-    // the allocations directly because peakConcurrentStrips is not
-    // event-scoped. Use its return as a sanity bound but compute the
-    // event-specific concurrent count from the per-strip lists.
-    const peak = peakConcurrentStrips(state, config, { start: w.start, end: w.end })
-    let stripsForEvent = 0
-    for (const stripList of state.strip_allocations) {
-      for (const a of stripList) {
-        if (a.event_id !== w.event_id) continue
-        if (a.phase !== w.phase) continue
-        if (a.start_time !== w.start || a.end_time !== w.end) continue
-        stripsForEvent++
-      }
+  const byDay = refDemandFromSchedule(drawn, config, competitions)
+  for (const [key, { intervals }] of Object.entries(byDay)) {
+    const shift = Number(key) * DAY_AXIS_SPACING_MINS
+    byDay[Number(key)] = {
+      intervals: intervals.map((iv) => ({ ...iv, startTime: iv.startTime + shift, endTime: iv.endTime + shift })),
     }
-    // Cap by total peak so a degenerate scan can never claim more strips than
-    // the day actually saw concurrently.
-    if (stripsForEvent > peak.total) stripsForEvent = peak.total
-
-    let count: number
-    if (w.phase === Phase.POOLS || w.phase === Phase.FLIGHT_A || w.phase === Phase.FLIGHT_B) {
-      const refRes = resolveRefsPerPool(
-        comp.ref_policy,
-        computePoolStructure(comp.fencer_count, comp.use_single_pool_override).n_pools,
-      )
-      count = w.phase === Phase.POOLS
-        ? refRes.refs_needed
-        : Math.max(1, Math.round(refRes.refs_needed / 2))
-    } else if (w.phase === Phase.DE || w.phase === Phase.DE_PRELIMS || w.phase === Phase.DE_ROUND_OF_16) {
-      count = stripsForEvent * config.DE_REFS
-    } else {
-      count = stripsForEvent
-    }
-
-    result[day].intervals.push({
-      startTime: w.start,
-      endTime: w.end,
-      count,
-      weapon: comp.weapon,
-    })
   }
-
-  return result
+  return byDay
 }
 
 // ──────────────────────────────────────────────
@@ -1666,8 +1618,12 @@ export function postScheduleWarnings(
  * last end (`de_total_end`, or `pool_end` with no DE) minus its day start.
  * Day assignment plans for this with the reduced first/last day capacity
  * (`dayColoring.ts`, §First and Last Day Capacity).
+ *
+ * Exported for the store (016 Task C), which runs it over the placements as
+ * drawn. It reads days only through `dayStart`, so the results and the config's
+ * `dayConfigs` must share one axis.
  */
-function firstLastDayWarnings(
+export function firstLastDayWarnings(
   schedule: Record<string, ScheduleResult>,
   config: TournamentConfig,
 ): Bottleneck[] {
@@ -1704,6 +1660,7 @@ function firstLastDayWarnings(
       subjects: [],
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
+      day,
       message: `${label} day (Day ${day + 1}, ${length} min) is not shorter than the shortest middle day (${shortestMiddle} min)`,
     })
   }
@@ -1751,7 +1708,8 @@ function lateDayWarnings(
       subjects,
       severity: BottleneckSeverity.WARN,
       delay_mins: finish - target,
-      message: `Day ${day + 1} ends at ${finish}, ${finish - target} min past its target ${target}: ${subjects.join(', ')} finish after it`,
+      day,
+      message: `Day ${day + 1} ends at ${clockOnDay(finish, day, config)}, ${finish - target} min past its target ${clockOnDay(target, day, config)}: ${subjects.join(', ')} finish after it`,
     })
   }
   return warnings
@@ -1867,6 +1825,7 @@ export function postScheduleDayBreakdown(
       subjects: [],
       severity: stripDeficit > 0 ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
       delay_mins: 0,
+      day,
       message: `Day ${day + 1} strips: ${consumed.strip_hours_consumed.toFixed(1)} strip-hours consumed of ${totalCapacity.toFixed(1)} available${stripDeficit > 0 ? ` (${stripDeficit.toFixed(1)} over capacity)` : ''}.`,
     })
 
@@ -1890,6 +1849,7 @@ export function postScheduleDayBreakdown(
         subjects: [],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
+        day,
         message: `Day ${day + 1} refs: peak demand ${peakRefDemand}.`,
       })
     }
@@ -1910,6 +1870,7 @@ export function postScheduleDayBreakdown(
         subjects: [],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
+        day,
         message: `Day ${day + 1} video-stage DE ref demand: ${videoStageSum} refs across ${stagedCount} staged events`,
       })
     }
