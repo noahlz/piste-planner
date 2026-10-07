@@ -21,10 +21,12 @@
  *
  * ## Fixed order (P5, owner-approved)
  *
- * Derived phases are seated by (day, phase start, id by code point, phase
- * order) on every recompute, not in the order they were edited. So kept events
- * never move when a derived one is added, but a later hand move with an
- * earlier start may take strips an earlier hand move held and unseat it.
+ * Derived events are seated whole, by (day, event start, id by code point,
+ * phase order), on every recompute, not in the order they were edited. The
+ * event start is its earliest phase start, so one event's phases are never
+ * interleaved with another's. Kept events never move when a derived one is
+ * added, but a later hand move with an earlier start may take strips an
+ * earlier hand move held and unseat it.
  *
  * ## Days never contend
  *
@@ -87,6 +89,8 @@ interface Candidate {
   day: number
   phase: Phase
   rank: number
+  /** The event's earliest phase start: the seating key P5 orders derived events by. */
+  eventStartMinutes: number
   startMinutes: number
   endMinutes: number
   stripCount: number
@@ -94,9 +98,18 @@ interface Candidate {
   kept: readonly number[] | null
 }
 
-function compareCandidates(a: Candidate, b: Candidate): number {
+/** Drawing order: (day, phase start, id, phase order). */
+function compareForOutput(a: Candidate, b: Candidate): number {
   return a.day - b.day
     || a.startMinutes - b.startMinutes
+    || compareIds(a.competitionId, b.competitionId)
+    || a.rank - b.rank
+}
+
+/** Seating order (P5): (day, event start, id, phase order), so each event is seated whole. */
+function compareForSeating(a: Candidate, b: Candidate): number {
+  return a.day - b.day
+    || a.eventStartMinutes - b.eventStartMinutes
     || compareIds(a.competitionId, b.competitionId)
     || a.rank - b.rank
 }
@@ -137,9 +150,11 @@ export function assignStrips(
   for (const [competitionId, input] of Object.entries(events)) {
     if (input.day_out_of_range) continue
     const day = input.result.assigned_day
-    phaseSpans(input.result).forEach((span, rank) => {
+    const spans = phaseSpans(input.result)
+    const eventStartMinutes = Math.min(...spans.map(span => span.start))
+    spans.forEach((span, rank) => {
       const base = {
-        competitionId, day, phase: span.phase, rank,
+        competitionId, day, phase: span.phase, rank, eventStartMinutes,
         startMinutes: span.start, endMinutes: span.end, stripCount: span.stripCount,
       }
       const kept = input.keptStrips === null
@@ -148,7 +163,7 @@ export function assignStrips(
       candidates.push({ ...base, kept })
     })
   }
-  candidates.sort(compareCandidates)
+  candidates.sort(compareForOutput)
 
   const stateByDay = new Map<number, GlobalState>()
   const stateFor = (day: number): GlobalState => {
@@ -172,7 +187,7 @@ export function assignStrips(
     }
   }
 
-  for (const candidate of candidates) {
+  for (const candidate of [...candidates].sort(compareForSeating)) {
     if (candidate.kept !== null) continue
     // A phase with nothing to claim holds nothing and is not unseated, by the shared rule.
     if (candidate.stripCount <= 0) {

@@ -1,7 +1,8 @@
 /**
  * The strip assigner (017 T3, spec §3): kept phases stay on the scheduler's
  * own indices, and derived (hand-moved or stale) phases are offered to the
- * engine's own strip search around them, in (day, start, id, phase) order.
+ * engine's own strip search around them, each event whole, in (day, event
+ * start, id, phase) order (P5).
  *
  * Real boards come from the store's own run (`runScheduleAll` and its
  * `lastRun`), so every kept index checked here is the engine's, read back
@@ -188,6 +189,7 @@ describe('assignStrips: kept phases', () => {
     const blocks = assignStrips(keptInputs(state.lastRun as KeptRun), config, competitions)
     const drawnUnseated = blocks.filter(b => b.unseated).map(b => phaseKey(b.competitionId, b.phase))
 
+    // 8 is the B1 pin-all unseated count the 017 plan records for T1.
     expect(engine.size).toBe(8)
     expect(new Set(drawnUnseated)).toEqual(engine)
     for (const block of blocks.filter(b => b.unseated)) {
@@ -196,9 +198,26 @@ describe('assignStrips: kept phases', () => {
     }
   })
 
+  it('a kept phase the run left no strips draws unseated and claims nothing', () => {
+    const events = {
+      K: { ...keptPool(poolResult('K', 0, 600, 700, 2), []), keptStrips: {} },
+      D: derived(poolResult('D', 0, 600, 700, 2)),
+    }
+    const blocks = assignStrips(events, smallConfig(2, 0), comps('K', 'D'))
+    expect(only(blocks, 'K')).toMatchObject({ unseated: true, strips: [], runs: [] })
+    expect(only(blocks, 'D')).toMatchObject({ unseated: false, strips: [0, 1] })
+  })
+
   it.each([4, -1, 1.5])('a kept index %s outside the day\'s 4 strips throws the named error', strip => {
     const events = { K: keptPool(poolResult('K', 0, 600, 700, 2), [0, strip]) }
-    expect(() => assignStrips(events, smallConfig(4, 0), comps('K'))).toThrow(KeptStripOutOfRangeError)
+    let thrown: unknown
+    try {
+      assignStrips(events, smallConfig(4, 0), comps('K'))
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(KeptStripOutOfRangeError)
+    expect(thrown).toMatchObject({ competitionId: 'K', phase: Phase.POOLS, strip })
   })
 })
 
@@ -220,6 +239,22 @@ describe('assignStrips: derived phases take the engine\'s candidate order', () =
     }
     const block = only(assignStrips(events, smallConfig(6, 2), comps('K', 'D')), 'D')
     expect(block.strips).toEqual([0, 1, 3, 4, 5])
+    expect(block.runs).toEqual([{ first: 0, count: 2 }, { first: 3, count: 3 }])
+    expect(block.firstStrip).toBe(0)
+  })
+
+  it.each([
+    ['before', 600, 700],
+    ['overlapping', 800, 900],
+  ])('under REQUIRED only the round of 16 is video-only: pools %s it take non-video strips', (_name, poolStart, poolEnd) => {
+    const result = {
+      ...poolResult('R', 0, poolStart, poolEnd, 2),
+      de_round_of_16_start: 800, de_round_of_16_end: 900, de_round_of_16_strip_count: 2,
+    }
+    const competition = makeCompetition({ id: 'R', de_video_policy: VideoPolicy.REQUIRED })
+    const blocks = assignStrips({ R: derived(result) }, smallConfig(6, 2), [competition])
+    expect(blocks.find(b => b.phase === Phase.POOLS)?.strips).toEqual([2, 3])
+    expect(blocks.find(b => b.phase === Phase.DE_ROUND_OF_16)?.strips).toEqual([0, 1])
   })
 
   it.each([
@@ -238,10 +273,14 @@ describe('assignStrips: derived phases take the engine\'s candidate order', () =
 })
 
 describe('assignStrips: collateral (spec §3)', () => {
+  /** Boards whose sweep seats none of the moved phases (B5 seated 0 of 48 when T3 was reviewed). */
+  const BOARDS_SEATING_NO_MOVE: ReadonlySet<string> = new Set(['B5'])
+
   it.each(SCENARIO_IDS)('%s: moving any event to another day moves no kept strip and overlaps nothing', id => {
     const board = runBoard(scenario(id))
     const days = board.config.days_available
     const failures: string[] = []
+    let movedSeated = 0
     for (const moved of Object.keys(board.kept.events).sort(compareIds)) {
       const others = keptInputs(board.kept, moved)
       const alone = assignStrips(others, board.config, board.competitions)
@@ -254,9 +293,13 @@ describe('assignStrips: collateral (spec §3)', () => {
         if (JSON.stringify(keptAfter) !== JSON.stringify(alone)) failures.push(`${moved}→${day}: kept moved`)
         const clash = overlaps(blocks)
         if (clash.length > 0) failures.push(`${moved}→${day}: ${clash[0]}`)
+        movedSeated += blocksOf(blocks, moved).filter(b => !b.unseated).length
       }
     }
     expect(failures).toEqual([])
+    // The overlap half is exercised only where moved phases get seats. B5's other days are full,
+    // so it seats none of its moved phases and its overlap check holds trivially.
+    expect(movedSeated > 0, `${movedSeated} moved phases seated`).toBe(!BOARDS_SEATING_NO_MOVE.has(id))
   })
 
   it('an unseated phase claims nothing, so a later phase still takes the strips it could not', () => {
@@ -296,6 +339,29 @@ describe('assignStrips: two hand moves on one day (P5, fixed order)', () => {
     const blocks = assignStrips(events, smallConfig(2, 0), two)
     expect(only(blocks, 'Z-early')).toMatchObject({ unseated: false, strips: [0, 1] })
     expect(only(blocks, 'A-late').unseated).toBe(true)
+  })
+
+  it.each([
+    ['A first', ['A', 'B']],
+    ['B first', ['B', 'A']],
+  ])('the event with the earlier start is seated whole before a later event, even when their phases interleave (%s)', (_name, order) => {
+    // A: pools 540–600 then DE 700–800, 2 strips each. B: pools 600–750 on all 4.
+    // By phase start, B's pools would take all 4 strips before A's DE and unseat it.
+    const a = {
+      ...poolResult('A', 0, 540, 600, 2),
+      de_start: 700, de_end: 800, de_strip_count: 2,
+    }
+    const inputs: Record<string, DrawnEventInput> = {
+      A: derived(a),
+      B: derived(poolResult('B', 0, 600, 750, 4)),
+    }
+    const events = Object.fromEntries(order.map(id => [id, inputs[id]]))
+    const blocks = assignStrips(events, smallConfig(4, 0), comps('A', 'B'))
+    expect(blocksOf(blocks, 'A').map(b => [b.phase, b.strips])).toEqual([
+      [Phase.POOLS, [0, 1]],
+      [Phase.DE, [0, 1]],
+    ])
+    expect(only(blocks, 'B')).toMatchObject({ unseated: true, strips: [] })
   })
 
   it('at one start the lower id by code point is seated first', () => {
@@ -381,8 +447,14 @@ describe('assignStrips: flighted events', () => {
     const flightB = mine.find(b => b.phase === Phase.FLIGHT_B)
     expect(flightA, 'FLIGHT_A block').toBeDefined()
     expect(flightB, 'FLIGHT_B block').toBeDefined()
+    for (const flight of [flightA!, flightB!]) {
+      expect(flight.unseated, `${flight.phase} seated`).toBe(false)
+      expect(flight.strips).toHaveLength(flight.stripCount)
+    }
+    // Moved to its own day and start, the derived FLIGHT_B starts where the scheduler started it.
+    const keptFlightB = board.kept.events[id].phases.find(p => p.phase === Phase.FLIGHT_B)
+    expect(flightB!.startMinutes).toBe(keptFlightB?.startMinutes)
     // Derive waits out the longer of the admin gap and the flight buffer, so the buffer is a floor.
-    expect(flightB!.startMinutes).toBe(input.result.flight_b_start)
     expect(flightB!.startMinutes).toBeGreaterThanOrEqual(
       snapToSlot(flightA!.endMinutes + board.config.FLIGHT_BUFFER_MINS))
     expect(mine.map(b => b.phase)).not.toContain(Phase.POOLS)
