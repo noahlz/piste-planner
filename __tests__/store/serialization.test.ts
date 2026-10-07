@@ -924,6 +924,17 @@ describe('encodeToUrl', () => {
   })
 })
 
+describe('the kept run is not part of the payload yet (017 T2)', () => {
+  it('encodes and serializes identically with a kept run and without one', () => {
+    const state = populatedState()
+    const withRun = { ...state, lastRun: { configKey: 'k', pins: [], events: {} } }
+    const withoutRun = { ...state, lastRun: null }
+    expect(encodeToUrl(withRun)).toBe(encodeToUrl(withoutRun))
+    expect(serializeState(withRun)).toBe(serializeState(withoutRun))
+    expect(serializeState(withRun)).not.toContain('lastRun')
+  })
+})
+
 describe('decodeFromUrl', () => {
   it('valid hash hydrates store', () => {
     const state = populatedState()

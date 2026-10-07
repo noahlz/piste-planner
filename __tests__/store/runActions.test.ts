@@ -217,3 +217,65 @@ describe('runScheduleAll — pinned placements', () => {
     )
   })
 })
+
+describe('runScheduleAll keeps the run', () => {
+  it('keeps one record per placed event, built with the pins the engine was given', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const state = useStore.getState()
+    const pinId = Object.keys(state.placements)[0]
+    state.setPinned(pinId, true)
+
+    vi.mocked(scheduleAll).mockClear()
+    runScheduleAll()
+
+    const kept = useStore.getState().lastRun
+    expect(kept).not.toBeNull()
+    expect(kept?.pins).toEqual(thirdArgOfCall(0))
+    expect(kept?.pins.map((p) => p.competition_id)).toEqual([pinId])
+    expect(Object.keys(kept?.events ?? {}).sort()).toEqual(Object.keys(useStore.getState().placements).sort())
+  })
+
+  it('writes placements and the kept run in one store update', () => {
+    applyPreset('B1')
+    const seen: { placementsChanged: boolean; runChanged: boolean }[] = []
+    const unsubscribe = useStore.subscribe((now, before) => {
+      const placementsChanged = now.placements !== before.placements
+      const runChanged = now.lastRun !== before.lastRun
+      if (placementsChanged || runChanged) seen.push({ placementsChanged, runChanged })
+    })
+    try {
+      runScheduleAll()
+    } finally {
+      unsubscribe()
+    }
+    expect(seen).toEqual([{ placementsChanged: true, runChanged: true }])
+  })
+
+  it('leaves the counts and the placements as they were before the run was kept', () => {
+    applyPreset('B1')
+    const counts = runScheduleAll()
+    expect(counts).toEqual({ placed: 24, unplaced: 0 })
+    expect(Object.keys(useStore.getState().placements)).toHaveLength(24)
+  })
+
+  it('clears the kept run when scheduleAll throws, and leaves the placements alone', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const placements = useStore.getState().placements
+    expect(useStore.getState().lastRun, 'premise: the first run was kept').not.toBeNull()
+
+    vi.mocked(scheduleAll).mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    runScheduleAll()
+
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(useStore.getState().placements).toBe(placements)
+  })
+
+  it('is not set by the preset load before any run', () => {
+    applyPreset('B1')
+    expect(useStore.getState().lastRun).toBeNull()
+  })
+})

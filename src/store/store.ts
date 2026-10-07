@@ -11,6 +11,7 @@ import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/
 import { stripSearchRange, scanStripCounts } from '../engine/stripSearch.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import type { ScenarioId } from '../data/tournaments.ts'
+import type { KeptRun } from './keptRun.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
@@ -116,6 +117,15 @@ export interface UiSlice {
   selectedCompetitionId: string | null
 
   /**
+   * The last `runScheduleAll`, kept whole so the canvas can draw the
+   * scheduler's own times and strips (017 spec §1). `null` before any run, after
+   * a run that threw, and after a load with no valid run. Not serialized.
+   * Written only by `runScheduleAll` (through `setPlacementsFromAuto`) and a
+   * state load.
+   */
+  lastRun: KeptRun | null
+
+  /**
    * Incremented by a Findings jump so the canvas scrolls and flashes once per
    * press — a nonce rather than a boolean, because jumping twice to the event
    * already selected must still be two jumps. Not serialized.
@@ -124,6 +134,8 @@ export interface UiSlice {
 
   setLoadedPresetId: (id: PresetId | null) => void
   setLastAutoRun: (run: LastAutoRun | null) => void
+  /** Replaces the kept run alone, for a state load that replays one (017 spec §5). */
+  setLastRun: (run: KeptRun | null) => void
   selectCompetition: (id: string | null) => void
   /** Selects `id` and asks the canvas to scroll to it, in one update. */
   jumpToCompetition: (id: string) => void
@@ -138,10 +150,16 @@ export interface PlacementsSlice {
    * ids in `keep`: those are carried over verbatim from the current map — day,
    * start, strip count, strips, source and pinned all untouched — and override
    * any same-id entry in `placements` (013 FR-059). An id in neither is dropped.
+   *
+   * `lastRun` is written in the same update (017 spec §1), so no subscriber
+   * sees the new placements against the old run. A caller with no run to keep
+   * (`null`, the default) clears it: placements set from outside a run never
+   * match a kept one.
    */
   setPlacementsFromAuto: (
     placements: Record<string, Placement>,
     keep?: ReadonlySet<string>,
+    lastRun?: KeptRun | null,
   ) => void
   /** Merges a partial into an existing entry, marking it manual and pinned. */
   updatePlacement: (id: string, partial: Partial<Placement>) => void
@@ -366,12 +384,15 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
     loadedPresetId: null,
     lastAutoRun: null,
+    lastRun: null,
     selectedCompetitionId: null,
     jumpNonce: 0,
 
     setLoadedPresetId: (id) => set({ loadedPresetId: id }),
 
     setLastAutoRun: (run) => set({ lastAutoRun: run }),
+
+    setLastRun: (run) => set({ lastRun: run }),
 
     selectCompetition: (id) => set({ selectedCompetitionId: id }),
 
@@ -386,7 +407,7 @@ function createPlacementsSlice(set: SetState, _get: GetState): PlacementsSlice {
   return {
     placements: {},
 
-    setPlacementsFromAuto: (placements, keep = EMPTY_KEEP) => {
+    setPlacementsFromAuto: (placements, keep = EMPTY_KEEP, lastRun = null) => {
       set((state) => {
         const normalised: Record<string, Placement> = {}
         for (const [id, placement] of Object.entries(placements)) {
@@ -401,7 +422,7 @@ function createPlacementsSlice(set: SetState, _get: GetState): PlacementsSlice {
         }
         // The placements map is the only thing written — the baseline this
         // action used to capture went with the retired scorecard (T011).
-        return { placements: normalised }
+        return { placements: normalised, lastRun }
       })
     },
 
