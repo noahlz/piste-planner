@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveEventSchedule, placementFromResult as enginePlacementFromResult } from '../../src/engine/derive.ts'
+import { deriveEventSchedule, placementFromResult } from '../../src/engine/derive.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import {
   BottleneckCause, DeMode, CutMode, EventType, Gender, Weapon, PlacementSource, VideoPolicy, tailEstimateMins,
@@ -38,9 +38,9 @@ function isolatedConfig(overrides: Partial<TournamentConfig> = {}): TournamentCo
  * result, so a null pool_start here means the oracle itself is corrupted —
  * that must fail loudly, not silently default start_time to 0.
  */
-function placementFromResult(r: ScheduleResult): Placement {
+function oraclePlacement(r: ScheduleResult): Placement {
   if (r.pool_start === null) {
-    throw new Error(`placementFromResult: oracle for ${r.competition_id} has a null pool_start`)
+    throw new Error(`oraclePlacement: oracle for ${r.competition_id} has a null pool_start`)
   }
   return {
     day: r.assigned_day,
@@ -60,7 +60,7 @@ function scheduleIsolated(
   const { schedule } = scheduleAll([competition], config)
   const oracle = schedule[competition.id]
   if (!oracle) throw new Error(`scheduleIsolated: ${competition.id} was not scheduled`)
-  return { oracle, placement: placementFromResult(oracle) }
+  return { oracle, placement: oraclePlacement(oracle) }
 }
 
 // Fields derive.ts must reproduce exactly from (placement, competition, config).
@@ -450,7 +450,7 @@ describe('deriveEventSchedule — oracle: reproduces scheduleAll geometry', () =
     expect(bottlenecks.filter((b) => b.cause === BottleneckCause.STRIP_CONTENTION)).toEqual([])
     expect(oracle.de_strip_count, 'the target DE stays strip-capped').toBeLessThan(oracle.bracket_size / 2)
 
-    const placement = placementFromResult(oracle)
+    const placement = oraclePlacement(oracle)
     const derived = deriveEventSchedule(placement, target, config)
 
     expectGeometryMatches(derived.result, oracle)
@@ -463,9 +463,7 @@ describe('deriveEventSchedule — oracle: reproduces scheduleAll geometry', () =
 // ──────────────────────────────────────────────
 
 // `runScheduleAll`'s result → placement conversion, shared with the scheduler
-// so both count referees from the same drawn schedule. Not this file's local
-// `placementFromResult` oracle helper above, which keeps the scheduler axis
-// and throws on a null pool_start.
+// so both count referees from the same drawn schedule.
 describe('placementFromResult', () => {
   it('places the event on its assigned day at its pool start on that day\'s clock axis', () => {
     const result: ScheduleResult = {
@@ -474,7 +472,7 @@ describe('placementFromResult', () => {
       pool_end: 2 * DAY_AXIS_SPACING_MINS + 660,
       pool_strip_count: 7,
     }
-    expect(enginePlacementFromResult(result)).toEqual({
+    expect(placementFromResult(result)).toEqual({
       day: 2,
       start_time: 540,
       strip_count: 7,
@@ -485,6 +483,6 @@ describe('placementFromResult', () => {
   })
 
   it('returns null for an event the scheduler left without a pool start', () => {
-    expect(enginePlacementFromResult(makeScheduleResult('ev', 1))).toBeNull()
+    expect(placementFromResult(makeScheduleResult('ev', 1))).toBeNull()
   })
 })

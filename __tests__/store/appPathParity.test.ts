@@ -6,7 +6,7 @@ import type { ScenarioId } from '../helpers/scenarios.ts'
 import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
-import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { buildTournamentConfig, buildPinnedPlacements } from '../../src/store/buildConfig.ts'
 import { selectAllFindings, selectDerivedRefRequirements } from '../../src/store/derived.ts'
 import { BottleneckRule, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
 
@@ -448,19 +448,44 @@ describe('a hard pair the scheduler breaks reaches the app\'s findings (016 revi
  * is shifted onto the scheduler axis before comparing. A day with no demand
  * reads peak_time 0 on both sides and is compared unshifted.
  *
- * Planning measured the two disagreeing on 13 days of B1, B2, B4, B6, B7 and
- * B8 (spec §'What planning measured'): the scheduler counted phases at the
+ * Before Task E this comparison is red on 14 days: the 13 days of B1, B2, B4,
+ * B6, B7 and B8 where the totals differ (spec §'What planning measured', whose
+ * table counts totals only), plus B8 day 1, where the total held at 146 and
+ * only peak_saber_refs differed (56 vs 64). The scheduler counted phases at the
  * times it allocated them, the store at the times it draws them.
  */
 describe('the footer\'s referee peak is the scheduler\'s (016 Task E)', () => {
+  /** The footer's per-day figures, with each non-empty day's peak_time moved onto the scheduler axis. */
+  const footerOnSchedulerAxis = () => selectDerivedRefRequirements(useStore.getState()).map((row) => ({
+    ...row,
+    peak_time: row.peak_total_refs > 0 ? row.peak_time + row.day * DAY_AXIS_SPACING_MINS : row.peak_time,
+  }))
+
   it.each(SCENARIO_IDS)('%s: every day\'s referee requirements match the scheduler\'s', (id) => {
     const engine = runAppPath(id).refRequirementsByDay
-    const store = selectDerivedRefRequirements(useStore.getState())
+    expect(footerOnSchedulerAxis()).toEqual(engine)
+  })
 
-    const onSchedulerAxis = store.map((row) => ({
-      ...row,
-      peak_time: row.peak_total_refs > 0 ? row.peak_time + row.day * DAY_AXIS_SPACING_MINS : row.peak_time,
-    }))
-    expect(onSchedulerAxis).toEqual(engine)
+  // The scheduler counts a pinned event from its own result for it, the
+  // footer from the organizer's pin. The two agree only while the scheduler
+  // honors the pin's day, start and strip count, which this case holds it to.
+  it.each(['B1', 'B2', 'B6', 'B8'] as const)('%s: the two still match with four hand-moved pins', (id) => {
+    runAppPath(id)
+    const moved = Object.keys(useStore.getState().placements).slice(0, 4)
+    expect(moved, 'premise: the run placed at least four events').toHaveLength(4)
+    moved.forEach((eventId, i) => {
+      useStore.getState().updatePlacement(eventId, { day: i % 2, start_time: 600 + 45 * i, strip_count: 3 + i })
+    })
+    const pins = Object.fromEntries(moved.map((eventId) => [eventId, useStore.getState().placements[eventId]]))
+
+    runScheduleAll()
+    const after = useStore.getState().placements
+    expect(Object.fromEntries(moved.map((eventId) => [eventId, after[eventId]])), 'the run kept every pin').toEqual(pins)
+
+    // The same inputs runScheduleAll just passed the engine, pins included.
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    const engine = scheduleAll(competitions, config, buildPinnedPlacements(state)).ref_requirements_by_day ?? []
+    expect(footerOnSchedulerAxis()).toEqual(engine)
   })
 })

@@ -163,6 +163,8 @@ describe('runAppPath', () => {
     // scheduler's allocations carry, so a delayed phase is counted at its earlier
     // drawn time and overlaps more of the day. These are the footer's numbers
     // (spec §'What planning measured', B1 218 / 140).
+    // computePostScheduleRefDemand, named in the paragraphs above, is gone –
+    // drawnRefDemand in concurrentScheduler.ts replaced it.
     //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.
