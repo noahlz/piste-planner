@@ -11,8 +11,9 @@ import { FindingSeverity, selectFindings, type Finding } from '../../../store/de
  * `--finding-badge` pair here: both are underlying WARN rows (contract §1's
  * `FindingSeverity` doc comment — Unplaced is "a Warning with a flag"), the
  * mockup draws every finding card in the one warm style regardless of
- * severity, and Unplaced's own "needs N strips" wording is what tells the two
- * apart, not a second badge colour.
+ * severity, and Unplaced's own wording ("No room here…", "Pinned here, but no
+ * strips are free…", 017 R4/P3) is what tells the two apart, not a second
+ * badge colour.
  */
 const BADGE_CLASSES: Record<FindingSeverity, string> = {
   [FindingSeverity.BLOCKING]: 'bg-conflict-chip text-finding-link',
