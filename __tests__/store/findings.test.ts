@@ -16,7 +16,7 @@ import {
 import * as derivedModule from '../../src/store/derived.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
-import { UNPLACED_WORDING, moveDay, runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
+import { UNPLACED_WORDING, moveDay, pinAll, runAndMoveHeadline, runAndPinAll, runPreset } from '../helpers/drawnFixtures.ts'
 import { competitionLabel } from '../../src/lib/competitionLabels.ts'
 import { formatClock } from '../../src/lib/time.ts'
 
@@ -382,12 +382,16 @@ describe('selectFindings â€” Unplaced rows read the drawn model (017 T5a, spec Â
         moveDay(id, day)
         const model = selectDrawnSchedule(useStore.getState())
         const move = `${id} â†’ day ${day + 1}`
+        expect(model.runState, `${move}: premise: a placement edit keeps the board fresh`).toBe('fresh')
 
         const others = model.blocks.filter((b) => b.competitionId !== id)
         expect(geometry(others), `${move}: kept events hold their times and strips`)
           .toEqual(before.filter((line) => !line.startsWith(`${id}|`)))
 
-        const unseated = model.unplacedIds.has(id)
+        // The oracle reads the mover's drawn strips, not `unplacedIds`, which the
+        // rows are built from. A zero-strip phase is never a block, so an empty
+        // strip set is an unseated phase.
+        const unseated = model.blocks.some((b) => b.competitionId === id && b.strips.length === 0)
         if (unseated) unseatedMoves++
         expect(
           unplacedRows().map((r) => [r.id, r.message]),
@@ -399,9 +403,7 @@ describe('selectFindings â€” Unplaced rows read the drawn model (017 T5a, spec Â
   })
 
   it.each(SCENARIO_IDS)('%s: a pin-all re-run gives one pin-wording row per event with an unseated phase', (scenario) => {
-    runPreset(scenario)
-    for (const id of Object.keys(useStore.getState().placements)) useStore.getState().setPinned(id, true)
-    runScheduleAll()
+    runAndPinAll(scenario)
     const model = selectDrawnSchedule(useStore.getState())
     const unseated = [...model.unplacedIds].sort()
     expect(unseated.length, 'premise: the re-run leaves pinned phases unseated').toBeGreaterThan(0)
@@ -418,9 +420,7 @@ describe('selectFindings â€” Unplaced rows read the drawn model (017 T5a, spec Â
    * stands where the per-event rows were.
    */
   it('shows no unseated row after a settings edit, keeps the out-of-range row and adds the stale row', () => {
-    runPreset('B4')
-    for (const id of Object.keys(useStore.getState().placements)) useStore.getState().setPinned(id, true)
-    runScheduleAll()
+    runAndPinAll('B4')
     expect(unplacedRows().length, 'premise: the fresh board has unseated rows').toBeGreaterThan(0)
     const stranded = Object.keys(useStore.getState().placements).sort()[0]
     useStore.getState().updatePlacement(stranded, { day: 9 })
@@ -433,7 +433,9 @@ describe('selectFindings â€” Unplaced rows read the drawn model (017 T5a, spec Â
     expect(model.runState, 'premise: the settings edit makes the board stale').toBe('stale')
     expect(model.blocks.some((b) => b.unseated), 'premise: the stale board has unseated phases').toBe(true)
 
-    expect(unplacedRows().map((r) => r.id).sort()).toEqual(['stale:run', `unplaced:${stranded}:day`])
+    // Source order, unsorted: the stale row stands where the per-event rows
+    // were, ahead of the out-of-range rows (P4 (b)).
+    expect(unplacedRows().map((r) => r.id)).toEqual(['stale:run', `unplaced:${stranded}:day`])
     expect(unplacedRows().find((r) => r.id === 'stale:run')).toEqual({
       id: 'stale:run',
       severity: 'Unplaced',
@@ -455,6 +457,68 @@ describe('selectFindings â€” Unplaced rows read the drawn model (017 T5a, spec Â
     expect({ placed, unplaced }).toEqual({ placed: inRange.length, unplaced: selected.length - inRange.length })
   })
 
+  /**
+   * The usual stale board: a run, then an input edit after which every phase
+   * still finds strips. B5 with 20 more strips is one (measured: B1-B8 under a
+   * DE-mode override, a pool-duration change or one more video strip all leave
+   * a phase unseated once the whole board is derived).
+   */
+  it('shows the stale row on a stale board where every phase is seated', () => {
+    runPreset('B5')
+    useStore.getState().setStrips(useStore.getState().strips_total + 20)
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: the strip edit makes the board stale').toBe('stale')
+    expect(model.blocks.every((b) => !b.unseated), 'premise: every phase is seated').toBe(true)
+
+    expect(unplacedRows().map((r) => [r.id, r.message])).toEqual([['stale:run', UNPLACED_WORDING.STALE]])
+    expect(selectPlacementCounts(state)).toEqual({ placed: 12, unplaced: 0, pinned: 0 })
+  })
+
+  /**
+   * Review focus 6: a pin whose strip count is above the engine's cap keeps
+   * its own key (keptRun), so the drawn model still finds it where kept. If
+   * the comparison used the engine's capped strip count, it would turn derived
+   * and get the re-run wording.
+   */
+  it('keeps a pin above the engine\'s strip cap and gives it the pin wording when unseated', () => {
+    // keptRun's pinAllWithOversizedPin order: the first id after one run.
+    runPreset('B1')
+    pinAll()
+    const [oversizedId] = Object.keys(useStore.getState().placements)
+    useStore.getState().updatePlacement(oversizedId, { strip_count: 40 })
+    runScheduleAll()
+    const model = selectDrawnSchedule(useStore.getState())
+    expect(model.runState, 'premise: the board is fresh after the run').toBe('fresh')
+    expect(model.events[oversizedId].result.pool_strip_count, 'premise: the engine capped the pool strips below the pin')
+      .toBeLessThan(40)
+    expect(model.unplacedIds.has(oversizedId), 'premise: the oversized pin is unseated').toBe(true)
+
+    expect(model.events[oversizedId].source).toBe('kept')
+    expect(unplacedRows().filter((r) => r.target === oversizedId).map((r) => [r.id, r.message]))
+      .toEqual([[`unplaced:${oversizedId}:room`, UNPLACED_WORDING.PIN]])
+  })
+
+  /**
+   * Spec Â§5: the pin toggle changes nothing, so the event stays kept and keeps
+   * P3's wording though it is no longer pinned. P3's text assumes a live pin,
+   * so the wording for this case is an open question for the owner. This
+   * pins the spec's current answer until they rule.
+   */
+  it('keeps the pin wording for a kept unseated event unpinned after the run (owner ruling pending)', () => {
+    runAndPinAll('B4')
+    const [id] = [...selectDrawnSchedule(useStore.getState()).unplacedIds].sort()
+    expect(id, 'premise: the pin-all re-run leaves an event unseated').toBeDefined()
+
+    useStore.getState().setPinned(id, false)
+    const model = selectDrawnSchedule(useStore.getState())
+    expect(model.runState, 'premise: the pin toggle keeps the board fresh').toBe('fresh')
+    expect(model.events[id].source, 'premise: the pin toggle keeps the entry').toBe('kept')
+
+    expect(unplacedRows().filter((r) => r.target === id).map((r) => [r.id, r.message]))
+      .toEqual([[`unplaced:${id}:room`, UNPLACED_WORDING.PIN]])
+  })
+
   it('shows no unseated row on a board that was never run, only the stale row', () => {
     threeEventsOverlappingOnDayZero()
     const state = useStore.getState()
@@ -465,24 +529,28 @@ describe('selectFindings â€” Unplaced rows read the drawn model (017 T5a, spec Â
 })
 
 describe('selectFindings â€” stranded event Unplaced row (contract Â§1.3, FR-060)', () => {
+  // On a run, so the board stays fresh and per-event rows could show: the
+  // last assertion then means the stranded event gets no room row.
   it('flags an event hand-moved outside days_available, and draws no overflow-style row for it', () => {
-    threeEventsOverlappingOnDayZero()
-    useStore.getState().updatePlacement('JR-W-EPEE-IND', { day: 5 })
+    runPreset('B1')
+    const id = Object.keys(useStore.getState().placements).sort()[0]
+    useStore.getState().updatePlacement(id, { day: 9 })
     const state = useStore.getState()
+    expect(selectDrawnSchedule(state).runState, 'premise: the board is fresh').toBe('fresh')
 
     const schedule = selectDerivedSchedule(state)
-    expect(schedule.events['JR-W-EPEE-IND']?.day_out_of_range).toBe(true)
+    expect(schedule.events[id]?.day_out_of_range).toBe(true)
 
     const rows = selectFindings(state)
-    const row = rows.find((r) => r.id === 'unplaced:JR-W-EPEE-IND:day')
+    const row = rows.find((r) => r.id === `unplaced:${id}:day`)
     expect(row).toBeDefined()
     expect(row?.severity).toBe('Unplaced')
-    expect(row?.target).toBe('JR-W-EPEE-IND')
+    expect(row?.target).toBe(id)
     expect(row?.day).toBeNull()
     expect(row?.where).toContain('out of range')
 
     expect(
-      rows.some((r) => r.id.startsWith('unplaced:JR-W-EPEE-IND:') && r.id !== 'unplaced:JR-W-EPEE-IND:day'),
+      rows.some((r) => r.id.startsWith(`unplaced:${id}:`) && r.id !== `unplaced:${id}:day`),
     ).toBe(false)
   })
 })

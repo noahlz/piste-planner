@@ -8,7 +8,11 @@ import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import type { ScenarioId } from '../../src/data/tournaments.ts'
 
-/** The Unplaced and stale texts, verbatim from the spec (R4/R7, P3, P4). */
+/**
+ * The Unplaced and stale texts, verbatim from the spec (R4/R7, P3, P4). Copied
+ * from the spec, never imported from derived.ts, so a wording change has to be
+ * made in both places on purpose.
+ */
 export const UNPLACED_WORDING = {
   RERUN: 'No room here with the current schedule – re-run Auto-assign to schedule around it.',
   PIN: 'Pinned here, but no strips are free at this time – move or unpin it, then re-run Auto-assign.',
@@ -19,6 +23,18 @@ export const UNPLACED_WORDING = {
 export function runPreset(id: ScenarioId): void {
   useStore.setState(useStore.getInitialState(), true)
   applyPreset(id)
+  runScheduleAll()
+}
+
+/** Pins every placed event where it sits. */
+export function pinAll(): void {
+  for (const placed of Object.keys(useStore.getState().placements)) useStore.getState().setPinned(placed, true)
+}
+
+/** Runs the preset, pins every placed event where the run put it, and runs again. */
+export function runAndPinAll(id: ScenarioId): void {
+  runPreset(id)
+  pinAll()
   runScheduleAll()
 }
 

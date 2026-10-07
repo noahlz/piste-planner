@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import { BottleneckRule, DeMode, Weapon } from '../../src/engine/types.ts'
+import { BottleneckRule, DeMode, Phase, Weapon } from '../../src/engine/types.ts'
 import type { Placement } from '../../src/engine/types.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makeCompetition, makeConfig, makePlacement, makeScheduleResult } from '../helpers/factories.ts'
@@ -267,7 +267,8 @@ describe('selectPlacementCounts reads the drawn model (017 T5a)', () => {
     const { id } = runAndMoveHeadline('B1')
     const state = useStore.getState()
     const counted = selectDrawnSchedule(state).blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced)
-    expect(counted.length, 'premise: the mover has more than one unseated phase').toBeGreaterThan(1)
+    expect(counted.map((b) => b.phase), 'premise: the mover\'s POOLS and DE_PRELIMS find no strips')
+      .toEqual([Phase.POOLS, Phase.DE_PRELIMS])
 
     expect(selectPlacementCounts(state)).toEqual({ placed: 23, unplaced: 1, pinned: 1 })
   })

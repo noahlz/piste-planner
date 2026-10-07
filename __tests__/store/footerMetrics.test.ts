@@ -376,6 +376,7 @@ describe('selectPlacementCounts', () => {
     const counts = selectPlacementCounts(useStore.getState())
     const selectedCount = Object.keys(useStore.getState().selectedCompetitions).length
     expect(selectedCount).toBe(12)
+    expect(counts.placed + counts.unplaced).toBe(selectedCount)
     expect(counts).toEqual({ placed: 12, unplaced: 0, pinned: 0 })
   })
 

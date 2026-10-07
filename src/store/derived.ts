@@ -523,7 +523,7 @@ const UNPLACED_PIN_MESSAGE =
 const STALE_MESSAGE = 'Stale – re-run Auto-assign'
 
 /** The stale row's id. It is never dismissable, so a stored dismissal of it hides nothing. */
-export const STALE_FINDING_ID = 'stale:run'
+const STALE_FINDING_ID = 'stale:run'
 
 /** One row of the Findings panel — every surface that shows a finding reads this shape. */
 export interface Finding {
