@@ -64,7 +64,7 @@ function runScenario(id: (typeof SCENARIO_IDS)[number]) {
   const validationRules = new Set<string>(
     validateConfig(config, competitions, ValidationMode.BINDING).map(ve => ve.rule),
   )
-  return { competitions, bottlenecks, warnings: analysis.warnings, validationRules }
+  return { competitions, bottlenecks, warnings: analysis.warnings, validationRules, days, schedule }
 }
 
 describe('Bottleneck rule and subjects invariants', () => {
@@ -75,14 +75,14 @@ describe('Bottleneck rule and subjects invariants', () => {
 
   for (const id of SCENARIO_IDS) {
     it(`scheduleAll bottlenecks of ${id} carry a rule and the competitions they name`, () => {
-      const { competitions, bottlenecks, validationRules } = scenarios[id]
+      const { competitions, bottlenecks, validationRules, days } = scenarios[id]
       const ids = competitions.map(c => c.id)
       expect(bottlenecks.length, `${id} bottlenecks checked`).toBeGreaterThan(0)
-      for (const b of bottlenecks) checkInvariants(b, ids, validationRules)
+      for (const b of bottlenecks) checkInvariants(b, ids, validationRules, days)
     })
 
     it(`initialAnalysis warnings of ${id} carry a rule and the competitions they name`, () => {
-      const { competitions, warnings, validationRules } = scenarios[id]
+      const { competitions, warnings, validationRules, days } = scenarios[id]
       const ids = competitions.map(c => c.id)
       if (SCENARIOS_WITHOUT_ANALYSIS_WARNINGS.includes(id)) {
         expect(
@@ -92,9 +92,45 @@ describe('Bottleneck rule and subjects invariants', () => {
       } else {
         expect(warnings.length, `${id} warnings checked`).toBeGreaterThan(0)
       }
-      for (const b of warnings) checkInvariants(b, ids, validationRules)
+      for (const b of warnings) checkInvariants(b, ids, validationRules, days)
     })
   }
+
+  // 016 Task A: the day-scoped rules always carry their day. A rule listed here
+  // that no scenario reaches is covered by its producer's own test instead.
+  it('every day-scoped finding the scenarios reach carries a day', () => {
+    const dayScoped = new Set<string>([
+      BottleneckRule.DAY_POOLS_EXCEED_STRIPS,
+      BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY,
+      BottleneckRule.DAY_VIDEO_DEMAND_EXCEEDS_VIDEO_STRIPS,
+      BottleneckRule.HARD_SEPARATION_VIOLATED,
+      BottleneckRule.REGIONAL_WINDOW_HONOURED,
+      BottleneckRule.REGIONAL_WINDOW_NOT_HONOURED,
+      BottleneckRule.DAY_ENDS_PAST_TARGET,
+      BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE,
+      BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
+      BottleneckRule.DAY_STRIP_HOURS_SUMMARY,
+      BottleneckRule.DAY_REF_PEAK_SUMMARY,
+      BottleneckRule.DAY_VIDEO_DE_REF_SUMMARY,
+    ])
+    const reached = SCENARIO_IDS.flatMap(id => [...scenarios[id].bottlenecks, ...scenarios[id].warnings])
+      .filter(b => dayScoped.has(b.rule))
+    expect(reached.length).toBeGreaterThan(0)
+    for (const b of reached) expect(b.day, `day of ${b.rule} "${b.message}"`).toBeTypeOf('number')
+  })
+
+  // Ties the field to the day map rather than to a constant: both subjects of a
+  // violated pair share the day the finding names.
+  it('every hard-separation-violated finding names the day both its subjects were assigned', () => {
+    for (const id of SCENARIO_IDS) {
+      const { bottlenecks, schedule } = scenarios[id]
+      for (const b of bottlenecks.filter(x => x.rule === BottleneckRule.HARD_SEPARATION_VIOLATED)) {
+        for (const subject of b.subjects) {
+          expect(b.day, `${id} day of ${b.message}`).toBe(schedule[subject].assigned_day)
+        }
+      }
+    }
+  })
 
   it('the scenarios between them check at least one validation-derived bottleneck', () => {
     const derived = SCENARIO_IDS.flatMap(id => scenarios[id].bottlenecks.filter(

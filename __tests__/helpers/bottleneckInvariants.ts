@@ -62,14 +62,20 @@ const CATALOGUE = new Set<string>(Object.values(BottleneckRule))
 /**
  * Shape, owner, subjects <-> message, and rule <-> cause checks for one
  * bottleneck. `validationRules` are the ids `validateConfig` produced for the
- * same inputs, which a validation-derived bottleneck may carry.
+ * same inputs, which a validation-derived bottleneck may carry. `daysAvailable`,
+ * when given, bounds `day` (016): a set `day` is an integer in [0, daysAvailable).
  */
 export function checkInvariants(
   b: Bottleneck,
   competitionIds: string[],
   validationRules: Set<string>,
+  daysAvailable?: number,
 ): void {
   const where = `${b.cause} "${b.message}"`
+  if (b.day !== undefined) {
+    expect(Number.isInteger(b.day) && b.day >= 0, `day of ${where}`).toBe(true)
+    if (daysAvailable !== undefined) expect(b.day, `day of ${where} within the days available`).toBeLessThan(daysAvailable)
+  }
   expect(b.rule, `rule of ${where}`).toMatch(KEBAB_CASE)
   expect(CATALOGUE.has(b.rule) || validationRules.has(b.rule), `unknown rule ${b.rule}`).toBe(true)
 

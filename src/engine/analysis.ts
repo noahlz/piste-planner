@@ -140,6 +140,7 @@ export function initialAnalysis(
         subjects: [],
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
+        day,
         message: `Day ${day + 1}: ~${totalPools} pools assigned but only ${config.strips_total} strips available. Consider adding strips, reducing competitions, or enabling flighting.`,
       })
     }
@@ -210,7 +211,8 @@ export function initialAnalysis(
           subjects: flightedIds,
           severity: BottleneckSeverity.WARN,
           delay_mins: 0,
-          message: `Multiple flighted competitions on day ${day}: ${flighted.map((c: Competition) => c.id).join(', ')}`,
+          day,
+          message: `Multiple flighted competitions on Day ${day + 1}: ${flighted.map((c: Competition) => c.id).join(', ')}`,
         })
       }
     }
@@ -239,7 +241,8 @@ export function initialAnalysis(
         subjects: [],
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
-        message: `Day ${day}: peak video-required DE demand is ${demand} but only ${config.video_strips_total} video strips available`,
+        day,
+        message: `Day ${day + 1}: peak video-required DE demand is ${demand} but only ${config.video_strips_total} video strips available`,
       })
     }
   }

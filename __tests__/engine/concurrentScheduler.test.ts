@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scheduleAllConcurrent, postScheduleDiagnostics } from '../../src/engine/concurrentScheduler.ts'
+import { scheduleAllConcurrent, postScheduleDiagnostics, postScheduleDayBreakdown } from '../../src/engine/concurrentScheduler.ts'
 import {
   BottleneckCause,
   BottleneckRule,
@@ -25,8 +25,9 @@ import {
   weightedPoolDuration,
 } from '../../src/engine/pools.ts'
 import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
-import { makeConfig, makeCompetition, makeStrips, makeBottleneck } from '../helpers/factories.ts'
+import { makeConfig, makeCompetition, makeStrips, makeBottleneck, makeScheduleResult } from '../helpers/factories.ts'
 import { checkInvariants } from '../helpers/bottleneckInvariants.ts'
+import { createGlobalState } from '../../src/engine/resources.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
@@ -661,6 +662,24 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
       crossoverBottlenecks.map(bn => bn.subjects.join('|')).sort(),
       'expected exactly one bottleneck per hard-edged pair, each naming both ids',
     ).toEqual(expectedPairs.map(pairKey).sort())
+  })
+
+  // 016 Task A: the finding's day is the day both events share in the day map.
+  // Every pair in this fixture lands on day index 0 (measured 2026-10-06), and
+  // no fixture found puts a violated pair on a later day: a violation falls on
+  // the lowest colour, and a pin on a conflicting pair is not reported. The
+  // assertion pins `day` to the pair's own assigned day, so a missing field fails.
+  it('NAC Cadet/Junior: each hard-separation finding carries the day both of its events share', () => {
+    const { config, competitions } = buildTemplate('NAC Cadet/Junior')
+    const { bottlenecks, schedule } = scheduleAllConcurrent(competitions, config)
+
+    const violated = bottlenecks.filter(b => b.rule === BottleneckRule.HARD_SEPARATION_VIOLATED)
+    expect(violated).toHaveLength(6)
+    for (const b of violated) {
+      const [a, c] = b.subjects.map(id => schedule[id]?.assigned_day)
+      expect(a, `${b.subjects.join(' and ')} share a day`).toBe(c)
+      expect(b.day, `day of ${b.subjects.join(' and ')}`).toBe(a)
+    }
   })
 
   // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
@@ -1310,5 +1329,29 @@ describe('scheduleAllConcurrent — a pinned flighted event on 1 strip', () => {
     expect(s.flight_a_strips).toBe(1)
     expect(s.flight_b_strips).toBe(1)
     expect((s.flight_b_end ?? 0) - (s.flight_b_start ?? 0)).toBe(flightBOnOneStrip.actual_duration)
+  })
+})
+
+describe('postScheduleDayBreakdown – each summary carries its day (016 Task A)', () => {
+  it('sets day on the strip-hours, ref-peak and video-stage lines of a failed event on day index 2', () => {
+    const config = makeConfig({ days_available: 3 })
+    const comp = makeCompetition({
+      id: 'E',
+      fencer_count: 40,
+      de_mode: DeMode.STAGED,
+      de_video_policy: VideoPolicy.REQUIRED,
+    })
+    const state = createGlobalState(config)
+    state.schedule['E'] = makeScheduleResult('E', 2)
+    state.bottlenecks.push(makeBottleneck({ competition_id: 'E', severity: BottleneckSeverity.ERROR }))
+
+    const summaries = postScheduleDayBreakdown([comp], config, state)
+
+    expect(summaries.map(b => b.rule)).toEqual([
+      BottleneckRule.DAY_STRIP_HOURS_SUMMARY,
+      BottleneckRule.DAY_REF_PEAK_SUMMARY,
+      BottleneckRule.DAY_VIDEO_DE_REF_SUMMARY,
+    ])
+    expect(summaries.map(b => b.day)).toEqual([2, 2, 2])
   })
 })

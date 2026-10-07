@@ -27,6 +27,7 @@ import {
   Category,
   VetAgeGroup,
   dayStart,
+  clockOnDay,
   dayEnd,
   dayHardEnd,
   findDayForTime,
@@ -357,6 +358,7 @@ export function scheduleAllConcurrent(
       subjects: [violation.id, violation.targetId].sort(),
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
+      day: dayMap.get(violation.id),
       message: `${violation.id} and ${violation.targetId} share a day: a hard separation could not be honored within the available days`,
     })
   }
@@ -787,6 +789,7 @@ function regionalWindowFindings(pairs: RegionalWindowPair[], state: GlobalState)
       subjects: [oId, yId].sort(),
       severity: honoured ? BottleneckSeverity.INFO : BottleneckSeverity.WARN,
       delay_mins: 0,
+      day: o.assigned_day,
       message: honoured
         ? `${oId} and ${yId} share day ${o.assigned_day + 1} inside the regional Group 1 window: ${starts}`
         : `${oId} and ${yId} share day ${o.assigned_day + 1} and the regional Group 1 window is not honoured: ${starts}`,
@@ -1704,6 +1707,7 @@ function firstLastDayWarnings(
       subjects: [],
       severity: BottleneckSeverity.WARN,
       delay_mins: 0,
+      day,
       message: `${label} day (Day ${day + 1}, ${length} min) is not shorter than the shortest middle day (${shortestMiddle} min)`,
     })
   }
@@ -1751,7 +1755,8 @@ function lateDayWarnings(
       subjects,
       severity: BottleneckSeverity.WARN,
       delay_mins: finish - target,
-      message: `Day ${day + 1} ends at ${finish}, ${finish - target} min past its target ${target}: ${subjects.join(', ')} finish after it`,
+      day,
+      message: `Day ${day + 1} ends at ${clockOnDay(finish, day, config)}, ${finish - target} min past its target ${clockOnDay(target, day, config)}: ${subjects.join(', ')} finish after it`,
     })
   }
   return warnings
@@ -1867,6 +1872,7 @@ export function postScheduleDayBreakdown(
       subjects: [],
       severity: stripDeficit > 0 ? BottleneckSeverity.WARN : BottleneckSeverity.INFO,
       delay_mins: 0,
+      day,
       message: `Day ${day + 1} strips: ${consumed.strip_hours_consumed.toFixed(1)} strip-hours consumed of ${totalCapacity.toFixed(1)} available${stripDeficit > 0 ? ` (${stripDeficit.toFixed(1)} over capacity)` : ''}.`,
     })
 
@@ -1890,6 +1896,7 @@ export function postScheduleDayBreakdown(
         subjects: [],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
+        day,
         message: `Day ${day + 1} refs: peak demand ${peakRefDemand}.`,
       })
     }
@@ -1910,6 +1917,7 @@ export function postScheduleDayBreakdown(
         subjects: [],
         severity: BottleneckSeverity.INFO,
         delay_mins: 0,
+        day,
         message: `Day ${day + 1} video-stage DE ref demand: ${videoStageSum} refs across ${stagedCount} staged events`,
       })
     }

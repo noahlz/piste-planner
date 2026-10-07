@@ -575,3 +575,64 @@ describe('suggestStripCount', () => {
     })
   })
 })
+
+// ──────────────────────────────────────────────
+// 016 Task A – day-scoped findings carry their day
+// ──────────────────────────────────────────────
+
+/**
+ * `initialAnalysis` receives the store's day indexes, so a finding's `day` is
+ * that same 0-based index. Every fixture lands on day index 2 (printed "Day 3")
+ * so a `day: 0` default cannot pass by accident.
+ */
+describe('initialAnalysis – day-scoped findings carry their 0-based day (016 Task A)', () => {
+  const DAY_INDEX = 2
+
+  it('day-pools-exceed-strips sets day and prints Day 3', () => {
+    const config = makeConfig({ strips: makeStrips(8, 0), days_available: 3 })
+    const competitions = Array.from({ length: 4 }, (_, i) => makeCompetition({ id: `COMP-${i}`, fencer_count: 24 }))
+    const dayAssignments = Object.fromEntries(competitions.map((c) => [c.id, DAY_INDEX]))
+
+    const warn = initialAnalysis(config, competitions, dayAssignments).warnings
+      .find((w: Bottleneck) => w.rule === BottleneckRule.DAY_POOLS_EXCEED_STRIPS)
+
+    expect(warn?.day).toBe(DAY_INDEX)
+    expect(warn?.message).toMatch(/^Day 3: /)
+  })
+
+  describe('multiple-flighted-same-day', () => {
+    const c1 = makeBigComp('flt-1', 70, { flighted: true })
+    const c2 = makeBigComp('flt-2', 70, { flighted: true })
+    const findings = () => initialAnalysis(makeConfig({ days_available: 3 }), [c1, c2], { 'flt-1': DAY_INDEX, 'flt-2': DAY_INDEX })
+      .warnings.filter((w: Bottleneck) => w.rule === BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY)
+
+    it('sets day on every finding of the day', () => {
+      expect(findings().map((w) => w.day)).toEqual([DAY_INDEX, DAY_INDEX])
+    })
+
+    it('prints the day 1-based, as Day 3', () => {
+      for (const w of findings()) {
+        expect(w.message).toMatch(/Day 3\b/)
+        expect(w.message).not.toMatch(/day 2\b/i)
+      }
+    })
+  })
+
+  describe('day-video-demand-exceeds-video-strips', () => {
+    const video = { de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED }
+    const finding = () => {
+      const config = makeConfig({ days_available: 3, video_strips_total: 1 })
+      const comps = [makeBigComp('vid-1', 42, video), makeBigComp('vid-2', 42, video)]
+      return initialAnalysis(config, comps, { 'vid-1': DAY_INDEX, 'vid-2': DAY_INDEX }).warnings
+        .find((w: Bottleneck) => w.rule === BottleneckRule.DAY_VIDEO_DEMAND_EXCEEDS_VIDEO_STRIPS)
+    }
+
+    it('sets day', () => {
+      expect(finding()?.day).toBe(DAY_INDEX)
+    })
+
+    it('prints the day 1-based, as Day 3', () => {
+      expect(finding()?.message).toMatch(/^Day 3: /)
+    })
+  })
+})
