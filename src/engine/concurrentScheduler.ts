@@ -19,7 +19,6 @@
 import {
   DeMode,
   EventType,
-  VideoPolicy,
   Phase,
   BottleneckCause,
   BottleneckRule,
@@ -66,6 +65,8 @@ import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
 import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand, refDemandFromSchedule } from './refs.ts'
 import { deriveEventSchedule, placementFromResult } from './derive.ts'
+import { phaseRequiresVideo } from './unseated.ts'
+import { compareIds } from './order.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS } from './constants.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
@@ -622,7 +623,7 @@ function buildPhaseNodes(
       })
     }
 
-    const r16VideoRequired = comp.de_video_policy === VideoPolicy.REQUIRED
+    const r16VideoRequired = phaseRequiresVideo(Phase.DE_ROUND_OF_16, comp)
     nodes.push({
       event_id: comp.id,
       kind: PhaseKind.DE_R16,
@@ -851,7 +852,7 @@ function preclaimPinnedEvents(
     (a, b) =>
       a.day - b.day ||
       a.start_time - b.start_time ||
-      a.competition_id.localeCompare(b.competition_id),
+      compareIds(a.competition_id, b.competition_id),
   )
 
   for (const pin of ordered) {
@@ -1521,7 +1522,7 @@ function compareNodes(a: PhaseNode, b: PhaseNode, events: EventState[]): number 
   const bScore = bEvent?.constraint_score ?? 0
   if (aScore !== bScore) return bScore - aScore
   // Tie — stable on event_id.
-  return a.event_id.localeCompare(b.event_id)
+  return compareIds(a.event_id, b.event_id)
 }
 
 function findEventState(events: EventState[], event_id: string): EventState | null {

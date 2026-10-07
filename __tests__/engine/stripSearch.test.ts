@@ -467,4 +467,29 @@ describe('search and schedule threading pins (T033)', () => {
       expect(placedCount < comps.length || unclaimed.length > 0).toBe(true)
     }
   })
+
+  // Characterisation (017 T1, must pass before and after): the search now
+  // subtracts the events `unseatedPhases` names instead of reading
+  // `PINNED_UNCLAIMED` itself. Captured at 114d99314b: the `placed` count of
+  // every candidate on the board above, from the floor (53) to the answer (83).
+  it('yields the same placed count at every candidate when the unseated rule is shared', () => {
+    const { comps, config } = minBoard()
+    const pinStart = dayStart(0, config) + 180
+    const pins: PinnedPlacement[] = ['D1-M-EPEE-IND', 'D1-M-FOIL-IND'].map(id => ({
+      competition_id: id,
+      day: 0,
+      start_time: pinStart,
+      strip_count: comps.find(c => c.id === id)!.strips_allocated,
+    }))
+
+    const placed: number[] = []
+    for (const candidate of scanStripCounts(comps, config, stripSearchRange(comps, config)!, pins)) {
+      placed.push(candidate.placed)
+    }
+
+    expect(placed).toEqual([
+      22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+      23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 24,
+    ])
+  })
 })

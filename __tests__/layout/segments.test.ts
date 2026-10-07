@@ -1,8 +1,14 @@
+import { createHash } from 'node:crypto'
 import { describe, it, expect } from 'vitest'
 import { eventTimeSegments } from '../../src/layout/segments.ts'
 import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import type { DerivedEventSchedule } from '../../src/engine/derive.ts'
 import { CutMode, DeMode, Phase } from '../../src/engine/types.ts'
+import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
+import { useStore } from '../../src/store/store.ts'
+import { applyPreset } from '../../src/store/presets.ts'
+import { runScheduleAll } from '../../src/store/runActions.ts'
+import { selectDerivedSchedule } from '../../src/store/derived.ts'
 import {
   makeCompetition,
   makeConfig,
@@ -109,5 +115,37 @@ describe('eventTimeSegments', () => {
 
     expect(staged).toEqual(before)
     expect(Object.keys(staged.result)).toEqual(Object.keys(before.result))
+  })
+})
+
+describe('eventTimeSegments on the reference tournaments', () => {
+  // Characterisation (017 T1): captured at 114d99314b, before `eventTimeSegments`
+  // delegated to `phaseSpans`. Each digest is the first 16 hex digits of the
+  // SHA-256 of every event's segments, by id, after the app's own run – so the
+  // move into the engine changed no span on B1–B8. B8's 148 matches the plan's
+  // phase count for it.
+  const EXPECTED = {
+    B1: ['af1d2cf4d111ae0f', 66], B2: ['ec157fca4c449b8d', 66], B3: ['1f23028d76cd460e', 72],
+    B4: ['6ec3a9347780d7b7', 42], B5: ['3dcb38014ee7022f', 24], B6: ['9259201622c03664', 90],
+    B7: ['fbf80c4fea872112', 54], B8: ['d5df97e475fb0de8', 148],
+  } as const
+
+  it.each(SCENARIO_IDS)('%s: draws the same segments as before', (id) => {
+    useStore.setState(useStore.getInitialState(), true)
+    applyPreset(id)
+    runScheduleAll()
+    const events = selectDerivedSchedule(useStore.getState()).events
+    const perEvent = Object.keys(events).sort().map(k => [k, eventTimeSegments(events[k])] as const)
+
+    const digest = createHash('sha256').update(JSON.stringify(perEvent)).digest('hex').slice(0, 16)
+    const count = perEvent.reduce((n, [, segments]) => n + segments.length, 0)
+    expect([digest, count]).toEqual(EXPECTED[id])
+  })
+})
+
+describe('eventTimeSegments zero-length spans', () => {
+  it('skips a pool block of zero minutes, as it skips a zero-minute DE block', () => {
+    const result = { ...makeScheduleResult('zero', 0), pool_start: 600, pool_end: 600, pool_strip_count: 2 }
+    expect(eventTimeSegments({ result, day_out_of_range: false })).toEqual([])
   })
 })

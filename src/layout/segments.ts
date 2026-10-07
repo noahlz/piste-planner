@@ -5,7 +5,8 @@
  */
 
 import type { DerivedEventSchedule } from '../engine/derive.ts'
-import { Phase } from '../engine/types.ts'
+import type { Phase } from '../engine/types.ts'
+import { phaseSpans } from '../engine/unseated.ts'
 
 /**
  * One drawable time span of an event: a pool block, one flight, or one DE
@@ -38,46 +39,15 @@ export interface TimeSegment {
  *   the medal bouts, which are deliberately not scheduled (`de.ts`
  *   "stop-at-semis" model). It gets no segment.
  *
- * A `null` start or end means the segment does not exist for this event.
+ * A `null` start or end, or a span of zero minutes, means the segment does not
+ * exist for this event. The enumeration lives in the engine (`phaseSpans`), so
+ * this and the unseated-phase rule cannot disagree about what a phase is.
  */
 export function eventTimeSegments(derived: DerivedEventSchedule): TimeSegment[] {
-  const r = derived.result
-  const segments: TimeSegment[] = []
-
-  const push = (
-    phase: Phase,
-    start: number | null,
-    end: number | null,
-    stripCount: number,
-  ): void => {
-    if (start === null || end === null) return
-    segments.push({ phase, startMinutes: start, endMinutes: end, stripCount })
-  }
-
-  if (r.flight_a_start !== null) {
-    push(Phase.FLIGHT_A, r.flight_a_start, r.flight_a_end, r.flight_a_strips)
-    push(Phase.FLIGHT_B, r.flight_b_start, r.flight_b_end, r.flight_b_strips)
-  } else {
-    push(Phase.POOLS, r.pool_start, r.pool_end, r.pool_strip_count)
-  }
-
-  // Single-stage and staged are mutually exclusive on the result, so these
-  // three pushes emit either the one DE block or the staged phases. A DE
-  // block of 0 minutes – a bracket of 2, which has no counted round
-  // (METHODOLOGY.md §DE Duration) – draws nothing and is skipped.
-  const pushDe = (...args: Parameters<typeof push>): void => {
-    const [, start, end] = args
-    if (start === end) return
-    push(...args)
-  }
-  pushDe(Phase.DE, r.de_start, r.de_end, r.de_strip_count)
-  pushDe(Phase.DE_PRELIMS, r.de_prelims_start, r.de_prelims_end, r.de_prelims_strip_count)
-  pushDe(
-    Phase.DE_ROUND_OF_16,
-    r.de_round_of_16_start,
-    r.de_round_of_16_end,
-    r.de_round_of_16_strip_count,
-  )
-
-  return segments
+  return phaseSpans(derived.result).map(span => ({
+    phase: span.phase,
+    startMinutes: span.start,
+    endMinutes: span.end,
+    stripCount: span.stripCount,
+  }))
 }
