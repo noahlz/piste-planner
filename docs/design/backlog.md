@@ -175,12 +175,12 @@ by 016, 2026-10-07.** The cause recorded here until then was wrong.*
 
 The two figures did not differ because the engine clamps. `computePostScheduleRefDemand`'s
 clamp (`stripsForEvent > peak.total`) fired zero times on B1–B8 and removing it
-left every `refRequirementsByDay` byte-identical. The store and the engine
+left every `refRequirementsByDay` byte-identical (an orchestrator observation, not recorded in a branch commit). The store and the engine
 emitted the same referee intervals with the same counts and differed only in
 **time**. The store derived each phase back to back from the placement, while
 the scheduler's allocations sat later where a phase waited for strips, so later
 phases were drawn 25–60+ minutes earlier than scheduled and overlapped
-more. Store minus engine on every day that differed, before 016:
+more. Engine and store on every day that differed, before 016:
 
 | Scenario | Day | Engine | Store |
 |---|---:|---:|---:|

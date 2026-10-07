@@ -13,8 +13,9 @@ blocks and no way to dismiss it. At a regional tournament the same pair gets
 the Group 1 window finding instead. Day-scoped findings say which day they
 belong to, the first and last day warning reaches the Findings panel, and the
 footer's referee peak is the same number the scheduler reports. Scheduled
-counts, ERRORs and every other ledger field are unmoved. Only the referee
-peaks rose, on 13 days plus one sabre peak.
+counts and ERRORs are unmoved. Only `refRequirementsByDay` moved: peak totals
+rose on 13 days, sabre peaks on 7 (one of them B8 day 1, outside the 13), and
+`peak_time` on 10.
 
 Headline, before to after (Base is `b84be7e291`, After is `9e918de7b9`):
 
@@ -31,7 +32,7 @@ B4 days 1 and 2, B6 days 0 to 2, B7 days 0 and 2, and B8 days 0 and 2.
 What each task does now:
 
 - **Spec and amendment (`6a73a30190`, `8e6b8d8e73`, plan `b31b382508`).** The
-  owner amended METHODOLOGY §Ref Demand Derivation and Phase 7 before the
+  owner amended METHODOLOGY §Ref Demand Derivation and Phase 5 (Resource Allocation) before the
   referee change: demand counts the schedule as the workbench draws it.
 - **A – findings carry their day (`a006cc751b`, review fix `56e92b4d55`).**
   `Bottleneck` gains an optional 0-based `day`, set by every day-scoped
@@ -102,23 +103,24 @@ only. The owner accepted it (below).
 | What | Value | Where |
 |---|---|---|
 | Unit suite | 82 files / 2278 tests, all pass (from 81 / 2148) | `9e918de7b9`, the last code commit |
-| `tsc -b`, lint | clean, clean | every commit in the chain |
+| `tsc -b`, lint | clean, clean | every code commit A–E |
 | Drift ledger snapshot SHA-256 | `7e2db75c38bb6e5702d3618e81127130739e9075536b843ca76a8cc368b89d06` to `cd484a89c7c95f9dc1afebbccf705177487683bde7c1fdd99a674b0afeaff481` | Task E `bce5a8ec5e`, byte-identical through Task D |
 | Snapshot change in Task E | 30 changed lines, all `peak_*` fields inside `refRequirementsByDay` | `bce5a8ec5e` |
 | B1–B8 scheduled, ERRORs | 24 / 24 / 24 / 21 / 12 / 45 / 18 / 53 and 0 / 0 / 0 / 9 / 0 / 9 / 0 / 0, both unchanged | every commit |
 | Engine against store | equal on every B1–B8 day, pinned by a new `appPathParity` case | `bce5a8ec5e` |
-| Live smoke | **pass**, two consecutive passes each round plus an independent fresh run | `8e7583ae49` |
+| Live smoke | **pass**, two consecutive passes each round | `a721f48cb0`, `3b3cfb6c72`, `8e7583ae49` (an independent fresh run is an orchestrator observation, not recorded in a commit) |
 
-Smoke command: `SMOKE_BASE=http://localhost:5187/piste-planner/ timeout 240
-node scripts/smoke.mjs`, after `pnpm -C <wt> dev --port 5187 --strictPort`.
+Smoke command: `SMOKE_BASE=http://localhost:5188/piste-planner/ timeout 240
+node scripts/smoke.mjs`, after `pnpm -C <wt> dev --port 5188 --strictPort`.
 What the driver now checks:
 
 1. **NAC.** Moving one event of a Junior/Cadet Foil pair onto the other's day
    shows one Warning naming both by label, with no dismiss control and the
    findings edge on both events.
-2. **ROC Mega.** A hand-moved Junior/Cadet Men's Foil pair shows the
-   regional-window-not-honoured Warning (Cadet 10:50, Junior 10:55, floor
-   13:00).
+2. **ROC Mega.** The driver picks, at runtime, a Group 1 pair whose pools are
+   on different days (it throws if none), moves one by hand, and asserts the
+   regional-window-not-honoured Warning row by finding id. The pair and times
+   are not pinned.
 3. **B1 boot.** The footer's peak referees read 218, unchanged by Task E.
 
 Chain of measurements, oldest first. The snapshot is byte-identical to
@@ -183,14 +185,14 @@ Chain of measurements, oldest first. The snapshot is byte-identical to
   sets to say what they hold, split the gutter and edge assertions into
   single-render tests and pinned `Finding.subjects` for a validation row. Two
   mutants were probed red.
-- **E.** Four drift judges, each on at most four scenario-days (the step cap),
-  plus `test-quality-reviewer`. Every move was attributed to the drawn-schedule
+- **E.** Four drift judges, each on at most four scenario-days (the step cap,
+  an orchestrator observation, not in a commit body), plus `test-quality-reviewer`. Every move was attributed to the drawn-schedule
   cause, and no judge raised an issue. The fix commit documented that the
   comparison is red on 14 days (13 by total plus B8 day 1's sabre), and added a
   parity case that hand-pins four events per scenario and checks the engine
   honours every pin.
 - **S.** Two review-fix rounds on the driver. The passes counted are two
-  consecutive in each round and one independent fresh run.
+  consecutive in each round, as the Task S commits record.
 
 ## Decisions made on the owner's behalf
 
@@ -266,12 +268,12 @@ Backlog-worthy items are marked with an asterisk.
   the scheduler's day colouring enforces it (`vetCoDayRequiredColor`). Cost if
   ignored: a hand-split Vet co-day raises nothing. In the backlog under
   §Hand-placed events, tied to §Vet co-day serialization.
-- **Phase-repeating scheduler findings** (`phase-deferred` and the like) stay
+- **\*Phase-repeating scheduler findings** (`phase-deferred` and the like) stay
   out of the panel. Backlog §Day-level findings.
-- **\*The regional Note is unreachable by hand in the live app.** No control
+- **The regional Note is unreachable by hand in the live app.** No control
   sets an event's start time (Move day keeps the start). The live smoke asserts
   the not-honoured Warning on ROC Mega and the store tests cover the Note.
-- **\*An overflowing block never draws the findings edge** (`Block.tsx`,
+- **An overflowing block never draws the findings edge** (`Block.tsx`,
   `warnedEdge = warned && !overflow`), so on a board with overflow one event of
   a hard pair can show its marker on some phases only. It predates 016, and 017
   (one strip model, no overflow) removes the cause.
