@@ -20,8 +20,9 @@ export type PlacedEvent = { competition_id: string; day: number; pool_start: num
  * Judges hand placements against the same rules the scheduler enforces: hard
  * same-day separations (via `crossoverPenalty`) and the regional Group 1
  * window. The two checks are independent, so a pair can carry both findings.
- * `labelOf` names events in messages (default: the id). The caller filters out unplaced and out-of-range events. A placed id with no
- * competition is skipped. Output is sorted by day, then subjects, then rule.
+ * `labelOf` names events in messages (default: the id). The caller filters
+ * out unplaced and out-of-range events. A placed id with no competition is
+ * skipped. Output is sorted by day, then subjects, then rule.
  */
 export function checkPlacementRules(
   competitions: Competition[],
