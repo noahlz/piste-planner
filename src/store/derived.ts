@@ -6,6 +6,7 @@ import { computeRefRequirements, refDemandFromSchedule } from '../engine/refs.ts
 import { checkPlacementRules } from '../engine/placementRules.ts'
 import type { PlacedEvent } from '../engine/placementRules.ts'
 import { firstLastDayWarnings } from '../engine/concurrentScheduler.ts'
+import { phaseKey } from '../engine/unseated.ts'
 import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS, ValidationMode } from '../engine/types.ts'
 import type {
   AnalysisResult,
@@ -333,27 +334,33 @@ function computeDerivedFindings(state: StoreState): DerivedFindings {
 export const selectDerivedFindings = memoizeOnDeps(scheduleDeps, computeDerivedFindings)
 
 /**
- * Ref-demand intervals for the placements as drawn: the derived per-event
- * `ScheduleResult`s handed to the engine's `refDemandFromSchedule`, the same
- * function the scheduler calls on its own schedule (016 spec §5), so the
- * footer's peak and the reported peak are one number. Out-of-range placements
- * are skipped here: their `assigned_day` cannot address a day bucket in
+ * Ref-demand intervals for the board as drawn (017 spec §7): the drawn model's
+ * kept and derived results handed to the engine's `refDemandFromSchedule`,
+ * the function the scheduler calls on its own timeline, leaving out only the
+ * blocks the model counts as unplaced. Right after a run the kept results are
+ * the scheduler's, so the footer's peak and the reported peak are one number.
+ * While fresh that skips unseated phases. While stale it skips nothing, so
+ * every derived phase counts, seated or not (P4 (c)). Out-of-range placements
+ * are skipped: their `assigned_day` cannot address a day bucket in
  * `config.days_available`.
  */
-export function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDemandByDay> {
+export function buildRefDemandByDay(schedule: DrawnSchedule): Record<number, RefDemandByDay> {
   const inRange = Object.values(schedule.events)
     .filter(({ day_out_of_range }) => !day_out_of_range)
     .map(({ result }) => result)
-  return refDemandFromSchedule(inRange, schedule.config, schedule.competitions)
+  const skip = new Set(
+    schedule.blocks.filter((block) => block.countsAsUnplaced).map((block) => phaseKey(block.competitionId, block.phase)),
+  )
+  return refDemandFromSchedule(inRange, schedule.config, schedule.competitions, skip)
 }
 
 function computeDerivedRefRequirements(state: StoreState): RefRequirementsByDay[] {
-  const schedule = selectDerivedSchedule(state)
+  const schedule = selectDrawnSchedule(state)
   const demandByDay = buildRefDemandByDay(schedule)
   return computeRefRequirements(demandByDay, schedule.config.days_available)
 }
 
-/** Derived ref requirements: peak concurrent refs per day, from the derived schedule (not a fresh scheduleAll run). */
+/** Ref requirements: peak concurrent refs per day, from the drawn model (not a fresh scheduleAll run). */
 export const selectDerivedRefRequirements = memoizeOnDeps(scheduleDeps, computeDerivedRefRequirements)
 
 // ──────────────────────────────────────────────
@@ -394,10 +401,9 @@ function peakRow(
 }
 
 function computeFooterMetrics(state: StoreState): FooterMetric[] {
-  // Finish and strips read the board as drawn (017 spec §4): right after a run
-  // that is the scheduler's own times and strips. The referee peak stays on
-  // the derived schedule until 017 T9 switches it and the scheduler's figure
-  // together (referee ordering, plan Global constraints).
+  // Finish, strips and the referee peak read the board as drawn (017 spec §4,
+  // §7): right after a run that is the scheduler's own times and strips, so
+  // the referee peak is the scheduler's own.
   const schedule = selectDrawnSchedule(state)
   const refRows = selectDerivedRefRequirements(state)
 

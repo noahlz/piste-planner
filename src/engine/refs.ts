@@ -1,4 +1,4 @@
-import { Weapon, RefPolicy } from './types.ts'
+import { Phase, Weapon, RefPolicy } from './types.ts'
 import type {
   TournamentConfig,
   Competition,
@@ -9,6 +9,7 @@ import type {
 } from './types.ts'
 import { computePoolStructure } from './pools.ts'
 import { computeBracketSize, deVideoStripAsk } from './de.ts'
+import { phaseKey } from './unseated.ts'
 
 /**
  * Estimates peak concurrent pool-round referee demand for a single competition.
@@ -107,25 +108,30 @@ export function computeRefRequirements(
  * `pool_refs_count`, a flighted event by its two flights' own refs instead,
  * and each DE block (single-stage, prelims, round of 16) by its strips ×
  * `DE_REFS`. Each result is keyed by its `assigned_day` and takes its weapon
- * from its competition. The store's footer and the scheduler both call this on
- * the schedule as the workbench draws it, so they count the same intervals.
+ * from its competition. The scheduler calls this on its own results, the
+ * store's footer on the board it draws (017 spec §7), so right after a run the
+ * two count the same intervals.
  *
- * Interval times are whatever axis the results are on: the store passes
- * clock-axis results, the scheduler shifts its own back to the scheduler axis.
- * A result whose competition is not given is skipped, and so is a block that
- * asks no referee – a bracket of 2's DE draws 0 strips (METHODOLOGY.md §DE
- * Duration 'No counted round').
+ * Interval times are whatever axis the results are on: the scheduler's own
+ * results sit on the scheduler axis, the store's drawn results on the clock
+ * axis. A result whose competition is not given is skipped, and so is a block
+ * that asks no referee – a bracket of 2's DE draws 0 strips (METHODOLOGY.md
+ * §DE Duration 'No counted round'). `skip` holds `phaseKey`s of phases that
+ * hold no strips (`unseatedPhases`, or the drawn model's unplaced blocks):
+ * each pushed interval is one phase, and a skipped one counts no referees.
  */
 export function refDemandFromSchedule(
   results: ScheduleResult[],
   config: TournamentConfig,
   competitions: Competition[],
+  skip: ReadonlySet<string> = new Set(),
 ): Record<number, RefDemandByDay> {
   const byDay: Record<number, RefDemandByDay> = {}
   const compById = new Map(competitions.map((c) => [c.id, c]))
 
-  function push(day: number, interval: RefDemandInterval): void {
+  function push(day: number, interval: RefDemandInterval, id: string, phase: Phase): void {
     if (interval.count === 0) return
+    if (skip.has(phaseKey(id, phase))) return
     if (!byDay[day]) byDay[day] = { intervals: [] }
     byDay[day].intervals.push(interval)
   }
@@ -138,17 +144,18 @@ export function refDemandFromSchedule(
     const weapon = competition.weapon
     const deRefCount = (strips: number) => strips * config.DE_REFS
 
+    const id = result.competition_id
     if (result.flight_a_start !== null && result.flight_a_end !== null) {
-      push(day, { startTime: result.flight_a_start, endTime: result.flight_a_end, count: result.flight_a_refs, weapon })
+      push(day, { startTime: result.flight_a_start, endTime: result.flight_a_end, count: result.flight_a_refs, weapon }, id, Phase.FLIGHT_A)
       if (result.flight_b_start !== null && result.flight_b_end !== null) {
-        push(day, { startTime: result.flight_b_start, endTime: result.flight_b_end, count: result.flight_b_refs, weapon })
+        push(day, { startTime: result.flight_b_start, endTime: result.flight_b_end, count: result.flight_b_refs, weapon }, id, Phase.FLIGHT_B)
       }
     } else if (result.pool_start !== null && result.pool_end !== null) {
-      push(day, { startTime: result.pool_start, endTime: result.pool_end, count: result.pool_refs_count, weapon })
+      push(day, { startTime: result.pool_start, endTime: result.pool_end, count: result.pool_refs_count, weapon }, id, Phase.POOLS)
     }
 
     if (result.de_start !== null && result.de_end !== null) {
-      push(day, { startTime: result.de_start, endTime: result.de_end, count: deRefCount(result.de_strip_count), weapon })
+      push(day, { startTime: result.de_start, endTime: result.de_end, count: deRefCount(result.de_strip_count), weapon }, id, Phase.DE)
     }
     if (result.de_prelims_start !== null && result.de_prelims_end !== null) {
       push(day, {
@@ -156,7 +163,7 @@ export function refDemandFromSchedule(
         endTime: result.de_prelims_end,
         count: deRefCount(result.de_prelims_strip_count),
         weapon,
-      })
+      }, id, Phase.DE_PRELIMS)
     }
     if (result.de_round_of_16_start !== null && result.de_round_of_16_end !== null) {
       push(day, {
@@ -164,7 +171,7 @@ export function refDemandFromSchedule(
         endTime: result.de_round_of_16_end,
         count: deRefCount(result.de_round_of_16_strip_count),
         weapon,
-      })
+      }, id, Phase.DE_ROUND_OF_16)
     }
   }
 

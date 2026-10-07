@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
 import { BottleneckRule, DeMode, Phase, Weapon } from '../../src/engine/types.ts'
-import type { Placement } from '../../src/engine/types.ts'
+import type { Competition, Placement, RefRequirementsByDay, ScheduleResult } from '../../src/engine/types.ts'
+import { computeRefRequirements, refDemandFromSchedule } from '../../src/engine/refs.ts'
+import { deriveEventSchedule } from '../../src/engine/derive.ts'
+import { phaseKey } from '../../src/engine/unseated.ts'
+import type { KeptRun } from '../../src/store/keptRun.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makeCompetition, makeConfig, makePlacement, makeScheduleResult } from '../helpers/factories.ts'
-import { runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
+import { drawnFromDerived, runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
@@ -268,15 +272,65 @@ describe('buildRefDemandByDay', () => {
   }
 
   it('gives a day whose only DE is a bracket of 2 no interval at all', () => {
-    expect(buildRefDemandByDay(bracketOfTwoSchedule(null))).toEqual({})
+    expect(buildRefDemandByDay(drawnFromDerived(bracketOfTwoSchedule(null)))).toEqual({})
   })
 
   it('keeps the same event\'s pool interval and drops only the 0-count DE', () => {
-    const byDay = buildRefDemandByDay(bracketOfTwoSchedule(2))
+    const byDay = buildRefDemandByDay(drawnFromDerived(bracketOfTwoSchedule(2)))
 
     expect(byDay[1].intervals).toEqual([
       { startTime: 480, endTime: 540, count: 2, weapon: Weapon.FOIL },
     ])
+  })
+})
+
+/**
+ * 017 T9 (spec §7, P4 (c)): the footer's referee peak counts the drawn model,
+ * leaving out only the blocks it counts as unplaced. Right after a run that is
+ * the scheduler's timeline (appPathParity.test.ts). After a hand move the moved
+ * event counts at its derived times, less a phase with no free strip. While
+ * stale every derived phase counts, seated or not.
+ */
+describe('selectDerivedRefRequirements counts the drawn board (017 T9)', () => {
+  /** The per-day peaks of `results`, leaving out the phases `skip` names. */
+  function sweep(results: ScheduleResult[], skip: ReadonlySet<string>): RefRequirementsByDay[] {
+    const { config, competitions } = selectDrawnSchedule(useStore.getState())
+    return computeRefRequirements(refDemandFromSchedule(results, config, competitions, skip), config.days_available)
+  }
+
+  it('counts a hand-moved event at its derived times, less the phases that find no strips', () => {
+    const { id } = runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    const unseated = model.blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced).map((b) => b.phase)
+    expect(unseated, 'premise: the mover\'s POOLS and DE_PRELIMS find no strips').toEqual([Phase.POOLS, Phase.DE_PRELIMS])
+
+    const kept = state.lastRun as KeptRun
+    const competition = model.competitions.find((c) => c.id === id) as Competition
+    const results = Object.keys(model.events).map((eventId) => {
+      if (eventId === id) return deriveEventSchedule(state.placements[id], competition, model.config).result
+      expect(model.events[eventId].source, `premise: ${eventId} stays kept`).toBe('kept')
+      return kept.events[eventId].result
+    })
+    const skip = new Set(unseated.map((phase) => phaseKey(id, phase)))
+    expect(sweep(results, skip), 'premise: the unseated phases would move a peak').not.toEqual(sweep(results, new Set()))
+
+    expect(selectDerivedRefRequirements(state)).toEqual(sweep(results, skip))
+  })
+
+  it('counts every derived phase on a stale board, including one that finds no strips', () => {
+    const { id } = runAndMoveHeadline('B1')
+    useStore.getState().updateCompetition(id, { fencer_count: useStore.getState().selectedCompetitions[id].fencer_count + 1 })
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: a fencer-count edit makes the board stale').toBe(RunState.STALE)
+    const unseated = new Set(model.blocks.filter((b) => b.unseated).map((b) => phaseKey(b.competitionId, b.phase)))
+    expect(unseated.size, 'premise: the stale board draws unseated phases').toBeGreaterThan(0)
+
+    const results = Object.values(model.events).map(({ result }) => result)
+    expect(sweep(results, unseated), 'premise: the unseated phases would move a peak').not.toEqual(sweep(results, new Set()))
+
+    expect(selectDerivedRefRequirements(state)).toEqual(sweep(results, new Set()))
   })
 })
 

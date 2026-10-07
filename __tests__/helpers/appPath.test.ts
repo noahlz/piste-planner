@@ -166,13 +166,21 @@ describe('runAppPath', () => {
     // computePostScheduleRefDemand, named in the paragraphs above, is gone –
     // drawnRefDemand in concurrentScheduler.ts replaced it.
     //
+    // 017 T9, 2026-10-07 – day 1 218/68 → 210/64 at the same 2040, day 2 140
+    // at 3510 → 134 at 3480 (sabre 56 held), days 0 and 3 held: Task E
+    // reversed. The scheduler counts its own timeline again, each phase at the
+    // times and on the strips it allocated, waits included, less a phase that
+    // holds no strips (METHODOLOGY.md §Ref Demand Derivation as amended for
+    // 017, spec §7), and the footer counts the drawn board, which right after a
+    // run is that timeline. drawnRefDemand is gone.
+    //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.
     const result = runAppPath('B1')
     expect(result.refRequirementsByDay).toEqual([
       { day: 0, peak_total_refs: 154, peak_saber_refs: 62, peak_time: 540 },
-      { day: 1, peak_total_refs: 218, peak_saber_refs: 68, peak_time: 2040 },
-      { day: 2, peak_total_refs: 140, peak_saber_refs: 56, peak_time: 3510 },
+      { day: 1, peak_total_refs: 210, peak_saber_refs: 64, peak_time: 2040 },
+      { day: 2, peak_total_refs: 134, peak_saber_refs: 56, peak_time: 3480 },
       { day: 3, peak_total_refs: 186, peak_saber_refs: 72, peak_time: 4920 },
     ])
   })

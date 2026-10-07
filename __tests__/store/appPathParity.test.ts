@@ -17,7 +17,9 @@ import {
 import { BottleneckRule, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
 import { phaseRequiresVideo, phaseSpans } from '../../src/engine/unseated.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { runPreset, runTemplate } from '../helpers/drawnFixtures.ts'
+import { runAndPinAll, runPreset, runTemplate } from '../helpers/drawnFixtures.ts'
+import { computeRefRequirements, refDemandFromSchedule } from '../../src/engine/refs.ts'
+import { unseatedPhases } from '../../src/engine/unseated.ts'
 
 /**
  * The app-path parity check (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), FR-004): for each of
@@ -462,6 +464,10 @@ describe('a hard pair the scheduler breaks reaches the app\'s findings (016 revi
  * table counts totals only), plus B8 day 1, where the total held at 146 and
  * only peak_saber_refs differed (56 vs 64). The scheduler counted phases at the
  * times it allocated them, the store at the times it draws them.
+ *
+ * 017 T9 (spec §7) keeps the parity and moves both sides onto the scheduler's
+ * timeline: the scheduler counts its own results less `unseatedPhases`, and the
+ * footer counts the drawn model, which right after a run is that timeline.
  */
 describe('the footer\'s referee peak is the scheduler\'s (016 Task E)', () => {
   /** The footer's per-day figures, with each non-empty day's peak_time moved onto the scheduler axis. */
@@ -497,6 +503,30 @@ describe('the footer\'s referee peak is the scheduler\'s (016 Task E)', () => {
     const engine = scheduleAll(competitions, config, buildPinnedPlacements(state)).ref_requirements_by_day ?? []
     expect(footerOnSchedulerAxis()).toEqual(engine)
   })
+
+  /**
+   * 017 T9 (spec §7): a pinned phase the engine could not seat holds no strips,
+   * so neither side counts referees for it. B8's pin-all re-run leaves 48
+   * phases unseated (unseated.test.ts), enough that counting them would move
+   * the peak.
+   */
+  it('a pinned phase the run could not seat counts no referees on either side', () => {
+    runAndPinAll('B8')
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    const run = scheduleAll(competitions, config, buildPinnedPlacements(state))
+    const unseated = unseatedPhases(run)
+    expect(unseated.size, 'premise: the pin-all re-run leaves phases unseated').toBeGreaterThan(0)
+
+    const sweep = (skip: ReadonlySet<string>) => computeRefRequirements(
+      refDemandFromSchedule(Object.values(run.schedule), config, competitions, skip),
+      config.days_available,
+    )
+    expect(sweep(unseated), 'premise: counting the unseated phases would move a peak').not.toEqual(sweep(new Set()))
+
+    expect(run.ref_requirements_by_day).toEqual(sweep(unseated))
+    expect(footerOnSchedulerAxis()).toEqual(run.ref_requirements_by_day)
+  })
 })
 
 /**
@@ -527,13 +557,18 @@ describe('the footer counts the engine\'s placements at boot (017 T5a)', () => {
   })
 
   /**
-   * Referee ordering (plan, Global constraints): T5a moves what the footer
-   * counts as unplaced, never the referee peak, which stays on the derived
-   * schedule until T9. Measured at the T4 commit (316d041578), must pass before
-   * and after.
+   * Referee ordering (plan, Global constraints): T5a moved what the footer
+   * counts as unplaced, never the referee peak.
+   *
+   * 017 T9, 2026-10-07 – B1 218 → 210, B2 244 → 240, B4 104 → 88, B6 112 → 78
+   * and B8 236 → 212, B3, B5 and B7 held. The footer and the scheduler now
+   * count the scheduler's own timeline (METHODOLOGY.md §Ref Demand Derivation,
+   * spec §7), waits included, so a DE delayed for strips no longer overlaps the
+   * pools it waited behind. These are the drift ledger's pre-016 peaks
+   * (b84be7e291), the maximum over each scenario's days.
    */
   const BOOT_REF_PEAKS: Record<ScenarioId, number> = {
-    B1: 218, B2: 244, B3: 226, B4: 104, B5: 118, B6: 112, B7: 228, B8: 236,
+    B1: 210, B2: 240, B3: 226, B4: 88, B5: 118, B6: 78, B7: 228, B8: 212,
   }
 
   it.each(SCENARIO_IDS)('%s keeps its boot referee peak', (id) => {

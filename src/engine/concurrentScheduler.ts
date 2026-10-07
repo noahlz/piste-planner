@@ -30,7 +30,6 @@ import {
   dayEnd,
   dayHardEnd,
   tailEstimateMins,
-  DAY_AXIS_SPACING_MINS,
   ValidationMode,
 } from './types.ts'
 import type {
@@ -40,7 +39,6 @@ import type {
   Bottleneck,
   GlobalState,
   RefRequirementsByDay,
-  RefDemandByDay,
   StripAllocation,
   PinnedPlacement,
   DeBlocks,
@@ -64,8 +62,7 @@ import {
 import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
 import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand, refDemandFromSchedule } from './refs.ts'
-import { deriveEventSchedule, placementFromResult } from './derive.ts'
-import { phaseRequiresVideo } from './unseated.ts'
+import { phaseRequiresVideo, unseatedPhases } from './unseated.ts'
 import { compareIds } from './order.ts'
 import { findIndividualCounterpart } from './crossover.ts'
 import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS } from './constants.ts'
@@ -364,12 +361,18 @@ export function scheduleAllConcurrent(
     })
   }
 
-  // Post-schedule ref demand from the schedule as the workbench draws it
-  // (METHODOLOGY.md §Ref Demand Derivation, 016 spec §5), so the footer and
-  // this report count the same intervals. Nothing in the scheduler reads it.
-  // `remaining`, not `competitions`: an excluded event has no schedule entry,
-  // so counting it here would report demand for a board it is absent from.
-  state.ref_demand_by_day = drawnRefDemand(state.schedule, config, remaining)
+  // Post-schedule ref demand from the scheduler's own timeline (METHODOLOGY.md
+  // §Ref Demand Derivation, 017 spec §7): each phase at the times and on the
+  // strips it allocated, waits included, less a phase that holds no strips.
+  // Right after a run the footer draws this timeline, so the two count the
+  // same intervals. Nothing in the scheduler reads it. `remaining`, not
+  // `competitions`: an excluded event has no schedule entry.
+  state.ref_demand_by_day = refDemandFromSchedule(
+    Object.values(state.schedule),
+    config,
+    remaining,
+    unseatedPhases(state),
+  )
 
   // Standard post-schedule pipeline.
   const diagnostics = postScheduleDiagnostics(remaining, config, state.bottlenecks)
@@ -1551,47 +1554,6 @@ function predecessorReadyTime(node: PhaseNode, events: EventState[]): number | n
   }
   if (maxFloor === -Infinity) return null
   return maxFloor
-}
-
-// ──────────────────────────────────────────────
-// Post-schedule ref demand
-// ──────────────────────────────────────────────
-
-/**
- * Referee demand per day from the schedule as the workbench draws it: each
- * scheduled event becomes the placement `runScheduleAll` would record
- * (`placementFromResult`), is laid out end to end by `deriveEventSchedule`,
- * and the drawn results are counted by `refDemandFromSchedule`, exactly as the
- * store's footer counts them. A phase the scheduler delayed for strips is
- * therefore counted at its drawn time, not its allocated one.
- *
- * `deriveEventSchedule` works on the placement's own day's clock axis, so its
- * intervals come back shifted by the day's d × DAY_AXIS_SPACING_MINS: every
- * engine time, `ref_requirements_by_day.peak_time` included, stays on the
- * scheduler axis. This is the one place that shift is added back.
- */
-function drawnRefDemand(
-  schedule: Record<string, ScheduleResult>,
-  config: TournamentConfig,
-  competitions: Competition[],
-): Record<number, RefDemandByDay> {
-  const drawn: ScheduleResult[] = []
-  for (const competition of competitions) {
-    const result = schedule[competition.id]
-    if (result === undefined) continue
-    const placement = placementFromResult(result)
-    if (placement === null) continue
-    drawn.push(deriveEventSchedule(placement, competition, config).result)
-  }
-
-  const byDay = refDemandFromSchedule(drawn, config, competitions)
-  for (const [key, { intervals }] of Object.entries(byDay)) {
-    const shift = Number(key) * DAY_AXIS_SPACING_MINS
-    byDay[Number(key)] = {
-      intervals: intervals.map((iv) => ({ ...iv, startTime: iv.startTime + shift, endTime: iv.endTime + shift })),
-    }
-  }
-  return byDay
 }
 
 // ──────────────────────────────────────────────
