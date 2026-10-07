@@ -22,9 +22,10 @@ import {
 } from '../../src/store/derived.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { unseatedPhases } from '../../src/engine/unseated.ts'
-import { DeMode, Weapon } from '../../src/engine/types.ts'
+import { DeMode, Phase, Weapon } from '../../src/engine/types.ts'
 import { SCENARIO_IDS, type ScenarioId } from '../../src/data/tournaments.ts'
 import { makePlacement } from '../helpers/factories.ts'
+import { FLIGHTED_FIXTURES, loadFlightedFixture, type FlightedFixtureName } from '../helpers/flightedFixtures.ts'
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState(), true)
@@ -66,7 +67,10 @@ function pinsForWholeBoard() {
 function expectWholeBoardStale(): void {
   const model = drawn()
   expect(model.runState).toBe(RunState.STALE)
-  expect(Object.keys(model.events).length).toBeGreaterThan(0)
+  const { placements, selectedCompetitions } = store()
+  const placedAndSelected = Object.keys(placements).filter(id => id in selectedCompetitions).sort()
+  expect(placedAndSelected.length, 'premise: the board holds placed events').toBeGreaterThan(0)
+  expect(Object.keys(model.events).sort()).toEqual(placedAndSelected)
   for (const [id, event] of Object.entries(model.events)) {
     expect(event.source, id).toBe('derived')
     expect(event.keptStrips, id).toBeNull()
@@ -140,7 +144,36 @@ describe('a placement edit derives only the event it touches (review focus 1)', 
     expect(model.runState).toBe(RunState.FRESH)
     expect(sourcesOf(model)).toEqual(sourcesOf(before))
     expect(sourcesOf(model)).toEqual(everyKept)
-    expect(keptRun().events[id]).toBeDefined()
+    expect(model.events[id]).toEqual(before.events[id])
+    const blocksOf = (m: DrawnSchedule) => m.blocks.filter(block => block.competitionId === id)
+    expect(blocksOf(model)).toEqual(blocksOf(before))
+  })
+})
+
+describe('a flighted run keeps each flight as its own phase (review focus 4)', () => {
+  it.each(Object.keys(FLIGHTED_FIXTURES) as FlightedFixtureName[])('%s', (name) => {
+    const id = loadFlightedFixture(name)
+    runScheduleAll()
+    const kept = keptRun().events[id]
+    const model = drawn()
+
+    expect(model.runState).toBe(RunState.FRESH)
+    expect(model.events[id].source).toBe('kept')
+    const blocks = model.blocks.filter(block => block.competitionId === id)
+    expect(blocks.map(block => block.phase)).toEqual(kept.phases.map(phase => phase.phase))
+    for (const block of blocks) {
+      const phase = kept.phases.find(p => p.phase === block.phase)
+      expect(block.strips, block.phase).toEqual(phase?.strips)
+    }
+    if (name === 'MANY_POOLS') {
+      for (const flight of [Phase.FLIGHT_A, Phase.FLIGHT_B]) {
+        expect(blocks.filter(block => block.phase === flight), flight).toHaveLength(1)
+      }
+    } else {
+      expect(blocks.some(block => block.phase === Phase.FLIGHT_A), 'premise: flight A runs').toBe(true)
+      expect(blocks.some(block => block.phase === Phase.FLIGHT_B)).toBe(false)
+    }
+    expect(model.unplacedIds.size).toBe(0)
   })
 })
 
@@ -151,7 +184,10 @@ describe('an edit to the engine\'s inputs makes the whole board stale (review fo
       const id = firstPlacedId()
       store().updateCompetition(id, { fencer_count: store().selectedCompetitions[id].fencer_count + 10 })
     },
-    'flighted': () => store().updateCompetition('D1-M-EPEE-IND', { flighted: true }),
+    'flighted': () => {
+      const { id, partial } = FLIGHTED_FIXTURES.MANY_POOLS
+      store().updateCompetition(id, partial)
+    },
     'deselect': () => store().removeCompetition(firstPlacedId()),
     'a setting': () => store().setDeModeOverride(DeMode.SINGLE_STAGE),
     'day count': () => store().setDays(store().days_available + 1),
@@ -285,13 +321,21 @@ describe('a board with no run', () => {
     expectWholeBoardStale()
   })
 
+  const DESELECTED_ID = 'Y14-M-FOIL-IND'
+  const placedOnDay = (day: number) => makePlacement({ day, start_time: 480, strip_count: 4 })
   const NOTHING_TO_BE_STALE_ABOUT: Record<string, () => void> = {
     'empty': () => {},
-    'placements of deselected events only': () =>
-      useStore.setState({ placements: { 'Y14-M-FOIL-IND': makePlacement({ day: 0, start_time: 480, strip_count: 4 }) } }),
+    'placements of deselected events only': () => {
+      expect(store().selectedCompetitions[DESELECTED_ID], 'premise: not selected in B1').toBeUndefined()
+      useStore.setState({ placements: { [DESELECTED_ID]: placedOnDay(0) } })
+    },
     'out-of-range placements only': () => {
       const id = Object.keys(store().selectedCompetitions)[0]
-      useStore.setState({ placements: { [id]: makePlacement({ day: 9, start_time: 480, strip_count: 4 }) } })
+      useStore.setState({ placements: { [id]: placedOnDay(9) } })
+    },
+    'negative-day placements only': () => {
+      const id = Object.keys(store().selectedCompetitions)[0]
+      useStore.setState({ placements: { [id]: placedOnDay(-1) } })
     },
   }
 
@@ -301,6 +345,55 @@ describe('a board with no run', () => {
 
     const model = drawn()
     expect(model.runState).toBe(RunState.FRESH)
+    expect(model.unplacedIds.size).toBe(0)
+  })
+})
+
+describe('a run that no longer describes the inputs keeps nothing', () => {
+  /**
+   * Keep only the last day's events, then drop that day: every placement is
+   * out of range, so nothing makes the board stale, yet the kept run read
+   * other inputs and must not draw any event.
+   */
+  function onlyOutOfRangePlacementsLeft(): void {
+    runPreset()
+    const lastDay = store().days_available - 1
+    for (const [id, placement] of Object.entries(store().placements)) {
+      if (placement.day !== lastDay) store().removeCompetition(id)
+    }
+    store().setDays(lastDay)
+  }
+
+  const EDITS: Record<string, () => void> = {
+    'fewer days': onlyOutOfRangePlacementsLeft,
+    'fewer days and fewer strips': () => {
+      onlyOutOfRangePlacementsLeft()
+      store().setStrips(2)
+    },
+  }
+
+  it.each(Object.keys(EDITS))('%s', (edit) => {
+    EDITS[edit]()
+    const { placements, selectedCompetitions, lastRun } = store()
+    const left = Object.keys(selectedCompetitions).filter(id => placements[id] !== undefined)
+
+    expect(left.length, 'premise: some events are still placed').toBeGreaterThan(0)
+    expect(
+      left.some(id => {
+        const key = lastRun?.events[id]?.placementKey
+        return key?.day === placements[id].day && key.start_time === placements[id].start_time
+          && key.strip_count === placements[id].strip_count
+      }),
+      'premise: an event still sits where the run put it',
+    ).toBe(true)
+
+    const model = drawn()
+    expect(model.runState).toBe(RunState.FRESH)
+    for (const id of left) {
+      expect(model.events[id].source, id).toBe('derived')
+      expect(model.events[id].day_out_of_range, id).toBe(true)
+    }
+    expect(model.blocks).toEqual([])
     expect(model.unplacedIds.size).toBe(0)
   })
 })
@@ -318,6 +411,10 @@ describe('memoization (review focus 9)', () => {
     } as const
     const before = Object.fromEntries(Object.entries(SELECTORS).map(([name, select]) => [name, select(store())]))
     const placements = store().placements
+    // Control: with nothing changed each selector returns the value it memoized,
+    // so a new value below means the run, not a missing memo.
+    const notMemoized = Object.entries(SELECTORS).filter(([name, select]) => select(store()) !== before[name])
+    expect(notMemoized.map(([name]) => name)).toEqual([])
 
     // The pin-all run seats fewer phases at the same placements.
     const { config, competitions } = buildTournamentConfig(store())
@@ -327,8 +424,7 @@ describe('memoization (review focus 9)', () => {
     store().setLastRun(keepRun(pinAllRun, config, competitions, pins))
 
     expect(store().placements).toBe(placements)
-    for (const [name, select] of Object.entries(SELECTORS)) {
-      expect(select(store()), name).not.toBe(before[name])
-    }
+    const unchanged = Object.entries(SELECTORS).filter(([name, select]) => select(store()) === before[name])
+    expect(unchanged.map(([name]) => name)).toEqual([])
   })
 })

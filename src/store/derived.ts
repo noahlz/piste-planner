@@ -183,15 +183,19 @@ function sitsWhereKept(key: KeptEvent['placementKey'], placement: Placement): bo
 }
 
 /**
- * Per event, the kept run's result and strips when the board is fresh and the
- * event sits exactly where the run put it (or where its pin held it), else its
+ * Per event, the kept run's result and strips when the run read the current
+ * inputs and the event sits exactly where the run put it (or where its pin held it), else its
  * placement's derived layout. Validity is decided here, on every recompute, so
  * no store action has to remember to invalidate the run (spec §2).
  */
 function computeDrawnSchedule(state: StoreState): DrawnSchedule {
   const { config, competitions } = buildTournamentConfig(state)
-  const runState = runStateOf(state, configKeyOf(config, competitions))
-  const kept = runState === RunState.FRESH ? state.lastRun : null
+  const configKey = configKeyOf(config, competitions)
+  const runState = runStateOf(state, configKey)
+  // Not `runState === FRESH`: a board with only out-of-range placements is
+  // fresh even when the run read other inputs (fewer days, fewer strips), and
+  // that run must keep nothing (spec §2, D2).
+  const kept = state.lastRun !== null && state.lastRun.configKey === configKey ? state.lastRun : null
 
   const events: Record<string, DrawnEventSchedule> = {}
   for (const competition of competitions) {
