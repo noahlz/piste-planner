@@ -2,10 +2,10 @@ import type { CSSProperties, MouseEvent, PointerEvent } from 'react'
 import type { Competition } from '../../engine/types.ts'
 import { Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
-import type { BlockPlacement } from '../../layout/lanes.ts'
+import type { DrawnBlock } from '../../layout/strips.ts'
 import { GENDER_DISPLAY, categoryDisplay, vetAgeGroupDisplay } from '../../lib/competitionLabels.ts'
 import { WeaponTokenPart, weaponVar } from './weaponTokens.ts'
-import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts'
+import { drawnStripsLabel, phaseDisplay } from '../../lib/placementLabels.ts'
 
 /**
  * One block on the canvas — FR-035 to FR-037, FR-043,
@@ -19,8 +19,8 @@ import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts
  * | 45° hatch, plus the icon | Phase — a bracket for a DE, a bout grid for pools |
  * | Name text | Category and gender, at whatever length the room allows |
  * | Pin badge | Pinned |
- * | Dashed edge / ring | Overflow / selection |
- * | Solid flash edge | A Warning, Unplaced or Blocking finding (not Notes, never on overflow) |
+ * | Dashed edge / ring | Unseated / selection |
+ * | Flash edge | A Warning, Unplaced or Blocking finding (not Notes), the overflow lane's blocks included |
  *
  * 004's block component painted the age category across sixteen fills and put the
  * weapon in a one-letter chip. Research D4 inverts that: weapon is the thing a
@@ -35,6 +35,17 @@ import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts
  * `weaponTokens.ts` and consumed by this element's own styles. No hex literal
  * and no age-category token name reaches this file: the tokens in `src/index.css` are
  * the single home for the colours (standing rule 13).
+ *
+ * ## One rect per strip run (017 spec §6)
+ *
+ * A phase on non-contiguous strips is drawn as several rects, one per maximal
+ * run, and `Canvas` renders one `Block` per run. The first run (`runIndex` 0)
+ * is the phase: it carries the accessible name and every `data-*` the tests and
+ * the live driver read. A continuation is a sibling that shares the fill, the
+ * hatch, the selection ring, the flash and the findings edge and click-selects
+ * too, but is `aria-hidden` and carries `data-block-run` alone, so
+ * `[data-event-block]` counts phases and the accessibility tree reads each
+ * phase once. The label, the icon and the pin badge stay on the first run.
  *
  * ## Nothing here drags, and nothing resizes (FR-043)
  *
@@ -75,12 +86,14 @@ export interface BlockProps {
   competition: Competition
   /** `competitionLabel(competition)`, resolved once by the canvas. */
   label: string
-  placement: BlockPlacement
+  placement: DrawnBlock
+  /** Which of the phase's strip runs this rect draws. 0, the default, is the phase itself. */
+  runIndex?: number
   pinned: boolean
   /**
    * The block's event has a committed Warning, Unplaced or Blocking finding row
    * (not a Note). Required so a dropped prop fails `tsc -b` instead of silently
-   * drawing no border. An overflow block never draws the solid edge.
+   * drawing no border. An unseated block draws it too.
    */
   warned: boolean
   selected: boolean
@@ -93,7 +106,7 @@ export interface BlockProps {
    * the full label: there is no room to judge it against.
    */
   widthPx: number | null
-  /** `placement.stripCount * rungAt(zoomStep).row`. */
+  /** This rect's height: its run's strips times `rungAt(zoomStep).row`, or one row for an unseated block. */
   heightPx: number
   /** Absolute position, as the canvas solved it. */
   style: CSSProperties
@@ -113,6 +126,7 @@ export function Block({
   competition,
   label,
   placement,
+  runIndex = 0,
   pinned,
   warned,
   selected,
@@ -126,13 +140,16 @@ export function Block({
   onClick,
 }: BlockProps) {
   const kind = phaseKind(placement.phase)
+  const isContinuation = runIndex > 0
+  // An unseated block has no run: it draws one row in the overflow lane.
+  const rows = Math.max(1, placement.runs[runIndex]?.count ?? 1)
 
   const name = [
     label,
     phaseDisplay(placement.phase),
     `Day ${placement.day + 1}`,
     `${formatClock(placement.startMinutes)}–${formatClock(placement.endMinutes)}`,
-    stripAssignmentLabel(placement.firstStrip, placement.stripCount, placement.overflow),
+    drawnStripsLabel(placement),
     ...(findings.length === 0
       ? []
       : [`${findings.length} finding${findings.length === 1 ? '' : 's'}: ${findings.join('; ')}`]),
@@ -142,7 +159,7 @@ export function Block({
   // 1240-1258). Sizing the glyph and the type from the rung alone left a
   // zoomed-out block carrying full-size furniture inside a shrinking box, so
   // wide blocks truncated their names for room the icon had taken.
-  const rowHeightPx = heightPx / Math.max(1, placement.stripCount)
+  const rowHeightPx = heightPx / rows
   const contentHeightPx = Math.max(0, heightPx - 8)
   const namePx = clamp(
     Math.max(rowHeightPx * 0.46, Math.min(contentHeightPx * 0.34, 19)),
@@ -199,9 +216,9 @@ export function Block({
   const displayIconPx = showIcon ? iconPx : iconAlonePx
   const renderIcon = displayIconPx > 0
 
-  // One value drives both the drawn edge and `data-warned`, so the attribute is
-  // "true" exactly when the solid findings border is drawn.
-  const warnedEdge = warned && !placement.overflow
+  // Every warned block draws the findings edge, the overflow lane's included
+  // (spec §6), so `data-warned` is simply the prop.
+  const warnedEdge = warned
 
   // The four paint channels travel as custom properties so the styles below
   // can consume them; React types style as CSSProperties, which has no index
@@ -214,39 +231,45 @@ export function Block({
     '--block-hatch': weaponVar(competition.weapon, WeaponTokenPart.HATCH),
     background: 'var(--block-fill)',
     color: 'var(--block-ink)',
-    // An unplaced block goes dashed in the flash colour. A placed one keeps a
+    // An unseated block goes dashed in the flash colour. A seated one keeps a
     // solid edge, which turns flash-coloured and 2px when its event carries a
     // Warning, Unplaced or Blocking finding (mockup lines 1283 and 1287). Written
     // as longhands: a `border` shorthand beside `borderStyle` makes React warn
     // whenever only one of them changes between renders.
-    borderWidth: placement.overflow || warnedEdge ? 2 : 1.5,
-    borderStyle: placement.overflow ? 'dashed' : 'solid',
-    borderColor: placement.overflow || warnedEdge ? 'var(--flash)' : 'var(--block-edge)',
+    borderWidth: placement.unseated || warnedEdge ? 2 : 1.5,
+    borderStyle: placement.unseated ? 'dashed' : 'solid',
+    borderColor: placement.unseated || warnedEdge ? 'var(--flash)' : 'var(--block-edge)',
     borderRadius: 9,
     boxSizing: 'border-box',
     overflow: 'hidden',
     boxShadow: 'var(--shadow-block)',
   } as CSSProperties
 
+  const identity = isContinuation
+    ? { 'aria-hidden': true as const, 'data-block-run': `${competition.id}:${placement.phase}` }
+    : {
+        role: 'img',
+        'aria-label': name,
+        'data-event-block': `${competition.id}:${placement.phase}`,
+        'data-event-id': competition.id,
+        'data-day': placement.day,
+        'data-phase': placement.phase,
+        'data-phase-kind': kind,
+        'data-start': placement.startMinutes,
+        'data-end': placement.endMinutes,
+        'data-strips': placement.strips.join(','),
+        'data-strip-count': placement.stripCount,
+        'data-unseated': placement.unseated ? 'true' : 'false',
+        'data-weapon': competition.weapon,
+        'data-pinned': pinned ? 'true' : 'false',
+        'data-warned': warnedEdge ? 'true' : 'false',
+        'data-selected': selected ? 'true' : 'false',
+        'data-flash': flash ? 'true' : 'false',
+      }
+
   return (
     <div
-      role="img"
-      aria-label={name}
-      data-event-block={`${competition.id}:${placement.phase}`}
-      data-event-id={competition.id}
-      data-day={placement.day}
-      data-phase={placement.phase}
-      data-phase-kind={kind}
-      data-start={placement.startMinutes}
-      data-end={placement.endMinutes}
-      data-strips={placement.stripCount}
-      data-first-strip={placement.firstStrip}
-      data-overflow={placement.overflow ? 'true' : 'false'}
-      data-weapon={competition.weapon}
-      data-pinned={pinned ? 'true' : 'false'}
-      data-warned={warnedEdge ? 'true' : 'false'}
-      data-selected={selected ? 'true' : 'false'}
-      data-flash={flash ? 'true' : 'false'}
+      {...identity}
       style={blockStyle}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
@@ -264,7 +287,7 @@ export function Block({
         />
       )}
 
-      {pinned && (
+      {pinned && !isContinuation && (
         <span
           data-pin-glyph
           aria-hidden="true"
@@ -300,31 +323,33 @@ export function Block({
         />
       )}
 
-      <div
-        aria-hidden="true"
-        data-content
-        className="relative flex h-full items-center justify-center overflow-hidden leading-none"
-        style={{ padding: `0 ${padding}px`, gap: `${gap}px` }}
-      >
-        {renderIcon && (
-          <span
-            data-icon={kind === 'de' ? 'bracket' : 'grid'}
-            className="block flex-none self-center"
-            style={{ width: displayIconPx, height: displayIconPx, lineHeight: 0 }}
-          >
-            {kind === 'de' ? <BracketIcon /> : <GridIcon />}
-          </span>
-        )}
-        {labelText !== '' && (
-          <span
-            data-label
-            className="overflow-hidden font-semibold text-ellipsis whitespace-nowrap"
-            style={{ fontSize: `${namePx.toFixed(1)}px`, lineHeight: 1 }}
-          >
-            {labelText}
-          </span>
-        )}
-      </div>
+      {!isContinuation && (
+        <div
+          aria-hidden="true"
+          data-content
+          className="relative flex h-full items-center justify-center overflow-hidden leading-none"
+          style={{ padding: `0 ${padding}px`, gap: `${gap}px` }}
+        >
+          {renderIcon && (
+            <span
+              data-icon={kind === 'de' ? 'bracket' : 'grid'}
+              className="block flex-none self-center"
+              style={{ width: displayIconPx, height: displayIconPx, lineHeight: 0 }}
+            >
+              {kind === 'de' ? <BracketIcon /> : <GridIcon />}
+            </span>
+          )}
+          {labelText !== '' && (
+            <span
+              data-label
+              className="overflow-hidden font-semibold text-ellipsis whitespace-nowrap"
+              style={{ fontSize: `${namePx.toFixed(1)}px`, lineHeight: 1 }}
+            >
+              {labelText}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

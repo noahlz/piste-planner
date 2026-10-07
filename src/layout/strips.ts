@@ -44,25 +44,26 @@ import type { Competition, GlobalState, Phase, TournamentConfig } from '../engin
 import { allocateInterval, createGlobalState, findAvailableStripsInWindow } from '../engine/resources.ts'
 import { phaseRequiresVideo, phaseSpans } from '../engine/unseated.ts'
 import { compareIds } from '../engine/order.ts'
-import type { BlockPlacement } from './lanes.ts'
+import { runsOf, type StripRun } from './runs.ts'
+
+export type { StripRun }
 
 /** One event to draw: its result on the clock axis, plus the strips its run kept, or `null` when derived. */
 export type DrawnEventInput = DerivedEventSchedule & {
   keptStrips: Readonly<Partial<Record<Phase, readonly number[]>>> | null
 }
 
-/** A stretch of consecutive strip indices, `first` 0-based. */
-export interface StripRun {
-  first: number
-  count: number
-}
-
 /**
  * One drawn phase. `strips` is ascending and empty when `unseated`; `runs` are
- * its maximal consecutive stretches. `firstStrip` and `overflow` keep code
- * typed on `BlockPlacement` compiling until the canvas reads `runs` (T6b).
+ * its maximal consecutive stretches, one rect each on the canvas.
  */
-export interface DrawnBlock extends BlockPlacement {
+export interface DrawnBlock {
+  competitionId: string
+  day: number
+  phase: Phase
+  startMinutes: number
+  endMinutes: number
+  stripCount: number
   strips: readonly number[]
   runs: readonly StripRun[]
   unseated: boolean
@@ -112,16 +113,6 @@ function compareForSeating(a: Candidate, b: Candidate): number {
     || a.eventStartMinutes - b.eventStartMinutes
     || compareIds(a.competitionId, b.competitionId)
     || a.rank - b.rank
-}
-
-function runsOf(strips: readonly number[]): StripRun[] {
-  const runs: StripRun[] = []
-  for (const strip of strips) {
-    const last = runs[runs.length - 1]
-    if (last && last.first + last.count === strip) last.count++
-    else runs.push({ first: strip, count: 1 })
-  }
-  return runs
 }
 
 function keptIndices(candidate: Omit<Candidate, 'kept'>, strips: readonly number[], stripsTotal: number): number[] {
@@ -222,8 +213,6 @@ export function assignStrips(
       startMinutes: candidate.startMinutes,
       endMinutes: candidate.endMinutes,
       stripCount: candidate.stripCount,
-      firstStrip: runs[0]?.first ?? 0,
-      overflow: unseated,
       strips,
       runs,
       unseated,

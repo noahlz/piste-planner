@@ -7,6 +7,9 @@ import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import type { ScenarioId } from '../../src/data/tournaments.ts'
+import { Phase } from '../../src/engine/types.ts'
+import { runsOf } from '../../src/layout/runs.ts'
+import type { DrawnBlock } from '../../src/layout/strips.ts'
 import { drawnScheduleFrom, RunState } from '../../src/store/derived.ts'
 import type { DerivedSchedule, DrawnEventSchedule, DrawnSchedule } from '../../src/store/derived.ts'
 
@@ -88,4 +91,27 @@ export function moveHeadline(): { id: string; day: number } {
   const day = (placements[id].day + 1) % days_available
   moveDay(id, day)
   return { id, day }
+}
+
+/**
+ * One drawn phase for a component test: pools at 08:00–09:45 on day 0 holding
+ * `strips` (strips 0–3 unless said), with `runs` and `unseated` following from
+ * the strip set the way `assignStrips` reports them. `strips: []` is an
+ * unseated phase, and `stripCount` then says how many it needed.
+ */
+export function drawnBlock(overrides: Partial<DrawnBlock> = {}): DrawnBlock {
+  const strips = overrides.strips ?? [0, 1, 2, 3]
+  const stripCount = overrides.stripCount ?? (strips.length > 0 ? strips.length : 4)
+  return {
+    competitionId: 'plain',
+    day: 0,
+    phase: Phase.POOLS,
+    startMinutes: 480,
+    endMinutes: 585,
+    stripCount,
+    strips,
+    runs: runsOf(strips),
+    unseated: strips.length === 0,
+    ...overrides,
+  }
 }

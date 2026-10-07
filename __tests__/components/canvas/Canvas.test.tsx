@@ -5,9 +5,16 @@ import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
 import { useStore, type StoreState } from '../../../src/store/store.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
-import { selectDrawnSchedule, selectDerivedFindings, selectFindings, FindingSeverity } from '../../../src/store/derived.ts'
-import type { DerivedFindings, DerivedSchedule, DrawnSchedule } from '../../../src/store/derived.ts'
-import { assignStripLanes } from '../../../src/layout/lanes.ts'
+import {
+  drawnScheduleFrom,
+  selectDrawnSchedule,
+  selectDerivedFindings,
+  selectFindings,
+  FindingSeverity,
+  RunState,
+} from '../../../src/store/derived.ts'
+import type { DerivedFindings, DerivedSchedule, DrawnEventSchedule, DrawnSchedule } from '../../../src/store/derived.ts'
+import { rungAt } from '../../../src/components/canvas/zoomLadder.ts'
 import type { DayConfig } from '../../../src/engine/types.ts'
 import { BottleneckRule, Phase } from '../../../src/engine/types.ts'
 import { makeBottleneck, makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
@@ -319,7 +326,7 @@ describe('Canvas zoom (FR-034, D3)', () => {
     })
     const findings: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
     const dayConfigs: DayConfig[] = [{ day_start_time: 480, day_end_time: 1320 }]
-    const expectedBlocks = assignStripLanes(schedule.events, config.strips_total).length
+    const expectedBlocks = schedule.blocks.length
 
     renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 2, fitting: true } })
 
@@ -417,7 +424,7 @@ describe('Canvas gutter flags (FR-037, 013 T030 contract §4.2)', () => {
 
     renderCanvas({ schedule, findings, dayConfigs }, { findingRows: [row] })
 
-    // assignStripLanes gives the only candidate firstStrip 0 over 2 strips, so
+    // The only phase is derived onto the lowest free strips, 0 and 1, so
     // rows are located by document position (strip index order) rather than
     // by any particular attribute value — the contract does not fix what
     // data-strip-row's value carries, only that it marks a row.
@@ -586,25 +593,36 @@ describe('Canvas findings edge (FR-042, 013 T048)', () => {
     return eventBlocks().filter((b) => b.dataset.eventId === id)
   }
 
-  /** An event B1 draws with both a placed block and an overflow block. */
-  function eventWithOverflow(): string {
-    const overflow = eventBlocks().find((b) => b.dataset.overflow === 'true')
-    if (!overflow?.dataset.eventId) throw new Error('fixture has no overflow block')
-    return overflow.dataset.eventId
+  /** B1 run, then the headline Move day: the moved event keeps a seated phase and has unseated ones. */
+  function movedBoard(): { schedule: DrawnSchedule; findings: DerivedFindings; dayConfigs: DayConfig[] } {
+    runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    return {
+      schedule: selectDrawnSchedule(state),
+      findings: selectDerivedFindings(state),
+      dayConfigs: state.dayConfigs,
+    }
   }
 
-  /** Every block reports 'true' only if it is a placed block of `targetId`. */
+  /** An event the moved board draws with both a seated block and an unseated one. */
+  function eventWithUnseated(): string {
+    const unseated = eventBlocks().find((b) => b.dataset.unseated === 'true')
+    if (!unseated?.dataset.eventId) throw new Error('fixture has no unseated block')
+    return unseated.dataset.eventId
+  }
+
+  /** Every block reports 'true' only if it belongs to `targetId`, the overflow lane's included (spec §6). */
   function expectWarnedOnly(targetId: string | null): void {
     for (const b of eventBlocks()) {
-      const expected = b.dataset.eventId === targetId && b.dataset.overflow !== 'true'
+      const expected = b.dataset.eventId === targetId
       expect(b.dataset.warned, b.dataset.eventBlock).toBe(expected ? 'true' : 'false')
     }
   }
 
   function guardTarget(targetId: string): void {
     const blocks = blocksOf(targetId)
-    expect(blocks.some((b) => b.dataset.overflow !== 'true')).toBe(true)
-    expect(blocks.some((b) => b.dataset.overflow === 'true')).toBe(true)
+    expect(blocks.some((b) => b.dataset.unseated !== 'true')).toBe(true)
+    expect(blocks.some((b) => b.dataset.unseated === 'true')).toBe(true)
   }
 
   /** The id of a B1 event that is not `id`. */
@@ -615,12 +633,12 @@ describe('Canvas findings edge (FR-042, 013 T048)', () => {
   }
 
   it.each(['Warning', 'Unplaced', 'Blocking'] as const)(
-    'marks every placed block of the event a committed %s row targets, never its overflow block, and no other event',
+    'marks every block of the event a committed %s row targets, its unseated block included, and no other event',
     (severity) => {
-      const { schedule, findings, dayConfigs } = b1Board()
-      // Learn the target from a first render, since only a drawn board shows which event overflows.
+      const { schedule, findings, dayConfigs } = movedBoard()
+      // Learn the target from a first render, since only a drawn board shows which event is unseated.
       const probe = renderCanvas({ schedule, findings, dayConfigs })
-      const targetId = eventWithOverflow()
+      const targetId = eventWithUnseated()
       probe.unmount()
       const otherId = otherThan(schedule.competitions, targetId)
 
@@ -686,7 +704,7 @@ describe('Canvas findings edge (FR-042, 013 T048)', () => {
   })
 
   function placedBlocksOfNonEmpty(id: string): boolean {
-    return blocksOf(id).some((b) => b.dataset.overflow !== 'true')
+    return blocksOf(id).some((b) => b.dataset.unseated !== 'true')
   }
 })
 
@@ -882,10 +900,7 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
     )
 
     const stripsOf = (id: string): string[] =>
-      blocksOf(id).flatMap((block) => {
-        const first = Number(block.dataset.firstStrip)
-        return Array.from({ length: Number(block.dataset.strips) }, (_, i) => String(first + i))
-      })
+      blocksOf(id).flatMap((block) => (block.dataset.strips ?? '').split(',').filter((strip) => strip !== ''))
     const expected = [...new Set([...stripsOf(OWNER), ...stripsOf(PARTNER)])].sort()
     const flagged = stripRowsInDay(0)
       .filter((r) => r.dataset.flagged === 'true')
@@ -912,5 +927,148 @@ describe('Canvas two-event findings (016 spec §4, R3, Task D)', () => {
     expect(findingsText(pool)).not.toContain('de only')
     expect(findingsText(de)).toContain('de only')
     expect(findingsText(de)).not.toContain('pools only')
+  })
+})
+
+describe('Canvas draws the scheduler\'s strips (017 T6b, spec §6)', () => {
+  const ROW = rungAt(DEFAULT_ZOOM.zoomStep).row
+  const PPM = rungAt(DEFAULT_ZOOM.zoomStep).ppm
+  const DAY_START = 480
+  const DAY_CONFIGS: DayConfig[] = [
+    { day_start_time: DAY_START, day_end_time: 1320 },
+    { day_start_time: DAY_START, day_end_time: 1320 },
+  ]
+  const NO_FINDINGS: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
+
+  type Entry = [id: string, start: number, end: number, stripCount: number, kept: number[] | null, day?: number]
+
+  /** A hand-built drawn model: `kept` entries keep their strip indices, the rest are derived around them. */
+  function board(entries: Entry[], runState: RunState = RunState.FRESH, stripsTotal = 8): DrawnSchedule {
+    const config = makeConfig({ days_available: 2, strips: makeStrips(stripsTotal, 0) })
+    const events: Record<string, DrawnEventSchedule> = {}
+    for (const [id, start, end, stripCount, kept, day = 0] of entries) {
+      events[id] = {
+        result: {
+          ...makeScheduleResult(id, day),
+          pool_start: start,
+          pool_end: end,
+          pool_strip_count: stripCount,
+        },
+        day_out_of_range: false,
+        keptStrips: kept === null ? null : { [Phase.POOLS]: kept },
+        source: kept === null ? 'derived' : 'kept',
+      }
+    }
+    const competitions = entries.map(([id]) => makeCompetition({ id }))
+    return drawnScheduleFrom(config, competitions, events, runState)
+  }
+
+  function draw(schedule: DrawnSchedule): void {
+    renderCanvas({ schedule, findings: NO_FINDINGS, dayConfigs: DAY_CONFIGS })
+  }
+
+  /** Every rect of one phase, the first run first. */
+  function rectsOf(id: string): HTMLElement[] {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(`[data-event-block="${id}:POOLS"], [data-block-run="${id}:POOLS"]`),
+    )
+  }
+
+  it('draws a kept phase with a split index set as one rect per run, at those strips, under one event block', () => {
+    draw(board([['K', 600, 700, 4, [0, 1, 5, 6]]]))
+
+    const rects = rectsOf('K')
+    expect(document.querySelectorAll('[data-event-block]')).toHaveLength(1)
+    expect(rects).toHaveLength(2)
+    expect(rects.map((rect) => rect.style.top)).toEqual([`${0 * ROW + 2}px`, `${5 * ROW + 2}px`])
+    expect(rects.map((rect) => rect.style.height)).toEqual([`${2 * ROW - 4}px`, `${2 * ROW - 4}px`])
+    for (const rect of rects) expect(rect.style.left).toBe(`${(600 - DAY_START) * PPM}px`)
+    expect(rects[0].dataset.strips).toBe('0,1,5,6')
+    expect(rects[0].dataset.stripCount).toBe('4')
+    expect(rects[0].dataset.unseated).toBe('false')
+  })
+
+  it('draws a phase held on one run as a single rect', () => {
+    draw(board([['K', 600, 700, 3, [2, 3, 4]]]))
+
+    expect(rectsOf('K')).toHaveLength(1)
+    expect(document.querySelector('[data-overflow-lane]')).toBeNull()
+  })
+
+  it('draws an unseated phase in its day\'s overflow lane at its time, holding no strip', () => {
+    draw(board([
+      ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
+      ['A', 630, 690, 2, null],
+    ]))
+
+    const lane = document.querySelector<HTMLElement>('[data-overflow-lane][data-day="0"]')
+    expect(lane).not.toBeNull()
+    const [rect] = rectsOf('A')
+    expect(lane?.contains(rect)).toBe(true)
+    expect(rect.dataset.unseated).toBe('true')
+    expect(rect.dataset.strips).toBe('')
+    expect(rect.dataset.start).toBe('630')
+    expect(rect.style.left).toBe(`${(630 - DAY_START) * PPM}px`)
+    expect(document.querySelector('[data-day-plot="0"]')?.contains(rect)).toBe(false)
+    // The seated phase stays in the strip plot.
+    expect(lane?.contains(rectsOf('K')[0])).toBe(false)
+  })
+
+  it('opens an overflow lane only on a day that has an unseated phase', () => {
+    // Day 1 is empty, so B finds room there and draws on strips.
+    draw(board([
+      ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
+      ['A', 630, 690, 2, null],
+      ['B', 630, 690, 2, null, 1],
+    ]))
+
+    expect(document.querySelectorAll('[data-overflow-lane]')).toHaveLength(1)
+    expect(document.querySelector('[data-overflow-lane][data-day="0"]')).not.toBeNull()
+    expect(rectsOf('B')[0].dataset.unseated).toBe('false')
+  })
+
+  it('stacks unseated phases that overlap in time on separate lane rows', () => {
+    draw(board([
+      ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
+      ['A', 630, 690, 2, null],
+      ['B', 650, 710, 2, null],
+    ]))
+
+    const [a] = rectsOf('A')
+    const [b] = rectsOf('B')
+    expect(a.style.top).not.toBe(b.style.top)
+    expect(a.parentElement).toBe(b.parentElement)
+  })
+
+  it('still draws an unseated phase in the lane on a stale board, where it counts as nothing', () => {
+    draw(board([
+      ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
+      ['A', 630, 690, 2, null],
+    ], RunState.STALE))
+
+    const lane = document.querySelector<HTMLElement>('[data-overflow-lane][data-day="0"]')
+    const [rect] = rectsOf('A')
+    expect(lane?.contains(rect)).toBe(true)
+    expect(rect.dataset.unseated).toBe('true')
+  })
+
+  it('flags the strip rows of every run of a flagged phase and no row between them', () => {
+    const schedule = board([['K', 600, 700, 4, [0, 1, 5, 6]]])
+    const row: Finding = {
+      id: 'test:Warning:K', severity: 'Warning', where: 'Day 1 · K', day: 0,
+      message: 'K', target: 'K', dismissable: true, subjects: ['K'],
+    }
+    renderCanvas({ schedule, findings: NO_FINDINGS, dayConfigs: DAY_CONFIGS }, { findingRows: [row] })
+
+    const flagged = stripRowsInDay(0).map((strip) => strip.dataset.flagged === 'true')
+    expect(flagged).toEqual([true, true, false, false, false, true, true, false])
+  })
+
+  it('draws no overflow lane for a board that was run', () => {
+    const { schedule, findings, dayConfigs } = b1Board()
+    renderCanvas({ schedule, findings, dayConfigs })
+
+    expect(document.querySelectorAll('[data-overflow-lane]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-event-block][data-unseated="true"]')).toHaveLength(0)
   })
 })

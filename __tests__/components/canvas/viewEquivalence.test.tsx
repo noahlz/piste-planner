@@ -229,7 +229,7 @@ function blocksFor(id: string): Map<string, Block> {
       day: Number(el.dataset.day),
       start: Number(el.dataset.start),
       end: Number(el.dataset.end),
-      strips: Number(el.dataset.strips),
+      strips: Number(el.dataset.stripCount),
     })
   }
   return found

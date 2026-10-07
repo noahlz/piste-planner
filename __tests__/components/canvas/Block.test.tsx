@@ -2,12 +2,12 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, fireEvent, cleanup } from '@testing-library/react'
 import { Block } from '../../../src/components/canvas/Block.tsx'
 import type { BlockProps } from '../../../src/components/canvas/Block.tsx'
-import type { BlockPlacement } from '../../../src/layout/lanes.ts'
 import { Phase, Weapon } from '../../../src/engine/types.ts'
 import { competitionLabel } from '../../../src/lib/competitionLabels.ts'
 import { categoryDisplay } from '../../../src/lib/competitionLabels.ts'
 import { Category, EventType } from '../../../src/engine/types.ts'
 import { makeCompetition } from '../../helpers/factories.ts'
+import { drawnBlock } from '../../helpers/drawnFixtures.ts'
 
 // 013 T025 (part a) — red tests for the redesigned block (D4, FR-035 to
 // FR-037, FR-043, contracts/ui-contract.md §Canvas encoding contract).
@@ -20,16 +20,7 @@ const COMPETITION = makeCompetition({ id: 'plain', category: Category.DIV1, weap
 const FULL_LABEL = competitionLabel(COMPETITION)
 const CATEGORY_LABEL = categoryDisplay(COMPETITION.category, EventType.INDIVIDUAL)
 
-const PLACEMENT: BlockPlacement = {
-  competitionId: 'plain',
-  day: 0,
-  phase: Phase.POOLS,
-  startMinutes: 480,
-  endMinutes: 585,
-  stripCount: 4,
-  firstStrip: 0,
-  overflow: false,
-}
+const PLACEMENT = drawnBlock()
 
 function renderBlock(overrides: Partial<BlockProps> = {}): HTMLElement {
   const props: BlockProps = {
@@ -70,8 +61,9 @@ describe('Block identity and accessibility (ui-contract §Canvas)', () => {
   })
 
   it('carries every kept data attribute with its value', () => {
+    const strips = Array.from({ length: 16 }, (_, i) => 6 + i)
     const el = renderBlock({
-      placement: { ...PLACEMENT, day: 1, firstStrip: 6, phase: Phase.DE, startMinutes: 615, endMinutes: 699, stripCount: 16 },
+      placement: drawnBlock({ day: 1, strips, phase: Phase.DE, startMinutes: 615, endMinutes: 699 }),
     })
 
     expect(el.dataset.eventBlock).toBe('plain:DE')
@@ -81,9 +73,27 @@ describe('Block identity and accessibility (ui-contract §Canvas)', () => {
     expect(el.dataset.phaseKind).toBe('de')
     expect(el.dataset.start).toBe('615')
     expect(el.dataset.end).toBe('699')
-    expect(el.dataset.strips).toBe('16')
-    expect(el.dataset.firstStrip).toBe('6')
-    expect(el.dataset.overflow).toBe('false')
+    expect(el.dataset.strips).toBe(strips.join(','))
+    expect(el.dataset.stripCount).toBe('16')
+    expect(el.dataset.unseated).toBe('false')
+    expect(el.hasAttribute('data-first-strip')).toBe(false)
+    expect(el.hasAttribute('data-overflow')).toBe(false)
+  })
+
+  it('names the drawn strips, split runs included, in its accessible name', () => {
+    const el = renderBlock({ placement: drawnBlock({ strips: [0, 1, 5, 6] }) })
+
+    expect(el.dataset.strips).toBe('0,1,5,6')
+    expect(el.getAttribute('aria-label')).toContain('Strips 1–2, 6–7')
+  })
+
+  it('carries an empty strip list and says what it needs when it is unseated', () => {
+    const el = renderBlock({ placement: drawnBlock({ strips: [], stripCount: 3 }) })
+
+    expect(el.dataset.strips).toBe('')
+    expect(el.dataset.stripCount).toBe('3')
+    expect(el.dataset.unseated).toBe('true')
+    expect(el.getAttribute('aria-label')).toContain('Unplaced, needs 3 strips')
   })
 
   it('never carries a category attribute', () => {
@@ -249,7 +259,7 @@ describe('Block label degrades as room shrinks (D4, mockup fits())', () => {
     cleanup()
 
     // rowH = 78/1 = 78 -> clamp(78*0.2, 6, 11) = 11
-    const wide = renderBlock({ heightPx: 78, placement: { ...PLACEMENT, stripCount: 1 } })
+    const wide = renderBlock({ heightPx: 78, placement: drawnBlock({ strips: [0] }) })
     const contentWide = wide.querySelector<HTMLElement>('[data-content]')
     expect(contentWide).not.toBeNull()
     expect(contentWide?.style.paddingLeft).toBe('11px')
@@ -269,10 +279,10 @@ describe('Block state badges (FR-037)', () => {
     expect(unpinned.querySelector('[data-pin-glyph]')).toBeNull()
   })
 
-  it('draws a dashed border on an overflowed block', () => {
-    const el = renderBlock({ placement: { ...PLACEMENT, overflow: true } })
+  it('draws a dashed border on an unseated block', () => {
+    const el = renderBlock({ placement: drawnBlock({ strips: [] }) })
 
-    expect(el.dataset.overflow).toBe('true')
+    expect(el.dataset.unseated).toBe('true')
     const dashed = el.style.borderStyle === 'dashed' || el.className.includes('dashed')
     expect(dashed).toBe(true)
   })
@@ -301,10 +311,10 @@ describe('Block findings edge (013 T048, ui-contract Encoding contract)', () => 
     expect(edgeOf(el)).toEqual({ width: '2px', style: 'solid', color: 'var(--flash)' })
   })
 
-  it('keeps the dashed flash edge on a warned overflow block and does not mark it warned', () => {
-    const el = renderBlock({ warned: true, placement: { ...PLACEMENT, overflow: true } })
+  it('marks a warned unseated block warned, its dashed flash edge included (spec §6)', () => {
+    const el = renderBlock({ warned: true, placement: drawnBlock({ strips: [] }) })
 
-    expect(el.dataset.warned).toBe('false')
+    expect(el.dataset.warned).toBe('true')
     expect(edgeOf(el)).toEqual({ width: '2px', style: 'dashed', color: 'var(--flash)' })
   })
 
@@ -354,5 +364,84 @@ describe('Block offers no drag or resize affordance (FR-043)', () => {
     const before = el.outerHTML
     fireEvent.pointerDown(el)
     expect(el.outerHTML).toBe(before)
+  })
+})
+
+/** Every rect of the phase, first run first, as the canvas renders them. */
+function renderRuns(placement: ReturnType<typeof drawnBlock>, overrides: Partial<BlockProps> = {}): HTMLElement[] {
+  render(
+    <>
+      {placement.runs.map((run, runIndex) => (
+        <Block
+          key={run.first}
+          competition={COMPETITION}
+          label={FULL_LABEL}
+          placement={placement}
+          runIndex={runIndex}
+          pinned
+          warned={false}
+          selected={false}
+          widthPx={200}
+          heightPx={run.count * 24}
+          style={{ position: 'absolute', left: 0, top: run.first * 24, width: 200, height: run.count * 24 }}
+          findings={[]}
+          {...overrides}
+        />
+      ))}
+    </>,
+  )
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-event-block], [data-block-run]'))
+}
+
+describe('Block draws one rect per strip run (017 spec §6)', () => {
+  const SPLIT = drawnBlock({ strips: [0, 1, 5, 6, 7] })
+
+  it('puts the identity attributes on the first run only and marks the others as continuations', () => {
+    const rects = renderRuns(SPLIT)
+
+    expect(rects).toHaveLength(2)
+    expect(document.querySelectorAll('[data-event-block]')).toHaveLength(1)
+    expect(rects[0].hasAttribute('data-event-block')).toBe(true)
+    expect(rects[0].hasAttribute('data-block-run')).toBe(false)
+    expect(rects[1].hasAttribute('data-event-block')).toBe(false)
+    expect(rects[1].hasAttribute('data-block-run')).toBe(true)
+    expect(rects[1].hasAttribute('data-event-id')).toBe(false)
+  })
+
+  it('keeps a continuation out of the accessibility tree and gives it no name of its own', () => {
+    const [first, continuation] = renderRuns(SPLIT)
+
+    expect(first.getAttribute('aria-hidden')).toBeNull()
+    expect(continuation.getAttribute('aria-hidden')).toBe('true')
+    expect(continuation.hasAttribute('aria-label')).toBe(false)
+  })
+
+  it('paints a continuation with the same fill and edge as the first run', () => {
+    const [first, continuation] = renderRuns(SPLIT, { warned: true })
+
+    for (const rect of [first, continuation]) {
+      expect(rect.style.getPropertyValue('--block-fill')).toBe('var(--weapon-foil-fill)')
+      expect(edgeOf(rect)).toEqual({ width: '2px', style: 'solid', color: 'var(--flash)' })
+    }
+  })
+
+  it('shares selection with its continuation and repeats neither the label nor the pin', () => {
+    const [first, continuation] = renderRuns(SPLIT, { selected: true })
+
+    expect(first.querySelector('[data-ring]')).not.toBeNull()
+    expect(continuation.querySelector('[data-ring]')).not.toBeNull()
+    expect(first.querySelector('[data-label]')).not.toBeNull()
+    expect(first.querySelector('[data-pin-glyph]')).not.toBeNull()
+    expect(continuation.querySelector('[data-label]')).toBeNull()
+    expect(continuation.querySelector('[data-pin-glyph]')).toBeNull()
+  })
+
+  it('selects on a click of a continuation too', () => {
+    const onClick = vi.fn()
+    const [, continuation] = renderRuns(SPLIT, { onClick })
+
+    fireEvent.click(continuation)
+
+    expect(onClick).toHaveBeenCalledTimes(1)
   })
 })

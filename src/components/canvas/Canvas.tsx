@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { DAY_HARD_END_MINS, DAY_START_MINS, clockHardEnd } from '../../engine/constants.ts'
 import type { Bottleneck, Competition, DayConfig, Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
-import { assignStripLanes, type BlockPlacement } from '../../layout/lanes.ts'
+import type { DrawnBlock } from '../../layout/strips.ts'
 import { useStore } from '../../store/store.ts'
 import {
   daySummariesFromBlocks,
@@ -61,10 +61,12 @@ import { FIT_FALLBACK_STEP, rungAt, type ZoomState } from './zoomLadder.ts'
  * which for a scheduled tournament may carry the scheduler's own day axis
  * rather than clock time (specs/006-day-axis-parity/contracts/day-axis.md C4 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), research D4/D5).
  *
- * The day bands are computed here too, by `daySummariesFromBlocks` over the
- * committed model's own `blocks` (017 T6a: the strips each phase holds, so a
- * band never claims more strips than the day has, and the unplaced events the
- * footer counts) — plus
+ * The grid and the day bands both read the committed model's own `blocks`
+ * (017): each phase is drawn on the strips it holds, one rect per consecutive
+ * run, and a phase that holds none is drawn in its day's overflow lane at its
+ * time. The bands come from `daySummariesFromBlocks` over the same blocks, so a
+ * band never claims more strips than the day has and counts the unplaced events
+ * the footer counts — plus
  * `findingRows`, a fourth prop `CenterView` commits alongside the other three
  * on the same settle (013 T032, contract §4.3). The pin badge reads
  * `pinnedIds`, the pinned set committed with the schedule since 013 T046
@@ -107,7 +109,7 @@ const TICK_STEPS_MINUTES: readonly number[] = [15, 30, 60, 120, 180, 360]
 const MIN_TICK_GAP_PX = 72
 
 export interface CanvasProps {
-  /** The committed drawn model. The grid still packs `events` (`lanes`) until 017 T6b; the bands read `blocks`. */
+  /** The committed drawn model: the grid and the bands both read its `blocks`. */
   schedule: DrawnSchedule
   /** Still feeds the tooltip's per-block messages (`findingsForBlock`). */
   findings: DerivedFindings
@@ -124,9 +126,9 @@ export interface CanvasProps {
   pinnedIds: ReadonlySet<string>
 }
 
-/** One block resolved to what it draws, once per render. */
-interface DrawnBlock {
-  readonly placement: BlockPlacement
+/** One phase resolved to what it draws, once per render. */
+interface ResolvedBlock {
+  readonly placement: DrawnBlock
   readonly competition: Competition
   readonly label: string
   readonly findings: string[]
@@ -216,6 +218,28 @@ const WARNED_SEVERITIES: ReadonlySet<Finding['severity']> = new Set([
  */
 function warnedCompetitions(findingRows: Finding[]): Set<string> {
   return flaggedCompetitions(findingRows.filter((row) => WARNED_SEVERITIES.has(row.severity)))
+}
+
+/**
+ * Which overflow-lane row each unseated block draws on. Blocks arrive ordered
+ * by start, and each takes the first row whose last block has ended, so blocks
+ * that overlap in time never share a row. One pass, a row search bounded by the
+ * block count (constitution IV).
+ */
+function overflowLaneRows(blocks: readonly ResolvedBlock[]): { rowOf: Map<ResolvedBlock, number>; rowCount: number } {
+  const rowEnds: number[] = []
+  const rowOf = new Map<ResolvedBlock, number>()
+  for (const block of blocks) {
+    let row = rowEnds.findIndex((end) => end <= block.placement.startMinutes)
+    if (row === -1) {
+      row = rowEnds.length
+      rowEnds.push(block.placement.endMinutes)
+    } else {
+      rowEnds[row] = block.placement.endMinutes
+    }
+    rowOf.set(block, row)
+  }
+  return { rowOf, rowCount: rowEnds.length }
 }
 
 /** How long a jump's flash stays on a block before clearing (013 T032, contract §4.4). */
@@ -369,11 +393,6 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
     return Array.from({ length: count }, (_, i) => span.startMinutes + i * step)
   }, [span.startMinutes, spanMinutes, pixelsPerMinute])
 
-  const lanes = useMemo(
-    () => assignStripLanes(schedule.events, stripsTotal),
-    [schedule.events, stripsTotal],
-  )
-
   const summaries = useMemo(
     () => daySummariesFromBlocks(schedule.blocks, daysAvailable, findingRows),
     [schedule.blocks, daysAvailable, findingRows],
@@ -384,8 +403,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
     [schedule.competitions],
   )
 
-  const drawn: DrawnBlock[] = []
-  for (const placement of lanes) {
+  const drawn: ResolvedBlock[] = []
+  for (const placement of schedule.blocks) {
     const competition = competitionsById.get(placement.competitionId)
     if (!competition) continue
     drawn.push({
@@ -407,7 +426,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
       rows = new Set<number>()
       flaggedRowsByDay.set(placement.day, rows)
     }
-    for (let i = 0; i < placement.stripCount; i++) rows.add(placement.firstStrip + i)
+    for (const strip of placement.strips) rows.add(strip)
   }
 
   /**
@@ -438,7 +457,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
    * The anchor is the block's own top centre, in viewport pixels, so the
    * tooltip stays put while the pointer moves within one block.
    */
-  function handleEnter(block: DrawnBlock, e: PointerEvent<HTMLDivElement>): void {
+  function handleEnter(block: ResolvedBlock, e: PointerEvent<HTMLDivElement>): void {
     const rect = e.currentTarget.getBoundingClientRect()
     setHovered({
       competitionId: block.placement.competitionId,
@@ -448,7 +467,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
     })
   }
 
-  function blockStyle(placement: BlockPlacement): CSSProperties {
+  /** One rect's box: its time across, and `topPx` / `heightPx` down (the +2/-4 inset included). */
+  function blockStyle(placement: DrawnBlock, topPx: number, heightPx: number): CSSProperties {
     const durationMinutes = Math.max(0, placement.endMinutes - placement.startMinutes)
     const offsetMinutes = placement.startMinutes - span.startMinutes
     const geometry: CSSProperties = zoom.fitting
@@ -463,8 +483,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
     return {
       position: 'absolute',
       // Block.tsx's label fit (contentHeightPx = heightPx - 8) assumes this +2/-4 inset.
-      top: `${placement.firstStrip * rowHeightPx + 2}px`,
-      height: `${Math.max(1, placement.stripCount * rowHeightPx - 4)}px`,
+      top: `${topPx + 2}px`,
+      height: `${Math.max(1, heightPx - 4)}px`,
       ...geometry,
     }
   }
@@ -556,6 +576,9 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
             const summary = summaries[day] ?? { day, ...EMPTY_SUMMARY }
             const flaggedRows = flaggedRowsByDay.get(day)
             const dayBlocks = drawn.filter((block) => block.placement.day === day)
+            const seatedBlocks = dayBlocks.filter((block) => !block.placement.unseated)
+            const unseatedBlocks = dayBlocks.filter((block) => block.placement.unseated)
+            const lane = overflowLaneRows(unseatedBlocks)
 
             return (
               <div key={day} data-day-group={day}>
@@ -637,30 +660,102 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
                         : { width: plotWidthAtRung, flexShrink: 0 }),
                     }}
                   >
-                    {dayBlocks.map((block) => (
-                      <Block
-                        key={`${block.placement.competitionId}:${block.placement.phase}`}
-                        competition={block.competition}
-                        label={block.label}
-                        placement={block.placement}
-                        pinned={pinnedIds.has(block.placement.competitionId)}
-                        warned={warned.has(block.placement.competitionId)}
-                        selected={selectedCompetitionId === block.placement.competitionId}
-                        flash={flashId === block.placement.competitionId}
-                        widthPx={
-                          (block.placement.endMinutes - block.placement.startMinutes) *
-                          pixelsPerMinute
-                        }
-                        heightPx={block.placement.stripCount * rowHeightPx}
-                        style={blockStyle(block.placement)}
-                        findings={block.findings}
-                        onPointerEnter={(e) => handleEnter(block, e)}
-                        onPointerLeave={() => setHovered(null)}
-                        onClick={() => selectCompetition(block.placement.competitionId)}
-                      />
-                    ))}
+                    {seatedBlocks.flatMap((block) =>
+                      block.placement.runs.map((run, runIndex) => (
+                        <Block
+                          key={`${block.placement.competitionId}:${block.placement.phase}:${runIndex}`}
+                          competition={block.competition}
+                          label={block.label}
+                          placement={block.placement}
+                          runIndex={runIndex}
+                          pinned={pinnedIds.has(block.placement.competitionId)}
+                          warned={warned.has(block.placement.competitionId)}
+                          selected={selectedCompetitionId === block.placement.competitionId}
+                          flash={flashId === block.placement.competitionId}
+                          widthPx={
+                            (block.placement.endMinutes - block.placement.startMinutes) *
+                            pixelsPerMinute
+                          }
+                          heightPx={run.count * rowHeightPx}
+                          style={blockStyle(block.placement, run.first * rowHeightPx, run.count * rowHeightPx)}
+                          findings={block.findings}
+                          onPointerEnter={(e) => handleEnter(block, e)}
+                          onPointerLeave={() => setHovered(null)}
+                          onClick={() => selectCompetition(block.placement.competitionId)}
+                        />
+                      )),
+                    )}
                   </div>
                 </div>
+
+                {/* The overflow lane (spec §6): phases that hold no strip, at
+                    their time, below the day's strips. It exists only on a day
+                    that has one. */}
+                {unseatedBlocks.length > 0 && (
+                  <div style={{ display: 'flex' }}>
+                    <div
+                      aria-hidden="true"
+                      style={{
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 10,
+                        width: GUTTER_WIDTH_PX,
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        paddingRight: 8,
+                        background: 'var(--chrome-deep)',
+                        borderRight: '1.5px solid var(--chrome-border)',
+                        borderTop: '1.5px dashed var(--chrome-border)',
+                        fontSize: 9.5,
+                        fontWeight: 600,
+                        letterSpacing: '.05em',
+                        textTransform: 'uppercase',
+                        color: 'var(--tick-minor)',
+                      }}
+                    >
+                      No room
+                    </div>
+                    <div
+                      data-overflow-lane="true"
+                      data-day={day}
+                      style={{
+                        position: 'relative',
+                        height: lane.rowCount * rowHeightPx,
+                        backgroundColor: 'var(--plot)',
+                        borderTop: '1.5px dashed var(--chrome-border)',
+                        boxSizing: 'content-box',
+                        ...(zoom.fitting
+                          ? { flex: 1, minWidth: 0 }
+                          : { width: plotWidthAtRung, flexShrink: 0 }),
+                      }}
+                    >
+                      {unseatedBlocks.map((block) => (
+                        <Block
+                          key={`${block.placement.competitionId}:${block.placement.phase}:lane`}
+                          competition={block.competition}
+                          label={block.label}
+                          placement={block.placement}
+                          pinned={pinnedIds.has(block.placement.competitionId)}
+                          warned={warned.has(block.placement.competitionId)}
+                          selected={selectedCompetitionId === block.placement.competitionId}
+                          flash={flashId === block.placement.competitionId}
+                          widthPx={
+                            (block.placement.endMinutes - block.placement.startMinutes) *
+                            pixelsPerMinute
+                          }
+                          heightPx={rowHeightPx}
+                          style={blockStyle(block.placement, (lane.rowOf.get(block) ?? 0) * rowHeightPx, rowHeightPx)}
+                          findings={block.findings}
+                          onPointerEnter={(e) => handleEnter(block, e)}
+                          onPointerLeave={() => setHovered(null)}
+                          onClick={() => selectCompetition(block.placement.competitionId)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -674,7 +769,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
           and that is load-bearing rather than a style choice. React Compiler
           freezes a value at the JSX boundary, so a target assembled here is
           provably never mutated; assembled into a local first, the block it
-          reads — and with it `lanes` and `competitionsById` — is inferred as
+          reads — and with it `schedule.blocks` and `competitionsById` — is inferred as
           possibly mutated later, and the compiler skips optimizing this
           component entirely. */}
       <CanvasTooltip

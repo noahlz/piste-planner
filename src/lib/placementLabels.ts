@@ -1,4 +1,5 @@
 import { Phase } from '../engine/types.ts'
+import { runsOf } from '../layout/runs.ts'
 
 /**
  * How a block names itself in words — the phase and the strips it runs on.
@@ -19,7 +20,7 @@ import { Phase } from '../engine/types.ts'
  *
  * Only the six phases `eventTimeSegments` emits can reach a block, so
  * `phaseDisplay`'s fallback is unreachable rather than lenient — it exists
- * because `BlockPlacement.phase` is the whole `Phase` union.
+ * because `DrawnBlock.phase` is the whole `Phase` union.
  */
 const PHASE_DISPLAY: Partial<Record<Phase, string>> = {
   [Phase.POOLS]: 'Pools',
@@ -57,13 +58,7 @@ export function stripRangeLabel(firstStrip: number, stripCount: number): string 
  */
 export function stripSetLabel(strips: readonly number[]): string {
   if (strips.length === 0) throw new RangeError('stripSetLabel: an empty strip set names no strips')
-  const sorted = [...new Set(strips)].sort((a, b) => a - b)
-  const runs: { first: number; count: number }[] = []
-  for (const strip of sorted) {
-    const last = runs[runs.length - 1]
-    if (last && last.first + last.count === strip) last.count++
-    else runs.push({ first: strip, count: 1 })
-  }
+  const runs = runsOf([...new Set(strips)].sort((a, b) => a - b))
   if (runs.length === 1) return stripRangeLabel(runs[0].first, runs[0].count)
   const parts = runs.map(({ first, count }) => (count === 1 ? `${first + 1}` : `${first + 1}–${first + count}`))
   return `Strips ${parts.join(', ')}`
@@ -72,12 +67,11 @@ export function stripSetLabel(strips: readonly number[]): string {
 /**
  * What a block says about its strips, overflow included.
  *
- * An overflowed block was granted no run at all: `assignStripLanes` reports it
- * at `firstStrip: 0` so it has somewhere to draw, and records no occupancy for
- * it. Reading that 0 as a placement makes both surfaces claim strips the block
- * was never given — "Strips 1–4" over a day that had no room for it, which is
- * fiction on exactly the over-capacity day an organizer opened the tool to
- * find. So the count is reported without a range, and the failure is named.
+ * An overflowed block was granted no run at all. Naming a range for it would
+ * claim strips the block was never given — "Strips 1–4" over a day that had no
+ * room for it, which is fiction on exactly the over-capacity day an organizer
+ * opened the tool to find. So the count is reported without a range, and the
+ * failure is named.
  */
 export function stripAssignmentLabel(
   firstStrip: number,
@@ -86,4 +80,15 @@ export function stripAssignmentLabel(
 ): string {
   if (!overflow) return stripRangeLabel(firstStrip, stripCount)
   return stripCount === 1 ? 'Unplaced, needs 1 strip' : `Unplaced, needs ${stripCount} strips`
+}
+
+/**
+ * What a drawn block says about its strips: the strips it holds, one range per
+ * run, or what an unseated block needs. Block's accessible name and the
+ * tooltip's Strips row read it, so the two cannot word the same block apart.
+ */
+export function drawnStripsLabel(block: { strips: readonly number[]; stripCount: number }): string {
+  return block.strips.length > 0
+    ? stripSetLabel(block.strips)
+    : stripAssignmentLabel(0, block.stripCount, true)
 }

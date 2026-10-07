@@ -1,9 +1,9 @@
 import type { Competition } from '../../engine/types.ts'
 import { formatMinutes } from '../../lib/time.ts'
-import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts'
+import { drawnStripsLabel, phaseDisplay } from '../../lib/placementLabels.ts'
 import { GENDER_DISPLAY, WEAPON_DISPLAY, categoryDisplay } from '../../lib/competitionLabels.ts'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx'
-import type { BlockPlacement } from '../../layout/lanes.ts'
+import type { DrawnBlock } from '../../layout/strips.ts'
 
 /**
  * The canvas tooltip — FR-022, contracts/ui-contract.md §Tooltip contract.
@@ -54,7 +54,7 @@ export interface CanvasTooltipTarget {
   label: string
   /** The day group the block draws in, 0-based. */
   day: number
-  placement: BlockPlacement
+  placement: DrawnBlock
   /** Findings attached to this competition, already narrowed to this block. */
   findings: string[]
   /** Where the anchor sits, in viewport-relative pixels. */
@@ -172,15 +172,7 @@ function TooltipBody({ target }: { target: CanvasTooltipTarget }) {
       <Row label="Start" field="start" value={formatMinutes(placement.startMinutes)} />
       <Row label="End" field="end" value={formatMinutes(placement.endMinutes)} />
       <Row label="Duration" field="duration" value={`${durationMinutes} min`} />
-      <Row
-        label="Strips"
-        field="strips"
-        value={stripAssignmentLabel(
-          placement.firstStrip,
-          placement.stripCount,
-          placement.overflow,
-        )}
-      />
+      <Row label="Strips" field="strips" value={drawnStripsLabel(placement)} />
 
       <dt className="font-medium opacity-70">Findings</dt>
       {/* An empty list says so rather than leaving the row blank: a blank row

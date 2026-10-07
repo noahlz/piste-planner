@@ -143,8 +143,7 @@ export type DrawnEventSchedule = DrawnEventInput & { source: 'kept' | 'derived' 
 
 /**
  * A drawn phase plus the model's one unplaced predicate: unseated on a fresh
- * board. Until T6b drops `overflow`, it carries the same answer, so a reader
- * still typed on `BlockPlacement` counts what the model counts.
+ * board. A stale board draws its unseated phases too, but counts none of them.
  */
 export type DrawnScheduleBlock = DrawnBlock & { countsAsUnplaced: boolean }
 
@@ -228,7 +227,7 @@ export function drawnScheduleFrom(
   const fresh = runState === RunState.FRESH
   const blocks: DrawnScheduleBlock[] = assignStrips(events, config, competitions).map((block) => {
     const countsAsUnplaced = block.unseated && fresh
-    return { ...block, countsAsUnplaced, overflow: countsAsUnplaced }
+    return { ...block, countsAsUnplaced }
   })
   const unplacedIds = new Set(blocks.filter((block) => block.countsAsUnplaced).map((block) => block.competitionId))
 

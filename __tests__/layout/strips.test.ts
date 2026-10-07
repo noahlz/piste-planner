@@ -240,7 +240,6 @@ describe('assignStrips: derived phases take the engine\'s candidate order', () =
     const block = only(assignStrips(events, smallConfig(6, 2), comps('K', 'D')), 'D')
     expect(block.strips).toEqual([0, 1, 3, 4, 5])
     expect(block.runs).toEqual([{ first: 0, count: 2 }, { first: 3, count: 3 }])
-    expect(block.firstStrip).toBe(0)
   })
 
   it.each([
@@ -310,7 +309,7 @@ describe('assignStrips: collateral (spec §3)', () => {
     }
     const blocks = assignStrips(events, smallConfig(4, 0), comps('K', 'A', 'B'))
     expect(only(blocks, 'A')).toMatchObject({
-      unseated: true, strips: [], runs: [], firstStrip: 0, overflow: true,
+      unseated: true, strips: [], runs: [],
     })
     expect(only(blocks, 'B')).toMatchObject({ unseated: false, strips: [2, 3] })
   })
@@ -423,15 +422,36 @@ describe('assignStrips: runs', () => {
     const block = only(assignStrips(events, smallConfig(10, 0), comps('K')), 'K')
     expect(block.strips).toEqual([0, 1, 2, 5, 7, 8])
     expect(block.runs).toEqual([{ first: 0, count: 3 }, { first: 5, count: 1 }, { first: 7, count: 2 }])
-    expect(block.firstStrip).toBe(0)
-    expect(block.overflow).toBe(false)
+    expect(block.unseated).toBe(false)
   })
 
-  it('a run starting past strip 0 sets firstStrip to its start', () => {
+  it('a run starting past strip 0 keeps its own start', () => {
     const events = { K: keptPool(poolResult('K', 0, 600, 700, 2), [4, 5]) }
     const block = only(assignStrips(events, smallConfig(10, 0), comps('K')), 'K')
     expect(block.runs).toEqual([{ first: 4, count: 2 }])
-    expect(block.firstStrip).toBe(4)
+  })
+})
+
+describe('assignStrips: capacity edges (moved from the retired lane packer)', () => {
+  it('lets two derived phases that never share a minute take the same strips', () => {
+    const events = {
+      a: derived(poolResult('a', 0, 600, 700, 2)),
+      b: derived(poolResult('b', 0, 700, 800, 2)),
+    }
+    const blocks = assignStrips(events, smallConfig(4, 0), comps('a', 'b'))
+    expect(only(blocks, 'a').strips).toEqual([0, 1])
+    expect(only(blocks, 'b').strips).toEqual([0, 1])
+  })
+
+  it('leaves a phase asking for more strips than the day has unseated', () => {
+    const block = only(assignStrips({ big: derived(poolResult('big', 0, 600, 700, 5)) }, smallConfig(4, 0), comps('big')), 'big')
+    expect(block).toMatchObject({ unseated: true, strips: [], runs: [], stripCount: 5 })
+  })
+
+  it('leaves every phase unseated on a day with no strips', () => {
+    const events = { a: derived(poolResult('a', 0, 600, 700, 1)) }
+    const block = only(assignStrips(events, smallConfig(0, 0), comps('a')), 'a')
+    expect(block.unseated).toBe(true)
   })
 })
 

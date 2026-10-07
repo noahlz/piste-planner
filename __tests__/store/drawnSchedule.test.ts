@@ -293,7 +293,6 @@ describe('what counts as unplaced', () => {
     expect(counted.length).toBe(8)
     for (const block of model.blocks) {
       expect(block.countsAsUnplaced).toBe(block.unseated)
-      expect(block.overflow).toBe(block.countsAsUnplaced)
     }
   })
 
@@ -306,7 +305,7 @@ describe('what counts as unplaced', () => {
     expect(model.runState).toBe(RunState.STALE)
     expect(model.blocks.some(block => block.unseated), 'premise: derived times leave phases unseated').toBe(true)
     expect(model.unplacedIds.size).toBe(0)
-    expect(model.blocks.filter(block => block.countsAsUnplaced || block.overflow)).toEqual([])
+    expect(model.blocks.filter(block => block.countsAsUnplaced)).toEqual([])
   })
 })
 

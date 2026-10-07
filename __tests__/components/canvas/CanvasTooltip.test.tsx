@@ -6,10 +6,9 @@ import {
   type CanvasTooltipTarget,
 } from '../../../src/components/canvas/CanvasTooltip.tsx'
 import { Block } from '../../../src/components/canvas/Block.tsx'
-import type { BlockPlacement } from '../../../src/layout/lanes.ts'
 import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
-import { drawnFromDerived } from '../../helpers/drawnFixtures.ts'
+import { drawnBlock, drawnFromDerived } from '../../helpers/drawnFixtures.ts'
 import { Category, Gender, Phase, Weapon } from '../../../src/engine/types.ts'
 import type { DayConfig } from '../../../src/engine/types.ts'
 import { VIEW_STATE_STORAGE_KEY } from '../../../src/store/viewState.ts'
@@ -52,16 +51,7 @@ const VIEWPORT_HEIGHT = 480
 /** The label competitionLabel() produces for the DIV1 men's foil fixture. */
 const DIV1_LABEL = "Div 1 Men's Foil Individual"
 
-const POOL_PLACEMENT: BlockPlacement = {
-  competitionId: 'plain',
-  day: 0,
-  phase: Phase.POOLS,
-  startMinutes: 480,
-  endMinutes: 585,
-  stripCount: 4,
-  firstStrip: 0,
-  overflow: false,
-}
+const POOL_PLACEMENT = drawnBlock()
 
 let restoreResizeObserver: () => void
 
@@ -131,16 +121,14 @@ describe('CanvasTooltip contents (FR-022)', () => {
             weapon: Weapon.SABRE,
           }),
           label: "Y10 Women's Saber Individual",
-          placement: {
+          placement: drawnBlock({
             competitionId: 'staged',
             day: 2,
             phase: Phase.DE_ROUND_OF_16,
             startMinutes: 915,
             endMinutes: 1030,
-            stripCount: 4,
-            firstStrip: 8,
-            overflow: false,
-          },
+            strips: [8, 9, 10, 11],
+          }),
         })}
       />,
     )
@@ -188,11 +176,23 @@ describe('CanvasTooltip contents (FR-022)', () => {
   it('writes a one-strip block as a strip rather than as a range of one', () => {
     render(
       <CanvasTooltip
-        target={makeTarget({ placement: { ...POOL_PLACEMENT, firstStrip: 2, stripCount: 1 } })}
+        target={makeTarget({ placement: drawnBlock({ strips: [2] }) })}
       />,
     )
 
     expect(field('strips')).toBe('Strip 3')
+  })
+
+  it('names every run of a split strip set the block drew', () => {
+    render(<CanvasTooltip target={makeTarget({ placement: drawnBlock({ strips: [0, 1, 5, 6, 7, 20] }) })} />)
+
+    expect(field('strips')).toBe('Strips 1–2, 6–8, 21')
+  })
+
+  it('says an unseated block needs strips rather than naming any it holds', () => {
+    render(<CanvasTooltip target={makeTarget({ placement: drawnBlock({ strips: [], stripCount: 4 }) })} />)
+
+    expect(field('strips')).toBe('Unplaced, needs 4 strips')
   })
 
   it('renders nothing at all with no target', () => {
