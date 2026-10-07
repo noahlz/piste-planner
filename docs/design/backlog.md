@@ -229,6 +229,11 @@ now agree on the 10:00 PM rule. What stays open is the last sentence's
 question, whether a phase past 10:00 PM should drop the event or place it with
 a WARN. The text below is the 2026-08-31 record and quotes the older wording.*
 
+**Owner ruling 2026-10-06:** place with a WARN. A phase that would end past
+10:00 PM is placed with a WARN carrying the estimated finish, not dropped. This
+stays in 018, and the owner amends METHODOLOGY §Same-Day Completion first,
+since the current text makes 10:00 PM a hard end.
+
 `METHODOLOGY.md` calls the 10 PM day end a soft boundary and says a late finish
 "produces a warning with estimated finish time, not a scheduling failure"
 (Inputs, Warning-Level Rules, Appendix A timing table). The runtime disagrees –
@@ -561,6 +566,10 @@ and warn? Restricting matches the spec and makes the error unreachable, but it
 also stops an organizer from trying 6 or 10, which the engine accepts. Free
 entry with a note on the control keeps that and costs one more line of text.
 
+**Owner ruling 2026-10-06:** keep free entry, from 0 to the strip count. At a
+NAC with fewer than 4 video strips, show a note on the control saying
+individual events need at least 4.
+
 **Cost if ignored**: a NAC with fewer than 4 video strips loses every
 individual event, and the stepper gives no hint.
 
@@ -804,6 +813,8 @@ no blocking decision.*
   (`constants.ts`) and `crossoverPenalty` do the same. At a regional type the
   older side's pools start no earlier than day start + 4 hours when a pair
   shares a day, which is the morning and afternoon split.*
+  **Owner ruling 2026-10-06:** the spec stands, replacing the 2026-10-05
+  ruling. DIV1 and CADET never share a day at NAC, SYC and SJCC.
 - **Flighting text conflicts with itself.** The Flighting section says Flight
   A/B start/end times are not tracked, while Runtime Decomposition says the
   concurrent scheduler decomposes them into two timed phase nodes. The former
