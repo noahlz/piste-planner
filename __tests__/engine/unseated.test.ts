@@ -4,12 +4,12 @@ import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { SCENARIO_IDS, type ScenarioId } from '../../src/data/tournaments.ts'
 import { BottleneckCause, Phase, VideoPolicy } from '../../src/engine/types.ts'
-import type { Competition, ScheduleResult } from '../../src/engine/types.ts'
+import type { Competition, ScheduleResult, StripAllocation } from '../../src/engine/types.ts'
 import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from '../../src/store/buildConfig.ts'
-import { makeCompetition } from '../helpers/factories.ts'
+import { makeCompetition, makeScheduleResult } from '../helpers/factories.ts'
 import { loadFlightedFixture } from '../helpers/flightedFixtures.ts'
 
 type PinMode = 'none' | 'all' | 'half'
@@ -56,6 +56,26 @@ function windowOf(result: ScheduleResult, phase: Phase): [number | null, number 
     case Phase.DE_ROUND_OF_16: return [result.de_round_of_16_start, result.de_round_of_16_end]
     default: throw new Error(`no window for ${phase}`)
   }
+}
+
+/** A phase's strip count read straight off the result, independent of `phaseSpans`. */
+function stripsOf(result: ScheduleResult, phase: Phase): number {
+  switch (phase) {
+    case Phase.FLIGHT_A: return result.flight_a_strips
+    case Phase.FLIGHT_B: return result.flight_b_strips
+    case Phase.POOLS: return result.pool_strip_count
+    case Phase.DE: return result.de_strip_count
+    case Phase.DE_PRELIMS: return result.de_prelims_strip_count
+    case Phase.DE_ROUND_OF_16: return result.de_round_of_16_strip_count
+    default: throw new Error(`no strip count for ${phase}`)
+  }
+}
+
+/** Pins every placed event on the store's current board and re-runs, as `runScenario` does. */
+function pinAllAndRerun() {
+  Object.keys(useStore.getState().placements).forEach(id => useStore.getState().setPinned(id, true))
+  runScheduleAll()
+  return engineRun()
 }
 
 /** The engine's pinned-unclaimed (event, phase) set, less phases that last zero minutes. */
@@ -116,19 +136,30 @@ describe('zero-length and empty phases are never phases', () => {
   it('B8 V80\'s zero-length round of 16 is in no span and never unseated', () => {
     const none = runScenario(scenario('B8'), 'none')
     const r = none.schedule[V80]
-    expect(r.de_round_of_16_start).toBe(r.de_round_of_16_end)
+    expect([r.de_round_of_16_start, r.de_round_of_16_end]).toEqual([3570, 3570])
     expect(phaseSpans(r).map(s => s.phase)).toContain(Phase.POOLS)
     expect(phaseSpans(r).map(s => s.phase)).not.toContain(Phase.DE_ROUND_OF_16)
 
     const all = runScenario(scenario('B8'), 'all')
+    // [M] The engine flags no zero-length phase PINNED_UNCLAIMED on any of
+    // B1–B8, so the absence below is not "the engine said nothing". The phase is
+    // still a zero-length window with no allocation, and only the guards in
+    // `phaseSpans` and `unseatedPhases` keep it out.
+    const r2 = all.schedule[V80]
+    expect([r2.de_round_of_16_start, r2.de_round_of_16_end]).toEqual([3570, 3570])
+    const seated = all.strip_allocations.flat().some(a => a.event_id === V80 && a.phase === Phase.DE_ROUND_OF_16)
+    expect(seated).toBe(false)
     expect(unseatedPhases(all).has(phaseKey(V80, Phase.DE_ROUND_OF_16))).toBe(false)
   })
 
-  it('a one-pool flighted event has no FLIGHT_B span and none unseated', () => {
+  it('a one-pool flighted event has an empty FLIGHT_B, no span for it, and none unseated', () => {
     const id = loadFlightedFixture('ONE_POOL')
     runScheduleAll()
-    const run = engineRun()
-    const spans = phaseSpans(run.schedule[id]).map(s => s.phase)
+    const run = pinAllAndRerun()
+    const r = run.schedule[id]
+    expect(r.flight_b_start).not.toBeNull()
+    expect(r.flight_b_end).toBe(r.flight_b_start)
+    const spans = phaseSpans(r).map(s => s.phase)
     expect(spans).toContain(Phase.FLIGHT_A)
     expect(spans).not.toContain(Phase.FLIGHT_B)
     expect(unseatedPhases(run).has(phaseKey(id, Phase.FLIGHT_B))).toBe(false)
@@ -137,10 +168,21 @@ describe('zero-length and empty phases are never phases', () => {
   it('a many-pools flighted event spans FLIGHT_A then FLIGHT_B, never POOLS', () => {
     const id = loadFlightedFixture('MANY_POOLS')
     runScheduleAll()
-    const spans = phaseSpans(engineRun().schedule[id])
+    const run = engineRun()
+    const spans = phaseSpans(run.schedule[id])
     expect(spans.slice(0, 2).map(s => s.phase)).toEqual([Phase.FLIGHT_A, Phase.FLIGHT_B])
     expect(spans.map(s => s.phase)).not.toContain(Phase.POOLS)
     expect(spans[0].end).toBeLessThan(spans[1].start)
+  })
+
+  it('a many-pools flighted event seats both flights, so an unpinned run leaves nothing unseated', () => {
+    const id = loadFlightedFixture('MANY_POOLS')
+    runScheduleAll()
+    const run = engineRun()
+    const seated = run.strip_allocations.flat().filter(a => a.event_id === id).map(a => a.phase)
+    expect(seated).toContain(Phase.FLIGHT_A)
+    expect(seated).toContain(Phase.FLIGHT_B)
+    expect(unseatedPhases(run).size).toBe(0)
   })
 })
 
@@ -152,9 +194,52 @@ describe('phaseSpans', () => {
       for (const span of phaseSpans(result)) {
         const [start, end] = windowOf(result, span.phase)
         expect([span.start, span.end]).toEqual([start, end])
+        expect(span.stripCount).toBe(stripsOf(result, span.phase))
         expect(span.end).toBeGreaterThan(span.start)
       }
     }
+  })
+
+  it.each([
+    ['D1-M-EPEE-IND', [Phase.POOLS, Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16]],
+    ['VET-M-FOIL-TEAM', [Phase.POOLS, Phase.DE]],
+  ])('lists B1 event %s\'s phases in drawing order and no other', (id, phases) => {
+    const run = runScenario(scenario('B1'), 'none')
+    expect(phaseSpans(run.schedule[id]).map(s => s.phase)).toEqual(phases)
+  })
+
+  it('skips a window that runs backwards as it skips an empty one', () => {
+    const backwards = { ...makeScheduleResult('X', 0), pool_start: 700, pool_end: 600, pool_strip_count: 2 }
+    expect(phaseSpans(backwards)).toEqual([])
+  })
+})
+
+describe('unseatedPhases, one input per guard', () => {
+  const X = phaseKey('X', Phase.POOLS)
+  const seat: StripAllocation = { event_id: 'X', phase: Phase.POOLS, start_time: 600, end_time: 700 }
+  const runOf = (pool: Partial<ScheduleResult>, allocations: StripAllocation[]) => ({
+    schedule: { X: { ...makeScheduleResult('X', 0), ...pool } },
+    strip_allocations: allocations.length > 0 ? [allocations] : [],
+  })
+
+  it('ignores a zero-length phase that has strips and no allocation', () => {
+    const run = runOf({ pool_start: 600, pool_end: 600, pool_strip_count: 2 }, [])
+    expect(unseatedPhases(run)).toEqual(new Set())
+  })
+
+  it('ignores a phase with no strips to claim', () => {
+    const run = runOf({ pool_start: 600, pool_end: 700, pool_strip_count: 0 }, [])
+    expect(unseatedPhases(run)).toEqual(new Set())
+  })
+
+  it('names a phase with strips, time and no allocation', () => {
+    const run = runOf({ pool_start: 600, pool_end: 700, pool_strip_count: 2 }, [])
+    expect(unseatedPhases(run)).toEqual(new Set([X]))
+  })
+
+  it('ignores that phase once an allocation seats it', () => {
+    const run = runOf({ pool_start: 600, pool_end: 700, pool_strip_count: 2 }, [seat])
+    expect(unseatedPhases(run)).toEqual(new Set())
   })
 })
 

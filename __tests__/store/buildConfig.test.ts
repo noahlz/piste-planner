@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { readFileSync } from 'fs'
-import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { buildTournamentConfig, buildPinnedPlacements } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
 import { TYPE_DEFAULTS } from '../../src/store/typeDefaults.ts'
 import { defaultCutForEntry } from '../../src/store/competitionDefaults.ts'
@@ -699,5 +699,35 @@ describe('buildTournamentConfig: de_video_policy follows the tournament type (02
   it.each(Object.values(TournamentType))('plans every team event BEST_EFFORT at %s', (type) => {
     const policies = videoPolicies(type, TEAM_IDS)
     for (const id of TEAM_IDS) expect(policies[id], id).toBe(VideoPolicy.BEST_EFFORT)
+  })
+})
+
+describe('buildPinnedPlacements: ties between pins break by code point, not the runtime locale (017 P7)', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('lists JR before Y14 at one day and start even when localeCompare follows Lithuanian', () => {
+    // Lithuanian puts "Y" between "I" and "J", so a locale-following tie-break
+    // would send Y14 first and replay a shared link to a different board.
+    const lithuanian = new Intl.Collator('lt')
+    vi.spyOn(String.prototype, 'localeCompare').mockImplementation(function (this: string, that: string) {
+      return lithuanian.compare(this, that)
+    })
+    expect(['Y14-M-FOIL-IND', 'JR-M-FOIL-IND'].sort((a, b) => a.localeCompare(b))).toEqual([
+      'Y14-M-FOIL-IND', 'JR-M-FOIL-IND',
+    ])
+
+    const pin = { day: 0, start_time: 540, strip_count: 4, strips: null, source: 'manual', pinned: true } as const
+    const state = storeWith({
+      ...minimalState(),
+      selectedCompetitions: {
+        'Y14-M-FOIL-IND': { fencer_count: 40, flighted: false },
+        'JR-M-FOIL-IND': { fencer_count: 40, flighted: false },
+      },
+      placements: { 'Y14-M-FOIL-IND': { ...pin }, 'JR-M-FOIL-IND': { ...pin } },
+    })
+
+    expect(buildPinnedPlacements(state).map(p => p.competition_id)).toEqual([
+      'JR-M-FOIL-IND', 'Y14-M-FOIL-IND',
+    ])
   })
 })

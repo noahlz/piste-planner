@@ -24,8 +24,9 @@ export interface PhaseSpan {
 /**
  * Every phase of one result that exists, in drawing order (flights before
  * pools, then the DE phases). A phase with a null start or end, or one that
- * lasts zero minutes – a bracket of 2 has no counted round (METHODOLOGY.md §DE
- * Duration), a one-pool flighted event has an empty FLIGHT_B – is not a phase.
+ * lasts no minutes (zero, or an end before its start) – a bracket of 2 has no
+ * counted round (METHODOLOGY.md §DE Duration), a one-pool flighted event has an
+ * empty FLIGHT_B – is not a phase.
  *
  * A flighted event fills `flight_a_*` and `flight_b_*` *and* leaves
  * `pool_start`/`pool_end` spanning both flights, so flights are checked first
@@ -41,7 +42,7 @@ export function phaseSpans(result: ScheduleResult): PhaseSpan[] {
     end: number | null,
     stripCount: number,
   ): void => {
-    if (start === null || end === null || end === start) return
+    if (start === null || end === null || end <= start) return
     spans.push({ phase, start, end, stripCount })
   }
 

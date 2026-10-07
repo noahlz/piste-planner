@@ -139,7 +139,8 @@ describe('eventTimeSegments on the reference tournaments', () => {
 
     const digest = createHash('sha256').update(JSON.stringify(perEvent)).digest('hex').slice(0, 16)
     const count = perEvent.reduce((n, [, segments]) => n + segments.length, 0)
-    expect([digest, count]).toEqual(EXPECTED[id])
+    // The segment list is the message, so a changed digest shows which event moved.
+    expect([digest, count], JSON.stringify(perEvent)).toEqual(EXPECTED[id])
   })
 })
 
