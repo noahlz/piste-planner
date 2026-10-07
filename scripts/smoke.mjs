@@ -1630,6 +1630,87 @@ if ((await poolDayOf(a)) === t8Day) throw new Error('017 T8: the Move day did no
 await expectReceiverMatches('after-move', await linkFromSender())
 await shot('017-t8-link-replay')
 
+// ── 017 task S: the headline move ──
+// A fresh B1 boot, then the headline Move day exactly as __tests__/helpers/drawnFixtures.ts
+// runAndMoveHeadline does it: the first event id in code-point order moves to the next day. B1 has
+// no room for that event's pools and prelims on the new day, so the canvas must say so in four
+// places at once: one Unplaced row worded as the spec words it, a footer of 23 placed · 1
+// unplaced, the unseated phase drawn in the "No room" lane as a focusable button, and a re-run
+// of Auto-assign that clears all three.
+const NO_ROOM_MESSAGE = 'No room here with the current schedule – re-run Auto-assign to schedule around it.'
+const footerCounts = async () => ((await footer.locator('[data-counts]').textContent()) ?? '').trim()
+
+// A reload is the fresh B1 boot: the store is in memory, so nothing the checks above placed or
+// pinned survives it. (Picking B1 in the Preset combobox instead keeps those hand placements.)
+await page.goto(BASE)
+await page.getByRole('region', { name: 'Matrix canvas' }).waitFor()
+await closePanel()
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(500)
+if (!(await footerCounts()).startsWith('24 placed · 0 unplaced')) {
+  throw new Error(`017 task S: a fresh B1 should read "24 placed · 0 unplaced", got "${await footerCounts()}"`)
+}
+const headlineId = (await eventIds()).sort()[0]
+if (headlineId !== 'D1-M-EPEE-IND') {
+  throw new Error(`017 task S: the first event id in code-point order on B1 should be D1-M-EPEE-IND, got ${headlineId}`)
+}
+const headlineFrom = await poolDayOf(headlineId)
+const headlineTo = (headlineFrom + 1) % dayCount
+log('017 task S: headline move', headlineId, 'day', headlineFrom + 1, '->', headlineTo + 1)
+await moveEventToDay(headlineId, headlineTo)
+
+await openPanel('Findings')
+const unplacedRows = page.getByRole('complementary', { name: 'Inspector panel' }).locator('[data-finding-id^="unplaced:"]')
+const headlineRows = unplacedRows.and(page.locator(`[data-finding-id^="unplaced:${headlineId}:"]`))
+if ((await headlineRows.count()) !== 1 || (await unplacedRows.count()) !== 1) {
+  await shot('017-task-s-rows')
+  throw new Error(`017 task S: expected exactly one Unplaced row, for ${headlineId}; found ${await unplacedRows.count()} in all, ${await headlineRows.count()} for it`)
+}
+const headlineMessage = ((await headlineRows.locator('[data-message]').textContent()) ?? '').trim()
+if (headlineMessage !== NO_ROOM_MESSAGE) {
+  throw new Error(`017 task S: the Unplaced row reads "${headlineMessage}", expected "${NO_ROOM_MESSAGE}"`)
+}
+log('017 task S: one Unplaced row:', headlineMessage)
+
+if (!(await footerCounts()).startsWith('23 placed · 1 unplaced')) {
+  await shot('017-task-s-footer')
+  throw new Error(`017 task S: after the headline move the footer should read "23 placed · 1 unplaced", got "${await footerCounts()}"`)
+}
+log('017 task S: footer =', await footerCounts())
+
+await closePanel()
+const laneBlocks = page.locator(`[data-overflow-lane] [data-event-block][data-event-id="${headlineId}"][data-unseated="true"]`)
+if ((await laneBlocks.count()) < 1) {
+  await shot('017-task-s-lane')
+  throw new Error(`017 task S: no unseated block of ${headlineId} is drawn in [data-overflow-lane]`)
+}
+const laneBlock = laneBlocks.first()
+await laneBlock.scrollIntoViewIfNeeded()
+if ((await laneBlock.evaluate((el) => el.tagName)) !== 'BUTTON') {
+  throw new Error(`017 task S: the lane block of ${headlineId} is not a <button>`)
+}
+await laneBlock.focus()
+if (!(await laneBlock.evaluate((el) => el === document.activeElement))) {
+  throw new Error(`017 task S: the lane block of ${headlineId} did not take focus`)
+}
+log('017 task S:', await laneBlocks.count(), 'unseated phase(s) of', headlineId, 'drawn in the No room lane as a focusable button')
+await shot('017-task-s-headline')
+
+await page.getByRole('button', { name: 'Auto-assign', exact: true }).click()
+await page.waitForTimeout(500)
+if (!(await footerCounts()).startsWith('24 placed · 0 unplaced')) {
+  await shot('017-task-s-rerun')
+  throw new Error(`017 task S: Auto-assign should return "24 placed · 0 unplaced", got "${await footerCounts()}"`)
+}
+await openPanel('Findings')
+const rowsAfter = await page.getByRole('complementary', { name: 'Inspector panel' }).locator('[data-finding-id^="unplaced:"]').count()
+if (rowsAfter !== 0) throw new Error(`017 task S: Auto-assign left ${rowsAfter} Unplaced row(s)`)
+await closePanel()
+if ((await page.locator('[data-overflow-lane] [data-event-block]').count()) !== 0) {
+  throw new Error('017 task S: Auto-assign left blocks in the No room lane')
+}
+log('017 task S: Auto-assign cleared the row and the lane:', await footerCounts())
+
 await browser.close()
 log('console errors =', errors.length, errors.slice(0, 3))
 if (errors.length) throw new Error('console errors: ' + errors.join(' | '))
