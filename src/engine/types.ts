@@ -612,6 +612,11 @@ export function clockOnDay(t: number, d: number, config: TournamentConfig): stri
   const clockMins = config.dayConfigs && config.dayConfigs[d]
     ? t - d * DAY_AXIS_SPACING_MINS
     : t - dayStart(d, config) + config.DAY_START_MINS
+  return formatClockMins(clockMins)
+}
+
+/** Formats a clock minute (minutes from midnight, wrapped into one day) as zero-padded `HH:MM`. */
+export function formatClockMins(clockMins: number): string {
   const m = ((Math.round(clockMins) % 1440) + 1440) % 1440
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
 }

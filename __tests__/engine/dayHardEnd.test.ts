@@ -96,17 +96,6 @@ describe('findAvailableStripsInWindow day inference on the fallback axis', () =>
   })
 })
 
-/**
- * The scheduler places work until the day's hard end, not its soft target
- * (METHODOLOGY.md §Same-Day Completion, §Phase 5): a phase ending between
- * 19:00 and 22:00 is placed, and SAME_DAY_VIOLATION fires only for a phase
- * that would end past 22:00 (§Bottlenecks Specific to the Concurrent
- * Scheduler).
- *
- * The one day opens late, at 17:30, so a single small event's pools end near
- * 19:00 and its DE runs on into the evening. The window is the scheduler-axis
- * shape `buildConfig.ts` emits for day hours 17:30–19:00.
- */
 const NINE_AM = 540
 const SEVEN_PM = 1140
 const TEN_PM = 1320
@@ -123,6 +112,17 @@ function appAxisConfig(days: number) {
   })
 }
 
+/**
+ * The scheduler places work until the day's hard end, not its soft target
+ * (METHODOLOGY.md §Same-Day Completion, §Phase 5): a phase ending between
+ * 19:00 and 22:00 is placed, and SAME_DAY_VIOLATION fires only for a phase
+ * that would end past 22:00 (§Bottlenecks Specific to the Concurrent
+ * Scheduler).
+ *
+ * The one day opens late, at 17:30, so a single small event's pools end near
+ * 19:00 and its DE runs on into the evening. The window is the scheduler-axis
+ * shape `buildConfig.ts` emits for day hours 17:30–19:00.
+ */
 const LATE_WINDOW: DayWindow = { day_start_time: 1050, day_end_time: 1140, day_hard_end_time: 1320 }
 
 function lateEventCompetition(fencerCount: number) {
