@@ -401,6 +401,16 @@ const blockCount = await page.locator('[data-event-block]').count()
 log('matrix event blocks =', blockCount)
 if (blockCount < 8) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
 
+// `[M]` 017 T6b: `[data-event-block]` now marks only a phase's first run (continuations
+// carry `data-block-run`), so the count above is one per drawn phase. A freshly
+// scheduled matrix seats every phase, so none may sit in the overflow lane
+// (`data-unseated="true"`; `data-overflow` and `data-first-strip` no longer exist).
+const unseatedAtBoot = await page.locator('[data-event-block][data-unseated="true"]').count()
+log('matrix unseated blocks at boot =', unseatedAtBoot)
+if (unseatedAtBoot !== 0) {
+  throw new Error(`${unseatedAtBoot} [data-event-block][data-unseated="true"] at boot, expected 0 (app defect: the scheduler left phases unseated)`)
+}
+
 // Captured now, before the zoom actions below change any geometry. 013 T026
 // removed the viewport culling that used to drop a scrolled-out block's DOM node, so
 // this is no longer load-bearing against culling — it still reads the blocks
@@ -1272,8 +1282,8 @@ async function moveEventToDay(id, day) {
   await closePanel()
   const blk = page.locator(`[data-event-block="${id}:POOLS"]`).first()
   await blk.scrollIntoViewIfNeeded()
-  // A dispatched click, not a pointer click: an overflowing (dashed) block of
-  // another event can be drawn over this one and intercept the pointer.
+  // A dispatched click, not a pointer click: another event's block (an unseated one
+  // in the overflow lane, say) can be drawn over this one and intercept the pointer.
   await blk.dispatchEvent('click')
   const strip = page.getByRole('region', { name: 'Selected event' })
   await strip.waitFor()
