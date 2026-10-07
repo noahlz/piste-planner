@@ -50,7 +50,7 @@ wrong or silent halts to the owner. A task whose spec item is still pending does
   - `timeout 300 pnpm -C <wt> --silent test --exclude 'tmp/**' > <wt>/tmp/test.log 2>&1`
   - `timeout 120 pnpm -C <wt> exec vitest run <file>`
   - `timeout 180 pnpm -C <wt> exec tsc -b > <wt>/tmp/tsc.log 2>&1`
-  - `timeout 120 pnpm -C <wt> --silent lint > <wt>/tmp/lint.log 2>&1`
+  - `timeout 120 pnpm -C <wt> --silent lint --ignore-pattern 'tmp/**' > <wt>/tmp/lint.log 2>&1` (the probes in `tmp/` are not linted)
   - Live app: `pnpm -C <wt> dev --port 5188 --strictPort`, then
     `SMOKE_BASE=http://localhost:5188/piste-planner/ timeout 240 node <wt>/scripts/smoke.mjs`.
   - Read logs only on failure.
