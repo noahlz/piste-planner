@@ -37,13 +37,12 @@ a run is the same number.
 | R6 | Link replay | **Yes.** The URL carries the pin set the sender's last run used, and boot replays `scheduleAll` with it, so the receiver's board equals the sender's, hand moves included |
 | R8 | Video gutter and camera icon | **Deferred** to a later feature |
 
-## Pending owner approval (asked in S1 before T1)
+## Owner approvals (2026-10-07)
 
-Each item below is the drafter's proposal. It is marked **pending** until the owner answers in S1, and
-the answer is written here in its own commit before T1. No task that depends on a pending item starts
-while it is pending.
+The owner approved every item below as proposed, P1 and P2 verbatim, P4 with both the banner and the
+Findings row. The planning session continues into implementation, so the worktree is reused.
 
-| # | Item | Proposal (default) | Needed by |
+| # | Item | Approved text or rule | Needed by |
 |---|---|---|---|
 | P1 | METHODOLOGY wording (§METHODOLOGY amendment) | the text below, verbatim | amendment commit, T9 |
 | P2 | D2 row (§D2 row amendment) | the text below, verbatim | Task D |
@@ -151,7 +150,7 @@ placements.
 - **Collateral.** Kept events never move: no derived interval overlaps a kept interval on the same strip
   and day, and every kept phase's indices are the same with and without derived events present. Derived
   events are re-seated in fixed order on every recompute, so whether one hand move can disturb another is
-  item P5 (pending).
+  item P5 (approved: fixed order).
 - **Unseated:** a phase with `stripCount > 0` and `endMinutes > startMinutes` that holds no strips. Every
   zero-length phase is skipped by `phaseSpans`, so it is never offered, never drawn and never flagged
   (B8 VET-W-SABRE-IND-V80's DE_ROUND_OF_16, 3570–3570, and a flighted one-pool event's empty FLIGHT_B).
@@ -173,8 +172,8 @@ placements.
 - **One Unplaced row per unplaced event**, id `unplaced:<id>:room`, `where` "Day N · <label>":
   - a derived (hand-moved) event: "No room here with the current schedule – re-run Auto-assign to
     schedule around it."
-  - a kept event whose pinned phase the engine could not seat: P3's wording (pending).
-- **While stale** (P4, pending): the board is not a schedule until the next run, so unseated phases are
+  - a kept event whose pinned phase the engine could not seat: P3's wording (approved).
+- **While stale** (P4, approved): the board is not a schedule until the next run, so unseated phases are
   unknown, not unplaced. No unseated rows, no unseated counts in the footer or the bands. Rows for events
   with no placement or an out-of-range day stay. The stale notice replaces the unseated rows (part 6).
 - The footer's referee peak does **not** change until the referee task (part 7).
@@ -215,7 +214,7 @@ exists yet, so no task looks for one.
     `scheduleAll` with a valid `run` and writes `lastRun` only, never placements. Without a valid `run`,
     `lastRun` becomes null, so a run from the previous board never draws against loaded placements, even
     when the two configs share a key.
-  - **Ids sort the same everywhere** (P7, pending). The engine's three id tie-breaks become code-point
+  - **Ids sort the same everywhere** (P7, approved). The engine's three id tie-breaks become code-point
     order. Over every catalogue id that order equals `en`'s, so the ledger stays byte-identical, and a
     sender and a receiver in different locales replay to one board.
   - **URL size.** `run` repeats each pin of the sender's last run, about 80 bytes each before base64. A
@@ -232,7 +231,7 @@ exists yet, so no task looks for one.
 - The overflow edge exemption goes (`warnedEdge = warned && !placement.overflow`,
   `src/components/canvas/Block.tsx:204`). Every warned block draws the findings edge, the overflow lane
   included.
-- **The stale notice** (P4, pending) is one `role="status"` banner above the center view reading
+- **The stale notice** (P4, approved) is one `role="status"` banner above the center view reading
   "Stale – re-run Auto-assign", plus, under the proposal, one non-dismissable row with the same text in
   the Findings panel where the per-event Unplaced rows were. The banner reads the center view's committed
   model's run state (`src/components/workbench/CenterView.tsx:142-170`), so it changes when the board
@@ -253,7 +252,7 @@ exists yet, so no task looks for one.
   (`src/engine/concurrentScheduler.ts:1559-1594`).
 - The store's footer counts the drawn model's intervals, leaving out the blocks the model counts as
   unplaced (part 2). While fresh that skips unseated phases. While stale it skips nothing, so every
-  derived phase is counted, seated or not (P4 (c), pending), since the stale board is not a schedule.
+  derived phase is counted, seated or not (P4 (c), approved), since the stale board is not a schedule.
 - Both switch in one commit, so `appPathParity` holds at every commit.
 
 ### METHODOLOGY amendment (P1, owner approves, committed before the referee task)

@@ -16,7 +16,7 @@ footer, the day bands, the Findings panel and the schedule table. The engine gai
 shared with Suggest, locale-independent id tie-breaks and, last, the referee count. The engine's
 scheduling is untouched.
 
-**Spec:** [`spec.md`](./spec.md) (owner rulings 2026-10-07, items P1–P7 pending until S1 asks), plus the
+**Spec:** [`spec.md`](./spec.md) (owner rulings 2026-10-07, items P1–P7 owner-approved 2026-10-07), plus the
 METHODOLOGY amendment committed before T9. The spec is never edited to match code. A task that finds it
 wrong or silent halts to the owner. A task whose spec item is still pending does not start.
 
