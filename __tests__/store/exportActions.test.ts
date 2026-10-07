@@ -5,6 +5,9 @@ import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { makePlacement } from '../helpers/factories.ts'
 import { selectDrawnSchedule, RunState } from '../../src/store/derived.ts'
 import { moveHeadline } from '../helpers/drawnFixtures.ts'
+import { Weapon } from '../../src/engine/types.ts'
+import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../../src/engine/constants.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { payloadWithRefusedRun, resetReceiver, sendBoard, sentPayload } from '../helpers/replayFixtures.ts'
 import {
   URL_SIZE_WARNING_BYTES,
@@ -16,6 +19,11 @@ import {
   shareLinkExceedsLimit,
   copyToClipboard,
 } from '../../src/store/exportActions.ts'
+
+vi.mock('../../src/engine/scheduler.ts', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../src/engine/scheduler.ts')>()
+  return { ...mod, scheduleAll: vi.fn(mod.scheduleAll) }
+})
 
 // ──────────────────────────────────────────────
 // Setup
@@ -324,19 +332,55 @@ describe('applyLoadedState with a run (017 T8)', () => {
     expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
   })
 
-  it('leaves the board as it was after a Move day on the receiver, kept events untouched', async () => {
+  it('draws the same board as the sender after both make the same Move day', async () => {
     const sent = sendBoard()
+    moveHeadline()
+    const senderAfter = selectDrawnSchedule(useStore.getState())
     resetReceiver()
     await receiveFile(sent.json)
-    const before = selectDrawnSchedule(useStore.getState())
 
     moveHeadline()
 
-    const after = selectDrawnSchedule(useStore.getState())
-    expect(after.runState).toBe(RunState.FRESH)
-    const keptBefore = before.blocks.filter((b) => before.events[b.competitionId].source === 'kept')
-    const unmoved = keptBefore.filter((b) => after.events[b.competitionId].source === 'kept')
-    expect(unmoved.length).toBeGreaterThan(0)
-    for (const block of unmoved) expect(after.blocks).toContainEqual(expect.objectContaining({ ...block, countsAsUnplaced: false }))
+    const receiverAfter = selectDrawnSchedule(useStore.getState())
+    expect(receiverAfter.runState).toBe(RunState.FRESH)
+    expect(receiverAfter).toEqual(senderAfter)
+  })
+
+  it('draws the sender\'s board over a receiver that had changed a pool duration', async () => {
+    const sent = sendBoard()
+    resetReceiver()
+    useStore.getState().setPoolRoundDuration(Weapon.EPEE, DEFAULT_POOL_ROUND_DURATION_TABLE.EPEE - 10)
+
+    await receiveFile(sent.json)
+
+    expect(useStore.getState().pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
+    expect(selectDrawnSchedule(useStore.getState())).toEqual(sent.drawn)
+  })
+
+  it('reports why the run was not replayed when the replay throws, and opens stale', async () => {
+    const sent = sendBoard()
+    resetReceiver()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(scheduleAll).mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    const parsed = await parseTournamentFile(new File([sent.json], SAVE_FILE_NAME))
+    if ('error' in parsed) throw new Error(parsed.error)
+
+    const failure = applyLoadedState(parsed.state, parsed.run)
+
+    expect(failure).toMatch(/boom/)
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/replay/i), expect.stringMatching(/boom/))
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+
+  it('reports no failure when the run replays', async () => {
+    const sent = sendBoard()
+    resetReceiver()
+    const parsed = await parseTournamentFile(new File([sent.json], SAVE_FILE_NAME))
+    if ('error' in parsed) throw new Error(parsed.error)
+
+    expect(applyLoadedState(parsed.state, parsed.run)).toBeNull()
   })
 })

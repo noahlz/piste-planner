@@ -344,15 +344,26 @@ describe('replayRun (017 T8)', () => {
     expect(thirdArgOfCall(0)).toEqual(pins)
   })
 
-  it('clears the kept run when the replay throws', () => {
+  it('clears the kept run, says why on the console and returns the reason when the replay throws', () => {
     applyPreset('B1')
     runScheduleAll()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(scheduleAll).mockImplementationOnce(() => {
       throw new Error('boom')
     })
 
-    replayRun(useStore.getState(), [])
+    const failure = replayRun(useStore.getState(), [])
 
+    expect(failure).toBe('boom')
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/replay/i), 'boom')
     expect(useStore.getState().lastRun).toBeNull()
+    warn.mockRestore()
+  })
+
+  it('returns no failure when the replay succeeds', () => {
+    applyPreset('B1')
+    runScheduleAll()
+
+    expect(replayRun(useStore.getState(), useStore.getState().lastRun!.pins)).toBeNull()
   })
 })

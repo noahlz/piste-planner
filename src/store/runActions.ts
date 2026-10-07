@@ -17,7 +17,8 @@ export interface AutoRunCounts {
  * and the rest of the scheduler's output derive on read from these inputs.
  * The whole run is also kept in memory as `lastRun` (017 spec §1), written in
  * the same store update as the placements, so the canvas can draw the
- * scheduler's own times and strips. It is never serialized.
+ * scheduler's own times and strips. Only its pins are serialized (017 T8, as
+ * `run`), so a link or file can replay it.
  *
  * A scheduling failure leaves the existing placements alone rather than
  * wiping them: the previous answer is still the best one on offer. The kept
@@ -85,16 +86,25 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
 /**
  * Replays `pins` through the scheduler and keeps the run, the way a link or a
  * file rebuilds the sender's board (017 R6, P6). Writes `lastRun` only, never a
- * placement: the placements are the ones the payload carried. A replay that
+ * placement: the placements are the ones the payload carried. A scheduler that
  * throws leaves no run, so the board opens stale rather than drawing a run it
- * did not reproduce.
+ * did not reproduce, and the reason is logged and returned for the caller to
+ * report the way a refused run is. Only `scheduleAll` is guarded, so a broken
+ * invariant in `keepRun` still surfaces.
+ *
+ * Returns the failure's reason, or null when the run was replayed.
  */
-export function replayRun(state: StoreState, pins: readonly PinnedPlacement[]): void {
+export function replayRun(state: StoreState, pins: readonly PinnedPlacement[]): string | null {
   const { config, competitions } = buildTournamentConfig(state)
+  let run: ReturnType<typeof scheduleAll>
   try {
-    const run = scheduleAll(competitions, config, [...pins])
-    state.setLastRun(keepRun(run, config, competitions, pins))
-  } catch {
+    run = scheduleAll(competitions, config, pins)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.warn('Could not replay the saved run, the board opens stale:', reason)
     state.setLastRun(null)
+    return reason
   }
+  state.setLastRun(keepRun(run, config, competitions, pins))
+  return null
 }

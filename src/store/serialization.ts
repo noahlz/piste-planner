@@ -55,6 +55,13 @@ export interface SerializedState {
   run?: PinnedPlacement[]
 }
 
+/**
+ * A payload that passed `validateSchema`. Its `run` is deliberately `unknown`:
+ * the schema check never looks at it, so `readRun` is the only way to get typed
+ * pins out of one.
+ */
+export type UnvalidatedPayload = Omit<SerializedState, 'run'> & { run?: unknown }
+
 // The seven-key override record travelled at the top level for exactly one
 // task: 013 T020
 // lifted it out of `competitions` so the retired Settings panel's share link
@@ -111,9 +118,9 @@ export function serializeState(state: StoreState): string {
 /**
  * The pins the last run was given, when that run still describes the board
  * (017 spec §5). Compared on the config key computed here, directly, rather
- * than through `selectDrawnSchedule`: `derived.ts` imports the store's
- * selectors, and this module must stay importable from `boot.ts` without
- * reaching them. A stale run, a run-less board and an empty board write none.
+ * than through the memoized `selectDrawnSchedule`, so this module never imports
+ * `derived.ts` and no import cycle can form through the selector. A stale run,
+ * a run-less board and an empty board write none.
  */
 function runToWrite(state: StoreState): PinnedPlacement[] | null {
   if (state.lastRun === null) return null
@@ -130,7 +137,7 @@ function runToWrite(state: StoreState): PinnedPlacement[] | null {
 /** Validate parsed data against the serialization schema. */
 export function validateSchema(
   data: unknown,
-): { valid: true; data: SerializedState } | { valid: false; error: string } {
+): { valid: true; data: UnvalidatedPayload } | { valid: false; error: string } {
   if (data == null || typeof data !== 'object') {
     return { valid: false, error: 'Input must be a non-null object' }
   }
@@ -309,7 +316,7 @@ export function validateSchema(
     }
   }
 
-  return { valid: true, data: obj as unknown as SerializedState }
+  return { valid: true, data: obj as unknown as UnvalidatedPayload }
 }
 
 // `mergeOntoDefaults` lived here until 013 T022: it merged an overrides-only
@@ -366,15 +373,18 @@ export function deserializeState(
     de_mode_override: data.tournament.de_mode_override ?? null,
   }
   // Only assign when present – a key set to undefined would clobber the store's
-  // seeded defaults through the useStore.setState merge (research D3). This
-  // matters more for video_strips_total than for pool_round_duration_table below:
-  // an unconditional assignment here would overwrite the store's `null` default
+  // seeded defaults through the useStore.setState merge (research D3). An
+  // unconditional assignment here would overwrite the store's `null` default
   // with `undefined`, which is not a member of `number | null`.
   if (data.tournament.video_strips_total !== undefined) {
     state.video_strips_total = data.tournament.video_strips_total
   }
-  if (data.tournament.pool_round_duration_table !== undefined) {
-    state.pool_round_duration_table = data.tournament.pool_round_duration_table
+  // Always assigned, unlike the key above: the writer leaves the table out when
+  // it equals the default (FR-045), and merging onto a live store would then
+  // keep the receiver's own durations under the sender's replayed run (017 R6).
+  // A fresh copy, so the store never shares the constant's object.
+  state.pool_round_duration_table = data.tournament.pool_round_duration_table ?? {
+    ...DEFAULT_POOL_ROUND_DURATION_TABLE,
   }
 
   // Lenient load: a placement whose event id isn't selected is dropped and reported,

@@ -6,8 +6,8 @@ import { useStore } from '../../../src/store/store.ts'
 import { SCENARIOS } from '../../../src/data/tournaments.ts'
 import { encodeToUrl } from '../../../src/store/serialization.ts'
 import { selectDrawnSchedule, RunState } from '../../../src/store/derived.ts'
-import { payloadWithRefusedRun, resetReceiver, sendBoard, sentPayload } from '../../helpers/replayFixtures.ts'
-import { TournamentType } from '../../../src/engine/types.ts'
+import { hashOf, payloadWithRefusedRun, resetReceiver, sendBoard, sentPayload } from '../../helpers/replayFixtures.ts'
+import { TournamentType, DAY_AXIS_SPACING_MINS } from '../../../src/engine/types.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import {
   DEFAULT_VIEW_STATE,
@@ -103,9 +103,6 @@ describe('bootstrap with an undecodable #config= fragment', () => {
 })
 
 describe('bootstrap with a #config= fragment that carries a run (017 T8)', () => {
-  const toHash = (payload: unknown) =>
-    `#config=${btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
-
   it.each([
     ['as shared', false, false],
     ['after one Move day', true, false],
@@ -136,7 +133,7 @@ describe('bootstrap with a #config= fragment that carries a run (017 T8)', () =>
     delete payload.run
     resetReceiver()
 
-    bootstrap(toHash(payload))
+    bootstrap(hashOf(payload))
 
     expect(useStore.getState().lastRun).toBeNull()
     expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
@@ -146,15 +143,16 @@ describe('bootstrap with a #config= fragment that carries a run (017 T8)', () =>
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sent = sendBoard({ pinned: true })
     const payload = payloadWithRefusedRun(sent)
-    payload.run![0].strip_count = 1
-    payload.run![0].day = 99
+    // Only the day is out of range: its start_time sits on day 99's own axis.
+    const [first] = payload.run!
+    payload.run![0] = { ...first, strip_count: 1, day: 99, start_time: 99 * DAY_AXIS_SPACING_MINS + (first.start_time % DAY_AXIS_SPACING_MINS) }
     resetReceiver()
 
-    bootstrap(toHash(payload))
+    bootstrap(hashOf(payload))
 
     expect(useStore.getState().lastRun).toBeNull()
     expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/run/i), expect.stringMatching(/day/))
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/run/i), expect.stringMatching(/run day for .* must be a whole day/))
     warn.mockRestore()
   })
 

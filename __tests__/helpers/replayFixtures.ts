@@ -58,3 +58,14 @@ export function payloadWithRefusedRun(board: SentBoard): SerializedState {
   payload.run = [{ ...pins[0], strip_count: 0 }, ...pins.slice(1)]
   return payload
 }
+
+/** `#config=...` for a payload, the way `encodeToUrl` writes it. */
+export function hashOf(payload: unknown): string {
+  return `#config=${btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
+}
+
+/** The payload a `#config=...` hash carries. */
+export function payloadOfHash(hash: string): SerializedState {
+  const b64 = hash.slice('#config='.length).replace(/-/g, '+').replace(/_/g, '/')
+  return JSON.parse(atob(b64)) as SerializedState
+}

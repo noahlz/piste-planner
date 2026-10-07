@@ -6,7 +6,9 @@ import { serializeState } from '../../../src/store/serialization.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import { makePlacement } from '../../helpers/factories.ts'
 import { selectDrawnSchedule, RunState } from '../../../src/store/derived.ts'
-import { payloadWithRefusedRun, resetReceiver, sendBoard } from '../../helpers/replayFixtures.ts'
+import { CATALOGUE } from '../../../src/engine/catalogue.ts'
+import { payloadWithRefusedRun, resetReceiver, sendBoard, sentPayload } from '../../helpers/replayFixtures.ts'
+import type { SentBoard } from '../../helpers/replayFixtures.ts'
 
 // 013 T010 — re-targets the deleted __tests__/components/saveLoadShare.test.tsx
 // at ExportPopover, the Header's Popover wrapper over the same
@@ -327,6 +329,54 @@ describe('ExportPopover load with a run (017 T8)', () => {
     expect(screen.getByRole('status').textContent).toMatch(/strip_count/)
     expect(useStore.getState().lastRun).toBeNull()
     expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+
+  it('says both what was dropped and why the run was refused, as two sentences', async () => {
+    const sent = sendBoard({ pinned: true })
+    const payload = payloadWithRefusedRun(sent)
+    const missing = CATALOGUE.find((entry) => !(entry.id in payload.competitions))!.id
+    payload.placements[missing] = Object.values(payload.placements)[0]
+    resetReceiver()
+    render(<ExportPopover defaultOpen />)
+
+    uploadJson(JSON.stringify(payload))
+
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toMatch(/saved run/i)
+    })
+    expect(screen.getByRole('status').textContent).toMatch(
+      new RegExp(`configuration: ${missing} The saved run could not be replayed \\(.*strip_count.*\\)\\.$`),
+    )
+  })
+
+  it.each([
+    ['a refused run', (sent: SentBoard) => JSON.stringify(payloadWithRefusedRun(sent)), /saved run/i],
+    [
+      'dropped placements',
+      (sent: SentBoard) => {
+        const payload = sentPayload(sent)
+        const missing = CATALOGUE.find((entry) => !(entry.id in payload.competitions))!.id
+        payload.placements[missing] = Object.values(payload.placements)[0]
+        return JSON.stringify(payload)
+      },
+      /Dropped 1 placement/,
+    ],
+  ])('clears the notice for %s when the next load is not valid JSON', async (_name, corrupt, notice) => {
+    const sent = sendBoard({ pinned: true })
+    const first = corrupt(sent)
+    resetReceiver()
+    render(<ExportPopover defaultOpen />)
+    uploadJson(first)
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toMatch(notice)
+    })
+
+    uploadJson('{not json')
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
   it('clears the refusal notice on the next good load', async () => {

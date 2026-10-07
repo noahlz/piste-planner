@@ -47,10 +47,11 @@ export async function parseTournamentFile(file: File): Promise<ParsedFile> {
  * there before never draws against the loaded placements, even when the two
  * configs share a key. The state goes in with `lastRun: null` in one update, so
  * no subscriber sees loaded placements beside the old run. Separate from
- * parsing so a caller can warn about dropped placements first (FR-009). */
-export function applyLoadedState(state: Partial<StoreState>, run: readonly PinnedPlacement[] | null): void {
+ * parsing so a caller can warn about dropped placements first (FR-009).
+ * Returns why the replay failed, or null when it did not (or no run came). */
+export function applyLoadedState(state: Partial<StoreState>, run: readonly PinnedPlacement[] | null): string | null {
   useStore.setState({ ...state, lastRun: null })
-  if (run !== null) replayRun(useStore.getState(), run)
+  return run === null ? null : replayRun(useStore.getState(), run)
 }
 
 /** Builds a shareable URL encoding the given state (or the live store) in its hash. */
