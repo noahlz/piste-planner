@@ -13,7 +13,8 @@ import {
   saveViewState,
 } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
-import { runPreset } from '../../helpers/drawnFixtures.ts'
+import { runPreset, UNPLACED_WORDING } from '../../helpers/drawnFixtures.ts'
+import { runScheduleAll } from '../../../src/store/runActions.ts'
 import { selectDerivedSchedule } from '../../../src/store/derived.ts'
 import { phaseSpans } from '../../../src/engine/unseated.ts'
 import { phaseDisplay } from '../../../src/lib/placementLabels.ts'
@@ -513,5 +514,106 @@ describe('the center commits the drawn model (017 T6a)', () => {
     expect(pills).toEqual(
       phaseSpans(kept).map((span) => `${phaseDisplay(span.phase)} ${formatClock(span.start)}–${formatClock(span.end)}`),
     )
+  })
+})
+
+/**
+ * 017 T7 – the stale banner (spec §6, P4). It reads the committed model's run
+ * state, so it appears and goes when the board redraws, not on the keystroke.
+ */
+describe('the stale banner follows the committed model (017 T7)', () => {
+  let restoreResizeObserver: () => void
+
+  beforeEach(() => {
+    restoreResizeObserver = installStubResizeObserver(900, 480)
+    runPreset('B1')
+  })
+
+  afterEach(() => {
+    restoreResizeObserver()
+  })
+
+  function renderCenter(viewMode: ViewMode = ViewMode.MATRIX): void {
+    render(
+      <CenterView
+        viewMode={viewMode}
+        zoom={{ zoomStep: 2, fitting: false }}
+        detailCollapsed={false}
+        onToggleDetailCollapsed={() => {}}
+      />,
+    )
+  }
+
+  function banner(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('[data-stale-banner]')
+  }
+
+  function settle(): void {
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS)
+    })
+  }
+
+  it('shows nothing on a board that was just run', () => {
+    renderCenter()
+
+    expect(banner()).toBeNull()
+    expect(screen.queryByText(UNPLACED_WORDING.STALE)).not.toBeInTheDocument()
+  })
+
+  it.each([ViewMode.MATRIX, ViewMode.SCHEDULE])('shows after a settings edit once the center settles, in the %s view', (viewMode) => {
+    renderCenter(viewMode)
+
+    act(() => {
+      useStore.getState().setStrips(79)
+    })
+    // The live model is stale already, but the center has not redrawn yet.
+    expect(banner()).toBeNull()
+
+    settle()
+
+    const shown = banner()
+    expect(shown).not.toBeNull()
+    expect(shown).toHaveAttribute('role', 'status')
+    expect(shown?.textContent).toBe(UNPLACED_WORDING.STALE)
+  })
+
+  it('goes once Auto-assign has run and the center has settled', () => {
+    renderCenter()
+    act(() => {
+      useStore.getState().setStrips(79)
+    })
+    settle()
+    expect(banner()).not.toBeNull()
+
+    act(() => {
+      runScheduleAll()
+    })
+    expect(banner()).not.toBeNull()
+
+    settle()
+
+    expect(banner()).toBeNull()
+  })
+
+  it('keeps the frozen state while a Blocking finding freezes the committed model', () => {
+    renderCenter()
+
+    // strips_total 0 is both a stale edit and a Blocking ERROR: the center commits nothing.
+    act(() => {
+      useStore.getState().setStrips(0)
+    })
+    settle()
+    expect(screen.getByRole('region', { name: 'Blocking findings' })).toBeInTheDocument()
+    expect(banner()).toBeNull()
+
+    // Valid again but not the strip count the run used: the board is stale, and says so.
+    act(() => {
+      useStore.getState().setStrips(79)
+    })
+    settle()
+
+    expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
+    expect(banner()).not.toBeNull()
   })
 })

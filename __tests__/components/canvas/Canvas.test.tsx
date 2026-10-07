@@ -1122,6 +1122,56 @@ describe('Canvas draws the scheduler\'s strips (017 T6b, spec §6)', () => {
     })
   })
 
+  describe('blocks are keyboard buttons (017 T7, spec §6)', () => {
+    /** Every element a Tab press can land on, in document order. */
+    function tabStops(): HTMLElement[] {
+      return Array.from(document.querySelectorAll<HTMLElement>('button, [tabindex]')).filter(
+        (el) => el.tabIndex >= 0,
+      )
+    }
+
+    it('offers one button per phase and none for a continuation run', () => {
+      draw(board([
+        ['K', 600, 700, 4, [0, 1, 5, 6]],
+        ['A', 630, 690, 8, null],
+      ]))
+
+      const [first, continuation] = rectsOf('K')
+      expect(rectsOf('K')).toHaveLength(2)
+      expect(screen.getAllByRole('button')).toHaveLength(2)
+      // The accessible name is the phase's own, found by the exact string a driver passes.
+      const name = first.getAttribute('aria-label') ?? ''
+      expect(screen.getAllByRole('button', { name })).toEqual([first])
+      expect(continuation.tagName).not.toBe('BUTTON')
+      expect(continuation.tabIndex).toBe(-1)
+      expect(tabStops()).not.toContain(continuation)
+    })
+
+    it('makes an overflow-lane block a button too', () => {
+      draw(board([
+        ['K', 600, 700, 8, [0, 1, 2, 3, 4, 5, 6, 7]],
+        ['A', 630, 690, 2, null],
+      ]))
+
+      const [lane] = rectsOf('A')
+      expect(lane.dataset.unseated).toBe('true')
+      expect(lane.tagName).toBe('BUTTON')
+      expect(tabStops()).toContain(lane)
+    })
+
+    it('tabs through every phase of a run board, day by day, and through nothing else', () => {
+      const { schedule, findings, dayConfigs } = b1Board()
+      renderCanvas({ schedule, findings, dayConfigs })
+
+      const stops = tabStops()
+      expect(stops).toEqual(eventBlocks())
+      expect(stops).toHaveLength(schedule.blocks.length)
+      const days = stops.map((stop) => Number(stop.dataset.day))
+      expect(days).toEqual([...days].sort((a, b) => a - b))
+      for (const stop of stops) expect(stop.tagName).toBe('BUTTON')
+    })
+  })
+
   it('draws no overflow lane for a board that was run', () => {
     const { schedule, findings, dayConfigs } = b1Board()
     renderCanvas({ schedule, findings, dayConfigs })

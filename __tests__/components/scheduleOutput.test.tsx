@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { ScheduleOutput } from '../../src/components/sections/ScheduleOutput.tsx'
 import { WorkbenchShell } from '../../src/components/workbench/WorkbenchShell.tsx'
+import { CenterView } from '../../src/components/workbench/CenterView.tsx'
+import { ViewMode } from '../../src/store/viewState.ts'
 import { useStore } from '../../src/store/store.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { deriveEventSchedule } from '../../src/engine/derive.ts'
@@ -166,12 +168,36 @@ describe('Competition cell names the event (T050)', () => {
   })
 })
 
+/** The center in its table view: the banner lives above the view, so ScheduleOutput alone cannot show it. */
+function renderCenterTable(): void {
+  render(
+    <CenterView
+      viewMode={ViewMode.SCHEDULE}
+      zoom={{ zoomStep: 2, fitting: false }}
+      detailCollapsed={false}
+      onToggleDetailCollapsed={() => {}}
+    />,
+  )
+}
+
 describe('ScheduleOutput', () => {
-  it('renders no staleness banner — placements are always current', () => {
+  it('shows no stale notice on a board that was just run', () => {
+    runPreset('B1')
+    renderCenterTable()
+
+    expect(document.querySelector('[data-schedule-row]')).toBeInTheDocument()
+    expect(document.querySelector('[data-stale-banner]')).toBeNull()
+    expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the stale notice on a board with placements and no run behind them', () => {
     const id = seedPlacedCompetition()
-    render(<ScheduleOutput />)
+    renderCenterTable()
 
     expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Stale – re-run Auto-assign')
+    // The notice is the stale state's only wording: the retired phrasing stays retired.
     expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
     expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
   })

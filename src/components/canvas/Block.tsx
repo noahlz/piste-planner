@@ -47,6 +47,13 @@ import { drawnStripsLabel, phaseDisplay } from '../../lib/placementLabels.ts'
  * `[data-event-block]` counts phases and the accessibility tree reads each
  * phase once. The label, the icon and the pin badge stay on the first run.
  *
+ * ## A phase is a keyboard button (017 spec §6)
+ *
+ * The first run is a `<button type="button">` and a plain tab stop, so its
+ * content is phrasing content (a `span`, never a `div`). A continuation is a
+ * `div` with `tabIndex={-1}`, so it never takes a tab stop. The focus ring is
+ * an outline, because the inline `boxShadow` below would override a shadow ring.
+ *
  * ## Nothing here drags, and nothing resizes (FR-043)
  *
  * The engine owns placement. A resize handle or a pointer-down that moved a
@@ -117,9 +124,9 @@ export interface BlockProps {
    * every block on the grid and never learn that one is in trouble.
    */
   findings: string[]
-  onPointerEnter?: (e: PointerEvent<HTMLDivElement>) => void
-  onPointerLeave?: (e: PointerEvent<HTMLDivElement>) => void
-  onClick?: (e: MouseEvent<HTMLDivElement>) => void
+  onPointerEnter?: (e: PointerEvent<HTMLElement>) => void
+  onPointerLeave?: (e: PointerEvent<HTMLElement>) => void
+  onClick?: (e: MouseEvent<HTMLElement>) => void
 }
 
 export function Block({
@@ -254,7 +261,6 @@ export function Block({
   const identity = isContinuation
     ? { 'aria-hidden': true as const, 'data-block-run': `${competition.id}:${placement.phase}` }
     : {
-        role: 'img',
         'aria-label': name,
         'data-event-block': `${competition.id}:${placement.phase}`,
         'data-event-id': competition.id,
@@ -273,14 +279,8 @@ export function Block({
         'data-flash': flash ? 'true' : 'false',
       }
 
-  return (
-    <div
-      {...identity}
-      style={blockStyle}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      onClick={onClick}
-    >
+  const content = (
+    <>
       {kind === 'de' && (
         <span
           data-hatch
@@ -330,10 +330,10 @@ export function Block({
       )}
 
       {!isContinuation && (
-        <div
+        <span
           aria-hidden="true"
           data-content
-          className="relative flex h-full items-center justify-center overflow-hidden leading-none"
+          className="relative flex h-full w-full items-center justify-center overflow-hidden leading-none"
           style={{ padding: `0 ${padding}px`, gap: `${gap}px` }}
         >
           {renderIcon && (
@@ -354,9 +354,35 @@ export function Block({
               {labelText}
             </span>
           )}
-        </div>
+        </span>
       )}
-    </div>
+    </>
+  )
+
+  const handlers = { style: blockStyle, onPointerEnter, onPointerLeave, onClick }
+
+  // A continuation is a non-button sibling: it is out of the accessibility tree and the tab order,
+  // so the phase is one tab stop and one name however many rects it takes.
+  if (isContinuation) {
+    return (
+      <div {...identity} {...handlers} tabIndex={-1} className="cursor-pointer">
+        {content}
+      </div>
+    )
+  }
+
+  // The focus ring is an outline because `blockStyle` writes the box-shadow inline and would win
+  // over a shadow ring. It takes a z-index on focus so a neighbouring block cannot cover it, kept
+  // under the sticky strip gutters (z-index 10).
+  return (
+    <button
+      type="button"
+      {...identity}
+      {...handlers}
+      className="cursor-pointer focus-visible:z-[5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      {content}
+    </button>
   )
 }
 

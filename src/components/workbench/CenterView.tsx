@@ -5,6 +5,7 @@ import {
   selectDerivedFindings,
   selectDrawnSchedule,
   selectFindings,
+  RunState,
   type DerivedFindings,
   type DrawnSchedule,
   type Finding,
@@ -179,6 +180,19 @@ export function CenterView({
 
   return (
     <main aria-label="Center view" className="print-unclip flex min-h-0 flex-1 flex-col">
+      {/* The stale notice (017 spec §6, P4) reads the *committed* model's run
+          state, so it lands with the board it describes and a Blocking
+          finding that freezes the model freezes it too. */}
+      {committed.schedule.runState === RunState.STALE && (
+        <div
+          role="status"
+          data-stale-banner
+          className="flex flex-none items-center gap-2 border-b-[1.5px] border-finding-border bg-finding-bg px-4 py-2 text-[12.5px] font-semibold text-finding-link"
+        >
+          <AlertCircle aria-hidden="true" className="h-4 w-4 flex-none" />
+          Stale – re-run Auto-assign
+        </div>
+      )}
       {/* The view fills this region absolutely rather than sizing to its
           content: the canvas measures its own viewport through a
           ResizeObserver and needs a height that does not depend on what it

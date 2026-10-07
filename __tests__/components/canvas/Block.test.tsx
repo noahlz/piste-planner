@@ -47,11 +47,47 @@ function block(): HTMLElement {
 }
 
 describe('Block identity and accessibility (ui-contract §Canvas)', () => {
-  it('is an img with an accessible name starting with the label', () => {
+  it('is a button with an accessible name starting with the label', () => {
     const el = renderBlock()
 
-    expect(el.getAttribute('role')).toBe('img')
+    expect(el.tagName).toBe('BUTTON')
+    expect(el.getAttribute('type')).toBe('button')
+    expect(el.hasAttribute('role')).toBe(false)
     expect(el.getAttribute('aria-label')?.startsWith(FULL_LABEL)).toBe(true)
+  })
+
+  it('holds no div inside the button, so its content is phrasing content', () => {
+    const el = renderBlock({ pinned: true, selected: true, flash: true })
+
+    expect(el.querySelector('div')).toBeNull()
+    expect(el.querySelector('[data-content]')?.tagName).toBe('SPAN')
+  })
+
+  it('is a plain tab stop that shows an outline focus ring, not a box-shadow one', () => {
+    const el = renderBlock()
+
+    expect(el.tabIndex).toBe(0)
+    // jsdom computes no :focus-visible, so the classes are the evidence. The ring is an outline
+    // because the inline box-shadow (--shadow-block) would override a shadow ring, and it takes a
+    // z-index on focus so a neighbouring block's edge cannot cover it.
+    const classes = el.className.split(/\s+/)
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        'focus-visible:outline-2',
+        'focus-visible:outline-offset-2',
+        'focus-visible:outline-ring',
+        'focus-visible:z-[5]',
+      ]),
+    )
+    expect(classes.some((c) => c.includes('ring-'))).toBe(false)
+  })
+
+  it('takes keyboard focus', () => {
+    const el = renderBlock()
+
+    el.focus()
+
+    expect(document.activeElement).toBe(el)
   })
 
   it('names a staged DE block by its video stage in the accessible name', () => {
@@ -414,6 +450,16 @@ describe('Block draws one rect per strip run (017 spec §6)', () => {
     expect(first.getAttribute('aria-hidden')).toBeNull()
     expect(continuation.getAttribute('aria-hidden')).toBe('true')
     expect(continuation.hasAttribute('aria-label')).toBe(false)
+  })
+
+  it('makes a continuation a non-button that is out of the tab order', () => {
+    const [first, continuation] = renderRuns(SPLIT)
+
+    expect(first.tagName).toBe('BUTTON')
+    expect(continuation.tagName).not.toBe('BUTTON')
+    expect(continuation.querySelector('button')).toBeNull()
+    expect(continuation.getAttribute('tabindex')).toBe('-1')
+    expect(continuation.hasAttribute('role')).toBe(false)
   })
 
   it('paints a continuation with the same fill and edge as the first run', () => {

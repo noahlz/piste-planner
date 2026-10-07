@@ -457,7 +457,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
    * The anchor is the block's own top centre, in viewport pixels, so the
    * tooltip stays put while the pointer moves within one block.
    */
-  function handleEnter(block: ResolvedBlock, e: PointerEvent<HTMLDivElement>): void {
+  function handleEnter(block: ResolvedBlock, e: PointerEvent<HTMLElement>): void {
     const rect = e.currentTarget.getBoundingClientRect()
     setHovered({
       competitionId: block.placement.competitionId,
