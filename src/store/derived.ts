@@ -20,11 +20,10 @@ import type {
   TournamentConfig,
   ValidationError,
 } from '../engine/types.ts'
-// The footer and the canvas must agree on which blocks exist, so both read
-// `assignStripLanes` rather than each flattening the derived schedule its own
-// way (constitution, "each fact has exactly one home"). `layout/lanes.ts` is
-// pure arithmetic with no React and no store read, so the import carries
-// nothing back the other way.
+// Only the day bands (`computeDaySummaries`) still read the lane packer, until
+// 017 T6a moves them onto the drawn model's blocks. Everything else here reads
+// `selectDrawnSchedule`. `layout/lanes.ts` is pure arithmetic with no React and
+// no store read, so the import carries nothing back the other way.
 import { assignStripLanes } from '../layout/lanes.ts'
 import type { BlockPlacement } from '../layout/lanes.ts'
 import { assignStrips } from '../layout/strips.ts'
@@ -261,9 +260,11 @@ function clockAxisConfig(config: TournamentConfig): TournamentConfig {
 }
 
 /**
- * Engine findings over the placements as drawn (016 spec §1, §3): the
+ * Engine findings over the board as drawn (016 spec §1, §3, 017 spec §4): the
  * same-day rule check (`checkPlacementRules`) and the first/last day WARN
- * (`firstLastDayWarnings`, the scheduler's own function). Events with no
+ * (`firstLastDayWarnings`, the scheduler's own function), over the drawn
+ * model's results. Right after a run those are the scheduler's own results, so
+ * the WARN is the scheduler's (017 T5b). Events with no
  * placement or with a day the tournament no longer has are left out of both
  * (review focus 1). The engine's late-day finding is not run here: the store's
  * `late-finish:day:<n>` row is the app's late-day finding (R2).
@@ -294,7 +295,7 @@ function placementFindings(schedule: DerivedSchedule, tournamentType: Tournament
 }
 
 function computeDerivedFindings(state: StoreState): DerivedFindings {
-  const schedule = selectDerivedSchedule(state)
+  const schedule = selectDrawnSchedule(state)
   const { config, competitions } = schedule
 
   // initialAnalysis needs a day per competition. A placed event uses its
@@ -318,7 +319,7 @@ function computeDerivedFindings(state: StoreState): DerivedFindings {
   return { validationErrors, analysis }
 }
 
-/** Derived findings: validation errors plus pre-scheduling analysis, from current inputs. */
+/** Derived findings: validation errors, pre-scheduling analysis and the rule check over the drawn board. */
 export const selectDerivedFindings = memoizeOnDeps(scheduleDeps, computeDerivedFindings)
 
 /**
@@ -383,7 +384,11 @@ function peakRow(
 }
 
 function computeFooterMetrics(state: StoreState): FooterMetric[] {
-  const schedule = selectDerivedSchedule(state)
+  // Finish and strips read the board as drawn (017 spec §4): right after a run
+  // that is the scheduler's own times and strips. The referee peak stays on
+  // the derived schedule until 017 T9 switches it and the scheduler's figure
+  // together (referee ordering, plan Global constraints).
+  const schedule = selectDrawnSchedule(state)
   const refRows = selectDerivedRefRequirements(state)
 
   // ── Finish: the latest de_total_end, tournament-wide ──
@@ -402,11 +407,11 @@ function computeFooterMetrics(state: StoreState): FooterMetric[] {
 
   // ── Strips: used strip-minutes over available, across all in-range blocks ──
   //
-  // `assignStripLanes` is the canvas's own answer to "which blocks exist"
-  // (`src/layout/lanes.ts`): it already skips `day_out_of_range` events and
-  // reads segments off `eventTimeSegments`, so this does not restate either
-  // rule in a private flattening.
-  const blocks = assignStripLanes(schedule.events, state.strips_total)
+  // The drawn model's blocks are the board's own answer to "which phases
+  // exist" (`assignStrips` skips `day_out_of_range` events and reads phases
+  // off `phaseSpans`). A block uses the strips it holds, `strips.length`, never
+  // its requested `stripCount`, so an unseated phase adds nothing (spec §4).
+  const { blocks } = schedule
 
   let totalAvailable = 0
   for (let day = 0; day < state.days_available; day++) {
@@ -421,7 +426,7 @@ function computeFooterMetrics(state: StoreState): FooterMetric[] {
 
   let totalUsed = 0
   for (const block of blocks) {
-    totalUsed += (block.endMinutes - block.startMinutes) * block.stripCount
+    totalUsed += (block.endMinutes - block.startMinutes) * block.strips.length
   }
 
   return [
@@ -590,9 +595,9 @@ const SEVERITY_RANK: Record<FindingSeverity, number> = {
  * days. Nothing here retries and nothing converges.
  */
 function computeAllFindings(state: StoreState): Finding[] {
-  const schedule = selectDerivedSchedule(state)
+  const drawn = selectDrawnSchedule(state)
   const derivedFindings = selectDerivedFindings(state)
-  const competitionsById = new Map(schedule.competitions.map((c) => [c.id, c]))
+  const competitionsById = new Map(drawn.competitions.map((c) => [c.id, c]))
 
   /** A subject is a target only when it names a competition the board actually has. */
   function resolveTarget(id: string | undefined): string | null {
@@ -695,7 +700,6 @@ function computeAllFindings(state: StoreState): Finding[] {
   //
   // While stale (P4 (a), (b)) the board is not a schedule, so `unplacedIds`
   // is empty and one non-dismissable notice stands in for these rows.
-  const drawn = selectDrawnSchedule(state)
   const unplacedRowFor = new Set<string>()
   for (const block of drawn.blocks) {
     const id = block.competitionId
@@ -750,8 +754,10 @@ function computeAllFindings(state: StoreState): Finding[] {
 
   // ── §1.4 Late finish: at most one row per day ──
   //
-  // `finish` is the maximum block end on the day — the same number the day
-  // band prints, never `de_total_end`, which is the footer's tournament-wide
+  // `finish` is the maximum block end on the day — the number the day band
+  // prints once 017 T6a moves the bands onto the drawn blocks (until then the
+  // band reads the lane packer at derived times and can print an earlier
+  // finish) — never `de_total_end`, which is the footer's tournament-wide
   // fact and would let the panel warn about a time the grid does not show.
   // `target` is the day's `day_end_time` in `state.dayConfigs`, the store's
   // clock-time day hours: the soft target (default 7:00 PM, Ops Manual 2026-27
@@ -764,11 +770,11 @@ function computeAllFindings(state: StoreState): Finding[] {
   // state — is untouched by the move (FR-025). Nothing here compares referees
   // needed against referees available either (FR-026).
   //
-  // Still the lane packer's blocks over derived times until 017 T5b moves the
-  // late-finish rows onto the drawn model.
-  const blocks = assignStripLanes(schedule.events, state.strips_total)
+  // The drawn model's blocks (017 spec §4), so right after a run the finish is
+  // the scheduler's own last phase end, its DE waits included. An unseated
+  // block still ends where it is drawn, so it still counts toward the finish.
   for (let day = 0; day < state.days_available; day++) {
-    const dayBlocks = blocks.filter((block) => block.day === day)
+    const dayBlocks = drawn.blocks.filter((block) => block.day === day)
     if (dayBlocks.length === 0) continue
     const dayConfig = state.dayConfigs[day]
     if (dayConfig === undefined) continue
@@ -782,7 +788,7 @@ function computeAllFindings(state: StoreState): Finding[] {
 
     // Ties go to the lowest competition id so the row names the same event
     // between two renders of the same board.
-    let culprit = null as BlockPlacement | null
+    let culprit = null as DrawnScheduleBlock | null
     for (const block of dayBlocks) {
       if (block.endMinutes !== finish) continue
       if (culprit === null || block.competitionId < culprit.competitionId) culprit = block

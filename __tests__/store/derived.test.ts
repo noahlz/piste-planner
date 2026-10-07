@@ -4,8 +4,10 @@ import { BottleneckRule, DeMode, Phase, Weapon } from '../../src/engine/types.ts
 import type { Placement } from '../../src/engine/types.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makeCompetition, makeConfig, makePlacement, makeScheduleResult } from '../helpers/factories.ts'
-import { runAndMoveHeadline } from '../helpers/drawnFixtures.ts'
+import { runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
 import type { DerivedSchedule } from '../../src/store/derived.ts'
 import {
   RunState,
@@ -183,6 +185,27 @@ describe('selectDerivedFindings', () => {
     expect(withPlacements.analysis.warnings.some(
       w => w.rule === BottleneckRule.DAY_POOLS_EXCEED_STRIPS && w.message.includes('Day 1:'),
     )).toBe(true)
+  })
+
+  /**
+   * 017 T5b (spec §4): the rule check and the first and last day WARN read the
+   * drawn model. B4's run keeps a first day of 790 minutes, its DEs waiting for
+   * strips, against a shortest middle day of 755, so the scheduler warns. Over
+   * `deriveEventSchedule`'s times, whose DEs start straight after the pools,
+   * the same board measured no WARN at all (2026-10-07).
+   */
+  it('measures the first and last day on the kept run, as the scheduler does', () => {
+    runPreset('B4')
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    const rules: string[] = [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]
+    const scheduler = scheduleAll(competitions, config).bottlenecks.filter((b) => rules.includes(b.rule))
+    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B4\'s first day').toEqual([
+      'First day (Day 1, 790 min) is not shorter than the shortest middle day (755 min)',
+    ])
+
+    const app = selectDerivedFindings(state).analysis.warnings.filter((w) => rules.includes(w.rule))
+    expect(app).toEqual(scheduler)
   })
 })
 

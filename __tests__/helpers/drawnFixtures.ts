@@ -26,6 +26,18 @@ export function runPreset(id: ScenarioId): void {
   runScheduleAll()
 }
 
+/**
+ * Resets the store, loads B1's settings (80 strips, 12 video), applies a
+ * catalogue template and runs Auto-assign: the plan's template sweep
+ * (Global constraints), as `tmp/measure017templates.test.ts` measured it.
+ */
+export function runTemplate(name: string): void {
+  useStore.setState(useStore.getInitialState(), true)
+  applyPreset('B1')
+  useStore.getState().applyTemplate(name)
+  runScheduleAll()
+}
+
 /** Pins every placed event where it sits. */
 export function pinAll(): void {
   for (const placed of Object.keys(useStore.getState().placements)) useStore.getState().setPinned(placed, true)

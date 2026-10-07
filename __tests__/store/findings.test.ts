@@ -4,9 +4,11 @@ import type { StoreState } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { makePlacement } from '../helpers/factories.ts'
-import { assignStripLanes } from '../../src/layout/lanes.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
+import { phaseSpans } from '../../src/engine/unseated.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
-import { DeMode, Phase, Weapon } from '../../src/engine/types.ts'
+import { DAY_AXIS_SPACING_MINS, DeMode, Phase, Weapon } from '../../src/engine/types.ts'
 import {
   selectDerivedSchedule,
   selectDerivedFindings,
@@ -563,9 +565,8 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
     useStore.getState().updateDayConfig(0, { day_end_time: 760 })
     const state = useStore.getState()
 
-    const schedule = selectDerivedSchedule(state)
-    const blocks = assignStripLanes(schedule.events, state.strips_total)
-    const day0Blocks = blocks.filter((b) => b.day === 0)
+    const schedule = selectDrawnSchedule(state)
+    const day0Blocks = schedule.blocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
     const close = state.dayConfigs[0].day_end_time
     const targetBlock = day0Blocks.find((b) => b.endMinutes === finish)
@@ -589,7 +590,7 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
     useStore.getState().setDeModeOverride(DeMode.STAGED)
     useStore.getState().setVideoStrips(4)
     const preState = useStore.getState()
-    const preBlocks = assignStripLanes(selectDerivedSchedule(preState).events, preState.strips_total)
+    const preBlocks = selectDrawnSchedule(preState).blocks
     const day0Blocks = preBlocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
     const last = day0Blocks.filter((b) => b.endMinutes === finish)
@@ -607,8 +608,7 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
   it('raises no row at the boundary — finish exactly window-minutes before close is not late (strict >)', () => {
     threeEventsOverlappingOnDayZero()
     const preState = useStore.getState()
-    const preSchedule = selectDerivedSchedule(preState)
-    const preBlocks = assignStripLanes(preSchedule.events, preState.strips_total)
+    const preBlocks = selectDrawnSchedule(preState).blocks
     const finish = Math.max(...preBlocks.filter((b) => b.day === 0).map((b) => b.endMinutes))
 
     useStore.getState().updateDayConfig(0, { day_end_time: finish + lateFinishWindowMins() })
@@ -623,22 +623,22 @@ describe('selectFindings — late finish tie-break picks the lower competition i
   it('names JR-M-EPEE-IND over JR-W-EPEE-IND when both blocks reach the same finish', () => {
     tiedEpeeEventsOnDayZero()
     const preState = useStore.getState()
-    const preSchedule = selectDerivedSchedule(preState)
-    const preBlocks = assignStripLanes(preSchedule.events, preState.strips_total)
+    const preBlocks = selectDrawnSchedule(preState).blocks
     const day0Blocks = preBlocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
 
     // Confirm the tie actually exists before trusting the target assertion
     // below — both events' blocks must reach the measured finish, and
-    // neither may have overflowed (an overflowing block is drawn at strip 0
-    // regardless of its real timing, which would make this fixture prove
-    // nothing about the tie-break itself).
+    // both must be seated, so the tie is between two drawn phases and not
+    // between a phase and one the board could not find strips for (017 T5b
+    // moved this from the lane packer's overflow to the drawn model's
+    // `unseated`).
     const mBlock = day0Blocks.find((b) => b.competitionId === 'JR-M-EPEE-IND' && b.endMinutes === finish)
     const wBlock = day0Blocks.find((b) => b.competitionId === 'JR-W-EPEE-IND' && b.endMinutes === finish)
     expect(mBlock, 'expected JR-M-EPEE-IND to reach the measured finish').toBeDefined()
     expect(wBlock, 'expected JR-W-EPEE-IND to reach the measured finish too — the tie this case pins').toBeDefined()
-    expect(mBlock?.overflow).toBe(false)
-    expect(wBlock?.overflow).toBe(false)
+    expect(mBlock?.unseated).toBe(false)
+    expect(wBlock?.unseated).toBe(false)
 
     useStore.getState().updateDayConfig(0, { day_end_time: finish + 20 })
     const state = useStore.getState()
@@ -670,8 +670,7 @@ describe('selectFindings — late finish overrun via a hand move, Blocking count
     useStore.getState().updatePlacement('JR-M-EPEE-IND', { start_time: 600 })
     const state = useStore.getState()
 
-    const schedule = selectDerivedSchedule(state)
-    const blocks = assignStripLanes(schedule.events, state.strips_total)
+    const blocks = selectDrawnSchedule(state).blocks
     expect(blocks.length, 'expected the move to leave the lanes populated, not emptied').toBeGreaterThan(0)
     const day0Blocks = blocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
@@ -720,8 +719,8 @@ function twoEpeeEventsFinishingAt(mFinish: number, wFinish: number): void {
   // block ends where the fixture put it.
   const state = useStore.getState()
   expect(state.dayConfigs[0].day_end_time).toBe(1140)
-  const blocks = assignStripLanes(selectDerivedSchedule(state).events, state.strips_total)
-  expect(blocks.some((b) => b.overflow)).toBe(false)
+  const blocks = selectDrawnSchedule(state).blocks
+  expect(blocks.some((b) => b.unseated)).toBe(false)
   expect(Math.max(...blocks.map((b) => b.endMinutes))).toBe(Math.max(mFinish, wFinish))
 }
 
@@ -762,6 +761,48 @@ describe('selectFindings — late finish against the 19:00 target (024 D7)', () 
     twoEpeeEventsFinishingAt(1080, 1050)
 
     expect(lateFinishRows()).toEqual([])
+  })
+})
+
+/**
+ * 017 T5b (spec §4): the late-finish rows read the drawn model, so right after
+ * a run they follow the scheduler's own DE ends, waits included, not
+ * `deriveEventSchedule`'s DEs started straight after the pools. The expected
+ * rows are built from a second `scheduleAll` over the same inputs (the boot
+ * run has no pins): per day, the latest phase end of the scheduler's results
+ * on the clock axis, the lowest id among the events reaching it, and the
+ * 45-minute lead before the day's target.
+ *
+ * Measured before T5b (2026-10-07), the late-finish row counts at boot read
+ * 1 / 2 / 2 / 3 / 0 / 2 / 3 / 1 on B1–B8, off the lane packer at derived
+ * times. The scheduler's DE ends give 1 / 3 / 4 / 3 / 0 / 3 / 3 / 2.
+ */
+describe('selectFindings — late finish follows the kept DE ends (017 T5b)', () => {
+  it.each(SCENARIO_IDS)('%s: one row per day whose scheduler finish is late, naming its event', (id) => {
+    runPreset(id)
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    const { schedule } = scheduleAll(competitions, config)
+
+    const latest = new Map<number, { finish: number; culprit: string }>()
+    for (const eventId of Object.keys(schedule).sort()) {
+      const result = schedule[eventId]
+      const shift = result.assigned_day * DAY_AXIS_SPACING_MINS
+      for (const span of phaseSpans(result)) {
+        const end = span.end - shift
+        const best = latest.get(result.assigned_day)
+        if (best === undefined || end > best.finish) latest.set(result.assigned_day, { finish: end, culprit: eventId })
+      }
+    }
+    const expected = [...latest.entries()]
+      .sort(([a], [b]) => a - b)
+      .filter(([day, { finish }]) => finish > state.dayConfigs[day].day_end_time - lateFinishWindowMins())
+      .map(([day, { finish, culprit }]) => ({ id: `late-finish:day:${day}`, target: culprit, finishesAt: formatClock(finish) }))
+
+    const rows = selectFindings(state)
+      .filter((r) => r.id.startsWith('late-finish:'))
+      .map((r) => ({ id: r.id, target: r.target, finishesAt: /finishes at (.+?),/.exec(r.message)?.[1] }))
+    expect(rows).toEqual(expected)
   })
 })
 

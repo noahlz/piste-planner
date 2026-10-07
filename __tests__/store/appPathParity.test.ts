@@ -7,8 +7,17 @@ import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from '../../src/store/buildConfig.ts'
-import { selectAllFindings, selectDerivedRefRequirements, selectFooterMetrics } from '../../src/store/derived.ts'
+import {
+  RunState,
+  selectAllFindings,
+  selectDerivedRefRequirements,
+  selectDrawnSchedule,
+  selectFooterMetrics,
+} from '../../src/store/derived.ts'
 import { BottleneckRule, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
+import { phaseRequiresVideo, phaseSpans } from '../../src/engine/unseated.ts'
+import { TEMPLATES } from '../../src/engine/catalogue.ts'
+import { runPreset, runTemplate } from '../helpers/drawnFixtures.ts'
 
 /**
  * The app-path parity check (specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md), FR-004): for each of
@@ -531,5 +540,114 @@ describe('the footer counts the engine\'s placements at boot (017 T5a)', () => {
     runAppPath(id)
     const refs = selectFooterMetrics(useStore.getState()).find((m) => m.id === 'refs:peak-total')
     expect(refs?.value).toBe(BOOT_REF_PEAKS[id])
+  })
+})
+
+/**
+ * 017 T5b (spec §Pass conditions, "Boot invariants"): on B1–B8 and all 10
+ * templates, right after a run, the board the app draws is the scheduler's own
+ * run, read straight off a second `scheduleAll` over the same inputs (the run
+ * had no pins, so the inputs are identical, as `runAppPath` relies on).
+ *
+ * The drawn-model invariants held from T4 on and must pass before and after.
+ * The first and last day WARN is the failing-first part: until T5b the rule
+ * check ran over `deriveEventSchedule` times, whose DEs start without the
+ * scheduler's waits, so the app's rows differed from the scheduler's on B4–B8
+ * (measured 2026-10-07: B4 0 rows against the scheduler's 1, B5 2 against 0,
+ * B6 1 against 0, B7 1 against 0, B8 2 against 1). A mismatch after T5b halts
+ * to the owner for attribution.
+ */
+describe('boot invariants: the drawn board is the scheduler\'s run (017 T5b)', () => {
+  const FIRST_LAST_RULES: string[] = [
+    BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE,
+    BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE,
+  ]
+  const BOARDS: { name: string; boot: () => void }[] = [
+    ...SCENARIO_IDS.map((id) => ({ name: id as string, boot: () => runPreset(id) })),
+    ...Object.keys(TEMPLATES).map((name) => ({ name, boot: () => runTemplate(name) })),
+  ]
+
+  /** The scheduler's run over the store's current inputs, which at boot carry no pins. */
+  function schedulerRun() {
+    const state = useStore.getState()
+    expect(buildPinnedPlacements(state), 'premise: a boot run has no pins').toEqual([])
+    const { config, competitions } = buildTournamentConfig(state)
+    return { config, competitions, run: scheduleAll(competitions, config) }
+  }
+
+  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: every drawn phase is the scheduler\'s, seated, on its own strips (must pass before and after)', (_, board) => {
+    board.boot()
+    const { config, competitions, run } = schedulerRun()
+    const model = selectDrawnSchedule(useStore.getState())
+    const byId = new Map(competitions.map((c) => [c.id, c]))
+
+    // The scheduler's phases on the clock axis, and its strips per phase.
+    const expected = new Map<string, { start: number; end: number; strips: number[] }>()
+    for (const [id, result] of Object.entries(run.schedule)) {
+      const shift = result.assigned_day * DAY_AXIS_SPACING_MINS
+      for (const span of phaseSpans(result)) {
+        expected.set(`${id}|${span.phase}`, { start: span.start - shift, end: span.end - shift, strips: [] })
+      }
+    }
+    const allocationMismatches: string[] = []
+    run.strip_allocations.forEach((allocations, strip) => {
+      for (const a of allocations) {
+        const phase = expected.get(`${a.event_id}|${a.phase}`)
+        const shift = run.schedule[a.event_id].assigned_day * DAY_AXIS_SPACING_MINS
+        if (phase === undefined || a.start_time - shift !== phase.start || a.end_time - shift !== phase.end) {
+          allocationMismatches.push(`${a.event_id} ${a.phase} on ${strip}`)
+          continue
+        }
+        phase.strips.push(strip)
+      }
+    })
+    expect(allocationMismatches, 'every allocation is one of the result\'s phases, at its times').toEqual([])
+
+    expect(model.runState).toBe(RunState.FRESH)
+    expect(model.blocks.filter((b) => b.unseated).map((b) => `${b.competitionId} ${b.phase}`), 'unseated phases').toEqual([])
+    expect(model.blocks.length, 'one block per scheduler phase').toBe(expected.size)
+    for (const block of model.blocks) {
+      const phase = expected.get(`${block.competitionId}|${block.phase}`)
+      expect(
+        { start: block.startMinutes, end: block.endMinutes, strips: block.strips },
+        `${block.competitionId} ${block.phase}`,
+      ).toEqual(phase && { start: phase.start, end: phase.end, strips: [...phase.strips].sort((a, b) => a - b) })
+    }
+
+    const overlaps: string[] = []
+    const videoOff: string[] = []
+    const held = new Map<string, { start: number; end: number; who: string }[]>()
+    for (const block of model.blocks) {
+      const who = `${block.competitionId} ${block.phase}`
+      const competition = byId.get(block.competitionId)
+      if (competition && phaseRequiresVideo(block.phase, competition)) {
+        if (block.strips.some((s) => !config.strips[s].video_capable)) videoOff.push(who)
+      }
+      for (const strip of block.strips) {
+        const key = `${block.day}|${strip}`
+        const intervals = held.get(key) ?? []
+        for (const other of intervals) {
+          if (block.startMinutes < other.end && other.start < block.endMinutes) overlaps.push(`${who} / ${other.who} on day ${block.day} strip ${strip}`)
+        }
+        intervals.push({ start: block.startMinutes, end: block.endMinutes, who })
+        held.set(key, intervals)
+      }
+    }
+    expect(overlaps, 'strip-index overlaps per day').toEqual([])
+    expect(videoOff, 'video-required phases off video').toEqual([])
+  })
+
+  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s first and last day WARN equal the scheduler\'s', (_, board) => {
+    board.boot()
+    const { run } = schedulerRun()
+    const scheduler = run.bottlenecks
+      .filter((b) => FIRST_LAST_RULES.includes(b.rule))
+      .map((b) => `${b.rule} day ${b.day}: ${b.message}`)
+    const app = selectAllFindings(useStore.getState())
+      .flatMap((row) => {
+        const [source, rule, , , day] = row.id.split(':')
+        return source === 'analysis' && FIRST_LAST_RULES.includes(rule) ? [`${rule} day ${day}: ${row.message}`] : []
+      })
+    expect(app).toEqual(scheduler)
   })
 })

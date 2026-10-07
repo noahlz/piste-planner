@@ -9,9 +9,12 @@ import {
   selectPlacementCounts,
   type FooterMetric,
 } from '../../src/store/derived.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { makePlacement } from '../helpers/factories.ts'
-import { runAndMoveHeadline } from '../helpers/drawnFixtures.ts'
-import { DeMode } from '../../src/engine/types.ts'
+import { runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
+import { DAY_AXIS_SPACING_MINS, DeMode } from '../../src/engine/types.ts'
+import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
 
 /**
  * T011b — `selectFooterMetrics` and `selectPlacementCounts` (research D7;
@@ -168,17 +171,25 @@ describe('selectFooterMetrics — the three rows', () => {
   })
 
   /**
-   * 910 is `ScheduleResult.de_total_end` for JR-M-EPEE-IND (872 before 024,
-   * 850 after group A's 8:00 start). 120 épée fencers make 12 pools of 7 and 6
-   * of 6, averaging round(108.67) = 109 minutes in one wave on 18 strips: pools
-   * 540–649 from the 9:00 start. The DE starts at the next slot after the
-   * 30-minute gap, 680, and a bracket of 128 with 120 promoted runs R128 (56
-   * bouts, 4 waves on 16 strips), R64 (2), then R32 through the semis (1
-   * each), 10 × 20 = 200 minutes to 880, plus the 30-minute tail.
+   * 920 is `ScheduleResult.de_total_end` for CDT-W-EPEE-IND in the scheduler's
+   * run, which the footer reads since 017 T5b (910 before, off
+   * `deriveEventSchedule`'s times). Its 12 pools run 540–649 on 12 strips on
+   * day 1, where CDT-M-EPEE-IND's and CDT-M-FOIL-IND's DEs take 32 strips from
+   * 680 while JR-W-SABRE-IND's DE holds 16 more until 747, so its 16-strip DE
+   * finds only 12 free and waits for the 750 slot rather than starting at 680,
+   * the slot after the 30-minute gap. Seven 20-minute waves run to 890, plus
+   * the 30-minute tail (measured 2026-10-07 off the drawn model; the boot sweep
+   * below checks the same figure against the scheduler on B1–B8).
+   *
+   * Before 017 it was 910, JR-M-EPEE-IND's DE run straight after its pools:
+   * 120 épée fencers make 12 pools of 7 and 6 of 6, averaging round(108.67) =
+   * 109 minutes in one wave on 18 strips, pools 540–649, the DE from 680, a
+   * bracket of 128 with R128 (4 waves on 16 strips), R64 (2) and R32 through
+   * the semis (1 each), 10 × 20 = 200 minutes to 880, plus the tail.
    */
   it('finish:tournament is the latest de_total_end', () => {
     b5()
-    expect(metric('finish:tournament').value).toBe(910)
+    expect(metric('finish:tournament').value).toBe(920)
   })
 
   /**
@@ -296,23 +307,28 @@ describe('selectFooterMetrics — a placement pushed out of range', () => {
   })
 
   /**
-   * B5's finish column ties three ways at 910 (JR-M-EPEE-IND, JR-M-FOIL-IND,
-   * CDT-M-EPEE-IND, the three 120-fencer foil and épée events, whose pool and
-   * DE times are equal since 024); moving any one of them out of range leaves
-   * `finish:tournament` at 910. All three have to move to see it drop, to 860 —
-   * the next-highest in-range finish, JR-W-FOIL-IND's and CDT-W-FOIL-IND's
-   * (10 pools of 7 from 540 to 660, the DE from 690, 7 waves to 830, plus the
-   * tail).
+   * Since 017 T5b the footer reads the scheduler's finishes, waits included
+   * (measured 2026-10-07): CDT-W-EPEE-IND 920 alone at the top, then
+   * CDT-W-FOIL-IND 915 (its DE waits from 690 to 745 on day 2), then a
+   * three-way tie at 910 (JR-M-EPEE-IND, JR-M-FOIL-IND and CDT-M-EPEE-IND, the
+   * three 120-fencer foil and épée events, whose DEs start at 680 without a
+   * wait). Moving an event out of range leaves every other event on its kept
+   * run, so each step reads the next finish down, and moving one of the tied
+   * three leaves 910. Before T5b the derived times tied those three at the top
+   * and dropped to 860.
    */
-  it('drops finish:tournament to the next in-range finish once every event tied at the top has moved', () => {
+  it('drops finish:tournament to the next in-range finish once every event at the top has moved', () => {
     b5()
+    expect(metric('finish:tournament').value).toBe(920)
+
+    useStore.getState().updatePlacement('CDT-W-EPEE-IND', { day: 3 })
+    expect(metric('finish:tournament').value).toBe(915)
+
+    useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 3 })
     expect(metric('finish:tournament').value).toBe(910)
 
-    for (const id of ['JR-M-EPEE-IND', 'JR-M-FOIL-IND', 'CDT-M-EPEE-IND']) {
-      useStore.getState().updatePlacement(id, { day: 3 })
-    }
-
-    expect(metric('finish:tournament').value).toBe(860)
+    useStore.getState().updatePlacement('JR-M-EPEE-IND', { day: 3 })
+    expect(metric('finish:tournament').value).toBe(910)
   })
 })
 
@@ -340,14 +356,18 @@ describe('selectFooterMetrics — pure function of store inputs', () => {
   it('recomputes once a depended-on input changes', () => {
     b5()
     const first = selectFooterMetrics(useStore.getState())
-    useStore.getState().setStrips(30)
+    useStore.getState().setStrips(120)
     const second = selectFooterMetrics(useStore.getState())
 
     expect(second).not.toBe(first)
-    // Halving the strips halves the denominator: 43975 / (3 × 30 × 600) =
-    // 43975 / 54000 = 81.435…
+    // Doubling the strips doubles the denominator: 43975 / (3 × 120 × 600) =
+    // 43975 / 216000 = 20.358…. The edit makes the board stale, so it lays out
+    // derived times on 120 strips, where every phase finds strips and holds
+    // its full count (017 T5b reads `strips.length`). Halving to 30 strips, as
+    // this case did before T5b, leaves 15 phases unseated, so it would measure
+    // the strip assigner rather than the denominator.
     expect(second.find((m) => m.id === 'strips:utilization')?.value)
-      .toBeCloseTo((43975 / 54000) * 100, 10)
+      .toBeCloseTo((43975 / 216000) * 100, 10)
   })
 
   it('writes nothing back to the store', () => {
@@ -356,6 +376,84 @@ describe('selectFooterMetrics — pure function of store inputs', () => {
     selectFooterMetrics(before)
     // Any set() call would hand back a new top-level object.
     expect(useStore.getState()).toBe(before)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Finish and utilization read the drawn model (017 T5b, spec §4)
+// ──────────────────────────────────────────────
+
+/**
+ * Right after a run the footer's finish and strip utilization are the
+ * scheduler's own run, read off a second `scheduleAll` over the same inputs
+ * (the boot run has no pins): the latest `de_total_end` on the clock axis, and
+ * every strip-minute the scheduler allocated over strips × the day windows.
+ * Before T5b both read `deriveEventSchedule`'s times and, for utilization,
+ * each block's requested `stripCount`.
+ */
+describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () => {
+  function engineRun() {
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    return scheduleAll(competitions, config)
+  }
+
+  function available(): number {
+    const { dayConfigs, days_available, strips_total } = useStore.getState()
+    let total = 0
+    for (let day = 0; day < days_available; day++) {
+      total += strips_total * (dayConfigs[day].day_end_time - dayConfigs[day].day_start_time)
+    }
+    return total
+  }
+
+  it.each(SCENARIO_IDS)('%s: finish is the scheduler\'s latest DE end', (id) => {
+    runPreset(id)
+    const { schedule } = engineRun()
+    let latest: number | null = null
+    for (const result of Object.values(schedule)) {
+      if (result.de_total_end === null) continue
+      const end = result.de_total_end - result.assigned_day * DAY_AXIS_SPACING_MINS
+      if (latest === null || end > latest) latest = end
+    }
+    expect(latest, 'premise: the run placed a DE').not.toBeNull()
+    expect(metric('finish:tournament').value).toBe(latest)
+  })
+
+  it.each(SCENARIO_IDS)('%s: strip utilization is the scheduler\'s allocated strip-minutes', (id) => {
+    runPreset(id)
+    const { strip_allocations } = engineRun()
+    let used = 0
+    for (const strip of strip_allocations) {
+      for (const allocation of strip) used += allocation.end_time - allocation.start_time
+    }
+    expect(metric('strips:utilization').value).toBeCloseTo((used / available()) * 100, 10)
+  })
+
+  /**
+   * B5's headline move (CDT-M-EPEE-IND to the next day) finds no strips for
+   * any of the mover's phases. An unseated phase holds no strips, so the mover
+   * leaves the footer's numerator entirely: utilization drops by exactly the
+   * strip-minutes the run had given it, and its requested strip count adds
+   * nothing at the new day.
+   */
+  it('never counts an unseated block\'s strips', () => {
+    runPreset('B5')
+    const before = metric('strips:utilization').value
+    const keptBefore = useStore.getState().lastRun
+    expect(keptBefore, 'premise: the run was kept').not.toBeNull()
+
+    const { id } = runAndMoveHeadline('B5')
+    const moverBlocks = selectDrawnSchedule(useStore.getState()).blocks.filter((b) => b.competitionId === id)
+    expect(moverBlocks.length, 'premise: the mover is drawn').toBeGreaterThan(0)
+    expect(moverBlocks.every((b) => b.unseated), 'premise: every phase of the mover is unseated').toBe(true)
+
+    const moverKept = keptBefore!.events[id].phases.reduce(
+      (sum, p) => sum + (p.endMinutes - p.startMinutes) * p.strips.length,
+      0,
+    )
+    expect(moverKept, 'premise: the run gave the mover strips').toBeGreaterThan(0)
+    expect(metric('strips:utilization').value).toBeCloseTo(before! - (moverKept / available()) * 100, 10)
   })
 })
 
