@@ -11,6 +11,8 @@ import type {
   AnalysisResult,
   Bottleneck,
   Competition,
+  Phase,
+  Placement,
   ScheduleResult,
   TournamentType,
   RefDemandByDay,
@@ -25,6 +27,10 @@ import type {
 // nothing back the other way.
 import { assignStripLanes } from '../layout/lanes.ts'
 import type { BlockPlacement } from '../layout/lanes.ts'
+import { assignStrips } from '../layout/strips.ts'
+import type { DrawnBlock, DrawnEventInput } from '../layout/strips.ts'
+import { configKeyOf } from './keptRun.ts'
+import type { KeptEvent } from './keptRun.ts'
 import { findingIdentity } from '../engine/validation.ts'
 // Pure string helpers, no React and no store read. They lived under
 // `src/components/` until 013 T031 moved them to `src/lib/`: the store may not
@@ -99,6 +105,10 @@ function scheduleDeps(state: StoreState): unknown[] {
     // seven values are constants again, so nothing about them can change
     // between two renders. This is the one setting left that can.
     state.de_mode_override,
+    // The drawn model reads the kept run (017 spec §2), and every selector
+    // keyed here or on `daySummaryDeps` must redraw after a run, even one
+    // that leaves every placement where it was (review focus 9).
+    state.lastRun,
   ]
 }
 
@@ -117,6 +127,102 @@ function computeDerivedSchedule(state: StoreState): DerivedSchedule {
 
 /** Derived schedule view model: per-event `ScheduleResult` + `day_out_of_range`, from placements. */
 export const selectDerivedSchedule = memoizeOnDeps(scheduleDeps, computeDerivedSchedule)
+
+// ──────────────────────────────────────────────
+// The drawn model (017 spec §2)
+// ──────────────────────────────────────────────
+
+/**
+ * Whether the kept run still describes the engine's inputs. A stale board is
+ * not a schedule until the next run: every event is laid out from its
+ * placement, and nothing it fails to seat counts as unplaced (P4 (a)).
+ */
+export const RunState = {
+  FRESH: 'fresh',
+  STALE: 'stale',
+} as const
+export type RunState = (typeof RunState)[keyof typeof RunState]
+
+/** `kept`: drawn from the last run. `derived`: laid out from its placement (`deriveEventSchedule`). */
+export type DrawnEventSchedule = DrawnEventInput & { source: 'kept' | 'derived' }
+
+/**
+ * A drawn phase plus the model's one unplaced predicate: unseated on a fresh
+ * board. Until T6b drops `overflow`, it carries the same answer, so a reader
+ * still typed on `BlockPlacement` counts what the model counts.
+ */
+export type DrawnScheduleBlock = DrawnBlock & { countsAsUnplaced: boolean }
+
+/** What the board shows (017 spec §2). A superset of `DerivedSchedule`. */
+export interface DrawnSchedule extends DerivedSchedule {
+  events: Record<string, DrawnEventSchedule>
+  blocks: DrawnScheduleBlock[]
+  /** Events with at least one block that counts as unplaced. */
+  unplacedIds: ReadonlySet<string>
+  runState: RunState
+}
+
+/**
+ * Stale when the board holds something the run should describe – an in-range
+ * placement of a selected event – and there is no run, or the run read other
+ * inputs. A deselected event's leftover placement does not count, as in
+ * `computePlacementCounts`.
+ */
+function runStateOf(state: StoreState, configKey: string): RunState {
+  const holdsPlacement = Object.keys(state.selectedCompetitions).some((id) => {
+    const placement = state.placements[id]
+    return placement !== undefined && placement.day >= 0 && placement.day < state.days_available
+  })
+  if (!holdsPlacement) return RunState.FRESH
+  return state.lastRun !== null && state.lastRun.configKey === configKey ? RunState.FRESH : RunState.STALE
+}
+
+/** The pin flag and source are not part of the key, so a pin toggle keeps the event (spec §5). */
+function sitsWhereKept(key: KeptEvent['placementKey'], placement: Placement): boolean {
+  return key.day === placement.day && key.start_time === placement.start_time && key.strip_count === placement.strip_count
+}
+
+/**
+ * Per event, the kept run's result and strips when the board is fresh and the
+ * event sits exactly where the run put it (or where its pin held it), else its
+ * placement's derived layout. Validity is decided here, on every recompute, so
+ * no store action has to remember to invalidate the run (spec §2).
+ */
+function computeDrawnSchedule(state: StoreState): DrawnSchedule {
+  const { config, competitions } = buildTournamentConfig(state)
+  const runState = runStateOf(state, configKeyOf(config, competitions))
+  const kept = runState === RunState.FRESH ? state.lastRun : null
+
+  const events: Record<string, DrawnEventSchedule> = {}
+  for (const competition of competitions) {
+    const placement = state.placements[competition.id]
+    if (!placement) continue
+    const keptEvent = kept?.events[competition.id]
+    if (keptEvent !== undefined && sitsWhereKept(keptEvent.placementKey, placement)) {
+      const keptStrips: Partial<Record<Phase, readonly number[]>> = {}
+      for (const phase of keptEvent.phases) keptStrips[phase.phase] = phase.strips
+      events[competition.id] = { result: keptEvent.result, day_out_of_range: false, keptStrips, source: 'kept' }
+    } else {
+      events[competition.id] = {
+        ...deriveEventSchedule(placement, competition, config),
+        keptStrips: null,
+        source: 'derived',
+      }
+    }
+  }
+
+  const fresh = runState === RunState.FRESH
+  const blocks: DrawnScheduleBlock[] = assignStrips(events, config, competitions).map((block) => {
+    const countsAsUnplaced = block.unseated && fresh
+    return { ...block, countsAsUnplaced, overflow: countsAsUnplaced }
+  })
+  const unplacedIds = new Set(blocks.filter((block) => block.countsAsUnplaced).map((block) => block.competitionId))
+
+  return { config, competitions, events, blocks, unplacedIds, runState }
+}
+
+/** The board as drawn: kept or derived events, their strips, and what counts as unplaced. */
+export const selectDrawnSchedule = memoizeOnDeps(scheduleDeps, computeDrawnSchedule)
 
 /**
  * The derived results (`deriveEventSchedule`) sit on the clock axis – minutes
