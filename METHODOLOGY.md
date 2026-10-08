@@ -15,25 +15,24 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 1. [Inputs and Outputs](#inputs-and-outputs)
 2. [Hard Constraints](#hard-constraints)
 3. [Warning-Level Rules](#warning-level-rules)
-4. [Relaxable Constraints](#relaxable-constraints)
-5. [Soft Preferences](#soft-preferences)
-6. [Constraint Relaxation](#constraint-relaxation)
-7. [Competition Math](#competition-math)
+4. [Soft Preferences](#soft-preferences)
+5. [Constraint Relaxation](#constraint-relaxation)
+6. [Competition Math](#competition-math)
    - [Pool Composition](#pool-composition)
    - [Strip Budget](#strip-budget)
    - [Flighting](#flighting)
    - [Direct Elimination (DE)](#direct-elimination-de)
-8. [DE Capacity Estimation](#de-capacity-estimation)
-9. [Resources](#resources)
+7. [DE Capacity Estimation](#de-capacity-estimation)
+8. [Resources](#resources)
    - [Strip Assignment](#strip-assignment)
    - [Referee Calculation](#referee-calculation)
-10. [Concurrent Phase Scheduler](#concurrent-phase-scheduler)
-11. [Scheduling Algorithm](#scheduling-algorithm)
-12. [Tournament-Type Policies](#tournament-type-policies)
-13. [Auto-Suggestion Logic](#auto-suggestion-logic)
-14. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
-15. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
-16. [References](#references)
+9. [Concurrent Phase Scheduler](#concurrent-phase-scheduler)
+10. [Scheduling Algorithm](#scheduling-algorithm)
+11. [Tournament-Type Policies](#tournament-type-policies)
+12. [Auto-Suggestion Logic](#auto-suggestion-logic)
+13. [Capacity-Aware Day Assignment](#capacity-aware-day-assignment)
+14. [Scheduler Stops at Semis](#scheduler-stops-at-semis)
+15. [References](#references)
 
 [Appendix A: Penalty & Constant Defaults](#appendix-a-penalty--constant-defaults)
 
@@ -53,6 +52,7 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
 - **Referee policy** (not counts — counts are an output, see below):
   - **Refs per pool**: 1 or 2, defaulted by tournament type – two at NAC, SYC and SJCC, one at ROC, RYC and RJCC (unsourced, see [Refs Per Pool](#refs-per-pool-input-that-affects-the-output)). It is not a scheduling input (see [Not Scheduling Inputs](#not-scheduling-inputs))
 - **Tournament duration**: 2–4 days (longer events, e.g. Summer Nationals, to be supported in a future version)
+  - Loading a template raises the day count to that template's minimum when the board has fewer days, and never lowers it. The minimum is the fewest days that meet every hard day rule among the template's events under the board's tournament type – hard pairs on different days, and each Veteran age-group co-day on one day. The days already on the board keep their start and end times, and each added day gets the default 9:00 AM to 7:00 PM. Under NAC, SYC and SJCC the NAC Cadet/Junior, NAC Div1/Junior and NAC Vet/Div1/Junior templates need 4 days and Junior Olympics needs 3. Under ROC, RYC and RJCC, where Group 1 pairs are soft (see [Regional Types](#regional-types-soft-with-a-time-of-day-window)), NAC Vet/Div1/Junior needs 3. Every other combination of template and type needs 2 or fewer.
 - **Per-competition options**:
   - **DE mode**: determined by tournament type and event type – NAC individual events use "Staged DEs" (Prelim + Video stages), and all other individual events use "Single Stage DE" (all DE rounds run as fast as possible). Team events always use Single Stage, NACs included (see [DE Modes](#de-modes))
   - **Video stage** (NACs only): the round at which DEs move to video strips. Every individual event at a NAC has video REQUIRED (team events have no video stage), from the round of 16 for Div 1, Junior and Cadet and from the round of 8 for every other individual category (Ops Manual p.19 – Video Replay, see [Video Replay Policy](#video-replay-policy))
@@ -75,7 +75,7 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
   - **3-weapon refs needed** — peak total refs across all bouts (any weapon)
   - **Saber refs needed** — peak refs needed for saber bouts specifically (a subset of the total). Saber bouts can only be officiated by 3-weapon refs, so this number sets the floor on the 3-weapon-certified portion of the staff.
   - Foil/epee-only refs can fill the gap between the saber-refs and total-refs numbers. The organizer chooses the split when staffing.
-- **Bottleneck diagnostics**: warnings and errors identifying resource conflicts, constraint relaxations, or policy violations
+- **Bottleneck diagnostics**: warnings and errors identifying resource conflicts or policy violations
 
 All times are minutes from midnight (e.g., 540 = 9:00 AM). The default scheduling day runs from 9:00 AM to 7:00 PM (10 hours), the planning day of Ops Manual p.17. 7:00 PM is a soft target: the engine may place work until the day's hard end at 10:00 PM, and a day that ends after 7:00 PM draws a warning. An event's last phase alone may end past the hard end, up to midnight, and draws a warning of its own (see [Same-Day Completion](#same-day-completion)). Pool rounds cannot start after 4:00 PM – this cutoff is unsourced, since the 2026-27 manual sets none. (see [`constants.ts`](src/engine/constants.ts))
 
@@ -91,6 +91,17 @@ These rules cause scheduling to fail or produce errors. They are never relaxed. 
 - For Veterans, "category" is read as the full `(VETERAN, vet_age_group)` pair: Vet 40 M Foil ind and Vet 50 M Foil ind are *different* categories and are not blocked by this rule (they are forced *together* by the Veteran Age-Group Co-Day Rule below). But Vet 40 M Foil ind and Vet 40 M Foil team share the full pair and are blocked.
 - Different-weapon pairs are not blocked: Vet Men's Saber ind + Vet Men's Epee team can share a day.
 - The rule holds at every tournament type, regional types included, because the individual and team events of one category draw the same fencers (Ops Manual p.20 – Group 1 bullet 3, which names NACs, and Ops Manual p.20 – Group 2: "same day scheduling of individual and team competitions should be avoided when it is possible that a fencer could fence in both competitions"). Keeping it hard at regional types, where the rest of Group 1 is soft, is listed in [Appendix B: Departures from the Operations Manual](#appendix-b-departures-from-the-operations-manual).
+
+### Individual/Team Separation
+
+- At every tournament type, these cross-level individual/team pairs of one weapon and gender are on different days:
+  - **Div 1 ind ↔ Junior team**: Junior team draws from the Div 1 individual pool
+  - **Junior ind ↔ Div 1 team**: Div 1 team draws from the Junior individual pool
+- Source: Ops Manual p.20 – Group 1 bullet 1 ("For any one weapon, the Div I, Junior, and Cadet competitions must not be held on the same day").
+- At NAC, SYC and SJCC both pairs already fall under the [Group 1](#overlapping-population-separation-group-1) pair DIV1 and JUNIOR. At ROC, RYC and RJCC, where Group 1 pairs are soft, these two stay hard – a departure listed in [Appendix B](#appendix-b-departures-from-the-operations-manual).
+- Same-category individual/team pairs (Junior↔Junior, Cadet↔Cadet, Div1↔Open Team, Vet↔Vet, etc.) are blocked by [Same-Population Conflicts](#same-population-conflicts).
+
+(see [`crossover.ts`](src/engine/crossover.ts), [`constants.ts`](src/engine/constants.ts))
 
 ### Veteran Age-Group Co-Day Rule
 
@@ -215,27 +226,6 @@ These rules produce warnings but do not block scheduling.
 
 ---
 
-## Relaxable Constraints
-
-These constraints apply as infinite penalties at constraint relaxation levels 0–2, behaving like hard blocks. At level 3 (last resort), they are relaxed. See [Constraint Relaxation](#constraint-relaxation).
-
-### Individual/Team Separation
-
-Cross-category indv/team pairs that are hard-blocked at levels 0–2 but relaxable at level 3 (same weapon+gender required):
-- **Div 1 ind ↔ Junior team**: Junior team draws from Div 1 individual pool
-- **Junior ind ↔ Div 1 team**: Div 1 team draws from Junior individual pool
-
-(see [`constants.ts`](src/engine/constants.ts) — `INDIV_TEAM_RELAXABLE_BLOCKS`)
-
-Note: same-category indv/team pairs (Junior↔Junior, Cadet↔Cadet, Div1↔Open Team, Vet↔Vet, etc.) are hard-blocked by [Same-Population Conflicts](#same-population-conflicts) and are *not* relaxed at level 3.
-
-**For other overlapping individual/team pairs**: 4-hour separation required, in either direction
-  - e.g., Vet Team at 9 AM allows Div 2 Individual at 11 AM
-  - Individual before team is a soft preference, not a hard rule
-  - When such a pair lands on the same day (because their constraint is soft, not hard), the runtime sequencer enforces `team_pools_start >= indiv_DE_end + 120 min` and emits `SEQUENCING_CONSTRAINT` (INFO).
-
----
-
 ## Soft Preferences
 
 These factors influence day assignment through a weighted penalty system. The auto-suggest algorithm assigns each competition to the day with the lowest total penalty. Penalties are listed in approximate order of strength. All weights will become configurable in a future release. (see [`dayAssignment.ts`](src/engine/dayAssignment.ts))
@@ -295,7 +285,7 @@ See Appendix A for exact values.
 | Soft Separation (DIV1↔DIV3) | 3.0 | Same weapon+gender on same day; suppressed at level >= 2. (see `SOFT_SEPARATION_PAIRS`) |
 | Soft Separation (VET↔DIV1A) | 3.0 | Same weapon+gender on same day (per gender, as for Group 1 – Piste Planner's reading). The Veteran side is every Veteran individual event (age-banded and Vet Combined) and the Div 1A side is the Div 1A individual event. Ops Manual p.20 – Group 2 |
 | Soft Separation (DIV2↔DIV3) | 3.0 | Same weapon+gender on same day (per gender, as for Group 1 – Piste Planner's reading). Ops Manual p.20 – Group 2 |
-| Soft Separation (Y14/CADET/JUNIOR↔DIV1 team) | 3.0 | Same weapon+gender on same day (per gender, as for Group 1 – Piste Planner's reading), where the DIV1 side is the open (Div 1) team event. Matched by event type, so DIV1 individual events are not affected by this row. A pair that a hard or relaxable block already separates stays blocked. Ops Manual p.20 – Group 2 ("open team") |
+| Soft Separation (Y14/CADET/JUNIOR↔DIV1 team) | 3.0 | Same weapon+gender on same day (per gender, as for Group 1 – Piste Planner's reading), where the DIV1 side is the open (Div 1) team event. Matched by event type, so DIV1 individual events are not affected by this row. A pair that a hard block already separates stays blocked. Ops Manual p.20 – Group 2 ("open team") |
 | Cross-Weapon Same Demographic | 0.2 | Same category, gender and event type (for Veterans, the same age group), different weapon, same day. Every category. Ops Manual p.20 – Group 3 |
 | Y8/Y10 Early Scheduling | 0.3 | Y8/Y10 not starting at day start. Ops Manual p.20 – Group 2 names Y10 only, and including Y8 is a departure (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
 
@@ -306,6 +296,10 @@ See Appendix A for exact values.
 - Team before individual: penalty (soft preference, not hard)
 - 2+ days apart: penalty
 - **Veteran team**: must be adjacent to ANY veteran individual of the same weapon/gender (Vet Combined or Vet Age 40–80)
+- **For other overlapping individual/team pairs**: 4-hour separation required, in either direction
+  - e.g., Vet Team at 9 AM allows Div 2 Individual at 11 AM
+  - Individual before team is a soft preference, not a hard rule
+  - When such a pair lands on the same day (because their constraint is soft, not hard), the runtime sequencer enforces `team_pools_start >= indiv_DE_end + 120 min` and emits `SEQUENCING_CONSTRAINT` (INFO).
 
 (see Appendix A for exact values)
 
@@ -313,16 +307,16 @@ See Appendix A for exact values.
 
 ## Constraint Relaxation
 
-The scheduling system uses three tiers of constraints: **Hard** (never relaxed), **Relaxable** (infinite penalty at levels 0–2, relaxed at level 3), and **Soft** (finite penalties, active at level 0). Progressive relaxation proceeds through these tiers when no valid assignment exists.
+The scheduling system uses two tiers of constraints: **Hard** (never relaxed) and **Soft** (finite penalties, active at level 0). Progressive relaxation proceeds through these tiers when no valid assignment exists.
 
 (see [`dayAssignment.ts`](src/engine/dayAssignment.ts))
 
 | Level | What's Relaxed |
 |---|---|
-| 0 (full constraints) | All rules active: hard blocks, relaxable ind/team pairs, soft preferences, proximity |
+| 0 (full constraints) | All rules active: hard blocks, soft preferences, proximity |
 | 1 | Drops proximity preferences (Proximity Preference, Individual-Team Proximity distance penalty) |
 | 2 | Drops soft crossover penalties and the Regional Group 1 pair penalty; overlapping populations may share a day, but same-population hard blocks remain |
-| 3 | Drops relaxable constraints (Individual/Team hard blocks); same population still produces a warning but is allowed as last resort |
+| 3 | Same population still produces a warning but is allowed as last resort |
 
 - Each relaxation emits a warning
 - If no valid day exists even at Level 3, scheduling fails with an unresolvable error
@@ -1013,7 +1007,7 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Ind+team day after | -0.4 | **Bonus**: team event the day after individual |
 | Same population | ∞ | **Hard block**: identical age category + gender + weapon |
 | Group 1 mandatory separation | ∞ | **Hard block** at NAC, SYC and SJCC: Group 1 pairs, Div 1–Cadet included, must be on different days (Ops Manual p.20 – Group 1). DIV1↔DIV1A is a hard block at every type (departure) |
-| Ind/team relaxable block | ∞ at level < 3 | **Relaxable**: specific ind/team cross-category pairs; relaxed at level 3 |
+| Ind/team cross-level block | ∞ | **Hard block** at every type: Div 1 ind ↔ Junior team and Junior ind ↔ Div 1 team, same weapon+gender, must be on different days (Ops Manual p.20 – Group 1 bullet 1). Hard at ROC, RYC and RJCC (departure) |
 
 ### Timing Constants
 
@@ -1120,8 +1114,9 @@ Where this spec departs from or extends the Operations Manual (S1), and the manu
 - **Div 1 and Div 1A, hard.** Ops Manual p.20 – Group 1 names "the Div I, Junior, and Cadet competitions", not Div 1A. The spec keeps Div 1 and Div 1A of the same weapon and gender on different days as a hard block, because nearly the same fencers enter both.
 - **Group 1 per gender.** Ops Manual p.20 – Group 1 applies "for any one weapon". The spec applies each Group 1 pair per weapon and gender, so a pair in different genders is not separated (see [Overlapping-Population Separation (Group 1)](#overlapping-population-separation-group-1)). The Group 2 soft separations in [Other Soft Preferences](#other-soft-preferences) are read the same way.
 - **Group 1 at regional types.** Ops Manual p.20 sets the criteria for national tournaments. At ROC, RYC and RJCC fencers enter several events a day, so the spec makes every Group 1 pair soft there, with a time-of-day window (see [Regional Types](#regional-types-soft-with-a-time-of-day-window)).
+- **Div 1 and Junior individual/team pairs kept hard at regional types.** Ops Manual p.20 – Group 1 bullet 1 keeps the Div I, Junior and Cadet competitions of one weapon off the same day, and the spec makes the rest of Group 1 soft at ROC, RYC and RJCC. Div 1 ind ↔ Junior team and Junior ind ↔ Div 1 team of the same weapon and gender stay hard there, because each team event draws from the other level's individual field (see [Individual/Team Separation](#individualteam-separation)).
 - **SYC and SJCC.** Neither the Operations Manual nor S8 calls SYC or SJCC a national tournament, and S8 p.15 lists both under "Regional Tournaments". The spec applies Ops Manual p.20's national scheduling criteria to them (every Group 1 pair hard), while it treats them as regional for video (`BEST_EFFORT`, Ops Manual p.19). See [Tournament-Type Policies](#tournament-type-policies).
-- **Group 1 bullet 3 kept hard at regional types.** Ops Manual p.20 – Group 1 keeps team and individual events of the same age level and weapon off the same day. The spec keeps this hard at every type, regional types included, because the same fencers enter both by definition, and p.20 – Group 2 asks the same ("same day scheduling of individual and team competitions should be avoided when it is possible that a fencer could fence in both competitions"). See [Same-Population Conflicts](#same-population-conflicts). The cross-level blocks (Div 1 ind ↔ Junior team, Junior ind ↔ Div 1 team) stay as specified in [Individual/Team Separation](#individualteam-separation).
+- **Group 1 bullet 3 kept hard at regional types.** Ops Manual p.20 – Group 1 keeps team and individual events of the same age level and weapon off the same day. The spec keeps this hard at every type, regional types included, because the same fencers enter both by definition, and p.20 – Group 2 asks the same ("same day scheduling of individual and team competitions should be avoided when it is possible that a fencer could fence in both competitions"). See [Same-Population Conflicts](#same-population-conflicts).
 - **Y8 in Y10's early-start and video tiers.** Ops Manual p.20 – Group 2 asks for Y10 events early in the day, and p.19 lists Y10, not Y8, in the round-of-8 video tier. The spec gives Y8 the same early-start preference as Y10 and, at a NAC, the same round-of-8 video stage.
 - **Proximity at every type.** Ops Manual p.20 – Group 2 asks that adjacent age groups not be widely separated at Summer Nationals only. The spec applies [Proximity Preference](#proximity-preference) at every tournament type.
 - **DE strip changeover.** Ops Manual p.17 prints 15/15/8 minutes per 15-touch bout as an average planning time and mentions no changeover. The spec reads that figure as fencing time and adds a 5-minute strip changeover, giving 20 foil, 20 épée, 13 sabre (see [DE Duration](#de-duration)). Team matches take p.17's figure as printed.
