@@ -255,6 +255,27 @@ describe('serializeState', () => {
     expect(json).not.toContain('a-key-the-payload-must-not-carry')
   })
 
+  // 020 R8: what the last calm board showed is this session's, never the
+  // payload's. Guard: green before and after, as above.
+  it('carries no held snapshot', () => {
+    populatedState()
+    const sentinel = 'a-held-row-the-payload-must-not-carry'
+    useStore.setState({
+      held: {
+        unplacedRows: [
+          { id: sentinel, severity: 'Unplaced', where: 'Board', day: null, message: sentinel, target: null, subjects: [], dismissable: true },
+        ],
+        counts: { placed: 1, unplaced: 2, pinned: 3 },
+        metrics: [],
+      },
+    })
+
+    const json = serializeState(useStore.getState())
+
+    expect(json).not.toContain('"held"')
+    expect(json).not.toContain(sentinel)
+  })
+
   // Changed by 004 US5 (T078 finding 7). This case previously pinned the
   // opposite – "always writes the full table from an untouched store" – which
   // is what FR-045 forbids: a URL saved at the defaults would pin today's

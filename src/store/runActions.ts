@@ -39,7 +39,11 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
   // Written before the engine runs, so a run that throws still records the
   // inputs it attempted and the automatic re-run does not retry them (020).
   // Through `useStore`, not `state`: `state` is a snapshot the caller passed in.
-  useStore.setState({ lastAttemptedKey: configKeyOf(config, competitions) })
+  // This write bypasses the store's writer, so it clears `held` (020 R8)
+  // itself: an attempt ends the due episode whatever the engine does next. A
+  // throw leaves a board that is not due and reads live, and a run on a
+  // Blocking board replaces the placements the pre-Blocking snapshot described.
+  useStore.setState({ lastAttemptedKey: configKeyOf(config, competitions), held: null })
 
   // The events the organizer has fixed. The engine schedules around them, and
   // they never count as work this run attempted (013 FR-054, FR-061).

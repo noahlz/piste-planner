@@ -418,7 +418,27 @@ function peakRow(
   return best
 }
 
+/**
+ * `scheduleDeps` plus every field the hold reads (020 R8): what `selectRerunDue`
+ * reads beyond `scheduleDeps` (the switch and the last attempt), and `held`.
+ * The footer's counts and metrics share it.
+ */
+function footerDeps(state: StoreState): unknown[] {
+  return [...scheduleDeps(state), state.autoRerun, state.lastAttemptedKey, state.held]
+}
+
+/** What R8 holds while a re-run is due, else null. `held` first, so a board holding nothing evaluates no rule. */
+function heldWhileDue(state: StoreState): HeldBoard | null {
+  return state.held !== null && selectRerunDue(state) ? state.held : null
+}
+
 function computeFooterMetrics(state: StoreState): FooterMetric[] {
+  // While due, the last calm board's metrics (020 R8): going stale alone moves
+  // all three, since a stale board draws every event derived and skips no
+  // unseated phase in the referee demand.
+  const held = heldWhileDue(state)
+  if (held !== null) return held.metrics
+
   // Finish, strips and the referee peak read the board as drawn (017 spec §4,
   // §7): right after a run that is the scheduler's own times and strips, so
   // the referee peak is the scheduler's own.
@@ -485,8 +505,8 @@ function computeFooterMetrics(state: StoreState): FooterMetric[] {
   ]
 }
 
-/** Footer rows: the three metrics `StatusFooter` shows. */
-export const selectFooterMetrics = memoizeOnDeps(scheduleDeps, computeFooterMetrics)
+/** Footer rows: the three metrics `StatusFooter` shows, held while a re-run is due (020 R8). */
+export const selectFooterMetrics = memoizeOnDeps(footerDeps, computeFooterMetrics)
 
 // ──────────────────────────────────────────────
 // Placement counts (data-model.md §10)
@@ -499,6 +519,11 @@ export interface PlacementCounts {
 }
 
 function computePlacementCounts(state: StoreState): PlacementCounts {
+  // While due, the last calm board's counts (020 R8): a stale board's
+  // `unplacedIds` is empty, so an unseated event would read as placed.
+  const held = heldWhileDue(state)
+  if (held !== null) return held.counts
+
   // An event is unplaced when it has no in-range placement, when the drawn
   // model counts one of its blocks as unplaced (017 spec §2, §4), or when the
   // model has no event for it because the engine cannot size its count
@@ -523,8 +548,8 @@ function computePlacementCounts(state: StoreState): PlacementCounts {
   return { placed, unplaced, pinned }
 }
 
-/** Placed / unplaced / pinned counts over the selected events (data-model.md §10). */
-export const selectPlacementCounts = memoizeOnDeps(scheduleDeps, computePlacementCounts)
+/** Placed / unplaced / pinned counts over the selected events (data-model.md §10), held while a re-run is due (020 R8). */
+export const selectPlacementCounts = memoizeOnDeps(footerDeps, computePlacementCounts)
 
 // ──────────────────────────────────────────────
 // The unified findings list (data-model.md §5, research D6, 013 T031)
@@ -846,9 +871,20 @@ function computeAllFindings(state: StoreState): Finding[] {
     })
   }
 
-  // `Array.prototype.sort` is stable, so rows keep their source order inside a
-  // severity group — which is the whole of §1.6's within-group rule.
-  return rows.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
+  return rows.sort(bySeverity)
+}
+
+/**
+ * `Array.prototype.sort` is stable, so rows keep their source order inside a
+ * severity group, which is the whole of §1.6's within-group rule.
+ */
+function bySeverity(a: Finding, b: Finding): number {
+  return SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
+}
+
+/** The per-event Unplaced rows (`:room` and `:day`), which R8 holds while due. Not `stale:run`. */
+function isUnplacedRow(row: Finding): boolean {
+  return row.id.startsWith('unplaced:')
 }
 
 /**
@@ -946,23 +982,79 @@ function computeFindings(state: StoreState): Finding[] {
   // on its way, so the stale row would only flash (020). `selectAllFindings`
   // keeps it, and `dismissFinding` reads that.
   const due = selectRerunDue(state)
-  return selectAllFindings(state).filter(
+  const all = selectAllFindings(state)
+  // R8: while due, the per-event Unplaced rows are the held ones, in their held
+  // order inside the Unplaced group, and every other row is live (FR-008).
+  const rows =
+    due && state.held !== null
+      ? [...all.filter((row) => !isUnplacedRow(row)), ...state.held.unplacedRows].sort(bySeverity)
+      : all
+  return rows.filter(
     (row) => (!row.dismissable || !state.dismissedFindings[row.id]) && !(due && row.id === STALE_FINDING_ID),
   )
 }
 
 /**
- * `daySummaryDeps` plus what `selectRerunDue` reads beyond it: the switch and
+ * `daySummaryDeps` plus what `selectRerunDue` reads beyond it, the switch and
  * the last attempt (its key fields, `lastRun` and the Blocking rows already sit
- * in `scheduleDeps`). `selectDaySummaries` keeps `daySummaryDeps` until 020
- * T1c moves it here.
+ * in `scheduleDeps`), and `held` (020 R8). `selectDaySummaries` reads
+ * `selectFindings`, so it shares these.
  */
 function findingsDeps(state: StoreState): unknown[] {
-  return [...daySummaryDeps(state), state.autoRerun, state.lastAttemptedKey]
+  return [...daySummaryDeps(state), state.autoRerun, state.lastAttemptedKey, state.held]
 }
 
 /** The rows the UI shows: every current finding, severity-ordered, less the dismissable ones the user has waved off and the stale row while a re-run is due. */
 export const selectFindings = memoizeOnDeps(findingsDeps, computeFindings)
+
+// ──────────────────────────────────────────────
+// The hold (020 R8, decision 18)
+// ──────────────────────────────────────────────
+
+/**
+ * What described the board when it was last calm (neither due nor Blocking),
+ * kept while a re-run is due so the Unplaced rows and the footer match the
+ * board the center holds (020 R8). Plain values, never a live view.
+ */
+export interface HeldBoard {
+  /** Every `unplaced:*` row of `selectAllFindings`, dismissed ones included, in their order. */
+  unplacedRows: Finding[]
+  counts: PlacementCounts
+  metrics: FooterMetric[]
+}
+
+/** Neither due nor Blocking: a board whose own values describe it. */
+function isCalm(state: StoreState): boolean {
+  return !selectRerunDue(state) && !selectHasBlocking(state)
+}
+
+function snapshotOf(state: StoreState): HeldBoard {
+  return {
+    unplacedRows: selectAllFindings(state).filter(isUnplacedRow),
+    counts: selectPlacementCounts(state),
+    metrics: selectFooterMetrics(state),
+  }
+}
+
+/**
+ * The `held` a store write leaves (020 R8), from the state before the write
+ * and the state it results in. The store's one writer calls it (`store.ts`).
+ *
+ * With the switch off in the result, nothing is held and no selector runs. A
+ * calm result clears the snapshot. A due or Blocking result takes the state
+ * before's values when that state was calm, else keeps what was held.
+ *
+ * The order is the point (every memo here is single-slot): `before` is read
+ * first, while its selectors are still the hits the last write or render left,
+ * and only then `after`, whose entries the subscribers go on to read as hits.
+ * A snapshot already held means `before` was not calm (calm always clears it),
+ * so `before` is skipped outright then, which is the case while typing.
+ */
+export function heldAfterWrite(before: StoreState, after: StoreState): HeldBoard | null {
+  if (!after.autoRerun) return null
+  const held = before.held ?? (isCalm(before) ? snapshotOf(before) : null)
+  return isCalm(after) ? null : held
+}
 
 // ──────────────────────────────────────────────
 // Day summaries (data-model.md §9, 013 T026)
@@ -1083,5 +1175,11 @@ function computeDaySummaries(state: StoreState): DaySummary[] {
   return daySummariesFromBlocks(selectDrawnSchedule(state).blocks, state.days_available, selectFindings(state))
 }
 
-/** One summary per day in `[0, days_available)`, day ascending (data-model.md §9). */
-export const selectDaySummaries = memoizeOnDeps(daySummaryDeps, computeDaySummaries)
+/**
+ * One summary per day in `[0, days_available)`, day ascending (data-model.md §9).
+ * On `selectFindings`' deps because it reads `selectFindings`: without `held`
+ * among them it would hand back a cached result after `held` changes. While due
+ * its `findings` count the held rows' days and its `unplaced` the live stale
+ * blocks (0), a disagreement no UI shows (020 decision 18).
+ */
+export const selectDaySummaries = memoizeOnDeps(findingsDeps, computeDaySummaries)

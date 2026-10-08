@@ -57,7 +57,9 @@ export async function parseTournamentFile(file: File): Promise<ParsedFile> {
 export function applyLoadedState(state: Partial<StoreState>, run: readonly PinnedPlacement[] | null): string | null {
   useStore.setState((current) => {
     const { config, competitions } = buildTournamentConfig({ ...current, ...state })
-    return { ...state, lastRun: null, loadRefusal: null, lastAttemptedKey: configKeyOf(config, competitions) }
+    // `held: null` too (020 R8): this write bypasses the store's writer, and a
+    // load leaves the board not due, so nothing it held still applies.
+    return { ...state, lastRun: null, loadRefusal: null, lastAttemptedKey: configKeyOf(config, competitions), held: null }
   })
   return run === null ? null : replayRun(useStore.getState(), run)
 }
