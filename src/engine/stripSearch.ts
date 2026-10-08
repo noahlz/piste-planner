@@ -55,6 +55,7 @@ import { scheduleAll, lastPhaseOverrunWarnings } from './scheduler.ts'
 import { aggregateStripHours } from './capacity.ts'
 import { buildStrips } from './stripBudget.ts'
 import { suggestStripCount, busiestDayLoad } from './analysis.ts'
+import { isSizeableCount } from './pools.ts'
 import { phaseKey, phaseSpans, unseatedPhases } from './unseated.ts'
 import { COMPETITORS_PER_STRIP_PER_DAY } from './constants.ts'
 import type { Competition, TournamentConfig, PinnedPlacement } from './types.ts'
@@ -94,7 +95,7 @@ export interface StripCandidate {
    */
   placed: number
   /**
-   * Competitions inside `MIN_FENCERS`–`MAX_FENCERS`, the filter
+   * Competitions `isSizeableCount` accepts, the filter
    * `aggregateStripHours` applies — not `competitions.length`.
    * `concurrentScheduler.ts:229-242` drops a competition carrying a per-event
    * ERROR (fencer-count bounds) and schedules the rest, so under the wider
@@ -108,8 +109,8 @@ export interface StripCandidate {
 }
 
 /**
- * The busiest day's competitors: the fencer counts of every competition inside
- * `MIN_FENCERS`–`MAX_FENCERS` (the competitions `aggregateStripHours` counts),
+ * The busiest day's competitors: the fencer counts of every competition
+ * `isSizeableCount` accepts (the competitions `aggregateStripHours` counts),
  * spread largest-first over `days_available` by `busiestDayLoad`. A team
  * event's count is its entries as stored. Reads no strip count and no day
  * hours (METHODOLOGY.md §Strip Count Suggestion).
@@ -119,7 +120,7 @@ export function busiestDayCompetitors(
   config: TournamentConfig,
 ): number {
   const counts = competitions
-    .filter(c => c.fencer_count >= config.MIN_FENCERS && c.fencer_count <= config.MAX_FENCERS)
+    .filter(c => isSizeableCount(c.fencer_count, config))
     .map(c => c.fencer_count)
   return busiestDayLoad(counts, config.days_available)
 }
@@ -150,7 +151,7 @@ export function stripSearchRange(
   competitions: Competition[],
   config: TournamentConfig,
 ): StripSearchRange | null {
-  const poolCeiling = suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct)
+  const poolCeiling = suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct, config)
   if (poolCeiling === null) return null
 
   const availableHours = config.days_available * config.DAY_LENGTH_MINS / 60
@@ -203,9 +204,7 @@ export function* scanStripCounts(
     )
   }
 
-  const required = competitions.filter(
-    c => c.fencer_count >= config.MIN_FENCERS && c.fencer_count <= config.MAX_FENCERS,
-  ).length
+  const required = competitions.filter(c => isSizeableCount(c.fencer_count, config)).length
 
   // A direct computation: the loop runs `ceiling - floor + 1` times, fixed
   // before entry. No convergence, no second cap.

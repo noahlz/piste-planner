@@ -6,7 +6,6 @@ import { CenterView } from '../../src/components/workbench/CenterView.tsx'
 import { ViewMode } from '../../src/store/viewState.ts'
 import { useStore } from '../../src/store/store.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
-import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { Category, Gender, Weapon } from '../../src/engine/types.ts'
 import type { Competition, Placement } from '../../src/engine/types.ts'
 import type { DrawnSchedule } from '../../src/store/derived.ts'
@@ -15,6 +14,7 @@ import type { ScheduleResult } from '../../src/engine/types.ts'
 import { formatMinutes } from '../../src/lib/time.ts'
 import { makeCompetition, makeConfig, makePlacement, makeStrips } from '../helpers/factories.ts'
 import { drawnFromDerived, runPreset, UNPLACED_WORDING } from '../helpers/drawnFixtures.ts'
+import { deriveSized } from '../helpers/derive.ts'
 
 // 005 T011: schedule-output rows moved out of the two departing layout test
 // files (specs/005-consolidate-domain-logic/triage-record.md (removed; git show 0ab5bd2dc9:specs/005-consolidate-domain-logic/triage-record.md) rows: one departing file's rows 22, 23, 24, 25, 26,
@@ -101,7 +101,7 @@ function committedModel(
     config,
     competitions: events.map((e) => e.competition),
     events: Object.fromEntries(
-      events.map((e) => [e.competition.id, deriveEventSchedule(e.placement, e.competition, config)]),
+      events.map((e) => [e.competition.id, deriveSized(e.placement, e.competition, config)]),
     ),
   })
   return { ...drawn, competitions: listed }

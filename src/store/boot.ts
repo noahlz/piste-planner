@@ -1,11 +1,11 @@
+import { useStore } from './store.ts'
 import { decodeFromUrl } from './serialization.ts'
 import { applyPreset } from './presets.ts'
 import { runScheduleAll } from './runActions.ts'
 import { applyLoadedState } from './exportActions.ts'
-import type { ScenarioId } from '../data/tournaments.ts'
+import { DEFAULT_PRESET_ID } from '../data/tournaments.ts'
 
-/** The preset the app opens on when no shared link says otherwise. */
-export const DEFAULT_PRESET_ID: ScenarioId = 'B1'
+export { DEFAULT_PRESET_ID }
 
 /**
  * Decides what the app is looking at on first paint (FR-007,
@@ -19,15 +19,18 @@ export const DEFAULT_PRESET_ID: ScenarioId = 'B1'
  * Everything else,
  * an unreadable fragment included, falls through to the default preset and
  * auto-schedules it, so the center shows a populated schedule with no user
- * action rather than an empty form.
+ * action rather than an empty form. A refused fragment leaves its reason in
+ * `loadRefusal` for the center's notice (018 R7).
  *
  * `hash` defaults to `window.location.hash` so tests drive it directly.
  */
 export function bootstrap(hash: string = window.location.hash): void {
+  let refusal: string | null = null
   if (hash.startsWith('#config=')) {
     const result = decodeFromUrl(hash)
     if ('error' in result) {
       console.error('Failed to load config from URL:', result.error)
+      refusal = result.error
     } else {
       applyLoadedState(result.state, result.run)
       if (result.droppedPlacements.length > 0) {
@@ -45,4 +48,6 @@ export function bootstrap(hash: string = window.location.hash): void {
 
   applyPreset(DEFAULT_PRESET_ID)
   runScheduleAll()
+  // After the preset, which clears it: the board shows B1 and the notice says why (018 R7).
+  if (refusal !== null) useStore.getState().setLoadRefusal(refusal)
 }

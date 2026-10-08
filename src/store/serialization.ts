@@ -9,9 +9,12 @@ import type {
 } from '../engine/types.ts'
 import { DeMode, TournamentType as TT, Weapon, PlacementSource, DAY_AXIS_SPACING_MINS } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
+import { competitionLabel } from '../lib/competitionLabels.ts'
 import { buildTournamentConfig } from './buildConfig.ts'
 import { configKeyOf } from './keptRun.ts'
 import {
+  MAX_FENCERS,
+  MIN_FENCERS,
   POOL_DURATION_MIN,
   POOL_DURATION_MAX,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -255,8 +258,19 @@ export function validateSchema(
     if (config == null || typeof config !== 'object') {
       return { valid: false, error: `competition "${id}" must be an object` }
     }
-    if (typeof config.fencer_count !== 'number' || config.fencer_count < 0) {
-      return { valid: false, error: `fencer_count must be >= 0 for competition "${id}"` }
+    // The engine sizes only a whole number inside MIN_FENCERS–MAX_FENCERS, so a
+    // link or file outside that is refused here with the event named, rather
+    // than loading into a board the engine cannot draw (018 R5, R6). A JSON
+    // `1e999` parses to Infinity and fails the same test.
+    const count = config.fencer_count
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < MIN_FENCERS || count > MAX_FENCERS) {
+      const entry = findCompetition(id)
+      const named = entry ? `${competitionLabel(entry)} (${id})` : `"${id}"`
+      const reason =
+        typeof count === 'number'
+          ? `fencer_count ${String(count)} for ${named} must be a whole number from ${MIN_FENCERS} to ${MAX_FENCERS}`
+          : `fencer_count must be a number (got ${typeof count}) for ${named}`
+      return { valid: false, error: reason }
     }
     if (typeof config.flighted !== 'boolean') {
       return { valid: false, error: `flighted must be a boolean for competition "${id}"` }

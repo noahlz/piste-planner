@@ -15,7 +15,8 @@ import { Canvas } from '../canvas/Canvas.tsx'
 import { DetailStrip } from './DetailStrip.tsx'
 import { ViewMode } from '../../store/viewState.ts'
 import type { ZoomState } from '../canvas/zoomLadder.ts'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, X } from 'lucide-react'
+import { DEFAULT_PRESET_ID } from '../../data/tournaments.ts'
 
 /** How long an edit must settle before the center relayouts (FR-008). */
 export const CENTER_SETTLE_MS = 150
@@ -145,6 +146,10 @@ export function CenterView({
   const liveFindingRows = useStore(selectFindings)
   const liveDayConfigs = useStore((s) => s.dayConfigs)
   const livePlacements = useStore((s) => s.placements)
+  const loadRefusal = useStore((s) => s.loadRefusal)
+  const setLoadRefusal = useStore((s) => s.setLoadRefusal)
+
+  const refused = loadRefusal !== null
 
   const blocking = liveFindings.validationErrors.filter((e) => e.severity === 'ERROR')
   const hasBlocking = blocking.length > 0
@@ -194,6 +199,40 @@ export function CenterView({
             <AlertCircle aria-hidden="true" className="h-4 w-4 flex-none" />
             Stale – re-run Auto-assign
           </div>
+        )}
+      </div>
+      {/* Why the link this page opened on was refused (018 R7). It reads the
+          live store, not the committed model: it describes the load, not the
+          schedule, so it has no settle to wait for. Its own live region, kept
+          mounted for the same reason as the stale notice's, and beside it
+          rather than inside it so either can come and go on its own. */}
+      <div
+        data-load-refusal={refused ? '' : undefined}
+        className={
+          refused
+            ? 'print-hidden flex flex-none items-start gap-2 border-b-[1.5px] border-finding-border bg-finding-bg px-4 py-2 text-[12.5px] font-semibold text-finding-link'
+            : 'contents'
+        }
+      >
+        {refused && <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 flex-none" />}
+        {/* Only the message sits in the live region – a button inside one is
+            read out with it, and Dismiss is not part of the news. */}
+        <div role="status" className={refused ? 'min-w-0 flex-1' : 'contents'}>
+          {refused && (
+            <span>
+              This link couldn't be opened – {loadRefusal}. Showing {DEFAULT_PRESET_ID} instead.
+            </span>
+          )}
+        </div>
+        {refused && (
+          <button
+            type="button"
+            aria-label="Dismiss notice"
+            onClick={() => setLoadRefusal(null)}
+            className="flex h-6 w-6 flex-none items-center justify-center rounded-md hover:bg-neutral-200"
+          >
+            <X aria-hidden="true" className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
       {/* The view fills this region absolutely rather than sizing to its

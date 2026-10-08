@@ -1,7 +1,7 @@
 import { memo, useMemo } from 'react'
 import { useStore } from '../../../store/store.ts'
 import { CATALOGUE, ALL_VET_AGE_GROUPS } from '../../../engine/catalogue.ts'
-import { MIN_FENCERS } from '../../../engine/constants.ts'
+import { MAX_FENCERS, MIN_FENCERS } from '../../../engine/constants.ts'
 import type { CatalogueEntry } from '../../../engine/types.ts'
 import { Category, EventType, Gender, Weapon } from '../../../engine/types.ts'
 import {
@@ -135,6 +135,7 @@ const EventChip = memo(function EventChip({ entry }: { entry: CatalogueEntry }) 
           value={config.fencer_count}
           onChange={(v) => updateCompetition(entry.id, { fencer_count: v })}
           min={MIN_FENCERS}
+          max={MAX_FENCERS}
           commitOnChange
           aria-label={`Fencer count for ${label}`}
         />

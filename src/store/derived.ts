@@ -115,7 +115,10 @@ function computeDerivedSchedule(state: StoreState): DerivedSchedule {
   for (const competition of competitions) {
     const placement = state.placements[competition.id]
     if (!placement) continue
-    events[competition.id] = deriveEventSchedule(placement, competition, config)
+    // No result for a count the engine cannot size (018 T4): the event is
+    // left out, as an unplaced one is.
+    const derived = deriveEventSchedule(placement, competition, config)
+    if (derived !== null) events[competition.id] = derived
   }
 
   return { config, competitions, events }
@@ -202,11 +205,10 @@ function computeDrawnSchedule(state: StoreState): DrawnSchedule {
       for (const phase of keptEvent.phases) keptStrips[phase.phase] = phase.strips
       events[competition.id] = { result: keptEvent.result, day_out_of_range: false, keptStrips, source: 'kept' }
     } else {
-      events[competition.id] = {
-        ...deriveEventSchedule(placement, competition, config),
-        keptStrips: null,
-        source: 'derived',
-      }
+      // A count the engine cannot size derives nothing and draws nothing; the
+      // placement counts treat its event as unplaced (018 T4).
+      const derived = deriveEventSchedule(placement, competition, config)
+      if (derived !== null) events[competition.id] = { ...derived, keptStrips: null, source: 'derived' }
     }
   }
 
@@ -497,11 +499,13 @@ export interface PlacementCounts {
 }
 
 function computePlacementCounts(state: StoreState): PlacementCounts {
-  // An event is unplaced when it has no in-range placement, or when the drawn
-  // model counts one of its blocks as unplaced (017 spec §2, §4). `unplacedIds`
-  // is keyed by competition id, so an event with several unseated phases
-  // counts once, and on a stale board it is empty (P4 (a)).
-  const { unplacedIds } = selectDrawnSchedule(state)
+  // An event is unplaced when it has no in-range placement, when the drawn
+  // model counts one of its blocks as unplaced (017 spec §2, §4), or when the
+  // model has no event for it because the engine cannot size its count
+  // (018 T4). `unplacedIds` is keyed by competition id, so an event with
+  // several unseated phases counts once, and on a stale board it is empty
+  // (P4 (a)).
+  const { events, unplacedIds } = selectDrawnSchedule(state)
 
   let placed = 0
   let unplaced = 0
@@ -511,7 +515,7 @@ function computePlacementCounts(state: StoreState): PlacementCounts {
     const placement = state.placements[id]
     const inRange =
       placement !== undefined && placement.day >= 0 && placement.day < state.days_available
-    if (inRange && !unplacedIds.has(id)) placed++
+    if (inRange && id in events && !unplacedIds.has(id)) placed++
     else unplaced++
     if (placement?.pinned) pinned++
   }

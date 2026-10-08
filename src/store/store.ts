@@ -7,7 +7,7 @@ import type {
   Weapon,
 } from '../engine/types.ts'
 import { PlacementSource } from '../engine/types.ts'
-import { findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
+import { fencerDefaultKeyOf, findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { stripSearchRange, scanStripCounts } from '../engine/stripSearch.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import type { ScenarioId } from '../data/tournaments.ts'
@@ -16,7 +16,14 @@ import type { KeptRun } from './keptRun.ts'
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
 import { selectAllFindings } from './derived.ts'
-import { DAY_END_MINS, DAY_START_MINS, DEFAULT_POOL_ROUND_DURATION_TABLE } from '../engine/constants.ts'
+import {
+  DAY_END_MINS,
+  DAY_START_MINS,
+  DEFAULT_POOL_ROUND_DURATION_TABLE,
+  NAC_FENCER_DEFAULTS,
+  REGIONAL_CUT_TOURNAMENT_TYPES,
+  REGIONAL_FENCER_DEFAULTS,
+} from '../engine/constants.ts'
 
 // ──────────────────────────────────────────────
 // Constants
@@ -113,6 +120,9 @@ export interface UiSlice {
   /** The most recent `runScheduleAll` outcome, or `null` before it has ever run. Not serialized. */
   lastAutoRun: LastAutoRun | null
 
+  /** Why the link the app opened on was refused, or `null`. Set by `bootstrap` before it falls back to the default preset, and cleared by dismissing the notice or by the next successful load (preset, template, file or link). Not serialized (018 R7). */
+  loadRefusal: string | null
+
   /** The competition the detail strip describes, or null. Not serialized. */
   selectedCompetitionId: string | null
 
@@ -133,6 +143,7 @@ export interface UiSlice {
 
   setLoadedPresetId: (id: PresetId | null) => void
   setLastAutoRun: (run: LastAutoRun | null) => void
+  setLoadRefusal: (reason: string | null) => void
   /** Replaces the kept run alone. A run that threw clears it here, and T8's state load replays one (017 spec §5). */
   setLastRun: (run: KeptRun | null) => void
   selectCompetition: (id: string | null) => void
@@ -305,22 +316,33 @@ type FencerDefaultTable = Partial<Record<string, number>>
  *  up only to reject an unknown id and to key the template's fencer table —
  *  every other per-event value is derived in `buildConfig.ts`.
  *  When fencerDefaults is provided (e.g. from a template), uses it to
- *  populate fencer_count instead of defaulting to 0. */
-function defaultConfigForId(id: string, fencerDefaults?: FencerDefaultTable): CompetitionConfig | null {
+ *  populate fencer_count instead of defaulting to 0, and a key it lacks falls
+ *  back to `fallbackDefaults`. `addCompetition` always passes the table for the
+ *  tournament type, and `applyTemplate` passes it as the fallback, which
+ *  covers every catalogue id (pinned by fencerCountDefaults.test.ts), so
+ *  neither starts an event at 0. */
+function defaultConfigForId(
+  id: string,
+  fencerDefaults?: FencerDefaultTable,
+  fallbackDefaults?: FencerDefaultTable,
+): CompetitionConfig | null {
   const entry = findCompetition(id)
   if (!entry) return null
-  const defaultKey =
-    entry.event_type === 'TEAM'
-      ? `${entry.category}:TEAM`
-      : `${entry.category}:${entry.weapon}:${entry.gender}`
-  const defaultCount = fencerDefaults?.[defaultKey] ?? 0
+  const key = fencerDefaultKeyOf(entry)
+  const defaultCount = fencerDefaults?.[key] ?? fallbackDefaults?.[key] ?? 0
   return {
     fencer_count: defaultCount,
     flighted: false,
   }
 }
 
-function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice {
+/** The default fencer counts an event added by hand starts from: a NAC's own
+ *  table, or the regional one for every type that cuts like a regional (018 R6). */
+function fencerDefaultsFor(type: TournamentType): FencerDefaultTable {
+  return REGIONAL_CUT_TOURNAMENT_TYPES.has(type) ? REGIONAL_FENCER_DEFAULTS : NAC_FENCER_DEFAULTS
+}
+
+function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice {
   return {
     selectedCompetitions: {},
 
@@ -334,7 +356,7 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
     },
 
     addCompetition: (id) => {
-      const config = defaultConfigForId(id)
+      const config = defaultConfigForId(id, fencerDefaultsFor(get().tournament_type))
       if (!config) return
       set((state) => ({
         selectedCompetitions: { ...state.selectedCompetitions, [id]: config },
@@ -367,15 +389,16 @@ function createCompetitionSlice(set: SetState, _get: GetState): CompetitionSlice
     applyTemplate: (templateName) => {
       const ids = TEMPLATES[templateName] ?? []
       const fencerDefaults = TEMPLATE_FENCER_DEFAULTS[templateName] ?? {}
+      const typeDefaults = fencerDefaultsFor(get().tournament_type)
       const map: Record<string, CompetitionConfig> = {}
       for (const id of ids) {
-        const config = defaultConfigForId(id, fencerDefaults)
+        const config = defaultConfigForId(id, fencerDefaults, typeDefaults)
         if (config) map[id] = config
       }
       // Records the template the same way setLoadedPresetId does, so a
       // template-loaded config reads back through the picker exactly like a
       // preset-loaded one (T006).
-      set({ selectedCompetitions: map, loadedPresetId: templateName })
+      set({ selectedCompetitions: map, loadedPresetId: templateName, loadRefusal: null })
     },
   }
 }
@@ -384,6 +407,7 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
   return {
     loadedPresetId: null,
     lastAutoRun: null,
+    loadRefusal: null,
     lastRun: null,
     selectedCompetitionId: null,
     jumpNonce: 0,
@@ -391,6 +415,8 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
     setLoadedPresetId: (id) => set({ loadedPresetId: id }),
 
     setLastAutoRun: (run) => set({ lastAutoRun: run }),
+
+    setLoadRefusal: (reason) => set({ loadRefusal: reason }),
 
     setLastRun: (run) => set({ lastRun: run }),
 

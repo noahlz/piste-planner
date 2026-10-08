@@ -124,7 +124,9 @@ export const INDIV_TEAM_MIN_GAP_MINS = 120
 
 export const EARLY_START_THRESHOLD = 10
 export const MAX_RESCHEDULE_ATTEMPTS = 3
-export const MAX_FENCERS = 500
+// 336 is the Athlete Handbook §2.2.5 (printed p.15) NAC cap for Div I, Junior and
+// Cadet: Elite 112 + Challenger 224. Only real tournaments are solved for.
+export const MAX_FENCERS = 336
 export const MIN_FENCERS = 2
 // Most fencers that advance from pools in any event, so no DE bracket exceeds 256
 // (S8 p.37 – "A maximum of 256 fencers will be promoted out of pools for all events")

@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, it, expect } from 'vitest'
 import { eventTimeSegments } from '../../src/layout/segments.ts'
-import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import type { DerivedEventSchedule } from '../../src/engine/derive.ts'
 import { CutMode, DeMode, Phase } from '../../src/engine/types.ts'
 import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
@@ -15,6 +14,7 @@ import {
   makePlacement,
   makeScheduleResult,
 } from '../helpers/factories.ts'
+import { deriveSized } from '../helpers/derive.ts'
 
 /**
  * Derives one event through the real engine so these expectations break if the
@@ -22,7 +22,7 @@ import {
  * hand from `src/engine/derive.ts` before being written down.
  */
 function derive(overrides: Parameters<typeof makeCompetition>[0]): DerivedEventSchedule {
-  return deriveEventSchedule(makePlacement(), makeCompetition(overrides), makeConfig())
+  return deriveSized(makePlacement(), makeCompetition(overrides), makeConfig())
 }
 
 describe('eventTimeSegments', () => {

@@ -1,11 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, within, fireEvent, act } from '@testing-library/react'
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
+import { CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
 import { bootstrap, DEFAULT_PRESET_ID } from '../../../src/store/boot.ts'
 import { useStore } from '../../../src/store/store.ts'
 import { SCENARIOS } from '../../../src/data/tournaments.ts'
 import { encodeToUrl } from '../../../src/store/serialization.ts'
 import { selectDrawnSchedule, RunState } from '../../../src/store/derived.ts'
+import { applyPreset } from '../../../src/store/presets.ts'
+import { applyLoadedState } from '../../../src/store/exportActions.ts'
+import { deserializeState } from '../../../src/store/serialization.ts'
 import { hashOf, payloadWithRefusedRun, resetReceiver, sendBoard, sentPayload } from '../../helpers/replayFixtures.ts'
 import { TournamentType, DAY_AXIS_SPACING_MINS } from '../../../src/engine/types.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
@@ -24,6 +28,14 @@ import {
 beforeEach(() => {
   localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
+})
+
+// Spies and fake timers are restored here, not at the end of each test body, so
+// a failed assertion cannot leave console.error or the clock replaced for the
+// next test.
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe('bootstrap with no usable fragment', () => {
@@ -97,8 +109,6 @@ describe('bootstrap with an undecodable #config= fragment', () => {
     expect(Object.keys(state.placements).length).toBeGreaterThan(0)
     // The decode failure is reported, not swallowed silently.
     expect(consoleError).toHaveBeenCalled()
-
-    consoleError.mockRestore()
   })
 })
 
@@ -153,7 +163,6 @@ describe('bootstrap with a #config= fragment that carries a run (017 T8)', () =>
     expect(useStore.getState().lastRun).toBeNull()
     expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/run/i), expect.stringMatching(/run day for .* must be a whole day/))
-    warn.mockRestore()
   })
 
   it('opens stale from a stale sender, whose link carries no run', () => {
@@ -166,5 +175,144 @@ describe('bootstrap with a #config= fragment that carries a run (017 T8)', () =>
 
     expect(useStore.getState().lastRun).toBeNull()
     expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+})
+
+// 018 T4 (R7): a refused link boots B1 and says why on the board, until the
+// notice is dismissed or the next load succeeds.
+describe('bootstrap with a refused #config= link (018 T4, R7)', () => {
+  /** A link whose first event holds a fencer count the engine cannot size. */
+  function zeroCountHash(): { hash: string; eventId: string } {
+    const payload = sentPayload(sendBoard())
+    const eventId = Object.keys(payload.competitions)[0]
+    payload.competitions[eventId].fencer_count = 0
+    resetReceiver()
+    return { hash: hashOf(payload), eventId }
+  }
+
+  function noticeIn(center: HTMLElement): HTMLElement | null {
+    return center.querySelector<HTMLElement>('[data-load-refusal]')
+  }
+
+  it('stores the refusal reason, still boots the default preset, and still logs the error', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { hash, eventId } = zeroCountHash()
+
+    bootstrap(hash)
+
+    const state = useStore.getState()
+    expect(state.loadRefusal).toContain(eventId)
+    expect(state.loadedPresetId).toBe(DEFAULT_PRESET_ID)
+    expect(Object.keys(state.placements).length).toBeGreaterThan(0)
+    expect(consoleError).toHaveBeenCalled()
+  })
+
+  it('stores a reason for an undecodable link too, not only for a count', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    bootstrap('#config=not-a-valid-base64url-payload!!!')
+    expect(useStore.getState().loadRefusal).toContain('Invalid base64url encoding')
+  })
+
+  it('stores no refusal for a readable link or for no link', () => {
+    bootstrap(sendBoard().hash)
+    expect(useStore.getState().loadRefusal).toBeNull()
+    resetReceiver()
+    bootstrap('')
+    expect(useStore.getState().loadRefusal).toBeNull()
+  })
+
+  it('shows a notice in the center view with the reason and the preset shown instead', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { hash, eventId } = zeroCountHash()
+    bootstrap(hash)
+    render(<WorkbenchShell />)
+
+    const center = screen.getByRole('main', { name: 'Center view' })
+    const notice = noticeIn(center)
+    expect(notice).not.toBeNull()
+    expect(notice).toHaveTextContent(/couldn.t be opened/i)
+    expect(notice).toHaveTextContent(eventId)
+    expect(notice).toHaveTextContent(DEFAULT_PRESET_ID)
+  })
+
+  it('keeps the notice, and not its Dismiss button, in a live region of its own beside the stale banner\'s', () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { hash } = zeroCountHash()
+    bootstrap(hash)
+    render(<WorkbenchShell />)
+    // Stale the board so both notices are up together, the case the placement is for.
+    act(() => useStore.getState().setStrips(useStore.getState().strips_total + 1))
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS + 1)
+    })
+
+    const center = screen.getByRole('main', { name: 'Center view' })
+    const notice = noticeIn(center)!
+    const staleBanner = center.querySelector<HTMLElement>('[data-stale-banner]')
+    expect(staleBanner, 'premise: the stale banner is showing').not.toBeNull()
+
+    const noticeRegion = notice.querySelector<HTMLElement>('[role="status"]')
+    const staleRegion = staleBanner!.closest<HTMLElement>('[role="status"]')
+    expect(noticeRegion).not.toBeNull()
+    expect(noticeRegion).toHaveTextContent(/couldn.t be opened/i)
+    expect(noticeRegion).not.toBe(staleRegion)
+    expect(staleBanner!.closest('[data-load-refusal]')).toBeNull()
+    expect(noticeRegion!.contains(staleBanner)).toBe(false)
+    expect(staleRegion!.contains(notice)).toBe(false)
+
+    const dismiss = within(notice).getByRole('button', { name: /dismiss/i })
+    expect(dismiss.closest('[role="status"]')).toBeNull()
+  })
+
+  it('renders no notice when nothing was refused, but keeps the live region mounted', () => {
+    bootstrap('')
+    render(<WorkbenchShell />)
+    const center = screen.getByRole('main', { name: 'Center view' })
+    expect(noticeIn(center)).toBeNull()
+    expect(within(center).getAllByRole('status').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('removes the notice and clears the stored reason when it is dismissed', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { hash } = zeroCountHash()
+    bootstrap(hash)
+    render(<WorkbenchShell />)
+    const center = screen.getByRole('main', { name: 'Center view' })
+
+    fireEvent.click(within(noticeIn(center)!).getByRole('button', { name: /dismiss/i }))
+
+    expect(noticeIn(center)).toBeNull()
+    expect(useStore.getState().loadRefusal).toBeNull()
+  })
+
+  describe('a later successful load clears it', () => {
+    function refusedBoot(): void {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      bootstrap(zeroCountHash().hash)
+      expect(useStore.getState().loadRefusal, 'premise: the link was refused').not.toBeNull()
+    }
+
+    it('a preset', () => {
+      refusedBoot()
+      applyPreset('B2')
+      expect(useStore.getState().loadRefusal).toBeNull()
+    })
+
+    it('a template', () => {
+      refusedBoot()
+      useStore.getState().applyTemplate('RYC Weekend')
+      expect(useStore.getState().loadRefusal).toBeNull()
+    })
+
+    it('a file or link', () => {
+      const sent = sendBoard()
+      const parsed = deserializeState(sent.json)
+      if ('error' in parsed) throw new Error(parsed.error)
+      resetReceiver()
+      refusedBoot()
+      applyLoadedState(parsed.state, parsed.run)
+      expect(useStore.getState().loadRefusal).toBeNull()
+    })
   })
 })

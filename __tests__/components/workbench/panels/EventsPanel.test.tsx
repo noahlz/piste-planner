@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { EventsPanel } from '../../../../src/components/workbench/panels/EventsPanel.tsx'
 import { useStore } from '../../../../src/store/store.ts'
 import { CATALOGUE, ALL_VET_AGE_GROUPS, TEMPLATES, findCompetition } from '../../../../src/engine/catalogue.ts'
-import { MIN_FENCERS } from '../../../../src/engine/constants.ts'
+import { MAX_FENCERS, MIN_FENCERS } from '../../../../src/engine/constants.ts'
 import { Category, EventType, Gender, Weapon } from '../../../../src/engine/types.ts'
 import { categoryDisplay, vetAgeGroupDisplay, competitionLabel } from '../../../../src/lib/competitionLabels.ts'
 
@@ -175,6 +175,17 @@ describe('EventsPanel — fencer count', () => {
     }
   })
 
+  it('a pressed chip caps its spinbutton at MAX_FENCERS', () => {
+    useStore.getState().applyTemplate('RYC Weekend')
+    render(<EventsPanel />)
+
+    const spinbuttons = screen.getAllByRole('spinbutton', { name: /Fencer count for/ })
+    expect(spinbuttons.length).toBeGreaterThan(0)
+    for (const input of spinbuttons) {
+      expect(input).toHaveAttribute('max', String(MAX_FENCERS))
+    }
+  })
+
   it('an unpressed chip renders no fencer-count spinbutton', () => {
     render(<EventsPanel />)
     expect(screen.queryAllByRole('spinbutton', { name: /Fencer count for/ })).toHaveLength(0)
@@ -219,6 +230,19 @@ describe('EventsPanel — fencer count', () => {
     // pins for the retired fencer-count component.
     const stillFirstId = Object.keys(useStore.getState().selectedCompetitions).sort()[0]
     expect(useStore.getState().selectedCompetitions[stillFirstId].fencer_count).not.toBe(MIN_FENCERS - 1)
+  })
+
+  it('a change to a value above MAX_FENCERS commits nothing', () => {
+    useStore.getState().applyTemplate('RYC Weekend')
+    const [firstId] = Object.keys(useStore.getState().selectedCompetitions).sort()
+    useStore.getState().updateCompetition(firstId, { fencer_count: 10 })
+    render(<EventsPanel />)
+
+    const entry = findCompetition(firstId)!
+    const input = screen.getByRole('spinbutton', { name: `Fencer count for ${competitionLabel(entry)}` })
+    fireEvent.change(input, { target: { value: String(MAX_FENCERS + 1) } })
+
+    expect(useStore.getState().selectedCompetitions[firstId].fencer_count).toBe(10)
   })
 })
 

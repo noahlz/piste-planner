@@ -3,7 +3,6 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { Canvas } from '../../../src/components/canvas/Canvas.tsx'
 import { ScheduleOutput } from '../../../src/components/sections/ScheduleOutput.tsx'
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
-import { deriveEventSchedule } from '../../../src/engine/derive.ts'
 import type { DerivedEventSchedule } from '../../../src/engine/derive.ts'
 import type { Competition, DayWindow, Placement, TournamentConfig } from '../../../src/engine/types.ts'
 import { Category, DeMode, Gender, Weapon } from '../../../src/engine/types.ts'
@@ -24,6 +23,7 @@ import {
   makeStrips,
 } from '../../helpers/factories.ts'
 import { NO_PINS } from '../../helpers/canvasQueries.ts'
+import { deriveSized } from '../../helpers/derive.ts'
 
 // 004 T031 — view equivalence (contracts/ui-contract.md §View equivalence
 // contract, FR-023).
@@ -149,7 +149,7 @@ const SHAPES: Record<string, Shape> = {
 function derivedModel(shapes: Record<string, Shape>): DerivedSchedule {
   const events: Record<string, DerivedEventSchedule> = {}
   for (const [id, shape] of Object.entries(shapes)) {
-    events[id] = deriveEventSchedule(shape.placement, shape.competition, CONFIG)
+    events[id] = deriveSized(shape.placement, shape.competition, CONFIG)
   }
   return {
     config: CONFIG,

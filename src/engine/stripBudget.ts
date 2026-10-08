@@ -7,7 +7,8 @@
 
 import type { Competition, Strip, TournamentConfig } from './types.ts'
 import { Weapon, DeMode } from './types.ts'
-import { poolCountFor } from './pools.ts'
+import { ENGINE_FENCER_BOUNDS, isSizeableCount, poolCountFor } from './pools.ts'
+import type { FencerCountBounds } from './pools.ts'
 import { peakDeRefDemand } from './refs.ts'
 import { computeBracketSize, deVideoStripAsk } from './de.ts'
 
@@ -61,12 +62,16 @@ export function computeStripCap(
  *
  * For staged-DE competitions, video-stage strip demand across all weapon
  * classes is factored in as additional cross-weapon contention.
+ *
+ * A competition `isSizeableCount` rejects has no pools or bracket to staff
+ * and is left out of every peak (018 T4).
  */
 export function recommendRefCount(
-  competitions: Competition[],
+  allCompetitions: Competition[],
   refsPerPool: number,
   config: TournamentConfig,
 ): { three_weapon: number; foil_epee: number } {
+  const competitions = allCompetitions.filter(c => isSizeableCount(c.fencer_count, config))
   const poolsFor = (comp: Competition) => poolCountFor(comp.fencer_count, comp.use_single_pool_override)
 
   // --- Pool peaks per weapon class (top-2) ---
@@ -131,13 +136,17 @@ export function recommendRefCount(
 
 /**
  * Returns the IDs of competitions whose pool round needs more strips than the
- * cap allows, making them candidates for flighting.
+ * cap allows, making them candidates for flighting. A competition
+ * `isSizeableCount` rejects has no pool round and is never a candidate
+ * (018 T4). `bounds` defaults to the engine's own.
  */
 export function flagFlightingCandidates(
   competitions: Competition[],
   poolStripCap: number,
+  bounds: FencerCountBounds = ENGINE_FENCER_BOUNDS,
 ): string[] {
   return competitions
+    .filter(comp => isSizeableCount(comp.fencer_count, bounds))
     .filter(comp => poolCountFor(comp.fencer_count, comp.use_single_pool_override) > poolStripCap)
     .map(comp => comp.id)
 }

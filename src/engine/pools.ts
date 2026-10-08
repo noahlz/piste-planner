@@ -1,9 +1,34 @@
 import { Weapon, CutMode, EventType, RefPolicy } from './types.ts'
-import type { PoolStructure, PoolDurationResult, RefResolution } from './types.ts'
-import { BOUT_COUNTS, MAX_DE_FIELD } from './constants.ts'
+import type { PoolStructure, PoolDurationResult, RefResolution, TournamentConfig } from './types.ts'
+import { BOUT_COUNTS, MAX_DE_FIELD, MAX_FENCERS, MIN_FENCERS } from './constants.ts'
 
 // BOUT_COUNTS[7] = 21 is the baseline pool size used to scale durations (Ops Manual p.17)
 const BASELINE_POOL_SIZE = 7
+
+export type FencerCountBounds = Pick<TournamentConfig, 'MIN_FENCERS' | 'MAX_FENCERS'>
+
+/** The engine's own bounds, for the few config-less helpers whose production callers pass the config. */
+export const ENGINE_FENCER_BOUNDS: FencerCountBounds = { MIN_FENCERS, MAX_FENCERS }
+
+/** The smallest field `computePoolStructure` can split into a pool (`BOUT_COUNTS[2] = 1`). */
+const SMALLEST_POOL = 2
+
+/**
+ * Whether the engine can size an event of `count` fencers: a whole number
+ * inside `bounds.MIN_FENCERS`–`bounds.MAX_FENCERS` (METHODOLOGY.md §Fencer
+ * Count Bounds), and never below a pool of two whatever the bounds say. Every
+ * pool-math caller asks this before `computePoolStructure` and skips an event
+ * it rejects, and `fencer-count-bounds` raises its ERROR on the same answer,
+ * so the scheduler never reaches pool math for one (018 T4). NaN, Infinity
+ * and fractions are rejected – they otherwise throw or return NaN downstream.
+ */
+export function isSizeableCount(count: number, bounds: FencerCountBounds): boolean {
+  return (
+    Number.isInteger(count) &&
+    count >= Math.max(SMALLEST_POOL, bounds.MIN_FENCERS) &&
+    count <= bounds.MAX_FENCERS
+  )
+}
 
 /**
  * Computes the pool structure (number of pools and their sizes) for a given fencer count.

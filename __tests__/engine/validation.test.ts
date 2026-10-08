@@ -235,15 +235,15 @@ describe('validateConfig — fencer count (structural)', () => {
     expectStructural('fencer_count', binding, advisory)
   })
 
-  it('returns ERROR in both modes when fencer_count exceeds MAX_FENCERS (500)', () => {
-    const comp = makeCompetition({ fencer_count: 501 })
+  it('returns ERROR in both modes when fencer_count exceeds MAX_FENCERS (336)', () => {
+    const comp = makeCompetition({ fencer_count: 337 })
     const { binding, advisory } = validateBoth(makeConfig(), [comp])
     expectStructural('fencer_count', binding, advisory)
   })
 
-  it('does not error for fencer_count at boundary values (2 and 500)', () => {
+  it('does not error for fencer_count at boundary values (2 and 336)', () => {
     const low = makeCompetition({ id: 'low', fencer_count: 2 })
-    const high = makeCompetition({ id: 'high', fencer_count: 500 })
+    const high = makeCompetition({ id: 'high', fencer_count: 336 })
     const { binding, advisory } = validateBoth(makeConfig(), [low, high])
     expect(binding.filter(e => e.field === 'fencer_count' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)
     expect(advisory.filter(e => e.field === 'fencer_count' && e.severity === BottleneckSeverity.ERROR)).toHaveLength(0)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveEventSchedule, placementFromResult } from '../../src/engine/derive.ts'
+import { placementFromResult } from '../../src/engine/derive.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import {
   BottleneckCause, DeMode, CutMode, EventType, Gender, Weapon, PlacementSource, VideoPolicy, tailEstimateMins,
@@ -11,6 +11,7 @@ import {
 } from '../../src/engine/pools.ts'
 import { makeCompetition, makeConfig, makeStrips, makeScheduleResult } from '../helpers/factories.ts'
 import { buildCompetitions, tournamentConfig, SCENARIOS } from '../helpers/scenarios.ts'
+import { deriveSized } from '../helpers/derive.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -121,7 +122,7 @@ describe('deriveEventSchedule — pool block geometry', () => {
     const competition = makeCompetition({ id: 'pool-plain', fencer_count: 24 })
     const { oracle, placement } = scheduleIsolated(competition, config)
 
-    const derived = deriveEventSchedule(placement, competition, config)
+    const derived = deriveSized(placement, competition, config)
 
     expect(derived.result.pool_start).toBe(oracle.pool_start)
     expect(derived.result.pool_end).toBe(oracle.pool_end)
@@ -143,7 +144,7 @@ describe('deriveEventSchedule — single-stage DE event', () => {
     const competition = makeCompetition({ id: 'de-single', fencer_count: 24, de_mode: DeMode.SINGLE_STAGE })
     const { oracle, placement } = scheduleIsolated(competition, config)
 
-    const derived = deriveEventSchedule(placement, competition, config)
+    const derived = deriveSized(placement, competition, config)
 
     expectGeometryMatches(derived.result, oracle)
     expect(derived.result.de_start).not.toBeNull()
@@ -168,7 +169,7 @@ describe('deriveEventSchedule — staged DE event', () => {
     expect(oracle.bracket_size).toBeGreaterThanOrEqual(64) // sanity: prelims only exist ≥64
     expect(oracle.de_prelims_start).not.toBeNull() // sanity: this scenario actually stages
 
-    const derived = deriveEventSchedule(placement, competition, config)
+    const derived = deriveSized(placement, competition, config)
 
     expectGeometryMatches(derived.result, oracle)
     expect(derived.result.de_prelims_start).not.toBeNull()
@@ -187,7 +188,7 @@ describe('deriveEventSchedule — staged video ask (METHODOLOGY.md §DE Modes)',
       day: 0, start_time: 480, strip_count: 1, strips: null, source: PlacementSource.AUTO, pinned: false,
     }
 
-    const derived = deriveEventSchedule(placement, competition, isolatedConfig())
+    const derived = deriveSized(placement, competition, isolatedConfig())
 
     expect(derived.result.bracket_size).toBe(4)
     expect(derived.result.de_round_of_16_strip_count).toBe(2)
@@ -207,7 +208,7 @@ describe('deriveEventSchedule — a bracket of 2 has no counted round', () => {
     { label: 'individual', event_type: EventType.INDIVIDUAL },
     { label: 'team', event_type: EventType.TEAM },
   ])('derives a 0-minute single-stage DE on 0 strips with the $label tail', ({ event_type }) => {
-    const derived = deriveEventSchedule(
+    const derived = deriveSized(
       { day: 0, start_time: 480, strip_count: 1, strips: null, source: PlacementSource.AUTO, pinned: false },
       bracketOf2({ de_mode: DeMode.SINGLE_STAGE, event_type }),
       isolatedConfig(),
@@ -225,7 +226,7 @@ describe('deriveEventSchedule — a bracket of 2 has no counted round', () => {
     const competition = bracketOf2({ de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED })
     const { oracle, placement } = scheduleIsolated(competition, config)
 
-    const derived = deriveEventSchedule(placement, competition, config)
+    const derived = deriveSized(placement, competition, config)
 
     expectGeometryMatches(derived.result, oracle)
     expect(derived.result.de_prelims_start).toBeNull()
@@ -245,7 +246,7 @@ describe('deriveEventSchedule — a pinned flighted event on 1 strip', () => {
       day: 0, start_time: 480, strip_count: 1, strips: null, source: PlacementSource.MANUAL, pinned: true,
     }
 
-    const derived = deriveEventSchedule(placement, competition, config)
+    const derived = deriveSized(placement, competition, config)
 
     const pools = computePoolStructure(competition.fencer_count)
     const baseline = weightedPoolDuration(pools, competition.weapon, config.pool_round_duration_table)
@@ -270,7 +271,7 @@ describe('deriveEventSchedule — flighted event', () => {
     const { oracle, placement } = scheduleIsolated(competition, config)
     expect(oracle.use_flighting).toBe(true) // sanity
 
-    const derived = deriveEventSchedule(placement, competition, config)
+    const derived = deriveSized(placement, competition, config)
 
     expectGeometryMatches(derived.result, oracle)
     expect(derived.result.use_flighting).toBe(true)
@@ -294,7 +295,7 @@ describe('deriveEventSchedule — flighted event', () => {
       day: 0, start_time: 480, strip_count: 6, strips: null, source: PlacementSource.MANUAL, pinned: true,
     }
 
-    const derived = deriveEventSchedule(placement, competition, config)
+    const derived = deriveSized(placement, competition, config)
 
     expect(derived.result.use_flighting).toBe(true)
     expect(derived.result.flighting_group_id).toBe('group-1')
@@ -320,7 +321,7 @@ describe('deriveEventSchedule — Div 1 DE field at a NAC (S8 p.37)', () => {
       day: 0, start_time: 480, strip_count: 20, strips: null, source: PlacementSource.AUTO, pinned: false,
     }
 
-    const { result } = deriveEventSchedule(placement, competition, config)
+    const { result } = deriveSized(placement, competition, config)
 
     expect(competition.fencer_count).toBe(fencers)
     expect(result.promoted_fencer_count).toBe(promoted)
@@ -340,8 +341,8 @@ describe('deriveEventSchedule — purity', () => {
       day: 1, start_time: 900, strip_count: 6, strips: null, source: PlacementSource.AUTO, pinned: false,
     }
 
-    const first = deriveEventSchedule(placement, competition, config)
-    const second = deriveEventSchedule(placement, competition, config)
+    const first = deriveSized(placement, competition, config)
+    const second = deriveSized(placement, competition, config)
 
     expect(second).toEqual(first)
   })
@@ -356,7 +357,7 @@ describe('deriveEventSchedule — purity', () => {
     const competitionBefore = JSON.parse(JSON.stringify(competition))
     const configBefore = JSON.parse(JSON.stringify(config))
 
-    deriveEventSchedule(placement, competition, config)
+    deriveSized(placement, competition, config)
 
     expect(placement).toEqual(placementBefore)
     expect(competition).toEqual(competitionBefore)
@@ -375,8 +376,8 @@ describe('deriveEventSchedule — day_out_of_range', () => {
     const { oracle, placement: basePlacement } = scheduleIsolated(competition, config)
     const placement: Placement = { ...basePlacement, day: 9 }
 
-    expect(() => deriveEventSchedule(placement, competition, config)).not.toThrow()
-    const derived = deriveEventSchedule(placement, competition, config)
+    expect(() => deriveSized(placement, competition, config)).not.toThrow()
+    const derived = deriveSized(placement, competition, config)
 
     expect(derived.day_out_of_range).toBe(true)
     expect(derived.result.pool_start).not.toBeNull()
@@ -393,8 +394,8 @@ describe('deriveEventSchedule — day_out_of_range', () => {
     const { placement: basePlacement } = scheduleIsolated(competition, config)
     const placement: Placement = { ...basePlacement, day: -1 }
 
-    expect(() => deriveEventSchedule(placement, competition, config)).not.toThrow()
-    const derived = deriveEventSchedule(placement, competition, config)
+    expect(() => deriveSized(placement, competition, config)).not.toThrow()
+    const derived = deriveSized(placement, competition, config)
     expect(derived.day_out_of_range).toBe(true)
     expect(derived.result.pool_start).not.toBeNull()
   })
@@ -404,7 +405,7 @@ describe('deriveEventSchedule — day_out_of_range', () => {
     const competition = makeCompetition({ id: 'in-range', fencer_count: 24 })
     const { placement } = scheduleIsolated(competition, config)
 
-    expect(deriveEventSchedule(placement, competition, config).day_out_of_range).toBe(false)
+    expect(deriveSized(placement, competition, config).day_out_of_range).toBe(false)
   })
 
   // Pins the boundary itself: day === days_available is out of range, and
@@ -418,7 +419,7 @@ describe('deriveEventSchedule — day_out_of_range', () => {
       day: 4, start_time: 480, strip_count: 6, strips: null, source: PlacementSource.MANUAL, pinned: true,
     }
 
-    expect(deriveEventSchedule(placement, competition, config).day_out_of_range).toBe(true)
+    expect(deriveSized(placement, competition, config).day_out_of_range).toBe(true)
   })
 
   it('does not flag day === days_available - 1 as out of range (boundary)', () => {
@@ -428,7 +429,7 @@ describe('deriveEventSchedule — day_out_of_range', () => {
       day: 3, start_time: 480, strip_count: 6, strips: null, source: PlacementSource.MANUAL, pinned: true,
     }
 
-    expect(deriveEventSchedule(placement, competition, config).day_out_of_range).toBe(false)
+    expect(deriveSized(placement, competition, config).day_out_of_range).toBe(false)
   })
 })
 
@@ -479,7 +480,7 @@ describe('deriveEventSchedule — oracle: reproduces scheduleAll geometry', () =
     expect(oracle.de_strip_count, 'the target DE stays strip-capped').toBeLessThan(oracle.bracket_size / 2)
 
     const placement = oraclePlacement(oracle)
-    const derived = deriveEventSchedule(placement, target, config)
+    const derived = deriveSized(placement, target, config)
 
     expectGeometryMatches(derived.result, oracle)
     expect(derived.day_out_of_range).toBe(false)

@@ -14,7 +14,7 @@
 import { Category } from './types.ts'
 import type { Competition, DeRound, TournamentConfig, GlobalState } from './types.ts'
 import { CATEGORY_START_PREFERENCE } from './constants.ts'
-import { computePoolStructure, weightedPoolDuration } from './pools.ts'
+import { computePoolStructure, isSizeableCount, weightedPoolDuration } from './pools.ts'
 import { deBlocksFor } from './de.ts'
 
 interface CompetitionStripHours {
@@ -95,7 +95,8 @@ export function estimateCompetitionStripHours(
 
 /**
  * Sums `estimateCompetitionStripHours` over `competitions`, skipping any
- * competition outside `MIN_FENCERS`–`MAX_FENCERS`. This is the tournament's
+ * competition `isSizeableCount` rejects (outside `MIN_FENCERS`–`MAX_FENCERS`,
+ * or not a whole number). This is the tournament's
  * one aggregate strip-hours fact: `validateFeasibility`'s shortfall message
  * and the Suggest search's floor (012 research.md D2) both read it here
  * rather than each summing the list a second time. The filter is part of the
@@ -109,7 +110,7 @@ export function aggregateStripHours(
   let total_strip_hours = 0
   let video_strip_hours = 0
   for (const c of competitions) {
-    if (c.fencer_count < config.MIN_FENCERS || c.fencer_count > config.MAX_FENCERS) continue
+    if (!isSizeableCount(c.fencer_count, config)) continue
     const e = estimateCompetitionStripHours(c, config)
     total_strip_hours += e.total_strip_hours
     video_strip_hours += e.video_strip_hours

@@ -59,6 +59,7 @@ import {
   estimatePoolDuration,
   weightedPoolDuration,
   computeDeFencerCount,
+  isSizeableCount,
 } from './pools.ts'
 import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
@@ -428,6 +429,10 @@ function buildEventStates(
     const day = dayMap.get(comp.id)
     if (day === undefined) continue
 
+    // Guarded upstream: `validateConfig` raises `fencer-count-bounds` for every
+    // count `isSizeableCount` rejects, and that rule is in
+    // PER_EVENT_ERROR_RULES, so `scheduleAllConcurrent` either drops the event
+    // or returns before this runs (018 T4).
     const poolStructure = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
     const poolBaseline = weightedPoolDuration(
       poolStructure,
@@ -1876,7 +1881,10 @@ export function postScheduleDayBreakdown(
     const compsOnDay = competitions.filter(c => state.schedule[c.id]?.assigned_day === day)
     let peakRefDemand = 0
     for (const comp of compsOnDay) {
-      if (comp.fencer_count <= 1) continue
+      // Only scheduled events reach here, and none is unsizeable (the
+      // validation pass drops those, PER_EVENT_ERROR_RULES); kept as a cheap
+      // backstop on the same predicate (018 T4).
+      if (!isSizeableCount(comp.fencer_count, config)) continue
       const poolDemand = peakPoolRefDemand(comp, comp.ref_policy)
       const deDemand = peakDeRefDemand(comp, config)
       peakRefDemand += Math.max(poolDemand, deDemand)

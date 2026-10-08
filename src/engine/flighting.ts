@@ -1,6 +1,7 @@
 import { BottleneckCause, BottleneckRule, BottleneckSeverity, Phase } from './types.ts'
 import type { Competition, FlightingGroup, Bottleneck, TournamentType } from './types.ts'
-import { computePoolStructure } from './pools.ts'
+import { ENGINE_FENCER_BOUNDS, computePoolStructure, isSizeableCount } from './pools.ts'
+import type { FencerCountBounds } from './pools.ts'
 import { crossoverPenalty } from './crossover.ts'
 import { forEachCompetitionPair } from './pairs.ts'
 // ──────────────────────────────────────────────
@@ -21,17 +22,22 @@ interface FlightingGroupSuggestions {
  * - The competition with more pools is designated priority; the other becomes flighted.
  * - When pool counts are tied, a FLIGHTING_GROUP_MANUAL_NEEDED warning is emitted and
  *   the suggestion is still created (with an arbitrary ordering by id for determinism).
+ *
+ * A competition `isSizeableCount` rejects pairs with nothing (018 T4).
+ * `bounds` defaults to the engine's own; `initialAnalysis` passes its config.
  */
 export function suggestFlightingGroups(
   competitions: Competition[],
   stripsTotal: number,
   dayAssignments: Record<string, number>,
   poolStripCap: number,
+  bounds: FencerCountBounds = ENGINE_FENCER_BOUNDS,
 ): FlightingGroupSuggestions {
   const suggestions: FlightingGroup[] = []
   const bottlenecks: Bottleneck[] = []
 
-  forEachCompetitionPair(competitions, (c1, c2) => {
+  const sizeable = competitions.filter(c => isSizeableCount(c.fencer_count, bounds))
+  forEachCompetitionPair(sizeable, (c1, c2) => {
     // Only consider pairs on the same day
     if (dayAssignments[c1.id] !== dayAssignments[c2.id]) return
 
@@ -87,6 +93,11 @@ export function suggestFlightingGroups(
  * METHODOLOGY.md §Flighting:
  * - Priority receives strips equal to its pool count, capped at strips_total.
  * - Flighted receives the remainder (strips_total − priority allocation).
+ *
+ * Precondition: `priorityComp` has a count `isSizeableCount` accepts. Its one
+ * production caller, `suggestFlightingGroups`, pairs only those (018 T4); a
+ * split has no honest value for an event with no pools, so this does not
+ * invent one.
  */
 export function calculateFlightedStrips(
   priorityComp: Competition,
@@ -123,12 +134,16 @@ export function calculateFlightedStrips(
  * 3. Warn (SAME_DAY_DEMOGRAPHIC_CONFLICT) if the grouped pair has a non-zero
  *    crossover penalty at `tournamentType` (a Group 1 pair is finite only at
  *    the regional types, Ops Manual p.20 – Group 1).
+ *
+ * Check 2 leaves out a competition `isSizeableCount` rejects, which has no
+ * pools to compare (018 T4). `bounds` defaults to the engine's own.
  */
 export function validateFlightingGroup(
   group: FlightingGroup,
   competitions: Competition[],
   dayAssignments: Record<string, number>,
   tournamentType: TournamentType,
+  bounds: FencerCountBounds = ENGINE_FENCER_BOUNDS,
 ): Bottleneck[] {
   const bottlenecks: Bottleneck[] = []
 
@@ -160,7 +175,9 @@ export function validateFlightingGroup(
   }
 
   // Check 2: flighted should be the largest on its day
-  const compsOnDay = competitions.filter(c => dayAssignments[c.id] === flightedDay)
+  const compsOnDay = competitions.filter(
+    c => dayAssignments[c.id] === flightedDay && isSizeableCount(c.fencer_count, bounds),
+  )
   const poolCounts = compsOnDay.map(c => ({
     id: c.id,
     pools: computePoolStructure(c.fencer_count, c.use_single_pool_override).n_pools,
@@ -168,7 +185,8 @@ export function validateFlightingGroup(
   const maxPools = Math.max(...poolCounts.map(p => p.pools))
   const flightedPools = poolCounts.find(p => p.id === flightedComp.id)?.pools ?? 0
 
-  if (flightedPools < maxPools) {
+  // An unsizeable flighted event has no pool count to compare, not zero pools.
+  if (poolCounts.some(p => p.id === flightedComp.id) && flightedPools < maxPools) {
     const largestComp = poolCounts.find(p => p.pools === maxPools)
     bottlenecks.push({
       competition_id: flightedComp.id,

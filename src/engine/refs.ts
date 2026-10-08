@@ -19,6 +19,9 @@ import { phaseKey } from './unseated.ts'
  * - ONE: 1 ref per pool
  * - TWO: 2 refs per pool
  * - AUTO: 2 refs per pool (peak estimate — AUTO tries 2 first, so we size for that)
+ *
+ * Takes no config, so its callers guard it: `comp` must have a count
+ * `isSizeableCount` accepts (018 T4).
  */
 export function peakPoolRefDemand(comp: Competition, ref_policy: RefPolicy): number {
   const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)

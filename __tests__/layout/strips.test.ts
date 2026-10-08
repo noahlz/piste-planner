@@ -16,7 +16,6 @@ import { buildPinnedPlacements, buildTournamentConfig } from '../../src/store/bu
 import type { KeptEvent, KeptRun } from '../../src/store/keptRun.ts'
 import { assignStrips, KeptStripOutOfRangeError } from '../../src/layout/strips.ts'
 import type { DrawnBlock, DrawnEventInput } from '../../src/layout/strips.ts'
-import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { phaseKey, unseatedPhases } from '../../src/engine/unseated.ts'
 import { compareIds } from '../../src/engine/order.ts'
@@ -27,6 +26,7 @@ import { Phase, PlacementSource, VideoPolicy } from '../../src/engine/types.ts'
 import type { Competition, ScheduleResult, TournamentConfig } from '../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
 import { loadFlightedFixture } from '../helpers/flightedFixtures.ts'
+import { deriveSized } from '../helpers/derive.ts'
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState(), true)
@@ -88,7 +88,7 @@ function competitionOf(board: Board, id: string): Competition {
 function movedInput(board: Board, id: string, day: number): DrawnEventInput {
   const key = board.kept.events[id].placementKey
   const placement = { ...key, day, strips: null, source: PlacementSource.MANUAL, pinned: false }
-  return { ...deriveEventSchedule(placement, competitionOf(board, id), board.config), keptStrips: null }
+  return { ...deriveSized(placement, competitionOf(board, id), board.config), keptStrips: null }
 }
 
 /** Every placed event derived from its store placement, as a stale board draws. */
@@ -99,7 +99,7 @@ function derivedInputs(board: Board): Record<string, DrawnEventInput> {
     const placement = placements[competition.id]
     if (placement) {
       inputs[competition.id] = {
-        ...deriveEventSchedule(placement, competition, board.config),
+        ...deriveSized(placement, competition, board.config),
         keptStrips: null,
       }
     }

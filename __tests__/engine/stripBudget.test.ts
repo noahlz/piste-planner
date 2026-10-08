@@ -85,11 +85,11 @@ describe('recommendRefCount', () => {
     const comps = [
       makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 140 }), // 20 pools
       makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 70 }),  // 10 pools
-      makeCompetition({ id: 'f3', weapon: Weapon.FOIL, fencer_count: 490 }), // 70 pools — 3rd!
+      makeCompetition({ id: 'f3', weapon: Weapon.FOIL, fencer_count: 336 }), // 48 pools — 3rd! (MAX_FENCERS, so the largest real event)
     ]
-    // Pool counts sorted desc: f3=70, f1=20, f2=10. Top-2 are f3 and f1; f2 is excluded.
-    // peak foil/epee = 70 + 20 = 90; three_weapon=0
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 90 })
+    // Pool counts sorted desc: f3=48, f1=20, f2=10. Top-2 are f3 and f1; f2 is excluded.
+    // peak foil/epee = 48 + 20 = 68; three_weapon=0
+    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 68 })
   })
 
   it('scales with refsPerPool', () => {

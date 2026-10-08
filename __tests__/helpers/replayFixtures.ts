@@ -59,9 +59,14 @@ export function payloadWithRefusedRun(board: SentBoard): SerializedState {
   return payload
 }
 
+/** `#config=...` for a payload's text as given, the way `encodeToUrl` writes it. */
+export function hashOfText(text: string): string {
+  return `#config=${btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
+}
+
 /** `#config=...` for a payload, the way `encodeToUrl` writes it. */
 export function hashOf(payload: unknown): string {
-  return `#config=${btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
+  return hashOfText(JSON.stringify(payload))
 }
 
 /** The payload a `#config=...` hash carries. */

@@ -2,14 +2,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { UnplacedDock } from '../../../src/components/workbench/UnplacedDock.tsx'
 import { useStore, type StoreState } from '../../../src/store/store.ts'
-import { selectDerivedSchedule } from '../../../src/store/derived.ts'
+import { selectDerivedSchedule, selectPlacementCounts } from '../../../src/store/derived.ts'
 import { TEMPLATES, findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/lib/competitionLabels.ts'
-import { estimateEventFootprint } from '../../../src/engine/derive.ts'
 import { formatMinutes } from '../../../src/lib/time.ts'
 import { applyPreset } from '../../../src/store/presets.ts'
 import { runScheduleAll } from '../../../src/store/runActions.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { footprintSized } from '../../helpers/derive.ts'
+import { runPreset } from '../../helpers/drawnFixtures.ts'
 
 // 013 T012 — the unplaced dock (FR-010, FR-011, ui-contract.md §Unplaced
 // dock): every selected competition with no placement is a button chip
@@ -38,7 +39,7 @@ function needText(id: string): string {
   const { config, competitions } = selectDerivedSchedule(useStore.getState())
   const competition = competitions.find((c) => c.id === id)
   if (!competition) throw new Error(`no competition for ${id}`)
-  const footprint = estimateEventFootprint(competition, config)
+  const footprint = footprintSized(competition, config)
   return `${footprint.strips} strips · ${formatMinutes(footprint.poolMinutes)} · DE ${formatMinutes(footprint.deMinutes)}`
 }
 
@@ -160,5 +161,34 @@ describe('UnplacedDock populated state', () => {
     expect(chip).not.toHaveTextContent('DE')
 
     consoleError.mockRestore()
+  })
+
+  // 018 T4: the dock's one predicate is "the model has no event for it", so a
+  // PLACED event whose count the engine cannot size waits here too.
+  it('shows a chip, without need text, for a placed event whose count becomes unsizeable, and the footer counts it unplaced', () => {
+    runPreset('B1')
+    const before = selectPlacementCounts(useStore.getState())
+    expect(before.unplaced, 'premise: B1 places every event').toBe(0)
+    render(<UnplacedDock />)
+    const region = screen.getByRole('region', { name: 'Unplaced events' })
+    expect(within(region).queryAllByRole('button'), 'premise: nothing waits').toHaveLength(0)
+
+    const targetId = Object.keys(useStore.getState().placements)[0]
+    expect(targetId in useStore.getState().placements, 'premise: the event is placed').toBe(true)
+    const entry = findCompetition(targetId)
+    const label = entry ? competitionLabel(entry) : targetId
+
+    act(() => {
+      useStore.getState().updateCompetition(targetId, { fencer_count: 0 })
+    })
+
+    const chips = within(region).getAllByRole('button')
+    expect(chips).toHaveLength(1)
+    expect(chips[0]).toHaveAttribute('data-event-id', targetId)
+    expect(chips[0]).toHaveTextContent(label)
+    expect(chips[0]).not.toHaveTextContent('strips')
+    const after = selectPlacementCounts(useStore.getState())
+    expect(after.unplaced).toBe(1)
+    expect(after.placed).toBe(before.placed - 1)
   })
 })

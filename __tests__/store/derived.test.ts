@@ -3,7 +3,6 @@ import { useStore } from '../../src/store/store.ts'
 import { BottleneckRule, DeMode, Phase, Weapon } from '../../src/engine/types.ts'
 import type { Competition, Placement, RefRequirementsByDay, ScheduleResult } from '../../src/engine/types.ts'
 import { computeRefRequirements, refDemandFromSchedule } from '../../src/engine/refs.ts'
-import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { phaseKey } from '../../src/engine/unseated.ts'
 import type { KeptRun } from '../../src/store/keptRun.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
@@ -22,6 +21,7 @@ import {
   selectDrawnSchedule,
   selectPlacementCounts,
 } from '../../src/store/derived.ts'
+import { deriveSized } from '../helpers/derive.ts'
 
 // Smallest drift-ledger scenario (12 events) — realistic roster for exercising
 // derived selectors against real catalogue data.
@@ -341,7 +341,7 @@ describe('selectDerivedRefRequirements counts the drawn board (017 T9)', () => {
       expect(model.events[eventId].source, `premise: ${eventId} stays kept`).toBe('kept')
       return kept.events[eventId].result
     })
-    const results = resultsWithMoverAt(deriveEventSchedule(state.placements[id], competition, model.config).result)
+    const results = resultsWithMoverAt(deriveSized(state.placements[id], competition, model.config).result)
     const skip = new Set(unseated.map((phase) => phaseKey(id, phase)))
     expect(sweep(results, skip), 'premise: the unseated phases would move a peak').not.toEqual(sweep(results, new Set()))
     expect(sweep(resultsWithMoverAt(kept.events[id].result), skip), 'premise: the mover\'s derived times move a peak')
@@ -402,5 +402,41 @@ describe('selectPlacementCounts reads the drawn model (017 T5a)', () => {
     expect(model.blocks.some((b) => b.unseated), 'premise: the stale board draws unseated phases').toBe(true)
 
     expect(selectPlacementCounts(state)).toEqual({ placed: 24, unplaced: 0, pinned: 1 })
+  })
+})
+
+describe('an event the engine cannot size counts as not placed (018 T4)', () => {
+  // Fresh-page order: the count is edited before any selector has run on it,
+  // so a throw cannot hide behind the memo cache.
+  function runB1WithCount(fencer_count: number): string {
+    runPreset('B1')
+    const id = 'JR-M-FOIL-IND'
+    useStore.getState().updateCompetition(id, { fencer_count })
+    expect(useStore.getState().placements[id], 'premise: the event keeps its placement').toBeDefined()
+    return id
+  }
+
+  it.each([0, 1, 1.5, Infinity])('%s: the drawn board leaves it out and the footer counts it unplaced', (n) => {
+    const id = runB1WithCount(n)
+    const state = useStore.getState()
+    const drawn = selectDrawnSchedule(state)
+    expect(drawn.events[id]).toBeUndefined()
+    expect(drawn.blocks.some((b) => b.competitionId === id)).toBe(false)
+    expect(selectDerivedSchedule(state).events[id]).toBeUndefined()
+    expect(selectPlacementCounts(state)).toEqual({ placed: 23, unplaced: 1, pinned: 0 })
+  })
+
+  it.each([0, 1, 1.5, Infinity])('%s: the findings carry the fencer-count-bounds ERROR', (n) => {
+    const id = runB1WithCount(n)
+    const findings = selectDerivedFindings(useStore.getState())
+    expect(findings.validationErrors.filter((e) => e.rule === 'fencer-count-bounds').map((e) => e.subjects))
+      .toEqual([[id]])
+  })
+
+  it('guard: a count of 2 is still drawn and counted placed', () => {
+    const id = runB1WithCount(2)
+    const state = useStore.getState()
+    expect(selectDrawnSchedule(state).events[id]).toBeDefined()
+    expect(selectPlacementCounts(state)).toEqual({ placed: 24, unplaced: 0, pinned: 0 })
   })
 })

@@ -63,7 +63,7 @@ export function makeConfig(overrides: Partial<TournamentConfig> = {}): Tournamen
     INDIV_TEAM_MIN_GAP_MINS: 120,
     EARLY_START_THRESHOLD: 10,
     MAX_RESCHEDULE_ATTEMPTS: 3,
-    MAX_FENCERS: 500,
+    MAX_FENCERS: 336,
     MIN_FENCERS: 2,
     pool_round_duration_table: DEFAULT_POOL_ROUND_DURATION_TABLE,
     // T072: de.ts and capacity.ts read these off the config instead of
