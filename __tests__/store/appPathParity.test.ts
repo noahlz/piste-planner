@@ -14,7 +14,8 @@ import {
   selectDrawnSchedule,
   selectFooterMetrics,
 } from '../../src/store/derived.ts'
-import { BottleneckRule, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
+import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
+import { competitionLabel } from '../../src/lib/competitionLabels.ts'
 import { phaseRequiresVideo, phaseSpans } from '../../src/engine/unseated.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { runAndPinAll, runPreset, runTemplate } from '../helpers/drawnFixtures.ts'
@@ -707,6 +708,27 @@ describe('boot invariants: the drawn board is the scheduler\'s run (017 T5b)', (
         const [source, rule, , , day] = row.id.split(':')
         return source === 'analysis' && FIRST_LAST_RULES.includes(rule) ? [`${rule} day ${day}: ${row.message}`] : []
       })
+    expect(app).toEqual(scheduler)
+  })
+
+  // 018 R3: the app's overrun rows are the scheduler's phase-overruns-day-end
+  // WARNs. The one difference is the message, which names the event by its
+  // label in the app and by its id in the scheduler.
+  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s phase-overruns-day-end rows equal the scheduler\'s WARNs', (_, board) => {
+    board.boot()
+    const { competitions, run } = schedulerRun()
+    const labels = new Map(competitions.map((c) => [c.id, competitionLabel(c)]))
+    const scheduler = run.bottlenecks
+      .filter((b) => b.rule === BottleneckRule.PHASE_OVERRUNS_DAY_END && b.severity === BottleneckSeverity.WARN)
+      .map((b) => ({ rule: b.rule, target: b.competition_id, day: b.day, message: b.message }))
+    const app = selectAllFindings(useStore.getState())
+      .filter((row) => row.id.split(':')[1] === BottleneckRule.PHASE_OVERRUNS_DAY_END)
+      .map((row) => ({
+        rule: row.id.split(':')[1],
+        target: row.target,
+        day: row.day,
+        message: row.message.replace(labels.get(row.target!)!, row.target!),
+      }))
     expect(app).toEqual(scheduler)
   })
 })

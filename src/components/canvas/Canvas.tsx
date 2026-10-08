@@ -110,6 +110,9 @@ const TICK_STEPS_MINUTES: readonly number[] = [15, 30, 60, 120, 180, 360]
  */
 const MIN_TICK_GAP_PX = 72
 
+/** The axis grows to fit a late last phase but stops at 06:00 the next morning (018 T3). */
+const AXIS_LIMIT_MINUTES = 1800
+
 export interface CanvasProps {
   /** The committed drawn model: the grid and the bands both read its `blocks`. */
   schedule: DrawnSchedule
@@ -270,8 +273,16 @@ function tickStepMinutes(pixelsPerMinute: number): number {
  * 09:00 on Thursday sits directly above a block at 09:00 on Friday. A day that
  * starts later than the others is drawn with its own empty lead-in, which is
  * the true statement about it.
+ *
+ * An event's last phase may end past the hard end (018 R1), so when the latest
+ * drawn block ends past the latest hard end the axis runs on to that end
+ * rounded up to the hour, and no further than `AXIS_LIMIT_MINUTES`. A block
+ * that would still run past the limit is drawn past the axis, as before.
  */
-function axisSpan(dayConfigs: DayConfig[]): { startMinutes: number; endMinutes: number } {
+function axisSpan(
+  dayConfigs: DayConfig[],
+  blocks: readonly DrawnBlock[],
+): { startMinutes: number; endMinutes: number } {
   let startMinutes = Number.POSITIVE_INFINITY
   let endMinutes = Number.NEGATIVE_INFINITY
   for (const day of dayConfigs) {
@@ -280,7 +291,12 @@ function axisSpan(dayConfigs: DayConfig[]): { startMinutes: number; endMinutes: 
     if (hardEnd > endMinutes) endMinutes = hardEnd
   }
   if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
-    return { startMinutes: DAY_START_MINS, endMinutes: DAY_HARD_END_MINS }
+    startMinutes = DAY_START_MINS
+    endMinutes = DAY_HARD_END_MINS
+  }
+  const latestEnd = blocks.reduce((latest, block) => Math.max(latest, block.endMinutes), Number.NEGATIVE_INFINITY)
+  if (latestEnd > endMinutes) {
+    endMinutes = Math.max(endMinutes, Math.min(Math.ceil(latestEnd / 60) * 60, AXIS_LIMIT_MINUTES))
   }
   return { startMinutes, endMinutes }
 }
@@ -372,7 +388,7 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
     return () => observer.disconnect()
   }, [daysAvailable])
 
-  const span = axisSpan(dayConfigs)
+  const span = axisSpan(dayConfigs, schedule.blocks)
   const spanMinutes = span.endMinutes - span.startMinutes
 
   const rung = rungAt(zoom.zoomStep)
@@ -589,7 +605,8 @@ export function Canvas({ schedule, findings, findingRows, dayConfigs, zoom, pinn
             >
               Strip
             </div>
-            <div style={{ position: 'relative', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+            {/* Decorative: every block carries its full clock times in its own label. */}
+            <div aria-hidden="true" style={{ position: 'relative', flex: 1, minWidth: 0, overflow: 'hidden' }}>
               {ticks.map((minutes) => (
                 <span
                   key={minutes}

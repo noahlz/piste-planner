@@ -5,7 +5,7 @@ import { initialAnalysis } from '../engine/analysis.ts'
 import { computeRefRequirements, refDemandFromSchedule } from '../engine/refs.ts'
 import { checkPlacementRules } from '../engine/placementRules.ts'
 import type { PlacedEvent } from '../engine/placementRules.ts'
-import { firstLastDayWarnings } from '../engine/concurrentScheduler.ts'
+import { firstLastDayWarnings, lastPhaseOverrunWarnings } from '../engine/concurrentScheduler.ts'
 import { phaseKey } from '../engine/unseated.ts'
 import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS, ValidationMode } from '../engine/types.ts'
 import type {
@@ -271,13 +271,26 @@ function clockAxisConfig(config: TournamentConfig): TournamentConfig {
 }
 
 /**
+ * Turns a competition id into its display label, or into itself when the board
+ * has no such competition, so a stray id still reads as something.
+ */
+function labelResolver(competitionsById: ReadonlyMap<string, Competition>): (id: string) => string {
+  return (id) => {
+    const competition = competitionsById.get(id)
+    return competition ? competitionLabel(competition) : id
+  }
+}
+
+/**
  * Engine findings over the board as drawn (016 spec §1, §3, 017 spec §4): the
  * same-day rule check (`checkPlacementRules`) and the first/last day WARN
- * (`firstLastDayWarnings`, the scheduler's own function), over the drawn
- * model's results. Right after a run those are the scheduler's own results, so
- * the WARN is the scheduler's (017 T5b). Events with no
- * placement or with a day the tournament no longer has are left out of both
- * (review focus 1). The engine's late-day finding is not run here: the store's
+ * (`firstLastDayWarnings`, the scheduler's own function), and the last-phase
+ * overrun WARN (`lastPhaseOverrunWarnings`, 018 R3: one per event whose last
+ * phase ends past its day's hard end, hand-moved events included), over the
+ * drawn model's results. Right after a run those are the scheduler's own
+ * results, so the WARN is the scheduler's (017 T5b). Events with no
+ * placement or with a day the tournament no longer has are left out of every
+ * check (review focus 1). The engine's late-day finding is not run here: the store's
  * `late-finish:day:<n>` row is the app's late-day finding (R2).
  */
 function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentType): Bottleneck[] {
@@ -293,6 +306,8 @@ function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentTy
     placed.push({ competition_id: id, day: result.assigned_day, pool_start: poolStart })
   }
 
+  const labelOfId = labelResolver(new Map(schedule.competitions.map((c) => [c.id, c])))
+
   return [
     ...checkPlacementRules(
       schedule.competitions,
@@ -302,6 +317,7 @@ function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentTy
       competitionLabel,
     ),
     ...firstLastDayWarnings(inRange, clockConfig),
+    ...lastPhaseOverrunWarnings(inRange, clockConfig, labelOfId),
   ]
 }
 
@@ -621,10 +637,7 @@ function computeAllFindings(state: StoreState): Finding[] {
     return competitionsById.has(id) ? id : null
   }
 
-  function labelOf(target: string): string {
-    const competition = competitionsById.get(target)
-    return competition ? competitionLabel(competition) : target
-  }
+  const labelOf = labelResolver(competitionsById)
 
   /**
    * The store day a target sits on, or null when it has no placement or an
@@ -682,7 +695,8 @@ function computeAllFindings(state: StoreState): Finding[] {
   // so the id needs no tie-break: each `initialAnalysis` pass emits at most one
   // finding per day (venue passes), per competition, per competition and day,
   // or per unordered pair; `checkPlacementRules` one per pair and rule, owned
-  // by the older side for the window; `firstLastDayWarnings` one per rule.
+  // by the older side for the window; `firstLastDayWarnings` one per rule;
+  // `lastPhaseOverrunWarnings` one per event.
   //
   // `day` and `where` come from `Bottleneck.day` when it names a day the board
   // has, so a Day 2 venue warning reads "Day 2"; otherwise from the target's

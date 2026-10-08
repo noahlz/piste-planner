@@ -1296,6 +1296,50 @@ describe('selectFindings — first and last day WARN from the placements (016 sp
   })
 })
 
+describe('selectFindings — a last phase past the hard end, one Warning per event (018 R3)', () => {
+  const OVERRUN = 'analysis:phase-overruns-day-end:'
+
+  // The set 018 T2's J1 measured on B4 (the scheduler's phase-overruns-day-end
+  // WARNs from `scheduleAll`, also pinned by appPathParity): the three events
+  // whose last phase ends past 22:00, by day (index) and label.
+  const B4_OVERRUNS = [
+    { id: 'CDT-W-FOIL-IND', day: 1, label: "Cadet Women's Foil Individual", finish: '23:10' },
+    { id: 'CDT-W-SABRE-IND', day: 1, label: "Cadet Women's Saber Individual", finish: '23:15' },
+    { id: 'Y14-W-EPEE-IND', day: 2, label: "Y14 Women's Epee Individual", finish: '23:30' },
+  ]
+
+  it('gives B4 one dismissable Warning per event ending past 22:00, naming its finish', () => {
+    runPreset('B4')
+
+    const rows = analysisRows(OVERRUN)
+
+    expect(rows.map((r) => [r.id, r.severity, r.day, r.target, r.subjects, r.dismissable])).toEqual(
+      B4_OVERRUNS.map(({ id, day }) => [`${OVERRUN}${id}:${id}:${day}`, 'Warning', day, id, [id], true]),
+    )
+    B4_OVERRUNS.forEach(({ label, finish, day }, i) => {
+      expect(rows[i].message).toContain(`${label} ends at ${finish} on Day ${day + 1}`)
+    })
+  })
+
+  it('gives a hand move that pushes the last phase past 22:00 the row, and clears it on restoring the start', () => {
+    runPreset('B1')
+    const id = 'D1-M-EPEE-IND'
+    const start = useStore.getState().placements[id].start_time
+    expect(analysisRows(OVERRUN), 'premise: a fresh B1 run ends every event by 22:00').toEqual([])
+
+    // Measured: from 14:00 this event's last phase ends at 23:00.
+    const LATE_START = 840 // 14:00
+    useStore.getState().updatePlacement(id, { start_time: LATE_START })
+    const rows = analysisRows(OVERRUN)
+    expect(rows.map((r) => [r.target, r.severity, r.dismissable])).toEqual([[id, 'Warning', true]])
+    const [row] = rows
+    expect(row.message).toContain("Div 1 Men's Epee Individual ends at 23:00 on Day 1")
+
+    useStore.getState().updatePlacement(id, { start_time: start })
+    expect(analysisRows(OVERRUN)).toEqual([])
+  })
+})
+
 describe('selectFindings — a bottleneck row id survives its sibling disappearing (016 spec §2)', () => {
   it('keeps the Day 3 pools row at the same id when the Day 2 one goes away', () => {
     useStore.setState(useStore.getInitialState(), true)
