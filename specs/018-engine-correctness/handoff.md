@@ -129,7 +129,7 @@ What each task does now:
 | Templates (B1 settings) | NAC Vet/Div1/Junior 58/8 → 60/6 (JR-M-EPEE-TEAM ends 23:45, JR-M-FOIL-TEAM 23:50), the nine others unchanged | `31ce0c3017` |
 | Overrun rows, fresh boards | B4 3, B6 7, the others none, equal to the scheduler's WARNs on B1–B8 and the 10 templates | `9533ec187c` |
 | Unsizeable counts | 0, 1, 1.5, NaN, 1e999, 337, 100000 refused at load and clean in the engine. 100000 is one per-event ERROR (23/24 placed) instead of an empty board, and Suggest answers in 1 ms instead of 33 s | `05654fca6d`, T4 judge 2 |
-| Live smoke | **pass**, two consecutive full passes with 0 console errors after T1, T3 and T4. T4's pair is on the final code head | T4: `a6eba2385b`'s body. T1 and T3: orchestrator observations in no commit (scratchpad `smoke1.log`, `smoke2.log`, `run1.log`, `run2.log`). No commit body or evidence file records a smoke run after T2 |
+| Live smoke | **pass**, two consecutive full passes with 0 console errors after T1, T2, T3 and T4. T4's pair is on the final code head | T4: `a6eba2385b`'s body. T1, T2 and T3: orchestrator observations in no commit (scratchpad `smoke1.log`, `smoke2.log`, `run1.log`, `run2.log`, and for T2 the smoke agent's report in the session's `finish-018-T2` workflow journal, which no commit carries) |
 
 Smoke command: `SMOKE_BASE=http://localhost:5188/piste-planner/ timeout 240
 node scripts/smoke.mjs`, after `pnpm -C <wt> dev --port 5188 --strictPort`.
