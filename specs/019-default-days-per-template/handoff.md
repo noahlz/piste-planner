@@ -408,6 +408,21 @@ changes `__tests__/helpers/scenarios.ts` and `__tests__/store/factoryParity.test
 and a change to `MAX_FENCERS`, `MIN_FENCERS` or `DAY_HARD_END_MINS` changes the
 factory's copy in the same commit.
 
+## Merge
+
+Checked 2026-10-08 with `git merge-tree --write-tree main 019-default-days-per-template`.
+
+- Branch head checked: 356877d787e5b2771af0cda6cb98849485ac3772 (the branch tip before this note).
+- Main: 8de0d5a12bd41936935f07e5b57dd2349ebedbed, which has not moved since the branch was cut.
+- Merge tree: a9b85e54e2e84befeff5b5e21f28e6da8d2d1964, identical to the branch's own tree.
+- Conflicts: none.
+- Because the trees are identical, the checks ran in the feature worktree at the branch head (clean status), with `tmp/**` excluded from the suite and lint.
+- Full suite: 93 files, 3133 tests, all passing.
+- `tsc -b`: clean. Lint: clean.
+- Drift ledger snapshot SHA-256: 32a4e0afb45abfbf8239f7bdbc15dda9eb1487c959893442b6029a6d0998b260, byte-identical to the expected value.
+
+The user merges with merge-with-costs. If main moves first, the check is re-run there.
+
 ## Resume prompt (after the merge)
 
 ```text
