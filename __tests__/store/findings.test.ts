@@ -4,15 +4,24 @@ import type { StoreState } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { makePlacement } from '../helpers/factories.ts'
-import { assignStripLanes } from '../../src/layout/lanes.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
+import { phaseSpans } from '../../src/engine/unseated.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
-import { DeMode, Phase } from '../../src/engine/types.ts'
-import { selectDerivedSchedule, selectDerivedFindings } from '../../src/store/derived.ts'
+import { DAY_AXIS_SPACING_MINS, DeMode, Phase, Weapon } from '../../src/engine/types.ts'
+import {
+  RunState,
+  selectDerivedSchedule,
+  selectDerivedFindings,
+  selectDrawnSchedule,
+  selectPlacementCounts,
+} from '../../src/store/derived.ts'
 import * as derivedModule from '../../src/store/derived.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
+import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
+import { UNPLACED_WORDING, moveDay, pinAll, runAndMoveHeadline, runAndPinAll, runPreset } from '../helpers/drawnFixtures.ts'
 import { competitionLabel } from '../../src/lib/competitionLabels.ts'
 import { formatClock } from '../../src/lib/time.ts'
-import { phaseDisplay } from '../../src/lib/placementLabels.ts'
 
 /**
  * 013 T030 (phase-5 contract, contracts/phase5-contract.md §1) — the unified
@@ -321,50 +330,230 @@ describe('selectFindings — INFO bottleneck maps to a Note row (contract §1.2,
   })
 })
 
-describe('selectFindings — Unplaced rows from lane overflow (contract §1.3)', () => {
-  it('emits one Unplaced row per overflowing block, naming the strip count from the block itself', () => {
+/**
+ * 017 T5a (spec §4): the Unplaced rows read the drawn model, one row per event
+ * it counts as unplaced, never the lane packer's overflow. Before T5a these
+ * rows came one per overflowing block of `assignStripLanes`, with ids
+ * `unplaced:<id>:<phase>`; the run-less overflow fixture's
+ * `unplaced:JR-M-FOIL-IND:DE` was the case this describe used to pin.
+ */
+describe('selectFindings — Unplaced rows read the drawn model (017 T5a, spec §4)', () => {
+  const unplacedRows = (): Finding[] => selectFindings(useStore.getState()).filter((r) => r.severity === 'Unplaced')
+
+  it('gives the headline move one re-run row naming the event on its new day', () => {
+    const { id, day } = runAndMoveHeadline('B1')
+
+    expect(unplacedRows()).toEqual([{
+      id: `unplaced:${id}:room`,
+      severity: 'Unplaced',
+      where: `Day ${day + 1} · ${labelOfId(id)}`,
+      day,
+      message: UNPLACED_WORDING.RERUN,
+      target: id,
+      subjects: [id],
+      dismissable: true,
+    }])
+  })
+
+  it('clears the headline move\'s row once Auto-assign runs again', () => {
+    runAndMoveHeadline('B1')
+    expect(unplacedRows(), 'premise: the move left a row').toHaveLength(1)
+
+    runScheduleAll()
+
+    expect(unplacedRows()).toEqual([])
+  })
+
+  /** Every drawn block of the model as one comparable line, sorted. */
+  function geometry(blocks: { competitionId: string; phase: string; day: number; startMinutes: number; endMinutes: number; strips: readonly number[] }[]): string[] {
+    return blocks
+      .map((b) => `${b.competitionId}|${b.phase}|d${b.day}|${b.startMinutes}-${b.endMinutes}|${b.strips.join(',')}`)
+      .sort()
+  }
+
+  it.each(SCENARIO_IDS)('%s: Move day of every event to every other day moves no kept event and gives an unseated mover one re-run row', (scenario) => {
+    runPreset(scenario)
+    const saved = useStore.getState().placements
+    const days = useStore.getState().days_available
+    const before = geometry(selectDrawnSchedule(useStore.getState()).blocks)
+
+    let unseatedMoves = 0
+    for (const id of Object.keys(saved).sort()) {
+      for (let day = 0; day < days; day++) {
+        if (day === saved[id].day) continue
+        useStore.setState({ placements: saved })
+        moveDay(id, day)
+        const model = selectDrawnSchedule(useStore.getState())
+        const move = `${id} → day ${day + 1}`
+        expect(model.runState, `${move}: premise: a placement edit keeps the board fresh`).toBe('fresh')
+
+        const others = model.blocks.filter((b) => b.competitionId !== id)
+        expect(geometry(others), `${move}: kept events hold their times and strips`)
+          .toEqual(before.filter((line) => !line.startsWith(`${id}|`)))
+
+        // The oracle reads the mover's drawn strips, not `unplacedIds`, which the
+        // rows are built from. A zero-strip phase is never a block, so an empty
+        // strip set is an unseated phase.
+        const unseated = model.blocks.some((b) => b.competitionId === id && b.strips.length === 0)
+        if (unseated) unseatedMoves++
+        expect(
+          unplacedRows().map((r) => [r.id, r.message]),
+          `${move}: ${unseated ? 'one re-run row' : 'no row'}`,
+        ).toEqual(unseated ? [[`unplaced:${id}:room`, UNPLACED_WORDING.RERUN]] : [])
+      }
+    }
+    expect(unseatedMoves, 'premise: some moves leave the mover unseated').toBeGreaterThan(0)
+  })
+
+  it.each(SCENARIO_IDS)('%s: a pin-all re-run gives one pin-wording row per event with an unseated phase', (scenario) => {
+    runAndPinAll(scenario)
+    const model = selectDrawnSchedule(useStore.getState())
+    const unseated = [...model.unplacedIds].sort()
+    expect(unseated.length, 'premise: the re-run leaves pinned phases unseated').toBeGreaterThan(0)
+    for (const id of unseated) expect(model.events[id].source, `${id} stays kept`).toBe('kept')
+
+    const rows = unplacedRows().map((r) => [r.id, r.message]).sort()
+    expect(rows).toEqual(unseated.map((id) => [`unplaced:${id}:room`, UNPLACED_WORDING.PIN]))
+  })
+
+  /**
+   * P4 (a) and (b): while stale the board is not a schedule, so its unseated
+   * phases raise no row. The out-of-range row stays, the events with no
+   * placement still count in the footer, and one non-dismissable stale row
+   * stands where the per-event rows were.
+   */
+  it('shows no unseated row after a settings edit, keeps the out-of-range row and adds the stale row', () => {
+    runAndPinAll('B4')
+    expect(unplacedRows().length, 'premise: the fresh board has unseated rows').toBeGreaterThan(0)
+    const stranded = Object.keys(useStore.getState().placements).sort()[0]
+    useStore.getState().updatePlacement(stranded, { day: 9 })
+
+    // A setting B4's foil events read. B4 is a youth event set whose DE mode
+    // already defaults to single stage, so a DE-mode override would change nothing.
+    useStore.getState().setPoolRoundDuration(Weapon.FOIL, useStore.getState().pool_round_duration_table[Weapon.FOIL] + 15)
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: the settings edit makes the board stale').toBe('stale')
+    expect(model.blocks.some((b) => b.unseated), 'premise: the stale board has unseated phases').toBe(true)
+
+    // Source order, unsorted: the stale row stands where the per-event rows
+    // were, ahead of the out-of-range rows (P4 (b)).
+    expect(unplacedRows().map((r) => r.id)).toEqual(['stale:run', `unplaced:${stranded}:day`])
+    expect(unplacedRows().find((r) => r.id === 'stale:run')).toEqual({
+      id: 'stale:run',
+      severity: 'Unplaced',
+      where: 'Board',
+      day: null,
+      message: UNPLACED_WORDING.STALE,
+      target: null,
+      subjects: [],
+      dismissable: false,
+    })
+
+    const selected = Object.keys(state.selectedCompetitions)
+    const inRange = selected.filter((id) => {
+      const placement = state.placements[id]
+      return placement !== undefined && placement.day >= 0 && placement.day < state.days_available
+    })
+    expect(selected.length - inRange.length, 'premise: one stranded event plus events with no placement').toBeGreaterThan(1)
+    const { placed, unplaced } = selectPlacementCounts(state)
+    expect({ placed, unplaced }).toEqual({ placed: inRange.length, unplaced: selected.length - inRange.length })
+  })
+
+  /**
+   * The usual stale board: a run, then an input edit after which every phase
+   * still finds strips. B5 with 20 more strips is one (measured: B1-B8 under a
+   * DE-mode override, a pool-duration change or one more video strip all leave
+   * a phase unseated once the whole board is derived).
+   */
+  it('shows the stale row on a stale board where every phase is seated', () => {
+    runPreset('B5')
+    useStore.getState().setStrips(useStore.getState().strips_total + 20)
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: the strip edit makes the board stale').toBe('stale')
+    expect(model.blocks.every((b) => !b.unseated), 'premise: every phase is seated').toBe(true)
+
+    expect(unplacedRows().map((r) => [r.id, r.message])).toEqual([['stale:run', UNPLACED_WORDING.STALE]])
+    expect(selectPlacementCounts(state)).toEqual({ placed: 12, unplaced: 0, pinned: 0 })
+  })
+
+  /**
+   * Review focus 6: a pin whose strip count is above the engine's cap keeps
+   * its own key (keptRun), so the drawn model still finds it where kept. If
+   * the comparison used the engine's capped strip count, it would turn derived
+   * and get the re-run wording.
+   */
+  it('keeps a pin above the engine\'s strip cap and gives it the pin wording when unseated', () => {
+    // keptRun's pinAllWithOversizedPin order: the first id after one run.
+    runPreset('B1')
+    pinAll()
+    const [oversizedId] = Object.keys(useStore.getState().placements)
+    useStore.getState().updatePlacement(oversizedId, { strip_count: 40 })
+    runScheduleAll()
+    const model = selectDrawnSchedule(useStore.getState())
+    expect(model.runState, 'premise: the board is fresh after the run').toBe('fresh')
+    expect(model.events[oversizedId].result.pool_strip_count, 'premise: the engine capped the pool strips below the pin')
+      .toBeLessThan(40)
+    expect(model.unplacedIds.has(oversizedId), 'premise: the oversized pin is unseated').toBe(true)
+
+    expect(model.events[oversizedId].source).toBe('kept')
+    expect(unplacedRows().filter((r) => r.target === oversizedId).map((r) => [r.id, r.message]))
+      .toEqual([[`unplaced:${oversizedId}:room`, UNPLACED_WORDING.PIN]])
+  })
+
+  /**
+   * Spec §5: the pin toggle changes nothing, so the event stays kept and keeps
+   * P3's wording though it is no longer pinned. P3's text assumes a live pin,
+   * so the wording for this case is an open question for the owner. This
+   * pins the spec's current answer until they rule.
+   */
+  it('keeps the pin wording for a kept unseated event unpinned after the run (owner ruling pending)', () => {
+    runAndPinAll('B4')
+    const [id] = [...selectDrawnSchedule(useStore.getState()).unplacedIds].sort()
+    expect(id, 'premise: the pin-all re-run leaves an event unseated').toBeDefined()
+
+    useStore.getState().setPinned(id, false)
+    const model = selectDrawnSchedule(useStore.getState())
+    expect(model.runState, 'premise: the pin toggle keeps the board fresh').toBe('fresh')
+    expect(model.events[id].source, 'premise: the pin toggle keeps the entry').toBe('kept')
+
+    expect(unplacedRows().filter((r) => r.target === id).map((r) => [r.id, r.message]))
+      .toEqual([[`unplaced:${id}:room`, UNPLACED_WORDING.PIN]])
+  })
+
+  it('shows no unseated row on a board that was never run, only the stale row', () => {
     threeEventsOverlappingOnDayZero()
     const state = useStore.getState()
-    const schedule = selectDerivedSchedule(state)
-    const blocks = assignStripLanes(schedule.events, state.strips_total)
-    const overflow = blocks.filter((b) => b.overflow)
-    expect(overflow).toHaveLength(1)
-    const block = overflow[0]
-    expect(block.competitionId).toBe('JR-M-FOIL-IND')
+    expect(selectDrawnSchedule(state).blocks.some((b) => b.unseated), 'premise: an unseated phase is drawn').toBe(true)
 
-    const rows = selectFindings(state)
-    const unplacedRows = rows.filter((r) => r.severity === 'Unplaced')
-    expect(unplacedRows).toHaveLength(1)
-
-    const row = rows.find((r) => r.id === `unplaced:${block.competitionId}:${block.phase}`)
-    expect(row).toBeDefined()
-    expect(row?.id).toBe('unplaced:JR-M-FOIL-IND:DE')
-    expect(row?.target).toBe(block.competitionId)
-    expect(row?.day).toBe(block.day)
-    expect(row?.where).toBe(`Day ${block.day + 1} · ${phaseDisplay(block.phase)}`)
-    expect(row?.message).toContain(`${block.stripCount} strip`)
+    expect(unplacedRows().map((r) => r.id)).toEqual(['stale:run'])
   })
 })
 
 describe('selectFindings — stranded event Unplaced row (contract §1.3, FR-060)', () => {
+  // On a run, so the board stays fresh and per-event rows could show: the
+  // last assertion then means the stranded event gets no room row.
   it('flags an event hand-moved outside days_available, and draws no overflow-style row for it', () => {
-    threeEventsOverlappingOnDayZero()
-    useStore.getState().updatePlacement('JR-W-EPEE-IND', { day: 5 })
+    runPreset('B1')
+    const id = Object.keys(useStore.getState().placements).sort()[0]
+    useStore.getState().updatePlacement(id, { day: 9 })
     const state = useStore.getState()
+    expect(selectDrawnSchedule(state).runState, 'premise: the board is fresh').toBe('fresh')
 
     const schedule = selectDerivedSchedule(state)
-    expect(schedule.events['JR-W-EPEE-IND']?.day_out_of_range).toBe(true)
+    expect(schedule.events[id]?.day_out_of_range).toBe(true)
 
     const rows = selectFindings(state)
-    const row = rows.find((r) => r.id === 'unplaced:JR-W-EPEE-IND:day')
+    const row = rows.find((r) => r.id === `unplaced:${id}:day`)
     expect(row).toBeDefined()
     expect(row?.severity).toBe('Unplaced')
-    expect(row?.target).toBe('JR-W-EPEE-IND')
+    expect(row?.target).toBe(id)
     expect(row?.day).toBeNull()
     expect(row?.where).toContain('out of range')
 
     expect(
-      rows.some((r) => r.id.startsWith('unplaced:JR-W-EPEE-IND:') && r.id !== 'unplaced:JR-W-EPEE-IND:day'),
+      rows.some((r) => r.id.startsWith(`unplaced:${id}:`) && r.id !== `unplaced:${id}:day`),
     ).toBe(false)
   })
 })
@@ -377,9 +566,8 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
     useStore.getState().updateDayConfig(0, { day_end_time: 760 })
     const state = useStore.getState()
 
-    const schedule = selectDerivedSchedule(state)
-    const blocks = assignStripLanes(schedule.events, state.strips_total)
-    const day0Blocks = blocks.filter((b) => b.day === 0)
+    const schedule = selectDrawnSchedule(state)
+    const day0Blocks = schedule.blocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
     const close = state.dayConfigs[0].day_end_time
     const targetBlock = day0Blocks.find((b) => b.endMinutes === finish)
@@ -403,7 +591,7 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
     useStore.getState().setDeModeOverride(DeMode.STAGED)
     useStore.getState().setVideoStrips(4)
     const preState = useStore.getState()
-    const preBlocks = assignStripLanes(selectDerivedSchedule(preState).events, preState.strips_total)
+    const preBlocks = selectDrawnSchedule(preState).blocks
     const day0Blocks = preBlocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
     const last = day0Blocks.filter((b) => b.endMinutes === finish)
@@ -421,8 +609,7 @@ describe('selectFindings — late finish rows, margin and boundary (contract §1
   it('raises no row at the boundary — finish exactly window-minutes before close is not late (strict >)', () => {
     threeEventsOverlappingOnDayZero()
     const preState = useStore.getState()
-    const preSchedule = selectDerivedSchedule(preState)
-    const preBlocks = assignStripLanes(preSchedule.events, preState.strips_total)
+    const preBlocks = selectDrawnSchedule(preState).blocks
     const finish = Math.max(...preBlocks.filter((b) => b.day === 0).map((b) => b.endMinutes))
 
     useStore.getState().updateDayConfig(0, { day_end_time: finish + lateFinishWindowMins() })
@@ -437,22 +624,22 @@ describe('selectFindings — late finish tie-break picks the lower competition i
   it('names JR-M-EPEE-IND over JR-W-EPEE-IND when both blocks reach the same finish', () => {
     tiedEpeeEventsOnDayZero()
     const preState = useStore.getState()
-    const preSchedule = selectDerivedSchedule(preState)
-    const preBlocks = assignStripLanes(preSchedule.events, preState.strips_total)
+    const preBlocks = selectDrawnSchedule(preState).blocks
     const day0Blocks = preBlocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
 
     // Confirm the tie actually exists before trusting the target assertion
     // below — both events' blocks must reach the measured finish, and
-    // neither may have overflowed (an overflowing block is drawn at strip 0
-    // regardless of its real timing, which would make this fixture prove
-    // nothing about the tie-break itself).
+    // both must be seated, so the tie is between two drawn phases and not
+    // between a phase and one the board could not find strips for (017 T5b
+    // moved this from the lane packer's overflow to the drawn model's
+    // `unseated`).
     const mBlock = day0Blocks.find((b) => b.competitionId === 'JR-M-EPEE-IND' && b.endMinutes === finish)
     const wBlock = day0Blocks.find((b) => b.competitionId === 'JR-W-EPEE-IND' && b.endMinutes === finish)
     expect(mBlock, 'expected JR-M-EPEE-IND to reach the measured finish').toBeDefined()
     expect(wBlock, 'expected JR-W-EPEE-IND to reach the measured finish too — the tie this case pins').toBeDefined()
-    expect(mBlock?.overflow).toBe(false)
-    expect(wBlock?.overflow).toBe(false)
+    expect(mBlock?.unseated).toBe(false)
+    expect(wBlock?.unseated).toBe(false)
 
     useStore.getState().updateDayConfig(0, { day_end_time: finish + 20 })
     const state = useStore.getState()
@@ -464,8 +651,11 @@ describe('selectFindings — late finish tie-break picks the lower competition i
   })
 })
 
-describe('selectFindings — late finish overrun via a hand move, Blocking count unchanged (FR-025)', () => {
-  it('reports minutes past close after a move pushes the finish beyond it, without adding a Blocking row', () => {
+// The board here was never run, so it is stale and the start-time edit is one
+// more stale edit, not a hand move on a run (017 T5b review). The fresh-board
+// hand move is pinned in 'late finish reads a hand-moved event' below.
+describe('selectFindings — late finish overrun after a start-time edit, Blocking count unchanged (FR-025)', () => {
+  it('reports minutes past close after an edit pushes the finish beyond it, without adding a Blocking row', () => {
     threeEventsOverlappingOnDayZero()
     // A real Blocking witness (013 T032 review follow-up): STAGED de mode
     // plus the fixture's default video_strips_total of 0 trips
@@ -484,8 +674,7 @@ describe('selectFindings — late finish overrun via a hand move, Blocking count
     useStore.getState().updatePlacement('JR-M-EPEE-IND', { start_time: 600 })
     const state = useStore.getState()
 
-    const schedule = selectDerivedSchedule(state)
-    const blocks = assignStripLanes(schedule.events, state.strips_total)
+    const blocks = selectDrawnSchedule(state).blocks
     expect(blocks.length, 'expected the move to leave the lanes populated, not emptied').toBeGreaterThan(0)
     const day0Blocks = blocks.filter((b) => b.day === 0)
     const finish = Math.max(...day0Blocks.map((b) => b.endMinutes))
@@ -534,8 +723,8 @@ function twoEpeeEventsFinishingAt(mFinish: number, wFinish: number): void {
   // block ends where the fixture put it.
   const state = useStore.getState()
   expect(state.dayConfigs[0].day_end_time).toBe(1140)
-  const blocks = assignStripLanes(selectDerivedSchedule(state).events, state.strips_total)
-  expect(blocks.some((b) => b.overflow)).toBe(false)
+  const blocks = selectDrawnSchedule(state).blocks
+  expect(blocks.some((b) => b.unseated)).toBe(false)
   expect(Math.max(...blocks.map((b) => b.endMinutes))).toBe(Math.max(mFinish, wFinish))
 }
 
@@ -579,6 +768,105 @@ describe('selectFindings — late finish against the 19:00 target (024 D7)', () 
   })
 })
 
+/**
+ * 017 T5b (spec §4): the late-finish rows read the drawn model, so right after
+ * a run they follow the scheduler's own DE ends, waits included, not
+ * `deriveEventSchedule`'s DEs started straight after the pools. The expected
+ * rows are built from a second `scheduleAll` over the same inputs (the boot
+ * run has no pins): per day, the latest phase end of the scheduler's results
+ * on the clock axis, the lowest id among the events reaching it, and the
+ * 45-minute lead before the day's target.
+ *
+ * Measured before T5b (2026-10-07), the late-finish row counts at boot read
+ * 1 / 2 / 2 / 3 / 0 / 2 / 3 / 1 on B1–B8, off the lane packer at derived
+ * times. The scheduler's DE ends give 1 / 3 / 4 / 3 / 0 / 3 / 3 / 2.
+ */
+describe('selectFindings — late finish follows the kept DE ends (017 T5b)', () => {
+  it.each(SCENARIO_IDS)('%s: one row per day whose scheduler finish is late, naming its event', (id) => {
+    runPreset(id)
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    const { schedule } = scheduleAll(competitions, config)
+
+    const latest = new Map<number, { finish: number; culprit: string }>()
+    for (const eventId of Object.keys(schedule).sort()) {
+      const result = schedule[eventId]
+      const shift = result.assigned_day * DAY_AXIS_SPACING_MINS
+      for (const span of phaseSpans(result)) {
+        const end = span.end - shift
+        const best = latest.get(result.assigned_day)
+        if (best === undefined || end > best.finish) latest.set(result.assigned_day, { finish: end, culprit: eventId })
+      }
+    }
+    const expected = [...latest.entries()]
+      .sort(([a], [b]) => a - b)
+      .filter(([day, { finish }]) => finish > state.dayConfigs[day].day_end_time - lateFinishWindowMins())
+      .map(([day, { finish, culprit }]) => ({ id: `late-finish:day:${day}`, target: culprit, finishesAt: formatClock(finish) }))
+
+    const rows = selectFindings(state)
+      .filter((r) => r.id.startsWith('late-finish:'))
+      .map((r) => ({ id: r.id, target: r.target, finishesAt: /finishes at (.+?),/.exec(r.message)?.[1] }))
+    expect(rows).toEqual(expected)
+  })
+})
+
+/**
+ * 017 T5b review: a fresh board with a hand-moved event (spec §5, Move day).
+ * The mover is derived at its new day and every other event keeps its run, and
+ * the day's late-finish row reads both. Measured 2026-10-07.
+ */
+describe('selectFindings — late finish reads a hand-moved event on a fresh board (017 T5b)', () => {
+  function lateRow(day: number): Finding | undefined {
+    return selectFindings(useStore.getState()).find((r) => r.id === `late-finish:day:${day}`)
+  }
+
+  /** Every block on `day` other than `id`'s, and its latest end. */
+  function othersLatest(id: string, day: number): number {
+    const blocks = selectDrawnSchedule(useStore.getState()).blocks
+    return Math.max(...blocks.filter((b) => b.day === day && b.competitionId !== id).map((b) => b.endMinutes))
+  }
+
+  /**
+   * B1's headline move puts D1-M-EPEE-IND on day 1. Its derived
+   * DE_ROUND_OF_16 ends at 1100 (18:20), inside the 45-minute lead before the
+   * 19:00 target, while the kept events on day 1 end by 1060, outside it. So
+   * only the mover makes day 1 late.
+   */
+  it('names the mover when only its derived end makes the day late', () => {
+    const { id, day } = runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    expect(selectDrawnSchedule(state).runState, 'premise: Move day keeps the board fresh').toBe(RunState.FRESH)
+    expect(selectDrawnSchedule(state).events[id].source, 'premise: the mover is derived').toBe('derived')
+    const kept = othersLatest(id, day)
+    expect(kept, 'premise: the kept events on the day end at 1060').toBe(1060)
+    expect(kept, 'premise: 1060 is outside the lead, so not late').toBeLessThanOrEqual(state.dayConfigs[day].day_end_time - lateFinishWindowMins())
+
+    const row = lateRow(day)
+    expect(row?.target).toBe('D1-M-EPEE-IND')
+    expect(row?.message).toContain(`finishes at ${formatClock(1100)}, 40 minutes before the day's target`)
+  })
+
+  /**
+   * An unseated block still ends where it is drawn, so it still counts toward
+   * the day's finish (derived.ts's late-finish comment). B2 after a run, with
+   * CDT-M-EPEE-TEAM moved to day 0 at 12:00: its DE finds no free strips and
+   * ends at 1205 (20:05), above the kept events' 1185 on that day.
+   */
+  it('counts an unseated block\'s end toward the day\'s finish', () => {
+    runPreset('B2')
+    useStore.getState().updatePlacement('CDT-M-EPEE-TEAM', { day: 0, start_time: 720 })
+    const drawn = selectDrawnSchedule(useStore.getState())
+    expect(drawn.runState, 'premise: a hand move keeps the board fresh').toBe(RunState.FRESH)
+    const last = drawn.blocks.filter((b) => b.competitionId === 'CDT-M-EPEE-TEAM' && b.endMinutes === 1205)
+    expect(last.map((b) => [b.phase, b.unseated]), 'premise: the mover\'s DE is unseated and ends at 1205').toEqual([[Phase.DE, true]])
+    expect(othersLatest('CDT-M-EPEE-TEAM', 0), 'premise: the kept events on day 0 end earlier').toBe(1185)
+
+    const row = lateRow(0)
+    expect(row?.target).toBe('CDT-M-EPEE-TEAM')
+    expect(row?.message).toContain(`finishes at ${formatClock(1205)}, 65 minutes past the day's target`)
+  })
+})
+
 describe('selectFindings — no referee comparison (FR-026)', () => {
   it('never mentions referees, on B1 after a full schedule run', () => {
     applyPreset('B1')
@@ -591,11 +879,13 @@ describe('selectFindings — no referee comparison (FR-026)', () => {
 })
 
 describe('selectFindings — dismissal filtering (contract §2.2)', () => {
+  // 017 T5a: the row comes from the headline move's unseated derived event,
+  // not from the run-less overflow fixture, which now raises only the stale row.
   it('filters a dismissed Unplaced row from the list but records the dismissal', () => {
-    threeEventsOverlappingOnDayZero()
+    const { id } = runAndMoveHeadline('B1')
     const before = selectFindings(useStore.getState())
     const unplacedRow = before.find((r) => r.severity === 'Unplaced')
-    expect(unplacedRow, 'expected an Unplaced row from the overflow fixture').toBeDefined()
+    expect(unplacedRow?.id, 'expected the headline move\'s Unplaced row').toBe(`unplaced:${id}:room`)
 
     useStore.getState().dismissFinding(unplacedRow!.id)
 
@@ -714,14 +1004,14 @@ describe('selectFindings — a pinned collision survives Auto-assign, naming the
 
     const rows = selectFindings(state)
     const unplacedRows = rows.filter((r) => r.severity === 'Unplaced')
-    // The packer's own tie order — day, then start minute, then competition id
-    // (lanes.ts:84-89) — gives the lower id (JR-M-EPEE-IND) the strip run first,
-    // so the greater id (JR-W-EPEE-IND) is the one left over.
-    expect(unplacedRows).toHaveLength(1)
-    expect(unplacedRows[0]?.target).toBe('JR-W-EPEE-IND')
-    expect(
-      rows.some((r) => r.severity === 'Unplaced' && r.target === 'JR-M-EPEE-IND'),
-    ).toBe(false)
+    // 017 T5a: the row reads the kept run. The engine pre-claims pins in
+    // (day, start, id) order (`compareIds`), so the lower id (JR-M-EPEE-IND)
+    // claims its pool strips first and the greater id (JR-W-EPEE-IND) is the
+    // pin it could not seat. It stays kept, so its row carries the pin
+    // wording (P3), not the re-run wording.
+    expect(unplacedRows.map((r) => [r.id, r.target, r.message])).toEqual([
+      ['unplaced:JR-W-EPEE-IND:room', 'JR-W-EPEE-IND', UNPLACED_WORDING.PIN],
+    ])
   })
 })
 
@@ -1026,18 +1316,30 @@ describe('selectFindings — a bottleneck row id survives its sibling disappeari
 })
 
 describe('selectFindings — dismissable by severity and rule (016 spec §2, R1)', () => {
-  it('is true for Warning and Unplaced rows and false for Blocking and Note rows', () => {
+  it('is true for Warning and per-event Unplaced rows and false for Blocking, Note and the stale row', () => {
     threeEventsOverlappingOnDayZero()
     useStore.getState().updateDayConfig(0, { day_end_time: 760 }) // a late-finish Warning
     const rows = selectFindings(useStore.getState())
     const bySeverity = (severity: string) => rows.filter((r) => r.severity === severity)
-    expect(bySeverity('Unplaced').length).toBeGreaterThan(0)
     expect(bySeverity('Warning').length).toBeGreaterThan(0)
     expect(bySeverity('Note').length).toBeGreaterThan(0)
-    for (const row of [...bySeverity('Unplaced'), ...bySeverity('Warning')]) {
-      expect(row.dismissable, row.id).toBe(true)
-    }
+    for (const row of bySeverity('Warning')) expect(row.dismissable, row.id).toBe(true)
     for (const row of bySeverity('Note')) expect(row.dismissable, row.id).toBe(false)
+    // The board was never run, so its one Unplaced row is the stale row (P4 (b)).
+    expect(bySeverity('Unplaced').map((r) => [r.id, r.dismissable])).toEqual([['stale:run', false]])
+
+    // The per-event rows: the headline move's re-run row, and a stranded event's
+    // row. The stranded event leaves another day, so the strips it frees cannot
+    // seat the mover.
+    const { id, day } = runAndMoveHeadline('B1')
+    const { placements } = useStore.getState()
+    const stranded = Object.keys(placements).sort().find((other) => other !== id && placements[other].day !== day)!
+    useStore.getState().updatePlacement(stranded, { day: 9 })
+    const perEvent = selectFindings(useStore.getState()).filter((r) => r.severity === 'Unplaced')
+    expect(perEvent.map((r) => [r.id, r.dismissable]).sort()).toEqual([
+      [`unplaced:${id}:room`, true],
+      [`unplaced:${stranded}:day`, true],
+    ])
 
     setupB5()
     useStore.getState().setStrips(0)

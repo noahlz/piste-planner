@@ -1,6 +1,6 @@
 import { useStore } from '../../store/store.ts'
-import { selectDerivedSchedule } from '../../store/derived.ts'
-import type { DerivedSchedule } from '../../store/derived.ts'
+import { selectDrawnSchedule } from '../../store/derived.ts'
+import type { DrawnSchedule } from '../../store/derived.ts'
 import type { DerivedEventSchedule } from '../../engine/derive.ts'
 import { formatMinutes } from '../../lib/time.ts'
 import { competitionLabel } from '../../lib/competitionLabels.ts'
@@ -65,9 +65,18 @@ function byPoolStartThenId(a: DerivedEventSchedule, b: DerivedEventSchedule): nu
  * or the dimmed-invalid rule holds the center behind the live store
  * (S2-contract.md §Center view). The hook still runs unconditionally — hook
  * rules — so mounted with no props this behaves exactly as it always has.
+ * Either way the rows are the drawn model's events (017 spec §6): right after
+ * a run each is the run's own result, its DE waits included, so the table and
+ * the canvas show the schedule the engine built. The prop takes only the two
+ * fields the table reads, but from the drawn model: a plain `DerivedSchedule`
+ * does not compile here (its events carry no `keptStrips` or `source`), so no
+ * caller can hand the table derived times while the canvas draws kept ones
+ * (FR-023, `viewEquivalence.test.tsx`).
  */
-export function ScheduleOutput({ schedule: committed }: { schedule?: DerivedSchedule } = {}) {
-  const live = useStore(selectDerivedSchedule)
+export function ScheduleOutput({
+  schedule: committed,
+}: { schedule?: Pick<DrawnSchedule, 'events' | 'competitions'> } = {}) {
+  const live = useStore(selectDrawnSchedule)
   const schedule = committed ?? live
 
   const entries = Object.values(schedule.events)

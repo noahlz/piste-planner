@@ -10,7 +10,16 @@ import type { SerializedState } from '../../src/store/serialization.ts'
 import { useStore } from '../../src/store/store.ts'
 import type { StoreState } from '../../src/store/store.ts'
 import { DeMode, PlacementSource } from '../../src/engine/types.ts'
-import type { Placement } from '../../src/engine/types.ts'
+import type { Placement, PinnedPlacement } from '../../src/engine/types.ts'
+import { DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
+import { CATALOGUE } from '../../src/engine/catalogue.ts'
+import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../../src/engine/constants.ts'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { hashOf, payloadOfHash, sendBoard, sentPayload } from '../helpers/replayFixtures.ts'
+import { runPreset } from '../helpers/drawnFixtures.ts'
+import { selectDrawnSchedule, RunState } from '../../src/store/derived.ts'
+import { applyLoadedState } from '../../src/store/exportActions.ts'
 
 // ──────────────────────────────────────────────
 // P2 types not yet on StoreState/SerializedState (T008 adds the store slices,
@@ -747,14 +756,15 @@ describe('deserializeState', () => {
     if ('error' in result) expect(result.error).toMatch(/pool_round_duration_table/i)
   })
 
-  it('load: JSON without pool_round_duration_table omits the key from the returned state entirely (FR-007)', () => {
+  it('load: JSON without pool_round_duration_table returns the default table, so a load never keeps the receiver\'s own (FR-007, 017 R6)', () => {
     const json = JSON.stringify(validSerializedData())
     const result = deserializeState(json)
     expect('state' in result).toBe(true)
     if ('state' in result) {
-      // The key must be absent, not present-as-undefined – a present-but-undefined key
-      // would clobber the store's seeded defaults through useStore.setState merge.
-      expect('pool_round_duration_table' in result.state).toBe(false)
+      // Present and complete, never undefined – an undefined value would clobber the
+      // store's seeded defaults through the useStore.setState merge, and an absent key
+      // would leave the receiver's customized durations under the sender's run.
+      expect(result.state.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
     }
   })
 
@@ -921,6 +931,17 @@ describe('encodeToUrl', () => {
     // base64url chars only after the prefix
     const payload = url.slice('#config='.length)
     expect(payload).toMatch(/^[A-Za-z0-9_-]+$/)
+  })
+})
+
+describe('a kept run for other inputs writes no run (017 T8)', () => {
+  it('encodes and serializes identically with a kept run of another config key and without one', () => {
+    const state = populatedState()
+    const withRun = { ...state, lastRun: { configKey: 'k', pins: [], events: {} } }
+    const withoutRun = { ...state, lastRun: null }
+    expect(encodeToUrl(withRun)).toBe(encodeToUrl(withoutRun))
+    expect(serializeState(withRun)).toBe(serializeState(withoutRun))
+    expect(serializeState(withRun)).not.toContain('lastRun')
   })
 })
 
@@ -1207,5 +1228,173 @@ describe('the retired override record is gone from the payload (013 T022)', () =
         'video_strips_total',
       ].sort(),
     )
+  })
+})
+
+// ──────────────────────────────────────────────
+// 017 T8: the sender's run travels with the payload (spec §5, R6, P6)
+// ──────────────────────────────────────────────
+
+describe('the run in the payload (017 T8)', () => {
+  it('writes the pins the last run was given, for a link and for a file alike', () => {
+    const board = sendBoard({ pinned: true })
+    const pins = useStore.getState().lastRun?.pins
+    expect(pins?.length).toBeGreaterThan(0)
+    expect(sentPayload(board).run).toEqual(pins)
+    expect(payloadOfHash(board.hash).run).toEqual(pins)
+  })
+
+  it('writes an empty run when the last run was given no pins', () => {
+    expect(sentPayload(sendBoard()).run).toEqual([])
+  })
+
+  it('writes no run once an input the run read has changed', () => {
+    runPreset('B1')
+    useStore.getState().setStrips(useStore.getState().strips_total + 1)
+    expect(JSON.parse(serializeState(useStore.getState()))).not.toHaveProperty('run')
+  })
+
+  it('writes no run from an empty board, and does not throw', () => {
+    useStore.setState(useStore.getInitialState(), true)
+    expect(() => serializeState(useStore.getState())).not.toThrow()
+    expect(JSON.parse(serializeState(useStore.getState()))).not.toHaveProperty('run')
+  })
+
+  it('writes no run when a run is kept but nothing is placed', () => {
+    runPreset('B1')
+    useStore.setState({ placements: {} })
+    expect(JSON.parse(serializeState(useStore.getState()))).not.toHaveProperty('run')
+  })
+
+  it('accepts a payload that carries a run, and one that does not', () => {
+    const payload = sentPayload(sendBoard({ pinned: true }))
+    expect(validateSchema(payload).valid).toBe(true)
+    delete payload.run
+    expect(validateSchema(payload).valid).toBe(true)
+  })
+
+  it('reaches derived.ts through no value import, so serialization and derived stay acyclic', () => {
+    // Type-only imports are erased, so they cannot close a cycle at runtime.
+    const valueImportsOf = (file: string): string[] => {
+      const source = readFileSync(file, 'utf-8').replace(/import type [^;]*?from\s+['"][^'"]+['"]/gs, '')
+      return [...source.matchAll(/from\s+['"](\.{1,2}\/[^'"]+)['"]/g)].map((m) => resolve(dirname(file), m[1]))
+    }
+    const reached = new Set<string>()
+    const walk = (file: string) => {
+      if (reached.has(file)) return
+      reached.add(file)
+      for (const next of valueImportsOf(file)) walk(next)
+    }
+    walk(resolve(__dirname, '../../src/store/serialization.ts'))
+    expect(reached.size, 'premise: the walk followed imports').toBeGreaterThan(1)
+    expect([...reached].filter((file) => file.endsWith('/store/derived.ts'))).toEqual([])
+  })
+})
+
+describe('deserializeState with a run (017 T8)', () => {
+  function pinnedPayload() {
+    const payload = sentPayload(sendBoard({ pinned: true }))
+    // The run comes from the store, not the payload, so a corrupted entry tests
+    // the reader whatever the writer does.
+    const run = (useStore.getState().lastRun?.pins ?? []).map((pin) => ({ ...pin }))
+    payload.run = run
+    return { payload, run, days: payload.tournament.days_available }
+  }
+  const unselectedId = () => {
+    const selected = new Set(Object.keys(useStore.getState().selectedCompetitions))
+    return CATALOGUE.find((entry) => !selected.has(entry.id))!.id
+  }
+
+  it('hands back a valid run unchanged and refuses nothing', () => {
+    const { payload, run } = pinnedPayload()
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toEqual(run)
+    expect(result.runRefused).toBeNull()
+  })
+
+  it('hands back no run and no refusal when the payload carries none', () => {
+    const { payload } = pinnedPayload()
+    delete payload.run
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toBeNull()
+    expect(result.runRefused).toBeNull()
+  })
+
+  it('accepts an empty run', () => {
+    const { payload } = pinnedPayload()
+    payload.run = []
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toEqual([])
+    expect(result.runRefused).toBeNull()
+  })
+
+  /** The first pin moved onto `day`'s own axis, keeping its time of day, so only the day check can refuse it. */
+  const onDay = (run: PinnedPlacement[], day: number): PinnedPlacement[] => [
+    { ...run[0], day, start_time: day * DAY_AXIS_SPACING_MINS + (run[0].start_time % DAY_AXIS_SPACING_MINS) },
+    ...run.slice(1),
+  ]
+  const DAY_REFUSED = /run day for .* must be a whole day from 0 to/
+  const AXIS_REFUSED = /run start_time for .* must fall on day \d+'s axis/
+
+  const INVALID: [string, (run: PinnedPlacement[], days: number) => unknown, RegExp][] = [
+    ['an unknown event id', (run) => [{ ...run[0], competition_id: 'NO-SUCH-EVENT' }, ...run.slice(1)], /does not exist: "NO-SUCH-EVENT"/],
+    ['an unselected event id', (run) => [{ ...run[0], competition_id: unselectedId() }, ...run.slice(1)], /is not selected: /],
+    ['a duplicate event id', (run) => [...run, run[0]], /more than once/],
+    ['a day out of range', (run, days) => onDay(run, days), DAY_REFUSED],
+    ['a negative day', (run) => onDay(run, -1), DAY_REFUSED],
+    [
+      'a start_time past its day axis',
+      (run) => [{ ...run[0], start_time: run[0].start_time + DAY_AXIS_SPACING_MINS }, ...run.slice(1)],
+      AXIS_REFUSED,
+    ],
+    [
+      'a start_time before its day axis',
+      (run, days) => [{ ...run[0], day: days - 1, start_time: run[0].start_time % DAY_AXIS_SPACING_MINS }, ...run.slice(1)],
+      AXIS_REFUSED,
+    ],
+    ['a strip_count below 1', (run) => [{ ...run[0], strip_count: 0 }, ...run.slice(1)], /strip_count/],
+    ['a fractional strip_count', (run) => [{ ...run[0], strip_count: 1.5 }, ...run.slice(1)], /strip_count/],
+    ['an entry that is not an object', (run) => [null, ...run.slice(1)], /object/],
+    ['a run that is not an array', () => ({ not: 'an array' }), /array/],
+  ]
+
+  it('has a multi-day board to test the lower start_time bound on', () => {
+    expect(pinnedPayload().days, 'premise: day days - 1 is not day 0').toBeGreaterThan(1)
+  })
+
+  it.each(INVALID)('refuses the whole run for %s, keeps the rest of the load, and says why', (_name, corrupt, reason) => {
+    const { payload, run, days } = pinnedPayload()
+    ;(payload as unknown as Record<string, unknown>).run = corrupt(run, days)
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toBeNull()
+    expect(result.runRefused).toMatch(reason)
+    expect(result.state.strips_total).toBe(payload.tournament.strips_total)
+    expect(Object.keys(result.state.placements ?? {}).length).toBeGreaterThan(0)
+  })
+
+  it.each(INVALID)('opens stale after applying a load that refuses the run for %s', (_name, corrupt, _reason) => {
+    const { payload, run, days } = pinnedPayload()
+    ;(payload as unknown as Record<string, unknown>).run = corrupt(run, days)
+    const result = deserializeState(JSON.stringify(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(useStore.getState().lastRun, 'premise: the sender still holds its run').not.toBeNull()
+
+    applyLoadedState(result.state, result.run)
+
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+
+  it('carries the refusal through decodeFromUrl as it does through a file', () => {
+    const { payload, run } = pinnedPayload()
+    payload.run = [{ ...run[0], strip_count: 0 }]
+    const result = decodeFromUrl(hashOf(payload))
+    if ('error' in result) throw new Error(result.error)
+    expect(result.run).toBeNull()
+    expect(result.runRefused).toMatch(/strip_count/)
   })
 })

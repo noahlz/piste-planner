@@ -5,6 +5,7 @@ import { useStore, type StoreState } from '../../../../src/store/store.ts'
 import * as derivedModule from '../../../../src/store/derived.ts'
 import { DeMode } from '../../../../src/engine/types.ts'
 import { makePlacement } from '../../../helpers/factories.ts'
+import { UNPLACED_WORDING, runAndMoveHeadline } from '../../../helpers/drawnFixtures.ts'
 
 // 013 T030, re-targets the retired analysis-output section's test (deleted
 // in T032 alongside its component), contract §3. `FindingsPanel.tsx`
@@ -60,8 +61,10 @@ function seedValidConfig(): void {
  * `threeEventsOverlappingOnDayZero` (__tests__/store/daySummaries.test.ts:114),
  * copied rather than imported — a test fixture, not a contract export. NAC, 3
  * days, 4 strips: JR-M-EPEE-IND day 0 @480, JR-W-EPEE-IND day 1 @480,
- * JR-M-FOIL-IND day 0 @500, 8 fencers each, SINGLE_STAGE. Measured to overflow
- * exactly JR-M-EPEE-IND:DE (contract §8 fixture notes).
+ * JR-M-FOIL-IND day 0 @500, 8 fencers each, SINGLE_STAGE. Its placements are
+ * written with no run, so since 017 T5a the board is stale: JR-M-FOIL-IND's
+ * DE still draws unseated, but it raises no row, and the panel shows the one
+ * stale row instead (spec P4).
  */
 function threeEventsOverlappingOnDayZero(): void {
   useStore.setState(useStore.getInitialState(), true)
@@ -161,13 +164,13 @@ describe('FindingsPanel — Show on grid (contract §3)', () => {
 
 describe('FindingsPanel — jump to grid (contract §2.1, §3)', () => {
   it('clicking Show on grid on the Unplaced row selects its target and increments jumpNonce', () => {
-    threeEventsOverlappingOnDayZero()
+    const { id } = runAndMoveHeadline('B1')
     const { container } = render(<FindingsPanel />)
 
     const rows = selectFindings(useStore.getState())
     const unplacedRow = rows.find((r) => r.severity === 'Unplaced')
-    expect(unplacedRow, 'expected an Unplaced row from the overflow fixture').toBeDefined()
-    expect(unplacedRow!.target).not.toBeNull()
+    expect(unplacedRow?.id, 'expected the headline move\'s Unplaced row').toBe(`unplaced:${id}:room`)
+    expect(unplacedRow!.target).toBe(id)
 
     const li = container.querySelector(`[data-finding-id="${unplacedRow!.id}"]`) as HTMLElement
     const button = within(li).getByRole('button', { name: 'Show on grid' })
@@ -225,12 +228,14 @@ describe('FindingsPanel — dismiss finding (contract §3)', () => {
   })
 
   it('clicking Dismiss finding on the Unplaced row removes it from the list and records the dismissal', () => {
-    threeEventsOverlappingOnDayZero()
+    const { id } = runAndMoveHeadline('B1')
     const { container } = render(<FindingsPanel />)
 
     const rows = selectFindings(useStore.getState())
     const unplacedRow = rows.find((r) => r.severity === 'Unplaced')
-    expect(unplacedRow, 'expected an Unplaced row from the overflow fixture').toBeDefined()
+    expect(unplacedRow?.id, 'expected the headline move\'s Unplaced row').toBe(`unplaced:${id}:room`)
+    expect(within(container.querySelector(`[data-finding-id="${unplacedRow!.id}"]`) as HTMLElement)
+      .getByText(UNPLACED_WORDING.RERUN)).toBeInTheDocument()
 
     const li = container.querySelector(`[data-finding-id="${unplacedRow!.id}"]`) as HTMLElement
     const button = within(li).getByRole('button', { name: 'Dismiss finding' })
@@ -241,5 +246,17 @@ describe('FindingsPanel — dismiss finding (contract §3)', () => {
 
     expect(container.querySelector(`[data-finding-id="${unplacedRow!.id}"]`)).toBeNull()
     expect(useStore.getState().dismissedFindings[unplacedRow!.id]).toBe(true)
+  })
+})
+
+describe('FindingsPanel — a board that was never run (017 T5a, spec P4)', () => {
+  it('lists no unseated row, only the stale row, with neither Show on grid nor Dismiss', () => {
+    threeEventsOverlappingOnDayZero()
+    const { container } = render(<FindingsPanel />)
+
+    const unplaced = [...container.querySelectorAll('[data-severity="Unplaced"]')] as HTMLElement[]
+    expect(unplaced.map((li) => li.getAttribute('data-finding-id'))).toEqual(['stale:run'])
+    expect(unplaced[0]).toHaveTextContent(UNPLACED_WORDING.STALE)
+    expect(within(unplaced[0]).queryByRole('button')).toBeNull()
   })
 })

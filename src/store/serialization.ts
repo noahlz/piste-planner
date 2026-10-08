@@ -5,8 +5,12 @@ import type {
   TournamentType,
   Weapon as WeaponType,
   Placement,
+  PinnedPlacement,
 } from '../engine/types.ts'
-import { DeMode, TournamentType as TT, Weapon, PlacementSource } from '../engine/types.ts'
+import { DeMode, TournamentType as TT, Weapon, PlacementSource, DAY_AXIS_SPACING_MINS } from '../engine/types.ts'
+import { findCompetition } from '../engine/catalogue.ts'
+import { buildTournamentConfig } from './buildConfig.ts'
+import { configKeyOf } from './keptRun.ts'
 import {
   POOL_DURATION_MIN,
   POOL_DURATION_MAX,
@@ -47,7 +51,16 @@ export interface SerializedState {
   competitions: Record<string, CompetitionConfig>
   placements: Record<string, Placement>
   dismissedFindings: string[]
+  /** The pins the sender's last run was given (017 R6, P6). Absent when the board has no run that still applies. */
+  run?: PinnedPlacement[]
 }
+
+/**
+ * A payload that passed `validateSchema`. Its `run` is deliberately `unknown`:
+ * the schema check never looks at it, so `readRun` is the only way to get typed
+ * pins out of one.
+ */
+export type UnvalidatedPayload = Omit<SerializedState, 'run'> & { run?: unknown }
 
 // The seven-key override record travelled at the top level for exactly one
 // task: 013 T020
@@ -63,6 +76,7 @@ const VALID_TOP_LEVEL_KEYS = [
   'competitions',
   'placements',
   'dismissedFindings',
+  'run',
 ] as const
 const VALID_TOURNAMENT_TYPES = new Set(Object.values(TT))
 const VALID_DE_MODES = new Set<unknown>(Object.values(DeMode))
@@ -96,7 +110,24 @@ export function serializeState(state: StoreState): string {
     placements: state.placements,
     dismissedFindings: Object.keys(state.dismissedFindings),
   }
+  const run = runToWrite(state)
+  if (run !== null) serialized.run = run
   return JSON.stringify(serialized)
+}
+
+/**
+ * The pins the last run was given, when that run still describes the board
+ * (017 spec §5). Compared on the config key computed here, directly, rather
+ * than through the memoized `selectDrawnSchedule`, so this module never imports
+ * `derived.ts` and no import cycle can form through the selector. A stale run,
+ * a run-less board and an empty board write none.
+ */
+function runToWrite(state: StoreState): PinnedPlacement[] | null {
+  if (state.lastRun === null) return null
+  if (Object.keys(state.placements).length === 0) return null
+  const { config, competitions } = buildTournamentConfig(state)
+  if (state.lastRun.configKey !== configKeyOf(config, competitions)) return null
+  return state.lastRun.pins
 }
 
 // ──────────────────────────────────────────────
@@ -106,7 +137,7 @@ export function serializeState(state: StoreState): string {
 /** Validate parsed data against the serialization schema. */
 export function validateSchema(
   data: unknown,
-): { valid: true; data: SerializedState } | { valid: false; error: string } {
+): { valid: true; data: UnvalidatedPayload } | { valid: false; error: string } {
   if (data == null || typeof data !== 'object') {
     return { valid: false, error: 'Input must be a non-null object' }
   }
@@ -285,7 +316,7 @@ export function validateSchema(
     }
   }
 
-  return { valid: true, data: obj as unknown as SerializedState }
+  return { valid: true, data: obj as unknown as UnvalidatedPayload }
 }
 
 // `mergeOntoDefaults` lived here until 013 T022: it merged an overrides-only
@@ -297,6 +328,14 @@ export function validateSchema(
 // Deserialize
 // ──────────────────────────────────────────────
 
+/** What a load found. `run` is the pin set to replay, `runRefused` says why a carried `run` was thrown away. */
+export interface DeserializeResult {
+  state: Partial<StoreState>
+  droppedPlacements: string[]
+  run: PinnedPlacement[] | null
+  runRefused: string | null
+}
+
 /**
  * Deserialize JSON string back to partial store state.
  * Returns { state, droppedPlacements } on success, { error } on failure.
@@ -305,7 +344,7 @@ export function validateSchema(
  */
 export function deserializeState(
   json: string,
-): { state: Partial<StoreState>; droppedPlacements: string[] } | { error: string } {
+): DeserializeResult | { error: string } {
   let parsed: unknown
   try {
     parsed = JSON.parse(json)
@@ -334,15 +373,18 @@ export function deserializeState(
     de_mode_override: data.tournament.de_mode_override ?? null,
   }
   // Only assign when present – a key set to undefined would clobber the store's
-  // seeded defaults through the useStore.setState merge (research D3). This
-  // matters more for video_strips_total than for pool_round_duration_table below:
-  // an unconditional assignment here would overwrite the store's `null` default
+  // seeded defaults through the useStore.setState merge (research D3). An
+  // unconditional assignment here would overwrite the store's `null` default
   // with `undefined`, which is not a member of `number | null`.
   if (data.tournament.video_strips_total !== undefined) {
     state.video_strips_total = data.tournament.video_strips_total
   }
-  if (data.tournament.pool_round_duration_table !== undefined) {
-    state.pool_round_duration_table = data.tournament.pool_round_duration_table
+  // Always assigned, unlike the key above: the writer leaves the table out when
+  // it equals the default (FR-045), and merging onto a live store would then
+  // keep the receiver's own durations under the sender's replayed run (017 R6).
+  // A fresh copy, so the store never shares the constant's object.
+  state.pool_round_duration_table = data.tournament.pool_round_duration_table ?? {
+    ...DEFAULT_POOL_ROUND_DURATION_TABLE,
   }
 
   // Lenient load: a placement whose event id isn't selected is dropped and reported,
@@ -365,7 +407,58 @@ export function deserializeState(
   }
   state.dismissedFindings = dismissedFindings
 
-  return { state, droppedPlacements }
+  const { run, runRefused } = readRun(data.run, knownIds, data.tournament.days_available)
+  return { state, droppedPlacements, run, runRefused }
+}
+
+/**
+ * Reads a payload's `run` as a whole (017 spec §5): one invalid entry refuses
+ * all of it, since replaying part of a run would draw a board different from
+ * the sender's while calling it fresh. A refusal is a notice, not a load
+ * error – the rest of the payload still loads, and the board opens stale.
+ */
+function readRun(
+  run: unknown,
+  selectedIds: ReadonlySet<string>,
+  daysAvailable: number,
+): { run: PinnedPlacement[] | null; runRefused: string | null } {
+  if (run === undefined) return { run: null, runRefused: null }
+  const refuse = (reason: string) => ({ run: null, runRefused: reason })
+  if (!Array.isArray(run)) return refuse('run must be an array')
+
+  const seen = new Set<string>()
+  const pins: PinnedPlacement[] = []
+  for (const [index, entry] of run.entries()) {
+    if (entry == null || typeof entry !== 'object' || Array.isArray(entry)) {
+      return refuse(`run entry ${index} must be an object`)
+    }
+    const pin = entry as Record<string, unknown>
+    const id = pin.competition_id
+    if (typeof id !== 'string' || findCompetition(id) === undefined) {
+      return refuse(`run names an event that does not exist: "${String(id)}"`)
+    }
+    if (!selectedIds.has(id)) return refuse(`run names an event that is not selected: "${id}"`)
+    if (seen.has(id)) return refuse(`run names "${id}" more than once`)
+    seen.add(id)
+
+    const { day, start_time, strip_count } = pin
+    if (typeof day !== 'number' || !Number.isInteger(day) || day < 0 || day >= daysAvailable) {
+      return refuse(`run day for "${id}" must be a whole day from 0 to ${daysAvailable - 1}`)
+    }
+    if (
+      typeof start_time !== 'number' ||
+      !Number.isInteger(start_time) ||
+      start_time < day * DAY_AXIS_SPACING_MINS ||
+      start_time >= (day + 1) * DAY_AXIS_SPACING_MINS
+    ) {
+      return refuse(`run start_time for "${id}" must fall on day ${day}'s axis`)
+    }
+    if (typeof strip_count !== 'number' || !Number.isInteger(strip_count) || strip_count < 1) {
+      return refuse(`run strip_count for "${id}" must be a whole number of at least 1`)
+    }
+    pins.push({ competition_id: id, day, start_time, strip_count })
+  }
+  return { run: pins, runRefused: null }
 }
 
 // ──────────────────────────────────────────────
@@ -397,9 +490,7 @@ export function encodeToUrl(state: StoreState): string {
 }
 
 /** Decode URL hash string back to partial store state. */
-export function decodeFromUrl(
-  hash: string,
-): { state: Partial<StoreState>; droppedPlacements: string[] } | { error: string } {
+export function decodeFromUrl(hash: string): DeserializeResult | { error: string } {
   if (!hash.startsWith(URL_PREFIX)) {
     return { error: `URL hash must start with "${URL_PREFIX}"` }
   }

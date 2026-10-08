@@ -9,6 +9,7 @@ import { BottleneckSeverity, DeMode } from '../../src/engine/types.ts'
 import type { ValidationError } from '../../src/engine/types.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makePlacement } from '../helpers/factories.ts'
+import { runAndMoveHeadline } from '../helpers/drawnFixtures.ts'
 
 // This file supersedes the "dismissalsSlice" block in placements.test.ts,
 // which pins T008's unguarded dismissFinding/undismissFinding (any id
@@ -227,18 +228,31 @@ describe('dismissedFindings serialization round-trip (serialization-v2, SC-001)'
 })
 
 describe('dismissFinding — widened to the unified findings list (013 T030, contract §2.2)', () => {
+  // 017 T5a: the row comes from a run plus the headline Move day, whose moved
+  // event finds no free strips. The run-less overflow fixture this used
+  // (`unplaced:JR-M-FOIL-IND:DE`) is stale now and raises only the stale row.
   it('dismissing an Unplaced row id records it and removes it from selectFindings', () => {
-    threeEventsOverlappingOnDayZero()
+    runAndMoveHeadline('B1')
     const unplaced = selectFindings(useStore.getState()).find((f) => f.severity === 'Unplaced')
-    expect(unplaced, 'expected an Unplaced finding from the overflowing DE block').toBeDefined()
     // Located by severity, then the id is asserted as a literal — a fixture
     // drift reports as a wrong id here rather than a missing row.
-    expect(unplaced!.id).toBe('unplaced:JR-M-FOIL-IND:DE')
+    expect(unplaced?.id).toBe('unplaced:D1-M-EPEE-IND:room')
 
     useStore.getState().dismissFinding(unplaced!.id)
 
     expect(useStore.getState().dismissedFindings[unplaced!.id]).toBe(true)
     expect(selectFindings(useStore.getState()).some((f) => f.id === unplaced!.id)).toBe(false)
+  })
+
+  it('dismissing the stale row is a no-op (017 P4: it is not dismissable)', () => {
+    threeEventsOverlappingOnDayZero()
+    const unplaced = selectFindings(useStore.getState()).filter((f) => f.severity === 'Unplaced')
+    expect(unplaced.map((f) => f.id), 'a board that was never run shows no unseated row').toEqual(['stale:run'])
+
+    useStore.getState().dismissFinding('stale:run')
+
+    expect(useStore.getState().dismissedFindings).toEqual({})
+    expect(selectFindings(useStore.getState()).some((f) => f.id === 'stale:run')).toBe(true)
   })
 
   it('dismissing a Late finish row id records it and filters it', () => {

@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { computeRefRequirements, peakDeRefDemand, refDemandFromSchedule } from '../../src/engine/refs.ts'
-import { DeMode, Weapon } from '../../src/engine/types.ts'
+import { DeMode, Phase, Weapon } from '../../src/engine/types.ts'
 import type { Competition, RefDemandByDay, ScheduleResult } from '../../src/engine/types.ts'
+import { phaseKey, unseatedPhases } from '../../src/engine/unseated.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { makeConfig, makeCompetition, makeScheduleResult } from '../helpers/factories.ts'
+import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
+import type { ScenarioId } from '../helpers/scenarios.ts'
 
 // ──────────────────────────────────────────────
 // peakDeRefDemand
@@ -246,5 +250,88 @@ describe('refDemandFromSchedule', () => {
   it('skips a result whose competition is not given', () => {
     const orphan = result('missing', 0, { pool_start: 480, pool_end: 600, pool_refs_count: 3 })
     expect(refDemandFromSchedule([orphan], config, [foil])).toEqual({})
+  })
+
+  // 017 T9 (spec §7): a phase that holds no strips counts no referees. `skip`
+  // names phases by `phaseKey`, and each pushed interval is one phase.
+  describe('skip', () => {
+    const pools = { pool_start: 480, pool_end: 600, pool_refs_count: 6 }
+    const flights = {
+      pool_start: 480, pool_end: 720, pool_refs_count: 10,
+      flight_a_start: 480, flight_a_end: 590, flight_a_refs: 5,
+      flight_b_start: 605, flight_b_end: 720, flight_b_refs: 4,
+    }
+    const staged = {
+      ...pools,
+      de_prelims_start: 700, de_prelims_end: 760, de_prelims_strip_count: 6,
+      de_round_of_16_start: 780, de_round_of_16_end: 840, de_round_of_16_strip_count: 4,
+    }
+    const iv = (startTime: number, endTime: number, count: number) => ({ startTime, endTime, count, weapon: Weapon.FOIL })
+    const POOLS_IV = iv(480, 600, 6)
+    const PRELIMS_IV = iv(700, 760, 12)
+    const R16_IV = iv(780, 840, 8)
+
+    it.each([
+      [Phase.POOLS, { ...pools, de_start: 700, de_end: 820, de_strip_count: 8 }, [iv(700, 820, 16)]],
+      [Phase.DE, { ...pools, de_start: 700, de_end: 820, de_strip_count: 8 }, [POOLS_IV]],
+      [Phase.FLIGHT_A, flights, [iv(605, 720, 4)]],
+      [Phase.FLIGHT_B, flights, [iv(480, 590, 5)]],
+      [Phase.DE_PRELIMS, staged, [POOLS_IV, R16_IV]],
+      [Phase.DE_ROUND_OF_16, staged, [POOLS_IV, PRELIMS_IV]],
+    ] as const)('leaves out a skipped %s and keeps the event\'s other phases', (phase, fields, kept) => {
+      const skip = new Set([phaseKey('foil', phase)])
+      expect(refDemandFromSchedule([result('foil', 0, fields)], config, [foil], skip)[0]?.intervals).toEqual(kept)
+    })
+
+    it('leaves another event\'s phase of the same name counted', () => {
+      const skip = new Set([phaseKey('sabre', Phase.POOLS)])
+      expect(refDemandFromSchedule([result('foil', 0, pools)], config, [foil], skip)[0]?.intervals).toEqual([POOLS_IV])
+    })
+  })
+})
+
+// ──────────────────────────────────────────────
+// The scheduler's referee peak is its own timeline (017 T9, spec §7)
+// ──────────────────────────────────────────────
+
+/**
+ * METHODOLOGY.md §Ref Demand Derivation (amended for 017): the scheduler
+ * reports the peak of its own timeline, each phase at the times it allocated,
+ * waits included, less any phase that holds no strips (`unseatedPhases`).
+ */
+describe('scheduleAll reports the peak of its own timeline (017 T9)', () => {
+  function run(id: ScenarioId) {
+    const { fencerCounts, tournamentType, days, strips, videoStrips } = SCENARIOS[id]
+    const competitions = buildCompetitions(fencerCounts, tournamentType)
+    const config = tournamentConfig(days, strips, videoStrips, tournamentType)
+    return { config, competitions, ...scheduleAll(competitions, config) }
+  }
+
+  // An unpinned run seats every phase, so this leaves the skip untested: the
+  // store's pinned cases (appPathParity.test.ts) pin it.
+  it.each(SCENARIO_IDS)('%s: every day\'s peak is a sweep of the scheduler\'s own intervals, waits included', (id) => {
+    const { config, competitions, ...result } = run(id)
+    expect(unseatedPhases(result).size, 'premise: an unpinned run seats every phase').toBe(0)
+    const timeline = refDemandFromSchedule(Object.values(result.schedule), config, competitions, new Set())
+    expect(result.ref_requirements_by_day).toEqual(computeRefRequirements(timeline, config.days_available))
+  })
+
+  /**
+   * The spec's Expected drift table: the days whose total or sabre peak moves
+   * from the drawn board (016 Task E) back to the timeline. Every other
+   * scenario-day holds, which the drift ledger's snapshot pins.
+   */
+  const MOVED: [ScenarioId, number, { total: number; sabre: number }][] = [
+    ['B1', 1, { total: 210, sabre: 64 }], ['B1', 2, { total: 134, sabre: 56 }],
+    ['B2', 0, { total: 228, sabre: 90 }], ['B2', 3, { total: 136, sabre: 70 }],
+    ['B4', 1, { total: 80, sabre: 44 }], ['B4', 2, { total: 80, sabre: 54 }],
+    ['B6', 0, { total: 78, sabre: 48 }], ['B6', 1, { total: 68, sabre: 20 }], ['B6', 2, { total: 64, sabre: 32 }],
+    ['B7', 0, { total: 156, sabre: 64 }], ['B7', 2, { total: 156, sabre: 70 }],
+    ['B8', 0, { total: 212, sabre: 56 }], ['B8', 1, { total: 146, sabre: 56 }], ['B8', 2, { total: 136, sabre: 48 }],
+  ]
+
+  it.each(MOVED)('%s day %i reads the spec\'s timeline peak', (id, day, expected) => {
+    const row = run(id).ref_requirements_by_day?.[day]
+    expect({ total: row?.peak_total_refs, sabre: row?.peak_saber_refs }).toEqual(expected)
   })
 })

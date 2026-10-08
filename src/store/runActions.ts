@@ -2,7 +2,8 @@ import { useStore, type StoreState } from './store.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import { scheduleAll } from '../engine/scheduler.ts'
 import { placementFromResult } from '../engine/derive.ts'
-import type { Placement, ScheduleResult } from '../engine/types.ts'
+import { keepRun } from './keptRun.ts'
+import type { Placement, PinnedPlacement, ScheduleResult, StripAllocation } from '../engine/types.ts'
 
 /** What `runScheduleAll` found: how many of the attempted competitions it placed. */
 export interface AutoRunCounts {
@@ -11,12 +12,17 @@ export interface AutoRunCounts {
 }
 
 /**
- * Runs the auto-scheduler and records where it put each event. Only the
- * placements survive — bottlenecks, ref requirements, and the rest of the
- * scheduler's output derive on read from these inputs.
+ * Runs the auto-scheduler and records where it put each event. The placements
+ * are the only schedule state that persists – bottlenecks, ref requirements,
+ * and the rest of the scheduler's output derive on read from these inputs.
+ * The whole run is also kept in memory as `lastRun` (017 spec §1), written in
+ * the same store update as the placements, so the canvas can draw the
+ * scheduler's own times and strips. Only its pins are serialized (017 T8, as
+ * `run`), so a link or file can replay it.
  *
  * A scheduling failure leaves the existing placements alone rather than
- * wiping them: the previous answer is still the best one on offer.
+ * wiping them: the previous answer is still the best one on offer. The kept
+ * run goes, though – it described a board the failed run did not reproduce.
  *
  * Returns the placed/unplaced counts and stamps them onto `lastAutoRun`, so
  * the top bar can report what the run did (T006, research D12). `unplaced` is
@@ -37,14 +43,16 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
   const attempted = competitions.length - pinned.length
 
   let schedule: Record<string, ScheduleResult>
+  let allocations: StripAllocation[][]
   try {
-    schedule = scheduleAll(competitions, config, pinned).schedule
+    ;({ schedule, strip_allocations: allocations } = scheduleAll(competitions, config, pinned))
   } catch {
     // Existing placements are left alone (the comment above), but the run
     // still happened and still gets stamped — nothing placed, everything
     // attempted counts as unplaced — so the top bar can say a run failed
     // rather than silently doing nothing.
     const counts: AutoRunCounts = { placed: 0, unplaced: attempted }
+    state.setLastRun(null)
     state.setLastAutoRun({ at: Date.now(), ...counts })
     return counts
   }
@@ -60,7 +68,8 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
     if (placement !== null) placements[id] = placement
   }
 
-  state.setPlacementsFromAuto(placements, pinnedIds)
+  const kept = keepRun({ schedule, strip_allocations: allocations }, config, competitions, pinned)
+  state.setPlacementsFromAuto(placements, pinnedIds, kept)
 
   const placed = Object.keys(placements).length
   const counts: AutoRunCounts = {
@@ -72,4 +81,30 @@ export function runScheduleAll(state: StoreState = useStore.getState()): AutoRun
   }
   state.setLastAutoRun({ at: Date.now(), ...counts })
   return counts
+}
+
+/**
+ * Replays `pins` through the scheduler and keeps the run, the way a link or a
+ * file rebuilds the sender's board (017 R6, P6). Writes `lastRun` only, never a
+ * placement: the placements are the ones the payload carried. A scheduler that
+ * throws leaves no run, so the board opens stale rather than drawing a run it
+ * did not reproduce, and the reason is logged and returned for the caller to
+ * report the way a refused run is. Only `scheduleAll` is guarded, so a broken
+ * invariant in `keepRun` still surfaces.
+ *
+ * Returns the failure's reason, or null when the run was replayed.
+ */
+export function replayRun(state: StoreState, pins: readonly PinnedPlacement[]): string | null {
+  const { config, competitions } = buildTournamentConfig(state)
+  let run: ReturnType<typeof scheduleAll>
+  try {
+    run = scheduleAll(competitions, config, pins)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.warn('Could not replay the saved run, the board opens stale:', reason)
+    state.setLastRun(null)
+    return reason
+  }
+  state.setLastRun(keepRun(run, config, competitions, pins))
+  return null
 }

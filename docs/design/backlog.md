@@ -27,17 +27,17 @@ feature that owns it is in [`competition-planner-workbench.md`](./competition-pl
   [§The scorecard's peak-referee row reads higher than the scheduler's own](#the-scorecards-peak-referee-row-reads-higher-than-the-schedulers-own).
 - The engine and the store both reporting a pin collision –
   [§The engine and the store both report a pin collision](#the-engine-and-the-store-both-report-a-pin-collision).
-  Feature 017.
+  Fixed by 017.
 - The two dead constants and the unwired `daySequencing.ts` –
   [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
   Feature 021.
 - The lane-packer overflow, including the two "Unplaced, needs N strips"
   figures for one event –
   [§The canvas calls events unplaced that the engine placed](#the-canvas-calls-events-unplaced-that-the-engine-placed).
-  Feature 017.
+  Fixed by 017.
 - Blocks that cannot be selected from the keyboard –
   [§A placed block cannot be selected from the keyboard](#a-placed-block-cannot-be-selected-from-the-keyboard).
-  Feature 017.
+  Fixed by 017.
 - The mockup's remaining visual gaps –
   [§The mockup's remaining visual gaps](#the-mockups-remaining-visual-gaps).
 - Small text still below WCAG AA –
@@ -112,15 +112,47 @@ peak-referee row and mostly closed §Day-level findings. Its handoff,
 - Phases drawn without the scheduler's waits, which the one referee number now
   inherits –
   [§The canvas draws phases without the scheduler's waits](#the-canvas-draws-phases-without-the-schedulers-waits).
-  Roadmap row 025.
+  Fixed by 017 (roadmap row 025 folded in).
 - The Vet age-group co-day rule unchecked for hand placements, the regional Note
   unreachable by hand and the overflow block that never draws the findings edge –
   [§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph).
-  The overflow edge goes with 017.
+  The overflow edge was fixed by 017.
 - Phase-repeating scheduler findings out of the panel, and the scheduler's own
   messages still printing ids –
   [§Day-level findings have no structured day](#day-level-findings-have-no-structured-day).
   Unscheduled.
+
+## What 017 deliberately left unfixed
+
+*Recorded by 017, 2026-10-07. It closed §The canvas calls events unplaced,
+§A placed block cannot be selected, §The engine and the store both report a pin
+collision and §The canvas draws phases without the scheduler's waits. Its
+handoff, `specs/017-canvas-tells-truth/handoff.md`, has the rest.*
+
+- Pinning every event in place and then re-running Auto-assign loses events –
+  [§Pinning an event in place and re-running can lose events](#pinning-an-event-in-place-and-re-running-can-lose-events).
+  Beside
+  [§Auto-assign does not hold an unpinned predecessor before a pinned successor](#auto-assign-does-not-hold-an-unpinned-predecessor-before-a-pinned-successor).
+  An owner call on what a pin fixes, unscheduled.
+- The referee sweep counting a block that ends and a block that starts at the
+  same minute as both present –
+  [§The referee sweep counts an instantaneous handoff twice](#the-referee-sweep-counts-an-instantaneous-handoff-twice).
+  An owner call, unscheduled.
+- The day band's unplaced count, computed and never displayed –
+  [§The day band computes an unplaced count it never shows](#the-day-band-computes-an-unplaced-count-it-never-shows).
+  An owner wording call.
+- A stale board where an event with every phase unseated shows no strip label –
+  [§A stale board's detail strip can show no strips for an event](#a-stale-boards-detail-strip-can-show-no-strips-for-an-event).
+  An owner call.
+- Re-run on parameter change keeps its whole scope, and `configKey` is its hook –
+  [§Changing a parameter should re-run the engine, with a working indicator](#changing-a-parameter-should-re-run-the-engine-with-a-working-indicator).
+  Roadmap row 020.
+- The video gutter and the camera icon (017 ruling R8) –
+  [§The video gutter and camera icon are deferred](#the-video-gutter-and-camera-icon-are-deferred).
+  A later feature.
+- Picking a preset in the header keeps the pins on events the two boards share –
+  [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share).
+  Predates 017, unscheduled.
 
 ## Day-level findings have no structured day
 
@@ -206,42 +238,69 @@ Sabre peaks and peak times moved with the totals, and one move fell outside the
 13 days (B8 day 1's sabre peak 56 to 64, total and time unchanged). The owner
 accepted all of them on 2026-10-07 as the same cause.
 
+**017 then fixed that entry (2026-10-07).** The scheduler reports the peak of its
+own timeline again and the footer counts the board it draws, which right after a
+run is the same timeline. The 14 scenario-days that moved are in
+`specs/017-canvas-tells-truth/spec.md` §Expected drift, and the ledger snapshot
+returned byte for byte to the pre-016 one.
+
 ## The canvas draws phases without the scheduler's waits
 
 *Found by 016's planning probe, 2026-10-06, and confirmed by its referee
-change. Recorded, not fixed. Roadmap row 025.*
+change. **Fixed by 017, 2026-10-07**, which folded in roadmap row 025.*
 
-After a run the app keeps each event's day, start and strip count, and
-re-derives the phase times without resource contention (`derive.ts`, "minus
-resource contention"). The scheduler planned them with contention, so a phase
-that waited for strips starts later in the scheduler's timeline than on the
-canvas. On a busy day later phases are drawn 25–60+ minutes earlier than the
-scheduler planned them. The referee peak is now counted from the drawn
-intervals (016, by design), so it inherits the same optimism. Measured on B1–B8
-at `b84be7e291`, the drawn schedule counts more referees at once than the
-scheduler's timeline on 13 days, because phases drawn early overlap more:
+After a run the app kept each event's day, start and strip count and re-derived
+the phase times without resource contention. A phase that waited for strips
+started later in the scheduler's timeline than on the canvas, by up to 75
+minutes on B1 and 505 on B6, so DE starts were drawn early and the referee peak
+(counted from the drawn intervals since 016) read high on 13 days. The numbers
+are in [§The scorecard's peak-referee row reads higher than the scheduler's own](#the-scorecards-peak-referee-row-reads-higher-than-the-schedulers-own).
 
-| Scenario | Day | Scheduler's timeline | As drawn |
-|---|---:|---:|---:|
-| B1 | 1 / 2 | 210 / 134 | 218 / 140 |
-| B2 | 0 / 3 | 228 / 136 | 244 / 140 |
-| B4 | 1 / 2 | 80 / 80 | 90 / 104 |
-| B6 | 0 / 1 / 2 | 78 / 68 / 64 | 98 / 90 / 112 |
-| B7 | 0 / 2 | 156 / 156 | 164 / 168 |
-| B8 | 0 / 2 | 212 / 136 | 236 / 172 |
+017 keeps the run in memory (`lastRun`, never in `Placement` and never in the
+URL's placements) and draws kept phases at the scheduler's own times on the
+scheduler's own strips. The referee peaks moved back to the scheduler's
+timeline on 14 scenario-days, and the snapshot SHA-256 is byte-identical to the
+pre-016 one (`7e2db75c38bb…`, `b84be7e291`).
 
-The sabre peaks move on the same days (app path: B1 day 1 64 to 68, B4 day 2
-54 to 60, B6 day 1 20 to 24, B6 day 2 32 to 58, B7 day 2 70 to 86, B8 day 0 56
-to 66), and so does B8 day 1's (56 to 64) with its total held at 146.
+**Rejected alternatives, measured by 017's planning on B1–B8:**
 
-**Cost if ignored**: an organizer reads DE start times that are early, and the
-referee peak (the footer and the scheduler's report) is an upper bound rather
-than what the scheduled day needs. B6 day 2 shows the size, 64 against 112.
+- **A no-wait engine** (the scheduler stops waiting for strips, so derived
+  times are right by construction): the scheduled counts become
+  24/19/23/19/12/40/16/53 (from 24/24/24/21/12/45/18/53), and ERRORs rise to 0/5/1/11/0/14/2/0.
+- **Close-gaps** (closing the scheduler's waits where possible): closes 32 of 200
+  waits, and B1 reaches only 17 placed, 7 unplaced.
+- **Replay without a run record** (a shared link carrying placements only): B6
+  boots 5 pools that cannot claim their strips.
+- **Re-packers at the kept times:** a one-pass packer leaves 0/3/2/0/0/0/0/2
+  blocks in overflow and a two-pass packer 1/1/1/0/0/0/0/3.
+- **A splitting packer at derived times:** 7/9/10/9/3/26/6/22 in overflow.
+- **Re-packing everything on a hand move:** breaks unmoved events in 69 of 72
+  moves on B1 and 159 of 159 on B8. Keeping the kept events fixed gave 0
+  collateral across all 585 single moves (every event to every other day,
+  B1–B8).
 
-**What it needs**: keep each phase's times after a run, and decide what a hand
-move does to them (shift the whole event, or fall back to derived times for the
-moved event only). Proposed as its own feature, row 025. Fixing it changes the
-referee peak again, so its drift review starts from the ledger 016 left.
+## The referee sweep counts an instantaneous handoff twice
+
+*Found by 017's planning, 2026-10-07. Recorded, not fixed. The rule has been
+documented since `a889885424`.*
+
+`sweepLine` (`src/engine/refs.ts`) processes a start before an end at the same
+minute, so a block that ends at t and a block that starts at t both count at t.
+The comment (`refs.ts:49`) justifies it as an instant referee handoff. With a
+half-open sweep (end first) the peaks read lower. T9's drift judge 2 probed it
+(an orchestrator observation, in no commit): B6 day 0 reads 48 not 78, B6 day 1
+48 not 68, and B4 day 2's sabre peak 38 not 54. Those are the only three figures
+measured, and the other scenario-days were not probed. They are also in
+`specs/017-canvas-tells-truth/handoff.md` §Left unfixed.
+
+**What it needs**: an owner call on whether an instantaneous handoff should
+count both blocks. It changes the footer's referee peak and the scheduler's
+`ref_requirements_by_day` together, so the change needs a drift review and a
+METHODOLOGY line.
+
+**Cost if ignored**: on days where many phases chain end to start the peak reads
+above the referees on the floor at any one moment, so the staffing advice
+is generous. It errs toward more referees, never fewer.
 
 ## Day-end overrun is a hard failure the methodology calls a warning
 
@@ -1202,10 +1261,9 @@ Still open from this entry:
   lands a pair on a window the scheduler would call honoured. The live smoke
   asserts the not-honoured Warning on ROC Mega and the store tests cover the
   Note.
-- **An overflowing block never draws the findings edge** (`Block.tsx`,
-  `warnedEdge = warned && !overflow`), so on a board with overflow one event of
-  a hard pair can show its marker on some phases only. It predates 016, and 017
-  (one strip model, no overflow) removes the cause.
+- **An overflowing block never drew the findings edge.** Fixed by 017: the
+  overflow exemption in `Block.tsx` is gone, so every warned block draws the
+  edge, the per-day overflow lane included.
 
 ## Templates are invented numbers, not a real season
 
@@ -1266,6 +1324,12 @@ observed rather than assumed:
 change – the failure this replaces – or the app re-runs constantly and flickers
 an indicator at values the organizer never meant to enter.
 
+**017 (2026-10-07) did not re-run.** An edit to anything the engine reads now
+marks the board stale, with a "Stale – re-run Auto-assign" banner and one
+Findings row, until the next run. This entry keeps its whole scope, and
+017's `configKey` is its hook: the canonical serialization of the engine's
+inputs, compared with the kept run's, says when a re-run is due.
+
 ## Adding strips can place fewer events
 
 *Measured 2026-09-06 by 012's baseline sweep. Design note with the mechanism,
@@ -1296,45 +1360,41 @@ four fix options with their costs. None is scheduled.
 ## The canvas calls events unplaced that the engine placed
 
 *Measured by 013 (handoff findings 1 and 9), promoted to an entry 2026-10-04
-when the owner set T039's pass condition. Roadmap feature 017.*
+when the owner set T039's pass condition. **Fixed by 017, 2026-10-07.***
 
-On the boot preset (B1, 80 strips) the engine places all 24 events and the
-Schedule view shows 24 rows, but the footer reads `19 placed · 5 unplaced ·
-0 pinned` and the canvas draws five blocks at strip 0 with the dashed overflow
-edge. `assignStripLanes` (`src/layout/lanes.ts:13`) packs each block into the
-lowest *contiguous* run of strips, in a fixed order, while the engine only
-counts free strips per window. Fragmentation leaves the packer without a run
-the engine's count says exists. `selectPlacementCounts` and the Findings
-list's Unplaced rows both read the packer, so the first screen of the app
-reports five problems that are not real.
+The entry blamed the lane packer's fragmentation and quoted `19 placed · 5
+unplaced` for B1. Both were out of date by the time 017 measured them. That
+figure predates 024, and the boot footer was 15 placed · 9 unplaced, with all
+nine overflow blocks DE phases. Across B1–B8 it read 15/9, 13/11, 14/10, 11/19,
+8/4, 17/37, 11/7, 30/23.
 
-**What it needs**: one strip model shared by the engine and the canvas –
-either the engine assigns concrete strip ranges the canvas draws, or the
-packer may split a block across non-contiguous strips. The first edits
-`src/engine/` and needs a drift review. Pass condition: the footer reads
-24 / 0 on B1 at 80 strips, and the smoke driver asserts it.
+**The cause was timing, with the packer's fragmentation on top.** `deriveEventSchedule`
+drew the DE at pool end plus the admin gap, without the scheduler's wait for
+strips, so the drawn load exceeded the strip count on every day of B1–B8 (B1 84,
+115, 90 and 95 strips against 80, B6 90, 83 and 112 against 48, B8 108, 136, 126
+and 115 against 68), while the engine's own never does. The contiguous packer
+added overflow even at the engine's own times (5/4/5/4/3/6/2/9 blocks).
 
-**Cost if ignored**: every organizer's first impression is a board with five
-phantom unplaced events and Findings rows they cannot act on.
-
-The same overflow shows one event two different figures (013 handoff finding
-33). B1's Div 1 Women's Epee reads "Unplaced, needs 32 strips" in the detail
-strip and "needs 16 strips" in the DE-prelims tooltip, each being that phase's
-own need under the packer, beside a dock that says "Every event has a slot."
-One strip model removes it.
+After a run the store now keeps the scheduler's own times and strip indices in
+memory and the canvas draws them. The boot footers read 24/0, 24/0, 24/0, 21/9,
+12/0, 45/9, 18/0, 53/0, equal to the engine's scheduled and unscheduled counts,
+and `scripts/smoke.mjs` asserts B1's `24 placed · 0 unplaced`. The 21/9 and 45/9
+are real, the engine's own ERRORs on B4 and B6. One strip model also removes the
+two "Unplaced, needs N strips" figures for one event (013 handoff finding 33),
+since the detail strip and the tooltips now read one drawn model.
 
 ## A placed block cannot be selected from the keyboard
 
 *013 handoff findings 13 and 20. Owner decision 2026-10-04: blocks become
-buttons. Roadmap feature 017.*
+buttons. **Fixed by 017, 2026-10-07.***
 
-`Block`'s root is `role="img"` with an `aria-label`, pinned by 013's
-`ui-contract.md` §Canvas, and T029 added `onClick` to it. A keyboard or
-assistive-technology user can select an unplaced event (the dock's chips are
-buttons) and can reach a placed one only through Findings → "Show on grid".
-The fix changes the role to `button` in the contract, keeps the accessible
-name, adds a visible focus ring, and re-checks the smoke driver's block
-locators in the same task.
+`Block`'s root was `role="img"` with an `aria-label`, so a keyboard or
+assistive-technology user could select an unplaced event (the dock's chips are
+buttons) and reach a placed one only through Findings → "Show on grid". Each
+phase is now one `<button type="button">` on its first run, with its accessible
+name, an outline focus ring and a plain tab stop, and Enter or Space selects it.
+Further runs of a split phase are `aria-hidden` siblings with `tabIndex={-1}`.
+The smoke driver tabs to a block and presses Enter.
 
 ## Auto-assign does not hold an unpinned predecessor before a pinned successor
 
@@ -1359,23 +1419,113 @@ check on current placements, so this sequencing part is unscheduled.
 event precedes its individual event or a Vet sibling runs out of order, with no
 finding.
 
+## Pinning an event in place and re-running can lose events
+
+*Found by 017's planning, 2026-10-07 (ruling R3). Recorded, not fixed. Beside
+[§Auto-assign does not hold an unpinned predecessor before a pinned successor](#auto-assign-does-not-hold-an-unpinned-predecessor-before-a-pinned-successor),
+the same pre-claim pass.*
+
+A pin fixes an event's day and pool start and nothing else, and 017 left that
+unchanged. Pinning every event where Auto-assign put it and re-running is not a
+no-op. The pre-claim pass seats each pin on the no-wait chain (pool end plus the
+admin gap, without the waits the first run had), not on the times the first run
+gave it. Measured: B1 goes from 24 placed, 0 unplaced to 19/5 and
+B8 from 53/0 to 25/28. The unseated set after a run with pins still equals
+`PINNED_UNCLAIMED` (checked on pin-all and pin-half, 16 of 16 trials), so the
+board reports it honestly.
+
+**What it needs**: an owner call on what a pin fixes, since the pool start alone
+is not enough to reproduce a board.
+
+**Cost if ignored**: an organizer who pins everything to protect a good board,
+then re-runs after a change, loses events with the unseated pins listed in
+Findings. Pinning fewer events shrinks the loss but does not remove it: pin-half
+still left 0/1/0/2/0/9/0/10 phases unseated on B1–B8.
+
+## Picking a preset keeps the pins on events the two boards share
+
+*Found by 017's Task S smoke agent, 2026-10-07. Recorded, not fixed. The cause
+predates 017 (013), and R3 makes it visible.*
+
+`applyPreset` (`src/store/presets.ts`) writes the scenario's inputs and does not
+clear the placements. `PresetPicker` then calls `runScheduleAll`. So choosing a
+preset in the header, B1 included, runs Auto-assign with every pin the organizer
+already holds on an event the old and new boards share. A reload is the fresh
+boot, because the store lives in memory. Under R3 a pin fixes only an event's day
+and pool start, so re-picking B1 after one hand move ran with that pin and, in
+the smoke agent's first attempt, read 21 placed · 3 unplaced · 2 pinned instead of
+24 · 0 · 0. See
+[§Pinning an event in place and re-running can lose events](#pinning-an-event-in-place-and-re-running-can-lose-events)
+for why a pin costs events. Task S's driver reloads the page to get a fresh B1,
+so no smoke check picks a preset after a hand move.
+
+**What it needs**: an owner call on whether picking a preset starts a clean board
+(clear the placements and the kept run, then run) or keeps hand work on shared
+events, with the choice stated in the picker.
+
+**Cost if ignored**: an organizer who compares presets after hand-placing events
+sees a different board from the preset's own, with events unplaced and pins they
+did not ask for, and nothing says why. Reloading the page is the workaround.
+
 ## The engine and the store both report a pin collision
 
-*013 handoff finding 25. Recorded, not fixed.*
+*013 handoff finding 25. **Fixed by 017, 2026-10-07.***
 
-When a pin cannot claim its strips, the engine emits a `PINNED_UNCLAIMED`
-bottleneck (one per phase node, finding 21). The UI never reads it: the Findings
-list shows the lane packer's Unplaced row instead (FR-059). The two surfaces
-agree on the fixture in finding 22 and nothing checks that they agree in
-general, so a pin the engine could not seat and a pin the packer could not seat
-can differ.
+When a pin could not claim its strips, the engine emitted a `PINNED_UNCLAIMED`
+bottleneck (one per phase node, finding 21) and the Findings list showed the lane
+packer's Unplaced row instead (FR-059). The two surfaces agreed on one fixture
+and nothing checked that they agreed in general.
 
-**What it needs**: one reporter. Feature 017's single strip model is the natural
-point, and 014's structured `Bottleneck` makes `PINNED_UNCLAIMED` consumable
-without message-text matching.
+017 made it one reporter. `unseatedPhases` (`src/engine/`) names the phases that
+need strips and hold none, Suggest's subtraction and the referee count read it,
+and the drawn model applies the same rule for the footer, the day bands and the
+Findings panel. Right after a run it equals the `PINNED_UNCLAIMED` set less any
+zero-length phase, which 017's pass conditions check after pin-all and pin-half
+runs on B1–B8. A kept pin the engine could not seat
+gets one Unplaced row (`unplaced:<id>:room`) reading "Pinned here, but no strips
+are free at this time – move or unpin it, then re-run Auto-assign." and
+`PINNED_UNCLAIMED` itself stays a ledger WARN with no panel row of its own.
 
-**Cost if ignored**: the same pin can be reported twice, or by only one surface,
-and the organizer cannot tell which to trust.
+## The day band computes an unplaced count it never shows
+
+*Found by 017, 2026-10-07. An owner wording call.*
+
+The day band's selector counts distinct unplaced events per day with the
+footer's rule, and the band does not render the figure. The footer and the
+Findings panel carry the count, so nothing is wrong on screen today.
+
+**What it needs**: the owner picks the wording and the spot in the band.
+
+**Cost if ignored**: an organizer scanning a crowded day cannot see at a glance
+that it holds an unplaced event, and must read the footer or the Findings panel.
+Nothing on screen is wrong.
+
+## A stale board's detail strip can show no strips for an event
+
+*Found by 017, 2026-10-07. An owner call.*
+
+While the board is stale, unseated phases are unknown, not unplaced, so they
+get no count and no Unplaced row. An event whose every phase is unseated on a
+stale board then has no strips to name, and the detail strip shows no strip
+label for it. That bends 013 handoff item 12, "the strips fact always renders".
+
+**What it needs**: an owner call between showing nothing, as now, and a line
+that says the strips are unknown until the next run.
+
+**Cost if ignored**: a blank strips fact on a stale board, beside the stale
+banner that already says why.
+
+## The video gutter and camera icon are deferred
+
+*017 ruling R8, 2026-10-07. Deferred to a later feature.*
+
+The mockup's video gutter and camera icon are not built. 017 draws strips from
+the kept run and leaves video marking as it was, and the alignment doc's D2 row
+still says the camera icon waits for a later feature.
+
+**Cost if ignored**: cosmetic. The board has no gutter or icon marking which
+strips carry video, so an organizer reads video strips from the strip numbers
+alone.
 
 ## The mockup's remaining visual gaps
 

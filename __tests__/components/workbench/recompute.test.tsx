@@ -13,6 +13,13 @@ import {
   saveViewState,
 } from '../../../src/store/viewState.ts'
 import { makePlacement } from '../../helpers/factories.ts'
+import { runPreset, UNPLACED_WORDING } from '../../helpers/drawnFixtures.ts'
+import { runScheduleAll } from '../../../src/store/runActions.ts'
+import { selectDerivedSchedule } from '../../../src/store/derived.ts'
+import { phaseSpans } from '../../../src/engine/unseated.ts'
+import { phaseDisplay } from '../../../src/lib/placementLabels.ts'
+import { formatClock, formatMinutes } from '../../../src/lib/time.ts'
+import type { ScheduleResult } from '../../../src/engine/types.ts'
 import { pinBadges } from '../../helpers/canvasQueries.ts'
 import { installStubResizeObserver } from '../../helpers/resizeObserver.ts'
 
@@ -443,5 +450,195 @@ describe('two-tier recompute with the matrix in the center (FR-008, FR-023)', ()
     })
 
     expect(band()).not.toBe(before)
+  })
+})
+
+function renderCenter(viewMode: ViewMode = ViewMode.MATRIX): void {
+  render(
+    <CenterView
+      viewMode={viewMode}
+      zoom={{ zoomStep: 2, fitting: false }}
+      detailCollapsed={false}
+      onToggleDetailCollapsed={() => {}}
+    />,
+  )
+}
+
+/**
+ * 017 T6a — the committed model is the drawn model (spec §2, §6). Right after a
+ * run the center draws the run's own times, DE waits included, in whichever
+ * view is up, and the detail strip under it reads the same model.
+ */
+describe('the center commits the drawn model (017 T6a)', () => {
+  let restoreResizeObserver: () => void
+
+  beforeEach(() => {
+    restoreResizeObserver = installStubResizeObserver(900, 480)
+  })
+
+  afterEach(() => {
+    restoreResizeObserver()
+  })
+
+  /** The DE's first minute, as the table's DE Start column reads it. */
+  function deStartOf(r: ScheduleResult): number | null {
+    return r.de_start ?? r.de_prelims_start ?? r.de_round_of_16_start
+  }
+
+  /** B1 after a run, and the first event whose kept DE starts later than its derived layout's. */
+  function runB1WithWaitedDe(): { id: string; kept: ScheduleResult } {
+    runPreset('B1')
+    const state = useStore.getState()
+    const derived = selectDerivedSchedule(state).events
+    const kept = state.lastRun?.events ?? {}
+    const id = Object.keys(kept)
+      .sort()
+      .find((eventId) => deStartOf(kept[eventId].result) !== deStartOf(derived[eventId].result))
+    if (!id) throw new Error('premise: some B1 DE waits for strips after its pools')
+    return { id, kept: kept[id].result }
+  }
+
+  it('the schedule table shows the run\'s DE start, not the derived one', () => {
+    const { id, kept } = runB1WithWaitedDe()
+    renderCenter(ViewMode.SCHEDULE)
+
+    expect(centerRowCells(id)[3]).toBe(formatMinutes(deStartOf(kept)))
+  })
+
+  it('the detail strip\'s pills show the run\'s phase times', () => {
+    const { id, kept } = runB1WithWaitedDe()
+    useStore.getState().selectCompetition(id)
+    renderCenter(ViewMode.MATRIX)
+
+    const pills = Array.from(document.querySelectorAll('[data-phase-pill]')).map((el) => el.textContent)
+    expect(pills).toEqual(
+      phaseSpans(kept).map((span) => `${phaseDisplay(span.phase)} ${formatClock(span.start)}–${formatClock(span.end)}`),
+    )
+  })
+})
+
+/**
+ * 017 T7 – the stale banner (spec §6, P4). It reads the committed model's run
+ * state, so it appears and goes when the board redraws, not on the keystroke.
+ */
+describe('the stale banner follows the committed model (017 T7)', () => {
+  const STALE_STRIPS = 79 // one under B1's 80: valid, but not the count the run used
+  const BLOCKING_STRIPS = 0 // strips_total 0 is a Blocking ERROR
+  let restoreResizeObserver: () => void
+
+  beforeEach(() => {
+    restoreResizeObserver = installStubResizeObserver(900, 480)
+    runPreset('B1')
+  })
+
+  afterEach(() => {
+    restoreResizeObserver()
+  })
+
+  function banner(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('[data-stale-banner]')
+  }
+
+  function settle(): void {
+    act(() => {
+      vi.advanceTimersByTime(CENTER_SETTLE_MS)
+    })
+  }
+
+  it('shows nothing on a board that was just run', () => {
+    renderCenter()
+
+    expect(banner()).toBeNull()
+    expect(screen.queryByText(UNPLACED_WORDING.STALE)).not.toBeInTheDocument()
+  })
+
+  it.each([ViewMode.MATRIX, ViewMode.SCHEDULE])('shows after a settings edit once the center settles, in the %s view', (viewMode) => {
+    renderCenter(viewMode)
+
+    act(() => {
+      useStore.getState().setStrips(STALE_STRIPS)
+    })
+    // The live model is stale already, but the center has not redrawn yet.
+    expect(banner()).toBeNull()
+
+    settle()
+
+    const shown = banner()
+    expect(shown).not.toBeNull()
+    // The live region is mounted all along, so the text arrives inside a region that exists.
+    expect(shown?.parentElement).toHaveAttribute('role', 'status')
+    expect(shown?.textContent).toBe(UNPLACED_WORDING.STALE)
+  })
+
+  it('goes once Auto-assign has run and the center has settled', () => {
+    renderCenter()
+    act(() => {
+      useStore.getState().setStrips(STALE_STRIPS)
+    })
+    settle()
+    expect(banner()).not.toBeNull()
+
+    act(() => {
+      runScheduleAll()
+    })
+    expect(banner()).not.toBeNull()
+
+    settle()
+
+    expect(banner()).toBeNull()
+  })
+
+  it('keeps the frozen state while a Blocking finding freezes the committed model', () => {
+    renderCenter()
+
+    // strips_total 0 is both a stale edit and a Blocking ERROR: the center commits nothing.
+    act(() => {
+      useStore.getState().setStrips(BLOCKING_STRIPS)
+    })
+    settle()
+    expect(screen.getByRole('region', { name: 'Blocking findings' })).toBeInTheDocument()
+    expect(banner()).toBeNull()
+
+    // Valid again but not the strip count the run used: the board is stale, and says so.
+    act(() => {
+      useStore.getState().setStrips(STALE_STRIPS)
+    })
+    settle()
+
+    expect(screen.queryByRole('region', { name: 'Blocking findings' })).not.toBeInTheDocument()
+    expect(banner()).not.toBeNull()
+  })
+
+  it('keeps the banner up when a Blocking finding then freezes a board that was already stale', () => {
+    renderCenter()
+    act(() => {
+      useStore.getState().setStrips(STALE_STRIPS)
+    })
+    settle()
+    expect(banner()).not.toBeNull()
+
+    act(() => {
+      useStore.getState().setStrips(BLOCKING_STRIPS)
+    })
+    settle()
+
+    expect(screen.getByRole('region', { name: 'Blocking findings' })).toBeInTheDocument()
+    expect(banner()?.textContent).toBe(UNPLACED_WORDING.STALE)
+  })
+
+  it('takes the frozen board out of the tab order and the accessibility tree', () => {
+    renderCenter()
+    const dimmed = document.querySelector<HTMLElement>('[data-dimmed]')
+    expect(dimmed).not.toHaveAttribute('inert')
+
+    act(() => {
+      useStore.getState().setStrips(BLOCKING_STRIPS)
+    })
+    settle()
+
+    expect(dimmed).toHaveAttribute('inert')
+    const blocks = document.querySelectorAll<HTMLElement>('[data-event-block]')
+    expect(blocks.length).toBeGreaterThan(0)
+    blocks.forEach((block) => expect(block.closest('[inert]')).not.toBeNull())
   })
 })

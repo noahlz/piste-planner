@@ -18,7 +18,7 @@
  * re-checked at 015 (2026-10-05) under the converged factory. Any figure that
  * moved carries a dated 015 line.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { computeStripCap } from '../../src/engine/stripBudget.ts'
@@ -333,5 +333,33 @@ describe('pinned scheduling (T033)', () => {
 
     const second = scheduleAllWithPins(comps, config, pins)
     expect(second).toEqual(first)
+  })
+})
+
+describe('pinned scheduling ties break by code point, not the runtime locale (017 P7)', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('preclaims JR-M-FOIL-IND before Y14-M-FOIL-IND when localeCompare follows Lithuanian', () => {
+    // Lithuanian puts "Y" between "I" and "J". B6 is the one scenario holding
+    // both ids. Shrunk to 24 strips, the pins' 13 + 15 pool strips exceed the
+    // cap of 19, so the later pin in id order is the one left PINNED_UNCLAIMED
+    // [M] Y14 under code-point order, JR under the Lithuanian one.
+    const lithuanian = new Intl.Collator('lt')
+    vi.spyOn(String.prototype, 'localeCompare').mockImplementation(function (this: string, that: string) {
+      return lithuanian.compare(this, that)
+    })
+    const { fencerCounts, days, tournamentType } = SCENARIOS.B6
+    const comps = buildCompetitions(fencerCounts, tournamentType)
+    const config = tournamentConfig(days, 24, 7, tournamentType)
+    const pinAt = (competition_id: string): PinnedPlacement => ({
+      competition_id, day: 0, start_time: dayStart(0, config) + 60, strip_count: 30,
+    })
+
+    const result = scheduleAllWithPins(comps, config, [pinAt('Y14-M-FOIL-IND'), pinAt('JR-M-FOIL-IND')])
+
+    const unclaimedPools = result.bottlenecks
+      .filter(b => b.cause === BottleneckCause.PINNED_UNCLAIMED && b.phase === Phase.POOLS)
+      .map(b => b.competition_id)
+    expect(unclaimedPools).toEqual(['Y14-M-FOIL-IND'])
   })
 })

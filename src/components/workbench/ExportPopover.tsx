@@ -36,6 +36,7 @@ function errorMessage(err: unknown): string {
 export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [droppedPlacements, setDroppedPlacements] = useState<string[]>([])
+  const [runRefused, setRunRefused] = useState<string | null>(null)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -44,17 +45,28 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
     saveToFile()
   }
 
+  /** A failed load leaves the board as it was, so the last load's notices no longer describe it. */
+  function clearLoadNotices() {
+    setDroppedPlacements([])
+    setRunRefused(null)
+  }
+
   async function handleLoad(file: File) {
     try {
       const result = await parseTournamentFile(file)
       if ('error' in result) {
         setLoadError(result.error)
+        clearLoadNotices()
       } else {
-        applyLoadedState(result.state)
+        const replayFailure = applyLoadedState(result.state, result.run)
         setLoadError(null)
         // A lenient load keeps going but says what it threw away, so a
         // silently shorter schedule never looks like the saved one.
         setDroppedPlacements(result.droppedPlacements)
+        // A carried run that failed validation, or whose replay threw, is
+        // thrown away whole and the board opens stale – said here the way the
+        // drops above are.
+        setRunRefused(result.runRefused ?? replayFailure)
       }
     } catch (err) {
       // parseTournamentFile's readFileText rejects when FileReader fires
@@ -62,6 +74,7 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
       // here that rejection reaches no error boundary (React review of
       // T007). Route it into the same alert a parse/schema error uses.
       setLoadError(`Could not read the file: ${errorMessage(err)}`)
+      clearLoadNotices()
     }
   }
 
@@ -87,6 +100,16 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
   }
 
   const urlExceedsLimit = shareUrl != null && shareLinkExceedsLimit(shareUrl)
+
+  // What the last good load threw away, one sentence each.
+  const loadNotices = [
+    ...(droppedPlacements.length > 0
+      ? [
+          `Dropped ${droppedPlacements.length} placement${droppedPlacements.length === 1 ? '' : 's'} for events not in this configuration: ${droppedPlacements.join(', ')}`,
+        ]
+      : []),
+    ...(runRefused !== null ? [`The saved run could not be replayed (${runRefused}).`] : []),
+  ]
 
   return (
     <Popover defaultOpen={defaultOpen}>
@@ -133,17 +156,8 @@ export function ExportPopover({ defaultOpen }: ExportPopoverProps) {
           )}
           {/* Always mounted: a live region only announces changes if it exists
               in the DOM before the content lands. */}
-          <p
-            className={droppedPlacements.length > 0 ? 'mt-2 text-sm text-finding-badge-text' : undefined}
-            role="status"
-          >
-            {droppedPlacements.length > 0 && (
-              <>
-                Dropped {droppedPlacements.length} placement
-                {droppedPlacements.length === 1 ? '' : 's'} for events not in this
-                configuration: {droppedPlacements.join(', ')}
-              </>
-            )}
+          <p className={loadNotices.length > 0 ? 'mt-2 text-sm text-finding-badge-text' : undefined} role="status">
+            {loadNotices.join(' ')}
           </p>
         </div>
 

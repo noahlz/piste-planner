@@ -4,17 +4,24 @@ import type { StoreState } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { makePlacement } from '../helpers/factories.ts'
-import { assignStripLanes } from '../../src/layout/lanes.ts'
+import { runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
 import { findingIdentity } from '../../src/engine/validation.ts'
-import { DeMode } from '../../src/engine/types.ts'
-import { selectDaySummaries, selectDerivedSchedule, selectDerivedFindings } from '../../src/store/derived.ts'
+import { DeMode, Weapon } from '../../src/engine/types.ts'
+import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
+import {
+  RunState,
+  selectDaySummaries,
+  selectDerivedFindings,
+  selectDrawnSchedule,
+  selectPlacementCounts,
+} from '../../src/store/derived.ts'
 import * as derivedModule from '../../src/store/derived.ts'
-import type { DaySummary } from '../../src/store/derived.ts'
+import type { DaySummary, DrawnScheduleBlock } from '../../src/store/derived.ts'
 
 /**
  * 013 T025 (phase-3 contract) — `selectDaySummaries` (data-model.md §9,
- * contracts/phase3-contract.md). One row per day, read from the same
- * `assignStripLanes` output the footer and the canvas already agree on
+ * contracts/phase3-contract.md). One row per day, read from the drawn model's
+ * blocks (`selectDrawnSchedule`, 017 T6a), the same blocks the footer counts
  * (constitution, "each fact has exactly one home") — never a private
  * re-flattening of the schedule.
  *
@@ -95,25 +102,25 @@ function twoJuniorEpeeOnSeparateDays(): void {
   })
 }
 
-/** Expected events/finish/unplaced for one day, derived from assignStripLanes — never typed by hand.
+/** Expected events/finish for one day, read off the drawn blocks — never typed by hand.
  *
  * `peakStrips` is deliberately not computed here (test-quality-reviewer
  * finding on 05103d5ff4): this used to re-implement `peakStripsOnDay`'s own
  * half-open interval-overlap loop, so an off-by-one shared by both
  * implementations would have passed unnoticed. It is asserted separately
- * below as a literal, reasoned out from the fixture's own block times. */
+ * below as a literal, reasoned out from the fixture's own block times.
+ * `unplaced` is likewise asserted as a literal, not computed here. */
 function expectedBlockFields(
-  blocks: ReturnType<typeof assignStripLanes>,
+  blocks: readonly DrawnScheduleBlock[],
   day: number,
-): Pick<DaySummary, 'events' | 'finish' | 'unplaced'> {
+): Pick<DaySummary, 'events' | 'finish'> {
   const dayBlocks = blocks.filter((b) => b.day === day)
   if (dayBlocks.length === 0) {
-    return { events: 0, finish: null, unplaced: 0 }
+    return { events: 0, finish: null }
   }
   const events = new Set(dayBlocks.map((b) => b.competitionId)).size
   const finish = Math.max(...dayBlocks.map((b) => b.endMinutes))
-  const unplaced = dayBlocks.filter((b) => b.overflow).length
-  return { events, finish, unplaced }
+  return { events, finish }
 }
 
 /**
@@ -145,40 +152,66 @@ function threeEventsOverlappingOnDayZero(): void {
   })
 }
 
-describe('selectDaySummaries — per-day fields, derived from assignStripLanes', () => {
-  it('matches events, finish and unplaced against an independently-computed assignStripLanes pass', () => {
+describe('selectDaySummaries — per-day fields, read off the drawn blocks', () => {
+  it('matches events, finish and unplaced against the drawn model\'s own blocks', () => {
     threeEventsOverlappingOnDayZero()
     const state = useStore.getState()
-    const schedule = selectDerivedSchedule(state)
-    const blocks = assignStripLanes(schedule.events, state.strips_total)
+    const { blocks } = selectDrawnSchedule(state)
 
     const summaries = selectDaySummaries(state)
     expect(summaries).toHaveLength(3)
 
+    // The board was never run, so it is stale, and the unseated JR-M-FOIL-IND
+    // DE on day 0 does not count as unplaced (P4 (a)): every day reads 0.
     for (let day = 0; day < 3; day++) {
       const expected = expectedBlockFields(blocks, day)
-      expect(summaries[day], `day ${day}`).toMatchObject({ day, ...expected })
+      expect(summaries[day], `day ${day}`).toMatchObject({ day, ...expected, unplaced: 0 })
     }
   })
 
-  it('sums concurrent strip demand at the busiest instant of the day', () => {
+  it('sums the strips held at the busiest instant, so an unseated phase adds none', () => {
     threeEventsOverlappingOnDayZero()
     const summaries = selectDaySummaries(useStore.getState())
 
-    // Day 0's four blocks: JR-M-EPEE-IND pool 480-640 (1 strip), JR-M-FOIL-IND
-    // pool 500-660 (1 strip), JR-M-EPEE-IND DE 670-710 (3 strips), and
-    // JR-M-FOIL-IND DE 690-730 (3 strips, drawn overflowing — 4 strips total
-    // leaves no free run once JR-M-EPEE-IND's DE has taken 3 of them, but
-    // `peakStripsOnDay` counts its demand regardless, since it measures
-    // demand rather than occupancy). The busiest instant is minute 690, where
-    // both DEs are running at once: 3 + 3 = 6. (Both pool blocks have already
-    // ended by 690, so neither reaches this instant.)
-    expect(summaries[0].peakStrips).toBe(6)
+    // Day 0, seated whole in (event start, id) order over 4 strips:
+    // JR-M-EPEE-IND pool 480-640 on strip 0 and DE 670-710 on strips 0-2, then
+    // JR-M-FOIL-IND pool 500-660 on strip 1 (strip 0 is busy) and DE 690-730,
+    // which needs 3 strips while only strip 3 is free, so it holds none. The
+    // busiest instant is 670-710, where JR-M-EPEE-IND's DE holds 3. Counting
+    // the unseated DE's 3 requested strips would read 6, more than the 4 the
+    // day has (017 spec §4).
+    expect(summaries[0].peakStrips).toBe(3)
     // Day 1 carries only JR-W-EPEE-IND, whose own pool-then-DE never overlap
     // each other, so the peak is just its largest single block, the 3-strip DE.
     expect(summaries[1].peakStrips).toBe(3)
     // Day 2 has nothing placed.
     expect(summaries[2].peakStrips).toBe(0)
+  })
+
+  // A bound, not an exact value. No B1–B8 board has an unseated phase at
+  // boot, so the boot half is a characterisation check that held before 017
+  // too; only the after-move half can tell held strips from requested ones.
+  // The exact value is pinned by the next test.
+  it.each(SCENARIO_IDS)('never claims more strips at peak than %s has, at boot or after the headline move', (scenario) => {
+    runPreset(scenario)
+    const atBoot = selectDaySummaries(useStore.getState())
+    const stripsTotal = useStore.getState().strips_total
+    for (const summary of atBoot) expect(summary.peakStrips, `boot day ${summary.day}`).toBeLessThanOrEqual(stripsTotal)
+
+    runAndMoveHeadline(scenario)
+    for (const summary of selectDaySummaries(useStore.getState())) {
+      expect(summary.peakStrips, `moved day ${summary.day}`).toBeLessThanOrEqual(stripsTotal)
+    }
+  })
+
+  it('reads 80 at peak on the day B1\'s headline move lands on', () => {
+    const { day } = runAndMoveHeadline('B1')
+
+    // D1-M-EPEE-IND's unseated POOLS (45 strips asked) and DE_PRELIMS (16)
+    // hold nothing and add nothing. The day's busiest instant holds all 80
+    // strips. Counting what the phases asked for would read 122.
+    expect(day).toBe(1)
+    expect(selectDaySummaries(useStore.getState())[day].peakStrips).toBe(80)
   })
 
   it('reports events 0, finish null and peakStrips 0 for a day with nothing placed on it', () => {
@@ -229,14 +262,45 @@ describe('selectDaySummaries — findings, re-pointed to selectFindings (013 T03
     expect(after[1].findings).toBe(before[1].findings)
   })
 
-  it('counts an Unplaced row on the day its overflowing block sits on', () => {
-    threeEventsOverlappingOnDayZero()
+  // 017 T5a: the Unplaced row comes from the headline Move day's unseated
+  // event on its new day. The run-less overflow fixture this used is stale
+  // now, and its one stale row belongs to no day.
+  it('counts an Unplaced row on the day its unseated event sits on', () => {
+    const { id, day } = runAndMoveHeadline('B1')
     const summaries = selectDaySummaries(useStore.getState())
     const findings = selectFindings(useStore.getState())
 
-    const day0Findings = findings.filter((f) => f.day === 0)
-    expect(day0Findings.some((f) => f.severity === 'Unplaced'), 'expected an Unplaced row on day 0').toBe(true)
-    expect(summaries[0].findings).toBeGreaterThanOrEqual(1)
-    expect(summaries[0].findings).toBe(day0Findings.length)
+    const dayFindings = findings.filter((f) => f.day === day)
+    expect(dayFindings.some((f) => f.id === `unplaced:${id}:room`), `expected the mover's Unplaced row on day ${day}`).toBe(true)
+    expect(summaries[day].findings).toBe(dayFindings.length)
+  })
+})
+
+// The band's `unplaced` is a data field with no display yet: the band text
+// (Canvas.tsx `dayBandText`) prints events, finish, peak strips and findings,
+// as it did before 017. Whether it should print "N unplaced" is an owner
+// question raised at T6a review, so these cases pin the field only.
+describe('selectDaySummaries — unplaced counts the drawn model\'s events (017 spec §4)', () => {
+  it('after the headline move, the moved event\'s band and the footer both count 1', () => {
+    const { id, day } = runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    expect(selectDrawnSchedule(state).unplacedIds, 'premise: the moved event is unplaced').toEqual(new Set([id]))
+
+    const summaries = selectDaySummaries(state)
+    expect(summaries[day].unplaced).toBe(1)
+    expect(summaries.reduce((sum, s) => sum + s.unplaced, 0)).toBe(1)
+    expect(selectPlacementCounts(state).unplaced).toBe(1)
+  })
+
+  it('after a settings edit, every band counts 0 unplaced', () => {
+    runPreset('B1')
+    const { setPoolRoundDuration, pool_round_duration_table } = useStore.getState()
+    setPoolRoundDuration(Weapon.EPEE, pool_round_duration_table[Weapon.EPEE] + 30)
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: the settings edit makes the board stale').toBe(RunState.STALE)
+    expect(model.blocks.some((b) => b.unseated), 'premise: the stale board has unseated phases').toBe(true)
+
+    expect(selectDaySummaries(state).map((s) => s.unplaced)).toEqual(Array.from({ length: state.days_available }, () => 0))
   })
 })

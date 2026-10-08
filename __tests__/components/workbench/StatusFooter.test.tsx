@@ -9,6 +9,7 @@ import { formatClock } from '../../../src/lib/time.ts'
 import { WEAPON_DISPLAY } from '../../../src/lib/competitionLabels.ts'
 import { Weapon } from '../../../src/engine/types.ts'
 import { ViewMode } from '../../../src/store/viewState.ts'
+import { runAndMoveHeadline, runPreset } from '../../helpers/drawnFixtures.ts'
 
 // 013 T011a — the retired bottom panel and its scorecard collapse into a
 // one-line StatusFooter (FR-049, FR-050; research D7, D18; contracts/
@@ -91,6 +92,26 @@ describe('StatusFooter counts (data-model.md §10)', () => {
     expect(document.querySelector('[data-counts]')?.textContent).toBe(
       `${counts.placed} placed · ${counts.unplaced} unplaced · ${counts.pinned} pinned`,
     )
+  })
+
+  // 017 T5a: the counts read the drawn model, so B1 boots at the engine's
+  // 24/0 (the lane packer's 15/9 before), and the headline move reads 23/1.
+  it.each([
+    ['at boot', () => runPreset('B1'), '24 placed · 0 unplaced · 0 pinned'],
+    ['after the headline Move day', () => runAndMoveHeadline('B1'), '23 placed · 1 unplaced · 1 pinned'],
+  ] as const)('renders B1\'s drawn counts %s', (_, arrange, text) => {
+    arrange()
+
+    render(
+      <StatusFooter
+        viewMode={ViewMode.MATRIX}
+        onViewModeChange={() => {}}
+        zoom={ZOOM}
+        onZoomChange={() => {}}
+      />,
+    )
+
+    expect(document.querySelector('[data-counts]')?.textContent).toBe(text)
   })
 
   it('renders zero counts on an empty store', () => {

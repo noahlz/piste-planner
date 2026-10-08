@@ -10,10 +10,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
-import { runScheduleAll } from '../../src/store/runActions.ts'
-import { DAY_AXIS_SPACING_MINS } from '../../src/store/buildConfig.ts'
+import { runScheduleAll, replayRun } from '../../src/store/runActions.ts'
+import { DAY_AXIS_SPACING_MINS, buildTournamentConfig, buildPinnedPlacements } from '../../src/store/buildConfig.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
+import { placementFromResult } from '../../src/engine/derive.ts'
+import { makePlacement } from '../helpers/factories.ts'
 import { PlacementSource } from '../../src/engine/types.ts'
+import type { Placement } from '../../src/engine/types.ts'
 
 vi.mock('../../src/engine/scheduler.ts', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../src/engine/scheduler.ts')>()
@@ -215,5 +218,152 @@ describe('runScheduleAll — pinned placements', () => {
     expect(useStore.getState().lastAutoRun).toEqual(
       expect.objectContaining({ placed: 0, unplaced: 0 }),
     )
+  })
+})
+
+describe('runScheduleAll keeps the run', () => {
+  it('keeps one record per placed event, built with the pins the engine was given', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const state = useStore.getState()
+    const pinId = Object.keys(state.placements)[0]
+    state.setPinned(pinId, true)
+
+    vi.mocked(scheduleAll).mockClear()
+    runScheduleAll()
+
+    const kept = useStore.getState().lastRun
+    expect(kept).not.toBeNull()
+    expect(kept?.pins).toEqual(thirdArgOfCall(0))
+    expect(kept?.pins.map((p) => p.competition_id)).toEqual([pinId])
+    expect(Object.keys(kept?.events ?? {}).sort()).toEqual(Object.keys(useStore.getState().placements).sort())
+  })
+
+  // `runScheduleAll` also stamps `lastAutoRun` in a second update, which predates
+  // 017 and touches neither field, so the filter below skips it.
+  it('writes placements and the kept run in one store update, so no subscriber sees one without the other', () => {
+    applyPreset('B1')
+    const seen: { placementsChanged: boolean; runChanged: boolean; configKey?: string }[] = []
+    const unsubscribe = useStore.subscribe((now, before) => {
+      const placementsChanged = now.placements !== before.placements
+      const runChanged = now.lastRun !== before.lastRun
+      if (placementsChanged || runChanged) {
+        seen.push({ placementsChanged, runChanged, configKey: now.lastRun?.configKey })
+      }
+    })
+    try {
+      runScheduleAll()
+    } finally {
+      unsubscribe()
+    }
+    expect(seen).toEqual([{
+      placementsChanged: true,
+      runChanged: true,
+      configKey: useStore.getState().lastRun?.configKey,
+    }])
+    expect(seen[0].configKey, 'the update with the placements already carries the new run').toBeDefined()
+  })
+
+  it('leaves the counts and the placements as the scheduler\'s own run gives them', () => {
+    const B1_SCHEDULED_COUNT = 24
+    applyPreset('B1')
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    const independent = scheduleAll(competitions, config, buildPinnedPlacements(state)).schedule
+    const expected: Record<string, Placement> = {}
+    for (const [id, result] of Object.entries(independent)) {
+      const placement = placementFromResult(result)
+      if (placement !== null) expected[id] = { ...placement, source: PlacementSource.AUTO, pinned: false }
+    }
+    expect(Object.keys(expected)).toHaveLength(B1_SCHEDULED_COUNT)
+
+    const counts = runScheduleAll()
+
+    expect(counts).toEqual({ placed: B1_SCHEDULED_COUNT, unplaced: 0 })
+    expect(useStore.getState().placements).toEqual(expected)
+  })
+
+  it('clears the kept run when placements are set from outside a run', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    expect(useStore.getState().lastRun, 'premise: the run was kept').not.toBeNull()
+
+    useStore.getState().setPlacementsFromAuto({ 'SOME-EVENT': makePlacement() })
+
+    expect(useStore.getState().lastRun).toBeNull()
+  })
+
+  it('clears the kept run when scheduleAll throws, and leaves the placements alone', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const placements = useStore.getState().placements
+    expect(useStore.getState().lastRun, 'premise: the first run was kept').not.toBeNull()
+
+    vi.mocked(scheduleAll).mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+    runScheduleAll()
+
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(useStore.getState().placements).toBe(placements)
+  })
+})
+
+describe('replayRun (017 T8)', () => {
+  it('rebuilds the kept run from its pins and writes no placement', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const kept = useStore.getState().lastRun
+    const placements = useStore.getState().placements
+    expect(kept, 'premise: the run was kept').not.toBeNull()
+    useStore.getState().setLastRun(null)
+
+    replayRun(useStore.getState(), kept!.pins)
+
+    expect(useStore.getState().lastRun).toEqual(kept)
+    expect(useStore.getState().placements).toBe(placements)
+  })
+
+  it('hands the scheduler the pins it was given', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const [id, placement] = Object.entries(useStore.getState().placements)[0]
+    const pins = [
+      {
+        competition_id: id,
+        day: placement.day,
+        start_time: placement.day * DAY_AXIS_SPACING_MINS + placement.start_time,
+        strip_count: placement.strip_count,
+      },
+    ]
+    vi.mocked(scheduleAll).mockClear()
+
+    replayRun(useStore.getState(), pins)
+
+    expect(scheduleAll).toHaveBeenCalledTimes(1)
+    expect(thirdArgOfCall(0)).toEqual(pins)
+  })
+
+  it('clears the kept run, says why on the console and returns the reason when the replay throws', () => {
+    applyPreset('B1')
+    runScheduleAll()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(scheduleAll).mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
+
+    const failure = replayRun(useStore.getState(), [])
+
+    expect(failure).toBe('boom')
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/replay/i), 'boom')
+    expect(useStore.getState().lastRun).toBeNull()
+    warn.mockRestore()
+  })
+
+  it('returns no failure when the replay succeeds', () => {
+    applyPreset('B1')
+    runScheduleAll()
+
+    expect(replayRun(useStore.getState(), useStore.getState().lastRun!.pins)).toBeNull()
   })
 })

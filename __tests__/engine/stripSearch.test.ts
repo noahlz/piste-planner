@@ -8,6 +8,7 @@ import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { aggregateStripHours } from '../../src/engine/capacity.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { buildStrips } from '../../src/engine/stripBudget.ts'
+import { unseatedPhases } from '../../src/engine/unseated.ts'
 import { makeConfig, makeCompetition } from '../helpers/factories.ts'
 import { buildCompetitions, tournamentConfig, SCENARIOS } from '../helpers/scenarios.ts'
 import { dayStart, EventType } from '../../src/engine/types.ts'
@@ -466,5 +467,56 @@ describe('search and schedule threading pins (T033)', () => {
       // pool start, or a pin can no longer claim at its own time.
       expect(placedCount < comps.length || unclaimed.length > 0).toBe(true)
     }
+  })
+
+  // Characterisation (017 T1, must pass before and after): the search now
+  // subtracts the events `unseatedPhases` names instead of reading
+  // `PINNED_UNCLAIMED` itself. Captured at 114d99314b: the `placed` count of
+  // every candidate on the board above, from the floor (53) to the answer (83).
+  /** The board of the characterisation below: EPEE and FOIL pinned to one minute of day 0. */
+  function pinnedMinBoard() {
+    const { comps, config } = minBoard()
+    const pinStart = dayStart(0, config) + 180
+    const pins: PinnedPlacement[] = ['D1-M-EPEE-IND', 'D1-M-FOIL-IND'].map(id => ({
+      competition_id: id,
+      day: 0,
+      start_time: pinStart,
+      strip_count: comps.find(c => c.id === id)!.strips_allocated,
+    }))
+    return { comps, config, pins }
+  }
+
+  it('yields the same placed count at every candidate when the unseated rule is shared', () => {
+    const { comps, config, pins } = pinnedMinBoard()
+
+    const placed: number[] = []
+    for (const candidate of scanStripCounts(comps, config, stripSearchRange(comps, config)!, pins)) {
+      placed.push(candidate.placed)
+    }
+
+    expect(placed).toEqual([
+      22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+      23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 24,
+    ])
+  })
+
+  it('subtracts events with an unseated phase at the candidates that have one', () => {
+    // Without this the characterisation above could pass while the subtraction
+    // never ran: a pinned phase left without strips keeps its pool_start, so the
+    // raw count stays 24 and only the subtraction brings it down.
+    const { comps, config, pins } = pinnedMinBoard()
+    const candidates = [...scanStripCounts(comps, config, stripSearchRange(comps, config)!, pins)]
+
+    const subtracted = candidates.filter((candidate) => {
+      const run = scheduleAll(comps, {
+        ...config, strips_total: candidate.count, strips: buildStrips(candidate.count, config.video_strips_total),
+      }, pins)
+      const rawPlaced = Object.values(run.schedule).filter(r => r.pool_start !== null).length
+      const unseated = unseatedPhases(run).size > 0
+      expect(candidate.placed < rawPlaced, `count ${candidate.count}`).toBe(unseated)
+      return unseated
+    })
+
+    expect(subtracted.length).toBeGreaterThan(0)
   })
 })

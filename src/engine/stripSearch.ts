@@ -55,7 +55,7 @@ import { scheduleAll } from './scheduler.ts'
 import { aggregateStripHours } from './capacity.ts'
 import { buildStrips } from './stripBudget.ts'
 import { suggestStripCount, busiestDayLoad } from './analysis.ts'
-import { BottleneckCause } from './types.ts'
+import { phaseKey, phaseSpans, unseatedPhases } from './unseated.ts'
 import { COMPETITORS_PER_STRIP_PER_DAY } from './constants.ts'
 import type { Competition, TournamentConfig, PinnedPlacement } from './types.ts'
 
@@ -80,8 +80,8 @@ export interface StripCandidate {
   count: number
   /**
    * Schedule entries with a non-null `pool_start` — the app's own rule
-   * (`runActions.ts:28`) — **minus** every pinned competition carrying a
-   * `PINNED_UNCLAIMED` bottleneck at this count.
+   * (`runActions.ts:28`) — **minus** every event with an unseated phase at this
+   * count (`unseatedPhases`, the rule the canvas and the Findings panel share).
    *
    * A pin keeps its day and start whether or not it finds free strips, so its
    * `pool_start` is non-null either way and the first rule alone cannot see a
@@ -89,8 +89,8 @@ export interface StripCandidate {
    * so counting it as placed makes a crowded board look *cheaper* than the
    * same board with no pins on it. Research D1 asks this search for "the
    * smallest count that places every event *around the pins* … without it the
-   * card could name a count at which the pinned board overflows", and a
-   * `PINNED_UNCLAIMED` warning is exactly that overflow.
+   * card could name a count at which the pinned board overflows", and an
+   * unseated phase is exactly that overflow.
    */
   placed: number
   /**
@@ -208,19 +208,18 @@ export function* scanStripCounts(
       strips_total: count,
       strips: buildStrips(count, config.video_strips_total),
     }
-    const { schedule, bottlenecks } = scheduleAll(competitions, candidateConfig, pinned)
+    const run = scheduleAll(competitions, candidateConfig, pinned)
+    const { schedule } = run
     let placed = Object.values(schedule).filter(r => r.pool_start !== null).length
     if (pinned.length > 0) {
       // Guarded, so the no-pins path runs the same statements it did before
-      // this feature — with no pins the engine emits no `PINNED_UNCLAIMED` at
-      // all, so the guard changes no number, only which statements execute.
-      const overflowed = new Set<string>()
-      for (const b of bottlenecks) {
-        if (b.cause !== BottleneckCause.PINNED_UNCLAIMED) continue
-        if (schedule[b.competition_id]?.pool_start === null) continue
-        overflowed.add(b.competition_id)
+      // this feature — with no pins every phase is seated, so the guard
+      // changes no number, only which statements execute.
+      const unseated = unseatedPhases(run)
+      for (const [id, result] of Object.entries(schedule)) {
+        if (result.pool_start === null) continue
+        if (phaseSpans(result).some(span => unseated.has(phaseKey(id, span.phase)))) placed--
       }
-      placed -= overflowed.size
     }
     const placesAll = placed === required
 

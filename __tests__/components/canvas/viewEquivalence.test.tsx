@@ -8,6 +8,7 @@ import type { DerivedEventSchedule } from '../../../src/engine/derive.ts'
 import type { Competition, DayWindow, Placement, TournamentConfig } from '../../../src/engine/types.ts'
 import { Category, DeMode, Gender, Weapon } from '../../../src/engine/types.ts'
 import type { DerivedFindings, DerivedSchedule } from '../../../src/store/derived.ts'
+import { drawnFromDerived } from '../../helpers/drawnFixtures.ts'
 import { useStore } from '../../../src/store/store.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import {
@@ -228,7 +229,7 @@ function blocksFor(id: string): Map<string, Block> {
       day: Number(el.dataset.day),
       start: Number(el.dataset.start),
       end: Number(el.dataset.end),
-      strips: Number(el.dataset.strips),
+      strips: Number(el.dataset.stripCount),
     })
   }
   return found
@@ -301,11 +302,13 @@ const EXPECTED_TUPLES = [
 ].sort()
 
 function renderBothViews(model: DerivedSchedule): void {
+  // One committed drawn model for both views, as CenterView hands them (017 T6a).
+  const drawn = drawnFromDerived(model)
   render(
     <>
-      <ScheduleOutput schedule={model} />
+      <ScheduleOutput schedule={drawn} />
       <Canvas
-        schedule={model}
+        schedule={drawn}
         findings={EMPTY_FINDINGS}
         findingRows={[]}
         dayConfigs={CANVAS_DAY_CONFIGS}

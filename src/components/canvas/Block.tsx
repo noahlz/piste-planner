@@ -1,11 +1,11 @@
-import type { CSSProperties, MouseEvent, PointerEvent } from 'react'
+import type { CSSProperties, FocusEvent, MouseEvent, PointerEvent } from 'react'
 import type { Competition } from '../../engine/types.ts'
 import { Phase } from '../../engine/types.ts'
 import { formatClock } from '../../lib/time.ts'
-import type { BlockPlacement } from '../../layout/lanes.ts'
+import type { DrawnBlock } from '../../layout/strips.ts'
 import { GENDER_DISPLAY, categoryDisplay, vetAgeGroupDisplay } from '../../lib/competitionLabels.ts'
 import { WeaponTokenPart, weaponVar } from './weaponTokens.ts'
-import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts'
+import { drawnStripsLabel, phaseDisplay } from '../../lib/placementLabels.ts'
 
 /**
  * One block on the canvas — FR-035 to FR-037, FR-043,
@@ -19,8 +19,8 @@ import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts
  * | 45° hatch, plus the icon | Phase — a bracket for a DE, a bout grid for pools |
  * | Name text | Category and gender, at whatever length the room allows |
  * | Pin badge | Pinned |
- * | Dashed edge / ring | Overflow / selection |
- * | Solid flash edge | A Warning, Unplaced or Blocking finding (not Notes, never on overflow) |
+ * | Dashed edge / ring | Unseated / selection |
+ * | Flash edge | A Warning, Unplaced or Blocking finding (not Notes), the overflow lane's blocks included |
  *
  * 004's block component painted the age category across sixteen fills and put the
  * weapon in a one-letter chip. Research D4 inverts that: weapon is the thing a
@@ -35,6 +35,24 @@ import { phaseDisplay, stripAssignmentLabel } from '../../lib/placementLabels.ts
  * `weaponTokens.ts` and consumed by this element's own styles. No hex literal
  * and no age-category token name reaches this file: the tokens in `src/index.css` are
  * the single home for the colours (standing rule 13).
+ *
+ * ## One rect per strip run (017 spec §6)
+ *
+ * A phase on non-contiguous strips is drawn as several rects, one per maximal
+ * run, and `Canvas` renders one `Block` per run. The first run (`runIndex` 0)
+ * is the phase: it carries the accessible name and every `data-*` the tests and
+ * the live driver read. A continuation is a sibling that shares the fill, the
+ * hatch, the selection ring, the flash and the findings edge and click-selects
+ * too, but is `aria-hidden` and carries `data-block-run` alone, so
+ * `[data-event-block]` counts phases and the accessibility tree reads each
+ * phase once. The label, the icon and the pin badge stay on the first run.
+ *
+ * ## A phase is a keyboard button (017 spec §6)
+ *
+ * The first run is a `<button type="button">` and a plain tab stop, so its
+ * content is phrasing content (a `span`, never a `div`). A continuation is a
+ * `div` with `tabIndex={-1}`, so it never takes a tab stop. The focus ring is
+ * an outline, because the inline `boxShadow` below would override a shadow ring.
  *
  * ## Nothing here drags, and nothing resizes (FR-043)
  *
@@ -75,12 +93,14 @@ export interface BlockProps {
   competition: Competition
   /** `competitionLabel(competition)`, resolved once by the canvas. */
   label: string
-  placement: BlockPlacement
+  placement: DrawnBlock
+  /** Which of the phase's strip runs this rect draws. 0, the default, is the phase itself. */
+  runIndex?: number
   pinned: boolean
   /**
    * The block's event has a committed Warning, Unplaced or Blocking finding row
    * (not a Note). Required so a dropped prop fails `tsc -b` instead of silently
-   * drawing no border. An overflow block never draws the solid edge.
+   * drawing no border. An unseated block draws it too.
    */
   warned: boolean
   selected: boolean
@@ -93,7 +113,7 @@ export interface BlockProps {
    * the full label: there is no room to judge it against.
    */
   widthPx: number | null
-  /** `placement.stripCount * rungAt(zoomStep).row`. */
+  /** This rect's height: its run's strips times `rungAt(zoomStep).row`, or one row for an unseated block. */
   heightPx: number
   /** Absolute position, as the canvas solved it. */
   style: CSSProperties
@@ -104,15 +124,19 @@ export interface BlockProps {
    * every block on the grid and never learn that one is in trouble.
    */
   findings: string[]
-  onPointerEnter?: (e: PointerEvent<HTMLDivElement>) => void
-  onPointerLeave?: (e: PointerEvent<HTMLDivElement>) => void
-  onClick?: (e: MouseEvent<HTMLDivElement>) => void
+  onPointerEnter?: (e: PointerEvent<HTMLElement>) => void
+  onPointerLeave?: (e: PointerEvent<HTMLElement>) => void
+  onClick?: (e: MouseEvent<HTMLElement>) => void
+  /** Focus and blur reach the button only, so a keyboard user gets the tooltip a pointer user gets from hover. */
+  onFocus?: (e: FocusEvent<HTMLElement>) => void
+  onBlur?: (e: FocusEvent<HTMLElement>) => void
 }
 
 export function Block({
   competition,
   label,
   placement,
+  runIndex = 0,
   pinned,
   warned,
   selected,
@@ -124,15 +148,26 @@ export function Block({
   onPointerEnter,
   onPointerLeave,
   onClick,
+  onFocus,
+  onBlur,
 }: BlockProps) {
   const kind = phaseKind(placement.phase)
+  const isContinuation = runIndex > 0
+  // An unseated block has no run: it draws one row in the overflow lane. A
+  // seated block with no run at this index is a caller bug, so it fails loudly
+  // rather than drawing a one-row rect with mis-sized label furniture.
+  const run = placement.runs[runIndex]
+  if (!placement.unseated && run === undefined) {
+    throw new RangeError(`Block: run ${runIndex} of ${placement.competitionId}:${placement.phase} does not exist`)
+  }
+  const rows = Math.max(1, run?.count ?? 1)
 
   const name = [
     label,
     phaseDisplay(placement.phase),
     `Day ${placement.day + 1}`,
     `${formatClock(placement.startMinutes)}–${formatClock(placement.endMinutes)}`,
-    stripAssignmentLabel(placement.firstStrip, placement.stripCount, placement.overflow),
+    drawnStripsLabel(placement),
     ...(findings.length === 0
       ? []
       : [`${findings.length} finding${findings.length === 1 ? '' : 's'}: ${findings.join('; ')}`]),
@@ -142,7 +177,7 @@ export function Block({
   // 1240-1258). Sizing the glyph and the type from the rung alone left a
   // zoomed-out block carrying full-size furniture inside a shrinking box, so
   // wide blocks truncated their names for room the icon had taken.
-  const rowHeightPx = heightPx / Math.max(1, placement.stripCount)
+  const rowHeightPx = heightPx / rows
   const contentHeightPx = Math.max(0, heightPx - 8)
   const namePx = clamp(
     Math.max(rowHeightPx * 0.46, Math.min(contentHeightPx * 0.34, 19)),
@@ -199,10 +234,6 @@ export function Block({
   const displayIconPx = showIcon ? iconPx : iconAlonePx
   const renderIcon = displayIconPx > 0
 
-  // One value drives both the drawn edge and `data-warned`, so the attribute is
-  // "true" exactly when the solid findings border is drawn.
-  const warnedEdge = warned && !placement.overflow
-
   // The four paint channels travel as custom properties so the styles below
   // can consume them; React types style as CSSProperties, which has no index
   // signature for custom properties.
@@ -214,44 +245,44 @@ export function Block({
     '--block-hatch': weaponVar(competition.weapon, WeaponTokenPart.HATCH),
     background: 'var(--block-fill)',
     color: 'var(--block-ink)',
-    // An unplaced block goes dashed in the flash colour. A placed one keeps a
+    // An unseated block goes dashed in the flash colour. A seated one keeps a
     // solid edge, which turns flash-coloured and 2px when its event carries a
     // Warning, Unplaced or Blocking finding (mockup lines 1283 and 1287). Written
     // as longhands: a `border` shorthand beside `borderStyle` makes React warn
     // whenever only one of them changes between renders.
-    borderWidth: placement.overflow || warnedEdge ? 2 : 1.5,
-    borderStyle: placement.overflow ? 'dashed' : 'solid',
-    borderColor: placement.overflow || warnedEdge ? 'var(--flash)' : 'var(--block-edge)',
+    // `warned` covers the overflow lane's blocks too (spec §6).
+    borderWidth: placement.unseated || warned ? 2 : 1.5,
+    borderStyle: placement.unseated ? 'dashed' : 'solid',
+    borderColor: placement.unseated || warned ? 'var(--flash)' : 'var(--block-edge)',
     borderRadius: 9,
     boxSizing: 'border-box',
     overflow: 'hidden',
     boxShadow: 'var(--shadow-block)',
   } as CSSProperties
 
-  return (
-    <div
-      role="img"
-      aria-label={name}
-      data-event-block={`${competition.id}:${placement.phase}`}
-      data-event-id={competition.id}
-      data-day={placement.day}
-      data-phase={placement.phase}
-      data-phase-kind={kind}
-      data-start={placement.startMinutes}
-      data-end={placement.endMinutes}
-      data-strips={placement.stripCount}
-      data-first-strip={placement.firstStrip}
-      data-overflow={placement.overflow ? 'true' : 'false'}
-      data-weapon={competition.weapon}
-      data-pinned={pinned ? 'true' : 'false'}
-      data-warned={warnedEdge ? 'true' : 'false'}
-      data-selected={selected ? 'true' : 'false'}
-      data-flash={flash ? 'true' : 'false'}
-      style={blockStyle}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      onClick={onClick}
-    >
+  const identity = isContinuation
+    ? { 'aria-hidden': true as const, 'data-block-run': `${competition.id}:${placement.phase}` }
+    : {
+        'aria-label': name,
+        'data-event-block': `${competition.id}:${placement.phase}`,
+        'data-event-id': competition.id,
+        'data-day': placement.day,
+        'data-phase': placement.phase,
+        'data-phase-kind': kind,
+        'data-start': placement.startMinutes,
+        'data-end': placement.endMinutes,
+        'data-strips': placement.strips.join(','),
+        'data-strip-count': placement.stripCount,
+        'data-unseated': placement.unseated ? 'true' : 'false',
+        'data-weapon': competition.weapon,
+        'data-pinned': pinned ? 'true' : 'false',
+        'data-warned': warned ? 'true' : 'false',
+        'data-selected': selected ? 'true' : 'false',
+        'data-flash': flash ? 'true' : 'false',
+      }
+
+  const content = (
+    <>
       {kind === 'de' && (
         <span
           data-hatch
@@ -264,7 +295,7 @@ export function Block({
         />
       )}
 
-      {pinned && (
+      {pinned && !isContinuation && (
         <span
           data-pin-glyph
           aria-hidden="true"
@@ -300,32 +331,70 @@ export function Block({
         />
       )}
 
+      {!isContinuation && (
+        <span
+          aria-hidden="true"
+          data-content
+          className="relative flex h-full w-full items-center justify-center overflow-hidden leading-none"
+          style={{ padding: `0 ${padding}px`, gap: `${gap}px` }}
+        >
+          {renderIcon && (
+            <span
+              data-icon={kind === 'de' ? 'bracket' : 'grid'}
+              className="block flex-none self-center"
+              style={{ width: displayIconPx, height: displayIconPx, lineHeight: 0 }}
+            >
+              {kind === 'de' ? <BracketIcon /> : <GridIcon />}
+            </span>
+          )}
+          {labelText !== '' && (
+            <span
+              data-label
+              className="overflow-hidden font-semibold text-ellipsis whitespace-nowrap"
+              style={{ fontSize: `${namePx.toFixed(1)}px`, lineHeight: 1 }}
+            >
+              {labelText}
+            </span>
+          )}
+        </span>
+      )}
+    </>
+  )
+
+  const rootProps = { style: blockStyle, onPointerEnter, onPointerLeave, onClick }
+
+  // A continuation is a non-button sibling: it is out of the accessibility tree and the tab order,
+  // so the phase is one tab stop and one name however many rects it takes. `tabIndex={-1}` makes a
+  // div mouse-focusable, so a press is default-prevented: focus must not land inside an
+  // `aria-hidden` rect, where it would vanish from the page for assistive tech.
+  if (isContinuation) {
+    return (
       <div
-        aria-hidden="true"
-        data-content
-        className="relative flex h-full items-center justify-center overflow-hidden leading-none"
-        style={{ padding: `0 ${padding}px`, gap: `${gap}px` }}
+        {...identity}
+        {...rootProps}
+        tabIndex={-1}
+        onMouseDown={(e) => e.preventDefault()}
+        className="cursor-pointer"
       >
-        {renderIcon && (
-          <span
-            data-icon={kind === 'de' ? 'bracket' : 'grid'}
-            className="block flex-none self-center"
-            style={{ width: displayIconPx, height: displayIconPx, lineHeight: 0 }}
-          >
-            {kind === 'de' ? <BracketIcon /> : <GridIcon />}
-          </span>
-        )}
-        {labelText !== '' && (
-          <span
-            data-label
-            className="overflow-hidden font-semibold text-ellipsis whitespace-nowrap"
-            style={{ fontSize: `${namePx.toFixed(1)}px`, lineHeight: 1 }}
-          >
-            {labelText}
-          </span>
-        )}
+        {content}
       </div>
-    </div>
+    )
+  }
+
+  // The focus ring is an outline because `blockStyle` writes the box-shadow inline and would win
+  // over a shadow ring. It takes a z-index on focus so a neighbouring block cannot cover it, kept
+  // under the sticky strip gutters (z-index 10).
+  return (
+    <button
+      type="button"
+      {...identity}
+      {...rootProps}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      className="cursor-pointer focus-visible:z-[5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      {content}
+    </button>
   )
 }
 

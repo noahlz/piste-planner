@@ -5,6 +5,7 @@ import type {
 } from '../engine/types.ts'
 import { DAY_AXIS_SPACING_MINS, DeStripRequirement } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
+import { compareIds } from '../engine/order.ts'
 import {
   DAY_START_MINS,
   DAY_END_MINS,
@@ -162,7 +163,7 @@ export function buildPinnedPlacements(state: StoreState): PinnedPlacement[] {
     (a, b) =>
       a.day - b.day ||
       a.start_time - b.start_time ||
-      a.competition_id.localeCompare(b.competition_id),
+      compareIds(a.competition_id, b.competition_id),
   )
   return pinned
 }

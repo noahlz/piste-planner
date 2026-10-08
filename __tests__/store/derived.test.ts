@@ -1,15 +1,26 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
-import { BottleneckRule, Weapon } from '../../src/engine/types.ts'
-import type { Placement } from '../../src/engine/types.ts'
+import { BottleneckRule, DeMode, Phase, Weapon } from '../../src/engine/types.ts'
+import type { Competition, Placement, RefRequirementsByDay, ScheduleResult } from '../../src/engine/types.ts'
+import { computeRefRequirements, refDemandFromSchedule } from '../../src/engine/refs.ts'
+import { deriveEventSchedule } from '../../src/engine/derive.ts'
+import { phaseKey } from '../../src/engine/unseated.ts'
+import type { KeptRun } from '../../src/store/keptRun.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
 import { makeCompetition, makeConfig, makePlacement, makeScheduleResult } from '../helpers/factories.ts'
+import { drawnFromDerived, moveDay, runAndMoveHeadline, runPreset } from '../helpers/drawnFixtures.ts'
+import { runScheduleAll } from '../../src/store/runActions.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { scheduleAll } from '../../src/engine/scheduler.ts'
 import type { DerivedSchedule } from '../../src/store/derived.ts'
 import {
+  RunState,
   buildRefDemandByDay,
   selectDerivedSchedule,
   selectDerivedFindings,
   selectDerivedRefRequirements,
+  selectDrawnSchedule,
+  selectPlacementCounts,
 } from '../../src/store/derived.ts'
 
 // Smallest drift-ledger scenario (12 events) — realistic roster for exercising
@@ -179,6 +190,27 @@ describe('selectDerivedFindings', () => {
       w => w.rule === BottleneckRule.DAY_POOLS_EXCEED_STRIPS && w.message.includes('Day 1:'),
     )).toBe(true)
   })
+
+  /**
+   * 017 T5b (spec §4): the rule check and the first and last day WARN read the
+   * drawn model. B4's run keeps a first day of 790 minutes, its DEs waiting for
+   * strips, against a shortest middle day of 755, so the scheduler warns. Over
+   * `deriveEventSchedule`'s times, whose DEs start straight after the pools,
+   * the same board measured no WARN at all (2026-10-07).
+   */
+  it('measures the first and last day on the kept run, as the scheduler does', () => {
+    runPreset('B4')
+    const state = useStore.getState()
+    const { config, competitions } = buildTournamentConfig(state)
+    const rules: string[] = [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]
+    const scheduler = scheduleAll(competitions, config).bottlenecks.filter((b) => rules.includes(b.rule))
+    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B4\'s first day').toEqual([
+      'First day (Day 1, 790 min) is not shorter than the shortest middle day (755 min)',
+    ])
+
+    const app = selectDerivedFindings(state).analysis.warnings.filter((w) => rules.includes(w.rule))
+    expect(app).toEqual(scheduler)
+  })
 })
 
 describe('selectDerivedRefRequirements', () => {
@@ -240,14 +272,112 @@ describe('buildRefDemandByDay', () => {
   }
 
   it('gives a day whose only DE is a bracket of 2 no interval at all', () => {
-    expect(buildRefDemandByDay(bracketOfTwoSchedule(null))).toEqual({})
+    expect(buildRefDemandByDay(drawnFromDerived(bracketOfTwoSchedule(null)))).toEqual({})
   })
 
   it('keeps the same event\'s pool interval and drops only the 0-count DE', () => {
-    const byDay = buildRefDemandByDay(bracketOfTwoSchedule(2))
+    const byDay = buildRefDemandByDay(drawnFromDerived(bracketOfTwoSchedule(2)))
 
     expect(byDay[1].intervals).toEqual([
       { startTime: 480, endTime: 540, count: 2, weapon: Weapon.FOIL },
     ])
+  })
+})
+
+/**
+ * 017 T9 (spec §7, P4 (c)): the footer's referee peak counts the drawn model,
+ * leaving out only the blocks it counts as unplaced. Right after a run that is
+ * the scheduler's timeline (appPathParity.test.ts). After a hand move the moved
+ * event counts at its derived times, less a phase with no free strip. While
+ * stale every derived phase counts, seated or not.
+ */
+describe('selectDerivedRefRequirements counts the drawn board (017 T9)', () => {
+  /** The per-day peaks of `results`, leaving out the phases `skip` names. */
+  function sweep(results: ScheduleResult[], skip: ReadonlySet<string>): RefRequirementsByDay[] {
+    const { config, competitions } = selectDrawnSchedule(useStore.getState())
+    return computeRefRequirements(refDemandFromSchedule(results, config, competitions, skip), config.days_available)
+  }
+
+  // Not the headline move: on B1 that leaves only its DE_ROUND_OF_16 seated,
+  // which moves no peak, so derived and kept times would sweep alike. This
+  // mover's POOLS seats on day 2 and its DEs do not, so both halves count.
+  it('counts a hand-moved event at its derived times, less the phases that find no strips', () => {
+    const id = 'VET-M-SABRE-IND-VCMB'
+    runPreset('B1')
+    expect(useStore.getState().placements[id].day, 'premise: the run puts the mover off day 2').not.toBe(2)
+    moveDay(id, 2)
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    const unseated = model.blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced).map((b) => b.phase)
+    expect(unseated, 'premise: the mover\'s DEs find no strips').toEqual([Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16])
+
+    const kept = state.lastRun as KeptRun
+    const competition = model.competitions.find((c) => c.id === id) as Competition
+    const resultsWithMoverAt = (mover: ScheduleResult) => Object.keys(model.events).map((eventId) => {
+      if (eventId === id) return mover
+      expect(model.events[eventId].source, `premise: ${eventId} stays kept`).toBe('kept')
+      return kept.events[eventId].result
+    })
+    const results = resultsWithMoverAt(deriveEventSchedule(state.placements[id], competition, model.config).result)
+    const skip = new Set(unseated.map((phase) => phaseKey(id, phase)))
+    expect(sweep(results, skip), 'premise: the unseated phases would move a peak').not.toEqual(sweep(results, new Set()))
+    expect(sweep(resultsWithMoverAt(kept.events[id].result), skip), 'premise: the mover\'s derived times move a peak')
+      .not.toEqual(sweep(results, skip))
+
+    expect(selectDerivedRefRequirements(state)).toEqual(sweep(results, skip))
+  })
+
+  it('counts every derived phase on a stale board, including one that finds no strips', () => {
+    const { id } = runAndMoveHeadline('B1')
+    useStore.getState().updateCompetition(id, { fencer_count: useStore.getState().selectedCompetitions[id].fencer_count + 1 })
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: a fencer-count edit makes the board stale').toBe(RunState.STALE)
+    for (const [eventId, event] of Object.entries(model.events)) {
+      expect(event.source, `premise: ${eventId} is derived while stale`).toBe('derived')
+    }
+    const unseated = new Set(model.blocks.filter((b) => b.unseated).map((b) => phaseKey(b.competitionId, b.phase)))
+    expect(unseated.size, 'premise: the stale board draws unseated phases').toBeGreaterThan(0)
+
+    const results = Object.values(model.events).map(({ result }) => result)
+    expect(sweep(results, unseated), 'premise: the unseated phases would move a peak').not.toEqual(sweep(results, new Set()))
+
+    expect(selectDerivedRefRequirements(state)).toEqual(sweep(results, new Set()))
+  })
+})
+
+/**
+ * 017 T5a (spec §2, §4): the footer's counts read the drawn model's one
+ * unplaced predicate, never the lane packer. An event is unplaced when it has
+ * no in-range placement or a block the model counts as unplaced.
+ */
+describe('selectPlacementCounts reads the drawn model (017 T5a)', () => {
+  it('counts the headline move\'s event once, though two of its phases find no strips', () => {
+    const { id } = runAndMoveHeadline('B1')
+    const state = useStore.getState()
+    const counted = selectDrawnSchedule(state).blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced)
+    expect(counted.map((b) => b.phase), 'premise: the mover\'s POOLS and DE_PRELIMS find no strips')
+      .toEqual([Phase.POOLS, Phase.DE_PRELIMS])
+
+    expect(selectPlacementCounts(state)).toEqual({ placed: 23, unplaced: 1, pinned: 1 })
+  })
+
+  it('reads 24 placed again once Auto-assign runs after the headline move', () => {
+    runAndMoveHeadline('B1')
+
+    runScheduleAll()
+
+    expect(selectPlacementCounts(useStore.getState())).toEqual({ placed: 24, unplaced: 0, pinned: 1 })
+  })
+
+  it('counts no unseated phase as unplaced on a stale board (review focus 10)', () => {
+    runAndMoveHeadline('B1')
+    useStore.getState().setDeModeOverride(DeMode.SINGLE_STAGE)
+    const state = useStore.getState()
+    const model = selectDrawnSchedule(state)
+    expect(model.runState, 'premise: a settings edit makes the board stale').toBe(RunState.STALE)
+    expect(model.blocks.some((b) => b.unseated), 'premise: the stale board draws unseated phases').toBe(true)
+
+    expect(selectPlacementCounts(state)).toEqual({ placed: 24, unplaced: 0, pinned: 1 })
   })
 })

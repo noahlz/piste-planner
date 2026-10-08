@@ -16,6 +16,7 @@ import { useStore } from '../../src/store/store.ts'
 import { applyPreset } from '../../src/store/presets.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { selectPlacementCounts, type PlacementCounts } from '../../src/store/derived.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import type { RefRequirementsByDay } from '../../src/engine/types.ts'
 import type { ScenarioId } from '../../src/data/tournaments.ts'
@@ -27,6 +28,8 @@ export interface AppPathResult {
   selectedCount: number
   /** From the same `scheduleAll` run, keyed by day (specs/006-day-axis-parity/baseline.md "Referee attribution" (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/baseline.md)). */
   refRequirementsByDay: RefRequirementsByDay[]
+  /** The status footer's counts right after the run (`selectPlacementCounts`, 017 T5a). */
+  footer: PlacementCounts
 }
 
 /**
@@ -44,6 +47,7 @@ export function runAppPath(id: ScenarioId): AppPathResult {
 
   runScheduleAll()
   const placedCount = Object.keys(useStore.getState().placements).length
+  const footer = selectPlacementCounts(useStore.getState())
 
   // Re-run scheduleAll directly (rather than reading the store) purely to
   // recover ref_requirements_by_day, which runScheduleAll discards. This is
@@ -74,5 +78,6 @@ export function runAppPath(id: ScenarioId): AppPathResult {
     placedCount,
     selectedCount,
     refRequirementsByDay: result.ref_requirements_by_day ?? [],
+    footer,
   }
 }

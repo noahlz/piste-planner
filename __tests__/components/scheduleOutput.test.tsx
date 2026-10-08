@@ -2,13 +2,19 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, within, act, fireEvent } from '@testing-library/react'
 import { ScheduleOutput } from '../../src/components/sections/ScheduleOutput.tsx'
 import { WorkbenchShell } from '../../src/components/workbench/WorkbenchShell.tsx'
+import { CenterView } from '../../src/components/workbench/CenterView.tsx'
+import { ViewMode } from '../../src/store/viewState.ts'
 import { useStore } from '../../src/store/store.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { Category, Gender, Weapon } from '../../src/engine/types.ts'
 import type { Competition, Placement } from '../../src/engine/types.ts'
-import type { DerivedSchedule } from '../../src/store/derived.ts'
+import type { DrawnSchedule } from '../../src/store/derived.ts'
+import { selectDerivedSchedule } from '../../src/store/derived.ts'
+import type { ScheduleResult } from '../../src/engine/types.ts'
+import { formatMinutes } from '../../src/lib/time.ts'
 import { makeCompetition, makeConfig, makePlacement, makeStrips } from '../helpers/factories.ts'
+import { drawnFromDerived, runPreset, UNPLACED_WORDING } from '../helpers/drawnFixtures.ts'
 
 // 005 T011: schedule-output rows moved out of the two departing layout test
 // files (specs/005-consolidate-domain-logic/triage-record.md (removed; git show 0ab5bd2dc9:specs/005-consolidate-domain-logic/triage-record.md) rows: one departing file's rows 22, 23, 24, 25, 26,
@@ -82,20 +88,23 @@ function competitionCell(rowId: string): string {
  * A committed model handed to `ScheduleOutput` as its `schedule` prop. Each
  * event is derived from its competition, but `listed` decides which
  * competitions the model's `competitions` array carries, so a case can leave
- * an event's competition out of it.
+ * an event's competition out of it. It is the drawn model the prop takes:
+ * seated with every event's own competition (the strip assigner needs each
+ * one), then `competitions` replaced by `listed`.
  */
 function committedModel(
   events: Array<{ competition: Competition; placement: Placement }>,
   listed: Competition[],
-): DerivedSchedule {
+): DrawnSchedule {
   const config = makeConfig({ days_available: 3, strips: makeStrips(24, 4) })
-  return {
+  const drawn = drawnFromDerived({
     config,
-    competitions: listed,
+    competitions: events.map((e) => e.competition),
     events: Object.fromEntries(
       events.map((e) => [e.competition.id, deriveEventSchedule(e.placement, e.competition, config)]),
     ),
-  }
+  })
+  return { ...drawn, competitions: listed }
 }
 
 /** Places the catalogue's team veteran event in the live store. */
@@ -159,12 +168,38 @@ describe('Competition cell names the event (T050)', () => {
   })
 })
 
+/** The center in its table view: the banner lives above the view, so ScheduleOutput alone cannot show it. */
+function renderCenterTable(): void {
+  render(
+    <CenterView
+      viewMode={ViewMode.SCHEDULE}
+      zoom={{ zoomStep: 2, fitting: false }}
+      detailCollapsed={false}
+      onToggleDetailCollapsed={() => {}}
+    />,
+  )
+}
+
 describe('ScheduleOutput', () => {
-  it('renders no staleness banner — placements are always current', () => {
+  it('shows no stale notice on a board that was just run', () => {
+    runPreset('B1')
+    renderCenterTable()
+
+    expect(document.querySelector('[data-schedule-row]')).toBeInTheDocument()
+    expect(document.querySelector('[data-stale-banner]')).toBeNull()
+    expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the stale notice on a board with placements and no run behind them', () => {
     const id = seedPlacedCompetition()
-    render(<ScheduleOutput />)
+    renderCenterTable()
 
     expect(document.querySelector(`[data-schedule-row="${id}"]`)).toBeInTheDocument()
+    const banner = document.querySelector('[data-stale-banner]')
+    expect(banner?.closest('[role="status"]')).not.toBeNull()
+    expect(banner?.textContent).toBe(UNPLACED_WORDING.STALE)
+    // The notice is the stale state's only wording: the retired phrasing stays retired.
     expect(screen.queryByText(/Results are outdated/)).not.toBeInTheDocument()
     expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
   })
@@ -323,6 +358,46 @@ describe('ScheduleOutput', () => {
 
     expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument()
     expect(screen.getByText('No events placed yet.')).toBeInTheDocument()
+  })
+})
+
+/** One row's cell text, found by row id and the cell's `data-cell`. */
+function cellText(rowId: string, cell: string): string {
+  const el = document.querySelector(`[data-schedule-row="${rowId}"] [data-cell="${cell}"]`)
+  if (!el) throw new Error(`no ${cell} cell in schedule row ${rowId}`)
+  return el.textContent ?? ''
+}
+
+/** The four time cells a result fills, in the table's own text. */
+function timeCells(r: ScheduleResult): Record<string, string> {
+  return {
+    poolStart: formatMinutes(r.pool_start),
+    poolEnd: formatMinutes(r.pool_end),
+    deStart: formatMinutes(r.de_start ?? r.de_prelims_start ?? r.de_round_of_16_start),
+    deEnd: formatMinutes(r.de_end ?? r.de_round_of_16_end),
+  }
+}
+
+describe('the table reads the drawn model (017 T6a, spec §6)', () => {
+  it('shows the run\'s own times for every event right after a run, DE waits included', () => {
+    runPreset('B1')
+    const state = useStore.getState()
+    const kept = state.lastRun?.events ?? {}
+    const derived = selectDerivedSchedule(state).events
+    const ids = Object.keys(kept).sort()
+    expect(
+      ids.some((id) => timeCells(kept[id].result).deStart !== timeCells(derived[id].result).deStart),
+      'premise: some B1 DE starts later than the derived layout puts it',
+    ).toBe(true)
+
+    render(<ScheduleOutput />)
+
+    for (const id of ids) {
+      const shown = Object.fromEntries(
+        ['poolStart', 'poolEnd', 'deStart', 'deEnd'].map((cell) => [cell, cellText(id, cell)]),
+      )
+      expect(shown, id).toEqual(timeCells(kept[id].result))
+    }
   })
 })
 

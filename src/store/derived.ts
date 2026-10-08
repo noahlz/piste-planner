@@ -6,11 +6,14 @@ import { computeRefRequirements, refDemandFromSchedule } from '../engine/refs.ts
 import { checkPlacementRules } from '../engine/placementRules.ts'
 import type { PlacedEvent } from '../engine/placementRules.ts'
 import { firstLastDayWarnings } from '../engine/concurrentScheduler.ts'
+import { phaseKey } from '../engine/unseated.ts'
 import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS, ValidationMode } from '../engine/types.ts'
 import type {
   AnalysisResult,
   Bottleneck,
   Competition,
+  Phase,
+  Placement,
   ScheduleResult,
   TournamentType,
   RefDemandByDay,
@@ -18,13 +21,12 @@ import type {
   TournamentConfig,
   ValidationError,
 } from '../engine/types.ts'
-// The footer and the canvas must agree on which blocks exist, so both read
-// `assignStripLanes` rather than each flattening the derived schedule its own
-// way (constitution, "each fact has exactly one home"). `layout/lanes.ts` is
-// pure arithmetic with no React and no store read, so the import carries
-// nothing back the other way.
-import { assignStripLanes } from '../layout/lanes.ts'
-import type { BlockPlacement } from '../layout/lanes.ts'
+// `layout/strips.ts` is pure, with no React and no store read, so the import
+// carries nothing back the other way.
+import { assignStrips } from '../layout/strips.ts'
+import type { DrawnBlock, DrawnEventInput } from '../layout/strips.ts'
+import { configKeyOf } from './keptRun.ts'
+import type { KeptEvent } from './keptRun.ts'
 import { findingIdentity } from '../engine/validation.ts'
 // Pure string helpers, no React and no store read. They lived under
 // `src/components/` until 013 T031 moved them to `src/lib/`: the store may not
@@ -99,6 +101,10 @@ function scheduleDeps(state: StoreState): unknown[] {
     // seven values are constants again, so nothing about them can change
     // between two renders. This is the one setting left that can.
     state.de_mode_override,
+    // The drawn model reads the kept run (017 spec §2), and every selector
+    // keyed here or on `daySummaryDeps` must redraw after a run, even one
+    // that leaves every placement where it was (review focus 9).
+    state.lastRun,
   ]
 }
 
@@ -117,6 +123,120 @@ function computeDerivedSchedule(state: StoreState): DerivedSchedule {
 
 /** Derived schedule view model: per-event `ScheduleResult` + `day_out_of_range`, from placements. */
 export const selectDerivedSchedule = memoizeOnDeps(scheduleDeps, computeDerivedSchedule)
+
+// ──────────────────────────────────────────────
+// The drawn model (017 spec §2)
+// ──────────────────────────────────────────────
+
+/**
+ * Whether the kept run still describes the engine's inputs. A stale board is
+ * not a schedule until the next run: every event is laid out from its
+ * placement, and nothing it fails to seat counts as unplaced (P4 (a)).
+ */
+export const RunState = {
+  FRESH: 'fresh',
+  STALE: 'stale',
+} as const
+export type RunState = (typeof RunState)[keyof typeof RunState]
+
+/** `kept`: drawn from the last run. `derived`: laid out from its placement (`deriveEventSchedule`). */
+export type DrawnEventSchedule = DrawnEventInput & { source: 'kept' | 'derived' }
+
+/**
+ * A drawn phase plus the model's one unplaced predicate: unseated on a fresh
+ * board. A stale board draws its unseated phases too, but counts none of them.
+ */
+export type DrawnScheduleBlock = DrawnBlock & { countsAsUnplaced: boolean }
+
+/** What the board shows (017 spec §2). A superset of `DerivedSchedule`. */
+export interface DrawnSchedule extends DerivedSchedule {
+  events: Record<string, DrawnEventSchedule>
+  blocks: DrawnScheduleBlock[]
+  /** Events with at least one block that counts as unplaced. */
+  unplacedIds: ReadonlySet<string>
+  runState: RunState
+}
+
+/**
+ * Stale when the board holds something the run should describe – an in-range
+ * placement of a selected event – and there is no run, or the run read other
+ * inputs. A deselected event's leftover placement does not count, as in
+ * `computePlacementCounts`.
+ */
+function runStateOf(state: StoreState, configKey: string): RunState {
+  const holdsPlacement = Object.keys(state.selectedCompetitions).some((id) => {
+    const placement = state.placements[id]
+    return placement !== undefined && placement.day >= 0 && placement.day < state.days_available
+  })
+  if (!holdsPlacement) return RunState.FRESH
+  return state.lastRun !== null && state.lastRun.configKey === configKey ? RunState.FRESH : RunState.STALE
+}
+
+/** The pin flag and source are not part of the key, so a pin toggle keeps the event (spec §5). */
+function sitsWhereKept(key: KeptEvent['placementKey'], placement: Placement): boolean {
+  return key.day === placement.day && key.start_time === placement.start_time && key.strip_count === placement.strip_count
+}
+
+/**
+ * Per event, the kept run's result and strips when the run read the current
+ * inputs and the event sits exactly where the run put it (or where its pin held it), else its
+ * placement's derived layout. Validity is decided here, on every recompute, so
+ * no store action has to remember to invalidate the run (spec §2).
+ */
+function computeDrawnSchedule(state: StoreState): DrawnSchedule {
+  const { config, competitions } = buildTournamentConfig(state)
+  const configKey = configKeyOf(config, competitions)
+  const runState = runStateOf(state, configKey)
+  // Not `runState === FRESH`: a board with only out-of-range placements is
+  // fresh even when the run read other inputs (fewer days, fewer strips), and
+  // that run must keep nothing (spec §2, D2).
+  const kept = state.lastRun !== null && state.lastRun.configKey === configKey ? state.lastRun : null
+
+  const events: Record<string, DrawnEventSchedule> = {}
+  for (const competition of competitions) {
+    const placement = state.placements[competition.id]
+    if (!placement) continue
+    const keptEvent = kept?.events[competition.id]
+    if (keptEvent !== undefined && sitsWhereKept(keptEvent.placementKey, placement)) {
+      const keptStrips: Partial<Record<Phase, readonly number[]>> = {}
+      for (const phase of keptEvent.phases) keptStrips[phase.phase] = phase.strips
+      events[competition.id] = { result: keptEvent.result, day_out_of_range: false, keptStrips, source: 'kept' }
+    } else {
+      events[competition.id] = {
+        ...deriveEventSchedule(placement, competition, config),
+        keptStrips: null,
+        source: 'derived',
+      }
+    }
+  }
+
+  return drawnScheduleFrom(config, competitions, events, runState)
+}
+
+/**
+ * Seats `events` with `assignStrips` and applies the model's one unplaced
+ * predicate: a block counts as unplaced when it is unseated and the board is
+ * fresh. Pure, so a committed model built by hand (a component test) goes
+ * through the same rule as the selector.
+ */
+export function drawnScheduleFrom(
+  config: TournamentConfig,
+  competitions: Competition[],
+  events: Record<string, DrawnEventSchedule>,
+  runState: RunState,
+): DrawnSchedule {
+  const fresh = runState === RunState.FRESH
+  const blocks: DrawnScheduleBlock[] = assignStrips(events, config, competitions).map((block) => {
+    const countsAsUnplaced = block.unseated && fresh
+    return { ...block, countsAsUnplaced }
+  })
+  const unplacedIds = new Set(blocks.filter((block) => block.countsAsUnplaced).map((block) => block.competitionId))
+
+  return { config, competitions, events, blocks, unplacedIds, runState }
+}
+
+/** The board as drawn: kept or derived events, their strips, and what counts as unplaced. */
+export const selectDrawnSchedule = memoizeOnDeps(scheduleDeps, computeDrawnSchedule)
 
 /**
  * The derived results (`deriveEventSchedule`) sit on the clock axis – minutes
@@ -151,14 +271,16 @@ function clockAxisConfig(config: TournamentConfig): TournamentConfig {
 }
 
 /**
- * Engine findings over the placements as drawn (016 spec §1, §3): the
+ * Engine findings over the board as drawn (016 spec §1, §3, 017 spec §4): the
  * same-day rule check (`checkPlacementRules`) and the first/last day WARN
- * (`firstLastDayWarnings`, the scheduler's own function). Events with no
+ * (`firstLastDayWarnings`, the scheduler's own function), over the drawn
+ * model's results. Right after a run those are the scheduler's own results, so
+ * the WARN is the scheduler's (017 T5b). Events with no
  * placement or with a day the tournament no longer has are left out of both
  * (review focus 1). The engine's late-day finding is not run here: the store's
  * `late-finish:day:<n>` row is the app's late-day finding (R2).
  */
-function placementFindings(schedule: DerivedSchedule, tournamentType: TournamentType): Bottleneck[] {
+function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentType): Bottleneck[] {
   const clockConfig = clockAxisConfig(schedule.config)
   const inRange: Record<string, ScheduleResult> = {}
   const placed: PlacedEvent[] = []
@@ -184,7 +306,7 @@ function placementFindings(schedule: DerivedSchedule, tournamentType: Tournament
 }
 
 function computeDerivedFindings(state: StoreState): DerivedFindings {
-  const schedule = selectDerivedSchedule(state)
+  const schedule = selectDrawnSchedule(state)
   const { config, competitions } = schedule
 
   // initialAnalysis needs a day per competition. A placed event uses its
@@ -208,31 +330,37 @@ function computeDerivedFindings(state: StoreState): DerivedFindings {
   return { validationErrors, analysis }
 }
 
-/** Derived findings: validation errors plus pre-scheduling analysis, from current inputs. */
+/** Derived findings: validation errors, pre-scheduling analysis and the rule check over the drawn board. */
 export const selectDerivedFindings = memoizeOnDeps(scheduleDeps, computeDerivedFindings)
 
 /**
- * Ref-demand intervals for the placements as drawn: the derived per-event
- * `ScheduleResult`s handed to the engine's `refDemandFromSchedule`, the same
- * function the scheduler calls on its own schedule (016 spec §5), so the
- * footer's peak and the reported peak are one number. Out-of-range placements
- * are skipped here: their `assigned_day` cannot address a day bucket in
+ * Ref-demand intervals for the board as drawn (017 spec §7): the drawn model's
+ * kept and derived results handed to the engine's `refDemandFromSchedule`,
+ * the function the scheduler calls on its own timeline, leaving out only the
+ * blocks the model counts as unplaced. Right after a run the kept results are
+ * the scheduler's, so the footer's peak and the reported peak are one number.
+ * While fresh that skips unseated phases. While stale it skips nothing, so
+ * every derived phase counts, seated or not (P4 (c)). Out-of-range placements
+ * are skipped: their `assigned_day` cannot address a day bucket in
  * `config.days_available`.
  */
-export function buildRefDemandByDay(schedule: DerivedSchedule): Record<number, RefDemandByDay> {
+export function buildRefDemandByDay(schedule: DrawnSchedule): Record<number, RefDemandByDay> {
   const inRange = Object.values(schedule.events)
     .filter(({ day_out_of_range }) => !day_out_of_range)
     .map(({ result }) => result)
-  return refDemandFromSchedule(inRange, schedule.config, schedule.competitions)
+  const skip = new Set(
+    schedule.blocks.filter((block) => block.countsAsUnplaced).map((block) => phaseKey(block.competitionId, block.phase)),
+  )
+  return refDemandFromSchedule(inRange, schedule.config, schedule.competitions, skip)
 }
 
 function computeDerivedRefRequirements(state: StoreState): RefRequirementsByDay[] {
-  const schedule = selectDerivedSchedule(state)
+  const schedule = selectDrawnSchedule(state)
   const demandByDay = buildRefDemandByDay(schedule)
   return computeRefRequirements(demandByDay, schedule.config.days_available)
 }
 
-/** Derived ref requirements: peak concurrent refs per day, from the derived schedule (not a fresh scheduleAll run). */
+/** Ref requirements: peak concurrent refs per day, from the drawn model (not a fresh scheduleAll run). */
 export const selectDerivedRefRequirements = memoizeOnDeps(scheduleDeps, computeDerivedRefRequirements)
 
 // ──────────────────────────────────────────────
@@ -273,7 +401,10 @@ function peakRow(
 }
 
 function computeFooterMetrics(state: StoreState): FooterMetric[] {
-  const schedule = selectDerivedSchedule(state)
+  // Finish, strips and the referee peak read the board as drawn (017 spec §4,
+  // §7): right after a run that is the scheduler's own times and strips, so
+  // the referee peak is the scheduler's own.
+  const schedule = selectDrawnSchedule(state)
   const refRows = selectDerivedRefRequirements(state)
 
   // ── Finish: the latest de_total_end, tournament-wide ──
@@ -292,11 +423,11 @@ function computeFooterMetrics(state: StoreState): FooterMetric[] {
 
   // ── Strips: used strip-minutes over available, across all in-range blocks ──
   //
-  // `assignStripLanes` is the canvas's own answer to "which blocks exist"
-  // (`src/layout/lanes.ts`): it already skips `day_out_of_range` events and
-  // reads segments off `eventTimeSegments`, so this does not restate either
-  // rule in a private flattening.
-  const blocks = assignStripLanes(schedule.events, state.strips_total)
+  // The drawn model's blocks are the board's own answer to "which phases
+  // exist" (`assignStrips` skips `day_out_of_range` events and reads phases
+  // off `phaseSpans`). A block uses the strips it holds, `strips.length`, never
+  // its requested `stripCount`, so an unseated phase adds nothing (spec §4).
+  const { blocks } = schedule
 
   let totalAvailable = 0
   for (let day = 0; day < state.days_available; day++) {
@@ -311,7 +442,7 @@ function computeFooterMetrics(state: StoreState): FooterMetric[] {
 
   let totalUsed = 0
   for (const block of blocks) {
-    totalUsed += (block.endMinutes - block.startMinutes) * block.stripCount
+    totalUsed += (block.endMinutes - block.startMinutes) * block.strips.length
   }
 
   return [
@@ -350,19 +481,11 @@ export interface PlacementCounts {
 }
 
 function computePlacementCounts(state: StoreState): PlacementCounts {
-  // An event the packer could not fit is unplaced from the canvas's point of
-  // view even though its own placement is in range (data-model.md §10: "an
-  // event the packer could not fit is unplaced whatever the store says") — so
-  // it counts once, in `unplaced`, and is excluded from `placed`, never both.
-  // A single event can emit up to three segments (`eventTimeSegments`), so
-  // this is keyed by competition id, not block count, or one event with two
-  // overflowing segments would count twice.
-  const schedule = selectDerivedSchedule(state)
-  const overflowing = new Set(
-    assignStripLanes(schedule.events, state.strips_total)
-      .filter((block) => block.overflow)
-      .map((block) => block.competitionId),
-  )
+  // An event is unplaced when it has no in-range placement, or when the drawn
+  // model counts one of its blocks as unplaced (017 spec §2, §4). `unplacedIds`
+  // is keyed by competition id, so an event with several unseated phases
+  // counts once, and on a stale board it is empty (P4 (a)).
+  const { unplacedIds } = selectDrawnSchedule(state)
 
   let placed = 0
   let unplaced = 0
@@ -372,12 +495,10 @@ function computePlacementCounts(state: StoreState): PlacementCounts {
     const placement = state.placements[id]
     const inRange =
       placement !== undefined && placement.day >= 0 && placement.day < state.days_available
-    if (inRange && !overflowing.has(id)) placed++
-    else if (!inRange) unplaced++
+    if (inRange && !unplacedIds.has(id)) placed++
+    else unplaced++
     if (placement?.pinned) pinned++
   }
-
-  unplaced += overflowing.size
 
   return { placed, unplaced, pinned }
 }
@@ -411,6 +532,20 @@ export type FindingSeverity = (typeof FindingSeverity)[keyof typeof FindingSever
  */
 export const LATE_FINISH_WINDOW_MINS = 45
 
+/** The Unplaced row of a hand-moved event the kept run leaves no room for (017 R4/R7). */
+const UNPLACED_RERUN_MESSAGE =
+  'No room here with the current schedule – re-run Auto-assign to schedule around it.'
+
+/** The Unplaced row of a kept event, a pin the engine could not seat (017 P3). */
+const UNPLACED_PIN_MESSAGE =
+  'Pinned here, but no strips are free at this time – move or unpin it, then re-run Auto-assign.'
+
+/** The one row a stale board shows where the per-event Unplaced rows were (017 P4 (b)). */
+const STALE_MESSAGE = 'Stale – re-run Auto-assign'
+
+/** The stale row's id. It is never dismissable, so a stored dismissal of it hides nothing. */
+const STALE_FINDING_ID = 'stale:run'
+
 /** One row of the Findings panel — every surface that shows a finding reads this shape. */
 export interface Finding {
   /** Stable across recomputes of the same condition, so a dismissal keeps matching. */
@@ -431,7 +566,8 @@ export interface Finding {
   subjects: string[]
   /**
    * Whether the organizer may wave the row off: Warning and Unplaced rows, except
-   * a `hard-separation-violated` Warning (016 R1). Blocking and Note rows never.
+   * a `hard-separation-violated` Warning (016 R1) and the stale row (017 P4 (b)).
+   * Blocking and Note rows never.
    * `dismissFinding` and the panel's dismiss control both read this.
    */
   dismissable: boolean
@@ -466,17 +602,18 @@ const SEVERITY_RANK: Record<FindingSeverity, number> = {
  *
  * Four sources, appended in a fixed order (contract §1.6) and then stably
  * sorted by severity, so within a severity group the source order survives:
- * validation errors, then bottleneck warnings, then the lane packer's
- * overflow and out-of-range events, then one late-finish row per day.
+ * validation errors, then bottleneck warnings, then the events the drawn model
+ * leaves unplaced (or the one stale row) and out-of-range events, then one
+ * late-finish row per day.
  *
  * Bounded by construction (constitution IV): every loop runs once over a list
  * whose length is already fixed — the errors, the warnings, the blocks, the
  * days. Nothing here retries and nothing converges.
  */
 function computeAllFindings(state: StoreState): Finding[] {
-  const schedule = selectDerivedSchedule(state)
+  const drawn = selectDrawnSchedule(state)
   const derivedFindings = selectDerivedFindings(state)
-  const competitionsById = new Map(schedule.competitions.map((c) => [c.id, c]))
+  const competitionsById = new Map(drawn.competitions.map((c) => [c.id, c]))
 
   /** A subject is a target only when it names a competition the board actually has. */
   function resolveTarget(id: string | undefined): string | null {
@@ -569,36 +706,52 @@ function computeAllFindings(state: StoreState): Finding[] {
     })
   }
 
-  // ── §1.3 Unplaced: one row per overflowing block ──
+  // ── §1.3 Unplaced: one row per event the drawn model leaves unplaced ──
   //
-  // The same `assignStripLanes` call the canvas draws from and the footer
-  // measures, so a row can never claim an overflow the grid does not show.
-  const blocks = assignStripLanes(schedule.events, state.strips_total)
-  for (const block of blocks) {
-    if (!block.overflow) continue
-    const phase = phaseDisplay(block.phase)
-    const strips = `${block.stripCount} strip${block.stripCount === 1 ? '' : 's'}`
+  // Read off the model's one predicate (`countsAsUnplaced`, collected in
+  // `unplacedIds`), the same answer the footer counts (017 spec §4). Rows
+  // follow the blocks' fixed order, one per event however many of its phases
+  // are unseated. A derived (hand-moved) event can be re-seated by a re-run
+  // (R4/R7); a kept one is a pin the engine could not seat (P3).
+  //
+  // While stale (P4 (a), (b)) the board is not a schedule, so `unplacedIds`
+  // is empty and one non-dismissable notice stands in for these rows.
+  const unplacedRowFor = new Set<string>()
+  for (const block of drawn.blocks) {
+    const id = block.competitionId
+    if (!drawn.unplacedIds.has(id) || unplacedRowFor.has(id)) continue
+    unplacedRowFor.add(id)
     rows.push({
-      id: `unplaced:${block.competitionId}:${block.phase}`,
+      id: `unplaced:${id}:room`,
       severity: FindingSeverity.UNPLACED,
-      where: `Day ${block.day + 1} · ${phase}`,
+      where: `Day ${block.day + 1} · ${labelOf(id)}`,
       day: block.day,
-      message:
-        `${labelOf(block.competitionId)} needs ${strips} for ${phase} on Day ${block.day + 1} ` +
-        `and none are free for ${formatClock(block.startMinutes)}–${formatClock(block.endMinutes)}. ` +
-        'It is drawn at strip 1, over the events that hold those strips.',
-      target: block.competitionId,
-      subjects: [block.competitionId],
+      message: drawn.events[id].source === 'kept' ? UNPLACED_PIN_MESSAGE : UNPLACED_RERUN_MESSAGE,
+      target: id,
+      subjects: [id],
       dismissable: true,
+    })
+  }
+  if (drawn.runState === RunState.STALE) {
+    rows.push({
+      id: STALE_FINDING_ID,
+      severity: FindingSeverity.UNPLACED,
+      where: 'Board',
+      day: null,
+      message: STALE_MESSAGE,
+      target: null,
+      subjects: [],
+      dismissable: false,
     })
   }
 
   // ── §1.3 Unplaced: one row per stranded event (FR-060) ──
   //
-  // `assignStripLanes` skips these outright — there is no day row to draw them
-  // on — so they raise no overflow row and would otherwise be invisible.
-  // `day` is null for the same reason: no band can carry the count.
-  for (const [id, derived] of Object.entries(schedule.events)) {
+  // The strip assigner skips these outright — there is no day row to draw them
+  // on — so they raise no unseated row and would otherwise be invisible.
+  // `day` is null for the same reason: no band can carry the count. They stay
+  // while stale (P4 (a)).
+  for (const [id, derived] of Object.entries(drawn.events)) {
     if (!derived.day_out_of_range) continue
     const assignedDay = derived.result.assigned_day
     rows.push({
@@ -617,9 +770,10 @@ function computeAllFindings(state: StoreState): Finding[] {
 
   // ── §1.4 Late finish: at most one row per day ──
   //
-  // `finish` is the maximum block end on the day — the same number the day
-  // band prints, never `de_total_end`, which is the footer's tournament-wide
-  // fact and would let the panel warn about a time the grid does not show.
+  // `finish` is the maximum block end on the day — the number the day band
+  // prints, since both read the drawn blocks — never `de_total_end`, which is
+  // the footer's tournament-wide fact and would let the panel warn about a
+  // time the grid does not show.
   // `target` is the day's `day_end_time` in `state.dayConfigs`, the store's
   // clock-time day hours: the soft target (default 7:00 PM, Ops Manual 2026-27
   // p.17), not the 10:00 PM hard end. Work may run past it, so this row is the
@@ -630,8 +784,12 @@ function computeAllFindings(state: StoreState): Finding[] {
   // Warning, so the Blocking count — and therefore Auto-assign's disabled
   // state — is untouched by the move (FR-025). Nothing here compares referees
   // needed against referees available either (FR-026).
+  //
+  // The drawn model's blocks (017 spec §4), so right after a run the finish is
+  // the scheduler's own last phase end, its DE waits included. An unseated
+  // block still ends where it is drawn, so it still counts toward the finish.
   for (let day = 0; day < state.days_available; day++) {
-    const dayBlocks = blocks.filter((block) => block.day === day)
+    const dayBlocks = drawn.blocks.filter((block) => block.day === day)
     if (dayBlocks.length === 0) continue
     const dayConfig = state.dayConfigs[day]
     if (dayConfig === undefined) continue
@@ -645,7 +803,7 @@ function computeAllFindings(state: StoreState): Finding[] {
 
     // Ties go to the lowest competition id so the row names the same event
     // between two renders of the same board.
-    let culprit = null as BlockPlacement | null
+    let culprit = null as DrawnScheduleBlock | null
     for (const block of dayBlocks) {
       if (block.endMinutes !== finish) continue
       if (culprit === null || block.competitionId < culprit.competitionId) culprit = block
@@ -713,14 +871,14 @@ export const selectFindings = memoizeOnDeps(daySummaryDeps, computeFindings)
 /**
  * What one day band on the canvas says about its day (FR-039).
  *
- * Every field is read off the same `assignStripLanes` output the canvas draws
- * and the footer measures (constitution, "each fact has exactly one home"), so
- * a band cannot claim a peak the grid does not show — provided the caller
- * hands `daySummariesFromBlocks` its own committed blocks, which is what
- * `Canvas` does. `selectDaySummaries` below is the *live* convenience
- * wrapper: it packs the live schedule itself, so a caller that mixes it with
- * a committed set of blocks (as `Canvas` used to) is the one place this
- * guarantee can still be broken.
+ * Every field is read off the drawn model's blocks, the same blocks the footer
+ * measures and the Findings panel counts (017 spec §4, constitution "each fact
+ * has exactly one home") — provided the caller hands `daySummariesFromBlocks`
+ * the blocks of the model it draws, which is what `Canvas` does with its
+ * committed model. `selectDaySummaries` below is the *live* convenience
+ * wrapper over `selectDrawnSchedule`, so a caller that mixes it with a
+ * committed model (as `Canvas` once did) is the one place this guarantee can
+ * still be broken.
  */
 export interface DaySummary {
   day: number
@@ -728,32 +886,34 @@ export interface DaySummary {
   events: number
   /** The latest block end on this day, or null when nothing is on it. */
   finish: number | null
-  /** Peak concurrent strip demand, sampled at every block start. */
+  /** Peak strips held at once, sampled at every block start. Never above the strip count. */
   peakStrips: number
-  /** Blocks the lane packer could not fit. */
+  /** Distinct events on this day the drawn model counts as unplaced (its one predicate). */
   unplaced: number
   /** Undismissed `selectFindings` rows whose `day` is this day (contract §1.7). */
   findings: number
 }
 
 /**
- * Peak concurrent strip demand on one day, sampled at every block start.
+ * Peak strips held at once on one day, sampled at every block start.
  *
- * Demand is a step function that only ever rises where a block begins, so the
- * maximum is attained at one of those instants and sampling them all finds it.
- * Bounded by construction: the outer loop runs once per block of the day and
- * the inner once per block, never on a condition that has to converge
- * (constitution IV). The interval is half-open — a block ending exactly where
- * another starts is not concurrent with it, matching `assignStripLanes`'s own
- * overlap rule.
+ * A block adds the strips it holds, `strips.length`, never the `stripCount` it
+ * asked for, so an unseated phase adds nothing and the peak cannot exceed the
+ * strips the day has (017 spec §4). Holding is a step function that only ever
+ * rises where a block begins, so the maximum is attained at one of those
+ * instants and sampling them all finds it. Bounded by construction: the outer
+ * loop runs once per block of the day and the inner once per block, never on a
+ * condition that has to converge (constitution IV). The interval is half-open
+ * — a block ending exactly where another starts is not concurrent with it,
+ * matching the engine's own overlap rule that seated them.
  */
-function peakStripsOnDay(dayBlocks: BlockPlacement[]): number {
+function peakStripsOnDay(dayBlocks: readonly DrawnScheduleBlock[]): number {
   let peak = 0
   for (const sample of dayBlocks) {
     let at = 0
     for (const block of dayBlocks) {
       if (block.startMinutes <= sample.startMinutes && block.endMinutes > sample.startMinutes) {
-        at += block.stripCount
+        at += block.strips.length
       }
     }
     if (at > peak) peak = at
@@ -774,13 +934,18 @@ function peakStripsOnDay(dayBlocks: BlockPlacement[]): number {
  *
  * This is what makes the day band safe to draw from a *committed* model
  * (FR-042, react-code-reviewer finding 1 on 05103d5ff4): `Canvas` calls this
- * directly with the same `assignStripLanes` output it draws blocks from, so
- * the band's numbers and the grid's blocks can never disagree about which
- * schedule they describe. `selectDaySummaries` below is the thin live
- * wrapper other callers use when there is no committed model to prefer.
+ * directly with its committed model's blocks, so the band's numbers and the
+ * grid's blocks can never disagree about which schedule they describe.
+ * `selectDaySummaries` below is the thin live wrapper other callers use when
+ * there is no committed model to prefer.
+ *
+ * `unplaced` counts events, not blocks, with the model's own predicate
+ * (`countsAsUnplaced`, whose events are `unplacedIds`), so a moved event with
+ * three unseated phases reads 1 here and 1 in the footer, and a stale board
+ * reads 0 (spec §4, P4 (a)).
  */
 export function daySummariesFromBlocks(
-  blocks: BlockPlacement[],
+  blocks: readonly DrawnScheduleBlock[],
   daysAvailable: number,
   findings: Finding[],
 ): DaySummary[] {
@@ -806,7 +971,7 @@ export function daySummariesFromBlocks(
       events,
       finish,
       peakStrips: peakStripsOnDay(dayBlocks),
-      unplaced: dayBlocks.filter((block) => block.overflow).length,
+      unplaced: new Set(dayBlocks.filter((block) => block.countsAsUnplaced).map((block) => block.competitionId)).size,
       findings: findingsOnDay.get(day) ?? 0,
     })
   }
@@ -815,9 +980,7 @@ export function daySummariesFromBlocks(
 }
 
 function computeDaySummaries(state: StoreState): DaySummary[] {
-  const schedule = selectDerivedSchedule(state)
-  const blocks = assignStripLanes(schedule.events, state.strips_total)
-  return daySummariesFromBlocks(blocks, state.days_available, selectFindings(state))
+  return daySummariesFromBlocks(selectDrawnSchedule(state).blocks, state.days_available, selectFindings(state))
 }
 
 /** One summary per day in `[0, days_available)`, day ascending (data-model.md §9). */

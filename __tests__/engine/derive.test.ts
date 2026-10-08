@@ -462,8 +462,8 @@ describe('deriveEventSchedule — oracle: reproduces scheduleAll geometry', () =
 // placementFromResult (016 Task E, spec §5)
 // ──────────────────────────────────────────────
 
-// `runScheduleAll`'s result → placement conversion, shared with the scheduler
-// so both count referees from the same drawn schedule.
+// `runScheduleAll`'s result → placement conversion, also used for the kept
+// run's placement key. The scheduler no longer calls it (017 T9).
 describe('placementFromResult', () => {
   it('places the event on its assigned day at its pool start on that day\'s clock axis', () => {
     const result: ScheduleResult = {

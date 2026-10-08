@@ -173,7 +173,7 @@ function geometryChanged(before, after) {
 // against the running app: page3 booted with Settings already open from the
 // `page` steps above and the unconditional click on page3 closed it.
 async function openPanel(name, pg = page) {
-  const button = pg.getByRole('button', { name })
+  const button = pg.getByRole('button', { name, exact: true })
   if ((await button.getAttribute('aria-pressed')) !== 'true') {
     await button.click()
   }
@@ -224,7 +224,7 @@ async function pressSuggest(stepName) {
       throw new Error(`${stepName}: no suggested strip count appeared within 3s (last read "${text}")`)
     }
   }
-  await page.getByRole('button', { name: 'Apply' }).click()
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
   return page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
 }
 
@@ -233,7 +233,7 @@ await page.goto(BASE)
 // The workbench is the only layout and boots directly — no tab to select.
 // The header's "Export" trigger proves the shell (and its header) mounted;
 // the rail's panels render statically regardless of store data.
-await page.getByRole('button', { name: 'Export' }).waitFor()
+await page.getByRole('button', { name: 'Export', exact: true }).waitFor()
 await shot('01-initial')
 
 // The matrix is the center's default view (FR-023) — it must be what greets a
@@ -274,11 +274,11 @@ const countsText = (await footer.locator('[data-counts]').textContent()) ?? ''
 const countsMatch = countsText.match(/^(\d+) placed · (\d+) unplaced · (\d+) pinned$/)
 if (!countsMatch) throw new Error(`could not parse footer counts: "${countsText}"`)
 const [footerPlaced, footerUnplaced, footerPinned] = countsMatch.slice(1).map(Number)
-// Logged beside the schedule-table boot count above, not asserted equal to
-// it — the lane packer (footer) and the scheduler (schedule table) can
-// legitimately disagree about what counts as "placed".
-// `[M]` 024 task S, 2026-10-06 (logged, not asserted – D13): boot read 24 schedule
-// rows with the footer at 15 placed / 9 unplaced / 0 pinned.
+// 017 T5a: the footer counts what the drawn model leaves unplaced, so B1's boot
+// reads 24 placed · 0 unplaced (the lane packer used to read 15 / 9 here).
+if (footerPlaced !== 24 || footerUnplaced !== 0) {
+  throw new Error(`B1 boot footer expected "24 placed · 0 unplaced", got "${countsText}"`)
+}
 log('boot placed count: schedule table', bootPlacedCount, 'vs footer', footerPlaced, 'placed /', footerUnplaced, 'unplaced /', footerPinned, 'pinned')
 
 for (const metric of ['finish', 'refs', 'strips']) {
@@ -292,14 +292,17 @@ log('footer metrics all present at boot')
 // moved that function's body into the engine without changing the store path,
 // so B1's boot figure must stay at what planning measured before it
 // (specs/016-hand-placement-rules/spec.md §What planning measured: store B1
-// day 1 = 218, day 2 = 140, so the peak is 218).
+// day 1 = 218, day 2 = 140, so the peak was 218).
+// 017 T9: 218 became 210. The peak is now the scheduler's own timeline, waits
+// included, rather than the store's separate demand estimate
+// (specs/017-canvas-tells-truth/spec.md §7 Referee demand, §Expected drift).
 const bootRefsPeak = Number(
   (await footer.locator('[data-metric="refs"] > span').last().textContent())?.trim(),
 )
-if (bootRefsPeak !== 218) {
-  throw new Error(`B1 boot footer peak referees changed: expected 218 (planning's store figure), got ${bootRefsPeak}`)
+if (bootRefsPeak !== 210) {
+  throw new Error(`B1 boot footer peak referees changed: expected 210 (017 T9, the timeline's peak), got ${bootRefsPeak}`)
 }
-log('016: B1 boot footer peak referees =', bootRefsPeak, '(unchanged from before Task E)')
+log('017 T9: B1 boot footer peak referees =', bootRefsPeak, '(the timeline peak, was 218)')
 
 const summaryAtBoot = (await page.locator('[data-summary]').textContent()) ?? ''
 const dayCount = Number(summaryAtBoot.match(/(\d+) days/)?.[1])
@@ -347,7 +350,7 @@ const strips = await pressSuggest('ROC Div1A/Vet')
 log('suggested strips =', strips)
 await shot('02-configured')
 
-const gen = page.getByRole('button', { name: 'Auto-assign' })
+const gen = page.getByRole('button', { name: 'Auto-assign', exact: true })
 if (await gen.isDisabled()) {
   await shot('02b-generate-disabled')
   throw new Error('Auto-assign disabled — read smoke-shots/02b for the blocking findings')
@@ -400,6 +403,78 @@ await closePanel()
 const blockCount = await page.locator('[data-event-block]').count()
 log('matrix event blocks =', blockCount)
 if (blockCount < 8) throw new Error('matrix canvas rendered fewer blocks than the measured floor after auto-schedule')
+
+// `[M]` 017 T6b: `[data-event-block]` now marks only a phase's first run (continuations
+// carry `data-block-run`), so the count above is one per drawn phase. A freshly
+// scheduled matrix seats every phase, so none may sit in the overflow lane
+// (`data-unseated="true"`; `data-overflow` and `data-first-strip` no longer exist).
+const unseatedAtBoot = await page.locator('[data-event-block][data-unseated="true"]').count()
+log('matrix unseated blocks at boot =', unseatedAtBoot)
+if (unseatedAtBoot !== 0) {
+  throw new Error(`${unseatedAtBoot} [data-event-block][data-unseated="true"] at boot, expected 0 (app defect: the scheduler left phases unseated)`)
+}
+
+// `[M]` 017 T7: every drawn phase is a keyboard button. Each `[data-event-block]` is a
+// `<button>` (continuations are aria-hidden and carry no such attribute), Tab alone reaches every
+// one of them, the focused one draws an outline ring (`:focus-visible`), and Enter and Space each
+// select a block and open the "Selected event" strip.
+{
+  const nonButtons = await page.$$eval('[data-event-block]', (els) => els.filter((e) => e.tagName !== 'BUTTON').length)
+  if (nonButtons !== 0) throw new Error(`017 T7: ${nonButtons} [data-event-block] elements are not <button>s`)
+  const allBlockIds = await page.$$eval('[data-event-block]', (els) => els.map((e) => e.getAttribute('data-event-block')))
+  if (new Set(allBlockIds).size !== allBlockIds.length) {
+    throw new Error('017 T7: two [data-event-block] elements share one phase id, so a multi-run block is exposed more than once')
+  }
+  const tabbed = new Set()
+  let ring = null
+  const TAB_LIMIT = allBlockIds.length + 400
+  await page.mouse.move(5, 5)
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  for (let i = 0; i < TAB_LIMIT && tabbed.size < allBlockIds.length; i++) {
+    await page.keyboard.press('Tab')
+    const hit = await page.evaluate(() => {
+      const el = document.activeElement
+      const id = el?.getAttribute('data-event-block') ?? null
+      if (!id) return null
+      const cs = getComputedStyle(el)
+      return { id, tag: el.tagName, outlineStyle: cs.outlineStyle, outlineWidth: cs.outlineWidth, focusVisible: el.matches(':focus-visible') }
+    })
+    if (!hit) continue
+    if (hit.tag !== 'BUTTON') throw new Error(`017 T7: Tab landed on a ${hit.tag} block, not a button`)
+    tabbed.add(hit.id)
+    ring ??= hit
+  }
+  if (tabbed.size !== allBlockIds.length) {
+    const missing = allBlockIds.filter((id) => !tabbed.has(id))
+    throw new Error(`017 T7: Tab reached ${tabbed.size} of ${allBlockIds.length} blocks within ${TAB_LIMIT} presses; missing ${missing.slice(0, 5).join(',')}`)
+  }
+  if (!ring?.focusVisible || ring.outlineStyle === 'none' || parseFloat(ring.outlineWidth) < 2) {
+    throw new Error(`017 T7: a Tab-focused block draws no focus ring: ${JSON.stringify(ring)}`)
+  }
+  log('017 T7: Tab reached all', tabbed.size, 'blocks, each a button; focus ring', ring.outlineStyle, ring.outlineWidth)
+
+  // Enter and Space on two different blocks. The strip is dismissed between them so each key
+  // is shown to open it, not to find it already open.
+  const strip = page.getByRole('region', { name: 'Selected event' })
+  const [enterId, spaceId] = [allBlockIds[0], allBlockIds[Math.min(1, allBlockIds.length - 1)]]
+  for (const [key, id] of [['Enter', enterId], ['Space', spaceId]]) {
+    const target = page.locator(`[data-event-block="${id}"]`)
+    await target.focus()
+    await page.keyboard.press(key)
+    await strip.waitFor({ timeout: 3000 })
+    if ((await target.getAttribute('data-selected')) !== 'true') {
+      throw new Error(`017 T7: ${key} on ${id} opened the strip but did not select the block`)
+    }
+    log('017 T7:', key, 'on', id, 'selects it and opens the Selected event strip')
+    await strip.getByRole('button', { name: 'Dismiss', exact: true }).click()
+    await strip.waitFor({ state: 'hidden' })
+  }
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+}
 
 // Captured now, before the zoom actions below change any geometry. 013 T026
 // removed the viewport culling that used to drop a scrolled-out block's DOM node, so
@@ -560,12 +635,17 @@ for (const b of poolBlocks) {
 log('matrix and schedule table agree on', poolBlocks.length, 'events (FR-023)')
 await shot('04-schedule')
 
-// P2 deleted the staleness surface; nothing should reintroduce it.
+// P2 deleted the staleness surface and 017 R5 brought one stale state back, so the ban narrows
+// instead of going: a fresh board just after Auto-assign draws no stale banner, and the old
+// wording of the retired surface stays banned. The banner's own text ("Stale – re-run
+// Auto-assign") is asserted to appear after a settings edit, below.
+const staleBannersFresh = await page.locator('[data-stale-banner]').count()
+if (staleBannersFresh !== 0) throw new Error(`${staleBannersFresh} [data-stale-banner] on a fresh board just after Auto-assign`)
 const body = await page.textContent('body')
-for (const w of ['stale', 'outdated', 'out of date', 'Run Validate']) {
+for (const w of ['outdated', 'out of date', 'Run Validate']) {
   if (body.toLowerCase().includes(w.toLowerCase())) throw new Error(`staleness text found: ${w}`)
 }
-log('no staleness text')
+log('no stale banner on a fresh board, and no retired staleness text')
 
 // Editing a fencer count must move the derived table with no explicit re-run.
 // 013 T036 split the one schedule table into one `<table>` per
@@ -607,14 +687,43 @@ await page.waitForTimeout(400)
 const after = await schedTable.textContent()
 if (before === after) throw new Error('derived schedule table did not update after fencer-count edit')
 log('derived table followed the edit')
+
+// `[M]` 017 T7: that settings edit left the kept run describing other inputs, so the board is stale
+// and says so twice: one `role="status"` banner above the center view and one non-dismissable
+// Findings row where the per-event Unplaced rows were.
+const staleBanner = page.locator('[data-stale-banner]')
+if ((await staleBanner.count()) !== 1) {
+  await shot('017-t7-no-banner')
+  throw new Error(`017 T7: expected one [data-stale-banner] after the fencer-count edit, found ${await staleBanner.count()}`)
+}
+if (!(await staleBanner.textContent())?.includes('Stale – re-run Auto-assign')) {
+  throw new Error(`017 T7: the stale banner reads "${await staleBanner.textContent()}"`)
+}
+if ((await page.getByRole('status').filter({ has: staleBanner }).count()) !== 1) {
+  throw new Error('017 T7: the stale banner is not inside a role="status" region')
+}
+await openPanel('Findings')
+const staleRow = page.getByRole('complementary', { name: 'Inspector panel' }).locator('[data-finding-id="stale:run"]')
+if ((await staleRow.count()) !== 1) {
+  await shot('017-t7-no-stale-row')
+  throw new Error(`017 T7: expected one stale Findings row, found ${await staleRow.count()}`)
+}
+if (!(await staleRow.textContent())?.includes('Stale – re-run Auto-assign')) {
+  throw new Error(`017 T7: the stale Findings row reads "${await staleRow.textContent()}"`)
+}
+if ((await staleRow.getByRole('button', { name: 'Dismiss finding' }).count()) !== 0) {
+  throw new Error('017 T7: the stale Findings row carries a dismiss control')
+}
+log('017 T7: a settings edit shows the stale banner and the stale Findings row')
+await closePanel()
 await shot('05-after-edit')
 
 // Share URL round-trip: a shared link must reproduce the same schedule.
 // "Export" is a Radix Popover trigger over the unmodified <SaveLoadShare />
 // logic — its contents (including "Generate Link") are not in the DOM until
 // the trigger is clicked, since Radix unmounts closed popover content.
-await page.getByRole('button', { name: 'Export' }).click()
-await page.getByRole('button', { name: 'Generate Link' }).click()
+await page.getByRole('button', { name: 'Export', exact: true }).click()
+await page.getByRole('button', { name: 'Generate Link', exact: true }).click()
 const shareUrl = await page.locator('input[readonly]').first().inputValue()
 log('share url length =', shareUrl.length)
 const rowsNow = await page.locator('[data-schedule-row]').count()
@@ -625,7 +734,7 @@ await page2.goto(shareUrl)
 // viewMode persists to localStorage (research D10, viewState.ts), which this
 // context already shares from page1's toggle above, so page2 also opens on
 // Schedule and needs no toggle click of its own.
-await page2.getByRole('button', { name: 'Export' }).waitFor()
+await page2.getByRole('button', { name: 'Export', exact: true }).waitFor()
 await page2.waitForTimeout(300)
 const rows2 = await page2.locator('[data-schedule-row]').count()
 log('round-trip rows:', rowsNow, 'vs', rows2)
@@ -655,7 +764,7 @@ const settingsRegion = page
   .getByRole('region', { name: 'Settings' })
 await settingsRegion.waitFor()
 const exportStillOpen = await page
-  .getByRole('button', { name: 'Generate Link' })
+  .getByRole('button', { name: 'Generate Link', exact: true })
   .isVisible()
   .catch(() => false)
 if (exportStillOpen) {
@@ -784,18 +893,18 @@ const deModeGroup = settingsRegion.getByRole('radiogroup', { name: 'DE mode' })
 await deModeGroup.getByRole('radio', { name: 'Single' }).click()
 await page.waitForTimeout(400)
 const generateLinkVisible = await page
-  .getByRole('button', { name: 'Generate Link' })
+  .getByRole('button', { name: 'Generate Link', exact: true })
   .isVisible()
   .catch(() => false)
 if (!generateLinkVisible) {
-  await page.getByRole('button', { name: 'Export' }).click()
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
 }
-await page.getByRole('button', { name: 'Generate Link' }).click()
+await page.getByRole('button', { name: 'Generate Link', exact: true }).click()
 const gearShareUrl = await page.locator('input[readonly]').first().inputValue()
 const page3 = await ctx.newPage()
 page3.on('pageerror', (e) => errors.push('p3: ' + e))
 await page3.goto(gearShareUrl)
-await page3.getByRole('button', { name: 'Export' }).waitFor()
+await page3.getByRole('button', { name: 'Export', exact: true }).waitFor()
 // NOT a fresh-page click: `panel` is persisted to `localStorage` (viewState.ts)
 // and this driver's pages share one context, so page3 boots with Settings
 // already open (left there by the `page` steps above) — an unconditional
@@ -877,7 +986,7 @@ await div1JuniorVideo.fill('12')
 await div1JuniorVideo.blur()
 await page.waitForTimeout(200)
 
-const div1JuniorGen = page.getByRole('button', { name: 'Auto-assign' })
+const div1JuniorGen = page.getByRole('button', { name: 'Auto-assign', exact: true })
 if (await div1JuniorGen.isDisabled()) {
   await shot('06b-div1junior-generate-disabled')
   throw new Error('Auto-assign disabled for NAC Div1/Junior — read smoke-shots/06b for the blocking findings')
@@ -913,7 +1022,7 @@ log('NAC Youth template applied')
 const nacYouthStrips = await pressSuggest('NAC Youth')
 log('NAC Youth suggested strips =', nacYouthStrips)
 
-const nacYouthGen = page.getByRole('button', { name: 'Auto-assign' })
+const nacYouthGen = page.getByRole('button', { name: 'Auto-assign', exact: true })
 if (await nacYouthGen.isDisabled()) {
   await shot('06c-nacyouth-generate-disabled')
   throw new Error('Auto-assign disabled for NAC Youth — read smoke-shots/06c for the blocking findings')
@@ -1058,7 +1167,7 @@ if (Number(vetStrips) !== 103) {
   throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 103 at ${vetVideoStrips} video strips (tmp/probe-t014-video.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
 }
 
-const vetGen = page.getByRole('button', { name: 'Auto-assign' })
+const vetGen = page.getByRole('button', { name: 'Auto-assign', exact: true })
 if (await vetGen.isDisabled()) {
   await shot('06d-vet-generate-disabled')
   throw new Error('Auto-assign disabled for NAC Vet/Div1/Junior — read smoke-shots/06d for the blocking findings')
@@ -1143,7 +1252,7 @@ log('NAC Cadet/Junior template applied')
 const teamStrips = await pressSuggest('NAC Cadet/Junior')
 log('NAC Cadet/Junior suggested strips =', teamStrips)
 
-const teamGen = page.getByRole('button', { name: 'Auto-assign' })
+const teamGen = page.getByRole('button', { name: 'Auto-assign', exact: true })
 if (await teamGen.isDisabled()) {
   await shot('07b-team-generate-disabled')
   throw new Error('Auto-assign disabled for NAC Cadet/Junior — read smoke-shots/07b for the blocking findings')
@@ -1272,8 +1381,8 @@ async function moveEventToDay(id, day) {
   await closePanel()
   const blk = page.locator(`[data-event-block="${id}:POOLS"]`).first()
   await blk.scrollIntoViewIfNeeded()
-  // A dispatched click, not a pointer click: an overflowing (dashed) block of
-  // another event can be drawn over this one and intercept the pointer.
+  // A dispatched click, not a pointer click: another event's block (an unseated one
+  // in the overflow lane, say) can be drawn over this one and intercept the pointer.
   await blk.dispatchEvent('click')
   const strip = page.getByRole('region', { name: 'Selected event' })
   await strip.waitFor()
@@ -1300,7 +1409,7 @@ async function eventIds() {
 await setTournamentType('NAC')
 await choosePreset('NAC Cadet/Junior')
 await pressSuggest('016 NAC Cadet/Junior')
-await page.getByRole('button', { name: 'Auto-assign' }).click()
+await page.getByRole('button', { name: 'Auto-assign', exact: true }).click()
 await page.waitForTimeout(500)
 await closePanel()
 await page.getByRole('radio', { name: 'Matrix' }).click()
@@ -1361,8 +1470,27 @@ if ((await hardRow.getByRole('button', { name: 'Dismiss finding' }).count()) !==
 }
 log('016 check 1: Warning row names both events, no dismiss control:', hardMessage)
 
+// `[M]` 017 T7: an unseated block is warned by its own Unplaced row now, so `data-warned` alone no
+// longer proves the hard-pair finding drew the edge. The evidence is the hard-pair row's own id
+// (it names both events as subjects), plus the event that was unwarned before the move being
+// seated with no Unplaced row of its own, so the only finding that can mark its blocks is that row.
+const hardRowId = (await hardRow.getAttribute('data-finding-id')) ?? ''
+if (!hardRowId.startsWith('analysis:') || !hardRowId.includes(junFoil) || !hardRowId.includes(cadFoil)) {
+  throw new Error(`016 check 1: the hard-pair row's data-finding-id "${hardRowId}" is not an analysis row naming ${junFoil} and ${cadFoil}`)
+}
+// Only an event with no warned block before the move can prove the row: the other may already
+// be warned (or Unplaced) for reasons of its own.
+const provers = [junFoil, cadFoil].filter((id) => !anyWarned(pick.before[id]))
+for (const id of provers) {
+  const ownUnplaced = await findingsList.locator(`[data-finding-id^="unplaced:${id}:"]`).count()
+  if (ownUnplaced !== 0) throw new Error(`016 check 1: ${id} has ${ownUnplaced} Unplaced row(s), so data-warned would not be tied to the hard-pair row`)
+}
+log('016 check 1: evidence row', hardRowId)
+
 await closePanel()
 for (const id of [junFoil, cadFoil]) {
+  const unseatedBlocks = provers.includes(id) ? await page.locator(`[data-event-block][data-event-id="${id}"][data-unseated="true"]`).count() : 0
+  if (unseatedBlocks !== 0) throw new Error(`016 check 1: ${id} has ${unseatedBlocks} unseated block(s), warned by Unplaced rather than the hard-pair row`)
   const warnedFlags = await warnedOf(id)
   log('016 check 1: data-warned after the move:', warnedFlags.join(','))
   if (!anyWarned(warnedFlags)) {
@@ -1436,6 +1564,152 @@ if (!/warning/i.test(regionalSeverity ?? '') || !regionalMessage.includes('not h
 }
 log('016 check 2: saw the Warning (regional-window-not-honoured) for the hand-moved pair')
 await shot('016-check2-regional')
+
+// ── 017 T8: a shared link replays the sender's run ──
+// The share-link steps above run on a board the fencer-count edit left stale, and a stale
+// sender writes no `run`, so those receivers open stale by design. This block shares a FRESH
+// board: Auto-assign, then a `#config=` link opened in a second page must draw the same
+// `[data-event-block]` set as the sender (id, phase, strips, start) and show no stale banner.
+// Then one Move day on the sender and a second link must still agree.
+async function blockSet(pg) {
+  return pg.$$eval('[data-event-block]', (els) =>
+    els
+      .map((e) => [e.getAttribute('data-event-block'), e.getAttribute('data-phase'), e.getAttribute('data-strips'), e.getAttribute('data-start')].join('|'))
+      .sort(),
+  )
+}
+
+async function linkFromSender() {
+  await closePanel()
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await page.getByRole('button', { name: 'Generate Link', exact: true }).click()
+  const url = await page.locator('input[readonly]').first().inputValue()
+  await page.keyboard.press('Escape')
+  return url
+}
+
+async function expectReceiverMatches(label, url) {
+  if (!url.includes('#config=')) throw new Error(`017 T8 ${label}: the share link has no #config= payload: ${url.slice(0, 60)}`)
+  const senderSet = await blockSet(page)
+  const senderStale = await page.locator('[data-stale-banner]').count()
+  if (senderStale !== 0) throw new Error(`017 T8 ${label}: the sender shows a stale banner on a board it just ran`)
+  const rx = await ctx.newPage()
+  rx.on('pageerror', (e) => errors.push('t8 receiver: ' + e))
+  await rx.goto(url)
+  await rx.getByRole('button', { name: 'Export', exact: true }).waitFor()
+  await rx.getByRole('region', { name: 'Matrix canvas' }).waitFor()
+  await rx.waitForTimeout(500)
+  const rxSet = await blockSet(rx)
+  const rxStale = await rx.locator('[data-stale-banner]').count()
+  if (rxStale !== 0) {
+    await rx.screenshot({ path: `${SHOTS}017-t8-${label}-receiver-stale.png`, fullPage: FULLPAGE })
+    throw new Error(`017 T8 ${label}: the receiver shows ${rxStale} [data-stale-banner] on a link from a fresh sender (app defect)`)
+  }
+  const missing = senderSet.filter((x) => !rxSet.includes(x))
+  const extra = rxSet.filter((x) => !senderSet.includes(x))
+  if (senderSet.length === 0) throw new Error(`017 T8 ${label}: the sender draws no blocks, so nothing was compared`)
+  if (missing.length || extra.length || senderSet.length !== rxSet.length) {
+    await rx.screenshot({ path: `${SHOTS}017-t8-${label}-receiver.png`, fullPage: FULLPAGE })
+    throw new Error(
+      `017 T8 ${label}: receiver blocks differ from the sender (${senderSet.length} vs ${rxSet.length}); missing ${missing.slice(0, 3).join(' ; ')} | extra ${extra.slice(0, 3).join(' ; ')} (app defect)`,
+    )
+  }
+  await rx.close()
+  log(`017 T8 ${label}: the receiver drew the sender's ${senderSet.length} blocks and shows no stale banner`)
+}
+
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await closePanel()
+await page.getByRole('button', { name: 'Auto-assign', exact: true }).click()
+await page.waitForTimeout(500)
+await expectReceiverMatches('fresh', await linkFromSender())
+
+const t8Day = await poolDayOf(a)
+await moveEventToDay(a, (t8Day + 1) % 4)
+if ((await poolDayOf(a)) === t8Day) throw new Error('017 T8: the Move day did not move the event')
+await expectReceiverMatches('after-move', await linkFromSender())
+await shot('017-t8-link-replay')
+
+// ── 017 task S: the headline move ──
+// A fresh B1 boot, then the headline Move day exactly as __tests__/helpers/drawnFixtures.ts
+// runAndMoveHeadline does it: the first event id in code-point order moves to the next day. B1 has
+// no room for that event's pools and prelims on the new day, so the canvas must say so in four
+// places at once: one Unplaced row worded as the spec words it, a footer of 23 placed · 1
+// unplaced, the unseated phase drawn in the "No room" lane as a focusable button, and a re-run
+// of Auto-assign that clears all three.
+const NO_ROOM_MESSAGE = 'No room here with the current schedule – re-run Auto-assign to schedule around it.'
+const footerCounts = async () => ((await footer.locator('[data-counts]').textContent()) ?? '').trim()
+
+// A reload is the fresh B1 boot: the store is in memory, so nothing the checks above placed or
+// pinned survives it. (Picking B1 in the Preset combobox instead keeps those hand placements.)
+await page.goto(BASE)
+await page.getByRole('region', { name: 'Matrix canvas' }).waitFor()
+await closePanel()
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(500)
+if (!(await footerCounts()).startsWith('24 placed · 0 unplaced')) {
+  throw new Error(`017 task S: a fresh B1 should read "24 placed · 0 unplaced", got "${await footerCounts()}"`)
+}
+const headlineId = (await eventIds()).sort()[0]
+if (headlineId !== 'D1-M-EPEE-IND') {
+  throw new Error(`017 task S: the first event id in code-point order on B1 should be D1-M-EPEE-IND, got ${headlineId}`)
+}
+const headlineFrom = await poolDayOf(headlineId)
+const headlineTo = (headlineFrom + 1) % dayCount
+log('017 task S: headline move', headlineId, 'day', headlineFrom + 1, '->', headlineTo + 1)
+await moveEventToDay(headlineId, headlineTo)
+
+await openPanel('Findings')
+const unplacedRows = page.getByRole('complementary', { name: 'Inspector panel' }).locator('[data-finding-id^="unplaced:"]')
+const headlineRows = unplacedRows.and(page.locator(`[data-finding-id^="unplaced:${headlineId}:"]`))
+if ((await headlineRows.count()) !== 1 || (await unplacedRows.count()) !== 1) {
+  await shot('017-task-s-rows')
+  throw new Error(`017 task S: expected exactly one Unplaced row, for ${headlineId}; found ${await unplacedRows.count()} in all, ${await headlineRows.count()} for it`)
+}
+const headlineMessage = ((await headlineRows.locator('[data-message]').textContent()) ?? '').trim()
+if (headlineMessage !== NO_ROOM_MESSAGE) {
+  throw new Error(`017 task S: the Unplaced row reads "${headlineMessage}", expected "${NO_ROOM_MESSAGE}"`)
+}
+log('017 task S: one Unplaced row:', headlineMessage)
+
+if (!(await footerCounts()).startsWith('23 placed · 1 unplaced')) {
+  await shot('017-task-s-footer')
+  throw new Error(`017 task S: after the headline move the footer should read "23 placed · 1 unplaced", got "${await footerCounts()}"`)
+}
+log('017 task S: footer =', await footerCounts())
+
+await closePanel()
+const laneBlocks = page.locator(`[data-overflow-lane] [data-event-block][data-event-id="${headlineId}"][data-unseated="true"]`)
+if ((await laneBlocks.count()) < 1) {
+  await shot('017-task-s-lane')
+  throw new Error(`017 task S: no unseated block of ${headlineId} is drawn in [data-overflow-lane]`)
+}
+const laneBlock = laneBlocks.first()
+await laneBlock.scrollIntoViewIfNeeded()
+if ((await laneBlock.evaluate((el) => el.tagName)) !== 'BUTTON') {
+  throw new Error(`017 task S: the lane block of ${headlineId} is not a <button>`)
+}
+await laneBlock.focus()
+if (!(await laneBlock.evaluate((el) => el === document.activeElement))) {
+  throw new Error(`017 task S: the lane block of ${headlineId} did not take focus`)
+}
+log('017 task S:', await laneBlocks.count(), 'unseated phase(s) of', headlineId, 'drawn in the No room lane as a focusable button')
+await shot('017-task-s-headline')
+
+await page.getByRole('button', { name: 'Auto-assign', exact: true }).click()
+await page.waitForTimeout(500)
+if (!(await footerCounts()).startsWith('24 placed · 0 unplaced')) {
+  await shot('017-task-s-rerun')
+  throw new Error(`017 task S: Auto-assign should return "24 placed · 0 unplaced", got "${await footerCounts()}"`)
+}
+await openPanel('Findings')
+const rowsAfter = await page.getByRole('complementary', { name: 'Inspector panel' }).locator('[data-finding-id^="unplaced:"]').count()
+if (rowsAfter !== 0) throw new Error(`017 task S: Auto-assign left ${rowsAfter} Unplaced row(s)`)
+await closePanel()
+if ((await page.locator('[data-overflow-lane] [data-event-block]').count()) !== 0) {
+  throw new Error('017 task S: Auto-assign left blocks in the No room lane')
+}
+log('017 task S: Auto-assign cleared the row and the lane:', await footerCounts())
 
 await browser.close()
 log('console errors =', errors.length, errors.slice(0, 3))

@@ -1,5 +1,8 @@
 import { useStore, type StoreState } from './store.ts'
 import { serializeState, deserializeState, encodeToUrl } from './serialization.ts'
+import type { DeserializeResult } from './serialization.ts'
+import type { PinnedPlacement } from '../engine/types.ts'
+import { replayRun } from './runActions.ts'
 
 /** A share URL past this size may not work in all browsers (research D-share). */
 export const URL_SIZE_WARNING_BYTES = 2048
@@ -7,9 +10,7 @@ export const URL_SIZE_WARNING_BYTES = 2048
 /** Filename offered for the saved-configuration download. */
 export const SAVE_FILE_NAME = 'tournament.piste.json'
 
-export type ParsedFile =
-  | { state: Partial<StoreState>; droppedPlacements: string[] }
-  | { error: string }
+export type ParsedFile = DeserializeResult | { error: string }
 
 /** Serializes state to a JSON file and triggers a browser download. */
 export function saveToFile(state: StoreState = useStore.getState()): void {
@@ -41,10 +42,16 @@ export async function parseTournamentFile(file: File): Promise<ParsedFile> {
   return deserializeState(text)
 }
 
-/** Writes parsed state onto the store. Separate from parsing so a caller can
- * warn about dropped placements first (FR-009). */
-export function applyLoadedState(state: Partial<StoreState>): void {
-  useStore.setState(state)
+/** Writes parsed state onto the store, then ends with `lastRun` set (017 spec
+ * §5): replayed from a valid `run`, else null, so a run from the board that was
+ * there before never draws against the loaded placements, even when the two
+ * configs share a key. The state goes in with `lastRun: null` in one update, so
+ * no subscriber sees loaded placements beside the old run. Separate from
+ * parsing so a caller can warn about dropped placements first (FR-009).
+ * Returns why the replay failed, or null when it did not (or no run came). */
+export function applyLoadedState(state: Partial<StoreState>, run: readonly PinnedPlacement[] | null): string | null {
+  useStore.setState({ ...state, lastRun: null })
+  return run === null ? null : replayRun(useStore.getState(), run)
 }
 
 /** Builds a shareable URL encoding the given state (or the live store) in its hash. */

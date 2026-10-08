@@ -5,7 +5,9 @@ import { bootstrap, DEFAULT_PRESET_ID } from '../../../src/store/boot.ts'
 import { useStore } from '../../../src/store/store.ts'
 import { SCENARIOS } from '../../../src/data/tournaments.ts'
 import { encodeToUrl } from '../../../src/store/serialization.ts'
-import { TournamentType } from '../../../src/engine/types.ts'
+import { selectDrawnSchedule, RunState } from '../../../src/store/derived.ts'
+import { hashOf, payloadWithRefusedRun, resetReceiver, sendBoard, sentPayload } from '../../helpers/replayFixtures.ts'
+import { TournamentType, DAY_AXIS_SPACING_MINS } from '../../../src/engine/types.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
 import {
   DEFAULT_VIEW_STATE,
@@ -97,5 +99,72 @@ describe('bootstrap with an undecodable #config= fragment', () => {
     expect(consoleError).toHaveBeenCalled()
 
     consoleError.mockRestore()
+  })
+})
+
+describe('bootstrap with a #config= fragment that carries a run (017 T8)', () => {
+  it.each([
+    ['as shared', false, false],
+    ['after one Move day', true, false],
+    ['with pins, after one Move day', true, true],
+  ])('draws the sender\'s board from the link %s', (_name, moved, pinned) => {
+    const sent = sendBoard({ moved, pinned })
+    expect(sent.drawn.runState, 'premise').toBe(RunState.FRESH)
+    resetReceiver()
+
+    bootstrap(sent.hash)
+
+    expect(selectDrawnSchedule(useStore.getState())).toEqual(sent.drawn)
+  })
+
+  it('does not run the auto-scheduler on the receiver, only replays', () => {
+    const sent = sendBoard({ moved: true })
+    const placements = sentPayload(sent).placements
+    resetReceiver()
+
+    bootstrap(sent.hash)
+
+    expect(useStore.getState().placements).toEqual(placements)
+  })
+
+  it('opens stale when the link has placements and no run', () => {
+    const sent = sendBoard()
+    const payload = sentPayload(sent)
+    delete payload.run
+    resetReceiver()
+
+    bootstrap(hashOf(payload))
+
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+  })
+
+  it('opens stale and says so on the console when the run is refused', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sent = sendBoard({ pinned: true })
+    const payload = payloadWithRefusedRun(sent)
+    // Only the day is out of range: its start_time sits on day 99's own axis.
+    const [first] = payload.run!
+    payload.run![0] = { ...first, strip_count: 1, day: 99, start_time: 99 * DAY_AXIS_SPACING_MINS + (first.start_time % DAY_AXIS_SPACING_MINS) }
+    resetReceiver()
+
+    bootstrap(hashOf(payload))
+
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/run/i), expect.stringMatching(/run day for .* must be a whole day/))
+    warn.mockRestore()
+  })
+
+  it('opens stale from a stale sender, whose link carries no run', () => {
+    sendBoard()
+    useStore.getState().setStrips(useStore.getState().strips_total + 1)
+    const hash = encodeToUrl(useStore.getState())
+    resetReceiver()
+
+    bootstrap(hash)
+
+    expect(useStore.getState().lastRun).toBeNull()
+    expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.STALE)
   })
 })

@@ -8,6 +8,11 @@
  * start, and the strip budget, and every duration comes from the same helpers
  * the scheduler calls.
  *
+ * The canvas uses this only for events moved by hand and while the board is
+ * stale (017). After a run, kept events draw the scheduler's own times, waits
+ * included, so the DE here starts at pool end plus the admin gap, earlier than
+ * the scheduler's on a busy day.
+ *
  * Three `ScheduleResult` fields have no input derivation and are left neutral:
  * `conflict_score`, `constraint_relaxation_level`, `accepted_warnings`. They
  * are scheduler diagnostics about contention, not geometry.
@@ -54,8 +59,7 @@ function grantedDeStrips(rounds: readonly DeRound[], desired: number, deCap: num
 /**
  * The placement a scheduler result becomes: its day, its pool start, and its
  * pool strip budget, marked auto and unpinned. `runScheduleAll` records these,
- * and the scheduler derives them back (`deriveEventSchedule`) to count
- * referees from the schedule as the workbench draws it (016 spec §5).
+ * and the kept run keys its results by them (`keptRun.ts`).
  *
  * `result.pool_start` is on the scheduler axis, where day d's times are
  * shifted by d × DAY_AXIS_SPACING_MINS. That shift comes back off here, since
