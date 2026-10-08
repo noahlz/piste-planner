@@ -570,7 +570,7 @@ describe('the stale banner follows the committed model (017 T7)', () => {
     expect(shown?.textContent).toBe(UNPLACED_WORDING.STALE)
   })
 
-  it('goes once Auto-assign has run and the center has settled', () => {
+  it('goes with the Auto-assign run, and the board follows after the settle', () => {
     renderCenter()
     act(() => {
       useStore.getState().setStrips(STALE_STRIPS)
@@ -581,11 +581,17 @@ describe('the stale banner follows the committed model (017 T7)', () => {
     act(() => {
       runScheduleAll()
     })
-    expect(banner()).not.toBeNull()
+    // 020 T2 (decision 4): the banner also needs the live model stale, so it
+    // goes with the run, while the board still draws the stale layout until
+    // the settle commits the run's.
+    expect(banner()).toBeNull()
+    const center = screen.getByRole('main', { name: 'Center view' })
+    expect(center).toHaveAttribute('data-settled', 'false')
 
     settle()
 
     expect(banner()).toBeNull()
+    expect(center).toHaveAttribute('data-settled', 'true')
   })
 
   it('keeps the frozen state while a Blocking finding freezes the committed model', () => {
