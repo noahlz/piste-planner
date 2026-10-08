@@ -417,7 +417,18 @@ engine reads must be in `configKey`.
 
 ## Merge
 
-Pending Task M.
+Checked 2026-10-08 with `git merge-tree --write-tree main 018-engine-correctness`.
+
+- Branch head checked: 83144571432348bd55db7b5eeb8ecea6040d57c0 (the branch tip before this note).
+- Main: d4f545736c2ebb355f91456c573c95713a578529, which has not moved since the branch was cut.
+- Merge tree: 327dfe7762846cd952b4702efcb5461674e75ece, identical to the branch's own tree.
+- Conflicts: none.
+- Because the trees are identical, the checks ran in the feature worktree at the branch head (clean status), with `tmp/**` excluded from the suite and lint.
+- Full suite: 89 files, 3031 tests, all passing.
+- `tsc -b`: clean. Lint: clean.
+- Drift ledger snapshot SHA-256: 903cd991fbca8f50c201092211314e48b275e9aa48db61ec7fb64cc0660107ab, byte-identical to the expected value.
+
+The user merges with merge-with-costs. If main moves first, the check is re-run there.
 
 ## Resume prompt (after the merge)
 
