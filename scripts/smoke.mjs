@@ -1189,52 +1189,65 @@ await shot('06d-vet-schedule')
 
 // ── Group B: a block placed after 19:00 draws inside the canvas axis ──
 // The planning day is 9:00-19:00 with a 22:00 hard end, and the axis reaches the
-// hard end so a block past 19:00 still has somewhere to draw. This reads the
-// largest template's matrix canvas: finds a placed block ending after 19:00
-// (1140 min) and checks its rendered box lies inside its day's time grid, and
-// that the axis carries ticks up to 22:00 (1320 min).
+// hard end so a block past 19:00 still has somewhere to draw. 018 T3 widens the
+// block-inside-grid check from the single latest block to EVERY block on the
+// board (the grown axis of B4 puts a block past 22:00 and the old check read only
+// one), so this reads the matrix canvas and checks each `[data-event-block]`'s
+// rendered box lies inside its day's `[data-day-plot]`. It also reports the
+// axis end (ticks mark the start of each interval, so the axis ends one tick
+// step past the last tick) and the latest block end, for the caller's assertions.
+async function readBoardGrid() {
+  return page.evaluate(() => {
+    const blocks = [...document.querySelectorAll('[data-event-block]')]
+    const ticks = [...document.querySelectorAll('[data-hour-tick]')].map((t) => Number(t.getAttribute('data-hour-tick')))
+    const maxTick = Math.max(...ticks)
+    const axisEnd = maxTick + (ticks.length > 1 ? ticks[1] - ticks[0] : 0)
+    const outside = []
+    let latestEnd = 0
+    let lateCount = 0
+    for (const el of blocks) {
+      const end = Number(el.getAttribute('data-end'))
+      latestEnd = Math.max(latestEnd, end)
+      if (end > 19 * 60) lateCount++
+      const day = el.getAttribute('data-day')
+      const plot = document.querySelector(`[data-day-plot="${day}"]`)
+      const r = el.getBoundingClientRect()
+      if (!plot) {
+        outside.push({ id: el.getAttribute('data-event-block'), day, end, reason: 'no day plot' })
+        continue
+      }
+      const pr = plot.getBoundingClientRect()
+      if (r.left < pr.left - 1 || r.right > pr.right + 1 || r.top < pr.top - 1 || r.bottom > pr.bottom + 1) {
+        outside.push({
+          id: el.getAttribute('data-event-block'),
+          day,
+          end,
+          block: { left: r.left, right: r.right, top: r.top, bottom: r.bottom },
+          plot: { left: pr.left, right: pr.right, top: pr.top, bottom: pr.bottom },
+        })
+      }
+    }
+    return { blockCount: blocks.length, lateCount, latestEnd, maxTick, axisEnd, outside }
+  })
+}
+async function assertEveryBlockInsideGrid(name) {
+  const grid = await readBoardGrid()
+  if (grid.blockCount === 0) throw new Error(`${name}: no event blocks on the board, so the inside-grid check has nothing to read`)
+  if (grid.outside.length > 0) {
+    throw new Error(`${name}: ${grid.outside.length} of ${grid.blockCount} blocks draw outside their time grid: ${JSON.stringify(grid.outside.slice(0, 3))}`)
+  }
+  return grid
+}
 await page.getByRole('radio', { name: 'Matrix' }).click()
 await page.waitForTimeout(200)
-const lateBlock = await page.evaluate(() => {
-  const late = [...document.querySelectorAll('[data-event-block]')].filter(
-    (el) => Number(el.getAttribute('data-end')) > 19 * 60,
-  )
-  // Ticks mark the start of each interval, so the axis ends one tick step past the last one.
-  const ticks = [...document.querySelectorAll('[data-hour-tick]')].map((t) => Number(t.getAttribute('data-hour-tick')))
-  const maxTick = Math.max(...ticks)
-  const axisEnd = maxTick + (ticks.length > 1 ? ticks[1] - ticks[0] : 0)
-  if (late.length === 0) return { lateCount: 0, maxTick, axisEnd }
-  // The block that ends latest is the one closest to the plot's right edge.
-  const el = late.reduce((a, b) => (Number(b.getAttribute('data-end')) > Number(a.getAttribute('data-end')) ? b : a))
-  const day = el.getAttribute('data-day')
-  const plot = document.querySelector(`[data-day-plot="${day}"]`)
-  const r = el.getBoundingClientRect()
-  const pr = plot.getBoundingClientRect()
-  return {
-    lateCount: late.length,
-    maxTick,
-    axisEnd,
-    end: Number(el.getAttribute('data-end')),
-    day,
-    block: { left: r.left, right: r.right, top: r.top, bottom: r.bottom },
-    plot: { left: pr.left, right: pr.right, top: pr.top, bottom: pr.bottom },
-  }
-})
+const lateBlock = await assertEveryBlockInsideGrid('NAC Vet/Div1/Junior')
 if (lateBlock.lateCount === 0) {
   throw new Error('no placed block ends after 19:00 on NAC Vet/Div1/Junior, so the axis-reach check has nothing to read')
 }
 if (lateBlock.axisEnd < 22 * 60) {
   throw new Error(`axis ends at ${lateBlock.axisEnd} min (last tick ${lateBlock.maxTick}), expected the axis to reach 22:00 (1320)`)
 }
-{
-  const { block: bx, plot: px } = lateBlock
-  if (bx.left < px.left - 1 || bx.right > px.right + 1 || bx.top < px.top - 1 || bx.bottom > px.bottom + 1) {
-    throw new Error(`block ending ${lateBlock.end} min on day ${lateBlock.day} draws outside its time grid: ${JSON.stringify(lateBlock)}`)
-  }
-}
-log('late blocks (> 19:00) =', lateBlock.lateCount, '| latest ends', lateBlock.end, 'min, day', lateBlock.day, '| inside time grid | axis last tick', lateBlock.maxTick, 'axis end', lateBlock.axisEnd, 'min')
-await page.getByRole('radio', { name: 'Schedule' }).click()
-await page.waitForTimeout(200)
+log('late blocks (> 19:00) =', lateBlock.lateCount, '| all', lateBlock.blockCount, 'blocks inside time grid | latest ends', lateBlock.latestEnd, 'min | axis last tick', lateBlock.maxTick, 'axis end', lateBlock.axisEnd, 'min')
 
 // ── Team event cut (008) ──
 // Before this feature, defaultCutForEntry gave every TEAM catalogue entry a
@@ -1710,6 +1723,57 @@ if ((await page.locator('[data-overflow-lane] [data-event-block]').count()) !== 
   throw new Error('017 task S: Auto-assign left blocks in the No room lane')
 }
 log('017 task S: Auto-assign cleared the row and the lane:', await footerCounts())
+
+// ── 018 T3: B4 – the overrun rows and the grown axis ──
+// B4's last-phase overruns (T2's J1 measurement) run past the 22:00 hard end.
+// After the preset's auto-run the Findings panel carries one Warning per such
+// event ("<label> ends at HH:MM on Day N, …") and the axis grows to cover the
+// latest end, rounded up to the hour. The axis end reaching 1440 shows as a
+// final tick labelled "00:00" (ticks past 24:00 wrap, formatClockMins).
+// Boot opens B1, so the preset is chosen here. This runs last: B4 is an SYC
+// fixture and applying a preset leaves the tournament type of the last one
+// applied, which the NAC-default steps above assume is still NAC. The B1-B8 options are named by
+// their full label (SCENARIOS[id].label in src/data/tournaments.ts), not the id.
+await choosePreset('B4: Jan 2026 SYC — Y8/Y10/Y12/Y14/Cadet (3 days, 30 events)')
+log('B4 preset applied')
+await page.waitForTimeout(500)
+await openPanel('Findings')
+const b4Panel = page.getByRole('complementary', { name: 'Inspector panel' })
+const b4Overruns = [
+  { id: 'CDT-W-FOIL-IND', label: "Cadet Women's Foil Individual", ends: '23:10' },
+  { id: 'CDT-W-SABRE-IND', label: "Cadet Women's Saber Individual", ends: '23:15' },
+  { id: 'Y14-W-EPEE-IND', label: "Y14 Women's Epee Individual", ends: '23:30' },
+]
+for (const o of b4Overruns) {
+  const row = b4Panel.locator('[data-finding-id]').filter({ hasText: `${o.label} ends at ${o.ends}` })
+  if ((await row.count()) !== 1) {
+    await shot('018-b4-overrun-row-missing')
+    const texts = await b4Panel.locator('[data-finding-id] [data-message]').allTextContents()
+    throw new Error(`018 T3: expected one B4 overrun row "${o.label} ends at ${o.ends}" (${o.id}), found ${await row.count()}; rows: ${JSON.stringify(texts.slice(0, 12))}`)
+  }
+  const sev = await row.getAttribute('data-severity')
+  if (!/warning/i.test(sev ?? '')) throw new Error(`018 T3: the ${o.id} overrun row severity is "${sev}", not Warning`)
+}
+log('018 T3: B4 Findings shows the three overrun rows (23:10, 23:15, 23:30)')
+await closePanel()
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(200)
+const b4Grid = await assertEveryBlockInsideGrid('B4')
+const lastTickLabel = await page.evaluate(() => {
+  const ticks = [...document.querySelectorAll('[data-hour-tick]')]
+  const last = ticks.reduce((a, b) => (Number(b.getAttribute('data-hour-tick')) > Number(a.getAttribute('data-hour-tick')) ? b : a))
+  return { minutes: Number(last.getAttribute('data-hour-tick')), text: last.textContent?.trim() }
+})
+if (b4Grid.axisEnd < 24 * 60 || b4Grid.latestEnd <= 22 * 60) {
+  await shot('018-b4-axis')
+  throw new Error(`018 T3: B4 axis ends at ${b4Grid.axisEnd} min with the latest block ending ${b4Grid.latestEnd}, expected the axis to reach 1440 past a block ending after 22:00`)
+}
+if (b4Grid.latestEnd > b4Grid.axisEnd) {
+  throw new Error(`018 T3: B4 latest block ends ${b4Grid.latestEnd} after the axis end ${b4Grid.axisEnd}`)
+}
+log('018 T3: B4 axis end', b4Grid.axisEnd, 'min | last tick', lastTickLabel.minutes, 'reads', JSON.stringify(lastTickLabel.text), '| all', b4Grid.blockCount, 'blocks inside time grid | latest ends', b4Grid.latestEnd)
+await page.getByRole('radio', { name: 'Schedule' }).click()
+await page.waitForTimeout(200)
 
 await browser.close()
 log('console errors =', errors.length, errors.slice(0, 3))
