@@ -352,13 +352,17 @@ describe('bootstrap seeds autoRerun from the stored view state (020 T3)', () => 
     expect(useStore.getState().autoRerun).toBe(false)
   })
 
-  // Runs right after the case above, so a leaked stored value or a flag that
-  // survives the store reset would read false here (every file clears the key
-  // per test).
-  it('is on again for a boot with nothing stored, right after a switch-off boot', () => {
-    expect(localStorage.getItem(VIEW_STATE_STORAGE_KEY), 'premise: the key was cleared').toBeNull()
+  // The flag starts false, so a seed that only ever turns it on would pass the
+  // case above. Booting on first, then again with the preference off, proves
+  // the seed also resets a flag that is already true.
+  it('a boot with the preference off turns off a flag that an earlier boot turned on', () => {
     bootstrap('')
-    expect(useStore.getState().autoRerun).toBe(true)
+    expect(useStore.getState().autoRerun, 'premise: the first boot turned it on').toBe(true)
+
+    saveViewState({ ...DEFAULT_VIEW_STATE, autoRerun: false })
+    bootstrap('')
+
+    expect(useStore.getState().autoRerun).toBe(false)
   })
 
   it.each([
