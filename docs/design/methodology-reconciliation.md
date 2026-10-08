@@ -107,6 +107,17 @@ Three things the table does show:
    without it on every template – the vet cluster's own clique
    ({age-banded merged, VET_COMBINED, VET team}) is 3, below the D1/JR K₄.
 
+*2026-10-08, from 019: the measurements above stand as history. 019 gives each
+template the days its hard rules need, read from the board's tournament type
+(`TEMPLATE_MIN_DAYS` in `src/engine/catalogue.ts`), so picking a template raises
+the board to 4 days for NAC Cadet/Junior, NAC Div1/Junior and NAC Vet/Div1/Junior
+at a national type, and a hint says so when the days are lowered. It also removes
+the Div 1 ↔ Junior team relaxation, which is the "χ at level 3" column: those two
+pairs are now hard at every type and level 3 no longer exists. NAC Div1/Junior
+and NAC Vet/Div1/Junior therefore no longer relax at 3 days. They break the pair
+and warn, as NAC Cadet/Junior already did. The store's initial 3 days still
+stands until boot overwrites it. Record: `specs/019-default-days-per-template/`.*
+
 #### 1.2.2 The engine does not report unsatisfiability – it absorbs it silently
 
 **[M, harness M6]** Running `assignDaysByColoring` directly and counting pairs
@@ -138,6 +149,14 @@ Cadet Men's Foil team, and so on – and reports no error, no warning, and
 `constraint_relaxation_level = 0`. The spec's §Constraint Relaxation ends "If no
 valid day exists even at Level 3, scheduling fails with an unresolvable error"
 (METHODOLOGY:284). No such failure exists in code.
+
+*2026-10-08, from 019: the table above is the pre-019 record. At 3 days NAC
+Div1/Junior and NAC Vet/Div1/Junior no longer record relaxations (the
+`relaxations` return value and `constraint_relaxation_level` are deleted) and
+report their Div 1 ↔ Junior team breaks as `UNAVOIDABLE_CROSSOVER_CONFLICT`
+WARNs like every other hard pair. The fallback itself is unchanged, and
+[backlog §Runtime failure is terminal](./backlog.md#runtime-failure-is-terminal--day-assignment-never-re-colors)
+records what it still does when days are too few.*
 
 #### 1.2.3 Phase 1 does not compute what its own comment says it computes
 

@@ -13,7 +13,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
   "events": {
     "D1-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 150,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 460,
@@ -28,7 +27,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "D1-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1610,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1880,
@@ -43,7 +41,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "D1-M-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4435,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4585,
@@ -58,7 +55,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "D1-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 170,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 400,
@@ -73,7 +69,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "D1-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1645,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1820,
@@ -88,7 +83,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "D1-W-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 2990,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3125,
@@ -103,7 +97,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "JR-M-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3030,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3240,
@@ -118,7 +111,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "JR-M-FOIL-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4470,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4700,
@@ -133,7 +125,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "JR-M-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1555,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1765,
@@ -148,7 +139,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "JR-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3090,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3280,
@@ -163,7 +153,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "JR-W-FOIL-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4525,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4675,
@@ -178,7 +167,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "JR-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 230,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 370,
@@ -193,7 +181,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-IND-VCMB": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1640,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1850,
@@ -208,7 +195,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-TEAM": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -223,7 +209,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-M-FOIL-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 260,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 365,
@@ -238,7 +223,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-M-FOIL-TEAM": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -253,7 +237,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-IND-VCMB": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4405,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4465,
@@ -268,7 +251,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-TEAM": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -283,7 +265,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-IND-VCMB": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4460,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4565,
@@ -298,7 +279,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-TEAM": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -313,7 +293,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 260,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 335,
@@ -328,7 +307,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-TEAM": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -343,7 +321,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 200,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 305,
@@ -358,7 +335,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-TEAM": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -423,7 +399,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
   "events": {
     "CDT-M-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1620,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1910,
@@ -438,7 +413,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-M-EPEE-TEAM": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -453,7 +427,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-M-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3060,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3355,
@@ -468,7 +441,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-M-FOIL-TEAM": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -483,7 +455,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-M-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 180,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 405,
@@ -498,7 +469,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-M-SABRE-TEAM": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -513,7 +483,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 180,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 430,
@@ -528,7 +497,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-W-EPEE-TEAM": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -543,7 +511,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-W-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 265,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 495,
@@ -558,7 +525,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-W-FOIL-TEAM": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -573,7 +539,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-W-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4410,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4585,
@@ -588,7 +553,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "CDT-W-SABRE-TEAM": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -603,7 +567,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "D1-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 235,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 545,
@@ -618,7 +581,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "D1-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1620,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1910,
@@ -633,7 +595,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "D1-M-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3115,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3300,
@@ -648,7 +609,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "D1-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3060,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3300,
@@ -663,7 +623,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "D1-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1710,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1880,
@@ -678,7 +637,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "D1-W-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1680,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1850,
@@ -693,7 +651,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "Y14-M-EPEE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4470,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4760,
@@ -708,7 +665,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "Y14-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1810,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 2020,
@@ -723,7 +679,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "Y14-M-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4470,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4645,
@@ -738,7 +693,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "Y14-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3170,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3410,
@@ -753,7 +707,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "Y14-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3235,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3465,
@@ -768,7 +721,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
     },
     "Y14-W-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3170,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3380,
@@ -833,7 +785,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
   "events": {
     "D2-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 270,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 540,
@@ -848,7 +799,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "D2-M-FOIL-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4585,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4835,
@@ -863,7 +813,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "D2-M-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1705,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1865,
@@ -878,7 +827,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "D2-W-EPEE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4605,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4805,
@@ -893,7 +841,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "D2-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3140,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3335,
@@ -908,7 +855,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "D2-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 240,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 510,
@@ -923,7 +869,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y10-M-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1600,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1705,
@@ -938,7 +883,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y10-M-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3050,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3305,
@@ -953,7 +897,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y10-M-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 85,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 165,
@@ -968,7 +911,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y10-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3055,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3305,
@@ -983,7 +925,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y10-W-FOIL-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4470,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4575,
@@ -998,7 +939,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y10-W-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1550,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1630,
@@ -1013,7 +953,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y12-M-EPEE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4545,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4855,
@@ -1028,7 +967,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y12-M-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 195,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 525,
@@ -1043,7 +981,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y12-M-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3110,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3305,
@@ -1058,7 +995,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y12-W-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1675,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1925,
@@ -1073,7 +1009,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y12-W-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 270,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 565,
@@ -1088,7 +1023,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y12-W-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4555,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4745,
@@ -1103,7 +1037,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y14-M-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3055,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3405,
@@ -1118,7 +1051,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y14-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1675,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 2025,
@@ -1133,7 +1065,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y14-M-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4440,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4775,
@@ -1148,7 +1079,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y14-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 240,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 550,
@@ -1163,7 +1093,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y14-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1705,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 2035,
@@ -1178,7 +1107,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
     },
     "Y14-W-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3110,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3335,
@@ -1242,7 +1170,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
   "events": {
     "CDT-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1257,7 +1184,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "CDT-M-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1272,7 +1198,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "CDT-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1287,7 +1212,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "CDT-W-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1302,7 +1226,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y10-M-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1317,7 +1240,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y10-M-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1332,7 +1254,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y10-M-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1347,7 +1268,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y10-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1362,7 +1282,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y10-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1377,7 +1296,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y10-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1392,7 +1310,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y12-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1407,7 +1324,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y12-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1422,7 +1338,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y12-M-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1437,7 +1352,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y12-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1452,7 +1366,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y12-W-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1467,7 +1380,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y12-W-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1482,7 +1394,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y14-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1497,7 +1408,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y14-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1512,7 +1422,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y8-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1527,7 +1436,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y8-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1542,7 +1450,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y8-M-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1557,7 +1464,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y8-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1572,7 +1478,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y8-W-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1587,7 +1492,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
     },
     "Y8-W-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1648,7 +1552,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
   "events": {
     "CDT-M-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1663,7 +1566,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "CDT-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1678,7 +1580,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "CDT-M-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1693,7 +1594,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "CDT-W-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1708,7 +1608,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "CDT-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1723,7 +1622,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "CDT-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1738,7 +1636,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "JR-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1753,7 +1650,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "JR-M-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1768,7 +1664,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "JR-M-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1783,7 +1678,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "JR-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1798,7 +1692,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "JR-W-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1813,7 +1706,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
     },
     "JR-W-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1869,7 +1761,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
   "events": {
     "CDT-M-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1884,7 +1775,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "CDT-M-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1899,7 +1789,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "CDT-M-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1914,7 +1803,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "CDT-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1929,7 +1817,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "CDT-W-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1944,7 +1831,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "CDT-W-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1959,7 +1845,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D1A-M-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1974,7 +1859,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D1A-M-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -1989,7 +1873,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D1A-M-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2004,7 +1887,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D1A-W-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2019,7 +1901,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D1A-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2034,7 +1915,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D1A-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2049,7 +1929,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D2-M-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2064,7 +1943,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D2-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2079,7 +1957,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D2-M-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2094,7 +1971,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D2-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2109,7 +1985,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D2-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2124,7 +1999,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "D2-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2139,7 +2013,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "JR-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2154,7 +2027,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "JR-M-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2169,7 +2041,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "JR-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2184,7 +2055,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "JR-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2199,7 +2069,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-IND-VCMB": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2214,7 +2083,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-IND-VCMB": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2229,7 +2097,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2244,7 +2111,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-IND-VCMB": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2259,7 +2125,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-IND-VCMB": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2274,7 +2139,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y10-M-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2289,7 +2153,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y10-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2304,7 +2167,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y10-M-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2319,7 +2181,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y10-W-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2334,7 +2195,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y10-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2349,7 +2209,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y10-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2364,7 +2223,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y12-M-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2379,7 +2237,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y12-M-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2394,7 +2251,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y12-M-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2409,7 +2265,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y12-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2424,7 +2279,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y12-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2439,7 +2293,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y12-W-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2454,7 +2307,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y14-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2469,7 +2321,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y14-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2484,7 +2335,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y14-M-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2499,7 +2349,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y14-W-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2514,7 +2363,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y14-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2529,7 +2377,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y14-W-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2544,7 +2391,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y8-M-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2559,7 +2405,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y8-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2574,7 +2419,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y8-M-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2589,7 +2433,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y8-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2604,7 +2447,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y8-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2619,7 +2461,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
     },
     "Y8-W-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -2680,7 +2521,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
   "events": {
     "CDT-M-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1590,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1840,
@@ -2695,7 +2535,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "CDT-M-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 235,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 445,
@@ -2710,7 +2549,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "CDT-M-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3060,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3220,
@@ -2725,7 +2563,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "CDT-W-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1740,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1930,
@@ -2740,7 +2577,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "CDT-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3205,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3395,
@@ -2755,7 +2591,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "CDT-W-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4530,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4665,
@@ -2770,7 +2605,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "D1-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 175,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 485,
@@ -2785,7 +2619,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "D1-M-FOIL-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4525,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4795,
@@ -2800,7 +2633,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "D1-M-SABRE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1680,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1920,
@@ -2815,7 +2647,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "D1-W-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3090,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3300,
@@ -2830,7 +2661,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "D1-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1770,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1960,
@@ -2845,7 +2675,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "D1-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 120,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 280,
@@ -2860,7 +2689,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "JR-M-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3060,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3390,
@@ -2875,7 +2703,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "JR-M-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1680,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1990,
@@ -2890,7 +2717,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "JR-M-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4440,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4655,
@@ -2905,7 +2731,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "JR-W-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 265,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 515,
@@ -2920,7 +2745,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "JR-W-FOIL-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4495,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4745,
@@ -2935,7 +2759,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
     },
     "JR-W-SABRE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3175,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3350,
@@ -3000,7 +2823,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
   "events": {
     "D1-M-EPEE-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3040,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3275,
@@ -3015,7 +2837,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-M-EPEE-TEAM": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -3030,7 +2851,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-M-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3095,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3245,
@@ -3045,7 +2865,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-M-FOIL-TEAM": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -3060,7 +2879,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-M-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 235,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 350,
@@ -3075,7 +2893,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-M-SABRE-TEAM": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -3090,7 +2907,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-W-EPEE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4525,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4695,
@@ -3105,7 +2921,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-W-EPEE-TEAM": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -3120,7 +2935,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-W-FOIL-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1585,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1710,
@@ -3135,7 +2949,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-W-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4410,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4545,
@@ -3150,7 +2963,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "D1-W-SABRE-TEAM": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": null,
@@ -3165,7 +2977,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "JR-M-EPEE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 175,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 465,
@@ -3180,7 +2991,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "JR-M-FOIL-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 420,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 610,
@@ -3195,7 +3005,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "JR-M-SABRE-IND": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4510,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4660,
@@ -3210,7 +3019,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "JR-W-EPEE-IND": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1670,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1880,
@@ -3225,7 +3033,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "JR-W-FOIL-IND": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3225,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3375,
@@ -3240,7 +3047,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "JR-W-SABRE-IND": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 180,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 330,
@@ -3255,7 +3061,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-IND-V40": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1615,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1790,
@@ -3270,7 +3075,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-IND-V50": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1585,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1680,
@@ -3285,7 +3089,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-IND-V60": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1575,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1650,
@@ -3300,7 +3103,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-IND-V70": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1620,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1820,
@@ -3315,7 +3117,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-IND-V80": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1645,
       "de_prelims_strip_count": 8,
       "de_round_of_16_start": 1850,
@@ -3330,7 +3131,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-EPEE-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 300,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 450,
@@ -3345,7 +3145,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-FOIL-IND-V40": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4455,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4515,
@@ -3360,7 +3159,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-FOIL-IND-V50": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4485,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4560,
@@ -3375,7 +3173,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-FOIL-IND-V60": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4495,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4590,
@@ -3390,7 +3187,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-FOIL-IND-V70": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4505,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4600,
@@ -3405,7 +3201,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-FOIL-IND-V80": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": 4440,
@@ -3420,7 +3215,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-FOIL-IND-VCMB": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3020,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3155,
@@ -3435,7 +3229,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-IND-V40": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1660,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1850,
@@ -3450,7 +3243,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-IND-V50": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1665,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1850,
@@ -3465,7 +3257,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-IND-V60": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1665,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 1870,
@@ -3480,7 +3271,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-IND-V70": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 1660,
       "de_prelims_strip_count": 8,
       "de_round_of_16_start": 1870,
@@ -3495,7 +3285,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-IND-V80": {
       "assigned_day": 1,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": 1645,
@@ -3510,7 +3299,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-M-SABRE-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 410,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 480,
@@ -3525,7 +3313,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-IND-V40": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3145,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3205,
@@ -3540,7 +3327,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-IND-V50": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3110,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3185,
@@ -3555,7 +3341,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-IND-V60": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3175,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3235,
@@ -3570,7 +3355,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-IND-V70": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3115,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3175,
@@ -3585,7 +3369,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-IND-V80": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": 3045,
@@ -3600,7 +3383,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-EPEE-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 335,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 440,
@@ -3615,7 +3397,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-IND-V40": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4495,
       "de_prelims_strip_count": 8,
       "de_round_of_16_start": 4620,
@@ -3630,7 +3411,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-IND-V50": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4530,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4630,
@@ -3645,7 +3425,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-IND-V60": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4535,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 4630,
@@ -3660,7 +3439,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-IND-V70": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 4565,
       "de_prelims_strip_count": 8,
       "de_round_of_16_start": 4650,
@@ -3675,7 +3453,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-IND-V80": {
       "assigned_day": 3,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": 4440,
@@ -3690,7 +3467,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-FOIL-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 485,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 560,
@@ -3705,7 +3481,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-IND-V40": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3085,
       "de_prelims_strip_count": 8,
       "de_round_of_16_start": 3155,
@@ -3720,7 +3495,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-IND-V50": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3205,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3255,
@@ -3735,7 +3509,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-IND-V60": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3215,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3265,
@@ -3750,7 +3523,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-IND-V70": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 3215,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 3285,
@@ -3765,7 +3537,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-IND-V80": {
       "assigned_day": 2,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": null,
       "de_prelims_strip_count": 0,
       "de_round_of_16_start": 3030,
@@ -3780,7 +3551,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
     },
     "VET-W-SABRE-IND-VCMB": {
       "assigned_day": 0,
-      "constraint_relaxation_level": 0,
       "de_prelims_start": 315,
       "de_prelims_strip_count": 16,
       "de_round_of_16_start": 365,

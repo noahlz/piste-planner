@@ -40,7 +40,7 @@ export function buildConstraintGraph(
   }
 
   forEachCompetitionPair(competitions, (c1, c2) => {
-    // crossoverPenalty covers same-population, the relaxable ind/team blocks,
+    // crossoverPenalty covers same-population, the cross-level ind/team blocks,
     // Group 1 by tournament type, the soft separations and CROSSOVER_GRAPH.
     const weight = crossoverPenalty(c1, c2, tournamentType)
 

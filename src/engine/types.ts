@@ -126,7 +126,6 @@ export const BottleneckCause = {
   STRIP_DEFICIT_NO_FLIGHTING: 'STRIP_DEFICIT_NO_FLIGHTING',
   VIDEO_STRIP_CONTENTION: 'VIDEO_STRIP_CONTENTION',
   PROXIMITY_PREFERENCE_UNMET: 'PROXIMITY_PREFERENCE_UNMET',
-  CONSTRAINT_RELAXED: 'CONSTRAINT_RELAXED',
   FLIGHTING_GROUP_NOT_LARGEST: 'FLIGHTING_GROUP_NOT_LARGEST',
   FLIGHTING_GROUP_MANUAL_NEEDED: 'FLIGHTING_GROUP_MANUAL_NEEDED',
   MULTIPLE_FLIGHTED_SAME_DAY: 'MULTIPLE_FLIGHTED_SAME_DAY',
@@ -157,7 +156,6 @@ export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCa
  */
 export const BottleneckRule = {
   PER_EVENT_EXCLUSION_SUMMARY: 'per-event-exclusion-summary',
-  DAY_ASSIGNMENT_RELAXED: 'day-assignment-relaxed',
   HARD_SEPARATION_VIOLATED: 'hard-separation-violated',
   PINNED_PHASE_UNCLAIMED: 'pinned-phase-unclaimed',
   CROSS_EVENT_DEPENDENCY_DELAY: 'cross-event-dependency-delay',
@@ -380,7 +378,6 @@ export interface ScheduleResult {
   pool_duration_actual: number
   de_duration_baseline: number
   de_duration_actual: number
-  constraint_relaxation_level: number
   accepted_warnings: AcceptedWarning[]
 }
 

@@ -1,6 +1,6 @@
-import type { CatalogueEntry, VetAgeGroup } from './types.ts'
+import type { CatalogueEntry, TournamentType, VetAgeGroup } from './types.ts'
 import { Category, EventType, Gender, Weapon, VetAgeGroup as VetAgeGroupEnum } from './types.ts'
-import { NAC_FENCER_DEFAULTS, REGIONAL_FENCER_DEFAULTS, type FencerDefaultKey } from './constants.ts'
+import { GROUP_1_SOFT_TYPES, NAC_FENCER_DEFAULTS, REGIONAL_FENCER_DEFAULTS, type FencerDefaultKey } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // ID generation helpers
@@ -287,4 +287,81 @@ export const TEMPLATE_FENCER_DEFAULTS: Record<string, FencerDefaultTable> = {
   'ROC Mega': REGIONAL_FENCER_DEFAULTS,
   'RYC Weekend': REGIONAL_FENCER_DEFAULTS,
   'RJCC Weekend': REGIONAL_FENCER_DEFAULTS,
+}
+
+// ──────────────────────────────────────────────
+// Template → fewest days its hard same-day rules need (METHODOLOGY §Inputs,
+// "Tournament duration"). Group 1 is the only hard rule that depends on the
+// tournament type, so one column covers the types where it is hard (NAC, SYC,
+// SJCC) and one the GROUP_1_SOFT_TYPES (ROC, RYC, RJCC). Written by hand and
+// pinned by an exact chromatic-number test (templateMinDays.test.ts).
+// ──────────────────────────────────────────────
+
+export interface TemplateMinDays {
+  national: number
+  regional: number
+}
+
+export const TEMPLATE_MIN_DAYS: Record<string, TemplateMinDays> = {
+  'NAC Youth': { national: 2, regional: 1 },
+  'NAC Cadet/Junior': { national: 4, regional: 2 },
+  'NAC Div1/Junior': { national: 4, regional: 2 },
+  'NAC Vet/Div1/Junior': { national: 4, regional: 3 },
+  'ROC Div1A/Vet': { national: 1, regional: 1 },
+  'ROC Div1A/Div2/Vet': { national: 1, regional: 1 },
+  'ROC Mega': { national: 2, regional: 1 },
+  'RYC Weekend': { national: 2, regional: 1 },
+  'RJCC Weekend': { national: 2, regional: 1 },
+  'Junior Olympics': { national: 3, regional: 2 },
+}
+
+/**
+ * The fewest days `templateName`'s hard same-day rules need on a board of
+ * `tournamentType`. An unknown name returns 0 – no raise – the way
+ * `applyTemplate` treats one as an empty template. Callers never pass one.
+ */
+export function templateMinDays(templateName: string, tournamentType: TournamentType): number {
+  if (!Object.hasOwn(TEMPLATE_MIN_DAYS, templateName)) return 0
+  const row = TEMPLATE_MIN_DAYS[templateName]
+  return GROUP_1_SOFT_TYPES.has(tournamentType) ? row.regional : row.national
+}
+
+// ──────────────────────────────────────────────
+// Template → the rule that needs its days, as one plain sentence for the
+// Tournament panel's hint (019 R3). Written for every template and column
+// whose minimum is 3 or more. The other cells, which only a file loaded after a
+// template pick can reach, use TEMPLATE_HINT_GENERIC.
+// ──────────────────────────────────────────────
+
+const TEMPLATE_HINT_CADET_JUNIOR =
+  'Cadet and Junior events of one weapon and gender may never share a day, ' +
+  'and neither may a team event and an individual event of the same age group.'
+
+const TEMPLATE_HINT_DIV1_JUNIOR =
+  'Div 1 and Junior events of one weapon and gender may never share a day, ' +
+  'and neither may a team event and an individual event of the same age group.'
+
+export const TEMPLATE_HINT_GENERIC = 'Some of its events may never share a day.'
+
+export const TEMPLATE_HINTS: Record<string, Partial<Record<keyof TemplateMinDays, string>>> = {
+  'NAC Cadet/Junior': { national: TEMPLATE_HINT_CADET_JUNIOR },
+  'NAC Div1/Junior': { national: TEMPLATE_HINT_DIV1_JUNIOR },
+  'NAC Vet/Div1/Junior': {
+    national: TEMPLATE_HINT_DIV1_JUNIOR,
+    regional:
+      'Veteran age-group events of one weapon and gender run on one day, ' +
+      'and neither the Veteran Combined nor the Veteran team event may join them or each other.',
+  },
+  'Junior Olympics': {
+    national:
+      'Cadet and Junior events of one weapon and gender may never share a day, ' +
+      "and Junior's individual and team events may never share one either.",
+  },
+}
+
+/** The sentence naming the rule behind `templateName`'s minimum on a board of `tournamentType`. */
+export function templateHintSentence(templateName: string, tournamentType: TournamentType): string {
+  const column = GROUP_1_SOFT_TYPES.has(tournamentType) ? 'regional' : 'national'
+  if (!Object.hasOwn(TEMPLATE_HINTS, templateName)) return TEMPLATE_HINT_GENERIC
+  return TEMPLATE_HINTS[templateName][column] ?? TEMPLATE_HINT_GENERIC
 }

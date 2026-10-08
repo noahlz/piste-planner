@@ -47,7 +47,7 @@ const HARD_CASES: HardCase[] = [
     b: { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET50 },
   },
   {
-    name: 'at ROC, where Group 1 is soft: the relaxable individual/team block (Div 1 individual, Junior team)',
+    name: 'at ROC, where Group 1 is soft: the cross-level individual/team block (Div 1 individual, Junior team)',
     a: { category: Category.DIV1, event_type: EventType.INDIVIDUAL },
     b: { category: Category.JUNIOR, event_type: EventType.TEAM },
     type: TournamentType.ROC,
@@ -104,7 +104,7 @@ describe('checkPlacementRules: hard same-day pairs', () => {
   })
 
   it('gives exactly one hard finding to a pair that matches several hard rules', () => {
-    // Div 1 individual / Junior team is a relaxable block AND a Group 1 pair.
+    // Div 1 individual / Junior team is a cross-level block AND a Group 1 pair.
     const findings = checkPlacementRules(
       [
         comp('div1-ind', { category: Category.DIV1, event_type: EventType.INDIVIDUAL }),

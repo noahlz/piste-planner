@@ -12,7 +12,6 @@ const ID_CHAR = /[A-Za-z0-9_-]/
  */
 export const CAUSE_OF_RULE: Record<BottleneckRule, BottleneckCause> = {
   [BottleneckRule.PER_EVENT_EXCLUSION_SUMMARY]: BottleneckCause.RESOURCE_EXHAUSTION,
-  [BottleneckRule.DAY_ASSIGNMENT_RELAXED]: BottleneckCause.CONSTRAINT_RELAXED,
   [BottleneckRule.HARD_SEPARATION_VIOLATED]: BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
   [BottleneckRule.PINNED_PHASE_UNCLAIMED]: BottleneckCause.PINNED_UNCLAIMED,
   [BottleneckRule.CROSS_EVENT_DEPENDENCY_DELAY]: BottleneckCause.SEQUENCING_CONSTRAINT,

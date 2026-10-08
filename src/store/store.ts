@@ -7,7 +7,7 @@ import type {
   Weapon,
 } from '../engine/types.ts'
 import { PlacementSource } from '../engine/types.ts'
-import { fencerDefaultKeyOf, findCompetition, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
+import { fencerDefaultKeyOf, findCompetition, templateMinDays, TEMPLATES, TEMPLATE_FENCER_DEFAULTS } from '../engine/catalogue.ts'
 import { stripSearchRange, scanStripCounts } from '../engine/stripSearch.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import type { ScenarioId } from '../data/tournaments.ts'
@@ -92,6 +92,9 @@ export interface CompetitionSlice {
   addCompetition: (id: string) => void
   updateCompetition: (id: string, partial: Partial<CompetitionConfig>) => void
   removeCompetition: (id: string) => void
+  /** Replaces the selection with the template's events and raises `days_available`
+   *  (and `dayConfigs`) to the fewest days the template's hard same-day rules need
+   *  for the board's tournament type. Never lowers the days and never changes the type. */
   applyTemplate: (templateName: string) => void
 }
 
@@ -395,10 +398,25 @@ function createCompetitionSlice(set: SetState, get: GetState): CompetitionSlice 
         const config = defaultConfigForId(id, fencerDefaults, typeDefaults)
         if (config) map[id] = config
       }
+      // A board with fewer days than the template's hard same-day rules need
+      // gets raised to that minimum in this same set(): existing windows kept by
+      // index, default windows for the added days. Otherwise days and windows
+      // stay as they were (same references). Never lowers, never touches the type.
+      const { days_available, dayConfigs, tournament_type } = get()
+      const minDays = templateMinDays(templateName, tournament_type)
+      const raise: Partial<TournamentSlice> = days_available < minDays
+        ? {
+            days_available: minDays,
+            dayConfigs: Array.from({ length: minDays }, (_, i) => dayConfigs[i] ?? {
+              day_start_time: DAY_START_MINS,
+              day_end_time: DAY_END_MINS,
+            }),
+          }
+        : {}
       // Records the template the same way setLoadedPresetId does, so a
       // template-loaded config reads back through the picker exactly like a
       // preset-loaded one (T006).
-      set({ selectedCompetitions: map, loadedPresetId: templateName, loadRefusal: null })
+      set({ selectedCompetitions: map, loadedPresetId: templateName, loadRefusal: null, ...raise })
     },
   }
 }

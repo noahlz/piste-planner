@@ -222,6 +222,49 @@ were written by 018, and every entry is unscheduled unless it says otherwise.*
   [§Two fencer-count corners 018 left open](#two-fencer-count-corners-018-left-open).
   New.
 
+## What 019 deliberately left unfixed
+
+*Recorded by 019, 2026-10-08. It closed §The store's default day count is
+unsatisfiable for three templates. Its handoff,
+`specs/019-default-days-per-template/handoff.md`, has the rest. Entries marked
+"new" were written by 019, and every entry is unscheduled unless it says
+otherwise.*
+
+- A failed event with no Findings row and no stated reason –
+  [§A failed event gets no Findings row and no stated reason](#a-failed-event-gets-no-findings-row-and-no-stated-reason).
+  New. An owner call.
+- Re-picking the loaded template doing nothing –
+  [§Re-picking the loaded template does nothing](#re-picking-the-loaded-template-does-nothing).
+  New.
+- The picker label going stale after a file load –
+  [§`loadedPresetId` survives a file load](#loadedpresetid-survives-a-file-load).
+  New.
+- Lowering days by hand discarding every day's custom hours –
+  [§Lowering days by hand discards every day's custom hours](#lowering-days-by-hand-discards-every-days-custom-hours).
+  New.
+- Suggest counting placements and overruns but not broken hard pairs –
+  [§Suggest ignores broken hard pairs on a hand-lowered board](#suggest-ignores-broken-hard-pairs-on-a-hand-lowered-board).
+  New.
+- The least-bad fallback breaking other and same-population pairs, tying at
+  Infinity and landing on day 0 –
+  [§Runtime failure is terminal – day assignment never re-colors](#runtime-failure-is-terminal--day-assignment-never-re-colors).
+  Existing entry, extended.
+- A template keeping the board's strips as well as its type, so B4 → NAC
+  Div1/Junior places 0 –
+  [§A template keeps the board's tournament type](#a-template-keeps-the-boards-tournament-type).
+  Existing entry, extended.
+- A template's day raise bringing back a pin left on a lowered-away day –
+  [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share).
+  Existing entry, extended.
+- Ten METHODOLOGY lines the amendment left, for feature 021 –
+  [§Left for 021 by 019's amendment](#left-for-021-by-019s-amendment), under
+  [§METHODOLOGY.md and the engine have diverged, and the doc is the spec](#methodologymd-and-the-engine-have-diverged-and-the-doc-is-the-spec).
+  Existing entry, extended. Feature 021.
+- Two hint copy nits, "the same age group" for Div 1 and the "a" before a type
+  code –
+  [§Two hint copy nits 019 left as owner copy](#two-hint-copy-nits-019-left-as-owner-copy).
+  New. An owner wording call.
+
 ## Day-level findings have no structured day
 
 *Found while planning 014, 2026-10-04. **Mostly fixed by 016, 2026-10-07.** What
@@ -572,6 +615,16 @@ and 018's probes ran every template as a NAC to avoid it.
 **Cost if ignored**: a regional template under a NAC type is measured against the
 wrong rules without anything saying so.
 
+*Extended by 019, 2026-10-08.* A template keeps the board's strips as well as its
+type (019 ruling R2 left both alone). B4 (SYC, 40 strips) → NAC Div1/Junior or
+NAC Vet/Div1/Junior places 0 events even at 4 days, on a strip shortfall
+("D1-M-EPEE-IND requires 45 strips for pools but only 40"). Raising the days
+cannot help, and nothing but the board's own strips and type decide that path.
+**What it needs**: the same owner call, now covering strips, or a message when a
+template's pool strip need passes the board's strips. **Cost if ignored**: an
+organizer who picks a K₄ template after B4 sees an empty board, and the hint
+(which is about days) says nothing.
+
 ## Dismiss controls drop focus to the page body
 
 *Found during 018, 2026-10-08. Recorded, not fixed. Repo-wide.*
@@ -643,6 +696,119 @@ finding says so.
 
 **Cost if ignored**: none today. Both would matter the day someone adds a caller.
 
+## A failed event gets no Findings row and no stated reason
+
+*Found by 019's Understand-phase claim check, 2026-10-08. Recorded, not fixed.*
+
+When the run permanently fails an event (an ERROR with no placement, such as the
+defer cap, a deadline breach or a hard same-day rule), nothing in the Findings
+panel says so. `computeAllFindings` (`src/store/derived.ts`) draws on validation
+errors, `initialAnalysis`, the same-day rule check over placed events and the
+drawn blocks. The run's own bottlenecks are not kept (`runActions.ts`,
+`KeptRun`), and an Unplaced row needs a drawn block, which a failed event lacks.
+NAC Youth at 2 days and 80 strips places 13 events and leaves 11 unplaced, with
+0 Blocking and 0 Unplaced rows. The same shows in eight other template and
+day-count cases of 019's probe. The failed event appears only as a dock chip
+carrying its label and footprint, the footer count and the dock's "N could not
+be placed" line.
+
+**What it needs**: an owner call on whether the run's ERRORs should be kept
+(on `lastRun`) and shown as Blocking or Unplaced rows naming the cause, for
+example "needs more days" or "no strips free before the hard end", and whether
+the dock chip and detail strip should carry the same reason.
+
+**Cost if ignored**: an organizer sees events dropped and cannot tell why or what
+to change (days, strips or a pin). The Blocking count stays 0, so Auto-assign is
+never disabled and the ERROR never reaches the panel.
+
+## Re-picking the loaded template does nothing
+
+*Found by 019's hint design, 2026-10-08. Recorded, not fixed. It is plan
+decision 7.*
+
+The template picker is a controlled Radix Select, and choosing the value it
+already shows does not fire `onValueChange`. So re-picking the loaded template
+does not re-apply it and does not re-raise the days. Only picking another
+template and then picking this one again does. The 019 hint appears when the
+days sit below the template's minimum, and it does not tell the organizer to
+re-pick.
+
+**What it needs**: an explicit control (an "apply again" action, or handling the
+item's own select event), or a line in the hint that names the Days pills as the
+fix.
+
+**Cost if ignored**: an organizer who lowered the days by hand and wants the
+template's own count back has no obvious way, short of the pills.
+
+## `loadedPresetId` survives a file load
+
+*Found by 019's hint design, 2026-10-08. Recorded, not fixed.*
+
+`loadedPresetId` is written only by `applyTemplate` and `applyPreset`. A file load
+(`exportActions.ts`, `ExportPopover.tsx`) leaves it as it was, as do hand removals
+and type changes. The picker keeps showing the old template's name over a board
+that is no longer that template. A `#config=` link is not affected, because it
+boots a fresh store with the id `null`. The 019 hint guards against the worst
+case by requiring every template event to be selected still, so it stays quiet on
+most stale boards.
+
+**What it needs**: clear `loadedPresetId` when a file loads (and decide for hand
+edits), which changes existing header behaviour and its tests.
+
+**Cost if ignored**: the picker label names a template the board is not. The hint
+can describe that template's minimum on a loaded board that still holds all of its
+events.
+
+## Lowering days by hand discards every day's custom hours
+
+*Found by 019's plan measurements, 2026-10-08. Recorded, not fixed.*
+
+`setDays` (`src/store/store.ts`) rebuilds `dayConfigs` with the default window for
+every day. Choosing a Days pill therefore resets the hours of the days it keeps as
+well as the ones it drops. 019's template raise avoids it (it appends only the
+missing days and keeps the existing windows), so the two paths now differ.
+
+**What it needs**: `setDays` keeps the first N windows and appends defaults for
+new days, as the raise does.
+
+**Cost if ignored**: an organizer who sets a custom start on day 2 and then
+changes the day count loses it without a message.
+
+## Suggest ignores broken hard pairs on a hand-lowered board
+
+*Found by 019's Understand-phase sweep, 2026-10-08. Recorded, not fixed.*
+
+The strip search's "places every event" test counts placements and overruns only
+(`src/engine/stripSearch.ts`). On a board whose days were lowered below the
+template's minimum it returns a count that places everything while hard pairs are
+broken, for example 255 strips for NAC Vet/Div1/Junior at 2 days before R4 and 283
+after it. The Findings panel does list the broken pairs.
+
+**What it needs**: either the search counts broken hard pairs as a miss, or the
+Suggest card says that the board has them.
+
+**Cost if ignored**: Suggest reads as a clean answer for a board that breaks the
+template's own rules, and the strips it asks for may be far past the venue ceiling.
+
+## Two hint copy nits 019 left as owner copy
+
+*Found by 019 T3's spec review, 2026-10-08. Recorded, not fixed. The fix round
+declined them because the plan fixed the wording.*
+
+- The NAC Div1/Junior hint says a team event and an individual event "of the same
+  age group" may never share a day. Div 1 is not an age group.
+- The hint's title line reads "on a <type> board" with a fixed "a"
+  (`src/store/templateHint.ts`). The right article depends on how each code is
+  said: as letters ("an SJCC", "an RYC") or as a word ("a NAC" said "nack").
+  Rewording around the article ("under NAC rules") avoids the choice.
+
+**What it needs**: an owner wording call, then a one-line change in `catalogue.ts`
+and `templateHint.ts`, with the exact-text pins in `templateHint.test.ts`,
+`TournamentPanel.test.tsx` and the smoke's hint check updated in the same commit.
+
+**Cost if ignored**: copy that reads slightly wrong in the one place the
+organizer is told why a board breaks the rules.
+
 ## Runtime failure is terminal – day assignment never re-colors
 
 *Found by the 2026-08-31 methodology review. Recorded, not fixed.*
@@ -659,10 +825,41 @@ repair loop – re-color the failed event with its failed day excluded, capped a
 one pass – would convert permanent drops into placements at the cost of a
 second coloring round.
 
+*Extended by 019, 2026-10-08 (T1 judge J2 and the spec review).* With 019's R4
+the least-bad fallback is the only path left when days are too few, and it is
+crude. It breaks other pairs, and sometimes same-population ones: NAC
+Vet/Div1/Junior at 3 days breaks a Junior ind ↔ Junior team pair. Every
+candidate day scores Infinity for a vertex with a hard collision, so all days
+tie and the strict `<` keeps day 0. The fallback cannot tell 1 broken pair from
+3, and it never weighs which pair is least harmful. Before R4 the two cross-level
+pairs had a relaxed path, so more boards reach the fallback now. The Findings
+panel still lists each broken pair as a non-dismissable row, so the break is
+visible. **What it needs**: the bounded re-color pass above, or at least a
+fallback that minimizes the count of broken hard pairs and prefers the
+cross-level pair over a same-population one. **Cost if ignored**: a hand-lowered
+board reports a break that a better color choice would have avoided, and the
+broken pair is chosen by tie-break order instead of by harm. The templates'
+own day minimums keep the default path clear of it.
+
 ## The store's default day count is unsatisfiable for three templates
 
 *Found by the 2026-08-31 methodology review, made visible (not fixed) by 010
 T009/T010 (R7), 2026-09-05.*
+
+*Fixed by 019, 2026-10-08 (`2873108b98`, `70cd7d865b`, `ec1ce0d076`). Picking a
+template now raises the board's days to the fewest its own hard same-day rules
+need, read from the board's tournament type (`TEMPLATE_MIN_DAYS` in
+`src/engine/catalogue.ts`: 4 for the three K₄ templates at a national type). It
+never lowers the days and keeps the day hours. When the organizer lowers the
+days below a minimum of 3 or more, a hint under the Days pills names the minimum
+and the rule. Div 1 ind ↔ Junior team and Junior ind ↔ Div 1 team never share a
+day at any type, so the level-3 relaxation and `constraint_relaxation_level` are
+deleted and the Div1/Junior and Vet/Div1/Junior "relaxed" rows are gone. Those
+boards now break the pair at too few days and warn, as Cadet/Junior already did.
+The store's initial 3 days stays, because boot overwrites it. The line numbers
+below are corrected to the current files, and the text is the record as it
+stood before the fix. What 019 left open is in
+[§What 019 deliberately left unfixed](#what-019-deliberately-left-unfixed).*
 
 `docs/design/methodology-reconciliation.md` §1.2.2 calls this "the single most
 serious finding in the audit": the DSatur least-bad-color fallback can break a
@@ -680,14 +877,14 @@ break visible going forward without repairing it.
 - **`NAC Cadet/Junior` at the store's default 3 days places 6 hard-blocked
   pairs, 0 relaxations, all on day 0.** The six pairs are not the same at
   every strip count, because `colorPenalty`'s load-balancing term reads
-  `dayCapacity` (derived from `strips_total`, `src/engine/dayColoring.ts:653`):
+  `dayCapacity` (derived from `strips_total`, `src/engine/dayColoring.ts:651`):
   at the app-suggested 39 strips, five are Group 1 CADET↔JUNIOR breaks plus
   one same-population break; at 80 strips / 12 video, all six are Group 1
   CADET↔JUNIOR. Full witness tables: specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md).
 - Per the audit's §1.2.1 clique/chromatic computation, three templates — `NAC
   Cadet/Junior`, `NAC Div1/Junior`, `NAC Vet/Div1/Junior` — carry a K₄ per
   (gender, weapon) and need 4 days. The store defaults to **3**
-  (`src/store/store.ts:193`): the default configuration cannot satisfy its own
+  (the store's initial value, `src/store/store.ts:221`): the default configuration cannot satisfy its own
   hard constraints.
 
 **010 made this visible and did not fix it.** `assignDaysByColoring` now
@@ -1235,6 +1432,42 @@ no blocking decision.*
   ERROR, and the engine does both. What stays open is whether a phase that
   would end past 10:00 PM should fail at all, which §Day-end overrun is a hard
   failure asks.*
+
+### Left for 021 by 019's amendment
+
+*Added by 019, 2026-10-08. 019's owner-approved METHODOLOGY amendment
+(`specs/019-default-days-per-template/amendment.md`) changed only what R4 and the
+day table needed. These ten items it left, with line numbers in the amended
+METHODOLOGY.md.*
+
+1. **:86** says hard rules "cause scheduling to fail or produce errors" and "are
+   never relaxed". The engine falls back to the least-bad day and emits a WARN
+   (`src/engine/dayColoring.ts`, the least-bad branch).
+2. **:90** says same population is "hard at every relaxation level", while the
+   level-3 row (:325) says it is "allowed as last resort". After R4 nothing
+   reaches level 3, so the level-3 row and :328 describe a level the engine never
+   uses.
+3. **:316** says Hard is "never relaxed", which conflicts with the level-3 row.
+4. **:323-324**: day coloring does not implement levels 1 and 2. :294-295 and
+   :1002 ("suppressed at level >= 2") depend on them.
+5. **:327** "Each relaxation emits a warning". After R4 no relaxation exists to
+   emit one.
+6. **:328** "scheduling fails with an unresolvable error". The engine uses the
+   least-bad fallback and a WARN `UNAVOIDABLE_CROSSOVER_CONFLICT`. :739
+   ("escalate through Constraint Relaxation") inherits it, and :700 still calls
+   the engine "constraint-relaxing".
+7. **:318** cites `dayAssignment.ts` for relaxation. The pass was in
+   `dayColoring.ts`.
+8. The paragraph Block 4 moves: "4-hour separation required" conflicts with its
+   own example (9 AM to 11 AM) and with the 120 minutes the sequencer enforces
+   (`INDIV_TEAM_MIN_GAP_MINS`), and "required" conflicts with "their constraint
+   is soft".
+9. Vet co-day splits made by the least-bad fallback are not reported, though :97
+   makes the co-day rule hard.
+10. **:293** and **:1001** describe the regional Group 1 pair penalty for "a
+    Group 1 pair (DIV1↔JUNIOR, …)". Group 1 matches by category across
+    individual and team, so the two cross-level pairs match it but stay hard. A
+    clause naming the exception would close it.
 
 ### Also outstanding, unverdicted
 
@@ -1789,6 +2022,13 @@ events, with the choice stated in the picker.
 **Cost if ignored**: an organizer who compares presets after hand-placing events
 sees a different board from the preset's own, with events unplaced and pins they
 did not ask for, and nothing says why. Reloading the page is the workaround.
+
+*Extended by 019, 2026-10-08 (plan decision 10).* A template's day raise brings
+back a pin that the organizer left on a lowered-away day. `setDays` keeps the
+placements and `buildPinnedPlacements` skips a pin whose day is out of range, so
+after a raise that day is in range again and the next run honours the pin. A
+T2 test pins this. **Cost if ignored**: an organizer who lowered the days to
+drop a hand move sees it come back after picking a template.
 
 ## The engine and the store both report a pin collision
 

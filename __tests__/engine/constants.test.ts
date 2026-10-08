@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  INDIV_TEAM_RELAXABLE_BLOCKS,
+  INDIV_TEAM_CROSS_LEVEL_BLOCKS,
   DEFAULT_CUT_BY_CATEGORY,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
@@ -65,24 +65,24 @@ describe('DEFAULT_POOL_ROUND_DURATION_TABLE', () => {
   })
 })
 
-describe('INDIV_TEAM_RELAXABLE_BLOCKS', () => {
+describe('INDIV_TEAM_CROSS_LEVEL_BLOCKS', () => {
   it('has exactly 2 entries', () => {
-    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toHaveLength(2)
+    expect(INDIV_TEAM_CROSS_LEVEL_BLOCKS).toHaveLength(2)
   })
 
   it('contains DIV1/JUNIOR and JUNIOR/DIV1 (cross-category indv/team only)', () => {
-    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toContainEqual({
+    expect(INDIV_TEAM_CROSS_LEVEL_BLOCKS).toContainEqual({
       indivCategory: Category.DIV1,
       teamCategory: Category.JUNIOR,
     })
-    expect(INDIV_TEAM_RELAXABLE_BLOCKS).toContainEqual({
+    expect(INDIV_TEAM_CROSS_LEVEL_BLOCKS).toContainEqual({
       indivCategory: Category.JUNIOR,
       teamCategory: Category.DIV1,
     })
   })
 
-  it('does NOT contain VETERAN/VETERAN — same-weapon Vet ind/team is hard non-relaxable', () => {
-    expect(INDIV_TEAM_RELAXABLE_BLOCKS).not.toContainEqual({
+  it('does NOT contain VETERAN/VETERAN — same-weapon Vet ind/team is a same-population block', () => {
+    expect(INDIV_TEAM_CROSS_LEVEL_BLOCKS).not.toContainEqual({
       indivCategory: Category.VETERAN,
       teamCategory: Category.VETERAN,
     })

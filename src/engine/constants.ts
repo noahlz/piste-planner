@@ -629,16 +629,16 @@ export const VIDEO_STAGE_ROUND_FALLBACK = 8
 export const VIDEO_BLOCK_STRIP_ASK = 4
 
 // ──────────────────────────────────────────────
-// Individual/Team relaxable blocks: pairs that MUST NOT be on the same day
-// (same weapon and gender) unless constraints are relaxed to level 3.
+// Individual/Team cross-level blocks: pairs that MUST NOT be on the same day
+// (same weapon and gender), at every tournament type and day count.
 // (METHODOLOGY.md §Individual/Team Separation)
 //
 // Same-category indv/team pairs (Junior↔Junior, Cadet↔Cadet, Vet↔Vet, etc.)
 // are hard-blocked by Same-Population Conflicts (crossoverPenalty) and are
-// *not* listed here — they are NOT relaxable at level 3.
+// *not* listed here.
 // ──────────────────────────────────────────────
 
-export const INDIV_TEAM_RELAXABLE_BLOCKS: { indivCategory: Category; teamCategory: Category }[] = [
+export const INDIV_TEAM_CROSS_LEVEL_BLOCKS: { indivCategory: Category; teamCategory: Category }[] = [
   { indivCategory: Category.DIV1, teamCategory: Category.JUNIOR },
   { indivCategory: Category.JUNIOR, teamCategory: Category.DIV1 },
 ]
