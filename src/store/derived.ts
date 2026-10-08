@@ -858,6 +858,72 @@ function computeAllFindings(state: StoreState): Finding[] {
  */
 export const selectAllFindings = memoizeOnDeps(scheduleDeps, computeAllFindings)
 
+// ──────────────────────────────────────────────
+// The re-run rule (020)
+// ──────────────────────────────────────────────
+
+/**
+ * Exactly the store fields `buildTournamentConfig` reads, the list the proxy
+ * check in `drawnSchedule.test.ts` pins. Narrower than `scheduleDeps`, so a
+ * hand move, a pin toggle or a run computes no new key.
+ */
+function configKeyDeps(state: StoreState): unknown[] {
+  return [
+    state.tournament_type,
+    state.days_available,
+    state.dayConfigs,
+    state.strips_total,
+    state.video_strips_total,
+    state.pool_round_duration_table,
+    state.de_mode_override,
+    state.selectedCompetitions,
+  ]
+}
+
+function computeConfigKey(state: StoreState): string {
+  const { config, competitions } = buildTournamentConfig(state)
+  return configKeyOf(config, competitions)
+}
+
+/** The key of the inputs the engine would read from the store as it stands (`configKeyOf`). */
+export const selectConfigKey = memoizeOnDeps(configKeyDeps, computeConfigKey)
+
+function computeHasBlocking(state: StoreState): boolean {
+  return selectAllFindings(state).some((row) => row.severity === FindingSeverity.BLOCKING)
+}
+
+/**
+ * Whether any Blocking row exists. Over `selectAllFindings`, not
+ * `selectFindings`: a Blocking row is never dismissable, so the two agree, and
+ * this one does not depend on the re-run rule that itself reads it.
+ * Auto-assign's disabled state and the re-run rule both read it.
+ */
+export const selectHasBlocking = memoizeOnDeps(scheduleDeps, computeHasBlocking)
+
+/**
+ * Whether an automatic re-run is owed (020): the switch is on, the inputs
+ * moved past both the kept run and the last attempt (a run or a load), and no
+ * Blocking row shows, since a run on a Blocking board wipes it. The switch is
+ * checked first so a switched-off board computes no key, and the key before
+ * `selectHasBlocking`, the dearest of the three.
+ *
+ * Not memoised: each part already is, and the comparisons are two string
+ * equalities. A pure function of the state, so it holds whatever number of
+ * notifications a run emits (`runScheduleAll` writes `lastAttemptedKey` in an
+ * update of its own before the engine call, and that state is not due).
+ */
+export function selectRerunDue(state: StoreState): boolean {
+  if (!state.autoRerun) return false
+  const key = selectConfigKey(state)
+  if (key === state.lastRun?.configKey || key === state.lastAttemptedKey) return false
+  return !selectHasBlocking(state)
+}
+
+/** The key while a re-run is due, else null: what the re-run hook subscribes to, so the switch off computes no key. */
+export function selectDueKey(state: StoreState): string | null {
+  return selectRerunDue(state) ? selectConfigKey(state) : null
+}
+
 /**
  * `scheduleDeps` plus the dismissal set.
  *
@@ -876,11 +942,27 @@ function daySummaryDeps(state: StoreState): unknown[] {
  * shown whatever `dismissedFindings` says.
  */
 function computeFindings(state: StoreState): Finding[] {
-  return selectAllFindings(state).filter((row) => !row.dismissable || !state.dismissedFindings[row.id])
+  // While a re-run is due the board holds its last fresh layout and the run is
+  // on its way, so the stale row would only flash (020). `selectAllFindings`
+  // keeps it, and `dismissFinding` reads that.
+  const due = selectRerunDue(state)
+  return selectAllFindings(state).filter(
+    (row) => (!row.dismissable || !state.dismissedFindings[row.id]) && !(due && row.id === STALE_FINDING_ID),
+  )
 }
 
-/** The rows the UI shows: every current finding, severity-ordered, less the dismissable ones the user has waved off. */
-export const selectFindings = memoizeOnDeps(daySummaryDeps, computeFindings)
+/**
+ * `daySummaryDeps` plus what `selectRerunDue` reads beyond it: the switch and
+ * the last attempt (its key fields, `lastRun` and the Blocking rows already sit
+ * in `scheduleDeps`). `selectDaySummaries` keeps `daySummaryDeps` until 020
+ * T1c moves it here.
+ */
+function findingsDeps(state: StoreState): unknown[] {
+  return [...daySummaryDeps(state), state.autoRerun, state.lastAttemptedKey]
+}
+
+/** The rows the UI shows: every current finding, severity-ordered, less the dismissable ones the user has waved off and the stale row while a re-run is due. */
+export const selectFindings = memoizeOnDeps(findingsDeps, computeFindings)
 
 // ──────────────────────────────────────────────
 // Day summaries (data-model.md §9, 013 T026)
