@@ -62,7 +62,7 @@ What each task does now:
   must-fix items on the draft METHODOLOGY text, one of them the handbook page,
   p.15 and not p.14) and three lenses with five blockers, four of them distinct:
   a refused link showed no reason anywhere (raised by two lenses, answered by
-  ruling R7), T1's red list was 15 tests in 7 files and not 3, R2 did not hold
+  ruling R7), T1's red list was 15 tests in 7 files, not the three the plan named, R2 did not hold
   `stripSearch.test.ts:271`, and T2's planned Suggest test could not fail first
   as written. A0 commits the owner-approved METHODOLOGY text verbatim before any
   code: the overrun (R1), Suggest counting an overrun as not placed (R2), the
@@ -108,9 +108,9 @@ What each task does now:
   (`loadRefusal`), and a dismissable notice beside the stale banner shows it.
 - **Task S – live smoke.** T4's two consecutive passes on the final code head
   (below) serve as Task S. No separate commit.
-- **Task D – docs (`91881baee9`).** `backlog.md` marks the three entries 018
-  closed and the second bullet of §Suggest's strip-hour floor "Fixed by 018" and
-  keeps them, narrows the `validation.ts` cut entry, updates §Per-event entry caps
+- **Task D – docs (`91881baee9`).** `backlog.md` marks §Day-end overrun and §A shared URL with a fencer count of 0
+  or 1 closed, and the Div 1 bullet of §Policy tables and the second bullet of
+  §Suggest's strip-hour floor "Fixed by 018", and keeps them, narrows the `validation.ts` cut entry, updates §Per-event entry caps
   and §Dead code held back, adds 15 entries and writes the §What 018 deliberately
   left unfixed index. `competition-planner-workbench.md` marks row 018 delivered,
   moves the baseline to after 018 and marks row 021's dependency delivered.
@@ -207,14 +207,13 @@ its task commit, which is why T2 and T4 grew after review.
   WARN in `derived.test.ts`, which the commit names. Judge 2 traced
   VET-M-SABRE-IND-VCMB to the defer cap, judge 3's control showed R2 alone holds
   B5 at 29, judge 4 found run order deciding which team events get Day 3's late
-  strips, and judge 5 showed the three B6 losses each consistent with R1. These
-  four observations are in Left unfixed.
+  strips, and judge 5 showed the three B6 losses each consistent with R1. Judges 2, 4 and 5's findings are Left unfixed items 2 and 3.
 - **T3 (React 1 important and 6 suggestions, spec 2 minors, test quality 3
   warnings).** The important one: times past midnight read two ways, "25:10" in
   the late-finish row and "01:10" in the overrun row. `formatClock` now
-  delegates to `formatClockMins` (decision 13). Test quality found five
-  surviving axis mutants (shrink-to-fit and which block sets the end) and an
-  unpinned 1440 wrap. Both now have cases, and the overrun rows are compared
+  delegates to `formatClockMins` (decision 13). Test quality found four
+  surviving axis mutants (shrink-to-fit and which block sets the end) and a fifth
+  on the unpinned 1440 wrap. Both now have cases, and the overrun rows are compared
   with the scheduler's on every board.
 - **T4 (spec 4 minors, React 8 suggestions, test quality 1 critical and 5
   warnings, 2 judges accept).** The critical: deleting the whole-number check at
@@ -398,7 +397,7 @@ indexed under backlog §What 018 deliberately left unfixed.
     overwrites at once. Cost if ignored: none today, and a new caller would seed
     0. Backlog §Two fencer-count corners 018 left open.
 
-Task D's caveat: the backlog entries for items 4–7 and 10–12 say "Found during
+Task D's caveat: the backlog entries for items 1, 4, 6–12, 15, 17 and 18 say "Found during
 018", because no commit body traces which task or review found them.
 
 ### For later features
