@@ -358,6 +358,7 @@ throwaway worktree and run the full suite, `tsc -b`, lint and the ledger there.
     `buildPinnedPlacements` skips a pin whose day is out of range, so after a raise that day is in range
     again and the next run honours the pin. Cost: an organizer who lowered days to drop a hand move sees
     it come back. A T2 test records it, and the backlog entry on preset pins gains it.
+    Superseded in part by 020 R4 (`specs/020-rerun-on-parameter-change/plan.md`) – whenever a run happens between a lower and a raise, the pin is gone.
 11. **`dayConfigs` changes only on a raise.** Cost: a fresh store's empty window list stays empty when a
     template needs no raise, as today.
 12. **The amendment leaves the hint out of METHODOLOGY** (plan review). R3 is UI, and the spec names no

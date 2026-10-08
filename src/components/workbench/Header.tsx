@@ -1,5 +1,5 @@
 import { useStore } from '../../store/store.ts'
-import { FindingSeverity, selectFindings } from '../../store/derived.ts'
+import { selectHasBlocking } from '../../store/derived.ts'
 import { runScheduleAll } from '../../store/runActions.ts'
 import { formatClock } from '../../lib/time.ts'
 import { PresetPicker } from './PresetPicker.tsx'
@@ -22,9 +22,10 @@ export function Header() {
 
   // 013 T032, contract §6: Auto-assign reads the unified findings list rather
   // than validationErrors directly, so its disabled state agrees with what
-  // the Findings panel and the rail badge show.
-  const findings = useStore(selectFindings)
-  const hasBlockingFinding = findings.some((f) => f.severity === FindingSeverity.BLOCKING)
+  // the Findings panel and the rail badge show. Through `selectHasBlocking`
+  // (020), the re-run rule's own gate: a boolean, so the header re-renders
+  // only when the gate flips, not on every findings change.
+  const hasBlockingFinding = useStore(selectHasBlocking)
 
   return (
     <header
@@ -48,7 +49,7 @@ export function Header() {
 
       <div className="ml-auto flex flex-none items-center gap-2.5">
         {lastAutoRun !== null && (
-          <span data-last-run className="font-mono text-[11px] font-semibold text-neutral-500">
+          <span data-last-run data-last-run-at={lastAutoRun.at} className="font-mono text-[11px] font-semibold text-neutral-500">
             Last run {formatClock(dateToMinutesFromMidnight(new Date(lastAutoRun.at)))}
           </span>
         )}

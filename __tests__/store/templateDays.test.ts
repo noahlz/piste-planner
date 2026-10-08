@@ -4,7 +4,8 @@ import { buildPinnedPlacements } from '../../src/store/buildConfig.ts'
 import { runScheduleAll } from '../../src/store/runActions.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { DAY_END_MINS, DAY_START_MINS } from '../../src/engine/constants.ts'
-import { TournamentType } from '../../src/engine/types.ts'
+import { PlacementSource, TournamentType } from '../../src/engine/types.ts'
+import type { Placement } from '../../src/engine/types.ts'
 
 // `applyTemplate` raises the board's days to the template's hard-rule minimum
 // for the board's type, and never lowers them (019 R1, R1a). Templates never
@@ -77,10 +78,8 @@ describe('applyTemplate raises the day count', () => {
     expect(useStore.getState().dayConfigs).toEqual([DEFAULT_WINDOW, DEFAULT_WINDOW, DEFAULT_WINDOW, DEFAULT_WINDOW])
   })
 
-  // Decision 10: `setDays` keeps placements and `buildPinnedPlacements` skips a
-  // pin whose day is out of range, so a raise brings that day back and the next
-  // run honours the pin the organizer left there.
-  it('brings back a pin left on a lowered-away day, and the next run honours it', () => {
+  /** A 4-day NAC board run on NAC Cadet/Junior, with the event on the last day pinned and its days lowered to 3. */
+  function pinLoweredAway(): { id: string; pin: Placement } {
     board(TournamentType.NAC, 4)
     useStore.getState().setStrips(80)
     useStore.getState().applyTemplate('NAC Cadet/Junior')
@@ -92,6 +91,38 @@ describe('applyTemplate raises the day count', () => {
     const pin = useStore.getState().placements[id]
     useStore.getState().setDays(3)
     expect(buildPinnedPlacements(useStore.getState()).map((p) => p.competition_id)).not.toContain(id)
+    return { id, pin }
+  }
+
+  // 020 R4 supersedes 019 decision 10 whenever a run happens between the lower
+  // and the raise, which automatic re-run makes the default: the run drops the
+  // pin on the removed day and re-places its event, as pressing Auto-assign
+  // does (`runActions.test.ts` already proves the drop).
+  it('loses a pin left on a lowered-away day when a run happens before the raise, and the re-pick does not bring it back', () => {
+    const { id, pin } = pinLoweredAway()
+
+    runScheduleAll()
+
+    const replaced = useStore.getState().placements[id]
+    expect(replaced.source).toBe(PlacementSource.AUTO)
+    expect(replaced.pinned).toBe(false)
+    expect(replaced.day).toBeLessThan(3)
+
+    // Re-applying the template is what picking another one and back does.
+    useStore.getState().applyTemplate('NAC Cadet/Junior')
+    expect(buildPinnedPlacements(useStore.getState()).map((p) => p.competition_id)).not.toContain(id)
+    runScheduleAll()
+
+    expect(useStore.getState().placements[id]).not.toBe(pin)
+    expect(useStore.getState().placements[id].pinned).toBe(false)
+  })
+
+  // Decision 10, as it holds with no run between the lower and the raise
+  // (automatic re-run off): `setDays` keeps placements and
+  // `buildPinnedPlacements` skips a pin whose day is out of range, so a raise
+  // brings that day back and the next run honours the pin the organizer left there.
+  it('with no run between the lower and the raise (automatic re-run off), the pin comes back', () => {
+    const { id, pin } = pinLoweredAway()
 
     // Re-applying the template is what picking another one and back does.
     useStore.getState().applyTemplate('NAC Cadet/Junior')

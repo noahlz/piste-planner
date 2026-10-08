@@ -32,6 +32,7 @@ the driver's existing locators keep working where nothing forces a change.
   and overlays blocking findings (carried from 004 FR-009).
 - Findings, day summaries and footer counts follow the store per keystroke.
   The center relayouts on commit (carried from 004 FR-008).
+  Superseded in part by 020 R8 (decisions 18 and 19, `specs/020-rerun-on-parameter-change/plan.md`) – while a re-run is due, the footer's counts and metrics and the Findings panel's Unplaced rows hold the last run's values instead of following the store per keystroke, and the rail badge counts what the panel shows.
 - No control anywhere edits tournament type, days or strips except the
   Tournament and Strips panels.
 - A rendering failure anywhere shows the error boundary's message and a

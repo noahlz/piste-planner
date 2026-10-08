@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../../store/store.ts'
 import type { DayConfig, Placement } from '../../engine/types.ts'
 import {
@@ -15,8 +15,9 @@ import { Canvas } from '../canvas/Canvas.tsx'
 import { DetailStrip } from './DetailStrip.tsx'
 import { ViewMode } from '../../store/viewState.ts'
 import type { ZoomState } from '../canvas/zoomLadder.ts'
-import { AlertCircle, X } from 'lucide-react'
+import { AlertCircle, LoaderCircle, X } from 'lucide-react'
 import { DEFAULT_PRESET_ID } from '../../data/tournaments.ts'
+import { useAutoRerun } from './useAutoRerun.ts'
 
 /** How long an edit must settle before the center relayouts (FR-008). */
 export const CENTER_SETTLE_MS = 150
@@ -64,6 +65,11 @@ interface CommittedModel {
    * blocks, or once a blocking ERROR clears and the next settle passes.
    */
   pinnedIds: ReadonlySet<string>
+  /**
+   * The placements `pinnedIds` was built from, kept by identity so the center
+   * can tell when its committed model is the live one (`data-settled`, 020 T2).
+   */
+  placements: Record<string, Placement>
 }
 
 /**
@@ -98,10 +104,15 @@ interface CommittedModel {
  *
  * (S2-contract.md §Center view and the dimmed-invalid rule), and they compose:
  *
- * 1. Two-tier recompute (FR-008). Findings and metrics follow the store per
- *    keystroke — the drawer reads it directly and is not debounced — while the
- *    center renders a *committed* copy that a `CENTER_SETTLE_MS` timer
- *    replaces once an edit stops arriving. A debounce, deliberately, and not
+ * 1. Two-tier recompute (FR-008). Findings follow the store per keystroke —
+ *    the drawer reads it directly and is not debounced — while the center
+ *    renders a *committed* copy that a `CENTER_SETTLE_MS` timer replaces once
+ *    an edit stops arriving. While an automatic re-run is due (020) the
+ *    center commits nothing and holds its last fresh board until the run
+ *    lands, and the Unplaced rows and the footer hold with it (R8), while the
+ *    other findings still follow typing. A settle still pending when due
+ *    rises commits at once, so the held board is the calm state the store
+ *    holds. A debounce, deliberately, and not
  *    `useDeferredValue`: React flushes a deferred value inside `act()`, which
  *    would make the test proving the center did *not* relayout vacuous.
  * 2. Dimmed invalid (FR-009). While any derived finding is ERROR the commit is
@@ -154,50 +165,104 @@ export function CenterView({
   const blocking = liveFindings.validationErrors.filter((e) => e.severity === 'ERROR')
   const hasBlocking = blocking.length > 0
 
+  const { due, updating } = useAutoRerun()
+
+  // `due` as of the latest commit, for the settle effect's cleanup: layout
+  // effects run before passive cleanups, so the cleanup that clears a pending
+  // settle sees whether the render that cleared it is due.
+  const dueRef = useRef(due)
+  useLayoutEffect(() => {
+    dueRef.current = due
+  }, [due])
+
   const [committed, setCommitted] = useState<CommittedModel>(() => ({
     schedule: live,
     findings: liveFindings,
     findingRows: liveFindingRows,
     dayConfigs: liveDayConfigs,
     pinnedIds: pinnedIdsOf(livePlacements),
+    placements: livePlacements,
   }))
+
+  // The committed model is the live one. The effect below arms no settle then,
+  // so this also means no settle is pending (`data-settled`).
+  const settled =
+    committed.schedule === live &&
+    committed.findings === liveFindings &&
+    committed.findingRows === liveFindingRows &&
+    committed.dayConfigs === liveDayConfigs &&
+    committed.placements === livePlacements
 
   useEffect(() => {
     // An invalid config commits nothing at all — rule 2 above. The last valid
     // layout stays on screen until the config is valid again and settles.
-    if (hasBlocking) return
+    // While a re-run is due the center holds its last fresh board, and the
+    // run's own settle draws the next one (020): one change per edit.
+    if (hasBlocking || due || settled) return
 
-    const timer = setTimeout(
-      () =>
-        setCommitted({
-          schedule: live,
-          findings: liveFindings,
-          findingRows: liveFindingRows,
-          dayConfigs: liveDayConfigs,
-          pinnedIds: pinnedIdsOf(livePlacements),
-        }),
-      CENTER_SETTLE_MS,
-    )
-    return () => clearTimeout(timer)
-  }, [live, liveFindings, liveFindingRows, liveDayConfigs, livePlacements, hasBlocking])
+    const model: CommittedModel = {
+      schedule: live,
+      findings: liveFindings,
+      findingRows: liveFindingRows,
+      dayConfigs: liveDayConfigs,
+      pinnedIds: pinnedIdsOf(livePlacements),
+      placements: livePlacements,
+    }
+    let pending = true
+    const timer = setTimeout(() => {
+      pending = false
+      setCommitted(model)
+    }, CENTER_SETTLE_MS)
+    return () => {
+      clearTimeout(timer)
+      // Due rose with this settle still pending (020 R8): commit it now rather
+      // than drop it, so the held board is the calm state the store holds –
+      // a run or a move just before the edit would otherwise never be drawn.
+      // Blocking rising still drops it (rule 2), as due never holds then.
+      if (pending && dueRef.current) setCommitted(model)
+    }
+  }, [live, liveFindings, liveFindingRows, liveDayConfigs, livePlacements, hasBlocking, due, settled])
 
   const showingMatrix = viewMode === ViewMode.MATRIX
 
+  // The live check (020 decision 4): an automatic run on a board that was
+  // already stale lands fresh before the center redraws, and without it the
+  // banner would flash for a settle. It ignores the switch, so after a manual
+  // Auto-assign the banner goes with the run, a settle before the board.
+  const showStale =
+    committed.schedule.runState === RunState.STALE && live.runState === RunState.STALE && !due
+
   return (
-    <main aria-label="Center view" className="print-unclip flex min-h-0 flex-1 flex-col">
+    <main
+      aria-label="Center view"
+      data-rerun={due ? 'due' : 'idle'}
+      data-settled={settled ? 'true' : 'false'}
+      className="print-unclip flex min-h-0 flex-1 flex-col"
+    >
       {/* The stale notice (017 spec §6, P4) reads the *committed* model's run
           state, so it lands with the board it describes and a Blocking
           finding that freezes the model freezes it too. The live region stays
           mounted so its text arrives inside a region that already exists –
-          screen readers often miss a region that appears with its text. */}
+          screen readers often miss a region that appears with its text.
+          "Updating…" (020 R1) shares the region and never shows with the
+          notice: it needs due, and the notice needs not due. */}
       <div role="status" className="contents">
-        {committed.schedule.runState === RunState.STALE && (
+        {showStale && (
           <div
             data-stale-banner
             className="flex flex-none items-center gap-2 border-b-[1.5px] border-finding-border bg-finding-bg px-4 py-2 text-[12.5px] font-semibold text-finding-link"
           >
             <AlertCircle aria-hidden="true" className="h-4 w-4 flex-none" />
             Stale – re-run Auto-assign
+          </div>
+        )}
+        {updating && (
+          <div
+            data-rerun-indicator
+            className="flex flex-none items-center gap-2 border-b-[1.5px] border-chrome-border bg-chrome-deep px-4 py-2 text-[12.5px] font-semibold text-neutral-600"
+          >
+            <LoaderCircle aria-hidden="true" className="h-4 w-4 flex-none motion-safe:animate-spin" />
+            Updating…
           </div>
         )}
       </div>

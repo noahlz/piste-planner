@@ -3,6 +3,8 @@ import { serializeState, deserializeState, encodeToUrl } from './serialization.t
 import type { DeserializeResult } from './serialization.ts'
 import type { PinnedPlacement } from '../engine/types.ts'
 import { replayRun } from './runActions.ts'
+import { buildTournamentConfig } from './buildConfig.ts'
+import { configKeyOf } from './keptRun.ts'
 
 /** A share URL past this size may not work in all browsers (research D-share). */
 export const URL_SIZE_WARNING_BYTES = 2048
@@ -48,9 +50,17 @@ export async function parseTournamentFile(file: File): Promise<ParsedFile> {
  * configs share a key. The state goes in with `lastRun: null` in one update, so
  * no subscriber sees loaded placements beside the old run. Separate from
  * parsing so a caller can warn about dropped placements first (FR-009).
+ * The same update seeds `lastAttemptedKey` with the key of the merged loaded
+ * state (020 R3), so no subscriber sees loaded inputs without it and a load
+ * never counts as an edit awaiting a re-run: it opens stale until the next edit.
  * Returns why the replay failed, or null when it did not (or no run came). */
 export function applyLoadedState(state: Partial<StoreState>, run: readonly PinnedPlacement[] | null): string | null {
-  useStore.setState({ ...state, lastRun: null, loadRefusal: null })
+  useStore.setState((current) => {
+    const { config, competitions } = buildTournamentConfig({ ...current, ...state })
+    // `held: null` too (020 R8): this write bypasses the store's writer, and a
+    // load leaves the board not due, so nothing it held still applies.
+    return { ...state, lastRun: null, loadRefusal: null, lastAttemptedKey: configKeyOf(config, competitions), held: null }
+  })
   return run === null ? null : replayRun(useStore.getState(), run)
 }
 

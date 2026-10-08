@@ -1,8 +1,8 @@
 // Live smoke test — drives the running app in a real browser.
 //
 // The unit suite checks the engine and components in isolation. This checks the
-// thing a user touches: that a template applies, a schedule renders, a derived
-// table follows an edit without a re-run, and a shared URL reproduces it.
+// thing a user touches: that a template applies, a schedule renders, the board
+// re-runs on its own after an edit (020), and a shared URL reproduces it.
 //
 //   pnpm dev &                 # or any server on SMOKE_BASE
 //   node scripts/smoke.mjs
@@ -187,8 +187,8 @@ async function openPanel(name, pg = page) {
 // panel" button closes whichever one is open and unmounts the `aside`
 // entirely (`WorkbenchShell`'s `panel !== null &&` guard), so this closes it
 // before the driver hovers or clicks anything the panel might be covering.
-async function closePanel() {
-  const aside = page.getByRole('complementary', { name: 'Inspector panel' })
+async function closePanel(pg = page) {
+  const aside = pg.getByRole('complementary', { name: 'Inspector panel' })
   if (await aside.isVisible().catch(() => false)) {
     await aside.getByRole('button', { name: 'Close panel' }).click()
     await aside.waitFor({ state: 'hidden' })
@@ -226,6 +226,121 @@ async function pressSuggest(stepName) {
   }
   await page.getByRole('button', { name: 'Apply', exact: true }).click()
   return page.getByRole('spinbutton', { name: 'Number of strips' }).inputValue()
+}
+
+// 020: the board re-runs on its own, 300 ms after an engine-input edit, so a read
+// taken straight after an edit can see the old board. `CenterView`'s `<main>`
+// carries `data-rerun` ("due" while a re-run is pending) and `data-settled`
+// ("false" while the committed model is not the live one – it stays "false"
+// while a Blocking finding freezes the board, so never call this on one).
+// Rule: after any engine-input edit, settle before the next Move day, pin or
+// board read, unless an Auto-assign click comes first. The 350 ms floor is there
+// so the check cannot pass before the render that sets "due"; there is no fixed
+// tail after the wait.
+async function settleBoard(pg = page) {
+  await pg.waitForTimeout(350)
+  await pg
+    .locator('main[aria-label="Center view"][data-rerun="idle"][data-settled="true"]')
+    .waitFor({ timeout: 15000 })
+}
+
+// The Settings panel's "Board" switch (020 R5). Opens Settings, sets the switch,
+// and puts the rail back as it found it: closed, Settings, or whichever other
+// panel was open (the panel is persisted, see `openPanel`).
+const RAIL_PANELS = ['Tournament', 'Strips & referees', 'Events', 'Findings', 'Settings']
+async function setAutoRerunSwitch(pg, on) {
+  let found = null
+  for (const name of RAIL_PANELS) {
+    if ((await pg.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')) === 'true') found = name
+  }
+  await openPanel('Settings', pg)
+  const rerunSwitch = pg
+    .getByRole('complementary', { name: 'Inspector panel' })
+    .getByRole('switch', { name: 'Re-run automatically' })
+  const want = on ? 'true' : 'false'
+  if ((await rerunSwitch.getAttribute('aria-checked')) !== want) await rerunSwitch.click()
+  for (let i = 0; (await rerunSwitch.getAttribute('aria-checked')) !== want; i++) {
+    if (i === 40) throw new Error(`Re-run automatically switch did not reach aria-checked=${want}`)
+    await pg.waitForTimeout(50)
+  }
+  if (found === 'Settings') return
+  if (found === null) await closePanel(pg)
+  else await openPanel(found, pg)
+}
+
+// Reads the "Re-run automatically" switch's aria-checked without changing it, leaving the rail as
+// it found it (same restore rule as `setAutoRerunSwitch`).
+async function readAutoRerunSwitch(pg) {
+  let found = null
+  for (const name of RAIL_PANELS) {
+    if ((await pg.getByRole('button', { name, exact: true }).getAttribute('aria-pressed')) === 'true') found = name
+  }
+  await openPanel('Settings', pg)
+  const state = await pg
+    .getByRole('complementary', { name: 'Inspector panel' })
+    .getByRole('switch', { name: 'Re-run automatically' })
+    .getAttribute('aria-checked')
+  if (found === null) await closePanel(pg)
+  else if (found !== 'Settings') await openPanel(found, pg)
+  return state
+}
+
+// A share link generated from the long-lived `page` as it stands (hoisted from the 017 T8 block for
+// the 017 T7 stale-board capture).
+async function linkFromSender() {
+  await closePanel()
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await page.getByRole('button', { name: 'Generate Link', exact: true }).click()
+  const url = await page.locator('input[readonly]').first().inputValue()
+  await page.keyboard.press('Escape')
+  return url
+}
+
+// 020: records every attach and detach of the stale banner and the "Updating…" row on `pg`, from
+// now on, into `window.__rerunWatch` (a MutationObserver sees a row that mounts and unmounts
+// between two driver polls, which a poll would miss). `readRerunWatch` returns the log.
+async function watchRerunRows(pg) {
+  await pg.evaluate(() => {
+    const SELECTORS = ['[data-stale-banner]', '[data-rerun-indicator]']
+    const log = []
+    window.__rerunWatch = log
+    const note = (kind, node) => {
+      if (!(node instanceof Element)) return
+      for (const sel of SELECTORS) {
+        const hit = node.matches(sel) ? node : node.querySelector(sel)
+        if (!hit) continue
+        // An attached row's text and live-region parent are read while it is still mounted.
+        log.push({
+          kind,
+          sel,
+          t: performance.now(),
+          text: kind === 'attach' ? (hit.textContent ?? '').trim() : '',
+          inStatus: kind === 'attach' ? hit.closest('[role="status"]') !== null : false,
+        })
+      }
+    }
+    new MutationObserver((records) => {
+      for (const r of records) {
+        r.addedNodes.forEach((n) => note('attach', n))
+        r.removedNodes.forEach((n) => note('detach', n))
+      }
+    }).observe(document.body, { childList: true, subtree: true })
+  })
+}
+async function readRerunWatch(pg) {
+  return pg.evaluate(() => window.__rerunWatch ?? [])
+}
+// Polls (bounded, 2 s) until a switch's aria-checked equals `want`, else throws naming `what`.
+async function expectAriaChecked(sw, want, what) {
+  for (let i = 0; (await sw.getAttribute('aria-checked')) !== want; i++) {
+    if (i === 40) throw new Error(`${what}: expected aria-checked="${want}", read "${await sw.getAttribute('aria-checked')}"`)
+    await sw.page().waitForTimeout(50)
+  }
+}
+async function lastRunAt(pg) {
+  const marker = pg.locator('[data-last-run]')
+  if ((await marker.count()) === 0) return 0
+  return Number(await marker.getAttribute('data-last-run-at'))
 }
 
 // ── Workbench shell ──
@@ -324,7 +439,7 @@ const stripsBumped = Number(stripsAtBoot) + 4
 const stripsMetricBefore = (await footer.locator('[data-metric="strips"] > span').last().textContent())?.trim()
 await stripInput.fill(String(stripsBumped))
 await stripInput.blur()
-await page.waitForTimeout(400)
+await settleBoard()
 const stripsMetricAfter = (await footer.locator('[data-metric="strips"] > span').last().textContent())?.trim()
 const summaryAfterBump = (await page.locator('[data-summary]').textContent()) ?? ''
 if (stripsMetricAfter === stripsMetricBefore) {
@@ -341,7 +456,7 @@ log('strips', stripsAtBoot, '->', stripsBumped, 'moved the footer strip-use metr
 // the boot left them, exactly as they did before this block existed.
 await stripInput.fill(stripsAtBoot)
 await stripInput.blur()
-await page.waitForTimeout(400)
+await settleBoard()
 
 await choosePreset('ROC Div1A/Vet')
 log('template applied')
@@ -681,18 +796,49 @@ for (const input of fencerInputs) {
   }
 }
 if (!fencerInput) throw new Error('no placed competition found to edit its fencer count')
-log('editing:', await fencerInput.getAttribute('aria-label'))
+const editedLabel = await fencerInput.getAttribute('aria-label')
+log('editing:', editedLabel)
+// 020 R6: with the switch on (its default) the board re-runs itself 300 ms after the edit, so the
+// edit must never show the stale banner or the "Updating…" row (the run lands well inside the
+// 500 ms reveal delay) and `data-last-run-at` must move. The observer sees a row that mounts and
+// unmounts between two polls, which the count reads below would miss.
+await watchRerunRows(page)
+const lastRunBeforeEdit = await lastRunAt(page)
 await fencerInput.fill('99')
 await fencerInput.blur()
-await page.waitForTimeout(400)
+await settleBoard()
+const watchedOnEdit = await readRerunWatch(page)
+if (watchedOnEdit.length > 0) {
+  await shot('020-edit-rows-attached')
+  throw new Error(`020 R6: a fencer-count edit with the switch on attached ${JSON.stringify(watchedOnEdit)} (expected no stale banner and no Updating row)`)
+}
+await openPanel('Findings')
+const staleRowsAfterAuto = await page
+  .getByRole('complementary', { name: 'Inspector panel' })
+  .locator('[data-finding-id="stale:run"]')
+  .count()
+if (staleRowsAfterAuto !== 0) throw new Error(`020 R6: ${staleRowsAfterAuto} stale:run Findings row(s) after the automatic re-run`)
+const lastRunAfterEdit = await lastRunAt(page)
+if (!(lastRunAfterEdit > lastRunBeforeEdit)) {
+  throw new Error(`020 R6: data-last-run-at did not increase after the edit (${lastRunBeforeEdit} -> ${lastRunAfterEdit}), so no automatic run happened`)
+}
 const after = await schedTable.textContent()
 if (before === after) throw new Error('derived schedule table did not update after fencer-count edit')
-log('derived table followed the edit')
+log('derived table followed the edit, with no stale banner or Updating row, and the run stamp moved', lastRunBeforeEdit, '->', lastRunAfterEdit)
 
-// `[M]` 017 T7: that settings edit left the kept run describing other inputs, so the board is stale
-// and says so twice: one `role="status"` banner above the center view and one non-dismissable
-// Findings row where the per-event Unplaced rows were.
+// `[M]` 017 T7 (restated by 020): with the Re-run automatically switch off, a settings edit leaves
+// the kept run describing other inputs, so the board is stale and says so twice: one
+// `role="status"` banner above the center view and one non-dismissable Findings row where the
+// per-event Unplaced rows were. The switch is off for this block and on again before the share
+// round-trip, so the later steps run on a settled board.
+await setAutoRerunSwitch(page, false)
+await openPanel('Events')
+const staleEditInput = page.getByRole('spinbutton', { name: editedLabel, exact: true })
+await staleEditInput.fill('98')
+await staleEditInput.blur()
 const staleBanner = page.locator('[data-stale-banner]')
+// No re-run is armed, so there is nothing to settle: wait for the banner's own render instead.
+await staleBanner.waitFor({ timeout: 3000 }).catch(() => {})
 if ((await staleBanner.count()) !== 1) {
   await shot('017-t7-no-banner')
   throw new Error(`017 T7: expected one [data-stale-banner] after the fencer-count edit, found ${await staleBanner.count()}`)
@@ -719,6 +865,39 @@ log('017 T7: a settings edit shows the stale banner and the stale Findings row')
 await closePanel()
 await shot('05-after-edit')
 
+// 020 R5a live: the switch is a view setting that outlives the page, so a page opened fresh in the
+// same context while it is off must read it off. The same page is the keyboard check the unit tests
+// could not make (user-event is not installed): Space on the focused switch toggles it, twice.
+const pgX = await ctx.newPage()
+pgX.on('pageerror', (e) => errors.push('pgX: ' + e))
+await pgX.goto(BASE)
+await pgX.getByRole('button', { name: 'Export', exact: true }).waitFor()
+await openPanel('Settings', pgX)
+const switchX = pgX.getByRole('complementary', { name: 'Inspector panel' }).getByRole('switch', { name: 'Re-run automatically' })
+await switchX.waitFor()
+await expectAriaChecked(switchX, 'false', '020 R5a: a fresh page opened while the switch is off')
+await switchX.focus()
+await pgX.keyboard.press('Space')
+await expectAriaChecked(switchX, 'true', '020 keyboard: first Space on the focused switch')
+await pgX.keyboard.press('Space')
+await expectAriaChecked(switchX, 'false', '020 keyboard: second Space on the focused switch')
+await pgX.close()
+log('020 R5a: a fresh page reads the switch off, and Space toggles it on and back off')
+
+// The link from this stale board carries no run (a sender with nothing fresh to hand over): kept for
+// the R3 receiver check below. Then switch on, and the stale board re-runs and clears both notices.
+const staleLink = await linkFromSender()
+await setAutoRerunSwitch(page, true)
+await settleBoard()
+if ((await staleBanner.count()) !== 0) {
+  await shot('020-banner-after-switch-on')
+  throw new Error(`017 T7: ${await staleBanner.count()} [data-stale-banner] after switching Re-run automatically back on and settling`)
+}
+await openPanel('Findings')
+if ((await staleRow.count()) !== 0) throw new Error(`017 T7: ${await staleRow.count()} stale Findings row(s) after switching Re-run automatically back on and settling`)
+await closePanel()
+log('017 T7: switching Re-run automatically on re-ran the stale board and cleared the banner and the Findings row')
+
 // Share URL round-trip: a shared link must reproduce the same schedule.
 // "Export" is a Radix Popover trigger over the unmodified <SaveLoadShare />
 // logic — its contents (including "Generate Link") are not in the DOM until
@@ -742,6 +921,119 @@ log('round-trip rows:', rowsNow, 'vs', rows2)
 await page2.screenshot({ path: `${SHOTS}06-roundtrip.png`, fullPage: FULLPAGE })
 if (rows2 !== rowsNow) throw new Error(`share round-trip row mismatch ${rowsNow} != ${rows2}`)
 await page2.close()
+
+// `[M]` 020 R3: a link with no run opens stale and stays stale. Opening the link captured from the
+// stale board above, with the switch checked on both sides, must not run anything by itself: the
+// receiver's rows at open equal its rows 2 s later, one banner shows and nothing is due. Only an
+// edit there re-runs and clears the banner.
+const switchOnSender = await readAutoRerunSwitch(page)
+if (switchOnSender !== 'true') throw new Error(`020 R3: the sender's switch reads aria-checked="${switchOnSender}", expected "true"`)
+const pgR3 = await ctx.newPage()
+pgR3.on('pageerror', (e) => errors.push('pgR3: ' + e))
+await pgR3.goto(staleLink)
+await pgR3.getByRole('button', { name: 'Export', exact: true }).waitFor()
+const r3Banner = pgR3.locator('[data-stale-banner]')
+await r3Banner.waitFor({ timeout: 10000 })
+const r3RowsAtOpen = (await pgR3.locator('[data-schedule-row]').allTextContents()).join('\n')
+await pgR3.waitForTimeout(2000)
+const r3RowsLater = (await pgR3.locator('[data-schedule-row]').allTextContents()).join('\n')
+if (r3RowsAtOpen !== r3RowsLater) {
+  await pgR3.screenshot({ path: `${SHOTS}020-r3-rows-changed.png`, fullPage: FULLPAGE })
+  throw new Error('020 R3: the stale link receiver\'s schedule rows changed within 2 s of opening (it re-ran by itself)')
+}
+if ((await r3Banner.count()) !== 1) throw new Error(`020 R3: expected one [data-stale-banner] on the stale link receiver after 2 s, found ${await r3Banner.count()}`)
+const r3Rerun = await pgR3.locator('main[aria-label="Center view"]').getAttribute('data-rerun')
+if (r3Rerun !== 'idle') throw new Error(`020 R3: the stale link receiver reads data-rerun="${r3Rerun}", expected "idle"`)
+log('020 R3: the stale link stays stale for 2 s (rows', (await pgR3.locator('[data-schedule-row]').count()) + ')')
+await openPanel('Events', pgR3)
+const r3Input = pgR3.getByRole('spinbutton', { name: editedLabel, exact: true })
+await r3Input.fill('97')
+await r3Input.blur()
+await settleBoard(pgR3)
+if ((await r3Banner.count()) !== 0) {
+  await pgR3.screenshot({ path: `${SHOTS}020-r3-banner-after-edit.png`, fullPage: FULLPAGE })
+  throw new Error(`020 R3: ${await r3Banner.count()} [data-stale-banner] on the receiver after an edit and a settle`)
+}
+await pgR3.close()
+log('020 R3: an edit on the stale link receiver re-ran the board and cleared the banner')
+
+// `[M]` 020 R1: a burst of edits keeps one re-run pending (the 300 ms debounce restarts on every
+// click) and the "Updating…" row shows once it has waited 500 ms, then goes when the run lands. On
+// the main page (ROC Div1A/Vet) with a placed competition at least 8 below its max, 8 clicks of
+// "Increase Fencer count for …" about 100 ms apart. The measured gaps (click to click, including
+// the click's own latency) are logged and named in any failure: on a loaded machine a gap past
+// 300 ms lets the debounce fire mid-burst, which breaks the premise rather than the app, and the
+// step reports it instead of loosening.
+const r1UnplacedText = await page.getByRole('region', { name: 'Unplaced events' }).textContent()
+await openPanel('Events')
+let r1Label = null
+let r1Original = null
+for (const input of await page.getByRole('spinbutton', { name: /Fencer count for/ }).all()) {
+  const label = await input.getAttribute('aria-label')
+  if (r1UnplacedText.includes(label.replace('Fencer count for ', ''))) continue
+  const max = await input.getAttribute('max')
+  const value = Number(await input.inputValue())
+  // The smallest qualifying count: eight more fencers on a big event (Div 1A Women's Foil, 98
+  // -> 106) tip a pool-strip precondition into a Blocking finding, and a Blocking board is not
+  // due by design, so the burst would end early on the app doing the right thing.
+  if ((max === null || value + 8 <= Number(max)) && (r1Original === null || value < r1Original)) {
+    r1Label = label
+    r1Original = value
+  }
+}
+if (r1Label === null) throw new Error('020 R1: no placed competition with a fencer count at least 8 below its max')
+const r1Input = page.getByRole('spinbutton', { name: r1Label, exact: true })
+const r1Increase = page.getByRole('button', { name: `Increase ${r1Label}`, exact: true })
+const r1Main = page.locator('main[aria-label="Center view"]')
+await watchRerunRows(page)
+// Page-side timeline of every data-rerun flip (ms since the first click), so a burst that
+// breaks reports when the run fired, not only that it did.
+await page.evaluate(() => {
+  const main = document.querySelector('main[aria-label="Center view"]')
+  const t0 = performance.now()
+  window.__r1Flips = [{ at: 0, rerun: main.getAttribute('data-rerun') }]
+  new MutationObserver(() => {
+    window.__r1Flips.push({ at: Math.round(performance.now() - t0), rerun: main.getAttribute('data-rerun') })
+  }).observe(main, { attributes: true, attributeFilter: ['data-rerun'] })
+})
+const r1Gaps = []
+let r1Last = Date.now()
+for (let i = 0; i < 8; i++) {
+  await r1Increase.click()
+  const now = Date.now()
+  r1Gaps.push(now - r1Last)
+  r1Last = now
+  const rerun = await r1Main.getAttribute('data-rerun')
+  if (rerun !== 'due') {
+    await openPanel('Findings')
+    const r1Rows = await page.$$eval('aside [data-finding-id]', (els) =>
+      els.map((e) => `${e.getAttribute('data-severity')}:${e.getAttribute('data-finding-id')}`),
+    )
+    log('020 R1 diagnosis: findings at the flip', JSON.stringify(r1Rows), '| data-settled', await r1Main.getAttribute('data-settled'))
+    throw new Error(`020 R1: data-rerun read "${rerun}" after click ${i + 1} of 8 on "${r1Label}" (was ${r1Original}, now ${await r1Input.inputValue()}, max ${await r1Input.getAttribute('max')}; data-rerun flips ${JSON.stringify(await page.evaluate(() => window.__r1Flips))}), expected "due" through the burst; click-to-click gaps ms (first is from the loop start): ${r1Gaps.join(', ')}`)
+  }
+  await page.waitForTimeout(100)
+}
+log('020 R1: 8 clicks held data-rerun="due" throughout; gaps ms:', r1Gaps.join(', '))
+await page.locator('[data-rerun-indicator]').waitFor({ state: 'detached', timeout: 3000 })
+const r1Log = await readRerunWatch(page)
+const r1Indicator = r1Log.filter((e) => e.sel === '[data-rerun-indicator]')
+const r1Attach = r1Indicator.find((e) => e.kind === 'attach')
+if (!r1Attach) throw new Error(`020 R1: "Updating…" never attached during the burst; gaps ms: ${r1Gaps.join(', ')}; log ${JSON.stringify(r1Log)}`)
+if (!r1Attach.text.includes('Updating…')) throw new Error(`020 R1: the indicator read "${r1Attach.text}", expected "Updating…"`)
+if (!r1Attach.inStatus) throw new Error('020 R1: the "Updating…" row was not inside a role="status" region')
+if (!r1Indicator.some((e) => e.kind === 'detach')) throw new Error(`020 R1: "Updating…" never detached; log ${JSON.stringify(r1Log)}`)
+if (r1Log.some((e) => e.sel === '[data-stale-banner]')) throw new Error(`020 R1: the stale banner attached during the burst; log ${JSON.stringify(r1Log)}`)
+log('020 R1: "Updating…" attached inside role=status and detached when the run landed')
+await r1Input.fill(String(r1Original))
+await r1Input.blur()
+await settleBoard()
+
+// The gears block below asserts that opening Settings dismisses an open Export popover, and the
+// R3/R1 steps above closed the one the round-trip left open: open it again.
+await closePanel()
+await page.getByRole('button', { name: 'Export', exact: true }).click()
+await page.getByRole('button', { name: 'Generate Link', exact: true }).click()
 
 // ── Gears panel (US5, T077) ──
 // Rendered inside the tool rail's Settings panel (T009, InspectorPanel.tsx)
@@ -773,10 +1065,12 @@ if (exportStillOpen) {
 }
 log('opening the Settings panel closed Export — the popover dismisses on outside click')
 
-// FR-041/SC-009: the panel is reachable, and every row reads its default on
-// first open — nothing above this point in the driver touches an engine
-// constant (the fencer-count edit above is a per-competition field, not one
-// of these). 5 rows total: the 2 in SettingsPanel.ROWS plus
+// FR-041/SC-009: the panel is reachable, and every row reads its default the
+// first time they are read – nothing above this point in the driver touches an
+// engine constant (the fencer-count edit above is a per-competition field, not
+// one of these). Settings has been opened before this point since 020: the
+// Re-run automatically switch is toggled from it, and that switch is the only
+// thing those earlier visits touch. 5 rows total: the 2 in SettingsPanel.ROWS plus
 // PoolDurationSettings' own 3, moved in behind this same trigger. It was 12
 // until T078 measured that six of the nine gears rows leave the derived
 // schedule byte-identical, and T079 finding 1 cut them to three; a seventh,
@@ -817,7 +1111,7 @@ await shot('09-gears-default')
 // carries it. The rejected candidates are kept because each records a trap a
 // future re-pointing would otherwise walk back into, all measured at this
 // exact point in the driver (ROC Div1A/Vet, NAC type, Suggested strips,
-// fencer count of 99 on the edited competition):
+// fencer count of 98 on the edited competition):
 //   - DEFAULT_DE_STRIP_FOOTPRINT: T069 measured that an override only moves
 //     anything once it drops below the DE strip grant max_de_strip_pct
 //     computes for the fixture; here it stayed at or above that cap, so it
@@ -851,7 +1145,7 @@ const epeeDurationChanged = epeeDurationDefault - 15
 const scheduleBeforeDuration = await schedTable.textContent()
 await epeeDurationInput.fill(String(epeeDurationChanged))
 await epeeDurationInput.blur()
-await page.waitForTimeout(400)
+await settleBoard()
 const scheduleAfterDuration = await schedTable.textContent()
 if (scheduleBeforeDuration === scheduleAfterDuration) {
   throw new Error('changing the epee pool duration did not move the schedule table (FR-046)')
@@ -865,7 +1159,7 @@ await shot('10-gears-changed')
 // FR-044: the revert control actually resets, not just relabels. Cheap once
 // the panel is open — nothing else in this driver exercises one.
 await settingsRegion.getByRole('button', { name: 'Revert Epee to default' }).click()
-await page.waitForTimeout(400)
+await settleBoard()
 if (Number(await epeeDurationInput.inputValue()) !== epeeDurationDefault) {
   throw new Error('Revert Epee to default did not restore the default value (FR-044)')
 }
@@ -892,7 +1186,7 @@ log('Revert Epee to default restored the default value, badge, and schedule')
 // may already be open.
 const deModeGroup = settingsRegion.getByRole('radiogroup', { name: 'DE mode' })
 await deModeGroup.getByRole('radio', { name: 'Single' }).click()
-await page.waitForTimeout(400)
+await settleBoard()
 const generateLinkVisible = await page
   .getByRole('button', { name: 'Generate Link', exact: true })
   .isVisible()
@@ -955,7 +1249,7 @@ await page3.close()
 // of 66. This is driver hygiene under D14 (re-point, never rewrite), not an
 // app fix.
 await deModeGroup.getByRole('radio', { name: 'Default' }).click()
-await page.waitForTimeout(400)
+await settleBoard()
 const defaultChecked = await deModeGroup.getByRole('radio', { name: 'Default' }).getAttribute('aria-checked')
 if (defaultChecked !== 'true') {
   throw new Error(`restoring DE mode to Default after the round-trip did not check the Default radio: aria-checked=${defaultChecked}`)
@@ -1286,7 +1580,7 @@ log('NAC Cadet/Junior schedule table rows =', teamRowCount)
 // (Preset combobox → NAC Cadet/Junior → Suggest → Auto-assign → Schedule radio
 // → count [data-schedule-row]). This count is measured at this point in the
 // driver's accumulated session state — after the ROC template, the
-// fencer-count edit to 99, and the share round-trip — not from a fresh boot,
+// fencer-count edit to 98, and the share round-trip — not from a fresh boot,
 // so it need not match a fresh-store after-column measured elsewhere (e.g.
 // T019's handoff).
 //
@@ -1346,6 +1640,30 @@ if ((await daysHint.count()) !== 0) throw new Error('019 T3: a days hint showed 
 if ((await headerDays()) !== 4) throw new Error(`019 T3: expected 4 days before lowering, header reads ${await headerDays()}`)
 log('019 T3: NAC Cadet/Junior at 4 days, no hint')
 
+// 020 R4: a re-run after lowering the day count drops the pins on the removed day
+// and re-places those events (it supersedes 019 decision 10). Hand-place one IND
+// event on day 4 here, while days is still 4, and read what the 3-day re-run did
+// with it after the days click below. Hand placement needs the Matrix canvas.
+await closePanel()
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(300)
+let r4Id = null
+for (const id of (await eventIds()).filter((e) => !e.endsWith('-TEAM')).sort()) {
+  if ((await poolDayOf(id)) !== 3) {
+    r4Id = id
+    break
+  }
+}
+if (!r4Id) throw new Error('020 R4: every NAC Cadet/Junior IND event already has its pools on day 4, none to pin there')
+await moveEventToDay(r4Id, 3)
+if ((await poolDayOf(r4Id)) !== 3) throw new Error(`020 R4: the Move day did not put ${r4Id} on day 4`)
+const r4Counts = async () => ((await footer.locator('[data-counts]').textContent()) ?? '').trim()
+if (!(await r4Counts()).endsWith('· 1 pinned')) {
+  throw new Error(`020 R4: after the hand move the footer should read 1 pinned, got "${await r4Counts()}"`)
+}
+log('020 R4:', r4Id, 'pinned on day 4, footer', await r4Counts())
+await openPanel('Tournament')
+
 await daysGroup.getByRole('radio', { name: '3', exact: true }).click()
 await daysHint.waitFor({ state: 'visible' })
 const hintText = ((await daysHint.textContent()) ?? '').trim()
@@ -1355,6 +1673,23 @@ if (!hintText.includes('NAC Cadet/Junior') || !hintText.includes('4 days')) {
 await waitHeaderDays(3)
 log('019 T3: lowered to 3 days, hint shows:', hintText)
 await shot('07c-days-hint')
+// The days edit is an engine input: let its re-run land before the pick below.
+await settleBoard()
+
+// 020 R4: that re-run dropped the pin on the removed day 4 and re-placed the event.
+const r4Day = await poolDayOf(r4Id)
+if (r4Day > 2) throw new Error(`020 R4: ${r4Id} should be re-placed on days 1-3 after lowering to 3 days, its pools are on day ${r4Day + 1}`)
+// Orchestrator ruling: this driver's 3-day board places 21 with or without the pin, so
+// assert 0 pinned and the event placed, and log the placed count rather than asserting 24.
+if (!(await r4Counts()).endsWith('· 0 pinned')) {
+  throw new Error(`020 R4: after the 3-day re-run the footer should read 0 pinned, got "${await r4Counts()}"`)
+}
+if ((await page.locator(`[data-unplaced-chip][data-event-id="${r4Id}"]`).count()) !== 0) {
+  throw new Error(`020 R4: after the 3-day re-run ${r4Id} should be placed, but it sits in the Unplaced dock`)
+}
+log('020 R4: lowered to 3 days, the re-run unpinned', r4Id, 'onto day', r4Day + 1, '| footer', await r4Counts())
+// Back to the Schedule table, which the NAC Youth and Cadet/Junior picks below read.
+await page.getByRole('radio', { name: 'Schedule' }).click()
 
 await choosePreset('NAC Youth')
 await daysHint.waitFor({ state: 'detached' })
@@ -1422,7 +1757,7 @@ await page
   .getByRole('radiogroup', { name: 'Tournament type' })
   .getByRole('radio', { name: 'ROC', exact: true })
   .click()
-await page.waitForTimeout(400)
+await settleBoard()
 
 // Both readings below live in the Strips & referees panel, which the
 // Tournament panel above just replaced — reopen it before reading either.
@@ -1580,6 +1915,9 @@ await shot('016-check1-hard-pair')
 await setTournamentType('ROC')
 await choosePreset('ROC Mega')
 await pressSuggest('016 ROC Mega')
+// 020: the Suggest Apply is an edit and re-runs the board. Settle so `eventIds()`
+// reads the run at Suggest's strips, not the ROC Mega pick's run.
+await settleBoard()
 await closePanel()
 await openPanel('Findings')
 // The auto-run may or may not emit a regional row of its own, so the pair is
@@ -1639,10 +1977,11 @@ log('016 check 2: saw the Warning (regional-window-not-honoured) for the hand-mo
 await shot('016-check2-regional')
 
 // ── 017 T8: a shared link replays the sender's run ──
-// The share-link steps above run on a board the fencer-count edit left stale, and a stale
-// sender writes no `run`, so those receivers open stale by design. This block shares a FRESH
-// board: Auto-assign, then a `#config=` link opened in a second page must draw the same
-// `[data-event-block]` set as the sender (id, phase, strips, start) and show no stale banner.
+// Since 020 a fresh sender's link carries a run: the board re-runs after an edit, so the earlier
+// share-link steps start from a settled board too (a stale sender, one with the Re-run
+// automatically switch off, still writes no `run`, and its receiver opens stale by design). This
+// block shares a board just after Auto-assign: a `#config=` link opened in a second page must draw
+// the same `[data-event-block]` set as the sender (id, phase, strips, start) and show no stale banner.
 // Then one Move day on the sender and a second link must still agree.
 async function blockSet(pg) {
   return pg.$$eval('[data-event-block]', (els) =>
@@ -1650,15 +1989,6 @@ async function blockSet(pg) {
       .map((e) => [e.getAttribute('data-event-block'), e.getAttribute('data-phase'), e.getAttribute('data-strips'), e.getAttribute('data-start')].join('|'))
       .sort(),
   )
-}
-
-async function linkFromSender() {
-  await closePanel()
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
-  await page.getByRole('button', { name: 'Generate Link', exact: true }).click()
-  const url = await page.locator('input[readonly]').first().inputValue()
-  await page.keyboard.press('Escape')
-  return url
 }
 
 async function expectReceiverMatches(label, url) {
@@ -1731,6 +2061,11 @@ const headlineFrom = await poolDayOf(headlineId)
 const headlineTo = (headlineFrom + 1) % dayCount
 log('017 task S: headline move', headlineId, 'day', headlineFrom + 1, '->', headlineTo + 1)
 await moveEventToDay(headlineId, headlineTo)
+// A hand move is not an engine-input edit, so it never makes a re-run due (020).
+const rerunAfterMove = await page.locator('main[aria-label="Center view"]').getAttribute('data-rerun')
+if (rerunAfterMove !== 'idle') {
+  throw new Error(`017 task S: after the headline Move day the board should be data-rerun="idle", got "${rerunAfterMove}"`)
+}
 
 await openPanel('Findings')
 const unplacedRows = page.getByRole('complementary', { name: 'Inspector panel' }).locator('[data-finding-id^="unplaced:"]')

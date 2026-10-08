@@ -9,15 +9,16 @@ import { DefaultLabel } from '../../common/DefaultLabel.tsx'
 import { SectionCaption } from '../../common/SectionCaption.tsx'
 
 // 012 T013 (research.md D5, FR-008), carried over from the retired strips
-// section: the search yields to the browser between candidates, so a real
-// run takes 199-229ms on the largest template and well under 100ms on every
-// other one (specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)). 100ms is the point at which the indicator is
-// visible on the largest board for roughly a hundred milliseconds and never
-// appears on a board that finishes in an instant (SC-007's second clause).
+// section: the search yields to the browser between candidates. 012 measured
+// 199-229ms on the largest template (specs/012-actionable-strip-suggestion/baseline.md §5 (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md)),
+// but 020's probe (specs/020-rerun-on-parameter-change/plan.md, "Measurements
+// the plan rests on") drains it in 0.2-6.6ms on every template, so the 100ms
+// delay now keeps the indicator off every board and only guards against a
+// slower machine (SC-007's second clause).
 export const SUGGEST_INDICATOR_DELAY_MS = 100
 
-// research.md D8: 012 measured 13-230ms per template. 300ms keeps a held
-// stepper from queueing a run per tick.
+// research.md D8: 012 measured 13-230ms per template, 020's probe 0.2-6.6ms.
+// 300ms keeps a held stepper from queueing a run per tick.
 const SEARCH_DEBOUNCE_MS = 300
 
 /** A strips-style stepper: NumberInput restyled through descendant arbitrary

@@ -255,7 +255,8 @@ otherwise.*
   Existing entry, extended.
 - A template's day raise bringing back a pin left on a lowered-away day –
   [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share).
-  Existing entry, extended.
+  Existing entry, extended. Superseded in part by 020 R4: whenever a run happens
+  between the lower and the raise, the pin is gone.
 - Ten METHODOLOGY lines the amendment left, for feature 021 –
   [§Left for 021 by 019's amendment](#left-for-021-by-019s-amendment), under
   [§METHODOLOGY.md and the engine have diverged, and the doc is the spec](#methodologymd-and-the-engine-have-diverged-and-the-doc-is-the-spec).
@@ -264,6 +265,56 @@ otherwise.*
   code –
   [§Two hint copy nits 019 left as owner copy](#two-hint-copy-nits-019-left-as-owner-copy).
   New. An owner wording call.
+
+## What 020 deliberately left unfixed
+
+*Recorded by 020, 2026-10-08. It delivered
+[§Changing a parameter should re-run the engine, with a working indicator](#changing-a-parameter-should-re-run-the-engine-with-a-working-indicator).
+Its handoff, `specs/020-rerun-on-parameter-change/handoff.md`, has the rest.
+Every entry is new and unscheduled unless it says otherwise.*
+
+- An inverted day window (start after end) with no validation message, and a
+  two-pick hours change re-running on it between the picks (ruling R7) –
+  [§An inverted day window has no validation message](#an-inverted-day-window-has-no-validation-message).
+  An owner call on whether it is Blocking.
+- A Dismiss on a held Findings row doing nothing while a re-run is due –
+  [§A Dismiss on a held Findings row does nothing while a re-run is due](#a-dismiss-on-a-held-findings-row-does-nothing-while-a-re-run-is-due).
+- "Updating…" unable to show during one long synchronous run –
+  [§The "Updating…" indicator cannot show during one long run](#the-updating-indicator-cannot-show-during-one-long-run).
+  A predictive reveal or a Worker is later work.
+- The late-fire reveal having no automated proof that it paints –
+  [§The late-fire reveal is best-effort](#the-late-fire-reveal-is-best-effort).
+- The reveal clock restarting when a Blocking edit or the switch interrupts a due
+  episode –
+  [§The reveal clock restarts when a Blocking edit or the switch interrupts it](#the-reveal-clock-restarts-when-a-blocking-edit-or-the-switch-interrupts-it).
+- The indicator clearing about 150 ms before the board redraws, with no
+  screen-reader completion cue –
+  [§The indicator clears about 150 ms before the board redraws](#the-indicator-clears-about-150-ms-before-the-board-redraws).
+- The indicator's in-flow slot shifting the board about 33 px and re-measuring
+  the canvas –
+  [§The indicator's slot shifts the board and re-measures the canvas](#the-indicators-slot-shifts-the-board-and-re-measures-the-canvas).
+- An automatic run clearing neither `loadRefusal` nor ExportPopover's "opens
+  stale" notice –
+  [§An automatic run clears neither the load notice nor the export notice](#an-automatic-run-clears-neither-the-load-notice-nor-the-export-notice).
+- Any key edit reshuffling every unpinned event, a dismissed day-scoped warning
+  returning when its event moves day, and no undo –
+  [§An automatic run reshuffles every unpinned event, with no undo](#an-automatic-run-reshuffles-every-unpinned-event-with-no-undo).
+  An owner call.
+- A share link copied inside the 300 ms window carrying no run –
+  [§A share link copied inside the debounce window carries no run](#a-share-link-copied-inside-the-debounce-window-carries-no-run).
+- Turning the switch on re-running edits made while it was off –
+  [§Turning the switch on re-runs edits made while it was off](#turning-the-switch-on-re-runs-edits-made-while-it-was-off).
+- An open Move day menu closing when an automatic run unplaces its event –
+  [§An open Move day menu closes when an automatic run unplaces its event](#an-open-move-day-menu-closes-when-an-automatic-run-unplaces-its-event).
+- The live app building the config key twice per store notification –
+  [§The live app builds the config key twice per store notification](#the-live-app-builds-the-config-key-twice-per-store-notification).
+- Each run emitting one extra store notification –
+  [§Each run emits one extra store notification](#each-run-emits-one-extra-store-notification).
+- A template's day raise bringing back a pin left on a lowered-away day, which
+  020's ruling R4 now supersedes whenever a run happens between a lower and a
+  raise –
+  [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share).
+  Existing entry, extended.
 
 ## Day-level findings have no structured day
 
@@ -1853,11 +1904,57 @@ the app's credibility rests on numbers it invented.
 
 ## Changing a parameter should re-run the engine, with a working indicator
 
-*Raised 2026-09-06 during 012's brainstorming.*
+*Raised 2026-09-06 during 012's brainstorming. **Delivered by 020, 2026-10-08.**
+What 020 left open is in
+[§What 020 deliberately left unfixed](#what-020-deliberately-left-unfixed). The
+text below is the record as it stood before the fix, with its stale lines
+corrected to the current files.*
 
-Today the engine runs only when **Auto-schedule all** is pressed
-(`TopBar.tsx:103`) or on boot (`boot.ts:41`). Changing strips or days updates the
-config and leaves the schedule stale until the organizer presses the button
+**What 020 shipped.** Changing anything the engine reads re-runs Auto-assign by
+itself, and the board never waits for a button.
+
+- **The rule** (`selectRerunDue` in `src/store/derived.ts`). A re-run is due when
+  the "Re-run automatically" switch is on, 017's config key differs from both the
+  kept run's and the last attempted run's (`lastAttemptedKey`), and no Blocking
+  finding shows, since a run on a Blocking board would wipe it. Hand moves and pin
+  toggles touch placements only and are not in the key, so they never trigger.
+- **The timer** (`useAutoRerun`, called once from `CenterView`). It waits 300 ms
+  after the last change to the key, checks the rule again, and runs once. Typing
+  "80" in a fencer-count field still commits per digit (Findings follow typing),
+  and only the settled value runs.
+- **The indicator.** "Updating…" sits in the stale banner's slot once the board
+  has waited 500 ms for a run, counted from when the re-run first became due. A
+  single edit never shows it. Continuous typing, or a slow machine, does.
+- **The switch.** Settings → Board → "Re-run automatically", on by default,
+  remembered per browser like the panel layout (`viewState.ts`) and not carried in
+  files or links. `bootstrap` seeds the store flag from it, so a store built any
+  other way starts with the feature off. Off, the board goes stale after an edit,
+  as before.
+- **Loads open stale.** A file or link that carried no run, or whose saved run
+  could not be replayed, is not re-run. The sender's board and the banner stay until the next parameter
+  edit.
+- **A held board.** While a re-run is due, the per-event Unplaced rows, the rail
+  badge and the footer keep their last values until the new run lands, while
+  other findings follow typing.
+- **Lost pins.** A re-run after lowering the days drops pins on the removed days,
+  as pressing Auto-assign does. This supersedes 019's decision 10 (see
+  [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share)).
+- Auto-assign stays enabled and runs at once, cancelling a pending run. "Last run
+  HH:MM" and the placed counts update on every automatic run. The engine is
+  untouched, the drift ledger is byte-identical (SHA-256 `32a4e0af…`) and B1–B8
+  still read 24/24/24/24/12/51/18/53. The rule adds 6.9 ms to a B8 preset pick
+  (63 store notifications), and the rule with the hold about 7.7 ms.
+- **Not covered by a unit test.** `@testing-library/user-event` is not installed,
+  so the switch's Space key is checked only in the live smoke. `data-settled`
+  stays `"false"` while a Blocking finding freezes the board.
+
+Tests went from 93 files and 3133 tests to 96 files and 3252, and the handoff,
+`specs/020-rerun-on-parameter-change/handoff.md`, has the rest.
+
+**The entry as raised.** The engine ran only when **Auto-assign** was pressed
+(`Header.tsx:59`, `PresetPicker.tsx:46` for a preset or template pick) or on boot
+(`boot.ts:59`), after `TopBar` was retired by 013. Changing strips or days updated
+the config and left the schedule stale until the organizer pressed the button
 again. The desired behaviour is that adjusting a parameter re-runs the engine, so
 the loop is adjust-and-see rather than adjust-and-remember-to-press.
 
@@ -1885,6 +1982,220 @@ marks the board stale, with a "Stale – re-run Auto-assign" banner and one
 Findings row, until the next run. This entry keeps its whole scope, and
 017's `configKey` is its hook: the canonical serialization of the engine's
 inputs, compared with the kept run's, says when a re-run is due.
+
+## An inverted day window has no validation message
+
+*Found by 020's planning (ruling R7), 2026-10-08. Recorded, not fixed.*
+
+The Tournament panel's day-hours pickers (`TournamentPanel.tsx`, through
+`updateDayConfig`) write the start and the end separately, and nothing checks
+that the start is before the end. An inverted window (start after end) raises no
+Findings row, is not Blocking and does not throw. A probe with day 1 inverted
+placed 18 of 24 events. With automatic re-run, a two-pick change can pass through that state:
+the organizer picks a new start, the 300 ms debounce fires before the end is
+picked, and the engine re-runs on the inverted window. Owner ruling R7 chose to
+re-run anyway, so the board moves twice and the first move is nonsense. Two picks
+less than 300 ms apart coalesce into one run.
+
+**What it needs**: a validation message for a start at or after the end, and an
+owner call on whether it is Blocking (which would also stop the transient run
+through the rule's own gate).
+
+**Cost if ignored**: an organizer who changes both hours sees the board reshuffle
+to a broken day and back, and one who leaves the window inverted gets a board
+that silently loses events with nothing in Findings saying why.
+
+## A Dismiss on a held Findings row does nothing while a re-run is due
+
+*Found by 020's R8 fold (plan decision 18), 2026-10-08. Recorded, not fixed.*
+
+While a re-run is due, the Unplaced rows hold their last values (R8), but
+`dismissFinding` checks the live rows (`selectAllFindings`), which hold nothing.
+A Dismiss on a held row the live board no longer raises therefore does nothing.
+That is every `:room` row, since a stale board raises none, and a `:day` row that
+the edit removed. A held `:day` row that the live board still raises stays
+dismissable, because stranded rows remain while the board is stale. The row comes
+back with the run if its event is still unplaced.
+
+**What it needs**: `dismissFinding` also checks the held rows.
+
+**Cost if ignored**: a click is lost for the length of the window, about 450 to
+560 ms after the last edit and longer under continuous typing, and the button
+gives no sign why.
+
+## The "Updating…" indicator cannot show during one long run
+
+*Found by 020's measurements, 2026-10-08. Recorded, not fixed. Plan decision 7
+and ruling R1.*
+
+The engine run is synchronous, so a timer cannot fire, and React cannot paint,
+while it runs. "Updating…" can appear only before a run (the late-fire path) or
+under continuous edits that keep the board waiting. Measured runs are 2 to 7 ms
+(B1 to NAC Vet/Div1/Junior), and the click-to-paint time is 53 to 106 ms in the
+dev build, so a single edit lands at about 300 + 106 ms and never needs it.
+
+**What it needs**: a predictive reveal from the last run's measured time, or a
+Worker, if a board ever runs long enough to matter.
+
+**Cost if ignored**: none at today's times. A run longer than 500 ms would show
+a frozen board with no indicator until it ended.
+
+## The late-fire reveal is best-effort
+
+*Found by 020's planning, 2026-10-08. Recorded, not fixed. Plan decision 7.*
+
+When the debounce fires 500 ms or more after the re-run became due and the
+indicator is not showing, `useAutoRerun` reveals it first, then waits a frame
+(`requestAnimationFrame`, then `setTimeout(0)`) before it re-checks and runs. The
+frame wait is the only way a delayed timer can paint the indicator before a
+synchronous run, but no automated test proves it paints. The test pins the order
+(reveal, wait, check, run) and nothing more.
+
+**What it needs**: a browser-level check that the indicator reaches the screen,
+or the late-fire path dropped, which the owner can ask for.
+
+**Cost if ignored**: on a machine that delays the timer past 500 ms the
+indicator may flash unpainted or not show, and the board waits as before.
+
+## The reveal clock restarts when a Blocking edit or the switch interrupts it
+
+*Found by 020's plan review, 2026-10-08. Recorded, not fixed.*
+
+The 500 ms clock runs from when a re-run first became due, and key changes inside
+that stretch do not restart it. A Blocking edit makes nothing due, and so does
+turning the switch off. Either ends the stretch, and the next one starts a new
+clock. Under continuous editing through a Blocking value, "Updating…" can
+therefore appear later than 500 ms after the organizer first began editing.
+
+**Cost if ignored**: the indicator is late on a path that passes through a
+Blocking value.
+
+## The indicator clears about 150 ms before the board redraws
+
+*Found by 020's plan review, 2026-10-08. Recorded, not fixed.*
+
+"Updating…" clears on the render where the run lands. The center commits the new
+board after its own settle, about 150 ms later, so for that stretch the old board
+shows with no indicator. The status region going empty is also no completion cue
+for a screen reader, which hears the indicator arrive and never hears it end.
+
+**What it needs**: clear the indicator with the board, and announce completion
+(for example "Board updated") in the live region.
+
+**Cost if ignored**: sighted users see a brief unmarked gap, and screen reader
+users get no signal that the board changed.
+
+## The indicator's slot shifts the board and re-measures the canvas
+
+*Found by 020's plan review, 2026-10-08. Recorded, not fixed. Ruling R1 puts the
+indicator in the banner's slot.*
+
+The slot is in the page flow, about 33 px tall. Each time it appears or
+disappears during continuous edits the board moves down or up by that much and
+the canvas measures itself again.
+
+**What it needs**: an overlay or a reserved slot that does not move the board.
+
+**Cost if ignored**: a small jump in the board each time the indicator comes and
+goes while the organizer is editing.
+
+## An automatic run clears neither the load notice nor the export notice
+
+*Found by 020's planning, 2026-10-08. Recorded, not fixed. Plan decision 15.*
+
+`loadRefusal` (the reason a link was refused) and ExportPopover's "opens stale"
+notice both describe a load (a link refused at boot, a file whose saved run could
+not be replayed), not the live board, so an automatic run leaves them as they
+were.
+
+**What it needs**: a rule for when each notice stops being true, then a clear in
+`runScheduleAll` or at the notice.
+
+**Cost if ignored**: a notice can outlive the stale board it describes, such as a
+refusal reason shown over a board that has since been re-run.
+
+## An automatic run reshuffles every unpinned event, with no undo
+
+*Found by 020's planning, 2026-10-08. Recorded, not fixed.*
+
+A re-run is Auto-assign, which overwrites every unpinned placement. So a
+deselect, a chip toggle or any other edit to a key input reshuffles the whole
+board once it settles, not just the event the organizer touched. A dismissed
+day-scoped warning can return when its event moves day, since its id carries the
+day. There is no undo. The escape is the switch, and only a pin survives a run.
+
+**What it needs**: an owner call on whether the organizer should be able to hold a
+board against a re-run, or undo one.
+
+**Cost if ignored**: an organizer who hand-placed events without pinning them
+loses that work to the next edit, and a dismissed warning reappears.
+
+## A share link copied inside the debounce window carries no run
+
+*Found by 020's planning (ruling R3), 2026-10-08. Recorded, not fixed.*
+
+A link carries the run only while the kept run's key matches the board
+(`serialization.ts`). Copied after an edit and before the 300 ms debounce fires,
+it carries none, so the receiver opens the board stale, with the banner, until
+their first parameter edit.
+
+**Cost if ignored**: a rare stale open for a receiver. The sender's own board is
+unaffected.
+
+## Turning the switch on re-runs edits made while it was off
+
+*Found by 020's planning, 2026-10-08. Recorded, not fixed. Plan decision 10.*
+
+With the switch off the board goes stale after an edit, as it did before 020.
+Turning it on re-runs any such edit, but not a stale load (R3). There is no
+undo.
+
+**Cost if ignored**: an organizer who turns the switch on to look gets a reshuffle
+of the hand-edited board they were holding.
+
+## An open Move day menu closes when an automatic run unplaces its event
+
+*Found by 020's plan review, 2026-10-08. Recorded, not fixed. A relative of
+[§Dismiss controls drop focus to the page body](#dismiss-controls-drop-focus-to-the-page-body).*
+
+If an automatic run, from a Flight toggle for example, unplaces an event whose
+Move day menu is open, the menu unmounts with its button and focus drops to
+`<body>`.
+
+**What it needs**: the focus pattern the dismiss entry names, applied here too.
+
+**Cost if ignored**: a keyboard user loses their place, in a case that needs the
+menu open while an edit settles.
+
+## The live app builds the config key twice per store notification
+
+*Found by 020's probes, 2026-10-08. Recorded, not fixed. The plan declined it.*
+
+`selectDrawnSchedule` and `selectConfigKey` each build 017's config key, because
+each memo is single-slot with its own dependencies. Having `computeDrawnSchedule`
+reuse `selectConfigKey` was left out, since it touches the drawn-schedule memo,
+outside this feature. Measured, a key costs 0.1 to 0.2 ms on the largest boards.
+The rule adds 6.9 ms to a B8 preset pick (63 notifications), the rule and the hold
+about 7.7 ms, and each fencer-count write while a run is due 0.86 ms against 0.67
+with the switch off. The hold's writer measures 19.2 ms gross per pick, most of it
+derivation that the UI reads would do anyway.
+
+**Cost if ignored**: about 0.1 ms per notification, below anything an organizer
+can see.
+
+## Each run emits one extra store notification
+
+*Found during 020's implementation, 2026-10-08. Recorded, not fixed.*
+
+`runScheduleAll` writes `lastAttemptedKey` and clears `held` in an update of its
+own before it calls the engine, so each run emits one more notification than it
+used to. React batches it, so components render once. A raw `useStore.subscribe`
+listener sees an intermediate state that is not due and not yet run.
+
+**What it needs**: nothing today, unless a subscriber outside React assumes one
+notification per run.
+
+**Cost if ignored**: none found.
 
 ## Adding strips can place fewer events
 
@@ -2029,6 +2340,18 @@ placements and `buildPinnedPlacements` skips a pin whose day is out of range, so
 after a raise that day is in range again and the next run honours the pin. A
 T2 test pins this. **Cost if ignored**: an organizer who lowered the days to
 drop a hand move sees it come back after picking a template.
+
+*Extended by 020, 2026-10-08 (ruling R4).* 020 supersedes 019's decision 10
+whenever a run happens between the lower and the raise, and automatic re-run
+makes that the default. Lowering the days makes a re-run due, and the run drops
+the pin on the removed day and re-places its event, as pressing Auto-assign does.
+The raise that follows has no pin left to bring back. 019's behaviour holds only
+when no run happens in between: the switch is off, or the raise comes inside the
+300 ms debounce window. 019's test is restated as two cases
+(`__tests__/store/templateDays.test.ts`), the run in between dropping the pin and
+the no-run path bringing it back. **Cost if ignored**: an organizer who lowers the
+days now loses a pin on the removed day once the run lands, where before it
+could come back. The switch is the escape.
 
 ## The engine and the store both report a pin collision
 

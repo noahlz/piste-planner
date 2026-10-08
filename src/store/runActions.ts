@@ -2,7 +2,7 @@ import { useStore, type StoreState } from './store.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import { scheduleAll } from '../engine/scheduler.ts'
 import { placementFromResult } from '../engine/derive.ts'
-import { keepRun } from './keptRun.ts'
+import { keepRun, configKeyOf } from './keptRun.ts'
 import type { Placement, PinnedPlacement, ScheduleResult, StripAllocation } from '../engine/types.ts'
 
 /** What `runScheduleAll` found: how many of the attempted competitions it placed. */
@@ -35,6 +35,15 @@ export interface AutoRunCounts {
  */
 export function runScheduleAll(state: StoreState = useStore.getState()): AutoRunCounts {
   const { config, competitions } = buildTournamentConfig(state)
+
+  // Written before the engine runs, so a run that throws still records the
+  // inputs it attempted and the automatic re-run does not retry them (020).
+  // Through `useStore`, not `state`: `state` is a snapshot the caller passed in.
+  // This write bypasses the store's writer, so it clears `held` (020 R8)
+  // itself: an attempt ends the due episode whatever the engine does next. A
+  // throw leaves a board that is not due and reads live, and a run on a
+  // Blocking board replaces the placements the pre-Blocking snapshot described.
+  useStore.setState({ lastAttemptedKey: configKeyOf(config, competitions), held: null })
 
   // The events the organizer has fixed. The engine schedules around them, and
   // they never count as work this run attempted (013 FR-054, FR-061).

@@ -12,10 +12,11 @@ import { stripSearchRange, scanStripCounts } from '../engine/stripSearch.ts'
 import { buildTournamentConfig, buildPinnedPlacements } from './buildConfig.ts'
 import type { ScenarioId } from '../data/tournaments.ts'
 import type { KeptRun } from './keptRun.ts'
+import type { HeldBoard } from './derived.ts'
 // Value import of a sibling module that itself imports `StoreState` from this
 // file as a type-only import (erased at compile time, per erasableSyntaxOnly)
 // — no runtime cycle, only a type-level one that TS resolves fine.
-import { selectAllFindings } from './derived.ts'
+import { heldAfterWrite, selectAllFindings } from './derived.ts'
 import {
   DAY_END_MINS,
   DAY_START_MINS,
@@ -144,6 +145,16 @@ export interface UiSlice {
    */
   jumpNonce: number
 
+  /** Whether an edit to an engine input re-runs Auto-assign by itself (020 R5). Starts false and only `bootstrap` seeds it from the viewer's stored preference. Not serialized. */
+  autoRerun: boolean
+
+  /** The config key of the most recent run or load, written before the engine is called so a run that threw is not retried (020). Not serialized. */
+  lastAttemptedKey: string | null
+
+  /** What the last calm board showed (020 R8), read while a re-run is due. Not serialized. */
+  held: HeldBoard | null
+
+  setAutoRerun: (on: boolean) => void
   setLoadedPresetId: (id: PresetId | null) => void
   setLastAutoRun: (run: LastAutoRun | null) => void
   setLoadRefusal: (reason: string | null) => void
@@ -429,6 +440,11 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
     lastRun: null,
     selectedCompetitionId: null,
     jumpNonce: 0,
+    autoRerun: false,
+    lastAttemptedKey: null,
+    held: null,
+
+    setAutoRerun: (on) => set({ autoRerun: on }),
 
     setLoadedPresetId: (id) => set({ loadedPresetId: id }),
 
@@ -543,10 +559,23 @@ function createDismissalsSlice(set: SetState, get: GetState): DismissalsSlice {
 // Combined store
 // ──────────────────────────────────────────────
 
-export const useStore = create<StoreState>()((set, get) => ({
-  ...createTournamentSlice(set as SetState, get as GetState),
-  ...createCompetitionSlice(set as SetState, get as GetState),
-  ...createUiSlice(set as SetState, get as GetState),
-  ...createPlacementsSlice(set as SetState, get as GetState),
-  ...createDismissalsSlice(set as SetState, get as GetState),
-}))
+export const useStore = create<StoreState>()((rawSet, get) => {
+  // The one writer every slice action goes through (020 R8, decision 18): it
+  // resolves the partial against the state before the write, works out `held`
+  // from the result, and sets both at once, so a subscriber sees each edit in
+  // one notification with `held` already right. A direct `useStore.setState`
+  // bypasses it, which is why `applyLoadedState` and `runScheduleAll` clear
+  // `held` themselves.
+  const set: SetState = (partial) => {
+    const before = get()
+    const resolved = typeof partial === 'function' ? partial(before) : partial
+    rawSet({ ...resolved, held: heldAfterWrite(before, { ...before, ...resolved }) })
+  }
+  return {
+    ...createTournamentSlice(set, get),
+    ...createCompetitionSlice(set, get),
+    ...createUiSlice(set, get),
+    ...createPlacementsSlice(set, get),
+    ...createDismissalsSlice(set, get),
+  }
+})

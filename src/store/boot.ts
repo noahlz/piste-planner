@@ -3,6 +3,7 @@ import { decodeFromUrl } from './serialization.ts'
 import { applyPreset } from './presets.ts'
 import { runScheduleAll } from './runActions.ts'
 import { applyLoadedState } from './exportActions.ts'
+import { loadViewState } from './viewState.ts'
 import { DEFAULT_PRESET_ID } from '../data/tournaments.ts'
 
 export { DEFAULT_PRESET_ID }
@@ -22,9 +23,17 @@ export { DEFAULT_PRESET_ID }
  * action rather than an empty form. A refused fragment leaves its reason in
  * `loadRefusal` for the center's notice (018 R7).
  *
+ * It also seeds the store's `autoRerun` flag from the viewer's stored
+ * preference (on by default), the one place the feature is switched on.
+ *
  * `hash` defaults to `window.location.hash` so tests drive it directly.
  */
 export function bootstrap(hash: string = window.location.hash): void {
+  // First, before any load or run: the app turns automatic re-run on here, from
+  // this browser's stored preference, so a link's stale board is not re-run by
+  // a flag that landed late (020 R3, R5, R5a).
+  useStore.getState().setAutoRerun(loadViewState().autoRerun)
+
   let refusal: string | null = null
   if (hash.startsWith('#config=')) {
     const result = decodeFromUrl(hash)

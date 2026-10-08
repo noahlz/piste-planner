@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, within, fireEvent, act } from '@testing-library/react'
 import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
+import { RERUN_DEBOUNCE_MS } from '../../../src/components/workbench/useAutoRerun.ts'
 import { bootstrap, DEFAULT_PRESET_ID } from '../../../src/store/boot.ts'
 import { useStore } from '../../../src/store/store.ts'
 import { SCENARIOS } from '../../../src/data/tournaments.ts'
@@ -13,12 +14,20 @@ import { deserializeState } from '../../../src/store/serialization.ts'
 import { hashOf, payloadWithRefusedRun, resetReceiver, sendBoard, sentPayload } from '../../helpers/replayFixtures.ts'
 import { TournamentType, DAY_AXIS_SPACING_MINS } from '../../../src/engine/types.ts'
 import { TEMPLATES } from '../../../src/engine/catalogue.ts'
+import { scheduleAll } from '../../../src/engine/scheduler.ts'
 import {
   DEFAULT_VIEW_STATE,
   VIEW_STATE_STORAGE_KEY,
   ViewMode,
   saveViewState,
 } from '../../../src/store/viewState.ts'
+
+// A pass-through spy: the engine is the real one, and the shell case below
+// counts its runs (020 R3).
+vi.mock('../../../src/engine/scheduler.ts', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../../src/engine/scheduler.ts')>()
+  return { ...mod, scheduleAll: vi.fn(mod.scheduleAll) }
+})
 
 // 004 T007 — boot behavior (FR-007, S2-contract.md §Boot): no fragment loads
 // the default preset and auto-schedules it, a `#config=` fragment loads that
@@ -28,6 +37,7 @@ import {
 beforeEach(() => {
   localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
+  vi.mocked(scheduleAll).mockClear()
 })
 
 // Spies and fake timers are restored here, not at the end of each test body, so
@@ -238,6 +248,8 @@ describe('bootstrap with a refused #config= link (018 T4, R7)', () => {
   it('keeps the notice, and not its Dismiss button, in a live region of its own beside the stale banner\'s', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    // The switch is how a test reaches a stale board on purpose (020 R5).
+    saveViewState({ ...DEFAULT_VIEW_STATE, autoRerun: false })
     const { hash } = zeroCountHash()
     bootstrap(hash)
     render(<WorkbenchShell />)
@@ -314,5 +326,78 @@ describe('bootstrap with a refused #config= link (018 T4, R7)', () => {
       applyLoadedState(parsed.state, parsed.run)
       expect(useStore.getState().loadRefusal).toBeNull()
     })
+  })
+})
+
+// 020 T3 (R5, R5a, R3): the feature turns on here. `bootstrap` seeds the
+// store's flag from the viewer's stored preference before anything else, on
+// the link path and the preset path alike.
+describe('bootstrap seeds autoRerun from the stored view state (020 T3)', () => {
+  /** A link whose sender's board carries no run, so it opens stale (R3). */
+  function noRunHash(): string {
+    const payload = sentPayload(sendBoard())
+    delete payload.run
+    resetReceiver()
+    return hashOf(payload)
+  }
+
+  it('is on with nothing stored', () => {
+    bootstrap('')
+    expect(useStore.getState().autoRerun).toBe(true)
+  })
+
+  it('is off when the stored preference is off', () => {
+    saveViewState({ ...DEFAULT_VIEW_STATE, autoRerun: false })
+    bootstrap('')
+    expect(useStore.getState().autoRerun).toBe(false)
+  })
+
+  // The flag starts false, so a seed that only ever turns it on would pass the
+  // case above. Booting on first, then again with the preference off, proves
+  // the seed also resets a flag that is already true.
+  it('a boot with the preference off turns off a flag that an earlier boot turned on', () => {
+    bootstrap('')
+    expect(useStore.getState().autoRerun, 'premise: the first boot turned it on').toBe(true)
+
+    saveViewState({ ...DEFAULT_VIEW_STATE, autoRerun: false })
+    bootstrap('')
+
+    expect(useStore.getState().autoRerun).toBe(false)
+  })
+
+  it.each([
+    ['on with nothing stored', null, true],
+    ['off when the stored preference is off', false, false],
+  ])('on a link boot, is %s', (_name, stored, expected) => {
+    const hash = sendBoard().hash
+    resetReceiver()
+    if (stored !== null) saveViewState({ ...DEFAULT_VIEW_STATE, autoRerun: stored })
+
+    bootstrap(hash)
+
+    expect(useStore.getState().autoRerun).toBe(expected)
+  })
+
+  // The seed lands before the shell renders and before any run, so a link
+  // without a run opens stale and stays so (R3). The edit after it is the
+  // positive control: the feature is on, and the next edit re-runs as usual.
+  it('opens a no-run link stale for 2 s in the full shell with no run, then re-runs the next edit', () => {
+    vi.useFakeTimers()
+    bootstrap(noRunHash())
+    render(<WorkbenchShell />)
+    vi.mocked(scheduleAll).mockClear()
+
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+
+    expect(vi.mocked(scheduleAll)).toHaveBeenCalledTimes(0)
+    expect(document.querySelectorAll('[data-stale-banner]')).toHaveLength(1)
+
+    act(() => useStore.getState().setStrips(useStore.getState().strips_total + 1))
+    act(() => {
+      vi.advanceTimersByTime(RERUN_DEBOUNCE_MS)
+    })
+    expect(vi.mocked(scheduleAll)).toHaveBeenCalledTimes(1)
   })
 })
