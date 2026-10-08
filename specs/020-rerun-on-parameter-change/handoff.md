@@ -411,7 +411,18 @@ and the reshuffle with no undo). The handoff does not restate them.
 
 ## Merge
 
-Pending Task M.
+`git merge-tree --write-tree main 020-rerun-on-parameter-change` gives tree `d20788e114`
+with no conflicts. That equals the branch tree at `d9738d92c9`, because `main` has not
+moved from `7a7e503f4d`, the commit 020 was cut from. On that tree the full suite reads 96
+files / 3252 tests, `tsc -b` and lint are clean, and the ledger SHA-256 is still
+`32a4e0afb45abfbf8239f7bdbc15dda9eb1487c959893442b6029a6d0998b260`. Task S's two smoke
+passes ran on the last code change. Everything after it is docs.
+
+Merge with `merge-with-costs` (never squash). The cost tooling should count the planning
+session `c6dd25f7-1a9b-4260-a427-3b24f2cc9d17`, the implementation session
+`2e8301f9-ddd7-4038-ba66-b184a22c0273` and the background task outputs under
+`a91cc939-e943-4ff6-a585-c52637ca30a0` (see Session notes on not counting 019's share
+twice).
 
 ## Resume prompt (after the merge)
 
