@@ -1,5 +1,7 @@
+import { useId } from 'react'
 import { RadioGroup as RadioGroupPrimitive } from 'radix-ui'
 import { useStore } from '../../../store/store.ts'
+import { selectTemplateDaysHint } from '../../../store/templateHint.ts'
 import { TournamentType } from '../../../engine/types.ts'
 import { daysAvailableRangeMessage } from '../../../engine/validation.ts'
 import { TIME_OPTIONS, formatClock } from '../../../lib/time.ts'
@@ -76,6 +78,16 @@ export function TournamentPanel() {
   const dayRangeMessage = daysAvailableRangeMessage(daysAvailable)
   const isOutOfRange = daysAvailable !== 2 && daysAvailable !== 3 && daysAvailable !== 4
 
+  // The loaded template's day hint (019 R3). The selector returns a string
+  // (or null), so the panel re-renders only when the text changes.
+  const daysHint = useStore(selectTemplateDaysHint)
+  const rangeMessageId = useId()
+  const hintId = useId()
+  const showRangeMessage = isOutOfRange && dayRangeMessage !== null
+  const describedBy = [showRangeMessage ? rangeMessageId : null, daysHint !== null ? hintId : null]
+    .filter((id) => id !== null)
+    .join(' ')
+
   return (
     <div className="flex flex-col gap-[18px] py-0.5">
       <div>
@@ -101,6 +113,7 @@ export function TournamentPanel() {
         <SectionCaption>Days</SectionCaption>
         <RadioGroupPrimitive.Root
           aria-label="Day count"
+          aria-describedby={describedBy || undefined}
           value={String(daysAvailable)}
           onValueChange={(value: string) => setDays(Number(value))}
           className="flex flex-wrap gap-[5px]"
@@ -120,8 +133,13 @@ export function TournamentPanel() {
             </RadioGroupPrimitive.Item>
           )}
         </RadioGroupPrimitive.Root>
-        {isOutOfRange && dayRangeMessage !== null && (
-          <p className="mt-2 text-[12.5px] leading-normal text-neutral-700">{dayRangeMessage}</p>
+        {/* Both messages are siblings of the group, never inside a pill: text
+            inside an item would join that radio's accessible name. */}
+        {showRangeMessage && (
+          <p id={rangeMessageId} className="mt-2 text-[12.5px] leading-normal text-neutral-700">{dayRangeMessage}</p>
+        )}
+        {daysHint !== null && (
+          <p id={hintId} data-days-hint className="mt-2 text-[12.5px] leading-normal text-neutral-700">{daysHint}</p>
         )}
       </div>
 

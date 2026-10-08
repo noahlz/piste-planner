@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
-import { TEMPLATES, TEMPLATE_MIN_DAYS } from '../../src/engine/catalogue.ts'
+import {
+  TEMPLATES,
+  TEMPLATE_HINTS,
+  TEMPLATE_HINT_GENERIC,
+  TEMPLATE_MIN_DAYS,
+  templateHintSentence,
+} from '../../src/engine/catalogue.ts'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { assignDaysByColoring } from '../../src/engine/dayColoring.ts'
 import { Category, EventType, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
@@ -100,8 +106,7 @@ describe('TEMPLATE_MIN_DAYS', () => {
     expect(measured).toEqual(expected)
   })
 
-  it.each(TEMPLATE_NAMES)('%s: day colouring at the table’s count breaks no hard pair (80 strips)', (name) => {
-    const broken: string[] = []
+  it.each(TEMPLATE_NAMES)('%s: day colouring at the table’s count breaks no hard pair (80 strips)', (name) => {    const broken: string[] = []
     for (const type of [...NATIONAL_TYPES, ...REGIONAL_TYPES]) {
       templateCompetitions(name, type)
       useStore.getState().setDays(tableDays(name, type))
@@ -113,5 +118,36 @@ describe('TEMPLATE_MIN_DAYS', () => {
       }
     }
     expect(broken).toEqual([])
+  })
+})
+
+// 019 R3, decision 9: the sentence naming the rule behind each template's minimum.
+// A key that drifts from the template names would fall back to the generic
+// sentence silently, so the table is pinned cell by cell.
+describe('TEMPLATE_HINTS', () => {
+  it('has no key that is not a template', () => {
+    for (const key of Object.keys(TEMPLATE_HINTS)) expect(TEMPLATE_NAMES).toContain(key)
+  })
+
+  const CELLS = TEMPLATE_NAMES.flatMap((name) =>
+    ([['national', TournamentType.NAC], ['regional', TournamentType.RYC]] as const).map(
+      ([column, type]) => ({ name, column, type, minDays: TEMPLATE_MIN_DAYS[name][column] }),
+    ),
+  )
+
+  it.each(CELLS)('$name on $column: a specific sentence exactly when the minimum is 3 or more', ({ name, type, minDays }) => {
+    const generic = templateHintSentence(name, type) === TEMPLATE_HINT_GENERIC
+
+    expect(generic).toBe(minDays < 3)
+  })
+
+  it.each([
+    ['NAC Cadet/Junior', TournamentType.NAC, 'Cadet and Junior events of one weapon and gender'],
+    ['NAC Div1/Junior', TournamentType.NAC, 'Div 1 and Junior events of one weapon and gender'],
+    ['NAC Vet/Div1/Junior', TournamentType.NAC, 'Div 1 and Junior events of one weapon and gender'],
+    ['NAC Vet/Div1/Junior', TournamentType.RYC, 'neither the Veteran Combined nor the Veteran team event'],
+    ['Junior Olympics', TournamentType.NAC, 'Junior\'s individual and team events'],
+  ])('%s on %s: names its own rule', (name, type, fragment) => {
+    expect(templateHintSentence(name, type)).toContain(fragment)
   })
 })
