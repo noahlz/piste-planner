@@ -6,6 +6,9 @@ had not moved), awaiting Task M's merge check and then the user's
 `merge-with-costs`. Spec: [`spec.md`](./spec.md). Plan: [`plan.md`](./plan.md).
 Roadmap row 025 was folded in (owner ruling R1).
 
+Planning and implementation ran in one session, in this one worktree (the
+planning worktree was reused), so merge-with-costs takes that single session id.
+
 ## What changed
 
 In product terms: after Auto-assign the canvas now shows the schedule the engine
@@ -55,6 +58,11 @@ What each task does now:
   the scheduler reports the peak of its own timeline, the footer counts the
   board it draws, and right after a run they are one number. `e68bcac0de` fixes
   the plan's lint command to skip the git-ignored `tmp/` planning probes.
+  Planning: the Understand workflow (4 readers, a B1–B8 measurement, a critic)
+  found the 19/5 premise stale (15/9) and the cause timing, not lane
+  fragmentation. Judge panel: A 7.5/8/7.5, B 6.5/6/6 (B6 40 placed against the
+  engine's 45), C 2/2/1.5 (floors 24/19/23/19/12/40/16/53). Three lenses
+  reviewed the plan (54 findings, 3 blockers) and it was revised.
 - **T1 – one unseated-phase rule (`25799f01cb`, review fix `f8bd39078a`).**
   New `src/engine/unseated.ts` names the phases that need strips and hold none
   (`unseatedPhases`), and Suggest's subtraction and the scheduler's video
@@ -77,8 +85,8 @@ What each task does now:
   strip and overlapped nothing.
 - **T4 – one drawn model (`e5f893d7de`, `316d041578`).** `selectDrawnSchedule`
   in `src/store/derived.ts` is the one answer to what the board shows. A board is
-  stale when it holds an in-range placement and `lastRun` is missing or its
-  `configKey` differs from the current inputs'. On a fresh board an event whose
+  stale when it holds an in-range placement of a selected event and `lastRun` is
+  missing or its `configKey` differs from the current inputs'. On a fresh board an event whose
   placement still equals its kept key draws the kept result, and every other
   placed event is derived. A block counts as unplaced only when unseated on a
   fresh board.
@@ -105,7 +113,7 @@ What each task does now:
 - **T7 – buttons and the stale banner (`f28b5935eb`, `6bacf397a2`, smoke
   `432db190c9`).** A phase's first run is a `<button type="button">` with its
   accessible name and an outline focus ring. The stale banner is a
-  `role="status"` region above the center view and keeps its state under a
+  `role="status"` region at the top of the center view and keeps its state under a
   Blocking finding.
 - **T8 – link and file replay (`a25c166fcb`, `8f21e998f7`, smoke `a2ee1e987d`).**
   The serialized state carries `run` (the pins the last run used) when the kept
@@ -131,15 +139,15 @@ What each task does now:
 
 | What | Value | Where |
 |---|---|---|
-| Unit suite | 87 files / 2795 tests, all pass (from 82 / 2278), `tmp/**` excluded | `d1f3e3c831`, the last code commit |
-| `tsc -b`, lint | clean, clean | every task head (the orchestrator re-verified after T2, T4, T5b for `tsc`, and T7 in full) |
+| Unit suite | 87 files / 2795 tests, all pass (from 82 / 2278), `tmp/**` excluded | `a97a7d69dd` (87 / 2795), held at `d1f3e3c831` (2795, files not stated), the last code commit |
+| `tsc -b`, lint | clean, clean | every task head (at T1 on src and __tests__, since the plan's lint command skipped `tmp/` only from `e68bcac0de`) (the orchestrator re-verified after T2, T4, T5b for `tsc`, and T7 in full) |
 | Drift ledger snapshot SHA-256 | `cd484a89c7c95f9dc1afebbccf705177487683bde7c1fdd99a674b0afeaff481` to `7e2db75c38bb6e5702d3618e81127130739e9075536b843ca76a8cc368b89d06` | T9 `a97a7d69dd`, unchanged through T8 |
 | Snapshot change in T9 | 30 changed lines, all `peak_*` fields inside `refRequirementsByDay`, on the spec's 14 scenario-days and none on a held day | `a97a7d69dd` (ledger check script exit 0, git-ignored) |
 | Snapshot against pre-016 | 0 changed lines against `b84be7e291`'s | `a97a7d69dd` |
 | B1–B8 scheduled, ERRORs | 24 / 24 / 24 / 21 / 12 / 45 / 18 / 53 and 0 / 0 / 0 / 9 / 0 / 9 / 0 / 0, both unchanged | every commit |
 | Boot footer against the engine | equal on B1–B8, pinned by `appPathParity` | `de463e574c` |
 | Boot invariants | 0 unseated, 0 overlaps and 0 video-required phases off video on B1–B8 and the 10 templates, phase times and strips equal to `strip_allocations` | `2961280f20` |
-| Live smoke | **pass**, two consecutive full passes after T5a, T5b, T6a, T6b, T7, T8, T9 and Task S, 0 console errors (the pass counts are in the smoke commits' bodies for T6b, T7, T8 and T9, and the rest are orchestrator observations) | the smoke commits above |
+| Live smoke | **pass**, two consecutive full passes after T5a, T5b, T6a, T6b, T7, T8, T9 and Task S, 0 console errors (two consecutive full passes are in the bodies of `f76d4f0d2f`, `432db190c9`, `a2ee1e987d`, `5b50f79d40` and `7837e32f7c` (T5b), while T5a, T6a and Task S passes and every 0-console-errors count are orchestrator observations) | the smoke commits above |
 
 Smoke command: `SMOKE_BASE=http://localhost:5188/piste-planner/ timeout 240
 node scripts/smoke.mjs`, after `pnpm -C <wt> dev --port 5188 --strictPort`.
@@ -168,7 +176,8 @@ What the driver now checks, on top of 016's three checks:
 
 Oldest first. Counts are taken from each commit's message body, with `tmp/**`
 excluded. Where a body has no count, the row says so and nothing is guessed.
-The snapshot is `cd484a89c7c9…` through `6bacf397a2` and later, until T9.
+The snapshot is `cd484a89c7c9…` from the base through T8 (`8f21e998f7`), and
+`7e2db75c38bb…` from T9 (`a97a7d69dd`) on.
 
 | Step | Commit | Files / tests | Notes |
 |---|---|---|---|
@@ -337,7 +346,10 @@ Each with what it costs if wrong.
 7. **T8 choices.** An empty board writes no run, and a pin-less run on a placed
    board writes `run: []`. Run entries' day and start time must be whole numbers.
    Cost: a hand-edited file with a fractional start loses its run and boots
-   stale, with the refusal reason shown beside the export status line.
+   stale, with the refusal reason shown beside the export status line. Review
+   found and fixed a real bug: loading a payload without
+   `pool_round_duration_table` kept the previous board's table, and it now
+   resets to the default (`8f21e998f7`).
 8. **`setPlacementsFromAuto`'s `lastRun` is optional** (T2), where the plan
    declared it required, so the many one-argument test callers compile. Cost: a
    future caller that forgets the run silently clears it and the board goes
@@ -375,7 +387,7 @@ Backlog-worthy items are marked with an asterisk and point at their entries.
   processes a start before an end at the same minute, and it predates 017
   (`a889885424`). T9 drift judge 2 probed a half-open sweep, an orchestrator
   observation recorded in no commit: B6 day 0 reads 48 not 78, B6 day 1 48 not
-  68, and B4 day 2's sabre peak 38 not 54. Only those three were probed. Cost if
+  68, and B4 day 2's sabre peak 38 not 54. Only those three figures were recorded. Cost if
   ignored: staffing advice errs generous, never short. An owner call, since it
   moves the ledger. Backlog §The referee sweep counts an instantaneous handoff
   twice, which now carries these figures.
