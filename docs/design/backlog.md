@@ -797,13 +797,14 @@ declined them because the plan fixed the wording.*
 
 - The NAC Div1/Junior hint says a team event and an individual event "of the same
   age group" may never share a day. Div 1 is not an age group.
-- The hint's title line reads "on a RYC board" and "on a SJCC board". Every type
-  code starts with a letter said with a vowel sound (en, ess, ar), so all six take
-  "an" – "an NAC board" as well. The text is built in
-  `src/store/templateHint.ts` with a fixed "a".
+- The hint's title line reads "on a <type> board" with a fixed "a"
+  (`src/store/templateHint.ts`). The right article depends on how each code is
+  said: as letters ("an SJCC", "an RYC") or as a word ("a NAC" said "nack").
+  Rewording around the article ("under NAC rules") avoids the choice.
 
 **What it needs**: an owner wording call, then a one-line change in `catalogue.ts`
-and `templateHint.ts`.
+and `templateHint.ts`, with the exact-text pins in `templateHint.test.ts`,
+`TournamentPanel.test.tsx` and the smoke's hint check updated in the same commit.
 
 **Cost if ignored**: copy that reads slightly wrong in the one place the
 organizer is told why a board breaks the rules.

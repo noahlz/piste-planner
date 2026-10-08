@@ -373,9 +373,9 @@ indexed under backlog §What 019 deliberately left unfixed.
 8. **\*A raise brings back a pin left on a lowered-away day** (decision 10). Cost
    if ignored: a hand move the organizer meant to drop comes back. Backlog
    §Picking a preset keeps the pins on events the two boards share (extended).
-9. **\*Two hint copy nits** (decision 15). Task D found the article nit wider than
-   the review said: read as letters, every type code takes "an", NAC included.
-   Cost if ignored: slightly wrong copy in the one place the organizer is told why
+9. **\*Two hint copy nits** (decision 15). The title line's fixed "a" fits a code
+   said as a word ("a NAC") and not one said as letters ("an RYC"), so the owner
+   picks the reading or a wording without the article. Cost if ignored: slightly wrong copy in the one place the organizer is told why
    a board breaks the rules. An owner wording call. Backlog §Two hint copy nits
    019 left as owner copy.
 10. **\*Ten METHODOLOGY lines the amendment left**, among them :86 and :328 saying
