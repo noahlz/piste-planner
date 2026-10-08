@@ -1724,6 +1724,55 @@ if ((await page.locator('[data-overflow-lane] [data-event-block]').count()) !== 
 }
 log('017 task S: Auto-assign cleared the row and the lane:', await footerCounts())
 
+// ── 018 T4: a refused link says why and still boots B1 ──
+// A fresh B1 sender's link, edited so one event's fencer_count is 0, is refused by the loader. The
+// receiver must still boot B1 (24 placed), and the notice at the top of the board must name the event
+// and the "2 to 336" bound, and go away on Dismiss. The refusal path calls console.error by design,
+// which fails the main page's console check, so the link opens on its OWN page and only its
+// pageerror is recorded.
+{
+  const sentUrl = await linkFromSender()
+  if (!sentUrl.includes('#config=')) throw new Error(`018 T4: the sender's share link has no #config= payload: ${sentUrl.slice(0, 60)}`)
+  // Re-encode as src/store/serialization.ts does: JSON -> base64 -> base64url (no padding is
+  // required, fromBase64Url re-adds it).
+  const payload = sentUrl.slice(sentUrl.indexOf('#config=') + '#config='.length)
+  const sentJson = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'))
+  const zeroId = Object.keys(sentJson.competitions).sort()[0]
+  sentJson.competitions[zeroId].fencer_count = 0
+  const badPayload = Buffer.from(JSON.stringify(sentJson), 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const badUrl = sentUrl.slice(0, sentUrl.indexOf('#config=')) + '#config=' + badPayload
+
+  const refused = await ctx.newPage()
+  refused.on('pageerror', (e) => errors.push('t4 refused receiver: ' + e))
+  await refused.goto(badUrl)
+  await refused.getByRole('button', { name: 'Export', exact: true }).waitFor()
+  await refused.getByRole('region', { name: 'Matrix canvas' }).waitFor()
+  await refused.waitForTimeout(500)
+
+  const notice = refused.locator('[data-load-refusal]')
+  if ((await notice.count()) !== 1) {
+    await refused.screenshot({ path: `${SHOTS}018-t4-no-refusal-notice.png`, fullPage: FULLPAGE })
+    throw new Error(`018 T4: expected one [data-load-refusal] notice on the refused link, found ${await notice.count()} (app defect)`)
+  }
+  const noticeText = ((await notice.textContent()) ?? '').trim()
+  if (!noticeText.includes(zeroId) || !noticeText.includes('2 to 336') || !noticeText.includes('B1')) {
+    await refused.screenshot({ path: `${SHOTS}018-t4-notice-text.png`, fullPage: FULLPAGE })
+    throw new Error(`018 T4: the refusal notice should name ${zeroId}, "2 to 336" and B1, it reads "${noticeText}"`)
+  }
+  const refusedFooter = ((await refused.getByRole('contentinfo', { name: 'Status bar' }).locator('[data-counts]').textContent()) ?? '').trim()
+  if (!refusedFooter.startsWith('24 placed · 0 unplaced')) {
+    throw new Error(`018 T4: the refused link should still boot B1 (24 placed · 0 unplaced), the footer reads "${refusedFooter}"`)
+  }
+  await refused.screenshot({ path: `${SHOTS}018-t4-refused-link.png`, fullPage: FULLPAGE })
+  await refused.getByRole('button', { name: 'Dismiss notice' }).click()
+  await refused.waitForTimeout(200)
+  if ((await refused.locator('[data-load-refusal]').count()) !== 0 || (await refused.getByRole('button', { name: 'Dismiss notice' }).count()) !== 0) {
+    throw new Error('018 T4: Dismiss notice did not remove the refusal notice')
+  }
+  await refused.close()
+  log(`018 T4: the link with ${zeroId} at 0 fencers booted B1 with the notice "${noticeText}", and Dismiss removed it`)
+}
+
 // ── 018 T3: B4 – the overrun rows and the grown axis ──
 // B4's last-phase overruns (T2's J1 measurement) run past the 22:00 hard end.
 // After the preset's auto-run the Findings panel carries one Warning per such
