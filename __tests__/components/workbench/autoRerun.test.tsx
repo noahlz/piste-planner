@@ -114,6 +114,22 @@ function setVet(count: number): void {
   edit(() => useStore.getState().updateCompetition(VET, { fencer_count: count }))
 }
 
+/**
+ * After an edit, a late debounce taken up to its last wait: the clock jumps
+ * 600 ms with no timer firing, the debounce reveals "Updating…" and requests a
+ * frame, and the frame fires and arms the `setTimeout(0)`, which has not run.
+ * The fake clock gives a zero delay armed inside a tick 1 ms, so `advance(1)`
+ * fires it.
+ */
+function intoLateYield(): void {
+  vi.setSystemTime(Date.now() + 600)
+  advance(RERUN_DEBOUNCE_MS)
+  expect(indicator(), 'premise: in the late-fire wait').not.toBeNull()
+  act(() => {
+    vi.advanceTimersToNextTimer()
+  })
+}
+
 function centerView(viewMode: ViewMode = ViewMode.MATRIX) {
   return (
     <CenterView viewMode={viewMode} zoom={ZOOM} detailCollapsed={false} onToggleDetailCollapsed={() => {}} />
@@ -253,14 +269,16 @@ describe('the board re-runs itself (020 T2)', () => {
     }
 
     // 80 fencers changes VET's pools and bracket, so the run redraws its row.
+    // Literal 299 and 300, not `RERUN_DEBOUNCE_MS`: they pin R2's value, so a
+    // change to the constant fails here instead of moving the test with it.
     setVet(80)
     waiting()
-    while (t < RERUN_DEBOUNCE_MS - 10) {
+    while (t < 290) {
       step(10)
       waiting()
     }
     step(9)
-    expect(t).toBe(RERUN_DEBOUNCE_MS - 1)
+    expect(t).toBe(299)
     waiting()
 
     step(1)
@@ -295,7 +313,9 @@ describe('the board re-runs itself (020 T2)', () => {
     setVet(42)
     advance(200)
     setVet(43)
-    advance(RERUN_INDICATOR_DELAY_MS - 400 - 1)
+    // Literal steps, not the constants: 499 and 500 ms after the first edit pin
+    // R1's value, and 299 and 300 ms after the last pin R2's.
+    advance(99)
     expect(indicator(), 'absent at 499 ms').toBeNull()
 
     advance(1)
@@ -308,7 +328,7 @@ describe('the board re-runs itself (020 T2)', () => {
     setVet(44)
     advance(200)
     setVet(45)
-    advance(RERUN_DEBOUNCE_MS - 1)
+    advance(299)
     expect(runs()).toBe(0)
     expect(indicator()).not.toBeNull()
 
@@ -343,6 +363,83 @@ describe('the board re-runs itself (020 T2)', () => {
 
     unmount()
     advance(1000)
+    expect(runs()).toBe(1)
+  })
+
+  it('3. boundary: a debounce 499 ms after due began runs at once, and one at 500 ms waits a frame', () => {
+    runB1()
+    render(centerView())
+
+    // 199 + 300 = 499 ms since due began: not late.
+    setVet(41)
+    vi.setSystemTime(Date.now() + 199)
+    advance(300)
+    expect(runs(), 'at 499 ms the run does not wait').toBe(1)
+    expect(indicator()).toBeNull()
+
+    // 200 + 300 = 500 ms: late (R1's `>=`).
+    setVet(42)
+    vi.setSystemTime(Date.now() + 200)
+    advance(300)
+    expect(indicator(), 'at 500 ms revealed before the run').not.toBeNull()
+    expect(runs(), 'at 500 ms the engine waits for a frame').toBe(1)
+    advance(16)
+    expect(runs()).toBe(2)
+  })
+
+  it('3. stage two: an unmount after the frame, before its `setTimeout(0)`, runs nothing', () => {
+    runB1()
+    const { unmount } = render(centerView())
+
+    setVet(41)
+    intoLateYield()
+    expect(runs(), 'the frame alone does not run').toBe(0)
+    advance(1)
+    expect(runs(), 'the yield runs').toBe(1)
+
+    setVet(42)
+    intoLateYield()
+    unmount()
+    advance(1000)
+    expect(runs()).toBe(1)
+  })
+
+  it('3. stage two: the yield re-checks the rule, so a switch-off React has not rendered yet runs nothing', () => {
+    runB1()
+    render(centerView())
+
+    setVet(41)
+    intoLateYield()
+    advance(1)
+    expect(runs(), 'the yield runs').toBe(1)
+
+    setVet(42)
+    intoLateYield()
+    // Outside `act`: React has not re-rendered, so no effect cleanup has
+    // cleared the pending yield, and only its own re-check can stop the run.
+    useStore.getState().setAutoRerun(false)
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(runs()).toBe(1)
+  })
+
+  it('the debounce re-checks the rule when it fires, so a switch-off React has not rendered yet runs nothing', () => {
+    runB1()
+    render(centerView())
+
+    setVet(41)
+    advance(RERUN_DEBOUNCE_MS)
+    expect(runs(), 'an edit left alone runs').toBe(1)
+
+    setVet(42)
+    advance(100)
+    // Outside `act`: React has not re-rendered, so no effect cleanup has
+    // cleared the armed debounce, and only its re-check can stop the run.
+    useStore.getState().setAutoRerun(false)
+    act(() => {
+      vi.advanceTimersByTime(RERUN_DEBOUNCE_MS)
+    })
     expect(runs()).toBe(1)
   })
 
@@ -483,7 +580,8 @@ describe('the re-run across mounts (020 T2 test 10)', () => {
     setVet(41)
     render(<StrictMode>{centerView()}</StrictMode>)
 
-    advance(RERUN_DEBOUNCE_MS - 1)
+    // Literal 299 then 1: R2's 300 ms, not the constant.
+    advance(299)
     expect(runs()).toBe(0)
     advance(1)
     expect(runs()).toBe(1)
@@ -500,7 +598,8 @@ describe('the re-run across mounts (020 T2 test 10)', () => {
     setVet(42)
     advance(200)
     setVet(43)
-    advance(RERUN_INDICATOR_DELAY_MS - 400 - 1)
+    // Literal, as in test 2: 499 and 500 ms after the first edit (R1).
+    advance(99)
     expect(indicator()).toBeNull()
     advance(1)
     expect(indicator()).not.toBeNull()
