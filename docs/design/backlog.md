@@ -255,7 +255,8 @@ otherwise.*
   Existing entry, extended.
 - A template's day raise bringing back a pin left on a lowered-away day –
   [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share).
-  Existing entry, extended.
+  Existing entry, extended. Superseded in part by 020 R4: whenever a run happens
+  between the lower and the raise, the pin is gone.
 - Ten METHODOLOGY lines the amendment left, for feature 021 –
   [§Left for 021 by 019's amendment](#left-for-021-by-019s-amendment), under
   [§METHODOLOGY.md and the engine have diverged, and the doc is the spec](#methodologymd-and-the-engine-have-diverged-and-the-doc-is-the-spec).
@@ -1929,8 +1930,8 @@ itself, and the board never waits for a button.
   files or links. `bootstrap` seeds the store flag from it, so a store built any
   other way starts with the feature off. Off, the board goes stale after an edit,
   as before.
-- **Loads open stale.** A file or link whose saved run could not be replayed is
-  not re-run. The sender's board and the banner stay until the next parameter
+- **Loads open stale.** A file or link that carried no run, or whose saved run
+  could not be replayed, is not re-run. The sender's board and the banner stay until the next parameter
   edit.
 - **A held board.** While a re-run is due, the per-event Unplaced rows, the rail
   badge and the footer keep their last values until the new run lands, while
@@ -1951,7 +1952,7 @@ Tests went from 93 files and 3133 tests to 96 files and 3252, and the handoff,
 `specs/020-rerun-on-parameter-change/handoff.md`, has the rest.
 
 **The entry as raised.** The engine ran only when **Auto-assign** was pressed
-(`Header.tsx:59`, `PresetPicker.tsx:46` for a preset pick) or on boot
+(`Header.tsx:59`, `PresetPicker.tsx:46` for a preset or template pick) or on boot
 (`boot.ts:59`), after `TopBar` was retired by 013. Changing strips or days updated
 the config and left the schedule stale until the organizer pressed the button
 again. The desired behaviour is that adjusting a parameter re-runs the engine, so
@@ -2103,8 +2104,9 @@ goes while the organizer is editing.
 *Found by 020's planning, 2026-10-08. Recorded, not fixed. Plan decision 15.*
 
 `loadRefusal` (the reason a link was refused) and ExportPopover's "opens stale"
-notice both describe a load or a copy, not the live board, so an automatic run
-leaves them as they were.
+notice both describe a load (a link refused at boot, a file whose saved run could
+not be replayed), not the live board, so an automatic run leaves them as they
+were.
 
 **What it needs**: a rule for when each notice stops being true, then a clear in
 `runScheduleAll` or at the notice.
