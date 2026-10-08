@@ -150,6 +150,9 @@ handoff, `specs/017-canvas-tells-truth/handoff.md`, has the rest.*
 - The video gutter and the camera icon (017 ruling R8) –
   [§The video gutter and camera icon are deferred](#the-video-gutter-and-camera-icon-are-deferred).
   A later feature.
+- Picking a preset in the header keeps the pins on events the two boards share –
+  [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share).
+  Predates 017, unscheduled.
 
 ## Day-level findings have no structured day
 
@@ -284,8 +287,11 @@ documented since `a889885424`.*
 `sweepLine` (`src/engine/refs.ts`) processes a start before an end at the same
 minute, so a block that ends at t and a block that starts at t both count at t.
 The comment (`refs.ts:49`) justifies it as an instant referee handoff. With a
-half-open sweep (end first) the peaks would read lower. How much lower was not
-measured, so this entry carries no figures.
+half-open sweep (end first) the peaks read lower. T9's drift judge 2 probed it
+(an orchestrator observation, in no commit): B6 day 0 reads 48 not 78, B6 day 1
+48 not 68, and B4 day 2's sabre peak 38 not 54. Those are the only three figures
+measured, and the other scenario-days were not probed. They are also in
+`specs/017-canvas-tells-truth/handoff.md` §Left unfixed.
 
 **What it needs**: an owner call on whether an instantaneous handoff should
 count both blocks. It changes the footer's referee peak and the scheduler's
@@ -1435,6 +1441,31 @@ is not enough to reproduce a board.
 then re-runs after a change, loses events with the unseated pins listed in
 Findings. Pinning fewer events shrinks the loss but does not remove it: pin-half
 still left 0/1/0/2/0/9/0/10 phases unseated on B1–B8.
+
+## Picking a preset keeps the pins on events the two boards share
+
+*Found by 017's Task S smoke agent, 2026-10-07. Recorded, not fixed. The cause
+predates 017 (013), and R3 makes it visible.*
+
+`applyPreset` (`src/store/presets.ts`) writes the scenario's inputs and does not
+clear the placements. `PresetPicker` then calls `runScheduleAll`. So choosing a
+preset in the header, B1 included, runs Auto-assign with every pin the organizer
+already holds on an event the old and new boards share. A reload is the fresh
+boot, because the store lives in memory. Under R3 a pin fixes only an event's day
+and pool start, so re-picking B1 after one hand move ran with that pin and, in
+the smoke agent's first attempt, read 21 placed · 3 unplaced · 2 pinned instead of
+24 · 0 · 0. See
+[§Pinning an event in place and re-running can lose events](#pinning-an-event-in-place-and-re-running-can-lose-events)
+for why a pin costs events. Task S's driver reloads the page to get a fresh B1,
+so no smoke check picks a preset after a hand move.
+
+**What it needs**: an owner call on whether picking a preset starts a clean board
+(clear the placements and the kept run, then run) or keeps hand work on shared
+events, with the choice stated in the picker.
+
+**Cost if ignored**: an organizer who compares presets after hand-placing events
+sees a different board from the preset's own, with events unplaced and pins they
+did not ask for, and nothing says why. Reloading the page is the workaround.
 
 ## The engine and the store both report a pin collision
 
