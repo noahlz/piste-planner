@@ -124,10 +124,16 @@ describe('eventTimeSegments on the reference tournaments', () => {
   // SHA-256 of every event's segments, by id, after the app's own run – so the
   // move into the engine changed no span on B1–B8. B8's 148 matches the plan's
   // phase count for it.
+  //
+  // 018 T1 (2026-10-07): the B1, B2, B7 and B8 digests moved on purpose. Div 1
+  // promotes 75% at a NAC (R4), so Div 1 R16 and later times shift. B8 also
+  // has a VET R16 knock-on: seven day-1 VET R16s start later, so JR-W-EPEE's
+  // prelims fall back onto 8 video strips from 1670 to 1850. Counts
+  // (66, 66, 54, 148) and B3–B6 are unchanged.
   const EXPECTED = {
-    B1: ['af1d2cf4d111ae0f', 66], B2: ['ec157fca4c449b8d', 66], B3: ['1f23028d76cd460e', 72],
+    B1: ['1972f1b8ff40deeb', 66], B2: ['38543891f24c5f71', 66], B3: ['1f23028d76cd460e', 72],
     B4: ['6ec3a9347780d7b7', 42], B5: ['3dcb38014ee7022f', 24], B6: ['9259201622c03664', 90],
-    B7: ['fbf80c4fea872112', 54], B8: ['d5df97e475fb0de8', 148],
+    B7: ['da10924b4af05090', 54], B8: ['dc00d9d378193f5b', 148],
   } as const
 
   it.each(SCENARIO_IDS)('%s: draws the same segments as before', (id) => {

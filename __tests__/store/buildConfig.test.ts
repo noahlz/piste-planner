@@ -163,7 +163,7 @@ describe('buildTournamentConfig', () => {
       // lines record that nothing passes through from the store any more.
       expect(comp.ref_policy).toBe(RefPolicy.TWO)
       expect(comp.cut_mode).toBe(CutMode.PERCENTAGE)
-      expect(comp.cut_value).toBe(20)
+      expect(comp.cut_value).toBe(25)
       expect(comp.de_mode).toBe(DeMode.STAGED)
       expect(comp.de_video_policy).toBe(VideoPolicy.REQUIRED)
       expect(comp.use_single_pool_override).toBe(false)
@@ -521,7 +521,10 @@ describe('buildTournamentConfig', () => {
      *  individual policy follows the type (METHODOLOGY.md §Tournament-Type
      *  Policies, 024 D9), so the 36 NAC Vet individual events went BEST_EFFORT →
      *  REQUIRED and the 12 ROC Div 1 and Junior individual events REQUIRED →
-     *  BEST_EFFORT. */
+     *  BEST_EFFORT.
+     *
+     *  Edited again at 018 T1 (2026-10-07), only `cut_value`: the six NAC Div 1
+     *  individual events went 20 → 25 (R4, S8 p.37). Junior stays 20. */
     const FIXTURE: { NAC: Competition[]; ROC: Competition[] } = JSON.parse(
       readFileSync(
         `${process.cwd()}/__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json`,

@@ -10,6 +10,7 @@ import {
   computePoolStructure, estimatePoolDuration, resolveRefsPerPool, weightedPoolDuration,
 } from '../../src/engine/pools.ts'
 import { makeCompetition, makeConfig, makeStrips, makeScheduleResult } from '../helpers/factories.ts'
+import { buildCompetitions, tournamentConfig, SCENARIOS } from '../helpers/scenarios.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -297,6 +298,33 @@ describe('deriveEventSchedule — flighted event', () => {
 
     expect(derived.result.use_flighting).toBe(true)
     expect(derived.result.flighting_group_id).toBe('group-1')
+  })
+})
+
+// ──────────────────────────────────────────────
+// Div 1 promotes 75% at a NAC (018 T1, R4)
+// ──────────────────────────────────────────────
+
+describe('deriveEventSchedule — Div 1 DE field at a NAC (S8 p.37)', () => {
+  // 25% cut. D1-M-EPEE-IND promoted 248 before 018 T1 (20% cut). 310 × 0.75 =
+  // 232.5 rounds half-up to 233. D1-M-FOIL-IND's 260 × 0.75 = 195 is exact.
+  it.each([
+    ['D1-M-EPEE-IND', 310, 233],
+    ['D1-M-FOIL-IND', 260, 195],
+  ] as const)('promotes B1 %s\'s %i fencers to %i into a 256 bracket', (id, fencers, promoted) => {
+    const { fencerCounts, tournamentType, days, strips, videoStrips } = SCENARIOS.B1
+    const competition = buildCompetitions(fencerCounts, tournamentType).find(c => c.id === id)
+    if (!competition) throw new Error(`B1 has no ${id}`)
+    const config = tournamentConfig(days, strips, videoStrips, tournamentType)
+    const placement: Placement = {
+      day: 0, start_time: 480, strip_count: 20, strips: null, source: PlacementSource.AUTO, pinned: false,
+    }
+
+    const { result } = deriveEventSchedule(placement, competition, config)
+
+    expect(competition.fencer_count).toBe(fencers)
+    expect(result.promoted_fencer_count).toBe(promoted)
+    expect(result.bracket_size).toBe(256)
   })
 })
 

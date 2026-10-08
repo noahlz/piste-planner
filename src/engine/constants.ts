@@ -171,6 +171,8 @@ export const POOL_DURATION_MAX = 999
 // Y14 advances everyone at every tournament type (S8 p.38 – Y14 SYC & NAC, 100%
 // promoted). S8's 80% advance belongs to the Y14 National Championship, which no
 // template models (METHODOLOGY.md §Default Cuts by Age Category).
+// Div 1 cuts 25% (75% promoted, S8 p.37 – Div I National Championships, NACs and
+// July Challenge) while Cadet and Junior cut 20%.
 export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: number }> = {
   [Category.Y8]: { mode: CutMode.DISABLED, value: 100 },
   [Category.Y10]: { mode: CutMode.DISABLED, value: 100 },
@@ -179,7 +181,7 @@ export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: n
   [Category.CADET]: { mode: CutMode.PERCENTAGE, value: 20 },
   [Category.JUNIOR]: { mode: CutMode.PERCENTAGE, value: 20 },
   [Category.VETERAN]: { mode: CutMode.DISABLED, value: 100 },
-  [Category.DIV1]: { mode: CutMode.PERCENTAGE, value: 20 },
+  [Category.DIV1]: { mode: CutMode.PERCENTAGE, value: 25 },
   [Category.DIV1A]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV2]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV3]: { mode: CutMode.DISABLED, value: 100 },
@@ -640,7 +642,7 @@ export const INDIV_TEAM_RELAXABLE_BLOCKS: { indivCategory: Category; teamCategor
 
 // ──────────────────────────────────────────────
 // Regional cut overrides: at ROC/RYC/SYC/RJCC/SJCC, these categories use 100% advancement
-// instead of the default 20% cut. Y14 needs no row, since it advances 100% by default.
+// instead of the default cut (25% for Div 1, 20% for Cadet and Junior). Y14 needs no row, since it advances 100% by default.
 // (METHODOLOGY.md §Default Cuts by Age Category)
 // ──────────────────────────────────────────────
 

@@ -68,8 +68,10 @@ function minBoard(): { comps: Competition[], config: TournamentConfig } {
  * 3 days give 390 | 390 | 380, so the manual baseline is ceil(390 / 14) = 28,
  * above the strip-hour floor ceil(592.05 / (3 × 10)) = 20, so floor=28. The
  * answer is 29, the plan's measured B5 `stripRecommendation` at row D, and
- * [M] placed@28 = 11 of 12 (CDT-W-SABRE-IND unplaced). A two-candidate scan
- * (B2, the other undershooting board, has 24 events: floor 75, answer 77).
+ * [M] placed@28 = 11 of 12 (CDT-W-SABRE-IND unplaced). A two-candidate scan.
+ * B5 is now the only reference board whose floor undershoots. B2 was one until
+ * 018 T1 (floor 75, answer 77 → 75), when Div 1 promoting 75% at a NAC let its
+ * team DE fit at the floor.
  *
  * 024 group D, 2026-10-06 – moved from B4. Group D's same-day rules bring B4's
  * answer down to its floor of 74 and B8's to its floor of 56, so neither
@@ -412,13 +414,15 @@ describe('search and schedule threading pins (T033)', () => {
     //
     // 024, 2026-10-06 – the pin moved from day0@300 to day0@180. Under the
     // 2026-27 DE times (Ops Manual p.17; METHODOLOGY.md §DE Duration, §DE Phase
-    // Breakdown) D1-M-EPEE-IND is the spec's worked example: 248 promoted,
-    // bracket 256, prelims 300 min on 16 strips and a video block of 80 min.
-    // From 300 its pools end at 416 (116-min pool round), prelims run 450–750
-    // and the video block 780–860, past the 840-minute day, so the pin could
-    // never claim its video block at any count and the search returned null.
-    // From 180 the video block ends at 740 and the tail at 770, which also
-    // fits the 780-minute hard window group B brings.
+    // Breakdown) D1-M-EPEE-IND is the spec's worked example: bracket 256,
+    // prelims on 16 strips and a video block of 80 min.
+    // 018 T1, 2026-10-07 – [M] with Div 1 promoting 75% (233 fencers, was 248
+    // before 018 T1) the prelims run 280 min, was 300. From 300 its pools end
+    // at 416 (116-min pool round), prelims run 450–730 and the video block
+    // 760–840, ending past the 780-minute hard window (10:00 PM less the 9:00 AM
+    // start), so the pin could never claim its video block at any count and the
+    // search returned null. From 180 its pools end at 296, prelims run 330–610,
+    // the video block 640–720 and the tail ends at 750, which fits that window.
     //
     // Four pins were tried first and can never have an answer: 45 + 38 + 30 +
     // 32 = 145 strips at one minute against a ceiling of 135.

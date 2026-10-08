@@ -827,30 +827,44 @@ describe('selectFindings — late finish reads a hand-moved event on a fresh boa
   }
 
   /**
-   * B1's headline move puts D1-M-EPEE-IND on day 1. Its derived
-   * DE_ROUND_OF_16 ends at 1100 (18:20), inside the 45-minute lead before the
-   * 19:00 target, while the kept events on day 1 end by 1060, outside it. So
+   * B1's headline move puts D1-M-EPEE-IND on day 1 at its old start. Since 018 T1
+   * (Div 1 promotes 75% at a NAC, 233 into the 256 bracket) its derived
+   * DE_ROUND_OF_16 ends at 1080 (18:00), 20 minutes earlier than at 80%, which is
+   * outside the 45-minute lead before the 19:00 target, so the move alone no
+   * longer makes day 1 late. The new trigger is a later start: nudging the
+   * mover 30 minutes later on day 1 shifts its derived end to 1110 (18:30), inside
+   * the lead, while the kept events on day 1 still end by 1060, outside it. So
    * only the mover makes day 1 late.
    */
   it('names the mover when only its derived end makes the day late', () => {
     const { id, day } = runAndMoveHeadline('B1')
+    const stateMoved = useStore.getState()
+    const limit = stateMoved.dayConfigs[day].day_end_time - lateFinishWindowMins()
+    expect(selectDrawnSchedule(stateMoved).events[id].source, 'premise: the mover is derived').toBe('derived')
+    expect(lateRow(day), 'premise: moved to day 1 at its old start, the mover ends at 1080, outside the lead').toBeUndefined()
+
+    const moverLast = Math.max(...selectDrawnSchedule(stateMoved).blocks.filter((b) => b.competitionId === id).map((b) => b.endMinutes))
+    expect(moverLast, 'premise: the mover\'s last block ends at 1080, outside the lead').toBe(1080)
+
+    useStore.getState().updatePlacement(id, { start_time: stateMoved.placements[id].start_time + 30 })
     const state = useStore.getState()
-    expect(selectDrawnSchedule(state).runState, 'premise: Move day keeps the board fresh').toBe(RunState.FRESH)
-    expect(selectDrawnSchedule(state).events[id].source, 'premise: the mover is derived').toBe('derived')
+    expect(selectDrawnSchedule(state).runState, 'premise: a hand move keeps the board fresh').toBe(RunState.FRESH)
+    expect(selectDrawnSchedule(state).events[id].source, 'premise: the nudged mover is still derived').toBe('derived')
     const kept = othersLatest(id, day)
     expect(kept, 'premise: the kept events on the day end at 1060').toBe(1060)
-    expect(kept, 'premise: 1060 is outside the lead, so not late').toBeLessThanOrEqual(state.dayConfigs[day].day_end_time - lateFinishWindowMins())
+    expect(kept, 'premise: 1060 is outside the lead, so not late').toBeLessThanOrEqual(limit)
 
     const row = lateRow(day)
     expect(row?.target).toBe('D1-M-EPEE-IND')
-    expect(row?.message).toContain(`finishes at ${formatClock(1100)}, 40 minutes before the day's target`)
+    expect(row?.message).toContain(`finishes at ${formatClock(1110)}, 30 minutes before the day's target`)
   })
 
   /**
    * An unseated block still ends where it is drawn, so it still counts toward
    * the day's finish (derived.ts's late-finish comment). B2 after a run, with
    * CDT-M-EPEE-TEAM moved to day 0 at 12:00: its DE finds no free strips and
-   * ends at 1205 (20:05), above the kept events' 1185 on that day.
+   * ends at 1205 (20:05), above the kept events' 1165 on that day (1185 before
+   * 018 T1, when Div 1 promoted 80%).
    */
   it('counts an unseated block\'s end toward the day\'s finish', () => {
     runPreset('B2')
@@ -859,7 +873,7 @@ describe('selectFindings — late finish reads a hand-moved event on a fresh boa
     expect(drawn.runState, 'premise: a hand move keeps the board fresh').toBe(RunState.FRESH)
     const last = drawn.blocks.filter((b) => b.competitionId === 'CDT-M-EPEE-TEAM' && b.endMinutes === 1205)
     expect(last.map((b) => [b.phase, b.unseated]), 'premise: the mover\'s DE is unseated and ends at 1205').toEqual([[Phase.DE, true]])
-    expect(othersLatest('CDT-M-EPEE-TEAM', 0), 'premise: the kept events on day 0 end earlier').toBe(1185)
+    expect(othersLatest('CDT-M-EPEE-TEAM', 0), 'premise: the kept events on day 0 end earlier').toBe(1165)
 
     const row = lateRow(0)
     expect(row?.target).toBe('CDT-M-EPEE-TEAM')
