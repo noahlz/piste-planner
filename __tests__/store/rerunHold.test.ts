@@ -318,6 +318,25 @@ describe('R8: what is not held', () => {
     expect(shows(STALE_ROW_ID)).toBe(true)
   })
 
+  // A Blocking result keeps what is held, so only the switch-off clause
+  // clears the snapshot here. Kept, it would come back once the switch is on
+  // again and the strips are restored.
+  it('a switch-off on a Blocking board clears the snapshot, and the next due edit reads live', () => {
+    const { calmSnapshot } = calmFixture()
+    const runStrips = state().strips_total
+    state().setStrips(0)
+    expect(state().held, 'premise: the Blocking edit holds the calm board').toEqual(calmSnapshot)
+
+    state().setAutoRerun(false)
+
+    expect(state().held).toBeNull()
+    state().setAutoRerun(true)
+    state().setStrips(runStrips + 1)
+    expect(due(), 'premise: the restored strips are due').toBe(true)
+    expect(liveReading().counts, 'premise: the live board differs from the pre-Blocking one').not.toEqual(CALM_COUNTS)
+    expect(read()).toEqual(liveReading())
+  })
+
   // 020 T1c's choice for `runScheduleAll`'s direct write of the last-attempted
   // key: it clears `held` in the same update, since an attempt ends the due
   // episode whatever the engine then does. Inside the engine the board is
@@ -459,7 +478,8 @@ describe('R8: held is session state', () => {
   // Guard: green against the stub, which declares the field.
   it('a store reset gives held null', () => {
     calmFixture()
-    useStore.setState({ held: snapshotOf(state()) })
+    typeFencers(41)
+    expect(state().held, 'premise: the edit holds a snapshot').not.toBeNull()
 
     useStore.setState(useStore.getInitialState(), true)
 
