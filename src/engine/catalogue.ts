@@ -1,6 +1,6 @@
-import type { CatalogueEntry, VetAgeGroup } from './types.ts'
+import type { CatalogueEntry, TournamentType, VetAgeGroup } from './types.ts'
 import { Category, EventType, Gender, Weapon, VetAgeGroup as VetAgeGroupEnum } from './types.ts'
-import { NAC_FENCER_DEFAULTS, REGIONAL_FENCER_DEFAULTS, type FencerDefaultKey } from './constants.ts'
+import { GROUP_1_SOFT_TYPES, NAC_FENCER_DEFAULTS, REGIONAL_FENCER_DEFAULTS, type FencerDefaultKey } from './constants.ts'
 
 // ──────────────────────────────────────────────
 // ID generation helpers
@@ -287,4 +287,41 @@ export const TEMPLATE_FENCER_DEFAULTS: Record<string, FencerDefaultTable> = {
   'ROC Mega': REGIONAL_FENCER_DEFAULTS,
   'RYC Weekend': REGIONAL_FENCER_DEFAULTS,
   'RJCC Weekend': REGIONAL_FENCER_DEFAULTS,
+}
+
+// ──────────────────────────────────────────────
+// Template → fewest days its hard same-day rules need (METHODOLOGY §Inputs,
+// "Tournament duration"). Group 1 is the only hard rule that depends on the
+// tournament type, so one column covers the types where it is hard (NAC, SYC,
+// SJCC) and one the GROUP_1_SOFT_TYPES (ROC, RYC, RJCC). Written by hand and
+// pinned by an exact chromatic-number test (templateMinDays.test.ts).
+// ──────────────────────────────────────────────
+
+export interface TemplateMinDays {
+  national: number
+  regional: number
+}
+
+export const TEMPLATE_MIN_DAYS: Record<string, TemplateMinDays> = {
+  'NAC Youth': { national: 2, regional: 1 },
+  'NAC Cadet/Junior': { national: 4, regional: 2 },
+  'NAC Div1/Junior': { national: 4, regional: 2 },
+  'NAC Vet/Div1/Junior': { national: 4, regional: 3 },
+  'ROC Div1A/Vet': { national: 1, regional: 1 },
+  'ROC Div1A/Div2/Vet': { national: 1, regional: 1 },
+  'ROC Mega': { national: 2, regional: 1 },
+  'RYC Weekend': { national: 2, regional: 1 },
+  'RJCC Weekend': { national: 2, regional: 1 },
+  'Junior Olympics': { national: 3, regional: 2 },
+}
+
+/**
+ * The fewest days `templateName`'s hard same-day rules need on a board of
+ * `tournamentType`. An unknown name returns 0 – no raise – the way
+ * `applyTemplate` treats one as an empty template. Callers never pass one.
+ */
+export function templateMinDays(templateName: string, tournamentType: TournamentType): number {
+  if (!Object.hasOwn(TEMPLATE_MIN_DAYS, templateName)) return 0
+  const row = TEMPLATE_MIN_DAYS[templateName]
+  return GROUP_1_SOFT_TYPES.has(tournamentType) ? row.regional : row.national
 }

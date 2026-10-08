@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { CATALOGUE, TEMPLATES, findCompetition } from '../../src/engine/catalogue.ts'
-import { Category, EventType, Gender, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
+import { CATALOGUE, TEMPLATES, findCompetition, templateMinDays } from '../../src/engine/catalogue.ts'
+import { Category, EventType, Gender, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
 import type { CatalogueEntry } from '../../src/engine/types.ts'
 
 // Non-veteran individual categories (each has exactly 6 entries: 3 weapons × 2 genders)
@@ -335,5 +335,25 @@ describe('TEMPLATES', () => {
     for (const [, templateIds] of Object.entries(TEMPLATES) as [string, string[]][]) {
       expect(templateIds.some((id: string) => id.startsWith('Y8-'))).toBe(false)
     }
+  })
+})
+
+describe('templateMinDays', () => {
+  // The column follows Group 1: national where it is hard (NAC, SYC, SJCC),
+  // regional where it is soft (ROC, RYC, RJCC).
+  it.each([
+    { type: TournamentType.NAC, days: 4 },
+    { type: TournamentType.SYC, days: 4 },
+    { type: TournamentType.SJCC, days: 4 },
+    { type: TournamentType.ROC, days: 2 },
+    { type: TournamentType.RYC, days: 2 },
+    { type: TournamentType.RJCC, days: 2 },
+  ])('NAC Cadet/Junior needs $days days at $type', ({ type, days }) => {
+    expect(templateMinDays('NAC Cadet/Junior', type)).toBe(days)
+  })
+
+  // 'toString' guards the own-key lookup: an `in` check would accept it.
+  it.each(['No such template', 'toString'])('an unknown name %s needs no days', (name) => {
+    expect(templateMinDays(name, TournamentType.NAC)).toBe(0)
   })
 })
