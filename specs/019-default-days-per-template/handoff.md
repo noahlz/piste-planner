@@ -420,6 +420,7 @@ Checked 2026-10-08 with `git merge-tree --write-tree main 019-default-days-per-t
 - Full suite: 93 files, 3133 tests, all passing.
 - `tsc -b`: clean. Lint: clean.
 - Drift ledger snapshot SHA-256: 32a4e0afb45abfbf8239f7bdbc15dda9eb1487c959893442b6029a6d0998b260, byte-identical to the expected value.
+- Re-checked after a docs-only follow-up (c321e5b6b47610ab7f84842fed2f73971fae26da, the article note in `backlog.md` and this file): merge tree c25bcdbd47c146d98a4fed5fb24d1c39e1a1fd0d, identical to the branch's own tree, no conflicts, main still 8de0d5a12b. The follow-up changed only those two markdown files, so the suite, `tsc -b`, lint and ledger results above stand.
 
 The user merges with merge-with-costs. If main moves first, the check is re-run there.
 
