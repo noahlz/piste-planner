@@ -435,7 +435,18 @@ list), so a new engine input needs a place in that list.
 
 ## Merge
 
-Pending Task M.
+Checked 2026-10-07 with `git merge-tree --write-tree main 017-canvas-tells-truth`.
+
+- Branch head checked: ba3bfa1444c334a03bdc70e684305ea8a176fa7a (the branch tip before this note).
+- Main: 114d99314b5af852453f42a90f51b8c8a5150785, which has not moved since the branch was cut.
+- Merge tree: 26058d83f7dee2b2e9345e70e33540178c538a7d, identical to the branch's own tree.
+- Conflicts: none.
+- The tree was checked out in a detached throwaway worktree (since removed) with a frozen-lockfile install and no `tmp/` directory.
+- Full suite: 87 files, 2795 tests, all passing.
+- `tsc -b`: clean. Lint: clean.
+- Drift ledger snapshot SHA-256: 7e2db75c38bb6e5702d3618e81127130739e9075536b843ca76a8cc368b89d06, byte-identical to the expected value.
+
+The user merges with merge-with-costs. If main moves first, the check is re-run there.
 
 ## Resume prompt (after the merge)
 
