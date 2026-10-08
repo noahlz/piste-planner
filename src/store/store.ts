@@ -144,6 +144,13 @@ export interface UiSlice {
    */
   jumpNonce: number
 
+  /** Whether an edit to an engine input re-runs Auto-assign by itself (020 R5). Starts false and only `bootstrap` seeds it from the viewer's stored preference. Not serialized. */
+  autoRerun: boolean
+
+  /** The config key of the most recent run or load, written before the engine is called so a run that threw is not retried (020). Not serialized. */
+  lastAttemptedKey: string | null
+
+  setAutoRerun: (on: boolean) => void
   setLoadedPresetId: (id: PresetId | null) => void
   setLastAutoRun: (run: LastAutoRun | null) => void
   setLoadRefusal: (reason: string | null) => void
@@ -429,6 +436,10 @@ function createUiSlice(set: SetState, _get: GetState): UiSlice {
     lastRun: null,
     selectedCompetitionId: null,
     jumpNonce: 0,
+    autoRerun: false,
+    lastAttemptedKey: null,
+
+    setAutoRerun: (on) => set({ autoRerun: on }),
 
     setLoadedPresetId: (id) => set({ loadedPresetId: id }),
 

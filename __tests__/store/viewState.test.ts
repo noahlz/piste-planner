@@ -41,6 +41,8 @@ function sampleViewState(): ViewState {
     // true, distinct from DEFAULT_VIEW_STATE.detailCollapsed (false, 013
     // phase4-contract.md §2).
     detailCollapsed: true,
+    // false, distinct from DEFAULT_VIEW_STATE.autoRerun (true, 020 R5).
+    autoRerun: false,
   }
 }
 
@@ -139,6 +141,11 @@ describe('viewState defaults', () => {
   // 013 T028 (phase4-contract.md §2): the detail strip opens expanded.
   it('defaults to detailCollapsed false', () => {
     expect(DEFAULT_VIEW_STATE.detailCollapsed).toBe(false)
+  })
+
+  // 020 R5: the Settings switch "Re-run automatically" is on until the viewer turns it off.
+  it('defaults to autoRerun true', () => {
+    expect(DEFAULT_VIEW_STATE.autoRerun).toBe(true)
   })
 })
 
@@ -396,6 +403,36 @@ describe('viewState detailCollapsed validation', () => {
 
   it('returns defaults wholesale when detailCollapsed is missing entirely', () => {
     const { detailCollapsed: _detailCollapsed, ...partial } = sampleViewState()
+    localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify(partial))
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+})
+
+// ──────────────────────────────────────────────
+// 020 R5a: autoRerun is remembered per browser
+// ──────────────────────────────────────────────
+
+describe('viewState round trip keeps autoRerun', () => {
+  it('reads back the same autoRerun that was written', () => {
+    const written = { ...DEFAULT_VIEW_STATE, autoRerun: false }
+    saveViewState(written)
+    expect(loadViewState().autoRerun).toBe(false)
+  })
+})
+
+describe('viewState autoRerun validation', () => {
+  it('returns defaults wholesale when autoRerun is not a boolean', () => {
+    localStorage.setItem(
+      VIEW_STATE_STORAGE_KEY,
+      JSON.stringify({ ...sampleViewState(), autoRerun: 'yes' }),
+    )
+    expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
+  })
+
+  // Records the one-time reset: a view state stored before 020 has no such
+  // field, so the viewer's panel, zoom and the rest fall back to defaults once.
+  it('returns defaults wholesale when autoRerun is missing entirely', () => {
+    const { autoRerun: _autoRerun, ...partial } = sampleViewState()
     localStorage.setItem(VIEW_STATE_STORAGE_KEY, JSON.stringify(partial))
     expect(loadViewState()).toEqual(DEFAULT_VIEW_STATE)
   })

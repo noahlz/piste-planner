@@ -241,6 +241,20 @@ describe('serializeState', () => {
     )
   })
 
+  // 020 R5a: the switch is per browser and the last-attempted key describes
+  // this session's run, so neither travels in a file or a link. Guard: green
+  // before and after, since `serializeState` builds an explicit literal.
+  it('carries neither the re-run switch nor the last-attempted key', () => {
+    populatedState()
+    useStore.setState({ autoRerun: true, lastAttemptedKey: 'a-key-the-payload-must-not-carry' })
+
+    const json = serializeState(useStore.getState())
+
+    expect(json).not.toContain('autoRerun')
+    expect(json).not.toContain('lastAttemptedKey')
+    expect(json).not.toContain('a-key-the-payload-must-not-carry')
+  })
+
   // Changed by 004 US5 (T078 finding 7). This case previously pinned the
   // opposite – "always writes the full table from an untouched store" – which
   // is what FR-045 forbids: a URL saved at the defaults would pin today's
