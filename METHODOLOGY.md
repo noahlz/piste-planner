@@ -101,7 +101,7 @@ These rules cause scheduling to fail or produce errors. They are never relaxed. 
 - At NAC, SYC and SJCC both pairs already fall under the [Group 1](#overlapping-population-separation-group-1) pair DIV1 and JUNIOR. At ROC, RYC and RJCC, where Group 1 pairs are soft, these two stay hard – a departure listed in [Appendix B](#appendix-b-departures-from-the-operations-manual).
 - Same-category individual/team pairs (Junior↔Junior, Cadet↔Cadet, Div1↔Open Team, Vet↔Vet, etc.) are blocked by [Same-Population Conflicts](#same-population-conflicts).
 
-(see [`crossover.ts`](src/engine/crossover.ts), [`constants.ts`](src/engine/constants.ts))
+(see [`crossover.ts`](src/engine/crossover.ts), [`constants.ts`](src/engine/constants.ts) – `INDIV_TEAM_CROSS_LEVEL_BLOCKS`)
 
 ### Veteran Age-Group Co-Day Rule
 
