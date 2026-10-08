@@ -1,6 +1,7 @@
 import { useId } from 'react'
-import { RadioGroup as RadioGroupPrimitive } from 'radix-ui'
+import { RadioGroup as RadioGroupPrimitive, Switch as SwitchPrimitive } from 'radix-ui'
 import { useStore } from '../../../store/store.ts'
+import { loadViewState, saveViewState } from '../../../store/viewState.ts'
 import { DeMode } from '../../../engine/types.ts'
 import { TYPE_DEFAULTS } from '../../../store/typeDefaults.ts'
 import { PoolDurationSettings } from '../../sections/PoolDurationSettings.tsx'
@@ -21,8 +22,13 @@ const DE_MODE_LABELS: Record<DeMode, string> = {
 }
 
 /**
- * The Settings inspector panel (013 T022, FR-029–FR-031, FR-063): pool round
- * durations, and the tournament's DE mode.
+ * The Settings inspector panel (013 T022, FR-029–FR-031, FR-063): the Board
+ * switch, pool round durations, and the tournament's DE mode.
+ *
+ * The Board section holds one switch, "Re-run automatically" (020 R5, R5a). It
+ * is a viewer preference, not part of the tournament: on by default, written to
+ * the store (which the board reads) and to the stored view state (which the
+ * next visit's `bootstrap` reads), and never carried in a file or link.
  *
  * It replaces `components/workbench/SettingsPanel.tsx`, whose two rows wrote
  * to the store's global-overrides slice — deleted in this task (research D7). Of the
@@ -48,11 +54,44 @@ export function SettingsPanel() {
   const deModeOverride = useStore((s) => s.de_mode_override)
   const setDeModeOverride = useStore((s) => s.setDeModeOverride)
 
+  const autoRerun = useStore((s) => s.autoRerun)
+  const setAutoRerun = useStore((s) => s.setAutoRerun)
+
   const hintId = useId()
   const teamNoteId = useId()
+  const autoRerunId = useId()
+  const autoRerunNoteId = useId()
+
+  // The store flag drives the board, and the stored view state carries the
+  // choice to the next visit, merged into what is stored so the panel, zoom
+  // and the rest survive it (the merge `WorkbenchShell` uses).
+  function changeAutoRerun(next: boolean): void {
+    setAutoRerun(next)
+    saveViewState({ ...loadViewState(), autoRerun: next })
+  }
 
   return (
     <section aria-label="Settings" className="flex flex-col gap-4 py-0.5 text-[12.5px]">
+      <div>
+        <SectionCaption>Board</SectionCaption>
+        <div className="flex items-center gap-2.5">
+          <SwitchPrimitive.Root
+            id={autoRerunId}
+            aria-describedby={autoRerunNoteId}
+            checked={autoRerun}
+            onCheckedChange={changeAutoRerun}
+            className="relative h-[20px] w-[36px] shrink-0 rounded-full border-[1.5px] border-chrome-border bg-secondary data-[state=checked]:border-transparent data-[state=checked]:bg-primary"
+          >
+            <SwitchPrimitive.Thumb className="block h-[14px] w-[14px] translate-x-[2px] rounded-full bg-primary-foreground shadow-sm transition-transform data-[state=checked]:translate-x-[18px] data-[state=unchecked]:bg-neutral-500" />
+          </SwitchPrimitive.Root>
+          <label htmlFor={autoRerunId}>Re-run automatically</label>
+        </div>
+        {/* Sibling of the switch, never inside it: text inside would join its name. */}
+        <p id={autoRerunNoteId} className="mt-2 text-[11.5px] text-neutral-700">
+          Off: an edit leaves the board stale until you press Auto-assign.
+        </p>
+      </div>
+
       <div>
         {/* The table's figures are for a pool of 7 (METHODOLOGY §Pool Duration
             Estimation, Ops Manual p.17). */}

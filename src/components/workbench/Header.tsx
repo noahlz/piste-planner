@@ -49,7 +49,7 @@ export function Header() {
 
       <div className="ml-auto flex flex-none items-center gap-2.5">
         {lastAutoRun !== null && (
-          <span data-last-run className="font-mono text-[11px] font-semibold text-neutral-500">
+          <span data-last-run data-last-run-at={lastAutoRun.at} className="font-mono text-[11px] font-semibold text-neutral-500">
             Last run {formatClock(dateToMinutesFromMidnight(new Date(lastAutoRun.at)))}
           </span>
         )}

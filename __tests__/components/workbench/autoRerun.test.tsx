@@ -7,15 +7,17 @@
  * due rises (R8), and hides the stale banner while due or once the live model
  * is fresh again.
  *
- * Each case starts from B1 after a run, with the switch turned on by hand:
- * only `bootstrap` turns it on in the app, and these tests never boot. The
+ * Each case of the first groups starts from B1 after a run, with the switch
+ * turned on by hand: only `bootstrap` turns it on in the app, and those cases
+ * never boot. The last group (T3) boots, as the app does. The
  * engine is the real one behind a pass-through spy, so a run is counted
  * without changing what it places (`runActions.test.ts`).
  */
 import { StrictMode } from 'react'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { CenterView, CENTER_SETTLE_MS } from '../../../src/components/workbench/CenterView.tsx'
+import { WorkbenchShell } from '../../../src/components/workbench/WorkbenchShell.tsx'
 import { EventsPanel } from '../../../src/components/workbench/panels/EventsPanel.tsx'
 import { StatusFooter } from '../../../src/components/workbench/StatusFooter.tsx'
 import { ToolRail } from '../../../src/components/workbench/ToolRail.tsx'
@@ -36,7 +38,17 @@ import {
   selectPlacementCounts,
 } from '../../../src/store/derived.ts'
 import type { Finding, FooterMetric, PlacementCounts } from '../../../src/store/derived.ts'
-import { VIEW_STATE_STORAGE_KEY, ViewMode } from '../../../src/store/viewState.ts'
+import {
+  DEFAULT_VIEW_STATE,
+  PanelId,
+  VIEW_STATE_STORAGE_KEY,
+  ViewMode,
+  loadViewState,
+  saveViewState,
+} from '../../../src/store/viewState.ts'
+import { bootstrap } from '../../../src/store/boot.ts'
+import { SCENARIOS } from '../../../src/data/tournaments.ts'
+import { PlacementSource } from '../../../src/engine/types.ts'
 import { scheduleAll } from '../../../src/engine/scheduler.ts'
 import { findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/lib/competitionLabels.ts'
@@ -753,5 +765,184 @@ describe('what describes the board holds with it (020 T2 tests 12 and 13, R8)', 
     expect(moverInNoRoomLane(mover)).toBe(drawn.unplacedIds.has(mover))
     expect(footerCounts()).toBe(countsText(selectPlacementCounts(state)))
     expect(unplacedRowIds()).toEqual(selectAllFindings(state).filter(isUnplacedRow).map((row) => row.id))
+  })
+})
+
+// ──────────────────────────────────────────────
+// The shell with the feature on (020 T3)
+// ──────────────────────────────────────────────
+
+/**
+ * The app as it opens: `bootstrap` seeds the switch from the viewer's stored
+ * preference (on, with nothing stored), then the whole shell renders. The
+ * boot's own run is not counted.
+ */
+function bootShell(panel: PanelId | null = null): void {
+  saveViewState({ ...DEFAULT_VIEW_STATE, panel })
+  bootstrap('')
+  render(<WorkbenchShell />)
+  vi.mocked(scheduleAll).mockClear()
+}
+
+/** Picks a tournament or a template through the header's real picker, the way a user does. */
+function pickPreset(optionName: string): void {
+  fireEvent.keyDown(screen.getByRole('combobox', { name: 'Preset' }), { key: 'ArrowDown' })
+  fireEvent.keyDown(screen.getByRole('option', { name: optionName }), { key: 'Enter' })
+}
+
+/** An engine-input edit that never makes a board Blocking and changes the config key. */
+function changeStrips(by: number): void {
+  edit(() => useStore.getState().setStrips(useStore.getState().strips_total + by))
+}
+
+function rerunSwitch(): HTMLElement {
+  return screen.getByRole('switch', { name: 'Re-run automatically' })
+}
+
+function lastRunSpan(): HTMLElement {
+  return document.querySelector<HTMLElement>('[data-last-run]')!
+}
+
+function unplacedDock(): HTMLElement {
+  return screen.getByRole('region', { name: 'Unplaced events' })
+}
+
+function dockLine(): string {
+  return /Placed \d+ events, \d+ could not be placed\./.exec(unplacedDock().textContent ?? '')?.[0] ?? ''
+}
+
+function unplacedChips(): number {
+  return unplacedDock().querySelectorAll('[data-unplaced-chip]').length
+}
+
+describe('the booted shell re-runs on its own (020 T3)', () => {
+  it.each([
+    ['a template', 'RYC Weekend'],
+    ['a tournament preset', SCENARIOS.B2.label],
+  ])('%s pick runs the engine once in 1 s, and an edit after it runs at 300 ms', (_kind, option) => {
+    bootShell()
+
+    pickPreset(option)
+    expect(runs(), 'the pick\'s own run').toBe(1)
+    advance(1000)
+    expect(runs(), 'nothing else runs after it').toBe(1)
+
+    changeStrips(1)
+    advance(299)
+    expect(runs()).toBe(1)
+    advance(1)
+    expect(runs(), 'the edit\'s run').toBe(2)
+  })
+
+  it('R6, Header: an automatic run changes "Last run HH:MM" and data-last-run-at', () => {
+    vi.setSystemTime(new Date(2026, 9, 8, 9, 5))
+    bootShell()
+    const first = useStore.getState().lastAutoRun!
+    expect(lastRunSpan()).toHaveTextContent('Last run 09:05')
+    expect(lastRunSpan(), 'the attribute carries the run time').toHaveAttribute('data-last-run-at', String(first.at))
+
+    vi.setSystemTime(new Date(2026, 9, 8, 11, 30))
+    changeStrips(1)
+    advance(RERUN_DEBOUNCE_MS)
+
+    const second = useStore.getState().lastAutoRun!
+    expect(runs()).toBe(1)
+    expect(second.at).toBeGreaterThan(first.at)
+    expect(lastRunSpan()).toHaveTextContent('Last run 11:30')
+    expect(lastRunSpan()).toHaveAttribute('data-last-run-at', String(second.at))
+  })
+
+  it('R6, dock: an automatic run updates "Placed N events, M could not be placed." on B4', () => {
+    bootShell()
+    pickPreset(SCENARIOS.B4.label)
+    expect(dockLine(), 'premise: the dock reads B4\'s 24 / 6').toBe('Placed 24 events, 6 could not be placed.')
+    expect(unplacedChips(), 'premise: at least one unplaced chip').toBeGreaterThan(0)
+    vi.mocked(scheduleAll).mockClear()
+
+    // Five fewer strips: the run places 20 of 30 and leaves chips up.
+    changeStrips(-5)
+    advance(RERUN_DEBOUNCE_MS)
+
+    expect(runs()).toBe(1)
+    expect(dockLine()).toBe('Placed 20 events, 10 could not be placed.')
+  })
+
+  it('R6, dock: a run that throws keeps the placements and reads "Placed 0 events, <attempted> could not be placed."', () => {
+    bootShell()
+    pickPreset(SCENARIOS.B4.label)
+    const attempted = Object.keys(useStore.getState().selectedCompetitions).length
+    const placed = { ...useStore.getState().placements }
+    expect(dockLine(), 'premise: the dock reads B4\'s 24 / 6').toBe('Placed 24 events, 6 could not be placed.')
+    expect(unplacedChips(), 'premise: at least one unplaced chip').toBeGreaterThan(0)
+    vi.mocked(scheduleAll).mockClear()
+    vi.mocked(scheduleAll).mockImplementationOnce(() => {
+      throw new Error('engine failure')
+    })
+
+    changeStrips(-5)
+    advance(RERUN_DEBOUNCE_MS)
+
+    expect(runs()).toBe(1)
+    expect(useStore.getState().placements, 'the failed run leaves the placements').toEqual(placed)
+    expect(dockLine()).toBe(`Placed 0 events, ${attempted} could not be placed.`)
+  })
+
+  it('R4: lowering the days re-places a pinned day-4 event, unpinned, on a day below 3', () => {
+    bootShell(PanelId.TOURNAMENT)
+    pickPreset('NAC Cadet/Junior')
+    expect(runs(), 'the pick\'s own run').toBe(1)
+    vi.mocked(scheduleAll).mockClear()
+    expect(useStore.getState().days_available, 'premise: 4 days').toBe(4)
+    const onLastDay = Object.entries(useStore.getState().placements).find(([, p]) => p.day === 3)
+    expect(onLastDay, 'premise: an event sits on day 4').toBeDefined()
+    const [id] = onLastDay!
+    edit(() => useStore.getState().setPinned(id, true))
+    expect(useStore.getState().placements[id].pinned, 'premise: it is pinned').toBe(true)
+
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Day count' })).getByRole('radio', { name: '3' }))
+    expect(useStore.getState().days_available).toBe(3)
+    expect(selectHasBlocking(useStore.getState()), 'premise: the 3-day board is not Blocking').toBe(false)
+    advance(RERUN_DEBOUNCE_MS)
+
+    expect(runs()).toBe(1)
+    const replaced = useStore.getState().placements[id]
+    expect(replaced.source).toBe(PlacementSource.AUTO)
+    expect(replaced.pinned).toBe(false)
+    expect(replaced.day).toBeLessThan(3)
+  })
+
+  it('turning the switch on re-runs a board that was edited while it was off', () => {
+    bootShell(PanelId.SETTINGS)
+    expect(rerunSwitch(), 'premise: on after boot').toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(rerunSwitch())
+    expect(loadViewState().autoRerun).toBe(false)
+    changeStrips(1)
+    advance(1000)
+    expect(runs(), 'off: no run').toBe(0)
+    expect(banner(), 'off: the board is stale').not.toBeNull()
+
+    fireEvent.click(rerunSwitch())
+    expect(banner(), 'hidden while due').toBeNull()
+    advance(RERUN_DEBOUNCE_MS - 1)
+    expect(runs()).toBe(0)
+    advance(1)
+    expect(runs()).toBe(1)
+    advance(CENTER_SETTLE_MS)
+    expect(banner()).toBeNull()
+  })
+
+  it('a load with no run stays stale for 2 s with the switch on', () => {
+    bootShell()
+
+    act(() => {
+      applyLoadedState({ strips_total: 79 }, null)
+    })
+    advance(2000)
+
+    expect(useStore.getState().autoRerun, 'premise: the switch is on').toBe(true)
+    expect(runs()).toBe(0)
+    expect(banner()).not.toBeNull()
+    expect(rerunAttr()).toBe('idle')
   })
 })

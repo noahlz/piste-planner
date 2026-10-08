@@ -6,6 +6,14 @@ import { TYPE_DEFAULTS } from '../../../../src/store/typeDefaults.ts'
 import { DeMode, TournamentType } from '../../../../src/engine/types.ts'
 import { buildTournamentConfig } from '../../../../src/store/buildConfig.ts'
 import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../../../../src/engine/constants.ts'
+import {
+  DEFAULT_VIEW_STATE,
+  PanelId,
+  VIEW_STATE_STORAGE_KEY,
+  ViewMode,
+  loadViewState,
+  saveViewState,
+} from '../../../../src/store/viewState.ts'
 
 // 013 T022 (FR-029–FR-031, FR-063, research D7). Re-targets
 // __tests__/components/workbench/SettingsPanel.test.tsx, deleted in this task
@@ -41,7 +49,91 @@ function deModeGroup(): HTMLElement {
 }
 
 beforeEach(() => {
+  localStorage.removeItem(VIEW_STATE_STORAGE_KEY)
   useStore.setState(useStore.getInitialState())
+})
+
+// ──────────────────────────────────────────────
+// Board (020 T3, R5, R5a)
+// ──────────────────────────────────────────────
+
+const REFRESH_SWITCH = 'Re-run automatically'
+const REFRESH_DESCRIPTION = 'Off: an edit leaves the board stale until you press Auto-assign.'
+
+function refreshSwitch(): HTMLElement {
+  return screen.getByRole('switch', { name: REFRESH_SWITCH })
+}
+
+describe('SettingsPanel – Board (020 T3)', () => {
+  it('opens with a Board section ahead of the pool durations', () => {
+    render(<SettingsPanel />)
+
+    const board = screen.getByText('Board')
+    const pools = screen.getByText('Pool durations (pool of 7)')
+    expect(board.compareDocumentPosition(pools) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(board.compareDocumentPosition(refreshSwitch()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it.each([
+    [true, 'true'],
+    [false, 'false'],
+  ])('reads the store: %s is aria-checked="%s"', (on, checked) => {
+    useStore.getState().setAutoRerun(on)
+    render(<SettingsPanel />)
+
+    expect(refreshSwitch()).toHaveAttribute('aria-checked', checked)
+  })
+
+  it('describes the switch with what off means', () => {
+    render(<SettingsPanel />)
+
+    expect(refreshSwitch()).toHaveAccessibleDescription(REFRESH_DESCRIPTION)
+  })
+
+  it('writes the store and the stored view state on a click, keeping the other stored fields', () => {
+    const stored = { ...DEFAULT_VIEW_STATE, viewMode: ViewMode.SCHEDULE, zoomStep: 4, panel: PanelId.SETTINGS }
+    saveViewState(stored)
+    useStore.getState().setAutoRerun(true)
+    render(<SettingsPanel />)
+
+    fireEvent.click(refreshSwitch())
+
+    expect(useStore.getState().autoRerun).toBe(false)
+    expect(refreshSwitch()).toHaveAttribute('aria-checked', 'false')
+    expect(loadViewState()).toEqual({ ...stored, autoRerun: false })
+
+    fireEvent.click(refreshSwitch())
+
+    expect(useStore.getState().autoRerun).toBe(true)
+    expect(loadViewState()).toEqual({ ...stored, autoRerun: true })
+  })
+
+  it('toggles from its visible text, which is its label', () => {
+    useStore.getState().setAutoRerun(true)
+    render(<SettingsPanel />)
+
+    fireEvent.click(screen.getByText(REFRESH_SWITCH))
+
+    expect(useStore.getState().autoRerun).toBe(false)
+  })
+
+  // user-event is not a dependency, so Space is not simulated: the browser
+  // turns it into a click on a focusable button, and a click is covered above.
+  // What is pinned here is what that relies on: a real, enabled, focusable
+  // button that keeps focus through the toggle.
+  it('is a focusable button that keeps focus through a toggle', () => {
+    useStore.getState().setAutoRerun(true)
+    render(<SettingsPanel />)
+    const toggle = refreshSwitch()
+
+    expect(toggle.tagName).toBe('BUTTON')
+    expect(toggle).toBeEnabled()
+    act(() => toggle.focus())
+    fireEvent.click(toggle)
+
+    expect(useStore.getState().autoRerun).toBe(false)
+    expect(document.activeElement).toBe(toggle)
+  })
 })
 
 // ──────────────────────────────────────────────
