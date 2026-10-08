@@ -1,6 +1,7 @@
 import { BottleneckSeverity, CutMode, VideoPolicy, BottleneckCause, BottleneckRule, Phase } from './types.ts'
 import type { AnalysisResult, Bottleneck, Competition, TournamentConfig } from './types.ts'
-import { computePoolStructure, computeDeFencerCount, poolCountFor } from './pools.ts'
+import { ENGINE_FENCER_BOUNDS, computePoolStructure, computeDeFencerCount, isSizeableCount, poolCountFor } from './pools.ts'
+import type { FencerCountBounds } from './pools.ts'
 import { computeBracketSize, demandsVideoStage } from './de.ts'
 import { suggestFlightingGroups } from './flighting.ts'
 import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
@@ -41,19 +42,21 @@ export function isRegionalQualifier(config: TournamentConfig): boolean {
  * and no scheduling result (FR-009), so it does not depend on the strip count
  * it is being asked to suggest.
  *
- * Competitions with ≤1 fencer cannot form a pool (`computePoolStructure`
- * throws) and contribute nothing. When none remains, the answer is `null` —
- * the absence of a suggestion, distinguishable from a suggestion of 0 strips
- * (FR-010).
+ * Competitions `isSizeableCount` rejects contribute nothing, the same set
+ * `aggregateStripHours` and the scan leave out (018 T4). When none remains,
+ * the answer is `null` — the absence of a suggestion, distinguishable from a
+ * suggestion of 0 strips (FR-010). `bounds` defaults to the engine's own;
+ * the strip search passes its config.
  */
 export function suggestStripCount(
   competitions: Competition[],
   daysAvailable: number,
   maxPoolStripPct: number,
+  bounds: FencerCountBounds = ENGINE_FENCER_BOUNDS,
 ): number | null {
   const poolDemands: number[] = []
   for (const comp of competitions) {
-    if (comp.fencer_count <= 1) continue
+    if (!isSizeableCount(comp.fencer_count, bounds)) continue
     poolDemands.push(poolCountFor(comp.fencer_count, comp.use_single_pool_override))
   }
   if (poolDemands.length === 0) return null
@@ -120,13 +123,16 @@ export function initialAnalysis(
 ): AnalysisResult {
   const warnings: Bottleneck[] = []
   const suggestions: string[] = []
+  // Every pass below that sizes pools or a bracket skips an event the engine
+  // cannot size; its `fencer-count-bounds` ERROR is validation's (018 T4).
+  const sizeable = (comp: Competition) => isSizeableCount(comp.fencer_count, config)
 
   // ── Pass 0: capacity warning — pools/day vs strips_total ────────────────
   // Sum pools per day from dayAssignments, warn if any day exceeds strip count.
   const poolsByDay = new Map<number, number>()
   for (const comp of competitions) {
     const day = dayAssignments[comp.id]
-    if (day === undefined) continue
+    if (day === undefined || !sizeable(comp)) continue
     const ps = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
     poolsByDay.set(day, (poolsByDay.get(day) ?? 0) + ps.n_pools)
   }
@@ -148,6 +154,7 @@ export function initialAnalysis(
 
   // ── Pass 1: strip deficit → flighting suggestions ────────────────────────
   for (const comp of competitions) {
+    if (!sizeable(comp)) continue
     const effectiveCap = computeStripCap(
       config.strips_total,
       config.max_pool_strip_pct,
@@ -177,7 +184,7 @@ export function initialAnalysis(
 
   // ── Pass 2: flighting group suggestions ──────────────────────────────────
   const globalPoolStripCap = computeStripCap(config.strips_total, config.max_pool_strip_pct)
-  const flightingGroups = suggestFlightingGroups(competitions, config.strips_total, dayAssignments, globalPoolStripCap)
+  const flightingGroups = suggestFlightingGroups(competitions, config.strips_total, dayAssignments, globalPoolStripCap, config)
   for (const b of flightingGroups.bottlenecks) {
     warnings.push(b)
   }
@@ -272,7 +279,7 @@ export function initialAnalysis(
 
   // ── Pass 6: cut summary (informational) ──────────────────────────────────
   for (const comp of competitions) {
-    if (comp.cut_mode === CutMode.DISABLED) continue
+    if (comp.cut_mode === CutMode.DISABLED || !sizeable(comp)) continue
     const promoted = computeDeFencerCount(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type)
     const bracket = computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type)
     warnings.push({

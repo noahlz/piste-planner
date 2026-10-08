@@ -16,7 +16,7 @@ import { CATALOGUE } from '../../src/engine/catalogue.ts'
 import { DEFAULT_POOL_ROUND_DURATION_TABLE } from '../../src/engine/constants.ts'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { hashOf, payloadOfHash, sendBoard, sentPayload } from '../helpers/replayFixtures.ts'
+import { hashOf, hashOfText, payloadOfHash, sendBoard, sentPayload } from '../helpers/replayFixtures.ts'
 import { runPreset } from '../helpers/drawnFixtures.ts'
 import { selectDrawnSchedule, RunState } from '../../src/store/derived.ts'
 import { applyLoadedState } from '../../src/store/exportActions.ts'
@@ -1396,5 +1396,60 @@ describe('deserializeState with a run (017 T8)', () => {
     if ('error' in result) throw new Error(result.error)
     expect(result.run).toBeNull()
     expect(result.runRefused).toMatch(/strip_count/)
+  })
+})
+
+describe('a fencer count the engine cannot size is refused at load (018 T4, R5, R6)', () => {
+  /** A count no real payload carries, swapped for the text under test because JSON.stringify writes Infinity as null. */
+  const SENTINEL = 777777
+
+  /** The file text for a payload whose fixture event holds `count`, written the way a hand-edited file or link could. */
+  function textWithCount(count: string): string {
+    const data = validSerializedData()
+    data.competitions[FIXTURE_EVENT_ID].fencer_count = SENTINEL
+    return JSON.stringify(data).replace(String(SENTINEL), count)
+  }
+
+  // 1e999 is Infinity once parsed, and the only JSON spelling of it.
+  const REFUSED = ['0', '1', '1.5', '24.5', '337', '1e999']
+  const ACCEPTED = ['2', '336']
+
+  it('words the refusal in full, with the label, the id and the bounds', () => {
+    const { error } = deserializeState(textWithCount('0')) as { error: string }
+    expect(error).toBe(
+      "fencer_count 0 for Cadet Men's Foil Individual (CDT-M-FOIL-IND) must be a whole number from 2 to 336",
+    )
+  })
+
+  it.each([['"64"', 'string'], ['null', 'object'], ['true', 'boolean']])(
+    'refuses a fencer_count of %s as not a number, naming what it was',
+    (count, kind) => {
+      const { error } = deserializeState(textWithCount(count)) as { error: string }
+      expect(error).toContain(`fencer_count must be a number (got ${kind})`)
+      expect(error).toContain(FIXTURE_EVENT_ID)
+    },
+  )
+
+  it.each(REFUSED)('refuses a file whose fencer_count is %s, naming the event and the bounds', (count) => {
+    const result = deserializeState(textWithCount(count))
+    expect(result).toHaveProperty('error')
+    const { error } = result as { error: string }
+    expect(error).toContain(FIXTURE_EVENT_ID)
+    expect(error).toMatch(/2.{1,6}336/)
+  })
+
+  it.each(REFUSED)('refuses a #config= link whose fencer_count is %s with the same reason', (count) => {
+    const fromFile = deserializeState(textWithCount(count))
+    const fromLink = decodeFromUrl(hashOfText(textWithCount(count)))
+    expect(fromLink).toEqual(fromFile)
+    expect(fromLink).toHaveProperty('error')
+  })
+
+  // Guards: the bounds themselves load.
+  it.each(ACCEPTED)('loads a file and a link whose fencer_count is %s', (count) => {
+    for (const result of [deserializeState(textWithCount(count)), decodeFromUrl(hashOfText(textWithCount(count)))]) {
+      if ('error' in result) throw new Error(result.error)
+      expect(result.state.selectedCompetitions?.[FIXTURE_EVENT_ID]?.fencer_count).toBe(Number(count))
+    }
   })
 })

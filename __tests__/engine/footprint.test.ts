@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveEventSchedule, estimateEventFootprint } from '../../src/engine/derive.ts'
+import { estimateEventFootprint } from '../../src/engine/derive.ts'
 import type { EventFootprint } from '../../src/engine/derive.ts'
 import { computePoolStructure } from '../../src/engine/pools.ts'
 import {
@@ -9,6 +9,7 @@ import type {
   Competition, TournamentConfig, Placement, ScheduleResult,
 } from '../../src/engine/types.ts'
 import { makeCompetition, makeConfig } from '../helpers/factories.ts'
+import { deriveSized } from '../helpers/derive.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -30,7 +31,7 @@ function deriveSynthetic(competition: Competition, config: TournamentConfig): Sc
     source: PlacementSource.AUTO,
     pinned: false,
   }
-  return deriveEventSchedule(placement, competition, config).result
+  return deriveSized(placement, competition, config).result
 }
 
 /**

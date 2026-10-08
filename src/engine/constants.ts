@@ -45,10 +45,11 @@ export const CATEGORY_START_PREFERENCE = {
 // The day of Ops Manual 2026-27 p.17 (METHODOLOGY.md Appendix A §Timing
 // Constants): start at 9:00 and aim to finish by 7:00 PM. 7:00 PM is a soft
 // target – work may run to the 10:00 PM hard end, which is unsourced and gives
-// way to an organizer day end set later (§Same-Day Completion).
+// way to an organizer day end set later, and an event's last phase may run on
+// past it to midnight with a WARN (§Same-Day Completion, `dayMidnight`).
 export const DAY_START_MINS = 540 // 9:00 AM
 export const DAY_END_MINS = 1140 // 7:00 PM — soft target
-export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase may end past it
+export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase but an event's last may end past it
 /** A clock-axis day's hard end: 10:00 PM, or the organizer's day end when set later (024 D7). */
 export function clockHardEnd(dayEndTime: number): number {
   return Math.max(dayEndTime, DAY_HARD_END_MINS)
@@ -123,7 +124,9 @@ export const INDIV_TEAM_MIN_GAP_MINS = 120
 
 export const EARLY_START_THRESHOLD = 10
 export const MAX_RESCHEDULE_ATTEMPTS = 3
-export const MAX_FENCERS = 500
+// 336 is the Athlete Handbook §2.2.5 (printed p.15) NAC cap for Div I, Junior and
+// Cadet: Elite 112 + Challenger 224. Only real tournaments are solved for.
+export const MAX_FENCERS = 336
 export const MIN_FENCERS = 2
 // Most fencers that advance from pools in any event, so no DE bracket exceeds 256
 // (S8 p.37 – "A maximum of 256 fencers will be promoted out of pools for all events")
@@ -171,6 +174,8 @@ export const POOL_DURATION_MAX = 999
 // Y14 advances everyone at every tournament type (S8 p.38 – Y14 SYC & NAC, 100%
 // promoted). S8's 80% advance belongs to the Y14 National Championship, which no
 // template models (METHODOLOGY.md §Default Cuts by Age Category).
+// Div 1 cuts 25% (75% promoted, S8 p.37 – Div I National Championships, NACs and
+// July Challenge) while Cadet and Junior cut 20%.
 export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: number }> = {
   [Category.Y8]: { mode: CutMode.DISABLED, value: 100 },
   [Category.Y10]: { mode: CutMode.DISABLED, value: 100 },
@@ -179,7 +184,7 @@ export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: n
   [Category.CADET]: { mode: CutMode.PERCENTAGE, value: 20 },
   [Category.JUNIOR]: { mode: CutMode.PERCENTAGE, value: 20 },
   [Category.VETERAN]: { mode: CutMode.DISABLED, value: 100 },
-  [Category.DIV1]: { mode: CutMode.PERCENTAGE, value: 20 },
+  [Category.DIV1]: { mode: CutMode.PERCENTAGE, value: 25 },
   [Category.DIV1A]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV2]: { mode: CutMode.DISABLED, value: 100 },
   [Category.DIV3]: { mode: CutMode.DISABLED, value: 100 },
@@ -640,7 +645,7 @@ export const INDIV_TEAM_RELAXABLE_BLOCKS: { indivCategory: Category; teamCategor
 
 // ──────────────────────────────────────────────
 // Regional cut overrides: at ROC/RYC/SYC/RJCC/SJCC, these categories use 100% advancement
-// instead of the default 20% cut. Y14 needs no row, since it advances 100% by default.
+// instead of the default cut (25% for Div 1, 20% for Cadet and Junior). Y14 needs no row, since it advances 100% by default.
 // (METHODOLOGY.md §Default Cuts by Age Category)
 // ──────────────────────────────────────────────
 

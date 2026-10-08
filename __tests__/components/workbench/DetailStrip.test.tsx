@@ -13,12 +13,12 @@ import {
 import { findCompetition } from '../../../src/engine/catalogue.ts'
 import { competitionLabel } from '../../../src/lib/competitionLabels.ts'
 import { eventTimeSegments } from '../../../src/layout/segments.ts'
-import { estimateEventFootprint } from '../../../src/engine/derive.ts'
 import { phaseDisplay, stripSetLabel } from '../../../src/lib/placementLabels.ts'
 import { formatClock, formatMinutes } from '../../../src/lib/time.ts'
 import { DeMode, Phase, PlacementSource, Weapon } from '../../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 import { drawnFromDerived, runAndMoveHeadline, runPreset } from '../../helpers/drawnFixtures.ts'
+import { footprintSized } from '../../helpers/derive.ts'
 
 // 013 T028 (part b) — red tests for the detail strip (contract §4,
 // phase4-contract.md). DetailStrip.tsx does not exist yet (T029 writes it),
@@ -615,7 +615,7 @@ describe('DetailStrip, no placement (contract §4 "Placed vs unplaced")', () => 
     expect(section).toHaveAttribute('data-selected-fencers', String(competition.fencer_count))
     expect(section).toHaveTextContent(`${competition.fencer_count} fencers`)
 
-    const footprint = estimateEventFootprint(competition, config)
+    const footprint = footprintSized(competition, config)
     const pills = section.querySelectorAll('[data-phase-pill]')
     expect(pills).toHaveLength(2)
     expect(pills[0]).toHaveAttribute('data-phase-pill', Phase.POOLS)
@@ -627,5 +627,27 @@ describe('DetailStrip, no placement (contract §4 "Placed vs unplaced")', () => 
     expect(screen.queryByRole('button', { name: 'Pin' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Pinned' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Move day' })).not.toBeInTheDocument()
+  })
+
+  // 018 T4: a placement survives a count edit, but the engine draws no event
+  // for a count it cannot size, so the strip reads it as unplaced and sizeless.
+  it('shows no pills and no day for a placed event whose count the engine cannot size, and does not throw', () => {
+    runPreset('B1')
+    const id = Object.keys(useStore.getState().placements).sort()[0]
+    expect(id in useStore.getState().placements, 'premise: the event is placed').toBe(true)
+    useStore.getState().updateCompetition(id, { fencer_count: 0 })
+    const schedule = selectDrawnSchedule(useStore.getState())
+    expect(schedule.events[id], 'premise: the model draws no event for it').toBeUndefined()
+    futureState().selectCompetition(id)
+
+    expect(() =>
+      render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />),
+    ).not.toThrow()
+
+    const section = screen.getByRole('region', { name: 'Selected event' })
+    expect(section).toHaveAttribute('data-selected-name', expectedName(id))
+    expect(section.querySelectorAll('[data-phase-pill]')).toHaveLength(0)
+    expect(section).not.toHaveAttribute('data-selected-day')
+    expect(section).toHaveAttribute('data-selected-fencers', '0')
   })
 })

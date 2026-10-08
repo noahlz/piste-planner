@@ -150,7 +150,20 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // Group 2 48 → 48, D.4 Group 3 48 → 46, D.5 the first/last-day capacity
   // 46 → 45. The ledger equals the app path at every sub-step, 45 at the end.
   // Both counts: 50 before group D, 45 after (plan §Group D).
-  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
+  //
+  // 018 T2, 2026-10-07 – B4 raised 21 → 24 and B6 raised 45 → 51, a deliberate
+  // raise under the rule above. METHODOLOGY §Same-Day Completion now lets an
+  // event's last phase end past the 22:00 hard end when it starts before it and
+  // ends by midnight (R1), placing the event with a SAME_DAY_VIOLATION WARN where
+  // it used to be dropped. B4 gains CDT-W-FOIL-IND, CDT-W-SABRE-IND and
+  // Y14-W-EPEE-IND and loses none, ERRORs 9 → 6. B6 gains JR-M-FOIL-IND,
+  // JR-W-EPEE-IND, JR-W-FOIL-IND, Y12-M-EPEE-IND, Y12-W-EPEE-IND and
+  // Y12-W-FOIL-IND and loses none, ERRORs 9 → 3. Two existing B6 events also
+  // moved: VET-M-SABRE-IND-VCMB (pools 2940 → 3565, now ends 22:30 with a WARN,
+  // after a defer-cap failure on attempt 1) and VET-M-EPEE-IND-VCMB (DE start
+  // +15). Both equal the app path's counts (24 and 51). The other six scenarios
+  // are byte-identical.
+  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 51, B7: 18, B8: 53,
 }
 
 /**
@@ -178,6 +191,11 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  * capacity (METHODOLOGY §First and Last Day Capacity) places JR-W-EPEE-IND, so
  * B8 places every event and emits no summary line. B4's day peaks move to
  * 152 / 168 / 190 and B6's to 112 / 106 / 118 under group D's re-pack.
+ *
+ * 018 T2, 2026-10-07 – membership holds, the peaks move. The last phase may now
+ * end past the hard end (METHODOLOGY §Same-Day Completion), so the events B4 and
+ * B6 used to drop are placed on their days and enter this sum: B4's day peaks
+ * 152 / 168 / 190 → 152 / 228 / 230 and B6's 112 / 106 / 118 → 132 / 126 / 131.
  *
  * Membership is asserted in both directions: the day-peaks test below fails if a
  * listed scenario emits no summary line or an unlisted one emits any.
@@ -372,7 +390,7 @@ describe('drift ledger', () => {
     // does not empty it". So this asserts, `[M]` at T006, re-measured at 015,
     // against the real run:
     //
-    //  - 18 scheduled exactly, not merely at-or-above the floor. The floor test
+    //  - 24 scheduled exactly (the dated entries below trace it from 18), not merely at-or-above the floor. The floor test
     //    below catches a collapse; this catches any movement in either
     //    direction, which is what the old `toBe(0)` did for the old number.
     //    015, 2026-10-05 – 17 → 18: the factory now applies the regional cut and
@@ -388,6 +406,10 @@ describe('drift ledger', () => {
     //    CDT-W-SABRE-IND and Y14-W-SABRE-IND out, CDT-M-SABRE-IND,
     //    Y12-M-SABRE-IND, Y12-W-EPEE-IND, Y12-W-FOIL-IND, Y12-W-SABRE-IND and
     //    Y14-W-FOIL-IND in (plan §Group D).
+    //    018 T2, 2026-10-07 – 21 → 24: the last phase may end past the 22:00 hard
+    //    end when it starts before it and ends by midnight (METHODOLOGY
+    //    §Same-Day Completion), so CDT-W-FOIL-IND, CDT-W-SABRE-IND and
+    //    Y14-W-EPEE-IND are placed with a SAME_DAY_VIOLATION WARN and none leaves.
     //  - no ERROR-severity validation finding at all, and in particular neither
     //    feasibility rule id among them. This reads `validateConfig` directly
     //    because it pins the severity at the source: a severity re-escalation
@@ -410,17 +432,17 @@ describe('drift ledger', () => {
     //    demand at 1548, and group B's 10-hour planning day (2026-27 Ops Manual
     //    p.17, METHODOLOGY §Strip-Hour Capacity) holds 3d × 40s × 10h = 1200,
     //    1380 with the 15% slack, so the WARN fires (1548 > 1380).
-    //  - no ERROR sits in Phase.VALIDATION. B4's 9 ERRORs (12 before 024's
-    //    group A, 11 before group D) are all
+    //  - no ERROR sits in Phase.VALIDATION. B4's 6 ERRORs (12 before 024's
+    //    group A, 11 before group D, 9 before 018 T2) are all
     //    DEADLINE_BREACH_UNRESOLVABLE from DEADLINE_CHECK — the ordinary
     //    per-event degradation of an oversubscribed board, which is spec.md
     //    §Edge Cases' accepted cost. A validation-phase ERROR returning is the
     //    shape that empties the board, and it halts here whatever its rule id.
     if (id === 'B4') {
-      it('B4 packs with feasibility demoted to WARN — 21 scheduled, no validation ERROR', () => {
+      it('B4 packs with feasibility demoted to WARN — 24 scheduled, no validation ERROR', () => {
         const { competitions, config, bottlenecks } = runScenario(id)
 
-        expect(buildDigest(id).scheduledCount).toBe(21)
+        expect(buildDigest(id).scheduledCount).toBe(24)
 
         const findings = validateConfig(config, competitions, ValidationMode.BINDING)
         expect(findings.filter(f => f.severity === BottleneckSeverity.ERROR)).toEqual([])

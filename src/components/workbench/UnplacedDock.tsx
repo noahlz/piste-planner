@@ -21,7 +21,8 @@ const WEAPON_CHIP_TOKENS: Record<Weapon, string> = {
 const NEUTRAL_CHIP_TOKENS = 'border-neutral-400 bg-neutral-200 text-foreground'
 
 /**
- * Every selected competition with no placement, docked above the center
+ * Every selected competition with no placement, or with one the engine
+ * cannot lay out because its count is unsizeable (018 T4), docked above the center
  * (FR-010, FR-011, ui-contract.md §Unplaced dock). Each chip is a button
  * whose click selects the event (013 T029), carrying the event's label and its
  * estimated footprint from `estimateEventFootprint`, the same helper the
@@ -33,13 +34,15 @@ const NEUTRAL_CHIP_TOKENS = 'border-neutral-400 bg-neutral-200 text-foreground'
  */
 export function UnplacedDock() {
   const selectedCompetitions = useStore((s) => s.selectedCompetitions)
-  const placements = useStore((s) => s.placements)
   const lastAutoRun = useStore((s) => s.lastAutoRun)
   const selectCompetition = useStore((s) => s.selectCompetition)
-  const { config, competitions } = useStore(selectDerivedSchedule)
+  const { config, competitions, events } = useStore(selectDerivedSchedule)
 
+  // `events` holds an entry only for a placed event the engine can size, so
+  // "no derived event" covers both an event with no placement and one placed
+  // with a count the engine cannot size (018 T4).
   const unplacedIds = Object.keys(selectedCompetitions)
-    .filter((id) => !(id in placements))
+    .filter((id) => !(id in events))
     .sort()
 
   return (
@@ -98,11 +101,8 @@ export function UnplacedDock() {
 }
 
 /**
- * `estimateEventFootprint` throws for `fencer_count <= 1` — `computePoolStructure`
- * can't form a pool of one — so a chip for such an event renders its label
- * without a need rather than the dock being the thing that throws. The
- * Events panel gets a minimum in phase 2; the error boundary is the backstop
- * elsewhere in the meantime.
+ * `estimateEventFootprint` gives no footprint for a count the engine cannot
+ * size (018 T4), so a chip for such an event renders its label without a need.
  */
 function footprintNeed(
   id: string,
@@ -110,7 +110,8 @@ function footprintNeed(
   config: TournamentConfig,
 ): string | null {
   const competition = competitions.find((c) => c.id === id)
-  if (!competition || competition.fencer_count < 2) return null
+  if (!competition) return null
   const footprint = estimateEventFootprint(competition, config)
+  if (footprint === null) return null
   return `${footprint.strips} strips · ${formatMinutes(footprint.poolMinutes)} · DE ${formatMinutes(footprint.deMinutes)}`
 }

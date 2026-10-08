@@ -58,7 +58,7 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
   - **Video stage** (NACs only): the round at which DEs move to video strips. Every individual event at a NAC has video REQUIRED (team events have no video stage), from the round of 16 for Div 1, Junior and Cadet and from the round of 8 for every other individual category (Ops Manual p.19 – Video Replay, see [Video Replay Policy](#video-replay-policy))
   - **Cut-to-DE**: % cut (e.g., cut 20% → promote 80%) or promoted count (e.g., promote top 256)
   - **Start time**: defaults to 9:00 AM (Ops Manual p.17), and the user can adjust it per day
-  - **Latest end time**: defaults to 7:00 PM, a soft target with a 10:00 PM hard end (see [Same-Day Completion](#same-day-completion))
+  - **Latest end time**: defaults to 7:00 PM, a soft target with a 10:00 PM hard end. An event's last phase alone may run past the hard end, up to midnight, with a warning (see [Same-Day Completion](#same-day-completion))
   - **Flighting**: triggered when a competition's pool count exceeds the per-event strip cap (see [Strip Budget](#strip-budget))
 
 #### Not Scheduling Inputs
@@ -77,7 +77,7 @@ Piste Planner models tournament scheduling as a resource-constrained scheduling 
   - Foil/epee-only refs can fill the gap between the saber-refs and total-refs numbers. The organizer chooses the split when staffing.
 - **Bottleneck diagnostics**: warnings and errors identifying resource conflicts, constraint relaxations, or policy violations
 
-All times are minutes from midnight (e.g., 540 = 9:00 AM). The default scheduling day runs from 9:00 AM to 7:00 PM (10 hours), the planning day of Ops Manual p.17. 7:00 PM is a soft target: the engine may place work until the day's hard end at 10:00 PM, and a day that ends after 7:00 PM draws a warning (see [Same-Day Completion](#same-day-completion)). Pool rounds cannot start after 4:00 PM – this cutoff is unsourced, since the 2026-27 manual sets none. (see [`constants.ts`](src/engine/constants.ts))
+All times are minutes from midnight (e.g., 540 = 9:00 AM). The default scheduling day runs from 9:00 AM to 7:00 PM (10 hours), the planning day of Ops Manual p.17. 7:00 PM is a soft target: the engine may place work until the day's hard end at 10:00 PM, and a day that ends after 7:00 PM draws a warning. An event's last phase alone may end past the hard end, up to midnight, and draws a warning of its own (see [Same-Day Completion](#same-day-completion)). Pool rounds cannot start after 4:00 PM – this cutoff is unsourced, since the 2026-27 manual sets none. (see [`constants.ts`](src/engine/constants.ts))
 
 ---
 
@@ -159,7 +159,7 @@ These hold at every tournament type and are listed in [Appendix B: Departures fr
 
 ### Single-Day Fit
 
-- A competition's worst-case duration (pool round + 30-minute admin gap + full DE) must fit between the day's start and its hard end (9:00 AM to 10:00 PM by default, 13 hours). Running past the 7:00 PM soft target is a warning, not a violation (see [Same-Day Completion](#same-day-completion))
+- A competition's worst-case duration (pool round + 30-minute admin gap + full DE) must fit on one day: every phase but its last ends by the day's hard end (9:00 AM to 10:00 PM by default, 13 hours), and its last phase starts before the hard end and ends by midnight. Running past the 7:00 PM soft target is a warning, not a violation, and so is a last phase that runs past the hard end (see [Same-Day Completion](#same-day-completion))
 - If an individual and team event are on the same day, their combined worst-case duration (including the 2-hour gap) must also fit
 
 ### Resource Preconditions
@@ -193,7 +193,9 @@ This is a **hard validation error**, not a warning. The UI should auto-suggest a
 
 ### Fencer Count Bounds
 
-- Each competition must have between 2 and 500 fencers
+- Each competition must have between 2 and 336 fencers
+- The maximum is the NAC entry cap for Div I, Junior and Cadet (S8 §2.2.5, p.15 – "DVI, JNR and CDT events at all North American Cups will be capped at a maximum of 336 entries TOTAL"), applied to every event
+- The minimum stays 2 because real events run that small: the April 2026 Div I NAC and Veteran Championships had Veteran 80+ events of 2–5 fencers and a Div I men's foil team event of 4 teams
 - Events outside this range are rejected in validation
 
 ---
@@ -205,9 +207,11 @@ These rules produce warnings but do not block scheduling.
 ### Same-Day Completion
 
 - A competition that starts on a given day should finish on that day
-- Each day's end time (default 7:00 PM) is that day's soft target (Ops Manual p.17 – "should complete no later than 7 p.m. if started by 9 a.m."), and the WARN follows it. The engine may place work past it, up to the day's hard end. The hard end is 10:00 PM, unless the organizer sets a later day end, in which case the hard end equals that day end
+- Each day's end time (default 7:00 PM) is that day's soft target (Ops Manual p.17 – "should complete no later than 7 p.m. if started by 9 a.m."), and the WARN follows it. The engine may place work past it, up to the day's hard end, and an event's last phase beyond that up to midnight (see below). The hard end is 10:00 PM, unless the organizer sets a later day end, in which case the hard end equals that day end
 - When a day's last competition ends after the soft target, the engine emits a structured WARN for that day with the estimated finish time. Scheduling is not blocked
-- No phase may end past the hard end (see `SAME_DAY_VIOLATION` in [Bottlenecks Specific to the Concurrent Scheduler](#bottlenecks-specific-to-the-concurrent-scheduler))
+- Every phase but an event's last must end by the hard end (see `SAME_DAY_VIOLATION` in [Bottlenecks Specific to the Concurrent Scheduler](#bottlenecks-specific-to-the-concurrent-scheduler))
+- An event's last phase (the event's final allocated phase: its DE, or the round-of-16 video stage for a staged DE – the gold and bronze bouts are not allocated) may end past the hard end when it starts before the hard end and ends by midnight of that day. The event is placed, and the engine emits a structured WARN for that event whose estimated finish is that last phase's end
+- A phase that cannot meet its limit fails the attempt, and two failed attempts still leave the event unscheduled (see [Two-Attempt Retry](#two-attempt-retry))
 
 ---
 
@@ -423,7 +427,8 @@ Under the concurrent scheduler a flighted event's pools split into two dependent
 |---|---|---|
 | Y8, Y10, Y12 | Disabled (100% advance) | |
 | Y14 | Disabled (100% advance) | At every tournament type (S8 p.38 – Y14 SYC & NAC, 100% promoted). S8's 80% advance belongs to the Y14 National Championship, which no template models. |
-| Cadet, Junior, Div 1 | 20% cut (80% advance) | Except at ROC, RYC, SYC, RJCC and SJCC → 100% advance. Cadet and Junior at a NAC: S8 p.37. |
+| Cadet, Junior | 20% cut (80% advance) | Except at ROC, RYC, SYC, RJCC and SJCC → 100% advance. Cadet and Junior at a NAC: S8 p.37. |
+| Div 1 | 25% cut (75% advance) | Except at ROC, RYC, SYC, RJCC and SJCC → 100% advance. Div 1 at a NAC: S8 p.37 – "Division I National Championships, Division I NACs and Division I July Challenge", "75% promoted to simple direct elimination". |
 | Div 1A | Disabled (100% advance) | Except at Summer Nationals → 80% advance |
 | Div 2, Div 3 | Disabled (100% advance) | |
 | Veteran | Disabled (100% advance) | |
@@ -655,7 +660,7 @@ When multiple phase nodes are READY, the loop picks the one with the highest pri
 ### Allocation, Deferral, and Failure
 
 The loop calls `findAvailableStripsInWindow`. On `fit: 'ok'` the node transitions to RUNNING, the successor's `ready_time` is set to `node.end_time + ADMIN_GAP_MINS` (or `+ FLIGHT_BUFFER_MINS` after `pools_flight_a`), and the successor is pushed onto the ready queue. On `fit: 'none'`:
-- If `earliest_next_start` lies within the day, the node is **deferred**: `ready_time` advances to `earliest_next_start`, `defer_count++`, and the node goes back onto the ready queue. A monotonicity invariant asserts `new_ready_time > old_ready_time`. `MAX_DEFERS_PER_PHASE = 16` is a circuit breaker against pathological states; the monotonicity invariant alone bounds termination.
+- If the node can still meet its day limit from `earliest_next_start` (end by the day's hard end, or for an event's last phase, start before the hard end and end by midnight – see [Same-Day Completion](#same-day-completion)), the node is **deferred**: `ready_time` advances to `earliest_next_start`, `defer_count++`, and the node goes back onto the ready queue. A monotonicity invariant asserts `new_ready_time > old_ready_time`. `MAX_DEFERS_PER_PHASE = 16` is a circuit breaker against pathological states; the monotonicity invariant alone bounds termination.
 - Otherwise the node FAILS, and the failure cascades to all not-yet-RUNNING phases of the event.
 
 ### Two-Attempt Retry
@@ -680,7 +685,8 @@ All three are wired in `applyCrossEventEdges`. The loop resolves them lazily and
 
 - `DEADLINE_BREACH` (WARN, `attempt_id=1`) — attempt 1 cascade.
 - `DEADLINE_BREACH_UNRESOLVABLE` (ERROR, `attempt_id=2`) — attempt 2 cascade; event permanently unscheduled.
-- `SAME_DAY_VIOLATION` (ERROR) — phase ends past `dayHardEnd`, the day's hard end (default 10:00 PM, see [Timing Constants](#timing-constants)). Ending after the 7:00 PM soft target is not this violation (see [Same-Day Completion](#same-day-completion)).
+- `SAME_DAY_VIOLATION` (ERROR) — a phase other than the event's last ends past `dayHardEnd`, the day's hard end (default 10:00 PM, see [Timing Constants](#timing-constants)), or the event's last phase starts at or after the hard end or ends past midnight. Ending after the 7:00 PM soft target is not this violation (see [Same-Day Completion](#same-day-completion)).
+- `SAME_DAY_VIOLATION` (WARN) — a placed event's last phase ends past `dayHardEnd` but within the midnight limit. One per event, with its estimated finish time.
 - `NO_WINDOW_DIAGNOSTIC` (INFO) — a deferral occurred; carries `reason: 'STRIPS' | 'TIME'`.
 - `SEQUENCING_CONSTRAINT` (INFO) — cross-event predecessor pushed `ready_time` forward.
 - `FLIGHT_B_DELAYED` (WARN) — Flight B started more than 30 min past Flight A's natural buffer.
@@ -748,7 +754,7 @@ Per-event phase decomposition:
 2. **Admin gap**: 30-minute mandatory gap between any phase and its successor (`ADMIN_GAP_MINS`).
 3. **DE phases**: STAGED events run `de_prelims → de_r16`; SINGLE_STAGE events run a flat `de` allocation. Gold/bronze are unallocated — `de_total_end = terminal_phase_end + tailEstimateMins(event_type)`.
 
-If strips are unavailable at the ideal time, the loop **defers** the phase to the earliest moment the right number of strips become simultaneously free, using `findAvailableStripsInWindow`'s `earliest_next_start`. If no slot exists that ends by the day's hard end (default 10:00 PM), the event fails and retries from `dayStart`, and a second failure marks the event permanently unscheduled. A phase that ends after the 7:00 PM soft target but before the hard end is placed (see [Same-Day Completion](#same-day-completion)). See [Concurrent Phase Scheduler](#concurrent-phase-scheduler) for the full lifecycle.
+If strips are unavailable at the ideal time, the loop **defers** the phase to the earliest moment the right number of strips become simultaneously free, using `findAvailableStripsInWindow`'s `earliest_next_start`. If no slot exists within the phase's day limit – ending by the day's hard end (default 10:00 PM), or for the event's last phase starting before the hard end and ending by midnight – the event fails and retries from `dayStart`, and a second failure marks the event permanently unscheduled. A phase that ends after the 7:00 PM soft target but before the hard end is placed, and so is a last phase that runs past the hard end within that limit, with a WARN carrying its estimated finish (see [Same-Day Completion](#same-day-completion)). See [Concurrent Phase Scheduler](#concurrent-phase-scheduler) for the full lifecycle.
 
 Ref demand is **derived post-schedule** from the scheduler's own timeline (see [Ref Demand Derivation](#ref-demand-derivation)), not maintained incrementally by the loop. It is summarized into per-day peak totals in Phase 7.
 
@@ -774,7 +780,7 @@ Each tournament type sets the same-day rules, the video policy, the DE mode, ref
 
 | Type | Same-day rules | Group 1 pairs | Video | DE mode | Refs per pool | Default cuts |
 |---|---|---|---|---|---|---|
-| NAC | National | Hard | REQUIRED for every individual event, BEST_EFFORT for team events | Staged for individual events, Single Stage for team events | Two | Cadet, Junior, Div 1: 20% cut. Every other category: 100% advance |
+| NAC | National | Hard | REQUIRED for every individual event, BEST_EFFORT for team events | Staged for individual events, Single Stage for team events | Two | Div 1: 25% cut. Cadet, Junior: 20% cut. Every other category: 100% advance |
 | SYC | National | Hard | BEST_EFFORT | Single Stage | Two | 100% advance |
 | SJCC | National | Hard | BEST_EFFORT | Single Stage | Two | 100% advance |
 | ROC | Regional | Soft, with a time-of-day window | BEST_EFFORT | Single Stage | One | 100% advance |
@@ -792,7 +798,7 @@ Each tournament type sets the same-day rules, the video policy, the DE mode, ref
 - All possible events except Div 1A.
 - National same-day rules: every Group 1 pair is hard, Div 1–Cadet included (Ops Manual p.20 – Group 1).
 - Rest-day preference between Junior and Div 1 in the same weapon (Ops Manual p.20 – Group 2). The Junior–Cadet rest day is a Junior Olympics rule and does not apply.
-- Default cuts: Cadet, Junior and Div 1 at 80% advancement to DE. Y14 and every other category advance 100% (S8 pp.37–38).
+- Default cuts: Div 1 at 75% advancement to DE, Cadet and Junior at 80%. Y14 and every other category advance 100% (S8 pp.37–38).
 - Staged DEs with video replay REQUIRED for every individual event: from the round of 16 for Div 1, Junior and Cadet, and from the round of 8 for every other category (Ops Manual p.19 – see [Video Replay Policy](#video-replay-policy)).
 - Team events plan with no video and run Single Stage DEs on general strips. Video is guaranteed only for the gold and bronze team matches (Ops Manual p.19), which are not scheduled. The bout committee finds a video strip for them on the day.
 - Two refs per pool.
@@ -838,14 +844,15 @@ The engine can auto-suggest configuration values to help organizers start with r
 
 ### Strip Count Suggestion
 
-The suggestion is the smallest strip count that places every event (see [`stripSearch.ts`](src/engine/stripSearch.ts)). The search starts at a floor and steps up one strip at a time:
+The suggestion is the smallest strip count at which every event is placed and its last phase ends by the day's hard end (see [`stripSearch.ts`](src/engine/stripSearch.ts)). The search starts at a floor and steps up one strip at a time:
 
 - **Manual baseline**: competitors on the busiest day ÷ 14 (Ops Manual p.17 – "Number of strips needed = Estimated number of competitors per day / 14")
   - **Busiest day**: the competitions' fencer counts are spread over the tournament days largest-first, each into the day with the fewest competitors so far, and the busiest day is the day that ends with the most. This is the same largest-first spread `suggestStripCount`, the search's ceiling, applies to pool counts (see [`analysis.ts`](src/engine/analysis.ts)). It depends only on the fencer counts and the number of days, never on the strip count being tested
   - **Team events** count their entries as stored (one per team)
   - **The divisor is fixed at 14** and does not scale when the organizer edits a day's hours. It is competitors per strip per day, not a day length
 - **Strip-hour floor**: the fewest strips whose strip-hour capacity across the tournament's days (see [Strip-Hour Capacity](#strip-hour-capacity)) covers the competitions' total strip-hour draw
-- **Answer**: the smallest count at or above max(strip-hour floor, manual baseline) at which the scheduler places every event. The manual's figure is never undercut
+- **Answer**: the smallest count at or above max(strip-hour floor, manual baseline) at which the scheduler places every event with its last phase ending by the day's hard end. The manual's figure is never undercut
+- **Overrun counts as not placed**: an event whose last phase ends past the day's hard end is placed by the scheduler with a warning (see [Same-Day Completion](#same-day-completion)), but the search counts it as not placed. The suggestion sizes for every event ending by the hard end
 
 ### Referee Output
 
@@ -968,7 +975,7 @@ For strip allocation and video strip preservation details, see [Strip Assignment
 | S5 | Fencing Parents: "How much notice should US Fencing give for NAC day schedules?" (Jun 2021) | [Link](https://www.fencingparents.org/whats-new-in-fencing/2021/6/28/how-much-notice-should-us-fencing-give-for-day-schedules-checkin-times-and-policy-changes) |
 | S6 | USA Fencing: "Take Note of These Updates to Events and Formats for the 2024-25 Tournament Season" (Jul 2024) | [Link](https://www.usafencing.org/news/2024/july/19/take-note-of-these-updates-to-events-and-formats-for-the-202425-tournament-season) |
 | S7 | USA Fencing: "Event Combinations Announced for 2023-24 NACs and Championships" (May 2023) | [Link](https://www.usafencing.org/news/2023/may/31/event-combinations-announced-for-202324-usa-fencing-nacs-and-championships) |
-| S8 | USA Fencing Athlete Handbook 2026-27 | [PDF](https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt46a0168c9377fc1b/USA%20Fencing%20Athlete%20Handbook%202026-27) – Pool sizes, competition formats, gender equity. Cited pages: p.15 (§2.3.2 – SYC and SJCC listed as regional tournaments), pp.37–38 (Table 2.16.1 – the 256-fencer maximum DE field on p.37, promotion rates and 10-touch DE bouts by event), p.41 (bout format: Veteran DEs are 10-touch), p.84 (Y8 Developmental Format), pp.85–86 (pool sizes for smaller fields). Page numbers are the printed ones. |
+| S8 | USA Fencing Athlete Handbook 2026-27 | [PDF](https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt46a0168c9377fc1b/USA%20Fencing%20Athlete%20Handbook%202026-27) – Pool sizes, competition formats, gender equity. Cited pages: p.15 (§2.2.5 – the 336-entry cap for Div I, Junior and Cadet at NACs, and §2.3.2 – SYC and SJCC listed as regional tournaments), pp.37–38 (Table 2.16.1 – the 256-fencer maximum DE field on p.37, promotion rates and 10-touch DE bouts by event), p.41 (bout format: Veteran DEs are 10-touch), p.84 (Y8 Developmental Format), pp.85–86 (pool sizes for smaller fields). Page numbers are the printed ones. |
 | S9 | Academy of Fencing Masters: "How to Make USA Fencing National Events Work for Everyone" | [Link](https://academyoffencingmasters.com/blog/how-to-make-usa-fencing-national-events-work-for-everyone/) |
 | S10 | Fencing Time tournament software documentation | [Link](https://www.fencingtime.com/Home/VerHistory) |
 
@@ -1014,7 +1021,8 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 |---|---|---|
 | Day start | 9:00 AM (540 min) | Earliest pool round start (Ops Manual p.17) |
 | Day end | 7:00 PM (1140 min) | Each day's soft target, editable per day: a day whose last competition ends later draws a WARN (Ops Manual p.17) |
-| Day hard end | 10:00 PM (1320 min) | No phase may end past it (`SAME_DAY_VIOLATION`). Equals the day end when the organizer sets a day end later than 10:00 PM. Unsourced |
+| Day hard end | 10:00 PM (1320 min) | No phase but an event's last may end past it (`SAME_DAY_VIOLATION`). The last phase must start before it and may end past it with a WARN, up to midnight. Equals the day end when the organizer sets a day end later than 10:00 PM. Unsourced |
+| Last-phase limit | Midnight (1440 min) | An event's last phase must end by midnight of its day. Unsourced |
 | Day length | 10 hours (600 min) | Planning day, Day start to Day end, used for strip-hour capacity (Ops Manual p.17) |
 | Competitors per strip per day | 14 | Fixed divisor of the [Strip Count Suggestion](#strip-count-suggestion) baseline (Ops Manual p.17). Not a day length |
 | Pool-round cutoff | 4:00 PM (960 min) | Pool rounds cannot start after this time. Unsourced – the 2026-27 manual sets no cutoff |
@@ -1074,7 +1082,7 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 | Flighting threshold | n_pools > pool_strip_cap (default 80% of strips) | Strip-budget trigger; replaces old 200+ fencer rule |
 | Video strip options | 4, 8, 12, 16 | Available video strip counts (NACs only). 8 is default, enough for two video stages at once |
 | Video stage strip ask | `min(4, bracketSize / 2)` | Video strips a staged DE's video block asks for |
-| Fencer count bounds | 2–500 | Valid range per competition |
+| Fencer count bounds | 2–336 | Valid range per competition. The maximum is the NAC entry cap for Div I, Junior and Cadet (S8 §2.2.5, p.15), applied to every event. The minimum stays 2 because real events run that small: the April 2026 Div I NAC and Veteran Championships had Veteran 80+ events of 2–5 fencers and a Div I men's foil team event of 4 teams |
 | DE minimum advancement | 2 fencers | Minimum fencers advancing to DE bracket |
 | DE maximum advancement | 256 fencers | Maximum fencers promoted out of pools in any event (S8 p.37) |
 | Pool size targets | 6–7 | Target pool size; `ceil(fencerCount / 7)` pools |

@@ -13,6 +13,7 @@ import {
   TournamentType,
   VideoPolicy,
   Weapon,
+  dayHardEnd,
   dayStart,
 } from '../../src/engine/types.ts'
 import type { Bottleneck, Competition, PinnedPlacement, TournamentConfig } from '../../src/engine/types.ts'
@@ -200,12 +201,18 @@ describe('regional Group 1 window – the older side waits for day start + 4 hou
     // spans 630 minutes from its start. From day start it fits the 780-minute
     // hard window (the control); from day start + 240 it cannot, so attempt 1
     // fails and the retry must not fall back to day start.
+    //
+    // 018 T2 (2026-10-07): the last phase may now end past the hard end, so
+    // without a limit the DE would overrun from day start + 240 and attempt 1
+    // would be placed with a WARN, leaving no retry to test. `latest_end` stays a
+    // hard per-event limit, so setting it to the hard end restores the premise
+    // that the late start does not fit, and the control still fits under it.
     const config = oneDay(TournamentType.ROC, {
       strips: makeStrips(9, 0),
       max_pool_strip_pct: 0.35,
       max_de_strip_pct: 0.25,
     })
-    const long = event('y14', Category.Y14, { fencer_count: 40 })
+    const long = event('y14', Category.Y14, { fencer_count: 40, latest_end: dayHardEnd(0, config) })
 
     const control = scheduleAllConcurrent([long], config)
     expect(poolStart(control, 'y14')).toBe(dayStart(0, config))

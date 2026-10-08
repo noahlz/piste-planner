@@ -50,7 +50,7 @@ export async function parseTournamentFile(file: File): Promise<ParsedFile> {
  * parsing so a caller can warn about dropped placements first (FR-009).
  * Returns why the replay failed, or null when it did not (or no run came). */
 export function applyLoadedState(state: Partial<StoreState>, run: readonly PinnedPlacement[] | null): string | null {
-  useStore.setState({ ...state, lastRun: null })
+  useStore.setState({ ...state, lastRun: null, loadRefusal: null })
   return run === null ? null : replayRun(useStore.getState(), run)
 }
 

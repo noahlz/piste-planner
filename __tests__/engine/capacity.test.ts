@@ -748,13 +748,13 @@ describe('aggregateStripHours', () => {
   })
 
   it('skips a competition below MIN_FENCERS and one above MAX_FENCERS', () => {
-    const config = makeConfig() // MIN_FENCERS 2, MAX_FENCERS 500
+    const config = makeConfig() // MIN_FENCERS 2, MAX_FENCERS 336
     const inRange = makeCompetition({ id: 'in-range', fencer_count: 24 })
     // fencer_count 1 is below MIN_FENCERS; estimateCompetitionStripHours may
     // throw on an unsizeable event, so the filter must run before the
     // estimator is ever called on this competition.
     const tooFew = makeCompetition({ id: 'too-few', fencer_count: 1 })
-    const tooMany = makeCompetition({ id: 'too-many', fencer_count: 501 })
+    const tooMany = makeCompetition({ id: 'too-many', fencer_count: config.MAX_FENCERS + 1 })
 
     const expected = estimateCompetitionStripHours(inRange, config)
     const result = aggregateStripHours([inRange, tooFew, tooMany], config)

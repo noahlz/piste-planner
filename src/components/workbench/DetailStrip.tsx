@@ -126,14 +126,15 @@ export function DetailStrip({
       phase: segment.phase,
       text: `${phaseDisplay(segment.phase)} ${formatClock(segment.startMinutes)}–${formatClock(segment.endMinutes)}`,
     }))
-  } else if (competition.fencer_count >= 2) {
-    // estimateEventFootprint throws below this floor (UnplacedDock's
-    // footprintNeed guards the same way) — no pills rather than a crash.
+  } else {
+    // No footprint for a count the engine cannot size (018 T4) — no pills.
     const footprint = estimateEventFootprint(competition, schedule.config)
-    pills = [
-      { phase: Phase.POOLS, text: `Pools ${formatMinutes(footprint.poolMinutes)}` },
-      { phase: Phase.DE, text: `DE ${formatMinutes(footprint.deMinutes)}` },
-    ]
+    if (footprint !== null) {
+      pills = [
+        { phase: Phase.POOLS, text: `Pools ${formatMinutes(footprint.poolMinutes)}` },
+        { phase: Phase.DE, text: `DE ${formatMinutes(footprint.deMinutes)}` },
+      ]
+    }
   }
 
   const otherDays = placed

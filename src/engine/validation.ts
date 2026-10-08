@@ -1,6 +1,6 @@
 import { BottleneckSeverity, CutMode, DeMode, EventType, RuleKind, ValidationMode, VideoPolicy, dayHardEnd, dayStart } from './types.ts'
 import type { Competition, TournamentConfig, ValidationError } from './types.ts'
-import { computePoolStructure, weightedPoolDuration } from './pools.ts'
+import { computePoolStructure, isSizeableCount, weightedPoolDuration } from './pools.ts'
 import { computeBracketSize, deBlocksFor, deVideoStripAsk } from './de.ts'
 import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
@@ -133,6 +133,16 @@ function validateRefConfig(_config: TournamentConfig, _competitions: Competition
   return []
 }
 
+/** Why `isSizeableCount` rejected `n`, for the `fencer-count-bounds` message. */
+function unsizeableReason(n: number, config: TournamentConfig): string {
+  if (Number.isNaN(n)) return 'is not a number'
+  // A fraction is named as one even when it also sits below the minimum.
+  if (Number.isFinite(n) && !Number.isInteger(n)) return 'is not a whole number'
+  if (n > config.MAX_FENCERS) return `exceeds maximum ${config.MAX_FENCERS}`
+  if (n < config.MIN_FENCERS || n < 2) return `is below minimum ${Math.max(2, config.MIN_FENCERS)}`
+  return 'is not a whole number'
+}
+
 function validateCompetitionFields(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
   const errors: ValidationError[] = []
 
@@ -145,11 +155,11 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
   }
 
   for (const comp of competitions) {
-    // Fencer count bounds
-    if (comp.fencer_count <= 0 || comp.fencer_count < config.MIN_FENCERS) {
-      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} is below minimum ${config.MIN_FENCERS}`, 'fencer-count-bounds', [comp.id]))
-    } else if (comp.fencer_count > config.MAX_FENCERS) {
-      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} exceeds maximum ${config.MAX_FENCERS}`, 'fencer-count-bounds', [comp.id]))
+    // Fencer count bounds: one finding for any count `isSizeableCount`
+    // rejects, so NaN, Infinity and fractions raise it too (018 T4). This is
+    // the upstream guard the scheduler's pool math relies on.
+    if (!isSizeableCount(comp.fencer_count, config)) {
+      errors.push(structural('fencer_count', `${comp.id}: fencer_count ${comp.fencer_count} ${unsizeableReason(comp.fencer_count, config)}`, 'fencer-count-bounds', [comp.id]))
     }
 
     // Team events must not use cuts — notice, not policy (R3, FR-011):
@@ -193,7 +203,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
     // Video strips a staged DE's video block asks for (METHODOLOGY.md §DE Modes).
     // An event below 2 fencers has no bracket to size it from – its
     // fencer-count finding already covers it – so it asks none.
-    const videoAsk = comp.fencer_count >= Math.max(config.MIN_FENCERS, 2)
+    const videoAsk = isSizeableCount(comp.fencer_count, config)
       ? deVideoStripAsk(
         computeBracketSize(comp.fencer_count, comp.cut_mode, comp.cut_value, comp.event_type),
       )
@@ -242,8 +252,10 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       errors.push(notice('max_de_strip_pct_override', `${comp.id}: the video stage requests ${videoAsk} strips but DE cap is ${deStripCap}`, 'r16-over-cap', [comp.id]))
     }
 
-    // Resource precondition checks — skip competitions with invalid fencer counts
-    if (comp.fencer_count >= config.MIN_FENCERS) {
+    // Resource precondition checks – skip a count `fencer-count-bounds` already
+    // rejected. Above MAX_FENCERS it is skipped too, so an absurd count is one
+    // per-event ERROR rather than a global strips ERROR that empties the board.
+    if (isSizeableCount(comp.fencer_count, config)) {
       const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
 
       // Strip capacity: n_pools strips needed (one per pool running in parallel).

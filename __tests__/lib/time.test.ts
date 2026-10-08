@@ -19,4 +19,12 @@ describe('formatClock', () => {
   it('renders an afternoon time with both parts', () => {
     expect(formatClock(847)).toBe('14:07')
   })
+
+  it.each([
+    [1440, '00:00'],
+    [1510, '01:10'],
+    [1439, '23:59'],
+  ])('wraps %i minutes into the next morning as %s', (minutes, expected) => {
+    expect(formatClock(minutes)).toBe(expected)
+  })
 })

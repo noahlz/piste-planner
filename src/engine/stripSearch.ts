@@ -51,10 +51,11 @@
  * browser a turn; the engine half owns no timer and no promise (research.md D5).
  */
 
-import { scheduleAll } from './scheduler.ts'
+import { scheduleAll, lastPhaseOverrunWarnings } from './scheduler.ts'
 import { aggregateStripHours } from './capacity.ts'
 import { buildStrips } from './stripBudget.ts'
 import { suggestStripCount, busiestDayLoad } from './analysis.ts'
+import { isSizeableCount } from './pools.ts'
 import { phaseKey, phaseSpans, unseatedPhases } from './unseated.ts'
 import { COMPETITORS_PER_STRIP_PER_DAY } from './constants.ts'
 import type { Competition, TournamentConfig, PinnedPlacement } from './types.ts'
@@ -94,7 +95,7 @@ export interface StripCandidate {
    */
   placed: number
   /**
-   * Competitions inside `MIN_FENCERS`–`MAX_FENCERS`, the filter
+   * Competitions `isSizeableCount` accepts, the filter
    * `aggregateStripHours` applies — not `competitions.length`.
    * `concurrentScheduler.ts:229-242` drops a competition carrying a per-event
    * ERROR (fencer-count bounds) and schedules the rest, so under the wider
@@ -108,8 +109,8 @@ export interface StripCandidate {
 }
 
 /**
- * The busiest day's competitors: the fencer counts of every competition inside
- * `MIN_FENCERS`–`MAX_FENCERS` (the competitions `aggregateStripHours` counts),
+ * The busiest day's competitors: the fencer counts of every competition
+ * `isSizeableCount` accepts (the competitions `aggregateStripHours` counts),
  * spread largest-first over `days_available` by `busiestDayLoad`. A team
  * event's count is its entries as stored. Reads no strip count and no day
  * hours (METHODOLOGY.md §Strip Count Suggestion).
@@ -119,7 +120,7 @@ export function busiestDayCompetitors(
   config: TournamentConfig,
 ): number {
   const counts = competitions
-    .filter(c => c.fencer_count >= config.MIN_FENCERS && c.fencer_count <= config.MAX_FENCERS)
+    .filter(c => isSizeableCount(c.fencer_count, config))
     .map(c => c.fencer_count)
   return busiestDayLoad(counts, config.days_available)
 }
@@ -150,7 +151,7 @@ export function stripSearchRange(
   competitions: Competition[],
   config: TournamentConfig,
 ): StripSearchRange | null {
-  const poolCeiling = suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct)
+  const poolCeiling = suggestStripCount(competitions, config.days_available, config.max_pool_strip_pct, config)
   if (poolCeiling === null) return null
 
   const availableHours = config.days_available * config.DAY_LENGTH_MINS / 60
@@ -177,6 +178,13 @@ export function stripSearchRange(
  * the smallest count that places every event *around the pins* — the count the
  * organizer will be judged by once they apply it. Without it the card could
  * name a count at which the pinned board overflows.
+ *
+ * `placed` is Suggest's progress number, not the footer's: an event the
+ * scheduler placed counts as not placed when its last phase ends past the day's
+ * hard end (018 R2, `lastPhaseOverrunWarnings`) or, with pins, when a phase of
+ * it is unseated – one decrement per event in either or both. So the answer is
+ * the smallest count at which every event ends by the hard end
+ * (METHODOLOGY.md §Strip Count Suggestion).
  */
 export function* scanStripCounts(
   competitions: Competition[],
@@ -196,9 +204,7 @@ export function* scanStripCounts(
     )
   }
 
-  const required = competitions.filter(
-    c => c.fencer_count >= config.MIN_FENCERS && c.fencer_count <= config.MAX_FENCERS,
-  ).length
+  const required = competitions.filter(c => isSizeableCount(c.fencer_count, config)).length
 
   // A direct computation: the loop runs `ceiling - floor + 1` times, fixed
   // before entry. No convergence, no second cap.
@@ -210,17 +216,23 @@ export function* scanStripCounts(
     }
     const run = scheduleAll(competitions, candidateConfig, pinned)
     const { schedule } = run
-    let placed = Object.values(schedule).filter(r => r.pool_start !== null).length
+    // The union of overrunning and unseated events, so an event in both is
+    // subtracted once.
+    const notPlaced = new Set(
+      lastPhaseOverrunWarnings(schedule, candidateConfig).map(b => b.competition_id),
+    )
     if (pinned.length > 0) {
-      // Guarded, so the no-pins path runs the same statements it did before
-      // this feature — with no pins every phase is seated, so the guard
-      // changes no number, only which statements execute.
+      // Guarded: with no pins every phase is seated, so the guard changes no
+      // number, only which statements execute.
       const unseated = unseatedPhases(run)
       for (const [id, result] of Object.entries(schedule)) {
         if (result.pool_start === null) continue
-        if (phaseSpans(result).some(span => unseated.has(phaseKey(id, span.phase)))) placed--
+        if (phaseSpans(result).some(span => unseated.has(phaseKey(id, span.phase)))) notPlaced.add(id)
       }
     }
+    const placed = Object.entries(schedule)
+      .filter(([id, r]) => r.pool_start !== null && !notPlaced.has(id))
+      .length
     const placesAll = placed === required
 
     yield { count, placed, required, placesAll }

@@ -17,6 +17,9 @@ export const SCENARIO_IDS = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8'] as 
 
 export type ScenarioId = (typeof SCENARIO_IDS)[number]
 
+/** The preset the app opens on when no shared link says otherwise. */
+export const DEFAULT_PRESET_ID: ScenarioId = 'B1'
+
 export type ScenarioFixture = {
   label: string
   source: string

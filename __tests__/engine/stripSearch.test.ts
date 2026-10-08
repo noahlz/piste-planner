@@ -8,10 +8,11 @@ import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { aggregateStripHours } from '../../src/engine/capacity.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { buildStrips } from '../../src/engine/stripBudget.ts'
-import { unseatedPhases } from '../../src/engine/unseated.ts'
+import { unseatedPhases, phaseKey } from '../../src/engine/unseated.ts'
 import { makeConfig, makeCompetition } from '../helpers/factories.ts'
+import { clock, lateEventCompetition, windowFrom } from '../helpers/lateEvent.ts'
 import { buildCompetitions, tournamentConfig, SCENARIOS } from '../helpers/scenarios.ts'
-import { dayStart, EventType } from '../../src/engine/types.ts'
+import { Category, dayHardEnd, dayStart, EventType, Gender, Phase, Weapon } from '../../src/engine/types.ts'
 import type { Competition, TournamentConfig, PinnedPlacement } from '../../src/engine/types.ts'
 
 // ──────────────────────────────────────────────
@@ -68,8 +69,10 @@ function minBoard(): { comps: Competition[], config: TournamentConfig } {
  * 3 days give 390 | 390 | 380, so the manual baseline is ceil(390 / 14) = 28,
  * above the strip-hour floor ceil(592.05 / (3 × 10)) = 20, so floor=28. The
  * answer is 29, the plan's measured B5 `stripRecommendation` at row D, and
- * [M] placed@28 = 11 of 12 (CDT-W-SABRE-IND unplaced). A two-candidate scan
- * (B2, the other undershooting board, has 24 events: floor 75, answer 77).
+ * [M] placed@28 = 11 of 12 (CDT-W-SABRE-IND unplaced). A two-candidate scan.
+ * B5 is now the only reference board whose floor undershoots. B2 was one until
+ * 018 T1 (floor 75, answer 77 → 75), when Div 1 promoting 75% at a NAC let its
+ * team DE fit at the floor.
  *
  * 024 group D, 2026-10-06 – moved from B4. Group D's same-day rules bring B4's
  * answer down to its floor of 74 and B8's to its floor of 56, so neither
@@ -283,13 +286,28 @@ describe('scanStripCounts', () => {
     expect(result).not.toBeNull()
     const count = result!
 
-    const atCount = scheduleAll(comps, { ...config, strips_total: count, strips: buildStrips(count, config.video_strips_total) })
-    const placedAtCount = Object.values(atCount.schedule).filter(r => r.pool_start !== null).length
-    expect(placedAtCount).toBe(comps.length)
-
-    const atCountMinusOne = scheduleAll(comps, { ...config, strips_total: count - 1, strips: buildStrips(count - 1, config.video_strips_total) })
-    const placedAtCountMinusOne = Object.values(atCountMinusOne.schedule).filter(r => r.pool_start !== null).length
-    expect(placedAtCountMinusOne).toBeLessThan(comps.length)
+    // 018 T2 (R2): an event whose last phase ends past the hard end has a
+    // pool_start but is not placed, so the oracle subtracts it, judging the end
+    // against the day's hard end on its own and not through the engine's
+    // `lastPhaseOverrunWarnings`. At count - 1 (28) all 12 events now get a
+    // pool_start, one of them overrunning, and counting pool_start alone gives
+    // 12 and not 11.
+    const placedBy = (n: number): number => {
+      const cfg = { ...config, strips_total: n, strips: buildStrips(n, config.video_strips_total) }
+      const { schedule } = scheduleAll(comps, cfg)
+      return Object.values(schedule).filter((r) => {
+        const lastEnd = r.de_round_of_16_end ?? r.de_end
+        const overruns = lastEnd !== null && lastEnd > dayHardEnd(r.assigned_day, cfg)
+        return r.pool_start !== null && !overruns
+      }).length
+    }
+    expect(placedBy(count)).toBe(comps.length)
+    expect(placedBy(count - 1)).toBe(comps.length - 1)
+    // Precondition: the oracle is what holds the line. Counting every pool_start
+    // would call count - 1 a pass and the answer would not be tight.
+    const cfgMinusOne = { ...config, strips_total: count - 1, strips: buildStrips(count - 1, config.video_strips_total) }
+    const rawPlaced = Object.values(scheduleAll(comps, cfgMinusOne).schedule).filter(r => r.pool_start !== null).length
+    expect(rawPlaced).toBe(comps.length)
   })
 
   it('the one-run path: a floor that already places everything yields exactly one candidate', () => {
@@ -342,6 +360,48 @@ describe('scanStripCounts', () => {
     expect(first.placed).toBe(expectedPlaced)
     expect(first.required).toBe(expectedRequired)
     expect(expectedRequired).not.toBe(comps.length)
+  })
+
+  it('a count whose only shortfall is an overrun does not pass', () => {
+    // 018 R2 (METHODOLOGY.md §Strip Count Suggestion, "Overrun counts as not
+    // placed"). One 100-fencer event on one day opening 17:55 with 20 strips (4
+    // video): its DE runs 20:15–23:15, placed past the 22:00 hard end with a
+    // WARN and every phase seated (the R1 block of dayHardEnd.test.ts).
+    const comps = [lateEventCompetition(100)]
+    const config = windowFrom(clock(17, 55))
+    // Precondition: at 20 strips the event is placed, overruns, and is seated.
+    const run = scheduleAll(comps, config)
+    expect(run.schedule['late-evt']?.de_end).toBe(clock(23, 15))
+    expect(unseatedPhases(run).size).toBe(0)
+
+    const { candidates, result } = drain(scanStripCounts(comps, config, { floor: 20, ceiling: 20 }))
+
+    expect(candidates).toEqual([{ count: 20, placed: 0, required: 1, placesAll: false }])
+    expect(result).toBeNull()
+  })
+
+  it('subtracts an event once when it both overruns and is unseated', () => {
+    // One day opening 16:40 with 20 strips (4 video). A (Div 1 men's foil, 24)
+    // is pinned at the open and B (Junior women's epee, 100) ten minutes later,
+    // both on all 20 strips. B's DE ends 22:10, past the hard end, and B|DE is
+    // unseated behind A's pinned pools. A double decrement gives 0 placed.
+    const open = clock(16, 40)
+    const a = { ...lateEventCompetition(24), id: 'A', gender: Gender.MEN, category: Category.DIV1, weapon: Weapon.FOIL }
+    const b = { ...lateEventCompetition(100), id: 'B', gender: Gender.WOMEN, category: Category.JUNIOR, weapon: Weapon.EPEE }
+    const comps = [a, b]
+    const config = windowFrom(open)
+    const pinned: PinnedPlacement[] = [
+      { competition_id: 'A', day: 0, start_time: open, strip_count: 20 },
+      { competition_id: 'B', day: 0, start_time: open + 10, strip_count: 20 },
+    ]
+    // Precondition: B overruns and B|DE is unseated, so it is in both lists.
+    const run = scheduleAll(comps, config, pinned)
+    expect(run.schedule['B']!.de_end).toBeGreaterThan(dayHardEnd(0, config))
+    expect(unseatedPhases(run).has(phaseKey('B', Phase.DE))).toBe(true)
+
+    const { candidates } = drain(scanStripCounts(comps, config, { floor: 20, ceiling: 20 }, pinned))
+
+    expect(candidates).toEqual([{ count: 20, placed: 1, required: 2, placesAll: false }])
   })
 })
 
@@ -412,13 +472,15 @@ describe('search and schedule threading pins (T033)', () => {
     //
     // 024, 2026-10-06 – the pin moved from day0@300 to day0@180. Under the
     // 2026-27 DE times (Ops Manual p.17; METHODOLOGY.md §DE Duration, §DE Phase
-    // Breakdown) D1-M-EPEE-IND is the spec's worked example: 248 promoted,
-    // bracket 256, prelims 300 min on 16 strips and a video block of 80 min.
-    // From 300 its pools end at 416 (116-min pool round), prelims run 450–750
-    // and the video block 780–860, past the 840-minute day, so the pin could
-    // never claim its video block at any count and the search returned null.
-    // From 180 the video block ends at 740 and the tail at 770, which also
-    // fits the 780-minute hard window group B brings.
+    // Breakdown) D1-M-EPEE-IND is the spec's worked example: bracket 256,
+    // prelims on 16 strips and a video block of 80 min.
+    // 018 T1, 2026-10-07 – [M] with Div 1 promoting 75% (233 fencers, was 248
+    // before 018 T1) the prelims run 280 min, was 300. From 300 its pools end
+    // at 416 (116-min pool round), prelims run 450–730 and the video block
+    // 760–840, ending past the 780-minute hard window (10:00 PM less the 9:00 AM
+    // start), so the pin could never claim its video block at any count and the
+    // search returned null. From 180 its pools end at 296, prelims run 330–610,
+    // the video block 640–720 and the tail ends at 750, which fits that window.
     //
     // Four pins were tried first and can never have an answer: 45 + 38 + 30 +
     // 32 = 145 strips at one minute against a ceiling of 135.

@@ -16,7 +16,6 @@ import {
   type KeptRun,
 } from '../../src/store/keptRun.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
-import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { phaseSpans, phaseKey, phaseRequiresVideo, unseatedPhases } from '../../src/engine/unseated.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { SCENARIO_IDS, type ScenarioId } from '../../src/data/tournaments.ts'
@@ -24,6 +23,7 @@ import { DAY_AXIS_SPACING_MINS, Phase } from '../../src/engine/types.ts'
 import type { Competition, ScheduleResult, TournamentConfig } from '../../src/engine/types.ts'
 import { makeScheduleResult } from '../helpers/factories.ts'
 import { loadFlightedFixture } from '../helpers/flightedFixtures.ts'
+import { deriveSized } from '../helpers/derive.ts'
 
 beforeEach(() => {
   useStore.setState(useStore.getInitialState(), true)
@@ -307,7 +307,7 @@ describe('keepRun with pins', () => {
     const pinned = Object.entries(kept.events).filter(([eventId]) => state.placements[eventId].pinned)
     expect(pinned.length).toBeGreaterThan(0)
     for (const [eventId, event] of pinned) {
-      const derived = deriveEventSchedule(state.placements[eventId], byId.get(eventId) as Competition, config).result
+      const derived = deriveSized(state.placements[eventId], byId.get(eventId) as Competition, config).result
       const times = (r: ScheduleResult) => phaseSpans(r).map(s => [s.phase, s.start, s.end])
       expect(times(event.result), `${id} ${eventId}`).toEqual(times(derived))
     }

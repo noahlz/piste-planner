@@ -247,12 +247,15 @@ Auto-assign around pins – the pinned events are excluded from the loop's
 seed, not from `buildEventStates`, per 013 research D1). P5 (FLUID) stays
 deferred with no owner.
 
-Baseline (after 016): `tsc -b` and lint clean, 82 files / 2278 tests. Drift
-ledger B1–B8 scheduled 24 / 24 / 24 / 21 / 12 / 45 / 18 / 53, equal to the app
-path on all eight, with 0 / 0 / 0 / 9 / 0 / 9 / 0 / 0 ERRORs. Snapshot SHA-256
-`cd484a89c7c9…`. (After 024 it was 81 files / 2148 tests and `7e2db75c38bb…`,
-and after 015 it was 78 files / 1830 tests, 24 / 24 / 24 / 18 / 12 / 40 / 18 /
-53 and `a4a71e333c77…`.) 016 moved only the referee peaks.
+Baseline (after 018): `tsc -b` and lint clean, 89 files / 3031 tests. Drift
+ledger B1–B8 scheduled 24 / 24 / 24 / 24 / 12 / 51 / 18 / 53, equal to the app
+path on all eight, with 0 / 0 / 0 / 6 / 0 / 3 / 0 / 0 ERRORs. Snapshot SHA-256
+`903cd991fbca…`. (Before 018 it was 87 files / 2795 tests, 24 / 24 / 24 / 21 /
+12 / 45 / 18 / 53, 0 / 0 / 0 / 9 / 0 / 9 / 0 / 0 ERRORs and `7e2db75c38bb…`.
+After 016 it was 82 files / 2278 tests and `cd484a89c7c9…`, after 024 it was 81
+files / 2148 tests and `7e2db75c38bb…`, and after 015 it was 78 files / 1830
+tests, 24 / 24 / 24 / 18 / 12 / 40 / 18 / 53 and `a4a71e333c77…`.) 018 moved
+B4 and B6 by the overrun and the Div 1 timings on B1, B2, B7 and B8.
 
 ### Owner decisions, 2026-10-04
 
@@ -281,10 +284,10 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 | **015** | **Delivered 2026-10-05** – ledger converges with the store: the drift factory now applies the per-type cut, DE-mode and ref-policy rules, so B1–B8 are measured on what the app runs. `specs/015-ledger-convergence/handoff.md` | closed | M | 013 | re-baseline, measured |
 | **016** | **Delivered 2026-10-07** – hand placements obey the rules: hard same-day pairs and the regional Group 1 window are checked on the current placements and shown as findings (a hard break is a Warning the organizer cannot dismiss), findings carry their day and the panel's row ids combine rule, owner, subjects and day, two-event findings mark both blocks, the first and last day WARN reaches the panel, and the footer's referee peak and the scheduler's `ref_requirements_by_day` are one number counted from the schedule as drawn. `specs/016-hand-placement-rules/handoff.md` | closed. Leftovers in §What 016 deliberately left unfixed | L | 014, 024 | referee peaks rose on 13 days (14 with a sabre move), counts and ERRORs unmoved |
 | **017** | **Delivered 2026-10-07** – the canvas tells the truth: after a run the store keeps the scheduler's own times and strip indices in memory and the canvas draws them, so the boot footers read 24/0, 24/0, 24/0, 21/9, 12/0, 45/9, 18/0, 53/0 (they were 15/9, 13/11, 14/10, 11/19, 8/4, 17/37, 11/7, 30/23). An event moved by hand is laid on the strips the kept events leave free and never disturbs a kept one, and when no room is left it is the one Unplaced row, and Suggest, the referee count, the footer and the Findings panel apply one unseated rule (`unseatedPhases` in the engine, the drawn model in the store). Any change to the engine's inputs marks the board stale, with a banner and a Findings row, until the next run. Share links and saved files carry the run's pins and replay it, so the receiver's board equals the sender's. Blocks are keyboard buttons, and the referee peak returns to the scheduler's own timeline (roadmap row 025 folded in). `specs/017-canvas-tells-truth/handoff.md` | closed. Leftovers in §What 017 deliberately left unfixed | M | 016, 024 | referee peaks fell on 14 scenario-days back to the pre-016 snapshot, counts and ERRORs unmoved |
-| **018** | Engine correctness – day-end overrun as a warning, Div 1 cut 25 %, the fencer-count ≤ 1 URL path verified. One drift review per fix. The DE prelims bout share left this row when 024's per-round DE derivation absorbed it | §Day-end overrun, §Policy tables (Div 1 only), §A shared URL with a fencer count of 0 or 1 | M | 024 | one per fix |
+| **018** | **Delivered 2026-10-08** – engine correctness: an event's last phase (its DE, or a staged DE's round-of-16 video stage) may now end past the day's 22:00 hard end when it starts before it and ends by midnight. It is placed with one Warning that carries the finish, the Findings panel shows that Warning for run-placed and hand-moved events alike, and the canvas grows to show the late finish, so B4 now places 24 events (it placed 21) and B6 51 (it placed 45). Div 1 promotes 75 % at a NAC (the cut is 25 %), per the 2026-27 handbook. A fencer count must be a whole number from 2 to 336 (the handbook's cap, not 500): a link or file with anything else opens on B1 with a dismissable notice that names the event and the reason, and the engine skips such an event instead of crashing the page. The 0-or-1 link path was real and wider than the audit said. `specs/018-engine-correctness/handoff.md` | closed. Leftovers in §What 018 deliberately left unfixed | M | 024 | B4 21→24 and B6 45→51 by the overrun, Div 1 timings moved on B1, B2, B7 and B8, fencer bounds no movement |
 | **019** | Default days per template – the three K₄ templates default to 4 days so they satisfy their own hard rules | §The store's default day count | S | 024 | parity only |
 | **020** | Re-run on parameter change – debounced, with a show-after-delay working indicator. 017 shows a stale banner when the inputs change but does not re-run, so this row keeps its whole scope, and 017's `configKey` (the canonical serialization of the engine's inputs, compared with the kept run's) is its hook for knowing when a re-run is due | §Changing a parameter should re-run the engine | M | 013, independent of 014–019 | no |
-| **021** | METHODOLOGY reconciliation – retire the eight time-of-day weights, the last cheap weight fix (`WEAPON_BALANCE` – 010 wired the proximity one and 024 the cross-weapon one as Group 3), the doc's self-contradictions, the verdicts in [`methodology-reconciliation.md`](./methodology-reconciliation.md) (minus L6 and L14, the video tiers and the DE prelims split, which 024 settled), delete `daySequencing.ts` and the dead constants, and add the calibration scenario | §METHODOLOGY.md and the engine have diverged, §Dead code held back, §Calibration debt | M–L | 018 (day-end wording) | yes |
+| **021** | METHODOLOGY reconciliation – retire the eight time-of-day weights, the last cheap weight fix (`WEAPON_BALANCE` – 010 wired the proximity one and 024 the cross-weapon one as Group 3), the doc's self-contradictions, the verdicts in [`methodology-reconciliation.md`](./methodology-reconciliation.md) (minus L6 and L14, the video tiers and the DE prelims split, which 024 settled), delete `daySequencing.ts` and the dead constants, and add the calibration scenario | §METHODOLOGY.md and the engine have diverged, §Dead code held back, §Calibration debt | M–L | 018 (day-end wording, delivered) | yes |
 | **022** | Release housekeeping – README, dev port, stale settings, stale citations | §Release housekeeping | S | last | no |
 | **023** | Team events go straight to DE – see the scope below | §Team events are scheduled with a pool round | L | 015, 024 | B1, B2, B8 move, B3–B7 must not |
 | **024** | **Delivered 2026-10-06** – 2026-27 Operations Manual conformance, one commit per rule group with its drift record: pool and DE times from the manual (A), a 9:00–19:00 day with a 22:00 hard end and a ÷ 14 strip baseline (B), the Y14 and RYC cuts and the 256-fencer DE cap (E), video required for every NAC individual event with team events Single Stage and best-effort (C), and the same-day rules by tournament type (D): Group 1, which now includes Div 1–Cadet, is hard at NAC, SYC and SJCC and soft at ROC, RYC and RJCC with a time-of-day window that holds the older side's pools until day start + 4 hours (METHODOLOGY §Overlapping-Population Separation (Group 1)), plus new Group 2 and 3 soft rules and shorter first and last days. `specs/024-ops-manual-conformance/handoff.md` | closed. Leftovers in §What 024 deliberately left unfixed | L | 015 | re-baseline, measured per group |
@@ -343,8 +346,8 @@ P5 (FLUID), and the experimental mode (rejected in 012). Five of them wait on
 an owner decision or on data first: vet co-day serialization, per-event entry
 caps, the strip non-monotonicity warning, youth pool calibration, and real
 2026-27 templates with the Elite/National split. The policy-tables entry's
-rows other than the Div 1 cut (018) sit here too, since 024 delivered the Y14
-and RYC cuts.
+rows other than the Div 1 cut sit here too, since 018 delivered the Div 1 cut
+and 024 the Y14 and RYC cuts.
 
 ## Testing
 

@@ -14,7 +14,8 @@ import {
   selectDrawnSchedule,
   selectFooterMetrics,
 } from '../../src/store/derived.ts'
-import { BottleneckRule, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
+import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS } from '../../src/engine/types.ts'
+import { competitionLabel } from '../../src/lib/competitionLabels.ts'
 import { phaseRequiresVideo, phaseSpans } from '../../src/engine/unseated.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { runAndPinAll, runPreset, runTemplate } from '../helpers/drawnFixtures.ts'
@@ -90,6 +91,13 @@ import { unseatedPhases } from '../../src/engine/unseated.ts'
  * placed again (specs/024-ops-manual-conformance/plan.md §Group D). Every entry
  * still equals its app-path pin.
  *
+ * 018 T2, 2026-10-07 – B4 21 → 24 and B6 45 → 51, read from the drift ledger's
+ * re-taken snapshot after R1: an event's last phase may now start before the
+ * 22:00 hard end and end by midnight, so it is placed with a WARN instead of
+ * dropped (specs/018-engine-correctness/plan.md T2). B4 gains CDT-W-FOIL-IND,
+ * CDT-W-SABRE-IND and Y14-W-EPEE-IND, B6 six events. Every entry still equals
+ * its app-path pin.
+ *
  * The table is still typed out, but it is no longer trusted as typed: the
  * "matches the live drift ledger" test below re-measures every entry by the
  * drift ledger's own route. Until 015 it was a hand-typed copy that nothing
@@ -97,7 +105,7 @@ import { unseatedPhases } from '../../src/engine/unseated.ts'
  * ledger's real counts had moved.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 51, B7: 18, B8: 53,
 }
 
 interface ParityException {
@@ -172,9 +180,14 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {}
  * the same moves as the ledger's under the Ops Manual p.20 same-day rules
  * (specs/024-ops-manual-conformance/plan.md §Group D). Their copies in
  * `appPath.test.ts` moved with them in the same commit. No other pin moved.
+ *
+ * 018 T2, 2026-10-07 – B4 re-measured 21 → 24 and B6 45 → 51, the same moves as
+ * the ledger's after R1 (the last phase may run past the hard end, placed with
+ * a WARN). Their copies in `appPath.test.ts` move with them in the same commit.
+ * No other pin moved.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 21, B5: 12, B6: 45, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 51, B7: 18, B8: 53,
 }
 
 // specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)
@@ -543,9 +556,9 @@ describe('the footer counts the engine\'s placements at boot (017 T5a)', () => {
     B1: { placed: 24, unplaced: 0 },
     B2: { placed: 24, unplaced: 0 },
     B3: { placed: 24, unplaced: 0 },
-    B4: { placed: 21, unplaced: 9 },
+    B4: { placed: 24, unplaced: 6 },
     B5: { placed: 12, unplaced: 0 },
-    B6: { placed: 45, unplaced: 9 },
+    B6: { placed: 51, unplaced: 3 },
     B7: { placed: 18, unplaced: 0 },
     B8: { placed: 53, unplaced: 0 },
   }
@@ -568,9 +581,14 @@ describe('the footer counts the engine\'s placements at boot (017 T5a)', () => {
    * spec §7), waits included, so a DE delayed for strips no longer overlaps the
    * pools it waited behind. These are the drift ledger's pre-016 peaks
    * (b84be7e291), the maximum over each scenario's days.
+   *
+   * 018 T2, 2026-10-07 – B4 88 → 96, the rest held. R1 places three more B4
+   * events past the old day end (a last phase may run past the 22:00 hard end),
+   * and their referees count: B4's day 1 total went 80 → 96 and day 2 80 → 94
+   * in `refs.test.ts`. B6's six new events add no peak (78 holds).
    */
   const BOOT_REF_PEAKS: Record<ScenarioId, number> = {
-    B1: 210, B2: 240, B3: 226, B4: 88, B5: 118, B6: 78, B7: 228, B8: 212,
+    B1: 210, B2: 240, B3: 226, B4: 96, B5: 118, B6: 78, B7: 228, B8: 212,
   }
 
   it.each(SCENARIO_IDS)('%s keeps its boot referee peak', (id) => {
@@ -690,6 +708,27 @@ describe('boot invariants: the drawn board is the scheduler\'s run (017 T5b)', (
         const [source, rule, , , day] = row.id.split(':')
         return source === 'analysis' && FIRST_LAST_RULES.includes(rule) ? [`${rule} day ${day}: ${row.message}`] : []
       })
+    expect(app).toEqual(scheduler)
+  })
+
+  // 018 R3: the app's overrun rows are the scheduler's phase-overruns-day-end
+  // WARNs. The one difference is the message, which names the event by its
+  // label in the app and by its id in the scheduler.
+  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s phase-overruns-day-end rows equal the scheduler\'s WARNs', (_, board) => {
+    board.boot()
+    const { competitions, run } = schedulerRun()
+    const labels = new Map(competitions.map((c) => [c.id, competitionLabel(c)]))
+    const scheduler = run.bottlenecks
+      .filter((b) => b.rule === BottleneckRule.PHASE_OVERRUNS_DAY_END && b.severity === BottleneckSeverity.WARN)
+      .map((b) => ({ rule: b.rule, target: b.competition_id, day: b.day, message: b.message }))
+    const app = selectAllFindings(useStore.getState())
+      .filter((row) => row.id.split(':')[1] === BottleneckRule.PHASE_OVERRUNS_DAY_END)
+      .map((row) => ({
+        rule: row.id.split(':')[1],
+        target: row.target,
+        day: row.day,
+        message: row.message.replace(labels.get(row.target!)!, row.target!),
+      }))
     expect(app).toEqual(scheduler)
   })
 })

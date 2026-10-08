@@ -460,8 +460,9 @@ describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () =>
    * A fresh board with a hand-moved event (spec §5, Move day): the mover is
    * derived at its new day while every other event keeps its run, and the
    * finish reads both. B1's headline move puts D1-M-EPEE-IND on day 1, where
-   * its derived DE_ROUND_OF_16 ends at 1100 and its DE at 1130 with the tail,
-   * above every kept event's 1090 (measured 2026-10-07).
+   * its derived DE_ROUND_OF_16 ends at 1080 and its DE at 1110 with the tail,
+   * above every kept event's 1090 (measured 2026-10-07, from 1100 / 1130 by
+   * 018 T1 when Div 1 went from 80% to 75% promoted).
    */
   it('finish reads a hand-moved event\'s derived DE end on a fresh board', () => {
     const { id } = runAndMoveHeadline('B1')
@@ -476,7 +477,7 @@ describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () =>
     }
     expect(keptLatest, 'premise: the kept events finish at 1090').toBe(1090)
 
-    expect(metric('finish:tournament').value).toBe(1130)
+    expect(metric('finish:tournament').value).toBe(1110)
   })
 
   /**

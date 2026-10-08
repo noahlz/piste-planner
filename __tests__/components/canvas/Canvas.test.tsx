@@ -15,7 +15,7 @@ import {
 } from '../../../src/store/derived.ts'
 import type { DerivedFindings, DerivedSchedule, DrawnEventSchedule, DrawnSchedule } from '../../../src/store/derived.ts'
 import { rungAt } from '../../../src/components/canvas/zoomLadder.ts'
-import type { DayConfig } from '../../../src/engine/types.ts'
+import type { DayConfig, ScheduleResult } from '../../../src/engine/types.ts'
 import { BottleneckRule, Phase } from '../../../src/engine/types.ts'
 import { makeBottleneck, makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../../helpers/factories.ts'
 import { installStubResizeObserver, NeverFiringResizeObserver } from '../../helpers/resizeObserver.ts'
@@ -256,27 +256,37 @@ describe('Canvas zoom (FR-034, D3)', () => {
   })
 
   describe('axis span', () => {
-    // A lone one-day block from `start` to `end`, drawn under fitting so its
-    // left and width read as percentages of the axis span.
-    function blockExtent(days: DayConfig[], start: number, end: number) {
+    // One-day blocks as [id, day, start, end], drawn under fitting so each
+    // block's left and width read as percentages of the shared axis span.
+    function blockExtents(days: DayConfig[], blocks: [string, number, number, number][]) {
       const config = makeConfig({ days_available: days.length, strips: makeStrips(4, 0) })
+      const events: Record<string, { result: ScheduleResult; day_out_of_range: boolean }> = {}
+      for (const [id, day, start, end] of blocks) {
+        events[id] = {
+          result: { ...makeScheduleResult(id, day), pool_start: start, pool_end: end, pool_strip_count: 2 },
+          day_out_of_range: false,
+        }
+      }
       const schedule = drawnFromDerived({
         config,
-        competitions: [makeCompetition({ id: 'late' })],
-        events: {
-          late: {
-            result: { ...makeScheduleResult('late', 0), pool_start: start, pool_end: end, pool_strip_count: 2 },
-            day_out_of_range: false,
-          },
-        },
+        competitions: blocks.map(([id]) => makeCompetition({ id })),
+        events,
       })
       const findings: DerivedFindings = { validationErrors: [], analysis: { warnings: [], suggestions: [] } }
-      const dayConfigs = days
 
-      renderCanvas({ schedule, findings, dayConfigs }, { zoom: { zoomStep: 2, fitting: true } })
+      renderCanvas({ schedule, findings, dayConfigs: days }, { zoom: { zoomStep: 2, fitting: true } })
 
-      const [block] = eventBlocks()
-      return { left: parseFloat(block.style.left), width: parseFloat(block.style.width) }
+      const extents: Record<string, { left: number; width: number }> = {}
+      for (const block of eventBlocks()) {
+        const id = block.dataset.eventBlock!.split(':')[0]
+        extents[id] = { left: parseFloat(block.style.left), width: parseFloat(block.style.width) }
+      }
+      return extents
+    }
+
+    // A lone day-0 block from `start` to `end`.
+    function blockExtent(days: DayConfig[], start: number, end: number) {
+      return blockExtents(days, [['late', 0, start, end]]).late
     }
 
     // Ops Manual 2026-27 p.17: the soft target is 19:00, but work may run to
@@ -307,6 +317,73 @@ describe('Canvas zoom (FR-034, D3)', () => {
 
       expect(left).toBeCloseTo(0, 1)
       expect(width).toBeCloseTo(100, 1)
+    })
+
+    // 018 R3: a last phase may end past the hard end, so the axis grows to the
+    // next whole hour after the latest block end rather than clipping it.
+    it('grows to the next whole hour after a block that ends past the hard end', () => {
+      // 23:05 rounds up to 24:00, so the span is 09:00 to 24:00 (900 minutes).
+      const { left, width } = blockExtent([{ day_start_time: 540, day_end_time: 1140 }], 540, 1385)
+
+      expect(left).toBeCloseTo(0, 1)
+      expect(width).toBeCloseTo(((1385 - 540) / 900) * 100, 1)
+    })
+
+    it('adds no hour when the latest block ends exactly on an hour past the hard end', () => {
+      const { width } = blockExtent([{ day_start_time: 540, day_end_time: 1140 }], 540, 1380)
+
+      expect(width).toBeCloseTo(100, 1)
+    })
+
+    it('stops growing at 30:00, 06:00 the next morning', () => {
+      const { width } = blockExtent([{ day_start_time: 540, day_end_time: 1140 }], 540, 1900)
+
+      // The block (1360 minutes) runs on past the capped axis (1260 minutes).
+      expect(width).toBeCloseTo(((1900 - 540) / (1800 - 540)) * 100, 1)
+    })
+
+    it('keeps the 22:00 hard end when every block ends well before it', () => {
+      const { width } = blockExtent([{ day_start_time: 540, day_end_time: 1140 }], 540, 1000)
+
+      expect(width).toBeCloseTo(((1000 - 540) / (1320 - 540)) * 100, 1)
+    })
+
+    it('sets one span from the latest block end across days, whichever block is drawn first or last', () => {
+      const day = { day_start_time: 540, day_end_time: 1140 }
+      const out = blockExtents([day, day, day], [
+        ['a', 0, 540, 1000],
+        ['b', 1, 540, 1385],
+        ['c', 2, 540, 1100],
+      ])
+
+      // 23:05 on day 2 rounds up to 24:00, so all three share 09:00 to 24:00 (900 minutes).
+      expect(out.a.width).toBeCloseTo(((1000 - 540) / 900) * 100, 1)
+      expect(out.b.width).toBeCloseTo(((1385 - 540) / 900) * 100, 1)
+      expect(out.c.width).toBeCloseTo(((1100 - 540) / 900) * 100, 1)
+    })
+
+    it('labels a tick exactly at 24:00 as 00:00', () => {
+      // Start 10:00 and a block to 25:00 give the span 600 to 1500, whose 120-minute ticks reach 1440.
+      blockExtent([{ day_start_time: 600, day_end_time: 1140 }], 600, 1500)
+
+      const tick = hourTicks().find((el) => el.dataset.hourTick === '1440')
+      expect(tick, 'a tick at 24:00').toBeDefined()
+      expect(tick!.textContent).toBe('00:00')
+    })
+
+    it('hides the tick strip from assistive technology, since every block carries its own times', () => {
+      blockExtent([{ day_start_time: 540, day_end_time: 1140 }], 540, 1320)
+
+      expect(hourTicks()[0].parentElement!.getAttribute('aria-hidden')).toBe('true')
+    })
+
+    it('labels ticks past 24:00 as wrapped clock times', () => {
+      // 25:10 rounds up to 26:00, so the 25:00 tick is drawn.
+      blockExtent([{ day_start_time: 540, day_end_time: 1140 }], 540, 1510)
+
+      const tick = hourTicks().find((el) => el.dataset.hourTick === '1500')
+      expect(tick, 'a tick at 25:00').toBeDefined()
+      expect(tick!.textContent).toBe('01:00')
     })
   })
 

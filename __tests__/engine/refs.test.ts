@@ -320,14 +320,28 @@ describe('scheduleAll reports the peak of its own timeline (017 T9)', () => {
    * The spec's Expected drift table: the days whose total or sabre peak moves
    * from the drawn board (016 Task E) back to the timeline. Every other
    * scenario-day holds, which the drift ledger's snapshot pins.
+   *
+   * 018 T1 (2026-10-07): B8 day 1's sabre peak 56 → 60. Div 1 at a NAC promotes
+   * 75% instead of 80% (R4). At cut 25 VET-M-SABRE-IND-V60's prelims start 5 min
+   * earlier (1670 → 1665), exactly when VET-M-SABRE-IND-V80's 4-ref R16 ends
+   * (1645–1665). `sweepLine` (src/engine/refs.ts) counts touching intervals as
+   * concurrent, so the day-1 sabre peak is 16 + 16 + 16 + 8 + 4 = 60 at 1665 (it
+   * was 56 at 1670) while the day's total (146) holds. The 60 is a boundary-touch
+   * figure that any 5-minute shift can flip (backlog §The referee sweep counts an
+   * instantaneous handoff twice). The seven VET R16 delays are not in that peak.
+   *
+   * 018 T2 (2026-10-07): B4 day 1 total 80 → 96 and day 2 total 80 → 94 (sabre
+   * 44 and 54 hold). The last phase may now end past the 22:00 hard end (R1), so
+   * three events the scheduler used to drop (CDT-W-FOIL, CDT-W-SABRE and
+   * Y14-W-EPEE) are placed and their DE refs enter the sweep. Day 0 (88) holds.
    */
   const MOVED: [ScenarioId, number, { total: number; sabre: number }][] = [
     ['B1', 1, { total: 210, sabre: 64 }], ['B1', 2, { total: 134, sabre: 56 }],
     ['B2', 0, { total: 228, sabre: 90 }], ['B2', 3, { total: 136, sabre: 70 }],
-    ['B4', 1, { total: 80, sabre: 44 }], ['B4', 2, { total: 80, sabre: 54 }],
+    ['B4', 1, { total: 96, sabre: 44 }], ['B4', 2, { total: 94, sabre: 54 }],
     ['B6', 0, { total: 78, sabre: 48 }], ['B6', 1, { total: 68, sabre: 20 }], ['B6', 2, { total: 64, sabre: 32 }],
     ['B7', 0, { total: 156, sabre: 64 }], ['B7', 2, { total: 156, sabre: 70 }],
-    ['B8', 0, { total: 212, sabre: 56 }], ['B8', 1, { total: 146, sabre: 56 }], ['B8', 2, { total: 136, sabre: 48 }],
+    ['B8', 0, { total: 212, sabre: 56 }], ['B8', 1, { total: 146, sabre: 60 }], ['B8', 2, { total: 136, sabre: 48 }],
   ]
 
   it.each(MOVED)('%s day %i reads the spec\'s timeline peak', (id, day, expected) => {

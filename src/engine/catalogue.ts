@@ -267,6 +267,15 @@ export const TEMPLATES: Record<string, string[]> = {
 
 type FencerDefaultTable = Partial<Record<FencerDefaultKey, number>>
 
+/** The key an event's default fencer count sits under in `NAC_FENCER_DEFAULTS`
+ *  and `REGIONAL_FENCER_DEFAULTS`: team events share one count per category,
+ *  individual events one per category, weapon and gender. */
+export function fencerDefaultKeyOf(entry: CatalogueEntry): FencerDefaultKey {
+  return entry.event_type === EventType.TEAM
+    ? `${entry.category}:TEAM`
+    : `${entry.category}:${entry.weapon}:${entry.gender}`
+}
+
 export const TEMPLATE_FENCER_DEFAULTS: Record<string, FencerDefaultTable> = {
   'NAC Youth': NAC_FENCER_DEFAULTS,
   'NAC Cadet/Junior': NAC_FENCER_DEFAULTS,

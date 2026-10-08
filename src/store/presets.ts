@@ -25,4 +25,6 @@ export function applyPreset(id: ScenarioId, state: StoreState = useStore.getStat
   // Records which preset is loaded so the top bar's picker reflects it even
   // when boot(), not a picker interaction, is what loaded it (review finding B).
   state.setLoadedPresetId(id)
+  // A preset is a successful load, so a refused link's notice no longer describes the board.
+  state.setLoadRefusal(null)
 }

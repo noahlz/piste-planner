@@ -79,13 +79,20 @@ describe('runAppPath', () => {
   // days planned shorter) re-colour the days: B8 places JR-W-EPEE-IND again
   // (METHODOLOGY.md §Overlapping-Population Separation and §First and Last Day
   // Capacity; specs/024-ops-manual-conformance/plan.md §Group D).
+  //
+  // 018 T2, 2026-10-07 – B4's placed count moved 21 → 24 and B6's 45 → 51, with
+  // the parity file's pins and the ledger's counts in the same commit. An event's
+  // last phase may now end past the 22:00 hard end when it starts before it and
+  // ends by midnight (METHODOLOGY.md §Same-Day Completion), so the events that
+  // lost only to a late finish are placed with a SAME_DAY_VIOLATION WARN. Nothing
+  // else moved.
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
-    B4: { selected: 30, placed: 21 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it; 18 until 024 group A; 19 until 024 group D – the ledger reads the same since 015 (see above)
+    B4: { selected: 30, placed: 24 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it; 18 until 024 group A; 19 until 024 group D; 21 until 018 T2 – the ledger reads the same since 015 (see above)
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
-    B6: { selected: 54, placed: 45 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A; 50 until 024 group D (seven out, two in)
+    B6: { selected: 54, placed: 51 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A; 50 until 024 group D (seven out, two in); 45 until 018 T2 (six placed past the hard end)
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
     B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4; 53 until 024 group B (JR-W-EPEE-IND lost to the 9:00 start); 52 until 024 group D placed it again
   }

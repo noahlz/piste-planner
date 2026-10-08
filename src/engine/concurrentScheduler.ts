@@ -29,6 +29,7 @@ import {
   clockOnDay,
   dayEnd,
   dayHardEnd,
+  dayMidnight,
   tailEstimateMins,
   ValidationMode,
 } from './types.ts'
@@ -58,6 +59,7 @@ import {
   estimatePoolDuration,
   weightedPoolDuration,
   computeDeFencerCount,
+  isSizeableCount,
 } from './pools.ts'
 import { deBlocksFor, deRoundsMinutes } from './de.ts'
 import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
@@ -381,6 +383,19 @@ export function scheduleAllConcurrent(
   state.bottlenecks.push(...dayBreakdown)
   const postWarnings = postScheduleWarnings(state.schedule, config)
   state.bottlenecks.push(...postWarnings)
+  // Computed after the run, so the same pure function serves the drawn board
+  // (018 T3) and because a WARN raised inside a failed attempt would be erased by
+  // its rollback (`releaseEventAllocations`). A pinned last phase that broke its
+  // limit keeps its ERROR (the pin is not retried), and the WARN is for an
+  // overrun within the midnight limit, so that event gets no WARN on top.
+  const overrunErrorIds = new Set(
+    state.bottlenecks
+      .filter((b) => b.rule === BottleneckRule.PHASE_OVERRUNS_DAY_END && b.severity === BottleneckSeverity.ERROR)
+      .map((b) => b.competition_id),
+  )
+  state.bottlenecks.push(
+    ...lastPhaseOverrunWarnings(state.schedule, config).filter((b) => !overrunErrorIds.has(b.competition_id)),
+  )
 
   const ref_requirements_by_day = computeRefRequirements(
     state.ref_demand_by_day,
@@ -414,6 +429,10 @@ function buildEventStates(
     const day = dayMap.get(comp.id)
     if (day === undefined) continue
 
+    // Guarded upstream: `validateConfig` raises `fencer-count-bounds` for every
+    // count `isSizeableCount` rejects, and that rule is in
+    // PER_EVENT_ERROR_RULES, so `scheduleAllConcurrent` either drops the event
+    // or returns before this runs (018 T4).
     const poolStructure = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
     const poolBaseline = weightedPoolDuration(
       poolStructure,
@@ -1192,12 +1211,6 @@ type AllocateOutcome =
   | { outcome: 'fail' }
 
 /**
- * Attempts to allocate the phase node. On success mutates the event's result
- * and the global state via `allocateInterval`. On a deferrable miss returns
- * `next_ready_time`. On an unrecoverable miss (no slot before dayHardEnd)
- * returns `fail`.
- */
-/**
  * A DE node whose bracket has no counted round – a bracket of 2, whose gold
  * bout the tail estimate covers. It takes 0 minutes and claims no strip,
  * general or video (METHODOLOGY.md §DE Duration 'No counted round', §Scheduler
@@ -1235,6 +1248,12 @@ function cappedStripCount(
   return Math.max(1, Math.min(node.desired_strip_count, cap))
 }
 
+/**
+ * Attempts to allocate the phase node. On success mutates the event's result
+ * and the global state via `allocateInterval`. On a deferrable miss returns
+ * `next_ready_time`. On an unrecoverable miss (no slot within the phase's day
+ * limit – see `fitsDay` below) returns `fail`.
+ */
 function tryAllocate(
   node: PhaseNode,
   event: EventState,
@@ -1243,11 +1262,27 @@ function tryAllocate(
 ): AllocateOutcome {
   const day = event.assigned_day
   // Day-window cap is the tighter of the day's hard end and the event's
-  // latest_end constraint. It bounds the day-end check, the STAGED fits-in-day
-  // pre-check and every deferral below. The 7:00 PM soft target does not bound
-  // placement: a phase may run past it to the hard end (Ops Manual 2026-27
-  // p.17, METHODOLOGY.md §Same-Day Completion, §Phase 5).
-  const hardEnd = Math.min(dayHardEnd(day, config), event.competition.latest_end)
+  // latest_end constraint. The 7:00 PM soft target does not bound placement: a
+  // phase may run past it to the hard end (Ops Manual 2026-27 p.17,
+  // METHODOLOGY.md §Same-Day Completion, §Phase 5).
+  const dayHard = dayHardEnd(day, config)
+  const hardEnd = Math.min(dayHard, event.competition.latest_end)
+  // 018 R1: the event's last phase alone may also start before the hard end and
+  // end past it, up to the day's midnight (or the organizer's later hard end),
+  // never past latest_end. `scheduleAll` warns about it after the run
+  // (`lastPhaseOverrunWarnings`). Every other phase ends by the hard end.
+  const isLastPhase = node.successor_index === -1
+  const lastPhaseEndCap = Math.min(Math.max(dayMidnight(day, config), dayHard), event.competition.latest_end)
+  // The one day-limit rule the STAGED fits-in-day pre-check, the post-fit check
+  // and both deferrals below share.
+  const fitsDay = (start: number, dur: number): boolean =>
+    start + dur <= hardEnd
+    || (isLastPhase && start < hardEnd && start + dur <= lastPhaseEndCap)
+  // A deferral also needs its new start before the hard end.
+  // (`fitsDay` already implies start < hardEnd for any phase of positive length,
+  // so the explicit check only matters for a zero-length phase.)
+  const canDeferTo = (start: number | null, dur: number): start is number =>
+    start !== null && start < hardEnd && fitsDay(start, dur)
 
   // Strip cap.
   const cappedCount = cappedStripCount(node, event, config)
@@ -1261,18 +1296,17 @@ function tryAllocate(
   const noCountedRound = hasNoCountedRound(node)
 
   // STAGED-DE phases (prelims, R16) pre-check whether the phase can fit
-  // before the hard end at all, before searching for strips. Without this, a
+  // within its day limit at all, before searching for strips. Without this, a
   // phase whose duration alone overruns the day would still search for
   // strips and — if strips happened to be free at ready_time — fail with a
   // SAME_DAY_VIOLATION instead of deferring or failing cleanly.
   if (!noCountedRound && (node.kind === PhaseKind.DE_PRELIMS || node.kind === PhaseKind.DE_R16)) {
-    const fitsInDay = node.ready_time + duration <= hardEnd
-    if (!fitsInDay) {
+    if (!fitsDay(node.ready_time, duration)) {
       // Try deferring once via window probe to confirm STRIPS vs TIME.
       const win = findAvailableStripsInWindow(
         state, config, cappedCount, node.ready_time, duration, node.video_required, day,
       )
-      if (win.fit === 'none' && win.earliest_next_start !== null && win.earliest_next_start + duration <= hardEnd) {
+      if (win.fit === 'none' && canDeferTo(win.earliest_next_start, duration)) {
         return { outcome: 'defer', next_ready_time: win.earliest_next_start, reason: win.reason }
       }
       return { outcome: 'fail' }
@@ -1289,10 +1323,16 @@ function tryAllocate(
   if (win.fit === 'ok') {
     const startTime = node.ready_time
     const endTime = startTime + duration
-    if (endTime > hardEnd) {
-      // Even a successful fit overruns the day's hard end — fail. Flag as
-      // SAME_DAY_VIOLATION (METHODOLOGY.md §Bottlenecks Specific to the
-      // Concurrent Scheduler). Ending past the soft target alone never lands here.
+    if (!fitsDay(startTime, duration)) {
+      // Even a successful fit breaks the phase's day limit — fail. Flag as
+      // SAME_DAY_VIOLATION ERROR (METHODOLOGY.md §Bottlenecks Specific to the
+      // Concurrent Scheduler). Ending past the soft target alone never lands
+      // here, nor does a last phase that overruns the hard end within its limit.
+      // The limit it broke, as a clock time: midnight for a last phase that
+      // starts in time, the hard end otherwise.
+      const brokenLimit = isLastPhase && startTime < hardEnd
+        ? `the last-phase limit ${clockOnDay(lastPhaseEndCap, day, config)}`
+        : `day-end ${clockOnDay(hardEnd, day, config)}`
       state.bottlenecks.push({
         competition_id: event.competition.id,
         phase: node.phase_label,
@@ -1301,7 +1341,7 @@ function tryAllocate(
         subjects: [event.competition.id],
         severity: BottleneckSeverity.ERROR,
         delay_mins: 0,
-        message: `${event.competition.id} ${node.phase_label}: ends at ${endTime} past day-end ${hardEnd}`,
+        message: `${event.competition.id} ${node.phase_label}: ends at ${clockOnDay(endTime, day, config)} past ${brokenLimit}`,
         attempt_id: event.attempt_id,
       })
       return { outcome: 'fail' }
@@ -1328,7 +1368,7 @@ function tryAllocate(
   }
 
   // Miss.
-  if (win.earliest_next_start !== null && win.earliest_next_start + duration <= hardEnd) {
+  if (canDeferTo(win.earliest_next_start, duration)) {
     return { outcome: 'defer', next_ready_time: snapToSlot(win.earliest_next_start), reason: win.reason }
   }
   return { outcome: 'fail' }
@@ -1574,6 +1614,49 @@ export function postScheduleWarnings(
 }
 
 /**
+ * One `SAME_DAY_VIOLATION` WARN per placed event whose last phase ends past its
+ * day's hard end (METHODOLOGY.md §Same-Day Completion, 018 R1 and R3). The last
+ * phase's end is `de_round_of_16_end` for a staged DE and `de_end` otherwise.
+ * An event with neither placed no last phase and is skipped.
+ *
+ * Each WARN reuses rule `phase-overruns-day-end`, names the event as its owner
+ * and only subject, carries the minutes past the hard end as `delay_mins`, and
+ * gives the estimated finish as a clock time. `labelOf` turns an id into the
+ * name the message shows (the store passes its competition label).
+ *
+ * Pure, and it reads days only through `dayHardEnd` and `clockOnDay`, so it
+ * works on every axis as long as the results and the config share one: the
+ * engine calls it after scheduling, and the store over the board as drawn.
+ * Ordered by day, then id.
+ */
+export function lastPhaseOverrunWarnings(
+  schedule: Record<string, ScheduleResult>,
+  config: TournamentConfig,
+  labelOf: (id: string) => string = (id) => id,
+): Bottleneck[] {
+  const overruns: { id: string; day: number; end: number; hardEnd: number }[] = []
+  for (const [id, r] of Object.entries(schedule)) {
+    const end = r.de_round_of_16_end ?? r.de_end
+    if (end === null) continue
+    const hardEnd = dayHardEnd(r.assigned_day, config)
+    if (end > hardEnd) overruns.push({ id, day: r.assigned_day, end, hardEnd })
+  }
+  overruns.sort((a, b) => a.day - b.day || compareIds(a.id, b.id))
+
+  return overruns.map(({ id, day, end, hardEnd }) => ({
+    competition_id: id,
+    phase: Phase.POST_SCHEDULE,
+    cause: BottleneckCause.SAME_DAY_VIOLATION,
+    rule: BottleneckRule.PHASE_OVERRUNS_DAY_END,
+    subjects: [id],
+    severity: BottleneckSeverity.WARN,
+    delay_mins: end - hardEnd,
+    day,
+    message: `${labelOf(id)} ends at ${clockOnDay(end, day, config)} on Day ${day + 1}, ${end - hardEnd} min past the day's hard end ${clockOnDay(hardEnd, day, config)}`,
+  }))
+}
+
+/**
  * The first and last days should be shorter than the days between (Ops Manual
  * p.20 – Group 2; METHODOLOGY.md §Phase 7, 024 D10). Reads the first and last
  * USED day and needs at least 3 used days. Each of the two warns when it is not
@@ -1634,7 +1717,8 @@ export function firstLastDayWarnings(
  * One WARN per day whose last competition ends after the day's soft target,
  * `dayEnd` (default 7:00 PM – Ops Manual 2026-27 p.17), at every day count
  * (METHODOLOGY.md §Same-Day Completion, 024 D7). Scheduling is not blocked:
- * the scheduler already placed the work, up to the day's hard end.
+ * the scheduler already placed the work, up to the day's hard end and an
+ * event's last phase up to midnight.
  *
  * An event's finish is its `de_total_end`, gold/bronze tail included, or its
  * `pool_end` when it has no DE. The message carries the day's estimated
@@ -1797,7 +1881,10 @@ export function postScheduleDayBreakdown(
     const compsOnDay = competitions.filter(c => state.schedule[c.id]?.assigned_day === day)
     let peakRefDemand = 0
     for (const comp of compsOnDay) {
-      if (comp.fencer_count <= 1) continue
+      // Only scheduled events reach here, and none is unsizeable (the
+      // validation pass drops those, PER_EVENT_ERROR_RULES); kept as a cheap
+      // backstop on the same predicate (018 T4).
+      if (!isSizeableCount(comp.fencer_count, config)) continue
       const poolDemand = peakPoolRefDemand(comp, comp.ref_policy)
       const deDemand = peakDeRefDemand(comp, config)
       peakRefDemand += Math.max(poolDemand, deDemand)

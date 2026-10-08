@@ -262,8 +262,9 @@ export interface DayConfig {
 
 /**
  * One day's window on the scheduler axis, as the engine reads it. Beyond the
- * organizer's hours it carries the day's hard end: no phase may end past it,
- * while ending past `day_end_time` only draws a warning (METHODOLOGY.md
+ * organizer's hours it carries the day's hard end: no phase but an event's last
+ * may end past it, and the last ends by `dayMidnight`, while ending past
+ * `day_end_time` only draws a warning (METHODOLOGY.md
  * §Same-Day Completion). `buildConfig.ts` sets it to
  * `d × 1440 + clockHardEnd(day_end)` (the helper in constants.ts, 024 D7).
  */
@@ -592,14 +593,36 @@ export function dayEnd(d: number, config: TournamentConfig): number {
 
 /**
  * Returns the absolute minute for the given day's hard end (default 10:00 PM):
- * no phase may end past it (`SAME_DAY_VIOLATION`, METHODOLOGY.md §Bottlenecks
- * Specific to the Concurrent Scheduler).
+ * no phase but an event's last may end past it, and the last phase must start
+ * before it and end by `dayMidnight` (`SAME_DAY_VIOLATION` ERROR past either
+ * limit, WARN for a last phase between them – METHODOLOGY.md §Same-Day
+ * Completion, §Bottlenecks Specific to the Concurrent Scheduler).
  */
 export function dayHardEnd(d: number, config: TournamentConfig): number {
   if (config.dayConfigs && config.dayConfigs[d]) {
     return config.dayConfigs[d].day_hard_end_time
   }
   return dayStart(d, config) + (config.DAY_HARD_END_MINS - config.DAY_START_MINS)
+}
+
+/** Minutes in a clock day: midnight, the last-phase limit (METHODOLOGY.md Appendix A §Timing Constants). */
+const MIDNIGHT_MINS = 1440
+
+/**
+ * Returns the absolute minute of the midnight that closes day d – the latest an
+ * event's last phase may end (METHODOLOGY.md §Same-Day Completion, 018 R1).
+ *
+ * **Scheduler axes only.** With a `dayConfigs` entry (the app's axis, day d's
+ * clock minute m at d × DAY_AXIS_SPACING_MINS + m) it is the next multiple of
+ * 1440 above dayStart(d). Without one (the fallback axis, minute 0 of each day
+ * standing for DAY_START_MINS) it is dayStart(d) + (1440 − DAY_START_MINS).
+ * Nothing on the store's clock axis calls it.
+ */
+export function dayMidnight(d: number, config: TournamentConfig): number {
+  if (config.dayConfigs && config.dayConfigs[d]) {
+    return (Math.floor(dayStart(d, config) / MIDNIGHT_MINS) + 1) * MIDNIGHT_MINS
+  }
+  return dayStart(d, config) + (MIDNIGHT_MINS - config.DAY_START_MINS)
 }
 
 /**
@@ -625,8 +648,10 @@ export function formatClockMins(clockMins: number): string {
  * Returns the day index d such that dayStart(d) <= t < dayHardEnd(d), or null
  * when no day in [0, days_available) contains t. It reads the hard end because
  * the scheduler places work past the soft target (METHODOLOGY.md §Same-Day
- * Completion), and that work still belongs to its day – the post-schedule ref
- * demand keys every phase by it.
+ * Completion), and that work still belongs to its day. Every phase of positive
+ * length starts before the hard end, so its start finds its day. An event's last
+ * phase may end past the hard end, up to `dayMidnight` (018 R1), and a minute
+ * in that overrun belongs to no day here.
  */
 export function findDayForTime(config: TournamentConfig, t: number): number | null {
   for (let d = 0; d < config.days_available; d++) {

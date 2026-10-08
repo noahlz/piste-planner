@@ -25,6 +25,7 @@ import {
   computePoolStructure,
   computeDeFencerCount,
   estimatePoolDuration,
+  isSizeableCount,
   resolveRefsPerPool,
   weightedPoolDuration,
 } from './pools.ts'
@@ -83,12 +84,17 @@ export function placementFromResult(result: ScheduleResult): Placement | null {
  * Computes one event's schedule geometry from its placement. Never throws on an
  * out-of-range day — durations are a function of (competition, config, strip
  * budget) only, so an impossible day changes the flag, not the blocks.
+ *
+ * `null` for a fencer count `isSizeableCount` rejects: there are no pools to
+ * lay out, so the event has no geometry and every caller counts it not placed
+ * (018 T4). Its `fencer-count-bounds` ERROR is validation's to report.
  */
 export function deriveEventSchedule(
   placement: Placement,
   competition: Competition,
   config: TournamentConfig,
-): DerivedEventSchedule {
+): DerivedEventSchedule | null {
+  if (!isSizeableCount(competition.fencer_count, config)) return null
   const poolStructure = computePoolStructure(
     competition.fencer_count,
     competition.use_single_pool_override,
@@ -285,11 +291,15 @@ export interface EventFootprint {
  * never populates `de_start` (see the branch above); its DE start is the
  * first staged phase instead, `de_prelims_start` when the bracket stages
  * prelims, else `de_round_of_16_start`.
+ *
+ * `null` when `deriveEventSchedule` gives no result: a count the engine
+ * cannot size has no footprint (018 T4).
  */
 export function estimateEventFootprint(
   competition: Competition,
   config: TournamentConfig,
-): EventFootprint {
+): EventFootprint | null {
+  if (!isSizeableCount(competition.fencer_count, config)) return null
   const poolStructure = computePoolStructure(
     competition.fencer_count,
     competition.use_single_pool_override,
@@ -302,7 +312,9 @@ export function estimateEventFootprint(
     source: PlacementSource.AUTO,
     pinned: false,
   }
-  const { result } = deriveEventSchedule(placement, competition, config)
+  const derived = deriveEventSchedule(placement, competition, config)
+  if (derived === null) return null
+  const { result } = derived
   const deStart = result.de_start ?? result.de_prelims_start ?? result.de_round_of_16_start
 
   return {

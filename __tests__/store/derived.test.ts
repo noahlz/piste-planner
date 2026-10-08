@@ -3,7 +3,6 @@ import { useStore } from '../../src/store/store.ts'
 import { BottleneckRule, DeMode, Phase, Weapon } from '../../src/engine/types.ts'
 import type { Competition, Placement, RefRequirementsByDay, ScheduleResult } from '../../src/engine/types.ts'
 import { computeRefRequirements, refDemandFromSchedule } from '../../src/engine/refs.ts'
-import { deriveEventSchedule } from '../../src/engine/derive.ts'
 import { phaseKey } from '../../src/engine/unseated.ts'
 import type { KeptRun } from '../../src/store/keptRun.ts'
 import { SCENARIOS } from '../helpers/scenarios.ts'
@@ -22,6 +21,7 @@ import {
   selectDrawnSchedule,
   selectPlacementCounts,
 } from '../../src/store/derived.ts'
+import { deriveSized } from '../helpers/derive.ts'
 
 // Smallest drift-ledger scenario (12 events) — realistic roster for exercising
 // derived selectors against real catalogue data.
@@ -193,22 +193,45 @@ describe('selectDerivedFindings', () => {
 
   /**
    * 017 T5b (spec §4): the rule check and the first and last day WARN read the
-   * drawn model. B4's run keeps a first day of 790 minutes, its DEs waiting for
-   * strips, against a shortest middle day of 755, so the scheduler warns. Over
+   * drawn model, so the app's rows equal the scheduler's. At 017 B4's kept run
+   * had a first day of 790 minutes against a shortest middle day of 755, while
    * `deriveEventSchedule`'s times, whose DEs start straight after the pools,
-   * the same board measured no WARN at all (2026-10-07).
+   * measured no WARN at all (2026-10-07).
+   *
+   * 018 T2 (2026-10-07): B4's premise moved from the first day to the last. R1
+   * places three more B4 events past the old day end, which lengthens Day 3 to
+   * 900 minutes against a shortest middle day of 885, and the first-day WARN no
+   * longer fires. Over derived times (no kept run) B4 still warns on the last
+   * day, but with different numbers: "Last day (Day 3, 760 min) ... (725 min)".
+   * B4 no longer exercises the first-day half, so B3 (which T2 leaves unchanged)
+   * covers it: the kept run warns first 635 / 595 and last 605 / 595, while
+   * derived times give first 630 / 565 and last 585 / 565.
    */
-  it('measures the first and last day on the kept run, as the scheduler does', () => {
-    runPreset('B4')
+  const FIRST_LAST_RULES: string[] = [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]
+
+  function keptRunWarnings(preset: 'B3' | 'B4') {
+    runPreset(preset)
     const state = useStore.getState()
     const { config, competitions } = buildTournamentConfig(state)
-    const rules: string[] = [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]
-    const scheduler = scheduleAll(competitions, config).bottlenecks.filter((b) => rules.includes(b.rule))
-    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B4\'s first day').toEqual([
-      'First day (Day 1, 790 min) is not shorter than the shortest middle day (755 min)',
-    ])
+    const scheduler = scheduleAll(competitions, config).bottlenecks.filter((b) => FIRST_LAST_RULES.includes(b.rule))
+    const app = selectDerivedFindings(state).analysis.warnings.filter((w) => FIRST_LAST_RULES.includes(w.rule))
+    return { scheduler, app }
+  }
 
-    const app = selectDerivedFindings(state).analysis.warnings.filter((w) => rules.includes(w.rule))
+  it('measures the last day on the kept run, as the scheduler does (B4)', () => {
+    const { scheduler, app } = keptRunWarnings('B4')
+    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B4\'s last day').toEqual([
+      'Last day (Day 3, 900 min) is not shorter than the shortest middle day (885 min)',
+    ])
+    expect(app).toEqual(scheduler)
+  })
+
+  it('measures the first and last day on the kept run, as the scheduler does (B3)', () => {
+    const { scheduler, app } = keptRunWarnings('B3')
+    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B3\'s first and last day').toEqual([
+      'First day (Day 1, 635 min) is not shorter than the shortest middle day (595 min)',
+      'Last day (Day 4, 605 min) is not shorter than the shortest middle day (595 min)',
+    ])
     expect(app).toEqual(scheduler)
   })
 })
@@ -318,7 +341,7 @@ describe('selectDerivedRefRequirements counts the drawn board (017 T9)', () => {
       expect(model.events[eventId].source, `premise: ${eventId} stays kept`).toBe('kept')
       return kept.events[eventId].result
     })
-    const results = resultsWithMoverAt(deriveEventSchedule(state.placements[id], competition, model.config).result)
+    const results = resultsWithMoverAt(deriveSized(state.placements[id], competition, model.config).result)
     const skip = new Set(unseated.map((phase) => phaseKey(id, phase)))
     expect(sweep(results, skip), 'premise: the unseated phases would move a peak').not.toEqual(sweep(results, new Set()))
     expect(sweep(resultsWithMoverAt(kept.events[id].result), skip), 'premise: the mover\'s derived times move a peak')
@@ -379,5 +402,41 @@ describe('selectPlacementCounts reads the drawn model (017 T5a)', () => {
     expect(model.blocks.some((b) => b.unseated), 'premise: the stale board draws unseated phases').toBe(true)
 
     expect(selectPlacementCounts(state)).toEqual({ placed: 24, unplaced: 0, pinned: 1 })
+  })
+})
+
+describe('an event the engine cannot size counts as not placed (018 T4)', () => {
+  // Fresh-page order: the count is edited before any selector has run on it,
+  // so a throw cannot hide behind the memo cache.
+  function runB1WithCount(fencer_count: number): string {
+    runPreset('B1')
+    const id = 'JR-M-FOIL-IND'
+    useStore.getState().updateCompetition(id, { fencer_count })
+    expect(useStore.getState().placements[id], 'premise: the event keeps its placement').toBeDefined()
+    return id
+  }
+
+  it.each([0, 1, 1.5, Infinity])('%s: the drawn board leaves it out and the footer counts it unplaced', (n) => {
+    const id = runB1WithCount(n)
+    const state = useStore.getState()
+    const drawn = selectDrawnSchedule(state)
+    expect(drawn.events[id]).toBeUndefined()
+    expect(drawn.blocks.some((b) => b.competitionId === id)).toBe(false)
+    expect(selectDerivedSchedule(state).events[id]).toBeUndefined()
+    expect(selectPlacementCounts(state)).toEqual({ placed: 23, unplaced: 1, pinned: 0 })
+  })
+
+  it.each([0, 1, 1.5, Infinity])('%s: the findings carry the fencer-count-bounds ERROR', (n) => {
+    const id = runB1WithCount(n)
+    const findings = selectDerivedFindings(useStore.getState())
+    expect(findings.validationErrors.filter((e) => e.rule === 'fencer-count-bounds').map((e) => e.subjects))
+      .toEqual([[id]])
+  })
+
+  it('guard: a count of 2 is still drawn and counted placed', () => {
+    const id = runB1WithCount(2)
+    const state = useStore.getState()
+    expect(selectDrawnSchedule(state).events[id]).toBeDefined()
+    expect(selectPlacementCounts(state)).toEqual({ placed: 24, unplaced: 0, pinned: 0 })
   })
 })

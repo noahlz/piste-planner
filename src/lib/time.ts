@@ -1,3 +1,5 @@
+import { formatClockMins } from '../engine/types.ts'
+
 export function formatMinutes(mins: number | null): string {
   if (mins === null) return '—'
   const hours = Math.floor(mins / 60)
@@ -5,11 +7,13 @@ export function formatMinutes(mins: number | null): string {
   return `${hours}:${minutes.toString().padStart(2, '0')}`
 }
 
-/** Zero-padded 24-hour clock (FR-041): 480 → "08:00", 847 → "14:07". */
+/**
+ * Zero-padded 24-hour clock (FR-041): 480 → "08:00", 847 → "14:07". Past midnight
+ * it wraps like the engine's `formatClockMins`, so 1510 → "01:10" and every
+ * surface that names a late finish agrees (018 T3).
+ */
 export function formatClock(minutesFromMidnight: number): string {
-  const hours = Math.floor(minutesFromMidnight / 60)
-  const minutes = minutesFromMidnight % 60
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+  return formatClockMins(minutesFromMidnight)
 }
 
 // 6:00 AM (360) through 11:00 PM (1380) in 30-minute increments

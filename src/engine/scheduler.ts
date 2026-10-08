@@ -8,7 +8,7 @@
  */
 
 import type { Competition, TournamentConfig, ScheduleResult, Bottleneck, RefRequirementsByDay, StripAllocation, PinnedPlacement } from './types.ts'
-import { scheduleAllConcurrent, postScheduleDiagnostics, postScheduleDayBreakdown, postScheduleWarnings } from './concurrentScheduler.ts'
+import { scheduleAllConcurrent, postScheduleDiagnostics, postScheduleDayBreakdown, postScheduleWarnings, lastPhaseOverrunWarnings } from './concurrentScheduler.ts'
 
 interface ScheduleAllResult {
   schedule: Record<string, ScheduleResult>
@@ -31,4 +31,4 @@ export function scheduleAll(
   return scheduleAllConcurrent(competitions, config, pinned)
 }
 
-export { postScheduleDiagnostics, postScheduleDayBreakdown, postScheduleWarnings }
+export { postScheduleDiagnostics, postScheduleDayBreakdown, postScheduleWarnings, lastPhaseOverrunWarnings }
