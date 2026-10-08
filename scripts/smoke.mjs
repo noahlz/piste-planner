@@ -376,9 +376,10 @@ await closePanel()
 // locator that reads the true placed count; this floor only guards against the
 // canvas culling away everything.
 //
-// 011 T013: this floor moved from 11 to 8. `applyTemplate` never touches
-// `days_available`, so it stays at boot's B1 value of 4 throughout this whole
-// driver — nothing here ever calls setDays. Before this feature the strip
+// 011 T013: this floor moved from 11 to 8. Templates never lower
+// `days_available` and raise it to at most 4, so it stays at boot's B1 value of 4
+// throughout this whole driver. The driver lowers days to 3 once, in the 019 hint
+// block, which restores 4 before the per-type step. Before this feature the strip
 // suggestion was a function of the largest event alone and did not read day
 // count, so the old rule and specs/012-actionable-strip-suggestion/baseline.md's (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) day=3 harness happened to agree.
 // T010's busiest-day rule is a function of `days_available` (FR-005) by
@@ -943,8 +944,10 @@ await page3.screenshot({ path: `${SHOTS}11-gears-roundtrip.png`, fullPage: FULLP
 await page3.close()
 
 // ── Restore isolation: the Single override set above leaks into later templates ──
-// `applyTemplate` keeps the override across a switch the same way it keeps
-// `days_available`. Since T045 (handoff finding 6) the Default pill clears the
+// `applyTemplate` keeps the override across a switch, while templates never
+// lower `days_available` and raise it to at most 4 (the driver lowers it to 3
+// once, in the 019 hint block, which restores 4 before the per-type step).
+// Since T045 (handoff finding 6) the Default pill clears the
 // override to null, so every later template resolves DE mode as a fresh store
 // would – following its own type – instead of carrying an explicit Staged.
 // 013 T023 measured the leak before this step existed: NAC Vet/Div1/Junior's
@@ -1035,7 +1038,8 @@ await page.waitForTimeout(200)
 const nacYouthRowCount = await page.locator('[data-schedule-row]').count()
 log('NAC Youth schedule table rows =', nacYouthRowCount)
 // Not pinned to a literal count: `days_available` sits at boot's B1 value of 4
-// for this whole driver (applyTemplate never touches it), so the suggested
+// here (templates never lower days and raise them to at most 4, and the driver
+// lowers days to 3 once, in the 019 hint block, which restores 4), so the suggested
 // number and the placed count here are one instance of the busiest-day rule
 // at a day count specs/012-actionable-strip-suggestion/baseline.md's (removed; git show 0ab5bd2dc9:specs/012-actionable-strip-suggestion/baseline.md) engine harness (forced to 3) does not share —
 // see the ROC Div1A/Vet matrix-block comment above for the same effect. The
@@ -1050,8 +1054,9 @@ log('NAC Youth schedule table rows =', nacYouthRowCount)
 // is 66. Isolated 2026-09-06: the gears-panel step above changes Admin gap
 // 30 → 15, reverts it to 30, then re-applies 15 so the override carries
 // through the share link — and nothing after that restores it.
-// `applyTemplate` keeps that override across a template switch the same way
-// it keeps `days_available`. A throwaway probe
+// `applyTemplate` keeps that override across a template switch, while templates
+// never lower `days_available` and raise it to at most 4 (the driver lowers it
+// to 3 once, in the 019 hint block, which restores 4). A throwaway probe
 // (tmp/probe-nac-youth-gap.test.ts, deleted) replaying this driver's store
 // actions found `ADMIN_GAP_MINS` the only field whose single swap moves the
 // answer — 63 ↔ 66 in both directions — with `strips_total`, `strips`, and
@@ -1297,9 +1302,10 @@ log('NAC Cadet/Junior schedule table rows =', teamRowCount)
 // this kind of movement to them ("re-packing under D6 … and T061a"); five more
 // events fitting is that re-pack landing in this template's favour.
 // 2026-09-05 (011 T013): 20 → 24, suggested strips 39 → 144. This is T010's
-// busiest-day suggestion rule, not a scheduling change: `applyTemplate` never
-// touches `days_available`, which stays at boot's B1 value of 4 for this whole
-// driver, so Suggest here sizes for the busiest of 4 day-groups' summed pool
+// busiest-day suggestion rule, not a scheduling change: templates never lower
+// `days_available` and raise it to at most 4, so it stays at boot's B1 value of 4
+// here (the driver lowers days to 3 once, in the 019 hint block, which restores
+// 4 before the per-type step), so Suggest here sizes for the busiest of 4 day-groups' summed pool
 // demand rather than the old rule's largest-single-event count. The bigger
 // number the button now writes into the strip field is what closes the
 // remaining 4-event shortfall — this is R5/L5 (011) working as specified, an
@@ -1315,6 +1321,60 @@ if (teamRowCount !== 24) {
   throw new Error(`NAC Cadet/Junior schedule table rendered ${teamRowCount} rows, expected 24`)
 }
 await shot('07-team-schedule')
+
+// ── 019 T3: the template's hint under the day count (R3) ──
+// Templates never lower days and raise them to at most 4, so the only way to
+// get below a template's minimum is to lower days by hand. This is the one
+// place the driver does that, and it restores 4 (through the template pick at
+// the end) before the per-type step below, which assumes NAC Cadet/Junior at 4.
+// Each assertion is paired with its opposite: "no hint at 4" proves nothing on
+// an app that never shows one, and "hint at 3" proves nothing on one that
+// always does, so the hint is also required to detach on a template that does
+// not need the days and the 4 is required to come back from the template alone.
+await openPanel('Tournament')
+const daysGroup = page.getByRole('radiogroup', { name: 'Day count' })
+const daysHint = page.locator('[data-days-hint]')
+const headerDays = async () =>
+  Number(((await page.locator('[data-summary]').textContent()) ?? '').match(/(\d+) days/)?.[1])
+const waitHeaderDays = (n) =>
+  page.waitForFunction(
+    (want) => new RegExp(`\\b${want} days`).test(document.querySelector('[data-summary]')?.textContent ?? ''),
+    n,
+  )
+
+if ((await daysHint.count()) !== 0) throw new Error('019 T3: a days hint showed on NAC Cadet/Junior at 4 days')
+if ((await headerDays()) !== 4) throw new Error(`019 T3: expected 4 days before lowering, header reads ${await headerDays()}`)
+log('019 T3: NAC Cadet/Junior at 4 days, no hint')
+
+await daysGroup.getByRole('radio', { name: '3', exact: true }).click()
+await daysHint.waitFor({ state: 'visible' })
+const hintText = ((await daysHint.textContent()) ?? '').trim()
+if (!hintText.includes('NAC Cadet/Junior') || !hintText.includes('4 days')) {
+  throw new Error(`019 T3: hint at 3 days should name "NAC Cadet/Junior" and "4 days", got "${hintText}"`)
+}
+await waitHeaderDays(3)
+log('019 T3: lowered to 3 days, hint shows:', hintText)
+await shot('07c-days-hint')
+
+await choosePreset('NAC Youth')
+await daysHint.waitFor({ state: 'detached' })
+if ((await headerDays()) !== 3) throw new Error(`019 T3: NAC Youth changed days from 3 to ${await headerDays()}`)
+log('019 T3: NAC Youth picked, hint gone, header still 3 days')
+
+await choosePreset('NAC Cadet/Junior')
+await waitHeaderDays(4)
+await daysGroup.getByRole('radio', { name: '4', exact: true }).and(page.locator('[aria-checked="true"]')).waitFor()
+await daysHint.waitFor({ state: 'detached' })
+// Schedule rows follow the pick asynchronously, so wait for the 24-row board
+// (12 team rows tell it from NAC Youth's 24) rather than reading once.
+await page.waitForFunction(
+  () =>
+    document.querySelectorAll('[data-schedule-row]').length === 24 &&
+    document.querySelectorAll('[data-schedule-row$="-TEAM"]').length === 12,
+  undefined,
+  { timeout: 15000 },
+)
+log('019 T3: NAC Cadet/Junior picked, raised back to 4 days, 4 radio checked, no hint, 24 rows of which 12 team')
 
 // ── Per-type defaults, and what survives a type change (T066, US4/FR-036) ──
 // The clarification US4 exists to settle: changing the tournament type
