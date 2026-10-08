@@ -130,9 +130,14 @@ describe('eventTimeSegments on the reference tournaments', () => {
   // has a VET R16 knock-on: seven day-1 VET R16s start later, so JR-W-EPEE's
   // prelims fall back onto 8 video strips from 1670 to 1850. Counts
   // (66, 66, 54, 148) and B3–B6 are unchanged.
+  //
+  // 018 T2 (2026-10-07): the B4 and B6 digests moved on purpose. A last phase
+  // may now run past the 22:00 hard end (R1), so events the scheduler used to
+  // drop are placed and drawn: B4 21 → 24 events (42 → 48 segments, two each)
+  // and B6 45 → 51 (90 → 102). B1–B3, B5, B7 and B8 are unchanged.
   const EXPECTED = {
     B1: ['1972f1b8ff40deeb', 66], B2: ['38543891f24c5f71', 66], B3: ['1f23028d76cd460e', 72],
-    B4: ['6ec3a9347780d7b7', 42], B5: ['3dcb38014ee7022f', 24], B6: ['9259201622c03664', 90],
+    B4: ['d2c0a3c4be181709', 48], B5: ['3dcb38014ee7022f', 24], B6: ['55b1994525d67043', 102],
     B7: ['da10924b4af05090', 54], B8: ['dc00d9d378193f5b', 148],
   } as const
 

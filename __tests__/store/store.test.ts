@@ -462,9 +462,12 @@ describe('lastAutoRun', () => {
 
     const result = runScheduleAll()
 
-    expect(result).toEqual({ placed: 21, unplaced: 9 })
+    // 018 T2 (2026-10-07): 21/9 → 24/6. A last phase may run past the 22:00 hard
+    // end (R1), so three of B4's former drops are placed. Six are still dropped,
+    // so the "drops entirely" premise holds.
+    expect(result).toEqual({ placed: 24, unplaced: 6 })
     expect(useStore.getState().lastAutoRun).toEqual(
-      expect.objectContaining({ placed: 21, unplaced: 9 }),
+      expect.objectContaining({ placed: 24, unplaced: 6 }),
     )
   })
 })

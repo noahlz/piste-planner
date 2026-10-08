@@ -186,7 +186,11 @@ function earliestFreeStartFor(state: GlobalState, stripIdx: number, startTime: n
  * The optional `day` parameter is the tournament day index used to compute the
  * day-end clamp via `dayHardEnd(day, config)` – the hard end, not the 7:00 PM
  * soft target, since work may run past the target (METHODOLOGY.md §Same-Day
- * Completion). Both call sites inside a scheduling
+ * Completion). The clamp only picks the miss's `STRIPS`-vs-`TIME` label and
+ * never refuses a fit. Since 018 R1 an event's last phase may end past the hard
+ * end, so a last-phase miss labelled `TIME` can still defer: `tryAllocate`
+ * applies the day limit itself, and the label is left as is (INFO only, outside
+ * the drift digest). Both call sites inside a scheduling
  * run (`concurrentScheduler.ts` `tryAllocate`, the STAGED-DE pre-check and the
  * strip-claim call every phase kind uses) always pass it explicitly — `day` is
  * optional for direct callers only, such as this file's own tests.

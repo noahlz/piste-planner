@@ -45,10 +45,11 @@ export const CATEGORY_START_PREFERENCE = {
 // The day of Ops Manual 2026-27 p.17 (METHODOLOGY.md Appendix A §Timing
 // Constants): start at 9:00 and aim to finish by 7:00 PM. 7:00 PM is a soft
 // target – work may run to the 10:00 PM hard end, which is unsourced and gives
-// way to an organizer day end set later (§Same-Day Completion).
+// way to an organizer day end set later, and an event's last phase may run on
+// past it to midnight with a WARN (§Same-Day Completion, `dayMidnight`).
 export const DAY_START_MINS = 540 // 9:00 AM
 export const DAY_END_MINS = 1140 // 7:00 PM — soft target
-export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase may end past it
+export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase but an event's last may end past it
 /** A clock-axis day's hard end: 10:00 PM, or the organizer's day end when set later (024 D7). */
 export function clockHardEnd(dayEndTime: number): number {
   return Math.max(dayEndTime, DAY_HARD_END_MINS)

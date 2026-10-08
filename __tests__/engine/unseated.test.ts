@@ -97,8 +97,15 @@ const totalSpans = (run: ReturnType<typeof engineRun>): number =>
 describe('unseatedPhases against the engine\'s pinned-unclaimed warnings', () => {
   // Distinct (event, phase) pairs the engine flagged PINNED_UNCLAIMED on a
   // pin-all and a pin-half re-run, measured at 114d99314b (tmp/measure017pins.json).
-  const ALL = [8, 14, 10, 12, 3, 37, 8, 48]
-  const HALF = [0, 1, 0, 2, 0, 9, 0, 10]
+  // 018 T2 (2026-10-07): pin-all B4 12 → 18 and B6 37 → 44, pin-half B4 2 → 5. The last phase may
+  // now end past the hard end (R1), so B4 places three more events (21 → 24) and
+  // B6 six more (45 → 51). These are re-measured counts whose unclaimed sets
+  // reshuffle: B4 pin-all gains CDT-W-FOIL, CDT-W-SABRE and the existing
+  // CDT-M-SABRE-IND, and B6 pin-all gains 12 phases and loses 5, only 4 of them
+  // from newly placed events. B6 pin-half holds at 9 by coincidence, and every
+  // other scenario holds.
+  const ALL = [8, 14, 10, 18, 3, 44, 8, 48]
+  const HALF = [0, 1, 0, 5, 0, 9, 0, 10]
 
   it.each(SCENARIO_IDS.map((id, i) => [id, ALL[i], HALF[i]] as const))(
     '%s: matches the warnings after a pin-all (%i) and a pin-half (%i) re-run',

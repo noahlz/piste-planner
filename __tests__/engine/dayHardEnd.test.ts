@@ -1,24 +1,30 @@
 import { describe, it, expect } from 'vitest'
-import { dayStart, dayEnd, dayHardEnd, findDayForTime, clockOnDay } from '../../src/engine/types.ts'
+import { dayStart, dayEnd, dayHardEnd, dayMidnight, findDayForTime, clockOnDay } from '../../src/engine/types.ts'
 import { DAY_AXIS_SPACING_MINS } from '../../src/store/buildConfig.ts'
 import {
   allocateInterval,
   createGlobalState,
   findAvailableStripsInWindow,
 } from '../../src/engine/resources.ts'
-import { postScheduleWarnings, scheduleAllConcurrent } from '../../src/engine/concurrentScheduler.ts'
+import {
+  lastPhaseOverrunWarnings,
+  postScheduleWarnings,
+  scheduleAllConcurrent,
+} from '../../src/engine/concurrentScheduler.ts'
+import { unseatedPhases } from '../../src/engine/unseated.ts'
 import {
   BottleneckCause,
   BottleneckRule,
   BottleneckSeverity,
-  CutMode,
+  Category,
   DeMode,
+  Gender,
   Phase,
-  RefPolicy,
-  VideoPolicy,
+  Weapon,
 } from '../../src/engine/types.ts'
-import type { Bottleneck, DayWindow, ScheduleResult } from '../../src/engine/types.ts'
-import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
+import type { Bottleneck, Competition, DayWindow, ScheduleResult } from '../../src/engine/types.ts'
+import { makeConfig, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
+import { clock, lateEventCompetition, SEVEN_PM, TEN_PM, windowFrom } from '../helpers/lateEvent.ts'
 import { checkInvariants } from '../helpers/bottleneckInvariants.ts'
 
 /**
@@ -96,9 +102,7 @@ describe('findAvailableStripsInWindow day inference on the fallback axis', () =>
   })
 })
 
-const NINE_AM = 540
-const SEVEN_PM = 1140
-const TEN_PM = 1320
+const NINE_AM = clock(9)
 
 /** The app's axis: each day's window shifted by d × DAY_AXIS_SPACING_MINS, as `buildConfig.ts` does. */
 function appAxisConfig(days: number) {
@@ -115,27 +119,17 @@ function appAxisConfig(days: number) {
 /**
  * The scheduler places work until the day's hard end, not its soft target
  * (METHODOLOGY.md §Same-Day Completion, §Phase 5): a phase ending between
- * 19:00 and 22:00 is placed, and SAME_DAY_VIOLATION fires only for a phase
- * that would end past 22:00 (§Bottlenecks Specific to the Concurrent
+ * 19:00 and 22:00 is placed. Only an event's last phase may run past 22:00, up
+ * to midnight, and then it draws a WARN (the R1 block below). A SAME_DAY_VIOLATION
+ * ERROR is for any other phase ending past 22:00, or a last phase starting at or
+ * after 22:00 or ending past midnight (§Bottlenecks Specific to the Concurrent
  * Scheduler).
  *
  * The one day opens late, at 17:30, so a single small event's pools end near
  * 19:00 and its DE runs on into the evening. The window is the scheduler-axis
  * shape `buildConfig.ts` emits for day hours 17:30–19:00.
  */
-const LATE_WINDOW: DayWindow = { day_start_time: 1050, day_end_time: 1140, day_hard_end_time: 1320 }
-
-function lateEventCompetition(fencerCount: number) {
-  return makeCompetition({
-    id: 'late-evt',
-    fencer_count: fencerCount,
-    de_mode: DeMode.SINGLE_STAGE,
-    de_video_policy: VideoPolicy.BEST_EFFORT,
-    cut_mode: CutMode.DISABLED,
-    cut_value: 100,
-    ref_policy: RefPolicy.ONE,
-  })
-}
+const LATE_WINDOW: DayWindow = { day_start_time: clock(17, 30), day_end_time: SEVEN_PM, day_hard_end_time: TEN_PM }
 
 function lateWindowConfig() {
   return makeConfig({
@@ -147,19 +141,19 @@ function lateWindowConfig() {
   })
 }
 
+// A SAME_DAY_VIOLATION ERROR carries its attempt's id, so the retry rollback
+// (`releaseEventAllocations`) removes it with the attempt. The failed-attempt
+// findings persist and name the phase that failed, so they are what these
+// tests read.
+function failedAttempts(result: ReturnType<typeof scheduleAllConcurrent>) {
+  return result.bottlenecks.filter((b) =>
+    b.cause === BottleneckCause.DEADLINE_BREACH
+    || b.cause === BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE)
+}
+
 describe('the scheduler places work until the day\'s hard end', () => {
   function runOnLateWindow(fencerCount: number) {
     return scheduleAllConcurrent([lateEventCompetition(fencerCount)], lateWindowConfig())
-  }
-
-  // A SAME_DAY_VIOLATION carries its attempt's id, so the retry rollback
-  // (`releaseEventAllocations`) removes it with the attempt. The failed-attempt
-  // findings persist and name the phase that failed, so they are what these
-  // tests read.
-  function failedAttempts(result: ReturnType<typeof scheduleAllConcurrent>) {
-    return result.bottlenecks.filter((b) =>
-      b.cause === BottleneckCause.DEADLINE_BREACH
-      || b.cause === BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE)
   }
 
   it('places a DE that ends between 19:00 and 22:00 on its first attempt', () => {
@@ -173,19 +167,6 @@ describe('the scheduler places work until the day\'s hard end', () => {
     expect(failedAttempts(result)).toEqual([])
   })
 
-  it('places pools that end by 22:00 and fails the DE that would end past it', () => {
-    const result = runOnLateWindow(100)
-
-    expect(result.schedule['late-evt']).toBeUndefined()
-    const failures = failedAttempts(result)
-    expect(failures.map((b) => b.cause)).toEqual([
-      BottleneckCause.DEADLINE_BREACH,
-      BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
-    ])
-    // Both attempts got past the pools and failed at the DE.
-    for (const b of failures) expect(b.message).toMatch(new RegExp(`failed at ${Phase.DE}\\b`))
-  })
-
   it('counts the referees of a phase that starts after 19:00 toward that day', () => {
     const result = runOnLateWindow(24)
     const s = result.schedule['late-evt']
@@ -196,6 +177,291 @@ describe('the scheduler places work until the day\'s hard end', () => {
     // 24 fencers: 4 pools ask 4 referees, and the DE's opening round asks one
     // per strip, more than the pools, so the day's peak is the DE's start.
     expect(day0?.peak_time).toBe(s.de_start)
+  })
+})
+
+/**
+ * 018 R1 (METHODOLOGY.md §Same-Day Completion, `SAME_DAY_VIOLATION` ERROR and
+ * WARN): an event's last phase – its DE, or the R16 stage of a staged DE – may
+ * end past the day's 22:00 hard end when it starts before the hard end and ends
+ * by midnight. The event is placed and draws one WARN. Every other phase still
+ * ends by the hard end, and `latest_end` stays a hard per-event limit.
+ */
+const MIDNIGHT = clock(24)
+
+function runFrom(start: number, competition: Competition) {
+  return scheduleAllConcurrent([competition], windowFrom(start))
+}
+
+function overrunWarnings(bottlenecks: Bottleneck[]): Bottleneck[] {
+  return bottlenecks.filter((b) =>
+    b.rule === BottleneckRule.PHASE_OVERRUNS_DAY_END && b.severity === BottleneckSeverity.WARN)
+}
+
+/** Both attempts failed at `phase` and the event was dropped. */
+function expectDroppedAt(result: ReturnType<typeof scheduleAllConcurrent>, phase: string) {
+  expect(result.schedule['late-evt']).toBeUndefined()
+  const failures = failedAttempts(result)
+  expect(failures.map((b) => b.cause)).toEqual([
+    BottleneckCause.DEADLINE_BREACH,
+    BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+  ])
+  for (const b of failures) expect(b.message).toMatch(new RegExp(`failed at ${phase}\\b`))
+}
+
+describe('an event\'s last phase may run past the hard end, up to midnight (018 R1)', () => {
+  // Opens 17:55: pools 17:55–19:44, DE 20:15–23:15.
+  const overrunRun = () => runFrom(clock(17, 55), lateEventCompetition(100))
+
+  it('places a last phase that starts before 22:00 and ends at 23:15 on its first attempt', () => {
+    const result = overrunRun()
+    const s = result.schedule['late-evt']
+
+    expect(s).toBeDefined()
+    expect(s.de_start).toBeLessThan(TEN_PM)
+    expect(s.de_end).toBe(clock(23, 15))
+    expect(failedAttempts(result)).toEqual([])
+  })
+
+  it('emits exactly one WARN for it, naming the event and its 23:15 finish', () => {
+    const warnings = overrunWarnings(overrunRun().bottlenecks)
+
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatchObject({
+      rule: BottleneckRule.PHASE_OVERRUNS_DAY_END,
+      cause: BottleneckCause.SAME_DAY_VIOLATION,
+      severity: BottleneckSeverity.WARN,
+      phase: Phase.POST_SCHEDULE,
+      competition_id: 'late-evt',
+      subjects: ['late-evt'],
+      day: 0,
+      delay_mins: 75,
+    })
+    expect(warnings[0].message).toBe('late-evt ends at 23:15 on Day 1, 75 min past the day\'s hard end 22:00')
+    checkInvariants(warnings[0], ['late-evt'], new Set(), 1)
+  })
+
+  it('lets a staged event\'s R16 run past 22:00 and warns on the R16 end', () => {
+    // Opens 18:00: pools 18:00–19:40, prelims 20:10–21:10, R16 21:40–23:00.
+    const result = runFrom(clock(18), lateEventCompetition(64, DeMode.STAGED))
+    const s = result.schedule['late-evt']
+
+    expect(s).toBeDefined()
+    expect(s.de_prelims_end).toBeLessThanOrEqual(TEN_PM)
+    expect(s.de_round_of_16_end).toBe(clock(23))
+    const warnings = overrunWarnings(result.bottlenecks)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0].delay_mins).toBe(60)
+    expect(warnings[0].message).toContain('23:00')
+  })
+
+  describe('a pinned last phase past 22:00', () => {
+    // The same 17:55 window, its pools pinned at the window's start.
+    const pinnedRun = () =>
+      scheduleAllConcurrent([lateEventCompetition(100)], windowFrom(clock(17, 55)), [
+        { competition_id: 'late-evt', day: 0, start_time: clock(17, 55), strip_count: 20 },
+      ])
+
+    it('is claimed and warned: no ERROR, no unclaimed pin, nothing unseated, one WARN', () => {
+      const result = pinnedRun()
+
+      expect(result.schedule['late-evt'].de_end).toBe(clock(23, 15))
+      expect(result.bottlenecks.filter((b) =>
+        b.cause === BottleneckCause.SAME_DAY_VIOLATION && b.severity === BottleneckSeverity.ERROR)).toEqual([])
+      expect(result.bottlenecks.filter((b) => b.cause === BottleneckCause.PINNED_UNCLAIMED)).toEqual([])
+      expect(unseatedPhases(result).size).toBe(0)
+      expect(overrunWarnings(result.bottlenecks).map((b) => b.subjects)).toEqual([['late-evt']])
+    })
+  })
+
+  // A pinned last phase that breaks its limit keeps the ERROR and the unclaimed
+  // pin, and draws no WARN on top (METHODOLOGY.md: the WARN is for an overrun
+  // within the midnight limit). The ERROR names the limit it broke as a clock time.
+  describe.each([
+    {
+      name: 'ends past midnight', fencers: 100, opens: clock(19, 10),
+      // Pools 19:10–20:59, DE 21:30–00:30.
+      message: 'late-evt DE: ends at 00:30 past the last-phase limit 00:00',
+    },
+    {
+      name: 'starts at or after 22:00', fencers: 24, opens: clock(20, 10),
+      // Pools 20:10–21:36, DE 22:10–23:30.
+      message: 'late-evt DE: ends at 23:30 past day-end 22:00',
+    },
+  ])('a pinned last phase that $name', ({ fencers, opens, message }) => {
+    const pinnedRun = () => scheduleAllConcurrent([lateEventCompetition(fencers)], windowFrom(opens), [
+      { competition_id: 'late-evt', day: 0, start_time: opens, strip_count: 20 },
+    ])
+
+    it('keeps the SAME_DAY_VIOLATION ERROR, naming the limit as a clock time, and the unclaimed pin', () => {
+      const result = pinnedRun()
+      const errors = result.bottlenecks.filter((b) =>
+        b.rule === BottleneckRule.PHASE_OVERRUNS_DAY_END && b.severity === BottleneckSeverity.ERROR)
+
+      expect(errors.map((b) => b.message)).toEqual([message])
+      expect(result.bottlenecks.filter((b) => b.cause === BottleneckCause.PINNED_UNCLAIMED)).toHaveLength(1)
+    })
+
+    it('draws no overrun WARN for the same event', () => {
+      expect(overrunWarnings(pinnedRun().bottlenecks)).toEqual([])
+    })
+  })
+
+  // The start edge: a last phase may start before, not at, the hard end. On a
+  // 24-fencer event the DE starts 120 min after the window opens.
+  describe('the start edge', () => {
+    // guard: opens 20:00 – pools 20:00–21:26, so the DE would start at 22:00 sharp.
+    it('drops a last phase that would start exactly at 22:00', () => {
+      expectDroppedAt(runFrom(clock(20), lateEventCompetition(24)), Phase.DE)
+    })
+
+    it('places a last phase that starts at 21:55, 5 minutes before the hard end', () => {
+      const result = runFrom(clock(19, 55), lateEventCompetition(24))
+      const s = result.schedule['late-evt']
+
+      expect(s.de_start).toBe(clock(21, 55))
+      expect(s.de_end).toBe(clock(23, 15))
+      expect(failedAttempts(result)).toEqual([])
+      expect(overrunWarnings(result.bottlenecks)).toHaveLength(1)
+    })
+  })
+
+  // The end edge: a last phase may end at midnight, not a minute after.
+  describe('the midnight edge', () => {
+    it('places a last phase that ends exactly at midnight, with a WARN', () => {
+      const result = runFrom(clock(18, 40), lateEventCompetition(100))
+
+      expect(result.schedule['late-evt'].de_end).toBe(MIDNIGHT)
+      expect(overrunWarnings(result.bottlenecks).map((b) => b.delay_mins)).toEqual([120])
+    })
+
+    // guard: one minute later the DE would end at 00:01.
+    it('drops a last phase that would end one minute past midnight', () => {
+      expectDroppedAt(runFrom(clock(18, 41), lateEventCompetition(100)), Phase.DE)
+    })
+  })
+
+  // guard: opens 20:10 – pools 20:10–21:36, so the DE would start 22:10 and
+  // end 23:30, before midnight but after the hard end.
+  it('drops an event whose last phase would start after 22:00', () => {
+    expectDroppedAt(runFrom(clock(20, 10), lateEventCompetition(24)), Phase.DE)
+  })
+
+  // guard: opens 19:10 – pools 19:10–20:59, DE would run 21:30–00:30.
+  it('drops an event whose last phase would end past midnight', () => {
+    expectDroppedAt(runFrom(clock(19, 10), lateEventCompetition(100)), Phase.DE)
+  })
+
+  // guard: opens 20:50 – pools would end 22:16. Pools are never the last phase.
+  it('drops an event whose pools would end past 22:00', () => {
+    expectDroppedAt(runFrom(clock(20, 50), lateEventCompetition(24)), Phase.POOLS)
+  })
+
+  // guard: opens 19:20 – pools 19:20–21:00, prelims would run 21:30–22:30.
+  it('drops a staged event whose prelims would end past 22:00', () => {
+    expectDroppedAt(runFrom(clock(19, 20), lateEventCompetition(64, DeMode.STAGED)), Phase.DE_PRELIMS)
+  })
+
+  // guard: opens 17:30 – the DE would end 20:50, past a latest_end of 20:30.
+  it('drops an event whose last phase would end past a latest_end set below 22:00', () => {
+    const competition = { ...lateEventCompetition(24), latest_end: clock(20, 30) }
+    expectDroppedAt(runFrom(clock(17, 30), competition), Phase.DE)
+  })
+
+  /**
+   * The miss-defer path: the last phase finds no strips at its ready time and
+   * defers behind another event's DE. The two events differ in gender, weapon
+   * and category, or the same-population check drops both. The day opens 16:40.
+   */
+  describe('a last phase deferred behind another event\'s DE', () => {
+    function twoEventRun(foilFencers: number, epeeFencers: number) {
+      const a = { ...lateEventCompetition(foilFencers), id: 'A', gender: Gender.MEN, category: Category.DIV1, weapon: Weapon.FOIL }
+      const b = { ...lateEventCompetition(epeeFencers), id: 'B', gender: Gender.WOMEN, category: Category.JUNIOR, weapon: Weapon.EPEE }
+      return scheduleAllConcurrent([a, b], windowFrom(clock(16, 40)))
+    }
+
+    it('is placed past 22:00 when the deferred start is before the hard end, with one WARN', () => {
+      // A (24): DE 18:40–20:00. B (100): pools to 18:29, DE deferred behind A's
+      // DE to 20:00 and run to 23:00.
+      const result = twoEventRun(24, 100)
+      const b = result.schedule['B']
+
+      expect(result.bottlenecks.filter((x) => x.rule === BottleneckRule.PHASE_DEFERRED).map((x) => x.message))
+        .toEqual(['B DE: deferred to 1200 (reason: TIME)'])
+      expect([b.de_start, b.de_end]).toEqual([clock(20), clock(23)])
+      expect(overrunWarnings(result.bottlenecks).map((x) => x.subjects)).toEqual([['B']])
+      expect(result.schedule['A'].de_end).toBe(clock(20))
+    })
+
+    // guard: with both events at 100 the strips free only at 23:20, after the
+    // hard end, so B's DE neither defers nor fits and B is dropped at its DE
+    // on the first attempt (its retry then fails at the pools).
+    it('fails when the strips free only at or after 22:00, and the event is dropped', () => {
+      const result = twoEventRun(100, 100)
+
+      expect(result.schedule['A'].de_end).toBe(clock(23, 20))
+      expect(result.schedule['B']).toBeUndefined()
+      const failures = failedAttempts(result).filter((x) => x.competition_id === 'B')
+      expect(failures.map((x) => x.cause)).toEqual([
+        BottleneckCause.DEADLINE_BREACH,
+        BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
+      ])
+      expect(failures[0].message).toMatch(/failed at DE\b/)
+    })
+  })
+})
+
+describe('dayMidnight, the last-phase limit on the scheduler axes', () => {
+  it('with a dayConfigs window, is the next multiple of 1440 above the day\'s start', () => {
+    expect([0, 1, 2].map((d) => dayMidnight(d, appAxisConfig(3)))).toEqual([MIDNIGHT, 2 * MIDNIGHT, 3 * MIDNIGHT])
+  })
+
+  it('without dayConfigs, is dayStart + (1440 − DAY_START_MINS)', () => {
+    expect([0, 1, 2].map((d) => dayMidnight(d, makeConfig({ days_available: 3 })))).toEqual([900, 2340, 3780])
+    expect(dayMidnight(1, makeConfig({ days_available: 3, DAY_START_MINS: 480 }))).toBe(1440 + 960)
+  })
+})
+
+describe('lastPhaseOverrunWarnings', () => {
+  function ending(id: string, day: number, deEnd: number | null, r16End: number | null = null): ScheduleResult {
+    return { ...makeScheduleResult(id, day), de_end: deEnd, de_round_of_16_end: r16End }
+  }
+
+  // Fallback axis: hard ends at 780 (day 0) and 2220 (day 1).
+  const fallback = makeConfig({ days_available: 2 })
+  // Inserted out of (day, id) order, so the ordering is the function's.
+  const schedule: Record<string, ScheduleResult> = {
+    'B-STAGED': ending('B-STAGED', 1, null, 2250),
+    'Z-SINGLE': ending('Z-SINGLE', 0, 810),
+    'A-SINGLE': ending('A-SINGLE', 0, 800),
+    'C-AT-HARD-END': ending('C-AT-HARD-END', 0, 780),
+    'D-UNPLACED': ending('D-UNPLACED', 0, null),
+  }
+
+  it('names each event whose last phase ends past its day\'s hard end, reading the R16 end when staged', () => {
+    const warnings = lastPhaseOverrunWarnings(schedule, fallback)
+
+    expect(warnings.map(({ subjects, day, delay_mins }) => ({ subjects, day, delay_mins }))).toEqual([
+      { subjects: ['A-SINGLE'], day: 0, delay_mins: 20 },
+      { subjects: ['Z-SINGLE'], day: 0, delay_mins: 30 },
+      { subjects: ['B-STAGED'], day: 1, delay_mins: 30 },
+    ])
+  })
+
+  it('names the event through labelOf and gives its finish as a clock time', () => {
+    // 800 on day 0 of the fallback axis is 22:20 (minute 0 stands for 9:00).
+    const warnings = lastPhaseOverrunWarnings({ 'A-SINGLE': schedule['A-SINGLE'] }, fallback, (id) => `Label ${id}`)
+
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0].message).toContain('Label A-SINGLE')
+    expect(warnings[0].message).toContain('22:20')
+  })
+
+  it('reads the clock on the app axis', () => {
+    const warnings = lastPhaseOverrunWarnings({ X: ending('X', 1, MIDNIGHT + 23 * 60 + 15) }, appAxisConfig(2))
+
+    expect(warnings.map((b) => b.delay_mins)).toEqual([75])
+    expect(warnings[0].message).toContain('23:15')
   })
 })
 

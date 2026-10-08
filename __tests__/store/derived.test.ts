@@ -193,22 +193,45 @@ describe('selectDerivedFindings', () => {
 
   /**
    * 017 T5b (spec §4): the rule check and the first and last day WARN read the
-   * drawn model. B4's run keeps a first day of 790 minutes, its DEs waiting for
-   * strips, against a shortest middle day of 755, so the scheduler warns. Over
+   * drawn model, so the app's rows equal the scheduler's. At 017 B4's kept run
+   * had a first day of 790 minutes against a shortest middle day of 755, while
    * `deriveEventSchedule`'s times, whose DEs start straight after the pools,
-   * the same board measured no WARN at all (2026-10-07).
+   * measured no WARN at all (2026-10-07).
+   *
+   * 018 T2 (2026-10-07): B4's premise moved from the first day to the last. R1
+   * places three more B4 events past the old day end, which lengthens Day 3 to
+   * 900 minutes against a shortest middle day of 885, and the first-day WARN no
+   * longer fires. Over derived times (no kept run) B4 still warns on the last
+   * day, but with different numbers: "Last day (Day 3, 760 min) ... (725 min)".
+   * B4 no longer exercises the first-day half, so B3 (which T2 leaves unchanged)
+   * covers it: the kept run warns first 635 / 595 and last 605 / 595, while
+   * derived times give first 630 / 565 and last 585 / 565.
    */
-  it('measures the first and last day on the kept run, as the scheduler does', () => {
-    runPreset('B4')
+  const FIRST_LAST_RULES: string[] = [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]
+
+  function keptRunWarnings(preset: 'B3' | 'B4') {
+    runPreset(preset)
     const state = useStore.getState()
     const { config, competitions } = buildTournamentConfig(state)
-    const rules: string[] = [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]
-    const scheduler = scheduleAll(competitions, config).bottlenecks.filter((b) => rules.includes(b.rule))
-    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B4\'s first day').toEqual([
-      'First day (Day 1, 790 min) is not shorter than the shortest middle day (755 min)',
-    ])
+    const scheduler = scheduleAll(competitions, config).bottlenecks.filter((b) => FIRST_LAST_RULES.includes(b.rule))
+    const app = selectDerivedFindings(state).analysis.warnings.filter((w) => FIRST_LAST_RULES.includes(w.rule))
+    return { scheduler, app }
+  }
 
-    const app = selectDerivedFindings(state).analysis.warnings.filter((w) => rules.includes(w.rule))
+  it('measures the last day on the kept run, as the scheduler does (B4)', () => {
+    const { scheduler, app } = keptRunWarnings('B4')
+    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B4\'s last day').toEqual([
+      'Last day (Day 3, 900 min) is not shorter than the shortest middle day (885 min)',
+    ])
+    expect(app).toEqual(scheduler)
+  })
+
+  it('measures the first and last day on the kept run, as the scheduler does (B3)', () => {
+    const { scheduler, app } = keptRunWarnings('B3')
+    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B3\'s first and last day').toEqual([
+      'First day (Day 1, 635 min) is not shorter than the shortest middle day (595 min)',
+      'Last day (Day 4, 605 min) is not shorter than the shortest middle day (595 min)',
+    ])
     expect(app).toEqual(scheduler)
   })
 })

@@ -51,7 +51,7 @@
  * browser a turn; the engine half owns no timer and no promise (research.md D5).
  */
 
-import { scheduleAll } from './scheduler.ts'
+import { scheduleAll, lastPhaseOverrunWarnings } from './scheduler.ts'
 import { aggregateStripHours } from './capacity.ts'
 import { buildStrips } from './stripBudget.ts'
 import { suggestStripCount, busiestDayLoad } from './analysis.ts'
@@ -177,6 +177,13 @@ export function stripSearchRange(
  * the smallest count that places every event *around the pins* — the count the
  * organizer will be judged by once they apply it. Without it the card could
  * name a count at which the pinned board overflows.
+ *
+ * `placed` is Suggest's progress number, not the footer's: an event the
+ * scheduler placed counts as not placed when its last phase ends past the day's
+ * hard end (018 R2, `lastPhaseOverrunWarnings`) or, with pins, when a phase of
+ * it is unseated – one decrement per event in either or both. So the answer is
+ * the smallest count at which every event ends by the hard end
+ * (METHODOLOGY.md §Strip Count Suggestion).
  */
 export function* scanStripCounts(
   competitions: Competition[],
@@ -210,17 +217,23 @@ export function* scanStripCounts(
     }
     const run = scheduleAll(competitions, candidateConfig, pinned)
     const { schedule } = run
-    let placed = Object.values(schedule).filter(r => r.pool_start !== null).length
+    // The union of overrunning and unseated events, so an event in both is
+    // subtracted once.
+    const notPlaced = new Set(
+      lastPhaseOverrunWarnings(schedule, candidateConfig).map(b => b.competition_id),
+    )
     if (pinned.length > 0) {
-      // Guarded, so the no-pins path runs the same statements it did before
-      // this feature — with no pins every phase is seated, so the guard
-      // changes no number, only which statements execute.
+      // Guarded: with no pins every phase is seated, so the guard changes no
+      // number, only which statements execute.
       const unseated = unseatedPhases(run)
       for (const [id, result] of Object.entries(schedule)) {
         if (result.pool_start === null) continue
-        if (phaseSpans(result).some(span => unseated.has(phaseKey(id, span.phase)))) placed--
+        if (phaseSpans(result).some(span => unseated.has(phaseKey(id, span.phase)))) notPlaced.add(id)
       }
     }
+    const placed = Object.entries(schedule)
+      .filter(([id, r]) => r.pool_start !== null && !notPlaced.has(id))
+      .length
     const placesAll = placed === required
 
     yield { count, placed, required, placesAll }
