@@ -126,8 +126,14 @@ describe('R8: while due, the Unplaced rows and the footer hold the last calm boa
     expect(liveReading().counts, 'premise: the live board reads stale').toEqual(STALE_COUNTS)
     expect(read().rowIds).toEqual(calm.rowIds)
     expect(read().counts).toEqual(calm.counts)
-    // The rail badge: the held rows plus the live others (decision 19).
-    expect(selectFindings(state()).length).toBe(calm.rowIds.length + otherRows({ ...state(), held: null }).length)
+    // The whole list, in order: the held rows lead, as the Unplaced group,
+    // since B1 has no Blocking row and `stale:run` is hidden while due. This
+    // pins the rail badge too (decision 19), which is the list's length.
+    expect(selectHasBlocking(state()), 'premise: no Blocking row ahead of the Unplaced group').toBe(false)
+    expect(selectFindings(state()).map((row) => row.id)).toEqual([
+      ...calm.rowIds,
+      ...otherRows({ ...state(), held: null }).map(([id]) => id),
+    ])
 
     // FR-008 (guard part): a second edit while due rewrites a non-`unplaced`
     // row, and the panel follows it.
@@ -149,15 +155,50 @@ describe('R8: while due, the Unplaced rows and the footer hold the last calm boa
   it('holds the footer metrics and reads the run\'s once it lands', () => {
     const { calm } = calmFixture()
 
-    typeFencers(41)
+    // 100, not 41: at 41 the live Finish stays at 18:30, so a hold that let
+    // Finish through would pass. At 100 all three rows move while stale.
+    typeFencers(100)
 
-    expect(liveReading().metrics, 'premise: the edit moves a live metric').not.toEqual(calm.metrics)
+    const live = liveReading().metrics
+    for (const metric of calm.metrics) {
+      expect(live.find((row) => row.id === metric.id)?.value, `premise: the edit moves the live ${metric.id}`).not.toBe(metric.value)
+    }
     expect(read().metrics).toEqual(calm.metrics)
 
     runScheduleAll()
 
     expect(read().metrics, 'premise: the run\'s metrics differ from the held ones').not.toEqual(calm.metrics)
     expect(read().metrics).toEqual(liveReading().metrics)
+  })
+
+  // A `:day` row survives going stale, so a fencer-count edit would leave the
+  // live one equal to the held one. A day count that takes the stranded event
+  // back into range drops it from the live board, and only the hold keeps it.
+  it('holds a stranded :day row the edit takes back into range, and drops it when the run lands', () => {
+    const { mover } = calmFixture()
+    const days = state().days_available
+    const stranded = Object.keys(state().placements)
+      .sort()
+      .find((id) => id !== mover && id !== VET && !state().placements[id].pinned)
+    expect(stranded, 'premise: an unpinned placed event to strand').toBeDefined()
+    state().updatePlacement(stranded!, { day: days })
+    expect(due(), 'premise: a hand move is not due').toBe(false)
+    const calm = read()
+    expect(calm.rowIds, 'premise: the stranded event raises a :day row').toEqual([
+      `unplaced:${mover}:room`,
+      `unplaced:${stranded}:day`,
+    ])
+
+    state().setDays(days + 1)
+
+    expect(due(), 'premise: the day edit is due').toBe(true)
+    expect(liveReading().rowIds, 'premise: the live board has the event back in range').toEqual([])
+    expect(read().rowIds).toEqual(calm.rowIds)
+
+    runScheduleAll()
+
+    expect(state().held).toBeNull()
+    expect(read().rowIds).toEqual([])
   })
 
   it('keeps the first snapshot through continued typing, not the first edit\'s stale values', () => {
