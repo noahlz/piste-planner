@@ -13,9 +13,9 @@
  * included, so the DE here starts at pool end plus the admin gap, earlier than
  * the scheduler's on a busy day.
  *
- * Three `ScheduleResult` fields have no input derivation and are left neutral:
- * `conflict_score`, `constraint_relaxation_level`, `accepted_warnings`. They
- * are scheduler diagnostics about contention, not geometry.
+ * Two `ScheduleResult` fields have no input derivation and are left neutral:
+ * `conflict_score` and `accepted_warnings`. They are scheduler diagnostics
+ * about contention, not geometry.
  */
 
 import { DAY_AXIS_SPACING_MINS, DeMode, PlacementSource, tailEstimateMins } from './types.ts'
@@ -163,7 +163,6 @@ export function deriveEventSchedule(
     pool_duration_actual: 0,
     de_duration_baseline: deBlocks.baselineMinutes,
     de_duration_actual: 0,
-    constraint_relaxation_level: 0,
     accepted_warnings: [],
   }
 

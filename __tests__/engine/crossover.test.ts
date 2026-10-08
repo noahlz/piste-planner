@@ -351,7 +351,9 @@ describe('crossoverPenalty – Group 1 by tournament type', () => {
     }
   })
 
-  it.each(REGIONAL_TYPES)('%s: the cross-level relaxable blocks stay Infinity (guard, Individual/Team Separation)', (type) => {
+  // At NAC, SYC and SJCC Group 1 also holds Div 1 ↔ Junior hard, so only the
+  // regional cases isolate the cross-level block.
+  it.each(ALL_TYPES)('%s: Div 1 and Junior cross-level individual/team pairs stay Infinity (guard, Individual/Team Separation)', (type) => {
     expect(bothOrders(Category.DIV1, Category.JUNIOR, type, EventType.INDIVIDUAL, EventType.TEAM))
       .toEqual([Infinity, Infinity])
     expect(bothOrders(Category.JUNIOR, Category.DIV1, type, EventType.INDIVIDUAL, EventType.TEAM))
@@ -423,9 +425,9 @@ describe('crossoverPenalty – Group 2 soft separations', () => {
     },
   )
 
-  it('Cadet and Junior against the Div 1 team keep their Group 1 and relaxable-block values (guard)', () => {
+  it('Cadet and Junior against the Div 1 team keep their Group 1 and cross-level-block values (guard)', () => {
     // Group 1 is checked before Group 2, and the Junior individual ↔ Div 1 team
-    // is a relaxable block, so the open-team row scores only Y14.
+    // is a cross-level block, so the open-team row scores only Y14.
     const d1Team = comp('d1-team', Category.DIV1, EventType.TEAM)
     const cadet = comp('cdt', Category.CADET, EventType.INDIVIDUAL)
     const junior = comp('jr', Category.JUNIOR, EventType.INDIVIDUAL)

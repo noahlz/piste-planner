@@ -6,7 +6,7 @@ import {
   GROUP_1_MANDATORY,
   GROUP_1_SOFT_TYPES,
   GROUP_2_SOFT_SEPARATIONS,
-  INDIV_TEAM_RELAXABLE_BLOCKS,
+  INDIV_TEAM_CROSS_LEVEL_BLOCKS,
   PENALTY_WEIGHTS,
   PROXIMITY_GRAPH,
   PROXIMITY_PENALTY_WEIGHTS,
@@ -81,15 +81,15 @@ function isGroup1Pair(a: Category, b: Category): boolean {
 
 /**
  * True when one event is the individual and the other the team of an
- * INDIV_TEAM_RELAXABLE_BLOCKS pair (METHODOLOGY §Individual/Team Separation).
+ * INDIV_TEAM_CROSS_LEVEL_BLOCKS pair (METHODOLOGY §Individual/Team Separation).
  * The caller has already matched weapon and gender. Checked before Group 1, so
- * these stay Infinity at the regional types where Group 1 is soft, and day
- * colouring alone relaxes them at level 3 (`findRelaxableEdges`).
+ * these stay Infinity at every type, including the regional types where Group 1
+ * is soft, and nothing in day assignment lowers them.
  */
-function isIndivTeamRelaxableBlock(c1: CompFields, c2: CompFields): boolean {
+function isIndivTeamCrossLevelBlock(c1: CompFields, c2: CompFields): boolean {
   if (c1.event_type === c2.event_type) return false
   const [indiv, team] = c1.event_type === EventType.INDIVIDUAL ? [c1, c2] : [c2, c1]
-  return INDIV_TEAM_RELAXABLE_BLOCKS.some(
+  return INDIV_TEAM_CROSS_LEVEL_BLOCKS.some(
     ({ indivCategory, teamCategory }) => indiv.category === indivCategory && team.category === teamCategory,
   )
 }
@@ -197,7 +197,7 @@ function isVetCombinedAgeBandedBlock(c1: CompFields, c2: CompFields): boolean {
  *   1. Same-population (same category+gender+weapon, Vet-aware).
  *   2. VET_COMBINED ↔ age-banded Vet ind (same gender+weapon): fencers typically
  *      enter both, so they must be on different days.
- *   3. INDIV_TEAM_RELAXABLE_BLOCKS (Div 1 ind ↔ Junior team, Junior ind ↔ Div 1
+ *   3. INDIV_TEAM_CROSS_LEVEL_BLOCKS (Div 1 ind ↔ Junior team, Junior ind ↔ Div 1
  *      team), before Group 1 so they stay hard where Group 1 is soft.
  *   4. DIV1_DIV1A_HARD_PAIR (Appendix B departure).
  *
@@ -226,7 +226,7 @@ export function crossoverPenalty(c1: CompFields, c2: CompFields, tournamentType:
   if (c1.gender !== c2.gender) return 0.0
   if (c1.weapon !== c2.weapon) return 0.0
 
-  if (isIndivTeamRelaxableBlock(c1, c2)) return Infinity
+  if (isIndivTeamCrossLevelBlock(c1, c2)) return Infinity
   if (isPair(c1.category, c2.category, ...DIV1_DIV1A_HARD_PAIR)) return Infinity
 
   if (isGroup1Pair(c1.category, c2.category)) {

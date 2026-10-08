@@ -56,11 +56,9 @@ function maybeDumpAsciiLanes(
 
 /**
  * Asserts mandatory-separation categories are never on the same day for scheduled events.
- * Per-event: skips any pair where either event used level-3 relaxation (knowingly
- * overrode hard blocks as a last resort).
  */
 function assertHardSeparations(
-  schedule: Record<string, { assigned_day: number; constraint_relaxation_level: number }>,
+  schedule: Record<string, { assigned_day: number }>,
   competitions: Competition[],
   tournamentType: TournamentType,
 ) {
@@ -70,8 +68,6 @@ function assertHardSeparations(
     for (let j = i + 1; j < entries.length; j++) {
       const [id1, sr1] = entries[i]
       const [id2, sr2] = entries[j]
-      // Skip pairs where either event knowingly overrode hard blocks
-      if (sr1.constraint_relaxation_level >= 3 || sr2.constraint_relaxation_level >= 3) continue
       const c1 = compMap.get(id1)!
       const c2 = compMap.get(id2)!
       if (c1.gender !== c2.gender || c1.weapon !== c2.weapon) continue
@@ -86,11 +82,9 @@ function assertHardSeparations(
 
 /**
  * Asserts ind and team events of same category/gender/weapon not on same day.
- * Per-event: skips any pair where either event used level-3 relaxation (knowingly
- * overrode hard blocks as a last resort).
  */
 function assertIndTeamSeparation(
-  schedule: Record<string, { assigned_day: number; constraint_relaxation_level: number }>,
+  schedule: Record<string, { assigned_day: number }>,
   competitions: Competition[],
 ) {
   const compMap = new Map(competitions.map(c => [c.id, c]))
@@ -99,8 +93,6 @@ function assertIndTeamSeparation(
     for (let j = i + 1; j < entries.length; j++) {
       const [id1, sr1] = entries[i]
       const [id2, sr2] = entries[j]
-      // Skip pairs where either event knowingly overrode hard blocks
-      if (sr1.constraint_relaxation_level >= 3 || sr2.constraint_relaxation_level >= 3) continue
       const c1 = compMap.get(id1)!
       const c2 = compMap.get(id2)!
       if (c1.category !== c2.category) continue
@@ -123,7 +115,7 @@ function assertIndTeamSeparation(
  * - All assigned days within bounds
  */
 function assertScheduleIntegrity(
-  schedule: Record<string, { assigned_day: number; constraint_relaxation_level: number }>,
+  schedule: Record<string, { assigned_day: number }>,
   bottlenecks: Bottleneck[],
   competitions: Competition[],
   days: number,
@@ -144,18 +136,7 @@ function assertScheduleIntegrity(
     expect(sr.assigned_day).toBeLessThan(days)
   }
 
-  // Relaxed events must have matching CONSTRAINT_RELAXED bottleneck (prevents silent false-pass
-  // if a bug were to set constraint_relaxation_level=3 on all events without actually relaxing)
-  for (const [id, sr] of Object.entries(schedule)) {
-    if (sr.constraint_relaxation_level > 0) {
-      const hasRelaxedBottleneck = bottlenecks.some(
-        b => b.competition_id === id && b.cause === BottleneckCause.CONSTRAINT_RELAXED,
-      )
-      expect(hasRelaxedBottleneck, `${id} has level ${sr.constraint_relaxation_level} but no CONSTRAINT_RELAXED bottleneck`).toBe(true)
-    }
-  }
-
-  // Hard separation constraints (per-event: skipped for events that used level-3 relaxation)
+  // Hard separation constraints
   assertHardSeparations(schedule, competitions, tournamentType)
 }
 
@@ -445,8 +426,8 @@ describe('Realistic tournament integration', () => {
 
     it('places events for NAC Div1/Junior, built through applyTemplate + buildTournamentConfig', () => {
       useStore.setState(useStore.getInitialState(), true)
-      useStore.getState().setDays(useStore.getState().days_available) // store's default day count (3), dayConfigs populated as boot does
       useStore.getState().applyTemplate('NAC Div1/Junior')
+      useStore.getState().setDays(3) // hand-lowered board: 3 days set after the template, below its 4
       useStore.getState().setStrips(STRIPS_ISOLATING_INDIV_TEAM_SAME_DAY)
       useStore.getState().setVideoStrips(VIDEO_STRIPS)
 
@@ -467,8 +448,8 @@ describe('Realistic tournament integration', () => {
 
     it('places events for NAC Vet/Div1/Junior, built through applyTemplate + buildTournamentConfig', () => {
       useStore.setState(useStore.getInitialState(), true)
-      useStore.getState().setDays(useStore.getState().days_available) // store's default day count (3), dayConfigs populated as boot does
       useStore.getState().applyTemplate('NAC Vet/Div1/Junior')
+      useStore.getState().setDays(3) // hand-lowered board: 3 days set after the template, below its 4
       useStore.getState().setStrips(STRIPS_ISOLATING_INDIV_TEAM_SAME_DAY)
       useStore.getState().setVideoStrips(VIDEO_STRIPS)
 

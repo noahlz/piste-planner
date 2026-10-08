@@ -299,7 +299,7 @@ export function scheduleAllConcurrent(
 
   // Day assignment via DSatur graph coloring.
   const graph = buildConstraintGraph(remaining, config.tournament_type)
-  const { dayMap, relaxations, violations } = assignDaysByColoring(graph, remaining, config, activePins)
+  const { dayMap, violations } = assignDaysByColoring(graph, remaining, config, activePins)
 
   // Build per-event state & phase nodes.
   const events = buildEventStates(remaining, dayMap, config)
@@ -325,30 +325,8 @@ export function scheduleAllConcurrent(
   // Materialize successful events into state.schedule. Already done inside the
   // loop after each event's terminal phase succeeds — see `commitEventResult`.
 
-  // Apply day-assignment relaxations as bottlenecks (mirrors scheduleAll).
-  for (const event of events) {
-    const sr = state.schedule[event.competition.id]
-    if (!sr) continue
-    const relaxLevel = relaxations.get(event.competition.id)
-    if (relaxLevel !== undefined) {
-      sr.constraint_relaxation_level = relaxLevel
-      state.bottlenecks.push({
-        competition_id: event.competition.id,
-        phase: Phase.DAY_ASSIGNMENT,
-        cause: BottleneckCause.CONSTRAINT_RELAXED,
-        rule: BottleneckRule.DAY_ASSIGNMENT_RELAXED,
-        subjects: [event.competition.id],
-        severity: BottleneckSeverity.INFO,
-        delay_mins: 0,
-        message: `${event.competition.id}: constraint relaxed to level ${relaxLevel} during day assignment`,
-      })
-    }
-  }
-
   // Report every hard edge the least-bad-color fallback broke to produce
-  // dayMap (FR-003). One WARN per violated pair, naming both competitions —
-  // never constraint_relaxation_level, which keeps its current meaning and
-  // writer (FR-005, research.md D1).
+  // dayMap (FR-003). One WARN per violated pair, naming both competitions.
   for (const violation of violations) {
     state.bottlenecks.push({
       competition_id: violation.id,
@@ -489,7 +467,6 @@ function buildEventStates(
       pool_duration_actual: 0,
       de_duration_baseline: deBlocks.baselineMinutes,
       de_duration_actual: 0,
-      constraint_relaxation_level: 0,
       accepted_warnings: [],
     }
 

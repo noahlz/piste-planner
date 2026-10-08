@@ -54,7 +54,7 @@ describe('buildConstraintGraph', () => {
     expect(edges[0].weight).toBeLessThan(Infinity)
     // VETERAN ↔ DIV1 has a small (~0.1) penalty: the populations rarely
     // overlap (~5–10% of vets enter Div1), so this is a soft preference
-    // the day-coloring will happily relax under contention.
+    // the day-coloring will happily break under contention.
     expect(edges[0].weight).toBeCloseTo(0.1, 2)
   })
 
@@ -81,7 +81,7 @@ describe('buildConstraintGraph', () => {
   it('Same-population: VET INDIVIDUAL + VET TEAM same gender+weapon -> hard edge (Infinity, ind+team always blocks)', () => {
     // Per METHODOLOGY §Same-Population Conflicts, Vet ind + Vet team (same
     // gender+weapon) are hard-blocked because the team event spans all Vet
-    // age groups. Hard at every relaxation level — NOT in INDIV_TEAM_RELAXABLE_BLOCKS.
+    // age groups. Hard at every day count — NOT in INDIV_TEAM_CROSS_LEVEL_BLOCKS.
     const vetIndiv = makeCompetition({ id: 'vet-men-foil-indiv', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const vetTeam = makeCompetition({ id: 'vet-men-foil-team', category: Category.VETERAN, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
 
@@ -98,7 +98,7 @@ describe('buildConstraintGraph', () => {
     expect(edgesTeam[0].weight).toBe(Infinity)
   })
 
-  it('INDIV_TEAM_RELAXABLE_BLOCKS: DIV1 INDIVIDUAL + JUNIOR TEAM same gender+weapon -> hard edge (Infinity)', () => {
+  it('cross-level block (INDIV_TEAM_CROSS_LEVEL_BLOCKS): DIV1 INDIVIDUAL + JUNIOR TEAM same gender+weapon -> hard edge (Infinity)', () => {
     const div1Indiv = makeCompetition({ id: 'div1-men-foil-indiv', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const juniorTeam = makeCompetition({ id: 'junior-men-foil-team', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
 

@@ -42,12 +42,11 @@ describe('assignDaysByColoring', () => {
     const graph = buildGraph([['c1', 'c2', Infinity]])
     const config = makeConfig({ days_available: 2 })
 
-    const { dayMap, relaxations } = assignDaysByColoring(graph, [c1, c2], config)
+    const { dayMap } = assignDaysByColoring(graph, [c1, c2], config)
 
     expect(dayMap.get('c1')).not.toBeUndefined()
     expect(dayMap.get('c2')).not.toBeUndefined()
     expect(dayMap.get('c1')).not.toBe(dayMap.get('c2'))
-    expect(relaxations.size).toBe(0)
   })
 
   it('assigns 3 mutually hard-conflicting events to 3 different days', () => {
@@ -61,20 +60,18 @@ describe('assignDaysByColoring', () => {
     ])
     const config = makeConfig({ days_available: 3 })
 
-    const { dayMap, relaxations } = assignDaysByColoring(graph, [c1, c2, c3], config)
+    const { dayMap } = assignDaysByColoring(graph, [c1, c2, c3], config)
 
     const days = [dayMap.get('c1'), dayMap.get('c2'), dayMap.get('c3')]
     expect(new Set(days).size).toBe(3)
-    expect(relaxations.size).toBe(0)
   })
 
-  it('records relaxation when INDIV_TEAM edge is relaxed to fit 3 events in 2 days', () => {
-    // DIV1 INDIVIDUAL ↔ JUNIOR TEAM is the canonical INDIV_TEAM_RELAXABLE_BLOCKS
-    // pair (F1 dropped Vet/Vet — same-population Vet ind/team is hard
-    // non-relaxable, not in the relaxable list). A third event (CADET MEN FOIL
-    // INDIVIDUAL) hard-conflicts with both. Order is deterministic via packing
-    // footprint tie-break (smallest last): junior-team is the smallest, so
-    // it is colored last and triggers the relaxation of its DIV1-indiv edge.
+  // Div 1 ind ↔ Junior team is a cross-level individual/team pair, hard at
+  // every tournament type (Ops Manual 2026-27 p.20 – Group 1 bullet 1,
+  // METHODOLOGY §Individual/Team Separation). Cadet men's foil individual
+  // conflicts with both through Group 1, hard at a national type and soft at
+  // a regional one. Packing footprint (smallest last) colors junior-team last.
+  function div1JuniorCadetFixture() {
     const div1Indiv = makeCompetition({
       id: 'div1-indiv',
       category: Category.DIV1,
@@ -99,7 +96,13 @@ describe('assignDaysByColoring', () => {
       event_type: EventType.INDIVIDUAL,
       strips_allocated: 12,
     })
-    // All three pairs have hard edges — with 2 days the INDIV_TEAM edge gets relaxed
+    return [div1Indiv, juniorTeam, cadet]
+  }
+
+  it('breaks the Div 1 ind ↔ Junior team pair when 3 mutually hard events have 2 days', () => {
+    // All three pairs are hard, so with 2 days junior-team has no valid color
+    // and the least-bad branch puts it beside div1-indiv on day 0: every day
+    // ties at Infinity, so the lowest day (div1-indiv's) wins.
     const graph = buildGraph([
       ['div1-indiv', 'junior-team', Infinity],
       ['div1-indiv', 'cadet', Infinity],
@@ -107,24 +110,22 @@ describe('assignDaysByColoring', () => {
     ])
     const config = makeConfig({ days_available: 2 })
 
-    const { dayMap, relaxations } = assignDaysByColoring(graph, [div1Indiv, juniorTeam, cadet], config)
+    const { dayMap, violations } = assignDaysByColoring(graph, div1JuniorCadetFixture(), config)
 
-    // All 3 get assigned some day
     expect(dayMap.size).toBe(3)
-    // The INDIV_TEAM edge was relaxed, so at least one relaxation is recorded
-    expect(relaxations.size).toBeGreaterThanOrEqual(1)
-    // All relaxation values should be 3 (INDIV_TEAM relaxation code)
-    for (const v of relaxations.values()) {
-      expect(v).toBe(3)
-    }
-    // The relaxation must land on an endpoint of the only relaxable edge
-    // (DIV1 ind ↔ JUNIOR team). It must NOT land on cadet — Cadet has no
-    // relaxable edge, so a relaxation recorded against cadet would mean the
-    // algorithm relaxed the wrong constraint.
-    expect(relaxations.has('cadet')).toBe(false)
-    const onRelaxableEndpoint =
-      relaxations.has('div1-indiv') || relaxations.has('junior-team')
-    expect(onRelaxableEndpoint).toBe(true)
+    expect(violations.map(v => [v.id, v.targetId].sort())).toEqual([['div1-indiv', 'junior-team']])
+  })
+
+  it('at ROC on 1 day, the Div 1 ind ↔ Junior team pair stays hard and is the one violation', () => {
+    // At a regional type Group 1 is soft, so both cadet edges are soft and the
+    // cross-level individual/team pair is the only hard edge left.
+    const competitions = div1JuniorCadetFixture()
+    const graph = buildConstraintGraph(competitions, TournamentType.ROC)
+    const config = makeConfig({ days_available: 1, tournament_type: TournamentType.ROC })
+
+    const { violations } = assignDaysByColoring(graph, competitions, config)
+
+    expect(violations.map(v => [v.id, v.targetId].sort())).toEqual([['div1-indiv', 'junior-team']])
   })
 
   it('soft conflicts prefer different days when enough colors available', () => {
@@ -140,12 +141,11 @@ describe('assignDaysByColoring', () => {
     ])
     const config = makeConfig({ days_available: 3 })
 
-    const { dayMap, relaxations, effectiveDays } = assignDaysByColoring(graph, [c1, c2, c3], config)
+    const { dayMap, effectiveDays } = assignDaysByColoring(graph, [c1, c2, c3], config)
 
     expect(effectiveDays).toBe(2)
     // c3 should avoid c2's day due to soft penalty (both days already open)
     expect(dayMap.get('c2')).not.toBe(dayMap.get('c3'))
-    expect(relaxations.size).toBe(0)
   })
 
   it('load balancing spreads events across used days evenly', () => {
@@ -279,10 +279,9 @@ describe('assignDaysByColoring', () => {
     const graph: ConstraintGraph = new Map([['a', []], ['b', []], ['c', []]])
     const config = makeConfig({ days_available: 2 })
 
-    const { dayMap, relaxations } = assignDaysByColoring(graph, comps, config)
+    const { dayMap } = assignDaysByColoring(graph, comps, config)
 
     expect(dayMap.size).toBe(3)
-    expect(relaxations.size).toBe(0)
   })
 
   it('effectiveDays reports minimum days needed', () => {
@@ -544,21 +543,18 @@ describe('colorPenalty — PROXIMITY_3_PLUS_DAYS (L1)', () => {
 // ──────────────────────────────────────────────
 // DSatur least-bad-color fallback reporting (R7 / US2, T007)
 //
-// When every color is blocked for a vertex, dsaturLoop's two least-bad-color
-// branches pick a color anyway. R7 (T009) made assignDaysByColoring return the
+// When every color is blocked for a vertex, dsaturLoop's least-bad-color
+// branch picks a color anyway. R7 (T009) made assignDaysByColoring return the
 // broken hard-edge pairs so the caller can report them instead of leaving no
 // trace. These tests pin that return shape:
 //
 //   assignDaysByColoring(...): {
-//     dayMap, relaxations, effectiveDays,
+//     dayMap, effectiveDays,
 //     violations: { id: string; targetId: string }[]
 //   }
 //
 // One entry per hard-edged pair sharing a day, order-insensitive between
-// `id` and `targetId`. The relaxed-success branch (:522-532) already reports
-// itself via `relaxations.set(id, 3)` and must NOT appear in `violations` —
-// that would double-report what `constraint_relaxation_level` already covers
-// (research.md D1).
+// `id` and `targetId`.
 // ──────────────────────────────────────────────
 
 describe('assignDaysByColoring — least-bad-color fallback violations (R7)', () => {
@@ -574,12 +570,20 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     return [a, b].sort().join('|')
   }
 
+  /** Exactly one violation per expected pair, order-insensitive within and across pairs. */
+  function expectViolationPairs(violations: { id: string; targetId: string }[], expectedPairs: [string, string][]) {
+    expect(violations.length).toBe(expectedPairs.length)
+    const actualKeys = violations.map(v => pairKey(v.id, v.targetId)).sort()
+    const expectedKeys = expectedPairs.map(([a, b]) => pairKey(a, b)).sort()
+    expect(actualKeys).toEqual(expectedKeys)
+  }
+
   /** Builds one template through the app's own configuration path, exactly as specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)/§3 measured it. */
   function buildTemplate(name: string) {
     useStore.setState(useStore.getInitialState(), true)
     const state = () => useStore.getState()
-    state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does
     state().applyTemplate(name)
+    state().setDays(3) // hand-lowered board: 3 days set after the template, below the K4 templates' 4
     state().setStrips(STRIPS)
     state().setVideoStrips(VIDEO_STRIPS)
     return buildTournamentConfig(state())
@@ -602,14 +606,11 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
       ['CDT-W-SABRE-TEAM', 'JR-W-SABRE-TEAM'],
     ]
 
-    expect(violations.length).toBe(6)
-    const actualKeys = violations.map(v => pairKey(v.id, v.targetId)).sort()
-    const expectedKeys = expectedPairs.map(([a, b]) => pairKey(a, b)).sort()
-    expect(actualKeys).toEqual(expectedKeys)
+    expectViolationPairs(violations, expectedPairs)
   })
 
   // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
-  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable in the days available, reports no violations (relax=0/viol=0)', () => {
+  it('NAC Youth at 3 days / 80 strips / 12 video: hard-constraint graph is satisfiable in the days available, reports no violations (viol=0)', () => {
     const { config, competitions } = buildTemplate('NAC Youth')
     const graph = buildConstraintGraph(competitions, config.tournament_type)
 
@@ -618,18 +619,24 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     expect(violations.length).toBe(0)
   })
 
-  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
-  it('NAC Div1/Junior at 3 days / 80 strips / 12 video: its six DIV1-ind/JUNIOR-team conflicts resolve through the relaxed branch and must not also appear as violations (relax=6/viol=0)', () => {
+  // 019 R4: Div 1 and Junior team never share a day, so no pair is lifted and the
+  // least-bad branch breaks six hard pairs, like NAC Cadet/Junior. The
+  // pairs are the R4 counterfactual's (specs/019-default-days-per-template/plan.md
+  // §Measurements, "NAC Div1/Junior|3|@80").
+  it('NAC Div1/Junior on a hand-lowered 3-day board / 80 strips / 12 video: one violation per hard-edged pair sharing a day, naming both ids (6 pairs, least-bad branch)', () => {
     const { config, competitions } = buildTemplate('NAC Div1/Junior')
     const graph = buildConstraintGraph(competitions, config.tournament_type)
 
-    const { violations, relaxations } = assignDaysByColoring(graph, competitions, config)
+    const { violations } = assignDaysByColoring(graph, competitions, config)
 
-    // Confirms the fixture actually exercises the relaxed branch (specs/010-wave-1-reconciliation/baseline.md (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
-    // §2: 6 relaxations, 0 violations) — if this drops to 0, the premise
-    // changed and the "reports no violations" assertion below is vacuous.
-    expect(relaxations.size).toBe(6)
-    expect(violations.length).toBe(0)
+    expectViolationPairs(violations, [
+      ['D1-M-EPEE-IND', 'JR-M-EPEE-TEAM'],
+      ['D1-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
+      ['D1-M-SABRE-TEAM', 'JR-M-SABRE-TEAM'],
+      ['D1-W-EPEE-TEAM', 'JR-W-EPEE-TEAM'],
+      ['D1-W-FOIL-TEAM', 'JR-W-FOIL-TEAM'],
+      ['D1-W-SABRE-TEAM', 'JR-W-SABRE-TEAM'],
+    ])
   })
 
   // Regression capture, not a red test. The expected map below is the day map
@@ -638,11 +645,11 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
   // moves a day assignment shows up here. It no longer evidences that R7's
   // violations reporting changed no decision (FR-004, FR-005): that held for
   // the pre-024 map, which group D replaced.
-  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: the day map is the post-024-group-D capture and relaxations stay empty', () => {
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: the day map is the post-024-group-D capture', () => {
     const { config, competitions } = buildTemplate('NAC Cadet/Junior')
     const graph = buildConstraintGraph(competitions, config.tournament_type)
 
-    const { dayMap, relaxations } = assignDaysByColoring(graph, competitions, config)
+    const { dayMap } = assignDaysByColoring(graph, competitions, config)
 
     // Captured from the current code, not derived from this same call.
     // Re-captured in 024 group D, whose owner-approved rules move six events.
@@ -689,10 +696,6 @@ describe('assignDaysByColoring — least-bad-color fallback violations (R7)', ()
     }
 
     expect(Object.fromEntries(dayMap)).toEqual(expectedDayMap)
-    // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md): NAC Cadet/Junior's six violations come from the
-    // least-bad branch, not the relaxed branch — zero relaxations here.
-    // R7 must not start writing to relaxations for this witness.
-    expect(relaxations.size).toBe(0)
   })
 })
 

@@ -217,7 +217,6 @@ type EventDigest = {
   de_strip_count: number
   de_prelims_strip_count: number
   de_round_of_16_strip_count: number
-  constraint_relaxation_level: number
   peak_de_ref_demand: number
 }
 
@@ -343,9 +342,6 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
       de_strip_count: sr.de_strip_count,
       de_prelims_strip_count: sr.de_prelims_strip_count,
       de_round_of_16_strip_count: sr.de_round_of_16_strip_count,
-      // Holding the event count by relaxing hard separations would otherwise read
-      // as "no drift" — integration.test.ts skips its separation assertions at level 3.
-      constraint_relaxation_level: sr.constraint_relaxation_level,
       // The single number the pod-captain removal changes. Aggregate ref demand is
       // dominated by the pool arm, so this never surfaces in the recommendations.
       peak_de_ref_demand: peakDeRefDemand(byId.get(eventId)!, config),

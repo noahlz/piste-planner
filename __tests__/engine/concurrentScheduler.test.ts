@@ -623,32 +623,23 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
   function buildTemplate(name: string) {
     useStore.setState(useStore.getInitialState(), true)
     const state = () => useStore.getState()
-    state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does
     state().applyTemplate(name)
+    state().setDays(3) // hand-lowered board: 3 days set after the template, below the K4 templates' 4
     state().setStrips(STRIPS)
     state().setVideoStrips(VIDEO_STRIPS)
     return buildTournamentConfig(state())
   }
 
-  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
-  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one WARN UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck per hard-edged pair, naming both ids (6 pairs)', () => {
-    const { config, competitions } = buildTemplate('NAC Cadet/Junior')
-    const { bottlenecks } = scheduleAllConcurrent(competitions, config)
-
-    // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) "Witness pairs" table, 80 strips / 12 video column.
-    const expectedPairs: [string, string][] = [
-      ['CDT-M-EPEE-TEAM', 'JR-M-EPEE-TEAM'],
-      ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
-      ['CDT-M-SABRE-IND', 'JR-M-SABRE-TEAM'],
-      ['CDT-W-EPEE-TEAM', 'JR-W-EPEE-TEAM'],
-      ['CDT-W-FOIL-TEAM', 'JR-W-FOIL-TEAM'],
-      ['CDT-W-SABRE-TEAM', 'JR-W-SABRE-TEAM'],
-    ]
-
+  /** One WARN hard-separation bottleneck per expected pair, each naming both ids. */
+  function expectHardSeparationWarns(
+    bottlenecks: Bottleneck[],
+    competitions: Competition[],
+    expectedPairs: [string, string][],
+  ) {
     const crossoverBottlenecks = bottlenecks.filter(
       b => b.cause === BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
     )
-    expect(crossoverBottlenecks).toHaveLength(6)
+    expect(crossoverBottlenecks).toHaveLength(expectedPairs.length)
     const competitionIds = competitions.map(c => c.id)
     for (const b of crossoverBottlenecks) {
       expect(b.severity).toBe(BottleneckSeverity.WARN)
@@ -662,6 +653,39 @@ describe('scheduleAllConcurrent — hard-edge violation bottlenecks (R7 / US2, T
       crossoverBottlenecks.map(bn => bn.subjects.join('|')).sort(),
       'expected exactly one bottleneck per hard-edged pair, each naming both ids',
     ).toEqual(expectedPairs.map(pairKey).sort())
+  }
+
+  // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md)
+  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: one WARN UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck per hard-edged pair, naming both ids (6 pairs)', () => {
+    const { config, competitions } = buildTemplate('NAC Cadet/Junior')
+    const { bottlenecks } = scheduleAllConcurrent(competitions, config)
+
+    // specs/010-wave-1-reconciliation/baseline.md §2 (removed; git show 0ab5bd2dc9:specs/010-wave-1-reconciliation/baseline.md) "Witness pairs" table, 80 strips / 12 video column.
+    expectHardSeparationWarns(bottlenecks, competitions, [
+      ['CDT-M-EPEE-TEAM', 'JR-M-EPEE-TEAM'],
+      ['CDT-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
+      ['CDT-M-SABRE-IND', 'JR-M-SABRE-TEAM'],
+      ['CDT-W-EPEE-TEAM', 'JR-W-EPEE-TEAM'],
+      ['CDT-W-FOIL-TEAM', 'JR-W-FOIL-TEAM'],
+      ['CDT-W-SABRE-TEAM', 'JR-W-SABRE-TEAM'],
+    ])
+  })
+
+  // 019 R4: with the pair always hard the engine reports the broken pairs as WARNs,
+  // so it agrees with the board's hard-separation rows. Pairs as in the
+  // dayColoring.test.ts witness for the same board.
+  it('NAC Div1/Junior on a hand-lowered 3-day board / 80 strips / 12 video: one WARN UNAVOIDABLE_CROSSOVER_CONFLICT bottleneck per hard-edged pair, naming both ids (6 pairs)', () => {
+    const { config, competitions } = buildTemplate('NAC Div1/Junior')
+    const { bottlenecks } = scheduleAllConcurrent(competitions, config)
+
+    expectHardSeparationWarns(bottlenecks, competitions, [
+      ['D1-M-EPEE-IND', 'JR-M-EPEE-TEAM'],
+      ['D1-M-FOIL-TEAM', 'JR-M-FOIL-TEAM'],
+      ['D1-M-SABRE-TEAM', 'JR-M-SABRE-TEAM'],
+      ['D1-W-EPEE-TEAM', 'JR-W-EPEE-TEAM'],
+      ['D1-W-FOIL-TEAM', 'JR-W-FOIL-TEAM'],
+      ['D1-W-SABRE-TEAM', 'JR-W-SABRE-TEAM'],
+    ])
   })
 
   // 016 Task A: the finding's day is the day both events share in the day map.

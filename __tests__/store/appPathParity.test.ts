@@ -447,11 +447,12 @@ describe('a hard pair the scheduler breaks reaches the app\'s findings (016 revi
     expect(missing).toEqual([])
   })
 
-  it('NAC Cadet/Junior at 3 days / 80 strips / 12 video: every broken pair shows in the app after a run', () => {
+  // 019 R4: Div1/Junior broke no hard pair here while its cross-level pair was relaxable.
+  it.each(['NAC Cadet/Junior', 'NAC Div1/Junior'])('%s at 3 days / 80 strips / 12 video: every broken pair shows in the app after a run', (template) => {
     useStore.setState(useStore.getInitialState(), true)
     const state = () => useStore.getState()
-    state().setDays(state().days_available) // populates dayConfigs at the default 3, as boot does
-    state().applyTemplate('NAC Cadet/Junior')
+    state().applyTemplate(template)
+    state().setDays(3) // hand-lowered board: 3 days set after the template, below its 4
     state().setStrips(80)
     state().setVideoStrips(12)
 

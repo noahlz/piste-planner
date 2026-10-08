@@ -67,7 +67,7 @@ function scheduleIsolated(
 
 // Fields derive.ts must reproduce exactly from (placement, competition, config).
 // Excludes scheduler-only diagnostics with no input derivation: conflict_score,
-// constraint_relaxation_level, accepted_warnings.
+// accepted_warnings.
 const DERIVED_FIELDS = [
   'competition_id', 'assigned_day', 'use_flighting', 'is_priority', 'flighting_group_id',
   'pool_start', 'pool_end', 'pool_strip_count', 'pool_refs_count',
@@ -86,7 +86,7 @@ const DERIVED_FIELDS = [
 // Scheduler-only diagnostics carried on ScheduleResult but not derivable from
 // (placement, competition, config) alone — see DERIVED_FIELDS' comment above.
 const EXCLUDED_DIAGNOSTIC_FIELDS = [
-  'conflict_score', 'constraint_relaxation_level', 'accepted_warnings',
+  'conflict_score', 'accepted_warnings',
 ] as const satisfies readonly (keyof ScheduleResult)[]
 void EXCLUDED_DIAGNOSTIC_FIELDS // used only in the type position below
 

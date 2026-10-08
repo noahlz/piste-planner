@@ -180,7 +180,6 @@ export function makeScheduleResult(competition_id: string, assigned_day: number)
     pool_duration_actual: 0,
     de_duration_baseline: 0,
     de_duration_actual: 0,
-    constraint_relaxation_level: 0,
     accepted_warnings: [],
   }
 }
