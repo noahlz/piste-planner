@@ -285,6 +285,9 @@ describe('the board re-runs itself (020 T2)', () => {
     expect(runs()).toBe(1)
     expect(rerunAttr()).toBe('idle')
     expect(selectDrawnSchedule(useStore.getState()).runState).toBe(RunState.FRESH)
+    quiet()
+    expect(boardText(), `board at ${t} ms`).toBe(before)
+    expect(settledAttr(), `data-settled at ${t} ms`).toBe('false')
 
     let after: string | null = null
     while (t < 700) {
