@@ -132,13 +132,15 @@ What each task does now:
 | The hold's writer, gross | 19.2 ms per pick, over the 16 ms line. Most of it derives the result state the UI then reads from the memo | `01396931bd` |
 | A fencer-count write while due, B8 | 0.86 ms with the switch on, 0.67 ms off | `01396931bd` |
 | Config key builds per notification | 2 with the switch on, 1 off (the writer's, then the drawn schedule's own). Declined in the plan, backlog entry | `01396931bd` |
-| Engine and live re-run cost | `runScheduleAll` 1.8–6.9 ms median, click to paint 53–106 ms | plan §Measurements the plan rests on |
+| Engine and live re-run cost | `runScheduleAll` 1.8–6.9 ms median, click to paint median 53–94 ms, max 106 ms | plan §Measurements the plan rests on |
 | Live smoke | **pass**, two consecutive full passes with 0 console errors after T1c, T2, T3 and Task S | `<wt>/tmp/smoke-T1c-{1,2}.log`, `smoke-T2-{1,2}.log`, `smoke-T3-final-{1,2}.log`, `smoke-S-{1,2}.log` |
 
-The 16 ms line is the plan's report-back line for "the added cost of `selectRerunDue`
-across a B8 preset pick" (T1b) and the writer's per-write cost (T1c).
-The rule alone and the writer's gross time pass it, but both count derivation the UI
-reads anyway, so they were reported and not optimised (Owner question D).
+The 16 ms line is the plan's report-back line for the added cost of `selectRerunDue`
+across a B8 preset pick (T1b), and for T1c's two probes: the writer's cost over the same
+pick and each of ten fencer-count writes while due. The rule alone (18.1 ms) and the
+writer's gross time per pick (19.2 ms) exceed it, while each write stays under 1 ms. Both
+per-pick figures count derivation the UI reads anyway, so they were reported and not
+optimised (Owner question D).
 
 Smoke command: `pnpm -C <wt> dev --port 5189 --strictPort`, then
 `SMOKE_BASE=http://localhost:5189/piste-planner/ timeout 240 node <wt>/scripts/smoke.mjs`.
@@ -290,7 +292,7 @@ them in full. 20 onward were made during implementation.
    450–560 ms after the last edit (it was 150 ms), and continuous typing keeps the old
    board up behind "Updating…".
 4. **The banner also needs the live model stale.** Cost: one 017 assertion restated
-   (`recompute.test.tsx:584`), and after a manual Auto-assign the banner goes 150 ms
+   (`recompute.test.tsx:587`, `:584` before T2), and after a manual Auto-assign the banner goes 150 ms
    before the board redraws. Recorded in T2's body as a deliberate correction.
 5. **`stale:run` is filtered in `selectFindings` while due.** Cost: none found.
 6. **Superseded by R8.** It accepted the Unplaced-row and badge flicker.
@@ -371,8 +373,9 @@ them in full. 20 onward were made during implementation.
     B6's unplaced events have no placement and never flickered. Cost: none, the B1
     premise (one `:room` row, 23 / 1 / 1) is asserted first.
 
-Deliberate corrections recorded in commit bodies: `recompute.test.tsx:584` flips from
-not-null to null with the case retitled (T2, decision 4). `boot.test.tsx:238-266` saves
+Deliberate corrections recorded in commit bodies: `recompute.test.tsx:587` (`:584` before
+T2) flips from not-null to null with the case retitled (T2, decision 4).
+`boot.test.tsx:248-278` (`:238-266` before T3) saves
 the preference off before `bootstrap`, assertions unchanged (T3). The 019 R4 test keeps
 its old body as the switch-off guard beside the new run-between case (T1a, decision 14).
 T3's review fix replaced its suggested order, since the flag starts false and that order
