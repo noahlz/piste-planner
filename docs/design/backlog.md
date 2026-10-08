@@ -154,6 +154,74 @@ handoff, `specs/017-canvas-tells-truth/handoff.md`, has the rest.*
   [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share).
   Predates 017, unscheduled.
 
+## What 018 deliberately left unfixed
+
+*Recorded by 018, 2026-10-08. It closed §Day-end overrun is a hard failure, the
+Div 1 bullet of §Policy tables and §A shared URL with a fencer count of 0 or 1,
+and the second bullet of §Suggest's strip-hour floor. Its handoff,
+`specs/018-engine-correctness/handoff.md`, has the rest. Entries marked "new"
+were written by 018, and every entry is unscheduled unless it says otherwise.*
+
+- The 4:00 PM pool cutoff that no engine code reads, and that the overrun now
+  makes visible –
+  [§The 4:00 PM pool cutoff is not enforced](#the-400-pm-pool-cutoff-is-not-enforced).
+  New. An owner call.
+- The defer cap of 16 deciding which events are lost, and the retry's start
+  estimate jumping past free windows –
+  [§The defer cap decides which events are lost](#the-defer-cap-decides-which-events-are-lost).
+  New.
+- Run order deciding which events get the late strips –
+  [§Run order decides which events get the late strips](#run-order-decides-which-events-get-the-late-strips).
+  New.
+- A selector throw cached by `memoizeOnDeps` –
+  [§`memoizeOnDeps` caches a throw](#memoizeondeps-caches-a-throw).
+  New.
+- The cut-share mismatch in `validation.ts`, whose Div 1 false-exclusion range
+  is now 2 to 5 fencers –
+  [§`validation.ts` reads a percentage cut as the share that advances](#validationts-reads-a-percentage-cut-as-the-share-that-advances).
+  Existing entry, narrowed.
+- The dev lane renderer that clips overrun tails –
+  [§The dev lane renderer clips overrun tails](#the-dev-lane-renderer-clips-overrun-tails).
+  New.
+- Every Veteran age group sharing one default count –
+  [§Every Veteran age group shares one default fencer count](#every-veteran-age-group-shares-one-default-fencer-count).
+  New.
+- The TIME and STRIPS miss label that still reads the hard end –
+  [§The TIME and STRIPS miss label still reads the hard end](#the-time-and-strips-miss-label-still-reads-the-hard-end).
+  New.
+- The day-ends-past-target WARN counting the medal tail and wrapping past
+  midnight –
+  [§The late-day WARN adds the medal tail and wraps past midnight](#the-late-day-warn-adds-the-medal-tail-and-wraps-past-midnight).
+  New.
+- Clock labels that wrap past midnight with no next-day cue –
+  [§Clock labels wrap past midnight with no next-day cue](#clock-labels-wrap-past-midnight-with-no-next-day-cue).
+  New. An owner wording call.
+- A template keeping the board's tournament type –
+  [§A template keeps the board's tournament type](#a-template-keeps-the-boards-tournament-type).
+  New. It predates 018.
+- Dismiss controls dropping focus to the page body –
+  [§Dismiss controls drop focus to the page body](#dismiss-controls-drop-focus-to-the-page-body).
+  New. Repo-wide.
+- B8's day-1 Vet round-of-16s running later –
+  [§B8's day-1 Vet round-of-16s run later after the Div 1 cut change](#b8s-day-1-vet-round-of-16s-run-later-after-the-div-1-cut-change).
+  New.
+- Drift figures on a tie or a boundary touch –
+  [§Three drift figures sit on a tie or a boundary touch](#three-drift-figures-sit-on-a-tie-or-a-boundary-touch),
+  beside
+  [§The referee sweep counts an instantaneous handoff twice](#the-referee-sweep-counts-an-instantaneous-handoff-twice).
+  New, and the sweep entry is an owner call.
+- Five events that end past 22:00 only by their medal tail and draw no WARN –
+  [§Five events end past 22:00 only by their medal tail](#five-events-end-past-2200-only-by-their-medal-tail).
+  New, plan decision 1.
+- `validateSameDayCompletion` measuring Single-Day Fit to the hard end –
+  [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
+  Existing entry, feature 021's sweep.
+- `calculateFlightedStrips` and `validateSameDayCompletion` still throwing on an
+  unsizeable count if called directly, and `selectCompetitions` still seeding a
+  count of 0 –
+  [§Two fencer-count corners 018 left open](#two-fencer-count-corners-018-left-open).
+  New.
+
 ## Day-level findings have no structured day
 
 *Found while planning 014, 2026-10-04. **Mostly fixed by 016, 2026-10-07.** What
@@ -307,6 +375,16 @@ is generous. It errs toward more referees, never fewer.
 *Found by the 2026-08-31 methodology review (web research + code cross-check).
 Recorded, not fixed.*
 
+*Fixed by 018, 2026-10-08 (`31ce0c3017`, drawn on the board by `9533ec187c`).
+An event's last phase, its DE or a staged DE's round-of-16 video stage, may now
+end past the day's hard end when it starts before it and ends by midnight. It is
+placed on the first attempt that fits, with one `phase-overruns-day-end` WARN
+carrying the estimated finish, and every other phase still ends by the hard end.
+B4 went 21 to 24 placed and B6 45 to 51, and the Findings panel shows one
+Warning row per overrunning event. The text below is the record as it stood
+before the fix. What 018 left open is in
+[§What 018 deliberately left unfixed](#what-018-deliberately-left-unfixed).*
+
 *2026-10-06, from 024: the premise below has narrowed. METHODOLOGY now sets
 7:00 PM as a soft target that draws a WARN and 10:00 PM as the hard end, where
 a phase that would end past it fails with `SAME_DAY_VIOLATION` at ERROR
@@ -335,6 +413,235 @@ every overrun the engine converts to an unscheduled event is a false
 infeasibility. Candidate fix: let terminal phases place past `dayHardEnd` with
 a WARN-severity bottleneck carrying the estimated finish, reserving failure
 for events that cannot start at all.
+
+## The 4:00 PM pool cutoff is not enforced
+
+*Found during 018, 2026-10-08. Recorded, not fixed. The overrun made it
+visible, and it predates 018.*
+
+`LATEST_START_MINS` (960, `constants.ts`) is threaded into `TournamentConfig`
+through `buildConfig.ts` and read by no engine code. METHODOLOGY says pool
+rounds cannot start after 4:00 PM (line 80 and the Timing Constants table, near
+line 1028) and calls the figure unsourced, since the 2026-27 manual sets none.
+The engine places pools later than that. Before 018, B4 had a pool at 16:05 and
+B6 one at 16:25. After T2, B6 starts pools at 17:35 (JR-W-EPEE-IND and
+Y12-W-EPEE-IND) and at 20:25 (VET-M-SABRE-IND-VCMB, after its retry).
+
+**What it needs**: an owner call to enforce the cutoff in the scheduler, move it
+to a sourced value, or delete the two METHODOLOGY lines and the constant.
+Enforcing it moves B4 and B6 and needs a drift review.
+
+**Cost if ignored**: the document states a rule the engine breaks, and a pool
+round at 20:25 puts its referees and its DE well into the night with no warning
+on the pool itself.
+
+## The defer cap decides which events are lost
+
+*Found by 018's T2 drift judges, 2026-10-08. Recorded, not fixed.*
+
+A phase that cannot get strips is deferred, and after `MAX_DEFERS_PER_PHASE`
+(16, `concurrentScheduler.ts`) the attempt fails. With the overrun in place this
+cap is what loses events. B6's JR-M-SABRE-IND and JR-W-SABRE-IND fail attempt 1
+on it, and VET-M-SABRE-IND-VCMB's attempt 1 failed on it before its retry put
+the pools at 20:25.
+
+A related weakness sits in the retry. `earliestFreeStartFor` (`resources.ts`)
+ignores gaps between bookings on a strip, so a retry's estimate of when strips
+free up jumps past a free window that would have fit the phase.
+
+**What it needs**: a decision on whether 16 defers is a modelled limit or an
+accident, and an `earliestFreeStartFor` that reads gaps. Either moves B4 and B6
+and needs a drift review.
+
+**Cost if ignored**: whether a busy event survives depends on a constant with no
+source, and a retry can start hours later than the strips allow.
+
+## Run order decides which events get the late strips
+
+*Found by 018's T2 drift judges, 2026-10-08. Recorded, not fixed.*
+
+Once the last phase can run past the hard end, the late evening strips go to
+whichever event reaches them first. On NAC Vet/Div1/Junior the men's Junior team
+DEs now place (JR-M-EPEE-TEAM 23:45 and JR-M-FOIL-TEAM 23:50) and push the
+women's Junior team DEs past midnight, where they are lost. They were lost before
+018 as well, so the count went from 58 to 60 placed and the women's events stayed
+out.
+
+**What it needs**: an owner call on whether run order is acceptable or whether
+the late strips should be shared by priority, which is a scheduler change.
+
+**Cost if ignored**: an organizer sees the men's events kept and the women's
+dropped for no reason that appears anywhere in the findings.
+
+## `memoizeOnDeps` caches a throw
+
+*Found during 018, 2026-10-08. Recorded, not fixed.*
+
+`memoizeOnDeps` (`src/store/derived.ts`, near lines 84 and 85) stores the new
+dependencies before it runs `compute`. If `compute` throws, the next call with
+the same dependencies returns the previous result without recomputing. A selector
+throw is then misreported or hides findings behind a stale result.
+
+**What it needs**: store the dependencies only after `compute` returns, with a
+test that a throw is rethrown on the next call.
+
+**Cost if ignored**: after any selector failure the Findings panel can show the
+last good answer for a board it can no longer compute, which is the worst kind of
+wrong.
+
+## The dev lane renderer clips overrun tails
+
+*Found during 018, 2026-10-08. Recorded, not fixed.*
+
+`src/tools/asciiLaneRenderer.ts` (near line 64 and lines 129 to 131) clips each
+lane at the day's hard end, so a phase that overruns it is drawn cut off. The
+renderer is a dev and test tool, not product code.
+
+**Cost if ignored**: low. A developer reading a lane dump of B4 or B6 does not
+see the overrun that the Findings panel reports.
+
+## Every Veteran age group shares one default fencer count
+
+*Found during 018, 2026-10-08. Recorded, not fixed.*
+
+`fencerDefaultKeyOf` (`catalogue.ts`) keys an individual event by category,
+weapon and gender, so every Veteran age group reads one count. A hand-added NAC
+V80 event starts at 120 fencers against 2 to 5 real entries.
+
+**What it needs**: age-group keys for Veteran events, with defaults taken from
+real entry data (the app's own rule that defaults come from real data).
+
+**Cost if ignored**: a hand-added older Veteran event starts at a count that
+overstates its pools, and the organizer has to know to lower it.
+
+## The TIME and STRIPS miss label still reads the hard end
+
+*Found during 018, 2026-10-08. Recorded, not fixed.*
+
+The `'TIME'` or `'STRIPS'` reason that `resources.ts` gives a missed allocation
+is chosen against the day's hard end. A last phase deferred into the overrun
+window therefore logs an INFO labelled TIME, although it is allowed to run there.
+The INFO sits outside the findings digest.
+
+**Cost if ignored**: low. A diagnostic reads wrong in a log nobody sees in the
+product.
+
+## The late-day WARN adds the medal tail and wraps past midnight
+
+*Found during 018, 2026-10-08. Recorded, not fixed.*
+
+The engine's `day-ends-past-target` WARN (`lateDayWarnings`,
+`concurrentScheduler.ts`) measures the day's end with the gold and bronze tail
+added, and it prints the clock with a wrap, so B4's day 3 reads 00:00. The
+Findings panel does not show this WARN.
+
+**What it needs**: a decision on whether the tail belongs in the day's end (the
+planning buffer says it does not bind) and a wording for a finish past midnight,
+together with
+[§Clock labels wrap past midnight with no next-day cue](#clock-labels-wrap-past-midnight-with-no-next-day-cue).
+
+**Cost if ignored**: a day that runs late is described by a time that reads like
+the start of the next morning, and only in the engine's own list.
+
+## Clock labels wrap past midnight with no next-day cue
+
+*Found during 018, 2026-10-08. Recorded, not fixed. An owner wording
+call.*
+
+`formatClock` now wraps past midnight like the engine's `formatClockMins`, so
+ticks, rows, block labels, bands and the footer agree. None of them says that the
+time is on the next day. B4's footer tournament finish reads 00:00, because
+Y14-W-EPEE-IND's tail ends at midnight.
+
+**What it needs**: wording, for example "00:10 (+1)", applied the same way
+everywhere a clock is drawn.
+
+**Cost if ignored**: a finish after midnight reads like an early-morning time,
+and an organizer can take B4's 00:00 for a bug.
+
+## A template keeps the board's tournament type
+
+*Found during 018, 2026-10-08. Recorded, not fixed. It predates 018.*
+
+`applyTemplate` sets no tournament type, so picking a template after a board of
+another type leaves the old type in place. The T3 smoke hit it after B4 (SYC),
+and 018's probes ran every template as a NAC to avoid it.
+
+**What it needs**: each template carries its tournament type, or the picker asks.
+
+**Cost if ignored**: a regional template under a NAC type is measured against the
+wrong rules without anything saying so.
+
+## Dismiss controls drop focus to the page body
+
+*Found during 018, 2026-10-08. Recorded, not fixed. Repo-wide.*
+
+Activating a dismiss control removes it, and focus falls to `<body>`. This holds
+for the load-refusal notice, the Findings rows and the detail strip. A keyboard
+user starts again from the top of the page.
+
+**What it needs**: one pattern that moves focus to the next sensible control, then
+applied to every dismiss.
+
+**Cost if ignored**: keyboard and screen reader users lose their place each time
+they dismiss something.
+
+## B8's day-1 Vet round-of-16s run later after the Div 1 cut change
+
+*Found by 018's T1 drift judges, 2026-10-08. Recorded, not fixed.*
+
+After the Div 1 cut moved to 25%, B8's seven day-1 VET round-of-16s run 100 to
+160 minutes later. JR-W-EPEE-IND's prelims fall back onto 8 of the 12 video
+strips (1670 to 1850), which is allocator behaviour (`resources.ts` near lines
+216 to 223). Counts and ERRORs did not move.
+
+**Cost if ignored**: the Vet video stages on B8's first day read later than a
+human scheduler would place them.
+
+## Three drift figures sit on a tie or a boundary touch
+
+*Found by 018's drift judges (T1 and T2), 2026-10-08. Recorded, not fixed.*
+
+- B7's new first-day-longer-than-middle WARN (T1, WARNs 3 to 4) sits on a tie of
+  625 minutes against 625. Any change that moves either side by a minute adds or
+  removes the WARN.
+- B8's day-1 peak sabre referees of 60 (T1) touch a boundary at minute 1665.
+- B4's referee peaks of 96 and 94 (T2) each include a 16-referee DE that ends at
+  the peak minute. Counting only truly overlapping intervals gives 80 and 78.
+
+The last two depend on
+[§The referee sweep counts an instantaneous handoff twice](#the-referee-sweep-counts-an-instantaneous-handoff-twice),
+which is an owner call.
+
+**Cost if ignored**: a future change near these figures looks like drift when it
+is only the tie or the boundary resolving the other way.
+
+## Five events end past 22:00 only by their medal tail
+
+*Found during 018, 2026-10-08. Recorded, not fixed. It is plan decision 1.*
+
+The overrun rule binds the last phase's end and not the gold and bronze tail,
+which METHODOLOGY treats as a planning buffer. Five events therefore end past
+22:00 only by the tail and draw no hard-end WARN: B2 once, B4 once and B6 three times.
+
+**What it needs**: an owner call on whether the tail should count toward the
+hard-end WARN.
+
+**Cost if ignored**: the day runs past 22:00 for the medal matches and no
+finding says so.
+
+## Two fencer-count corners 018 left open
+
+*Found during 018, 2026-10-08. Recorded, not fixed.*
+
+- `calculateFlightedStrips` and `validateSameDayCompletion` still throw on an
+  unsizeable count if they are called directly. No production code reaches them
+  (see the second bullet of
+  [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep)).
+- `selectCompetitions` still seeds a fencer count of 0 for a newly selected
+  event. `applyPreset` overwrites it at once, so no board holds a 0 for long.
+
+**Cost if ignored**: none today. Both would matter the day someone adds a caller.
 
 ## Runtime failure is terminal – day assignment never re-colors
 
@@ -532,6 +839,9 @@ published rules:
   The 20% figure belongs to a different mechanism – the new 315-entrant NAC
   cap for Div1/Junior/Cadet, sized so 315 entries produce a 256 DE tableau
   ([Event Restructure Update, June 2025](https://www.usafencing.org/news)).
+  *Fixed by 018, 2026-10-08 (`44576f6f43`, METHODOLOGY `5272d66823`). Div 1
+  promotes 75% at a NAC, with a 25% cut. Cadet and Junior stay at 20%, and
+  the regional types stay at 100%.*
 - **Flighting trigger**: the old entries-based two-pool-round rule was
   eliminated for 2025-26. The engine's strip-budget trigger is closer to real
   practice (flighting as the release valve when strips/refs are short), but
@@ -616,11 +926,14 @@ computes `round(fencer_count × (1 − cut_value / 100))`, so it reads the same
 number as the share that is cut, and the DE field it builds is the one the
 schedule uses. The two disagree on every percentage.
 
-- **A 20% cut, the default for Cadet, Junior and Div 1**: the check's figure
+- **A 20% cut, the default for Cadet and Junior**: the check's figure
   is 20% of the field, so 2 to 7 fencers read as fewer than 2 promoted and the
   event is excluded with a `cut-value-min-promotions` ERROR. The DE field would
   have been 2 to 6 fencers, a real if tiny event. Real fields of 2 to 7 are
-  rare, but a what-if run or a hand-entered count hits it.
+  rare, but a what-if run or a hand-entered count hits it. Div 1 had this
+  default until 018 moved it to a 25% cut at a NAC (`44576f6f43`), so its false
+  exclusion now covers 2 to 5 fencers, where the DE field would have been 2 to
+  4.
 - **A 99% cut**: the check's figure is 99% of the field, so it passes. The DE
   field is 1% of the field, which `computeDeFencerCount` floors to 2. The
   intended protection, an error when a cut leaves fewer than 2 fencers, does
@@ -728,7 +1041,10 @@ Two small mismatches sit in how those bounds are built.
   `MIN_FENCERS` (2) to `MAX_FENCERS` (500). The two agree for every count from 0
   to 500. They differ for a count above 500, which `fencer-count-bounds`
   rejects as an ERROR (`validation.ts`) and which the ceiling still counts.
-  The fix is to share one filter.
+  The fix is to share one filter. *Fixed by 018, 2026-10-08 (`05654fca6d`).
+  `isSizeableCount` (`pools.ts`) is now the one predicate behind the bounds
+  rule, the floor, the ceiling and every pool-math caller, and `MAX_FENCERS` is
+  336.*
 
 **Cost if ignored**: low. A board with an out-of-range fencer count gets a
 ceiling that includes an event the floor ignores, and a video-heavy board scans
@@ -959,7 +1275,13 @@ the tree on purpose.*
   flag it and wrong to delete it. 014 found two more of these with no caller in
   `src/`: `validateFlightingGroup` (`flighting.ts`) and
   `validateSameDayCompletion` (`validation.ts`). 014 gave both rule ids and
-  subjects, so they stay correct until 021 decides.
+  subjects, so they stay correct until 021 decides. *018 added one fact,
+  2026-10-08: `validateSameDayCompletion` still measures Single-Day Fit to the
+  hard end and not to the end of an event's last phase, which the overrun rule
+  now allows past it. Nothing calls it, so no board is affected, and 021's sweep
+  should delete it or bring it in line. 018 also left it throwing on an
+  unsizeable count, see
+  [§Two fencer-count corners 018 left open](#two-fencer-count-corners-018-left-open).*
 
 ## Global settings
 
@@ -1142,8 +1464,9 @@ comments make.
 an organizer reaches for before renting more rooms.*
 
 Nothing in the store, engine, or UI lets an organizer cap entries for one event.
-`MAX_FENCERS = 500` (`src/engine/constants.ts:91`) is a structural sanity bound
-enforced by `validation.ts:151` – it rejects an impossible `fencer_count`, it
+`MAX_FENCERS = 336` (`src/engine/constants.ts`, S8 §2.2.5 p.15, moved from 500
+by 018) is a structural sanity bound enforced by the `fencer-count-bounds` rule
+in `validation.ts` and at load – it rejects an impossible `fencer_count`, it
 does not express a planning decision.
 
 This matters because capping is the lever that shrinks demand rather than adding
@@ -1572,6 +1895,14 @@ call.
 
 *Unverified, from the 2026-10-04 state-of-project audit. Roadmap feature 018
 verifies it first.*
+
+*Fixed by 018, 2026-10-08 (`05654fca6d`). Verified first: it was real and wider
+than written. A link or file with a `fencer_count` of 0, 1 or `Infinity` loaded
+without complaint and put the whole shell behind the error boundary. Load now
+refuses a count that is not a whole number or lies outside 2 to 336, with a
+reason that names the event and shows on a dismissable notice, and the engine
+skips an unsizeable event instead of throwing. The text below is the audit's
+original record.*
 
 `analysis.ts:117` and `:140` call `computePoolStructure(comp.fencer_count, …)`
 with no guard, while the module's own comment (`:44`) says a competition with
