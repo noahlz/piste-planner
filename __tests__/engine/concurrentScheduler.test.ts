@@ -12,7 +12,6 @@ import {
   Weapon,
   RefPolicy,
   CutMode,
-  DeStripRequirement,
   Phase,
   ValidationMode,
   tailEstimateMins,
@@ -47,7 +46,6 @@ function comp(id: string, overrides: Partial<Competition> = {}): Competition {
     de_mode: DeMode.SINGLE_STAGE,
     cut_mode: CutMode.DISABLED,
     cut_value: 100,
-    de_round_of_16_requirement: DeStripRequirement.IF_AVAILABLE,
     ref_policy: RefPolicy.ONE,
     ...overrides,
   })
@@ -772,9 +770,8 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
     // reads this competition's derived fields — isolated to one finding.
     // category/gender/weapon deliberately differ from validTrio()'s
     // 'valid-1' (DIV1/MEN/FOIL) so this event does not share its
-    // same-population key — smallConfig()'s 2-day default sits exactly at
-    // the same-population rule's threshold, so a collision here would pass
-    // by accident rather than by isolation.
+    // same-population key, and no rule tied to that key can touch it – only
+    // fencer-count-bounds explains its exclusion.
     const bad = comp('bad-fencer-count', {
       fencer_count: 1, category: Category.CADET, gender: Gender.WOMEN, weapon: Weapon.EPEE,
     })
@@ -1039,7 +1036,7 @@ describe('scheduleAllConcurrent — the demoted feasibility finding (011 T006)',
 describe('postScheduleDiagnostics — the recommendation survives a WARN-only feasibility finding, and its message names four levers in order with no strip count (T005, T009)', () => {
   it('a configuration whose only finding is feasibility-strip-hours (WARN) still emits the post-schedule RESOURCE_RECOMMENDATION INFO', () => {
     // 13 events, one strip-hour-hungry combination per category/gender/weapon
-    // so `same-population` never fires. max_pool_strip_pct is deliberately
+    // so the crossover same-population block never binds. max_pool_strip_pct is deliberately
     // below 1.0 so each event's own pool count (7, from 48 fencers) stays
     // under strips_total (8) — no per-event resource-precondition-strips
     // ERROR — while suggestStripCount's ceiling still exceeds it, which is

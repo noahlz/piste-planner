@@ -467,8 +467,8 @@ export const GROUP_1_MANDATORY: readonly { older: Category; younger: Category }[
 ]
 
 // Tournament types where Group 1 is soft, with a time-of-day window (METHODOLOGY
-// §Regional Types: Soft, With a Time-of-Day Window). Not REGIONAL_QUALIFIER_TYPES:
-// SYC and SJCC take the national criteria here (Appendix B).
+// §Regional Types: Soft, With a Time-of-Day Window). SYC and SJCC are regional
+// but take the national criteria here (Appendix B).
 export const GROUP_1_SOFT_TYPES: ReadonlySet<TournamentType> = new Set<TournamentType>([
   TournamentType.ROC,
   TournamentType.RYC,
@@ -554,17 +554,6 @@ export const PROXIMITY_GRAPH: { cat1: Category; cat2: Category; weight: number }
 ]
 
 // ──────────────────────────────────────────────
-// Proximity penalty weights by scheduling distance (days apart)
-// ──────────────────────────────────────────────
-
-export const PROXIMITY_PENALTY_WEIGHTS: Record<number, number> = {
-  0: 0.0,
-  1: -0.4,
-  2: 0.0,
-  3: 0.5,
-}
-
-// ──────────────────────────────────────────────
 // REST_DAY_PAIRS: category pairs that should have a rest day between them
 // (Ops Manual p.20 – Group 2, METHODOLOGY §Rest Day Preference). Junior–Cadet
 // is absent: the manual asks for that rest day only at the Junior Olympic
@@ -574,18 +563,6 @@ export const PROXIMITY_PENALTY_WEIGHTS: Record<number, number> = {
 export const REST_DAY_PAIRS: [Category, Category][] = [
   [Category.JUNIOR, Category.DIV1],
 ]
-
-// ──────────────────────────────────────────────
-// Regional qualifier tournament types — cannot cap fencer registrations per handbook.
-// ──────────────────────────────────────────────
-
-export const REGIONAL_QUALIFIER_TYPES: ReadonlySet<string> = new Set<string>([
-  TournamentType.RYC,
-  TournamentType.RJCC,
-  TournamentType.ROC,
-  TournamentType.SYC,
-  TournamentType.SJCC,
-])
 
 // ──────────────────────────────────────────────
 // Video stage round: the DE round at which video replay begins per category
@@ -688,21 +665,13 @@ export const PENALTY_WEIGHTS = {
 } as const
 
 // ──────────────────────────────────────────────
-// Capacity penalty curve — fill-ratio thresholds and ramps
+// Capacity penalty curve – the cap on dayColoring.ts's capacityPenalty. The live
+// curve is 0 up to fill 0.85, linear to 3.0 at fill 1.0, then 3.0 + 10 per unit
+// of fill past 1.0, capped at OVERFLOW_PENALTY (20.0).
 // ──────────────────────────────────────────────
 
 export const CAPACITY_PENALTY_CURVE = {
-  /** Fill ratio below which no capacity penalty applies */
-  LOW_THRESHOLD: 0.6,
-  /** Fill ratio at which the moderate ramp begins */
-  MID_THRESHOLD: 0.8,
-  /** Fill ratio at which the steep ramp ends and max penalty applies */
-  HIGH_THRESHOLD: 0.95,
-  /** Maximum penalty for the low-to-mid band */
-  LOW_BAND_MAX: 3.0,
-  /** Additional penalty added across the mid-to-high band */
-  MID_BAND_DELTA: 7.0,
-  /** Flat penalty when fill ratio exceeds the high threshold */
+  /** Cap on the past-capacity penalty */
   OVERFLOW_PENALTY: 20.0,
 } as const
 

@@ -2,15 +2,12 @@ import { describe, it, expect } from 'vitest'
 import {
   buildPenaltyMatrix,
   crossoverPenalty,
-  proximityPenalty,
   getProximityWeight,
-  individualTeamProximityPenalty,
   findIndividualCounterpart,
 } from '../../src/engine/crossover.ts'
 import { Category, Gender, Weapon, EventType, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
 import { CROSSOVER_GRAPH } from '../../src/engine/constants.ts'
-import type { ScheduleResult } from '../../src/engine/types.ts'
-import { makeComp, makeCompetition, makeScheduleResult } from '../helpers/factories.ts'
+import { makeComp, makeCompetition } from '../helpers/factories.ts'
 
 
 // ──────────────────────────────────────────────
@@ -449,154 +446,6 @@ describe('getProximityWeight', () => {
     { cat1: Category.DIV1, cat2: Category.Y10, expected: 0.0 },
   ])('$cat1 ↔ $cat2 → $expected', ({ cat1, cat2, expected }) => {
     expect(getProximityWeight(cat1, cat2)).toBe(expected)
-  })
-})
-
-// ──────────────────────────────────────────────
-// proximityPenalty
-// ──────────────────────────────────────────────
-
-describe('proximityPenalty', () => {
-  const div1 = makeCompetition({ id: 'div1', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
-  const junior = makeCompetition({ id: 'junior', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.FOIL })
-  const juniorWomen = makeCompetition({ id: 'junior-w', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.FOIL })
-  const juniorEpee = makeCompetition({ id: 'junior-e', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.EPEE })
-  const y10 = makeCompetition({ id: 'y10', category: Category.Y10, gender: Gender.MEN, weapon: Weapon.FOIL })
-
-  it('Same gender+weapon, DIV1↔JUNIOR, day_gap=1 → negative bonus (-0.4 × 1.0)', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      junior: makeScheduleResult('junior', 1),
-    }
-    // div1 proposed day=2, junior on day=1 → gap=1 → -0.4 * 1.0 = -0.4
-    const result = proximityPenalty(div1, 2, schedule, [junior])
-    expect(result).toBeCloseTo(-0.4)
-  })
-
-  it('Same gender+weapon, DIV1↔JUNIOR, day_gap=0 → 0.0 (same day handled elsewhere)', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      junior: makeScheduleResult('junior', 2),
-    }
-    const result = proximityPenalty(div1, 2, schedule, [junior])
-    expect(result).toBe(0.0)
-  })
-
-  it('Same gender+weapon, DIV1↔JUNIOR, day_gap=3 → positive penalty (0.5 × 1.0)', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      junior: makeScheduleResult('junior', 0),
-    }
-    // div1 proposed day=3, junior on day=0 → gap=3 → 0.5 * 1.0 = 0.5
-    const result = proximityPenalty(div1, 3, schedule, [junior])
-    expect(result).toBeCloseTo(0.5)
-  })
-
-  it('Different gender → 0.0 regardless', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      'junior-w': makeScheduleResult('junior-w', 0),
-    }
-    const result = proximityPenalty(div1, 3, schedule, [juniorWomen])
-    expect(result).toBe(0.0)
-  })
-
-  it('Different weapon → 0.0 regardless', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      'junior-e': makeScheduleResult('junior-e', 0),
-    }
-    const result = proximityPenalty(div1, 3, schedule, [juniorEpee])
-    expect(result).toBe(0.0)
-  })
-
-  it('Non-proximity pair (DIV1↔Y10) → 0.0', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      y10: makeScheduleResult('y10', 0),
-    }
-    const result = proximityPenalty(div1, 3, schedule, [y10])
-    expect(result).toBe(0.0)
-  })
-
-  it('day_gap=4 → clamped to 3, same penalty as gap=3 (0.5 × 1.0)', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      junior: makeScheduleResult('junior', 0),
-    }
-    // div1 proposed day=4, junior on day=0 → gap=4, clamped to 3 → 0.5 * 1.0
-    const result = proximityPenalty(div1, 4, schedule, [junior])
-    expect(result).toBeCloseTo(0.5)
-  })
-})
-
-// ──────────────────────────────────────────────
-// individualTeamProximityPenalty
-// ──────────────────────────────────────────────
-
-describe('individualTeamProximityPenalty', () => {
-  const teamComp = makeCompetition({ id: 'div1-team', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.TEAM })
-  const indComp = makeCompetition({ id: 'div1-ind', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
-
-  it('TEAM event, individual scheduled day before → -0.4 bonus', () => {
-    // team on proposed day=2, individual on day=1 → gap = 2-1 = 1 → -0.4
-    const schedule: Record<string, ScheduleResult> = {
-      'div1-ind': makeScheduleResult('div1-ind', 1),
-    }
-    const result = individualTeamProximityPenalty(
-      teamComp,
-      2,
-      schedule,
-      [indComp],
-    )
-    expect(result).toBe(-0.4)
-  })
-
-  it('TEAM event, individual scheduled same day → 0.0', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      'div1-ind': makeScheduleResult('div1-ind', 2),
-    }
-    const result = individualTeamProximityPenalty(
-      teamComp,
-      2,
-      schedule,
-      [indComp],
-    )
-    expect(result).toBe(0.0)
-  })
-
-  it('TEAM event, individual scheduled day after (team before ind) → 1.0 penalty', () => {
-    // team proposed day=1, individual on day=2 → gap = 1-2 = -1 → 1.0
-    const schedule: Record<string, ScheduleResult> = {
-      'div1-ind': makeScheduleResult('div1-ind', 2),
-    }
-    const result = individualTeamProximityPenalty(
-      teamComp,
-      1,
-      schedule,
-      [indComp],
-    )
-    expect(result).toBe(1.0)
-  })
-
-  it('TEAM event, individual 2+ days after (team far before ind) → 0.3 penalty', () => {
-    // team proposed day=0, individual on day=3 → gap = 0-3 = -3 → too far apart
-    const schedule: Record<string, ScheduleResult> = {
-      'div1-ind': makeScheduleResult('div1-ind', 3),
-    }
-    const result = individualTeamProximityPenalty(
-      teamComp,
-      0,
-      schedule,
-      [indComp],
-    )
-    expect(result).toBe(0.3)
-  })
-
-  it('INDIVIDUAL event → 0.0', () => {
-    const schedule: Record<string, ScheduleResult> = {
-      'div1-ind': makeScheduleResult('div1-ind', 1),
-    }
-    const result = individualTeamProximityPenalty(
-      indComp,
-      2,
-      schedule,
-      [indComp],
-    )
-    expect(result).toBe(0.0)
   })
 })
 

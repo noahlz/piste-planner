@@ -10,18 +10,6 @@ import { crossoverPenalty } from './crossover.ts'
 import { demandsVideoStage } from './de.ts'
 
 // ──────────────────────────────────────────────
-// SchedulingError
-// ──────────────────────────────────────────────
-
-export class SchedulingError extends Error {
-  // Uses ES2022 Error.cause to carry the BottleneckCause string for callers to inspect
-  constructor(causeCode: string, message: string) {
-    super(message, { cause: causeCode })
-    this.name = 'SchedulingError'
-  }
-}
-
-// ──────────────────────────────────────────────
 // constraintScore — METHODOLOGY.md §Scheduling Algorithm Phase 3
 // ──────────────────────────────────────────────
 

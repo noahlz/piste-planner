@@ -4,16 +4,7 @@ import { ENGINE_FENCER_BOUNDS, computePoolStructure, computeDeFencerCount, isSiz
 import type { FencerCountBounds } from './pools.ts'
 import { computeBracketSize, demandsVideoStage } from './de.ts'
 import { suggestFlightingGroups } from './flighting.ts'
-import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
-
-/**
- * Returns true when the tournament is a regional qualifier (RYC, RJCC, ROC, SYC, SJCC).
- * Tournament type lives on the config, not on individual competitions.
- */
-export function isRegionalQualifier(config: TournamentConfig): boolean {
-  return REGIONAL_QUALIFIER_TYPES.has(config.tournament_type)
-}
 
 /**
  * The **ceiling** of the strip search (`stripSearch.ts`): the strips the venue
@@ -89,23 +80,6 @@ export function busiestDayLoad(loads: readonly number[], daysAvailable: number):
   }
 
   return Math.max(...dayLoads)
-}
-
-/**
- * Returns the maximum allowable pool count difference between men's and women's
- * events sharing the same age/weapon group (METHODOLOGY.md §Phase 2: Pre-Scheduling Analysis).
- *
- * Threshold is based on the LARGER pool count of the two events:
- *   ≤3 pools → 0  (must be equal)
- *   4–7      → 1
- *   8–11     → 2
- *   12+      → 3
- */
-export function genderEquityAllowableDiff(largerPools: number): number {
-  if (largerPools <= 3) return 0
-  if (largerPools <= 7) return 1
-  if (largerPools <= 11) return 2
-  return 3
 }
 
 /**

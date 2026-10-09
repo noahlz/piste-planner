@@ -3,7 +3,7 @@ import type {
   TournamentConfig,
   PinnedPlacement,
 } from '../engine/types.ts'
-import { DAY_AXIS_SPACING_MINS, DeStripRequirement } from '../engine/types.ts'
+import { DAY_AXIS_SPACING_MINS } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import { compareIds } from '../engine/order.ts'
 import {
@@ -213,8 +213,6 @@ function buildCompetitions(state: StoreState): Competition[] {
       // day 7. Infinity can never be the minimum in
       // Math.min(dayHardEnd(day, config), latest_end), for any day count.
       latest_end: Infinity,
-      optional: false,
-      de_round_of_16_requirement: DeStripRequirement.HARD,
       // The store's own flag. `flighted: true` with a null group is exactly the
       // shape `derive.ts` splits into Flight A and Flight B, so the flag needs
       // no further derivation (data-model §4). `flighting_group_id` stays null:

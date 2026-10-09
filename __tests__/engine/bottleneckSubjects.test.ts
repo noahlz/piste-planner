@@ -13,8 +13,8 @@
  * producers fire is the drift ledger's concern, and producers a scenario never
  * reaches are not exercised here.
  *
- * The subjects -> message direction applies to engine-native rules only (two
- * validation rules list ids their message does not name) and couples to wording
+ * The subjects -> message direction applies to engine-native rules only (a
+ * validation rule may list ids its message does not name) and couples to wording
  * on purpose, as a one-time cross-check that subjects name what the message names. A future switch to
  * display names in messages must update it.
  *
@@ -24,7 +24,7 @@
  * concurrentScheduler.test.ts.
  */
 import { describe, it, expect, beforeAll } from 'vitest'
-import { BottleneckRule, Phase, ValidationMode } from '../../src/engine/types.ts'
+import { BottleneckRule, EventType, Phase, ValidationMode } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { initialAnalysis } from '../../src/engine/analysis.ts'
 import { validateConfig } from '../../src/engine/validation.ts'
@@ -152,15 +152,16 @@ describe('Bottleneck rule and subjects invariants', () => {
     expect(derived?.subjects).toEqual(finding?.subjects)
   })
 
-  it('a same-population bottleneck passes the oracle though its message names the group, not the event ids', () => {
-    const config = makeConfig({ days_available: 2 })
-    const competitions = ['SP-1', 'SP-2', 'SP-3'].map(id => makeCompetition({ id }))
+  it('a policy validation-derived bottleneck (team-requires-individual) passes the oracle', () => {
+    const config = makeConfig()
+    const competitions = [makeCompetition({ id: 'X-M-FOIL-TEAM', event_type: EventType.TEAM })]
     const findings = validateConfig(config, competitions, ValidationMode.BINDING)
-    const finding = findings.find(f => f.rule === 'same-population')
-    expect(finding?.subjects).toEqual(['SP-1', 'SP-2', 'SP-3'])
+    const finding = findings.find(f => f.rule === 'team-requires-individual')
+    expect(finding?.subjects).toEqual(['X-M-FOIL-TEAM'])
 
-    const derived = scheduleAll(competitions, config).bottlenecks.find(b => b.rule === 'same-population')
+    const derived = scheduleAll(competitions, config).bottlenecks.find(b => b.rule === 'team-requires-individual')
     expect(derived).toBeDefined()
+    expect(derived?.subjects).toEqual(finding?.subjects)
     checkInvariants(derived!, competitions.map(c => c.id), new Set(findings.map(f => f.rule)))
   })
 })

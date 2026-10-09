@@ -38,7 +38,6 @@ export type EventType = (typeof EventType)[keyof typeof EventType]
 export const RefPolicy = {
   ONE: 'ONE',
   TWO: 'TWO',
-  AUTO: 'AUTO',
 } as const
 export type RefPolicy = (typeof RefPolicy)[keyof typeof RefPolicy]
 
@@ -47,12 +46,6 @@ export const DeMode = {
   STAGED: 'STAGED',
 } as const
 export type DeMode = (typeof DeMode)[keyof typeof DeMode]
-
-export const DeStripRequirement = {
-  HARD: 'HARD',
-  IF_AVAILABLE: 'IF_AVAILABLE',
-} as const
-export type DeStripRequirement = (typeof DeStripRequirement)[keyof typeof DeStripRequirement]
 
 export const VideoPolicy = {
   REQUIRED: 'REQUIRED',
@@ -100,7 +93,6 @@ export const Phase = {
   FLIGHTING: 'FLIGHTING',
   CUT: 'CUT',
   VALIDATION: 'VALIDATION',
-  SCHEDULING: 'SCHEDULING',
   POST_SCHEDULE: 'POST_SCHEDULE',
   DEADLINE_CHECK: 'DEADLINE_CHECK',
 } as const
@@ -108,24 +100,17 @@ export type Phase = (typeof Phase)[keyof typeof Phase]
 
 export const BottleneckCause = {
   STRIP_CONTENTION: 'STRIP_CONTENTION',
-  REFEREE_CONTENTION: 'REFEREE_CONTENTION',
-  STRIP_AND_REFEREE_CONTENTION: 'STRIP_AND_REFEREE_CONTENTION',
   SEQUENCING_CONSTRAINT: 'SEQUENCING_CONSTRAINT',
   SAME_DAY_DEMOGRAPHIC_CONFLICT: 'SAME_DAY_DEMOGRAPHIC_CONFLICT',
   UNAVOIDABLE_CROSSOVER_CONFLICT: 'UNAVOIDABLE_CROSSOVER_CONFLICT',
   DEADLINE_BREACH: 'DEADLINE_BREACH',
   DEADLINE_BREACH_UNRESOLVABLE: 'DEADLINE_BREACH_UNRESOLVABLE',
-  AUTO_REF_FALLBACK: 'AUTO_REF_FALLBACK',
-  TWO_REF_FALLBACK: 'TWO_REF_FALLBACK',
   FLIGHT_B_DELAYED: 'FLIGHT_B_DELAYED',
   STRIP_DEFICIT_NO_FLIGHTING: 'STRIP_DEFICIT_NO_FLIGHTING',
   VIDEO_STRIP_CONTENTION: 'VIDEO_STRIP_CONTENTION',
-  PROXIMITY_PREFERENCE_UNMET: 'PROXIMITY_PREFERENCE_UNMET',
   FLIGHTING_GROUP_NOT_LARGEST: 'FLIGHTING_GROUP_NOT_LARGEST',
   FLIGHTING_GROUP_MANUAL_NEEDED: 'FLIGHTING_GROUP_MANUAL_NEEDED',
   MULTIPLE_FLIGHTED_SAME_DAY: 'MULTIPLE_FLIGHTED_SAME_DAY',
-  GENDER_EQUITY_CAP_VIOLATION: 'GENDER_EQUITY_CAP_VIOLATION',
-  REFEREE_INSUFFICIENT_ACCEPTED: 'REFEREE_INSUFFICIENT_ACCEPTED',
   SAME_DAY_VIOLATION: 'SAME_DAY_VIOLATION',
   SCHEDULE_ACCEPTED_WITH_WARNINGS: 'SCHEDULE_ACCEPTED_WITH_WARNINGS',
   CUT_SUMMARY: 'CUT_SUMMARY',
@@ -227,14 +212,12 @@ export interface Competition {
   ref_policy: RefPolicy
   earliest_start: number
   latest_end: number
-  optional: boolean
   vet_age_group: VetAgeGroup | null
   use_single_pool_override: boolean
   cut_mode: CutMode
   cut_value: number
   de_mode: DeMode
   de_video_policy: VideoPolicy
-  de_round_of_16_requirement: DeStripRequirement
   flighted: boolean
   flighting_group_id: string | null
   is_priority: boolean
@@ -322,12 +305,6 @@ export interface RefRequirementsByDay {
   peak_time: number
 }
 
-export interface AcceptedWarning {
-  cause: BottleneckCause
-  severity: BottleneckSeverity
-  message: string
-}
-
 export interface ScheduleResult {
   competition_id: string
   assigned_day: number
@@ -363,12 +340,10 @@ export interface ScheduleResult {
   de_round_of_16_end: number | null
   de_round_of_16_strip_count: number
   de_total_end: number | null
-  conflict_score: number
   pool_duration_baseline: number
   pool_duration_actual: number
   de_duration_baseline: number
   de_duration_actual: number
-  accepted_warnings: AcceptedWarning[]
 }
 
 /**
@@ -479,7 +454,7 @@ export interface ValidationError {
   field: string
   message: string
   severity: BottleneckSeverity
-  /** Stable kebab-case rule id, e.g. 'same-population'. */
+  /** Stable kebab-case rule id, e.g. 'team-requires-individual'. */
   rule: string
   kind?: RuleKind
   /** Sorted competition ids, or [field] for global rules. */
@@ -629,20 +604,4 @@ export function clockOnDay(t: number, d: number, config: TournamentConfig): stri
 export function formatClockMins(clockMins: number): string {
   const m = ((Math.round(clockMins) % 1440) + 1440) % 1440
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-}
-
-/**
- * Returns the day index d such that dayStart(d) <= t < dayHardEnd(d), or null
- * when no day in [0, days_available) contains t. It reads the hard end because
- * the scheduler places work past the soft target (METHODOLOGY.md §Same-Day
- * Completion), and that work still belongs to its day. Every phase of positive
- * length starts before the hard end, so its start finds its day. An event's last
- * phase may end past the hard end, up to `dayMidnight` (018 R1), and a minute
- * in that overrun belongs to no day here.
- */
-export function findDayForTime(config: TournamentConfig, t: number): number | null {
-  for (let d = 0; d < config.days_available; d++) {
-    if (dayStart(d, config) <= t && t < dayHardEnd(d, config)) return d
-  }
-  return null
 }

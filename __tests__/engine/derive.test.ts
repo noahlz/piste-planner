@@ -65,9 +65,8 @@ function scheduleIsolated(
   return { oracle, placement: oraclePlacement(oracle) }
 }
 
-// Fields derive.ts must reproduce exactly from (placement, competition, config).
-// Excludes scheduler-only diagnostics with no input derivation: conflict_score,
-// accepted_warnings.
+// Fields derive.ts must reproduce exactly from (placement, competition, config):
+// every key of ScheduleResult.
 const DERIVED_FIELDS = [
   'competition_id', 'assigned_day', 'use_flighting', 'is_priority', 'flighting_group_id',
   'pool_start', 'pool_end', 'pool_strip_count', 'pool_refs_count',
@@ -83,19 +82,11 @@ const DERIVED_FIELDS = [
   'de_duration_baseline', 'de_duration_actual',
 ] as const satisfies readonly (keyof ScheduleResult)[]
 
-// Scheduler-only diagnostics carried on ScheduleResult but not derivable from
-// (placement, competition, config) alone — see DERIVED_FIELDS' comment above.
-const EXCLUDED_DIAGNOSTIC_FIELDS = [
-  'conflict_score', 'accepted_warnings',
-] as const satisfies readonly (keyof ScheduleResult)[]
-void EXCLUDED_DIAGNOSTIC_FIELDS // used only in the type position below
-
-// Exhaustiveness guard: DERIVED_FIELDS plus EXCLUDED_DIAGNOSTIC_FIELDS must
-// cover every key of ScheduleResult. If ScheduleResult gains a field claimed
-// by neither list, the object literal below is missing a required property
-// and this file stops compiling.
+// Exhaustiveness guard: DERIVED_FIELDS must cover every key of ScheduleResult.
+// If ScheduleResult gains a field the list does not name, the object literal
+// below is missing a required property and this file stops compiling.
 const _fieldCoverageCheck: Record<
-  Exclude<keyof ScheduleResult, typeof DERIVED_FIELDS[number] | typeof EXCLUDED_DIAGNOSTIC_FIELDS[number]>,
+  Exclude<keyof ScheduleResult, typeof DERIVED_FIELDS[number]>,
   true
 > = {}
 void _fieldCoverageCheck // type-level check only — no runtime assertion needed

@@ -267,56 +267,6 @@ export function findAvailableStripsInWindow(
 }
 
 // ──────────────────────────────────────────────
-// peakConcurrentStrips — sweep-line over allocation intervals
-// ──────────────────────────────────────────────
-
-/**
- * Returns the peak concurrent strip occupancy within `window`, separated into
- * total strips and the video-strip subset. Walks every allocation across every
- * strip in the state; small N keeps this cheap.
- *
- * Used by Phase B's referee-staffing layer (replaces the existing sweep-line on
- * RefDemandInterval[]) and by post-schedule capacity reporting.
- */
-export function peakConcurrentStrips(
-  state: GlobalState,
-  config: TournamentConfig,
-  window: { start: number; end: number },
-): { total: number; video: number } {
-  type Event = { time: number; deltaTotal: number; deltaVideo: number }
-  const events: Event[] = []
-
-  for (let i = 0; i < state.strip_allocations.length; i++) {
-    const isVideo = config.strips[i]?.video_capable === true
-    const list = state.strip_allocations[i]
-    for (const a of list) {
-      // Allocation overlaps window?
-      if (a.start_time >= window.end || a.end_time <= window.start) continue
-      const start = Math.max(a.start_time, window.start)
-      const end = Math.min(a.end_time, window.end)
-      events.push({ time: start, deltaTotal: 1, deltaVideo: isVideo ? 1 : 0 })
-      events.push({ time: end, deltaTotal: -1, deltaVideo: isVideo ? -1 : 0 })
-    }
-  }
-
-  // Sort: ascending by time. End events (negative delta) before start events at
-  // the same instant so touching intervals do not double-count.
-  events.sort((a, b) => a.time - b.time || a.deltaTotal - b.deltaTotal)
-
-  let curTotal = 0
-  let curVideo = 0
-  let peakTotal = 0
-  let peakVideo = 0
-  for (const e of events) {
-    curTotal += e.deltaTotal
-    curVideo += e.deltaVideo
-    if (curTotal > peakTotal) peakTotal = curTotal
-    if (curVideo > peakVideo) peakVideo = curVideo
-  }
-  return { total: peakTotal, video: peakVideo }
-}
-
-// ──────────────────────────────────────────────
 // snapToSlot
 // ──────────────────────────────────────────────
 

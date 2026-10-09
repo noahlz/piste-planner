@@ -1,14 +1,10 @@
-import { BottleneckSeverity, CutMode, DeMode, EventType, RuleKind, ValidationMode, VideoPolicy, dayHardEnd, dayStart } from './types.ts'
+import { BottleneckSeverity, CutMode, DeMode, EventType, RuleKind, ValidationMode, VideoPolicy } from './types.ts'
 import type { Competition, TournamentConfig, ValidationError } from './types.ts'
-import { computePoolStructure, isSizeableCount, weightedPoolDuration } from './pools.ts'
-import { computeBracketSize, deBlocksFor, deVideoStripAsk } from './de.ts'
+import { computePoolStructure, isSizeableCount } from './pools.ts'
+import { computeBracketSize, deVideoStripAsk } from './de.ts'
 import { REGIONAL_CUT_OVERRIDES, REGIONAL_CUT_TOURNAMENT_TYPES } from './constants.ts'
 import { computeStripCap } from './stripBudget.ts'
 import { aggregateStripHours } from './capacity.ts'
-
-function err(field: string, message: string, rule: string, subjects: string[]): ValidationError {
-  return { field, message, severity: BottleneckSeverity.ERROR, rule, subjects }
-}
 
 /** Structural finding: leaves nothing to draw, ERROR in both validation modes (research D3). */
 function structural(field: string, message: string, rule: string, subjects: string[]): ValidationError {
@@ -41,55 +37,6 @@ function policy(field: string, message: string, mode: ValidationMode, rule: stri
  */
 export function findingIdentity(finding: ValidationError): string {
   return `${finding.rule}:${finding.subjects.join('+')}`
-}
-
-/**
- * Computes the worst-case single-day duration for a competition:
- * pool round + admin gap + full DE, each DE block at its full strip ask
- * (METHODOLOGY.md §DE Duration).
- * Returns a ValidationError if it exceeds the hard window, null otherwise.
- *
- * Single-Day Fit measures against the day's hard window, start to hard end
- * (9:00 AM to 10:00 PM, 780 minutes, by default), not the 10-hour planning
- * day: running past the 7:00 PM soft target is a warning, not a violation
- * (METHODOLOGY.md §Single-Day Fit, §Same-Day Completion; Ops Manual 2026-27
- * p.17). When the organizer edits hours, the widest day's window applies,
- * since the competition only has to fit on one of them (024 D7).
- */
-export function validateSameDayCompletion(
-  competition: Competition,
-  config: TournamentConfig,
-): ValidationError | null {
-  const { fencer_count, weapon, use_single_pool_override } = competition
-
-  const poolStructure = computePoolStructure(fencer_count, use_single_pool_override)
-  const poolDuration = weightedPoolDuration(poolStructure, weapon, config.pool_round_duration_table)
-  const deDuration = deBlocksFor(competition, config).baselineMinutes
-  const total = poolDuration + config.ADMIN_GAP_MINS + deDuration
-  const window = widestHardWindow(config)
-
-  if (total > window) {
-    return err(
-      'same_day_completion',
-      `Competition ${competition.id} worst-case duration ${total} min exceeds the day's hard window ${window} min (pool=${poolDuration}, admin=${config.ADMIN_GAP_MINS}, DE=${deDuration})`,
-      'same-day-completion',
-      [competition.id],
-    )
-  }
-  return null
-}
-
-/**
- * The widest day's start-to-hard-end window. A day with no `dayConfigs` entry
- * takes the default window, `DAY_HARD_END_MINS - DAY_START_MINS`, through
- * `dayStart`/`dayHardEnd`'s own fallback.
- */
-function widestHardWindow(config: TournamentConfig): number {
-  let widest = 0
-  for (let d = 0; d < config.days_available; d++) {
-    widest = Math.max(widest, dayHardEnd(d, config) - dayStart(d, config))
-  }
-  return widest
 }
 
 // ── Sub-validators ─────────────────────────────────────────────────────────────
@@ -127,10 +74,6 @@ function validateStripConfig(config: TournamentConfig, competitions: Competition
   }
 
   return errors
-}
-
-function validateRefConfig(_config: TournamentConfig, _competitions: Competition[]): ValidationError[] {
-  return []
 }
 
 /** Why `isSizeableCount` rejected `n`, for the `fencer-count-bounds` message. */
@@ -287,7 +230,7 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
   return errors
 }
 
-function validateDependencies(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
+function validateDependencies(competitions: Competition[], mode: ValidationMode): ValidationError[] {
   const errors: ValidationError[] = []
 
   // Team events require a matching individual
@@ -302,31 +245,6 @@ function validateDependencies(config: TournamentConfig, competitions: Competitio
       if (!individualKeys.has(key)) {
         errors.push(policy('event_type', `${comp.id}: team event has no matching individual for ${comp.category} ${comp.gender} ${comp.weapon}`, mode, 'team-requires-individual', [comp.id]))
       }
-    }
-  }
-
-  // Same population: N individual events for same category+gender+weapon
-  // Veteran events include vet_age_group in the key because each age group is a distinct population.
-  const populationGroups = new Map<string, string[]>()
-  for (const comp of competitions) {
-    if (comp.event_type === EventType.INDIVIDUAL) {
-      const key = comp.vet_age_group !== null
-        ? `${comp.category}|${comp.gender}|${comp.weapon}|${comp.vet_age_group}`
-        : `${comp.category}|${comp.gender}|${comp.weapon}`
-      const ids = populationGroups.get(key) ?? []
-      ids.push(comp.id)
-      populationGroups.set(key, ids)
-    }
-  }
-  for (const [key, ids] of populationGroups) {
-    if (ids.length > config.days_available) {
-      errors.push(policy(
-        'same_population',
-        `Same-population group [${key}] has ${ids.length} individual events but only ${config.days_available} days available`,
-        mode,
-        'same-population',
-        [...ids].sort(),
-      ))
     }
   }
 
@@ -466,9 +384,8 @@ export function validateConfig(
   return [
     ...globalErrors,
     ...validateStripConfig(config, competitions, mode),
-    ...validateRefConfig(config, competitions),
     ...validateCompetitionFields(config, competitions, mode),
-    ...validateDependencies(config, competitions, mode),
+    ...validateDependencies(competitions, mode),
     // Feasibility is notice-kind at its source (011 FR-001/FR-002): WARN in
     // every mode, so there is no mode re-derivation left to do here.
     ...validateFeasibility(config, competitions),

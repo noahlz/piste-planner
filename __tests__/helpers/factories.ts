@@ -3,7 +3,7 @@ import {
   BottleneckCause, BottleneckRule, BottleneckSeverity, Phase,
   Category, Gender, Weapon,
   EventType, CutMode, DeMode, VideoPolicy,
-  RefPolicy, DeStripRequirement, TournamentType, PlacementSource,
+  RefPolicy, TournamentType, PlacementSource,
 } from '../../src/engine/types.ts'
 import {
   DEFAULT_POOL_ROUND_DURATION_TABLE,
@@ -84,17 +84,17 @@ export function makeCompetition(overrides: Partial<Competition> = {}): Competiti
     weapon: Weapon.FOIL,
     event_type: EventType.INDIVIDUAL,
     fencer_count: 24,
-    ref_policy: RefPolicy.AUTO,
+    // TWO, not the retired AUTO: behaviour is unchanged, since resolveRefsPerPool
+    // and peakPoolRefDemand treat every policy but ONE as 2 refs per pool.
+    ref_policy: RefPolicy.TWO,
     earliest_start: 0,
     latest_end: 9999,
-    optional: false,
     vet_age_group: null,
     use_single_pool_override: false,
     cut_mode: CutMode.DISABLED,
     cut_value: 100,
     de_mode: DeMode.SINGLE_STAGE,
     de_video_policy: VideoPolicy.BEST_EFFORT,
-    de_round_of_16_requirement: DeStripRequirement.HARD,
     flighted: false,
     flighting_group_id: null,
     is_priority: false,
@@ -170,11 +170,9 @@ export function makeScheduleResult(competition_id: string, assigned_day: number)
     de_round_of_16_end: null,
     de_round_of_16_strip_count: 0,
     de_total_end: null,
-    conflict_score: 0,
     pool_duration_baseline: 0,
     pool_duration_actual: 0,
     de_duration_baseline: 0,
     de_duration_actual: 0,
-    accepted_warnings: [],
   }
 }

@@ -6,7 +6,6 @@ import {
   findAvailableStripsInWindow,
   allocateInterval,
   releaseEventAllocations,
-  peakConcurrentStrips,
   nextFreeTime,
   snapToSlot,
 } from '../../src/engine/resources.ts'
@@ -590,49 +589,3 @@ function findBalancedCallSites(source: string, fnName: string): string[] {
   }
   return sites
 }
-
-// ──────────────────────────────────────────────
-// peakConcurrentStrips
-// ──────────────────────────────────────────────
-
-describe('peakConcurrentStrips', () => {
-  it('returns 0 for an empty state', () => {
-    const config = makeConfig({ strips: makeStrips(4, 1) })
-    const state = createGlobalState(config)
-    const result = peakConcurrentStrips(state, config, { start: 0, end: 1000 })
-    expect(result.total).toBe(0)
-    expect(result.video).toBe(0)
-  })
-
-  it('counts overlapping intervals at peak time', () => {
-    const config = makeConfig({ strips: makeStrips(4, 1) })
-    const state = createGlobalState(config)
-    // Strip 0 (video) used 0..200; strip 1 used 60..180; strip 2 used 100..150.
-    // Peak = 3 simultaneous strips in [100, 150]; video subset = 1 (strip 0).
-    allocateInterval(state, 'evt-A', Phase.POOLS, [0], 0, 200)
-    allocateInterval(state, 'evt-B', Phase.POOLS, [1], 60, 180)
-    allocateInterval(state, 'evt-C', Phase.POOLS, [2], 100, 150)
-    const result = peakConcurrentStrips(state, config, { start: 0, end: 300 })
-    expect(result.total).toBe(3)
-    expect(result.video).toBe(1)
-  })
-
-  it('clips allocations to the requested window', () => {
-    const config = makeConfig({ strips: makeStrips(2, 0) })
-    const state = createGlobalState(config)
-    // Two non-overlapping intervals; window only sees the first.
-    allocateInterval(state, 'evt-A', Phase.POOLS, [0], 0, 100)
-    allocateInterval(state, 'evt-B', Phase.POOLS, [1], 200, 300)
-    const result = peakConcurrentStrips(state, config, { start: 0, end: 150 })
-    expect(result.total).toBe(1)
-  })
-
-  it('touching intervals on different strips do not double-count at the seam', () => {
-    const config = makeConfig({ strips: makeStrips(2, 0) })
-    const state = createGlobalState(config)
-    allocateInterval(state, 'evt-A', Phase.POOLS, [0], 0, 100)
-    allocateInterval(state, 'evt-B', Phase.POOLS, [1], 100, 200)
-    const result = peakConcurrentStrips(state, config, { start: 0, end: 300 })
-    expect(result.total).toBe(1)
-  })
-})

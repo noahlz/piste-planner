@@ -18,7 +18,7 @@ import {
 } from '../../src/engine/constants.ts'
 import {
   Category, Gender, Weapon, EventType,
-  CutMode, DeMode, VideoPolicy, RefPolicy, DeStripRequirement,
+  CutMode, DeMode, VideoPolicy, RefPolicy,
   TournamentType,
 } from '../../src/engine/types.ts'
 
@@ -175,12 +175,10 @@ describe('buildTournamentConfig', () => {
 
       expect(comp.earliest_start).toBe(0)
       expect(comp.latest_end).toBe(Infinity)
-      expect(comp.optional).toBe(false)
       // `de_round_of_16_strips` is gone since 024 group A: the video block asks
       // `min(4, bracketSize / 2)` through one engine function (METHODOLOGY.md
       // §DE Modes; 024 plan D6), so the bridge has no strip count to set.
       expect(comp).not.toHaveProperty('de_round_of_16_strips')
-      expect(comp.de_round_of_16_requirement).toBe(DeStripRequirement.HARD)
       expect(comp.flighted).toBe(false)
       expect(comp.flighting_group_id).toBeNull()
       expect(comp.is_priority).toBe(false)
@@ -518,7 +516,11 @@ describe('buildTournamentConfig', () => {
      *  BEST_EFFORT.
      *
      *  Edited again at 018 T1 (2026-10-07), only `cut_value`: the six NAC Div 1
-     *  individual events went 20 → 25 (R4, S8 p.37). Junior stays 20. */
+     *  individual events went 20 → 25 (R4, S8 p.37). Junior stays 20.
+     *
+     *  Edited again at 021 T1b (2026-10-08): `optional` and
+     *  `de_round_of_16_requirement` left every row, with the Competition fields
+     *  that nothing read. */
     const FIXTURE: { NAC: Competition[]; ROC: Competition[] } = JSON.parse(
       readFileSync(
         `${process.cwd()}/__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json`,

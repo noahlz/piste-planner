@@ -462,12 +462,10 @@ function buildEventStates(
       de_round_of_16_end: null,
       de_round_of_16_strip_count: 0,
       de_total_end: null,
-      conflict_score: 0,
       pool_duration_baseline: poolBaseline,
       pool_duration_actual: 0,
       de_duration_baseline: deBlocks.baselineMinutes,
       de_duration_actual: 0,
-      accepted_warnings: [],
     }
 
     const phases = buildPhaseNodes(comp, poolStructure, refRes, poolBaseline, deBlocks, config)

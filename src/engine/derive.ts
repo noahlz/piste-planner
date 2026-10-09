@@ -12,10 +12,6 @@
  * stale (017). After a run, kept events draw the scheduler's own times, waits
  * included, so the DE here starts at pool end plus the admin gap, earlier than
  * the scheduler's on a busy day.
- *
- * Two `ScheduleResult` fields have no input derivation and are left neutral:
- * `conflict_score` and `accepted_warnings`. They are scheduler diagnostics
- * about contention, not geometry.
  */
 
 import { DAY_AXIS_SPACING_MINS, DeMode, PlacementSource, tailEstimateMins } from './types.ts'
@@ -158,12 +154,10 @@ export function deriveEventSchedule(
     de_round_of_16_end: null,
     de_round_of_16_strip_count: 0,
     de_total_end: null,
-    conflict_score: 0,
     pool_duration_baseline: poolBaseline,
     pool_duration_actual: 0,
     de_duration_baseline: deBlocks.baselineMinutes,
     de_duration_actual: 0,
-    accepted_warnings: [],
   }
 
   // Pool block. A standalone flighted event splits its pools into A and B;

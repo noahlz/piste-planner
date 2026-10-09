@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { initialAnalysis, genderEquityAllowableDiff, isRegionalQualifier, suggestStripCount } from '../../src/engine/analysis.ts'
+import { initialAnalysis, suggestStripCount } from '../../src/engine/analysis.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 import {
   BottleneckCause,
@@ -7,7 +7,6 @@ import {
   Category,
   Gender,
   TournamentType,
-  Weapon,
   CutMode,
   DeMode,
   EventType,
@@ -15,30 +14,6 @@ import {
   BottleneckRule,
 } from '../../src/engine/types.ts'
 import type { Competition, Bottleneck } from '../../src/engine/types.ts'
-
-// ──────────────────────────────────────────────
-// genderEquityAllowableDiff
-// ──────────────────────────────────────────────
-
-describe('genderEquityAllowableDiff', () => {
-  it.each([
-    // [larger_pools, expectedDiff] — table from PRD Section 9.1
-    [1,  0],
-    [2,  0],
-    [3,  0],
-    [4,  1],
-    [5,  1],
-    [7,  1],
-    [8,  2],
-    [10, 2],
-    [11, 2],
-    [12, 3],
-    [15, 3],
-    [20, 3],
-  ])('larger_pools=%i → allowable diff %i', (largerPools: number, expected: number) => {
-    expect(genderEquityAllowableDiff(largerPools)).toBe(expected)
-  })
-})
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -370,53 +345,6 @@ describe('initialAnalysis — Pass 6: cut summary', () => {
       (w: Bottleneck) => w.competition_id === 'no-cuts' && w.severity === BottleneckSeverity.INFO,
     )
     expect(cutInfo).toBeUndefined()
-  })
-})
-
-// ──────────────────────────────────────────────
-// Pass 7 — gender equity cap validation (removed from pipeline; genderEquityAllowableDiff still exported)
-// ──────────────────────────────────────────────
-
-describe('initialAnalysis — Pass 7: gender equity', () => {
-  it('equal fencer counts (both 128) → no GENDER_EQUITY_CAP_VIOLATION', () => {
-    const config = makeConfig({ tournament_type: TournamentType.NAC })
-    const mens = makeCompetition({
-      id: 'men-foil',
-      gender: Gender.MEN,
-      weapon: Weapon.FOIL,
-      category: Category.DIV1,
-      fencer_count: 128,
-    })
-    const womens = makeCompetition({
-      id: 'women-foil',
-      gender: Gender.WOMEN,
-      weapon: Weapon.FOIL,
-      category: Category.DIV1,
-      fencer_count: 128,
-    })
-    const result = initialAnalysis(config, [mens, womens], { 'men-foil': 0, 'women-foil': 0 })
-
-    const violation = result.warnings.find(
-      (w: Bottleneck) => w.cause === BottleneckCause.GENDER_EQUITY_CAP_VIOLATION,
-    )
-    expect(violation).toBeUndefined()
-  })
-})
-
-// ──────────────────────────────────────────────
-// isRegionalQualifier
-// ──────────────────────────────────────────────
-
-describe('isRegionalQualifier', () => {
-  it.each([
-    ['RYC', true],
-    ['RJCC', true],
-    ['ROC', true],
-    ['SYC', true],
-    ['SJCC', true],
-    ['NAC', false],
-  ] as const)('%s → %s', (tournamentType, expected) => {
-    expect(isRegionalQualifier(makeConfig({ tournament_type: tournamentType }))).toBe(expected)
   })
 })
 

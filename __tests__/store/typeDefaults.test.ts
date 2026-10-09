@@ -56,13 +56,6 @@ describe('TYPE_DEFAULTS', () => {
   })
 
   it.each(Object.values(TournamentType))(
-    'never gives %s a referee default of RefPolicy.AUTO (AUTO is the unset marker, not a resolved value)',
-    (type) => {
-      expect(TYPE_DEFAULTS[type].ref_policy).not.toBe(RefPolicy.AUTO)
-    },
-  )
-
-  it.each(Object.values(TournamentType))(
     "gives %s a DE mode default that is one of the engine's two DeMode values",
     (type) => {
       expect([DeMode.SINGLE_STAGE, DeMode.STAGED]).toContain(TYPE_DEFAULTS[type].de_mode)

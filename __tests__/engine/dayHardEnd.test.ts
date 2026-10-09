@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayStart, dayEnd, dayHardEnd, dayMidnight, findDayForTime, clockOnDay } from '../../src/engine/types.ts'
+import { dayStart, dayEnd, dayHardEnd, dayMidnight, clockOnDay } from '../../src/engine/types.ts'
 import { DAY_AXIS_SPACING_MINS } from '../../src/store/buildConfig.ts'
 import {
   allocateInterval,
@@ -371,7 +371,8 @@ describe('an event\'s last phase may run past the hard end, up to midnight (018 
   /**
    * The miss-defer path: the last phase finds no strips at its ready time and
    * defers behind another event's DE. The two events differ in gender, weapon
-   * and category, or the same-population check drops both. The day opens 16:40.
+   * and category, or the same-population block keeps them off the one day.
+   * The day opens 16:40.
    */
   describe('a last phase deferred behind another event\'s DE', () => {
     function twoEventRun(foilFencers: number, epeeFencers: number) {
@@ -671,26 +672,6 @@ describe('first/last-day WARN', () => {
   // guard: both edge days strictly shorter than the middle – silent today too.
   it('stays silent when the first and last days are both shorter than every middle day', () => {
     expect(firstLastRules(daysOfLength({ 0: 299, 1: 300, 2: 299 }), 3)).toEqual([])
-  })
-})
-
-describe('findDayForTime reads the day\'s hard end', () => {
-  const config = makeConfig({
-    days_available: 2,
-    dayConfigs: [
-      { day_start_time: 540, day_end_time: 1140, day_hard_end_time: 1320 },
-      { day_start_time: 1980, day_end_time: 2580, day_hard_end_time: 2760 },
-    ],
-  })
-
-  it('places a time between the 19:00 target and the 22:00 hard end on its day', () => {
-    expect(findDayForTime(config, 1200)).toBe(0)
-    expect(findDayForTime(config, 2700)).toBe(1)
-  })
-
-  // guard: past the hard end belongs to no day, today as well.
-  it('places a time at or past the hard end on no day', () => {
-    expect(findDayForTime(config, 1320)).toBeNull()
   })
 })
 
