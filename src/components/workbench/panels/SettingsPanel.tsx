@@ -34,8 +34,9 @@ const DE_MODE_LABELS: Record<DeMode, string> = {
  * to the store's global-overrides slice — deleted in this task (research D7). Of the
  * seven settings that slice carried, five could not move the derived schedule
  * at all and the sixth moved it off `de_duration_table`'s own calibration;
- * `buildConfig.ts` now reads all seven from `constants.ts`. What earns a row
- * back is engine work first, recorded in `docs/design/backlog.md`.
+ * `buildConfig.ts` reads the five that remain from `constants.ts` (024 removed
+ * `YOUTH_VET_BOUT_DELTA` and 021 T1a removed `THRESHOLD_MINS`). What earns a
+ * row back is engine work first, recorded in `docs/design/backlog.md`.
  *
  * DE mode has a third pill, Default, that returns `de_mode_override` to `null`
  * so the tournament follows its type again (handoff finding 6, owner decision

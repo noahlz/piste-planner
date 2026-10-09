@@ -54,8 +54,7 @@ export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase but an event's la
 export function clockHardEnd(dayEndTime: number): number {
   return Math.max(dayEndTime, DAY_HARD_END_MINS)
 }
-export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start after this (unsourced)
-export const LATEST_START_OFFSET = 420 // offset from DAY_START to LATEST_START
+export const LATEST_START_OFFSET = 420 // 7 hours after a day's start (4:00 PM on a 9:00 AM day) – the pool-start cutoff, Piste Planner's own rule (unsourced)
 export const SLOT_MINS = 5
 // The 10-hour planning day, DAY_START_MINS to DAY_END_MINS, that strip-hour
 // capacity counts (METHODOLOGY.md §Strip-Hour Capacity). Not the hard window.
@@ -72,7 +71,6 @@ export const COMPETITORS_PER_STRIP_PER_DAY = 14
 // phase – the 5-minute changeover is already in the bout time.
 export const ADMIN_GAP_MINS = 30
 export const FLIGHT_BUFFER_MINS = 15
-export const THRESHOLD_MINS = 10
 // Pool rounds run 60-120 min for a pool of 7 (see DEFAULT_POOL_ROUND_DURATION_TABLE), so a 60-min wave can't accommodate the second event starting inside the wave.
 export const MORNING_WAVE_WINDOW_MINS = 120
 
@@ -115,15 +113,12 @@ export const TEAM_MATCH_DURATION: Record<Weapon, number> = {
   [Weapon.FOIL]: 60,
   [Weapon.SABRE]: 30,
 }
-export const SAME_TIME_WINDOW_MINS = 30
 export const INDIV_TEAM_MIN_GAP_MINS = 120
 
 // ──────────────────────────────────────────────
-// Scheduling algorithm limits
+// Field-size limits
 // ──────────────────────────────────────────────
 
-export const EARLY_START_THRESHOLD = 10
-export const MAX_RESCHEDULE_ATTEMPTS = 3
 // 336 is the Athlete Handbook §2.2.5 (printed p.15) NAC cap for Div I, Junior and
 // Cadet: Elite 112 + Challenger 224. Only real tournaments are solved for.
 export const MAX_FENCERS = 336
@@ -668,20 +663,6 @@ export const REGIONAL_CUT_TOURNAMENT_TYPES: ReadonlySet<string> = new Set<string
 // ──────────────────────────────────────────────
 
 export const PENALTY_WEIGHTS = {
-  /** Same-time high crossover (edge >= 0.8) */
-  SAME_TIME_HIGH_CROSSOVER: 10.0,
-  /** Same-time low crossover (edge < 0.8) */
-  SAME_TIME_LOW_CROSSOVER: 4.0,
-  /** Ind+team same-time or wrong order on same day */
-  INDIV_TEAM_SAME_TIME_OR_WRONG_ORDER: 8.0,
-  /** Ind+team gap < 120 min on same day */
-  INDIV_TEAM_GAP_UNDER_MIN: 3.0,
-  /** Early start consecutive days, high crossover */
-  EARLY_START_CONSECUTIVE_HIGH_CROSSOVER: 5.0,
-  /** Early start same day, high crossover */
-  EARLY_START_SAME_DAY_HIGH_CROSSOVER: 2.0,
-  /** Early start consecutive days, ind+team same demographic */
-  EARLY_START_CONSECUTIVE_INDIV_TEAM: 2.0,
   /** Regional Group 1 pair on one day: ROC, RYC and RJCC only (Ops Manual p.20 – Group 1) */
   REGIONAL_GROUP_1_PAIR: 5.0,
   /** Rest day violation (consecutive-day penalty for JUNIOR/DIV1, Ops Manual p.20 – Group 2) */
@@ -690,14 +671,8 @@ export const PENALTY_WEIGHTS = {
   TEAM_BEFORE_INDIVIDUAL: 1.0,
   /** Weapon balance — minority group absent on a day */
   WEAPON_BALANCE: 0.5,
-  /** Last-day ref shortage: large NAC (300+ fencers) */
-  LAST_DAY_REF_SHORTAGE_LARGE_NAC: 0.5,
   /** Proximity 3+ days apart */
   PROXIMITY_3_PLUS_DAYS: 0.5,
-  /** Y10 non-first-slot penalty */
-  Y10_NON_FIRST_SLOT: 0.3,
-  /** Last-day ref shortage: large ROC (100+ fencers) */
-  LAST_DAY_REF_SHORTAGE_LARGE_ROC: 0.3,
   /** Ind+team 2+ days apart (proximity) */
   INDIV_TEAM_2_PLUS_DAYS: 0.3,
   /**
@@ -706,8 +681,6 @@ export const PENALTY_WEIGHTS = {
    * (Ops Manual p.20 – Group 3, METHODOLOGY §Other Soft Preferences)
    */
   CROSS_WEAPON_SAME_DEMOGRAPHIC: 0.2,
-  /** Last-day ref shortage: medium tournament (50-100 fencers) */
-  LAST_DAY_REF_SHORTAGE_MEDIUM: 0.2,
   /** Proximity 1 day apart (bonus — negative) */
   PROXIMITY_1_DAY: -0.4,
   /** Ind+team day after individual (bonus — negative) */

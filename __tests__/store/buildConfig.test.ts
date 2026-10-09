@@ -7,11 +7,10 @@ import { defaultCutForEntry } from '../../src/store/competitionDefaults.ts'
 import { findCompetition } from '../../src/engine/catalogue.ts'
 import type { Strip, Competition } from '../../src/engine/types.ts'
 import {
-  DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
-  ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS, THRESHOLD_MINS,
+  DAY_START_MINS, DAY_END_MINS, LATEST_START_OFFSET,
+  ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS,
   SLOT_MINS, DAY_LENGTH_MINS, DE_REFS,
-  SAME_TIME_WINDOW_MINS, INDIV_TEAM_MIN_GAP_MINS,
-  EARLY_START_THRESHOLD, MAX_RESCHEDULE_ATTEMPTS,
+  INDIV_TEAM_MIN_GAP_MINS,
   MAX_FENCERS, MIN_FENCERS,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
   DE_BOUT_DURATION, DE_BOUT_DURATION_10_TOUCH, TEAM_MATCH_DURATION, DEFAULT_DE_STRIP_FOOTPRINT,
@@ -263,7 +262,6 @@ describe('buildTournamentConfig', () => {
 
       expect(config.ADMIN_GAP_MINS).toBe(ADMIN_GAP_MINS)
       expect(config.FLIGHT_BUFFER_MINS).toBe(FLIGHT_BUFFER_MINS)
-      expect(config.THRESHOLD_MINS).toBe(THRESHOLD_MINS)
       expect(config.SLOT_MINS).toBe(SLOT_MINS)
       expect(config.DE_BOUT_DURATION).toEqual(DE_BOUT_DURATION)
       // 024 group A: the 10-touch and team-match times a DE is derived from
@@ -322,15 +320,11 @@ describe('buildTournamentConfig', () => {
 
       expect(config.DAY_START_MINS).toBe(DAY_START_MINS)
       expect(config.DAY_END_MINS).toBe(DAY_END_MINS)
-      expect(config.LATEST_START_MINS).toBe(LATEST_START_MINS)
       expect(config.LATEST_START_OFFSET).toBe(LATEST_START_OFFSET)
       expect(config.SLOT_MINS).toBe(SLOT_MINS)
       expect(config.DAY_LENGTH_MINS).toBe(DAY_LENGTH_MINS)
       expect(config.DE_REFS).toBe(DE_REFS)
-      expect(config.SAME_TIME_WINDOW_MINS).toBe(SAME_TIME_WINDOW_MINS)
       expect(config.INDIV_TEAM_MIN_GAP_MINS).toBe(INDIV_TEAM_MIN_GAP_MINS)
-      expect(config.EARLY_START_THRESHOLD).toBe(EARLY_START_THRESHOLD)
-      expect(config.MAX_RESCHEDULE_ATTEMPTS).toBe(MAX_RESCHEDULE_ATTEMPTS)
       expect(config.MAX_FENCERS).toBe(MAX_FENCERS)
       expect(config.MIN_FENCERS).toBe(MIN_FENCERS)
       expect(config.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)

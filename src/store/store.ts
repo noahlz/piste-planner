@@ -82,9 +82,11 @@ export interface CompetitionConfig {
 
 // The `GlobalOverrides` slice lived here until 013 T022 (research D7): seven
 // engine constants the retired gears panel could retune. Two of them had rows,
-// the other five were carried but unreachable, and `buildConfig.ts` now reads
-// all seven from `constants.ts` directly. Retuning any of them again is engine
-// work first — see "Global settings" in `docs/design/backlog.md`.
+// the other five were carried but unreachable, and `buildConfig.ts` reads the
+// five that remain from `constants.ts` directly (024 removed
+// `YOUTH_VET_BOUT_DELTA` and 021 T1a removed `THRESHOLD_MINS`). Retuning any of
+// them again is engine work first – see "Global settings" in
+// `docs/design/backlog.md`.
 
 export interface CompetitionSlice {
   selectedCompetitions: Record<string, CompetitionConfig>
