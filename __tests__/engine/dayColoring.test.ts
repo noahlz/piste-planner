@@ -4,6 +4,7 @@ import {
   capacityPenalty,
   crossWeaponSameDemographicPenalty,
   dayCapacityFactor,
+  weaponBalancePenalty,
 } from '../../src/engine/dayColoring.ts'
 import { FIRST_LAST_DAY_CAPACITY_FACTOR } from '../../src/engine/constants.ts'
 import { categoryWeight, estimateCompetitionStripHours } from '../../src/engine/capacity.ts'
@@ -1149,9 +1150,11 @@ describe('crossWeaponSameDemographicPenalty — Group 3', () => {
     // foil and x hard-conflict, so they take days 0 and 1 (foil first, by
     // packing footprint). The sabre has no edges, so both days cost it the same
     // load-balance fullness and the tie would go to day 0 – the foil's day.
-    // Only the Group 3 term separates them.
+    // Only the Group 3 term separates them. x is a foil event so the tournament
+    // holds no épée and weapon balance is not scored (021 T4) – with an épée x
+    // it alone would also send the sabre to day 1.
     const foil = makeCompetition({ id: 'foil', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.FOIL, strips_allocated: 8 })
-    const x = makeCompetition({ id: 'x', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.EPEE, strips_allocated: 6 })
+    const x = makeCompetition({ id: 'x', category: Category.DIV1, gender: Gender.WOMEN, weapon: Weapon.FOIL, strips_allocated: 6 })
     const sabre = makeCompetition({ id: 'sabre', category: Category.CADET, gender: Gender.MEN, weapon: Weapon.SABRE, strips_allocated: 1 })
     const graph = buildGraph([['foil', 'x', Infinity]])
     graph.set('sabre', [])
@@ -1161,6 +1164,140 @@ describe('crossWeaponSameDemographicPenalty — Group 3', () => {
     expect(dayMap.get('foil')).toBe(0)
     expect(dayMap.get('x')).toBe(1)
     expect(dayMap.get('sabre')).toBe(1)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Weapon balance (021 O4, O7 – METHODOLOGY §Weapon Balance, Ops Manual p.20 –
+// Group 2): the "keeps" reading. +0.5 when the event leaves its day one-class,
+// −0.5 when it brings the missing class, 0 on a day already holding both.
+// ──────────────────────────────────────────────
+
+describe('weaponBalancePenalty – no day holds one weapon class (O4, O7)', () => {
+  const ev = (id: string, weapon: Weapon, overrides: Partial<Competition> = {}) =>
+    makeCompetition({ id, category: Category.DIV1, gender: Gender.MEN, weapon, ...overrides })
+  /** An épée event on another day, so the tournament holds both classes. */
+  const epeeElsewhere = ev('epee-elsewhere', Weapon.EPEE)
+
+  /**
+   * Scores `s` on day 0, with `onDay` coloured onto day 0, `elsewhere` in the
+   * tournament but coloured onto day 1, and `uncoloured` in the tournament but
+   * not yet coloured (as most events are while colouring runs).
+   */
+  function scoreOnDay0(
+    s: Competition,
+    onDay: Competition[],
+    elsewhere: Competition[] = [epeeElsewhere],
+    uncoloured: Competition[] = [],
+  ): number {
+    const coloring = new Map<string, number>([
+      ...onDay.map(o => [o.id, 0] as const),
+      ...elsewhere.map(o => [o.id, 1] as const),
+    ])
+    return weaponBalancePenalty(s, 0, [s, ...onDay, ...elsewhere, ...uncoloured], coloring)
+  }
+
+  it('an épée event earns −0.5 on a ROW-only day and pays 0 on a mixed day, so it prefers the ROW-only day', () => {
+    const epee = ev('self', Weapon.EPEE)
+    const onRowOnly = scoreOnDay0(epee, [ev('foil', Weapon.FOIL)])
+    const onMixed = scoreOnDay0(epee, [ev('foil', Weapon.FOIL), ev('epee', Weapon.EPEE)])
+    expect(onRowOnly).toBe(-0.5)
+    expect(onMixed).toBe(0)
+    expect(onRowOnly).toBeLessThan(onMixed)
+  })
+
+  it('a ROW event on a ROW-only day pays +0.5, because the day stays one-class', () => {
+    expect(scoreOnDay0(ev('self', Weapon.SABRE), [ev('foil', Weapon.FOIL)])).toBe(0.5)
+  })
+
+  it('an épée event on an épée-only day pays +0.5, because the day stays one-class', () => {
+    expect(scoreOnDay0(ev('self', Weapon.EPEE), [ev('epee', Weapon.EPEE)], [ev('foil-elsewhere', Weapon.FOIL)])).toBe(0.5)
+  })
+
+  it.each([Weapon.FOIL, Weapon.SABRE, Weapon.EPEE])('the first %s event on an empty day pays +0.5', (weapon) => {
+    const elsewhere = [epeeElsewhere, ev('foil-elsewhere', Weapon.FOIL)]
+    expect(scoreOnDay0(ev('self', weapon), [], elsewhere)).toBe(0.5)
+  })
+
+  it('a ROW event pays 0 on a day already holding both classes, where the same day without its épée costs +0.5', () => {
+    const foil = ev('self', Weapon.FOIL)
+    const sabre = ev('sabre', Weapon.SABRE)
+    expect(scoreOnDay0(foil, [sabre, ev('epee', Weapon.EPEE)])).toBe(0)
+    expect(scoreOnDay0(foil, [sabre])).toBe(0.5)
+  })
+
+  it('is not scored when the tournament lacks a class, and is once an épée event joins it', () => {
+    const foil = ev('self', Weapon.FOIL)
+    const sabre = ev('sabre', Weapon.SABRE)
+    // guard: an all-ROW tournament – a ROW-only day and an empty day both score 0
+    expect(scoreOnDay0(foil, [sabre], [ev('foil-elsewhere', Weapon.FOIL)])).toBe(0)
+    expect(scoreOnDay0(foil, [], [sabre])).toBe(0)
+    // guard: an all-épée tournament
+    expect(scoreOnDay0(ev('self', Weapon.EPEE), [ev('epee', Weapon.EPEE)], [])).toBe(0)
+    // red pair: the same ROW-only day once the tournament holds an épée event elsewhere
+    expect(scoreOnDay0(foil, [sabre], [epeeElsewhere])).toBe(0.5)
+  })
+
+  // O4's scope – one day-level judgement over both genders and team events.
+  // Each case fails a per-gender or a teams-excluded reading.
+  it("pools genders: a men's épée event earns −0.5 on a day holding only a women's ROW event", () => {
+    expect(scoreOnDay0(ev('self', Weapon.EPEE), [ev('w-foil', Weapon.FOIL, { gender: Gender.WOMEN })])).toBe(-0.5)
+  })
+
+  it('pools teams: a ROW individual earns −0.5 on a day holding only an épée team event', () => {
+    const epeeTeam = ev('epee-team', Weapon.EPEE, { event_type: EventType.TEAM })
+    expect(scoreOnDay0(ev('self', Weapon.FOIL), [epeeTeam])).toBe(-0.5)
+  })
+
+  it("pools genders: a women's ROW event pays 0 on a day of a men's ROW and a men's épée event", () => {
+    const wFoil = ev('self', Weapon.FOIL, { gender: Gender.WOMEN })
+    const mSabre = ev('m-sabre', Weapon.SABRE)
+    expect(scoreOnDay0(wFoil, [mSabre, ev('m-epee', Weapon.EPEE)])).toBe(0)
+    // red pair: without the men's épée the day stays ROW-only
+    expect(scoreOnDay0(wFoil, [mSabre])).toBe(0.5)
+  })
+
+  it('an uncoloured event is on no day but still counts toward the tournament\'s classes', () => {
+    const foil = ev('self', Weapon.FOIL)
+    const epeeUncoloured = ev('epee-uncoloured', Weapon.EPEE)
+    // The only épée event is uncoloured. A day scan that counted it would see
+    // épée on day 0 (−0.5, or 0 beside the sabre), and a tournament scan over
+    // coloured events alone would find no épée and score 0.
+    expect(scoreOnDay0(foil, [], [], [epeeUncoloured])).toBe(0.5)
+    expect(scoreOnDay0(foil, [ev('sabre', Weapon.SABRE)], [], [epeeUncoloured])).toBe(0.5)
+  })
+
+  it('does not count the event itself when the colouring already places it on the day', () => {
+    const epee = ev('self', Weapon.EPEE)
+    const foil = ev('foil', Weapon.FOIL)
+    const coloring = new Map<string, number>([['self', 0], ['foil', 0]])
+    // The day held only ROW before the épée event, so it brings the missing class.
+    expect(weaponBalancePenalty(epee, 0, [epee, foil], coloring)).toBe(-0.5)
+  })
+
+  it('is flat, whatever the event\'s size', () => {
+    const large = { strips_allocated: 40, fencer_count: 300 }
+    expect(scoreOnDay0(ev('self', Weapon.EPEE, large), [ev('foil', Weapon.FOIL)])).toBe(-0.5)
+    expect(scoreOnDay0(ev('self', Weapon.SABRE, large), [ev('foil', Weapon.FOIL)])).toBe(0.5)
+  })
+
+  it('steers day colouring: an épée event with no edges joins the ROW-only day, not the épée-only day', () => {
+    // epee and foil hard-conflict, so they take days 0 and 1 (epee first, by
+    // packing footprint). The free épée event has no edges and no Group 3 or
+    // saber-pileup term on either day, so load balance ties the two days and the
+    // tie would go to day 0. Only weapon balance separates them: +0.5 on the
+    // épée-only day, −0.5 on the ROW-only one.
+    const epee = makeCompetition({ id: 'epee', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.EPEE, strips_allocated: 8 })
+    const foil = makeCompetition({ id: 'foil', category: Category.CADET, gender: Gender.WOMEN, weapon: Weapon.FOIL, strips_allocated: 6 })
+    const free = makeCompetition({ id: 'free', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE, strips_allocated: 1 })
+    const graph = buildGraph([['epee', 'foil', Infinity]])
+    graph.set('free', [])
+
+    const { dayMap } = assignDaysByColoring(graph, [epee, foil, free], makeConfig({ days_available: 2 }))
+
+    expect(dayMap.get('epee')).toBe(0)
+    expect(dayMap.get('foil')).toBe(1)
+    expect(dayMap.get('free')).toBe(1)
   })
 })
 

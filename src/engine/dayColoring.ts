@@ -35,7 +35,7 @@
  */
 
 import type { Competition, TournamentConfig, PinnedPlacement } from './types.ts'
-import { Category, EventType, VetAgeGroup } from './types.ts'
+import { Category, EventType, VetAgeGroup, Weapon } from './types.ts'
 import { saberPileupPenalty } from './dayAssignment.ts'
 import type { ConstraintGraph } from './constraintGraph.ts'
 import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
@@ -259,6 +259,54 @@ export function crossWeaponSameDemographicPenalty(
   return total
 }
 
+/** The two weapon classes of Ops Manual p.20 – Group 2: right-of-way (foil and sabre) and épée. */
+const isEpee = (c: Competition): boolean => c.weapon === Weapon.EPEE
+
+/**
+ * Weapon balance (Ops Manual p.20 – Group 2, METHODOLOGY §Weapon Balance, 021
+ * O4 and O7): the goal is that no day holds only one weapon class.
+ *
+ * Judged on `proposedDay` with `competition` added, over every event already
+ * coloured there – both genders and team events count together:
+ *   - the day would hold one class only (it was empty, or held that class
+ *     alone)                                   → +WEAPON_BALANCE
+ *   - the event brings the missing class to a day that held only the other
+ *                                              → −WEAPON_BALANCE
+ *   - the day already held both classes        → 0
+ * The value is flat, whatever the event's size. Returns 0 when the tournament
+ * (`competitions`) has no event of one class at all.
+ */
+export function weaponBalancePenalty(
+  competition: Competition,
+  proposedDay: number,
+  competitions: Competition[],
+  coloring: Map<string, number>,
+): number {
+  let tournamentHasEpee = false
+  let tournamentHasRow = false
+  let dayHasEpee = false
+  let dayHasRow = false
+  for (const other of competitions) {
+    const epee = isEpee(other)
+    if (epee) tournamentHasEpee = true
+    else tournamentHasRow = true
+    if (other.id === competition.id) continue
+    if (coloring.get(other.id) !== proposedDay) continue
+    if (epee) dayHasEpee = true
+    else dayHasRow = true
+  }
+  if (!tournamentHasEpee || !tournamentHasRow) return 0
+
+  if (dayHasEpee && dayHasRow) return 0
+  const selfIsEpee = isEpee(competition)
+  // The day held only the class the event lacks: the event balances it.
+  if ((selfIsEpee && dayHasRow) || (!selfIsEpee && dayHasEpee)) {
+    return -PENALTY_WEIGHTS.WEAPON_BALANCE
+  }
+  // Empty, or holding the event's own class alone: the day stays one-class.
+  return PENALTY_WEIGHTS.WEAPON_BALANCE
+}
+
 /**
  * Computes the soft penalty for assigning `id` color `c`, given current coloring.
  * Includes:
@@ -269,6 +317,7 @@ export function crossWeaponSameDemographicPenalty(
  *   - individual/team ordering penalties
  *   - VET_COMBINED day-after preference (F3c)
  *   - the Group 3 cross-weapon preference
+ *   - weapon balance (no day holds one weapon class)
  *   - saber pileup
  *   - load balancing: a flat cost per event already on the day, plus the
  *     capacity penalty for the day's fill
@@ -338,6 +387,8 @@ function colorPenalty(
   total += vetCombinedOrderingPenalty(self, c, competitions, coloring)
   // Group 3 cross-weapon preference (Ops Manual p.20 – Group 3)
   total += crossWeaponSameDemographicPenalty(self, c, competitions, coloring)
+  // Weapon balance: no day holds one weapon class (Ops Manual p.20 – Group 2)
+  total += weaponBalancePenalty(self, c, competitions, coloring)
 
   // Saber pileup: discourage concentrating saber events on a single day, a
   // structural staffing risk (METHODOLOGY.md §Saber Pileup).

@@ -835,6 +835,11 @@ describe('selectFindings — late finish reads a hand-moved event on a fresh boa
    * mover 30 minutes later on day 1 shifts its derived end to 1110 (18:30), inside
    * the lead, while the kept events on day 1 still end by 1060, outside it. So
    * only the mover makes day 1 late.
+   *
+   * 021 T4 (2026-10-09): the kept events on day 1 end at 1000, not 1060. Weapon
+   * balance (METHODOLOGY §Weapon Balance) re-colours B1, so day 1 holds
+   * different events. 1000 is further outside the lead, and the mover's 1080 and
+   * 1110 hold.
    */
   it('names the mover when only its derived end makes the day late', () => {
     const { id, day } = runAndMoveHeadline('B1')
@@ -851,8 +856,8 @@ describe('selectFindings — late finish reads a hand-moved event on a fresh boa
     expect(selectDrawnSchedule(state).runState, 'premise: a hand move keeps the board fresh').toBe(RunState.FRESH)
     expect(selectDrawnSchedule(state).events[id].source, 'premise: the nudged mover is still derived').toBe('derived')
     const kept = othersLatest(id, day)
-    expect(kept, 'premise: the kept events on the day end at 1060').toBe(1060)
-    expect(kept, 'premise: 1060 is outside the lead, so not late').toBeLessThanOrEqual(limit)
+    expect(kept, 'premise: the kept events on the day end at 1000').toBe(1000)
+    expect(kept, 'premise: 1000 is outside the lead, so not late').toBeLessThanOrEqual(limit)
 
     const row = lateRow(day)
     expect(row?.target).toBe('D1-M-EPEE-IND')

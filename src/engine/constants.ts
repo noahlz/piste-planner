@@ -647,7 +647,14 @@ export const PENALTY_WEIGHTS = {
   REST_DAY_VIOLATION: 1.5,
   /** Team scheduled before individual (wrong order, proximity) */
   TEAM_BEFORE_INDIVIDUAL: 1.0,
-  /** Weapon balance — minority group absent on a day */
+  /**
+   * Weapon balance, so that no day holds only one weapon class (right-of-way –
+   * foil and sabre – or épée): +0.5 when an event leaves its day one-class,
+   * −0.5 when it brings the missing class, 0 on a day already holding both.
+   * Both genders and team events count together, and a tournament with no event
+   * of one class is not scored (Ops Manual p.20 – Group 2, METHODOLOGY §Weapon
+   * Balance)
+   */
   WEAPON_BALANCE: 0.5,
   /** Proximity 3+ days apart */
   PROXIMITY_3_PLUS_DAYS: 0.5,

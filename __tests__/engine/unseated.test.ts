@@ -104,8 +104,13 @@ describe('unseatedPhases against the engine\'s pinned-unclaimed warnings', () =>
   // CDT-M-SABRE-IND, and B6 pin-all gains 12 phases and loses 5, only 4 of them
   // from newly placed events. B6 pin-half holds at 9 by coincidence, and every
   // other scenario holds.
-  const ALL = [8, 14, 10, 18, 3, 44, 8, 48]
-  const HALF = [0, 1, 0, 5, 0, 9, 0, 10]
+  // 021 T4 (2026-10-09): pin-all B3 10 → 11, B5 3 → 4, B6 44 → 53 and B8 48 → 47,
+  // pin-half B3 0 → 1, B6 9 → 8 and B8 10 → 13. Weapon balance (METHODOLOGY
+  // §Weapon Balance) re-colours the day maps of B1, B3, B5, B6, B7 and B8, and
+  // B6 places 53 events (from 51), so each re-run pins a different board. B1
+  // and B7 hold although their day maps moved, and B2 and B4 are unchanged.
+  const ALL = [8, 14, 11, 18, 4, 53, 8, 47]
+  const HALF = [0, 1, 1, 5, 0, 8, 0, 13]
 
   it.each(SCENARIO_IDS.map((id, i) => [id, ALL[i], HALF[i]] as const))(
     '%s: matches the warnings after a pin-all (%i) and a pin-half (%i) re-run',
@@ -143,7 +148,9 @@ describe('zero-length and empty phases are never phases', () => {
   it('B8 V80\'s zero-length round of 16 is in no span and never unseated', () => {
     const none = runScenario(scenario('B8'), 'none')
     const r = none.schedule[V80]
-    expect([r.de_round_of_16_start, r.de_round_of_16_end]).toEqual([3570, 3570])
+    // 021 T4 (2026-10-09): 3570 → 635. Weapon balance moves V80's co-day group
+    // from day 2 to day 0, and its round of 16 stays zero-length there.
+    expect([r.de_round_of_16_start, r.de_round_of_16_end]).toEqual([635, 635])
     expect(phaseSpans(r).map(s => s.phase)).toContain(Phase.POOLS)
     expect(phaseSpans(r).map(s => s.phase)).not.toContain(Phase.DE_ROUND_OF_16)
 
@@ -153,7 +160,7 @@ describe('zero-length and empty phases are never phases', () => {
     // still a zero-length window with no allocation, and only the guards in
     // `phaseSpans` and `unseatedPhases` keep it out.
     const r2 = all.schedule[V80]
-    expect([r2.de_round_of_16_start, r2.de_round_of_16_end]).toEqual([3570, 3570])
+    expect([r2.de_round_of_16_start, r2.de_round_of_16_end]).toEqual([635, 635])
     const seated = all.strip_allocations.flat().some(a => a.event_id === V80 && a.phase === Phase.DE_ROUND_OF_16)
     expect(seated).toBe(false)
     expect(unseatedPhases(all).has(phaseKey(V80, Phase.DE_ROUND_OF_16))).toBe(false)

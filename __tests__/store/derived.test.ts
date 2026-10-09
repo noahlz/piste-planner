@@ -206,10 +206,16 @@ describe('selectDerivedFindings', () => {
    * B4 no longer exercises the first-day half, so B3 (which T2 leaves unchanged)
    * covers it: the kept run warns first 635 / 595 and last 605 / 595, while
    * derived times give first 630 / 565 and last 585 / 565.
+   *
+   * 021 T4 (2026-10-09): the first-and-last case moved from B3 to B8. Weapon
+   * balance (METHODOLOGY §Weapon Balance) re-colours B3's days and its kept run
+   * no longer warns on either day. B8's kept run now warns first 485 / 485 and
+   * last 720 / 485, while derived times (no kept run) give the last day alone at
+   * 590 / 450, so B8 still tells the kept run from derived times on both halves.
    */
   const FIRST_LAST_RULES: string[] = [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]
 
-  function keptRunWarnings(preset: 'B3' | 'B4') {
+  function keptRunWarnings(preset: 'B4' | 'B8') {
     runPreset(preset)
     const state = useStore.getState()
     const { config, competitions } = buildTournamentConfig(state)
@@ -226,11 +232,11 @@ describe('selectDerivedFindings', () => {
     expect(app).toEqual(scheduler)
   })
 
-  it('measures the first and last day on the kept run, as the scheduler does (B3)', () => {
-    const { scheduler, app } = keptRunWarnings('B3')
-    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B3\'s first and last day').toEqual([
-      'First day (Day 1, 635 min) is not shorter than the shortest middle day (595 min)',
-      'Last day (Day 4, 605 min) is not shorter than the shortest middle day (595 min)',
+  it('measures the first and last day on the kept run, as the scheduler does (B8)', () => {
+    const { scheduler, app } = keptRunWarnings('B8')
+    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B8\'s first and last day').toEqual([
+      'First day (Day 1, 485 min) is not shorter than the shortest middle day (485 min)',
+      'Last day (Day 4, 720 min) is not shorter than the shortest middle day (485 min)',
     ])
     expect(app).toEqual(scheduler)
   })
@@ -323,16 +329,23 @@ describe('selectDerivedRefRequirements counts the drawn board (017 T9)', () => {
 
   // Not the headline move: on B1 that leaves only its DE_ROUND_OF_16 seated,
   // which moves no peak, so derived and kept times would sweep alike. This
-  // mover's POOLS seats on day 2 and its DEs do not, so both halves count.
+  // mover's POOLS seats on day 0 and its DE does not, so both halves count.
+  //
+  // 021 T4 (2026-10-09): the mover changed from VET-M-SABRE-IND-VCMB (moved to
+  // day 2) to VET-M-SABRE-TEAM (moved to day 0).
+  // Weapon balance (METHODOLOGY §Weapon Balance) re-colours B1, and that move
+  // now leaves its pools unseated too. Over every B1 event and day, only
+  // VET-M-SABRE-TEAM to day 0 and VET-W-SABRE-TEAM to day 0 or 2 seat some
+  // phases and not others while both peak premises below hold (measured).
   it('counts a hand-moved event at its derived times, less the phases that find no strips', () => {
-    const id = 'VET-M-SABRE-IND-VCMB'
+    const id = 'VET-M-SABRE-TEAM'
     runPreset('B1')
-    expect(useStore.getState().placements[id].day, 'premise: the run puts the mover off day 2').not.toBe(2)
-    moveDay(id, 2)
+    expect(useStore.getState().placements[id].day, 'premise: the run puts the mover off day 0').not.toBe(0)
+    moveDay(id, 0)
     const state = useStore.getState()
     const model = selectDrawnSchedule(state)
     const unseated = model.blocks.filter((b) => b.competitionId === id && b.countsAsUnplaced).map((b) => b.phase)
-    expect(unseated, 'premise: the mover\'s DEs find no strips').toEqual([Phase.DE_PRELIMS, Phase.DE_ROUND_OF_16])
+    expect(unseated, 'premise: the mover\'s DE finds no strips').toEqual([Phase.DE])
 
     const kept = state.lastRun as KeptRun
     const competition = model.competitions.find((c) => c.id === id) as Competition

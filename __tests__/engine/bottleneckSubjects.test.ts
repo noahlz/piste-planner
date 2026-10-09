@@ -35,13 +35,23 @@ import { checkInvariants, namesCompetition } from '../helpers/bottleneckInvarian
 const catalogue = new Set<string>(Object.values(BottleneckRule))
 
 /**
- * Scenarios whose `initialAnalysis` raises no warning, pinned at exactly zero so
- * a new warning is noticed rather than silently skipped. B5 is here because
- * 015's factory builds the SJCC as the app does – the regional all-advance cut
- * and single-stage DEs – and the converged B5 raises none (measured 015,
- * 2026-10-05). Every other scenario must raise at least one.
+ * Scenarios whose `initialAnalysis` warnings are pinned rule by rule, so a new
+ * or different warning is noticed rather than silently accepted. Every other
+ * scenario must raise at least one.
+ *
+ * B5 was pinned at zero from 015 (2026-10-05): the factory builds the SJCC as
+ * the app does – the regional all-advance cut and single-stage DEs – and the
+ * converged B5 raised none. 021 T4 (2026-10-09): weapon balance (METHODOLOGY
+ * §Weapon Balance) re-colours B5's days, and Day 2 (index 1) now holds
+ * JR-M-FOIL-IND, CDT-M-EPEE-IND, CDT-M-SABRE-IND and CDT-W-EPEE-IND, so B5
+ * raises one `day-pools-exceed-strips` WARN (~63 pools on 60 strips). The
+ * scheduler still places all 12 events with no ERROR. The drift ledger's
+ * `warnCountsByCause` does not see `initialAnalysis` warnings, so this pin is
+ * the only one on B5's.
  */
-const SCENARIOS_WITHOUT_ANALYSIS_WARNINGS: readonly (typeof SCENARIO_IDS)[number][] = ['B5']
+const PINNED_ANALYSIS_RULES: Partial<Record<(typeof SCENARIO_IDS)[number], readonly string[]>> = {
+  B5: [BottleneckRule.DAY_POOLS_EXCEED_STRIPS],
+}
 
 describe('namesCompetition', () => {
   it('does not find an id inside a longer id that extends it', () => {
@@ -89,11 +99,12 @@ describe('Bottleneck rule and subjects invariants', () => {
     it(`initialAnalysis warnings of ${id} carry a rule and the competitions they name`, () => {
       const { competitions, warnings, validationRules, days } = scenarios[id]
       const ids = competitions.map(c => c.id)
-      if (SCENARIOS_WITHOUT_ANALYSIS_WARNINGS.includes(id)) {
+      const pinned = PINNED_ANALYSIS_RULES[id]
+      if (pinned) {
         expect(
-          warnings,
-          `${id} now emits initialAnalysis warnings. Confirm they are expected, then remove ${id} from SCENARIOS_WITHOUT_ANALYSIS_WARNINGS. The invariant loop checks them.`,
-        ).toHaveLength(0)
+          warnings.map(w => w.rule),
+          `${id}'s initialAnalysis warnings changed. Confirm they are expected, then update PINNED_ANALYSIS_RULES with a dated note. The invariant loop checks them.`,
+        ).toEqual(pinned)
       } else {
         expect(warnings.length, `${id} warnings checked`).toBeGreaterThan(0)
       }

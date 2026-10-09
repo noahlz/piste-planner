@@ -136,10 +136,16 @@ describe('eventTimeSegments on the reference tournaments', () => {
   // may now run past the 22:00 hard end (R1), so events the scheduler used to
   // drop are placed and drawn: B4 21 → 24 events (42 → 48 segments, two each)
   // and B6 45 → 51 (90 → 102). B1–B3, B5, B7 and B8 are unchanged.
+  //
+  // 021 T4 (2026-10-09): the B1, B3, B5, B6, B7 and B8 digests moved on
+  // purpose. Weapon balance (METHODOLOGY §Weapon Balance, owner rulings O4 and
+  // O7) re-colours their day maps, the same six scenarios the drift ledger
+  // moves. B6 places 51 → 53 events (102 → 106 segments). B2 and B4 are
+  // unchanged, and the other counts hold.
   const EXPECTED = {
-    B1: ['1972f1b8ff40deeb', 66], B2: ['38543891f24c5f71', 66], B3: ['1f23028d76cd460e', 72],
-    B4: ['d2c0a3c4be181709', 48], B5: ['3dcb38014ee7022f', 24], B6: ['55b1994525d67043', 102],
-    B7: ['da10924b4af05090', 54], B8: ['dc00d9d378193f5b', 148],
+    B1: ['2c69ff46cf84f560', 66], B2: ['38543891f24c5f71', 66], B3: ['7a643084a6030fbc', 72],
+    B4: ['d2c0a3c4be181709', 48], B5: ['18197dd2e2268e2e', 24], B6: ['e5a90a710470baa3', 106],
+    B7: ['12848ca4621bcf3a', 54], B8: ['ec998d1f7c066d29', 148],
   } as const
 
   it.each(SCENARIO_IDS)('%s: draws the same segments as before', (id) => {

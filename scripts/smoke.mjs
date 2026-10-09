@@ -1936,44 +1936,54 @@ for (const w of ['FOIL', 'EPEE', 'SABRE']) {
 }
 log('016 check 2: candidate pairs', pairs.slice(0, 4).map((p) => p.join('~')).join(' | '))
 if (!pairs.length) throw new Error(`016 check 2: no Group 1 pair among ${rocIds.join(',')}`)
-// Like check 1, only a pair on different days counts, so the hand move always
-// changes the placement and cannot pass on one the auto-run made.
-let rocPick = null
+// `[M]` 021 T4: the weapon-balance term moved the ROC Mega day map, so the first pair on different
+// days can now hold a Cadet start that already honours the window once Move day puts the pair on one
+// day (Move day keeps each event's start time, so the outcome depends on the pair). The assertion
+// stays strict on the pair finally used: each pair on different days is tried in turn, an honoured
+// Note moves on to the next pair, and no pair reaching the not-honoured Warning fails the step.
+let regionalPair = null
+const regionalSeen = []
 for (const [x, y] of pairs) {
   const dx = await poolDayOf(x)
   const dy = await poolDayOf(y)
   log('016 check 2: candidate', x, 'day', dx + 1, '|', y, 'day', dy + 1)
-  if (dx !== dy) {
-    rocPick = [x, y, dx]
+  // Like check 1, only a pair on different days counts, so the hand move always
+  // changes the placement and cannot pass on one the auto-run made.
+  if (dx === dy) continue
+  const a = x
+  const b = y
+  log('016 check 2: using', a, 'day', dx + 1, '|', b, 'day', dy + 1, 'before the move')
+  await moveEventToDay(b, dx)
+  if ((await poolDayOf(b)) !== dx) throw new Error(`016 check 2: the Move day did not put ${b} on ${a}'s day`)
+  await openPanel('Findings')
+  const pairRows = page
+    .getByRole('complementary', { name: 'Inspector panel' })
+    .locator(`[data-finding-id*="${a}"][data-finding-id*="${b}"]`)
+    .filter({ hasText: 'regional Group 1 window' })
+  if ((await pairRows.count()) === 0) {
+    await shot('016-check2-no-row')
+    throw new Error(`016 check 2: no regional Group 1 window row for ${a}~${b} with the pair on one day`)
+  }
+  const regionalSeverity = await pairRows.first().getAttribute('data-severity')
+  const regionalMessage = (await pairRows.first().locator('[data-message]').textContent()) ?? ''
+  log('016 check 2: regional row severity =', regionalSeverity, '|', regionalMessage)
+  // The app has no control for an event's start time (Move day keeps the
+  // placement's start_time and nothing else sets it), so the honoured Note
+  // ("inside the regional Group 1 window") is not chosen by hand. The
+  // not-honoured Warning is asserted strictly on the pair that reaches it.
+  if (/warning/i.test(regionalSeverity ?? '') && regionalMessage.includes('not honoured')) {
+    regionalPair = [a, b]
     break
   }
+  regionalSeen.push(`${a}~${b}=${regionalSeverity}`)
+  await closePanel()
 }
-if (!rocPick) throw new Error('016 check 2: no Group 1 pair with pools on different days, so the hand move cannot be proven')
-const [a, b, target] = rocPick
-log('016 check 2: using', a, 'day', target + 1, '|', b, 'day', (await poolDayOf(b)) + 1, 'before the move')
-await moveEventToDay(b, target)
-if ((await poolDayOf(b)) !== target) throw new Error(`016 check 2: the Move day did not put ${b} on ${a}'s day`)
-await openPanel('Findings')
-const pairRows = page
-  .getByRole('complementary', { name: 'Inspector panel' })
-  .locator(`[data-finding-id*="${a}"][data-finding-id*="${b}"]`)
-  .filter({ hasText: 'regional Group 1 window' })
-const regionalSeen = await pairRows.count()
-if (regionalSeen === 0) {
-  await shot('016-check2-no-row')
-  throw new Error(`016 check 2: no regional Group 1 window row for ${a}~${b} with the pair on one day`)
+if (!regionalPair) {
+  await shot('016-check2-no-warning')
+  throw new Error(`016 check 2: no Group 1 pair reached the not-honoured Warning when put on one day (${regionalSeen.join(', ') || 'no pair on different days'})`)
 }
-const regionalSeverity = await pairRows.first().getAttribute('data-severity')
-const regionalMessage = (await pairRows.first().locator('[data-message]').textContent()) ?? ''
-log('016 check 2: regional row severity =', regionalSeverity, '|', regionalMessage)
-// The app has no control for an event's start time (Move day keeps the
-// placement's start_time and nothing else sets it), so the honoured Note
-// ("inside the regional Group 1 window") cannot be reached by hand. The
-// not-honoured Warning is the reachable state and is asserted strictly.
-if (!/warning/i.test(regionalSeverity ?? '') || !regionalMessage.includes('not honoured')) {
-  throw new Error(`016 check 2: regional row for ${a}~${b} is not the not-honoured Warning: ${regionalSeverity} "${regionalMessage}"`)
-}
-log('016 check 2: saw the Warning (regional-window-not-honoured) for the hand-moved pair')
+const [a, b] = regionalPair
+log('016 check 2: saw the Warning (regional-window-not-honoured) for the hand-moved pair', a + '~' + b)
 await shot('016-check2-regional')
 
 // ── 017 T8: a shared link replays the sender's run ──
