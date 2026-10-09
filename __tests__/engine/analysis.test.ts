@@ -262,8 +262,10 @@ describe('initialAnalysis — Pass 2: flighting group suggestions', () => {
     const result = initialAnalysis(config, [c1, c2], { large: 0, small: 0 })
 
     // Suggestions from suggestFlightingGroups are added as strings
-    expect(result.suggestions).toHaveLength(1)
-    expect(result.suggestions.some((s: string) => s.includes('large') || s.includes('small'))).toBe(true)
+    // The larger event is the one flighted (METHODOLOGY §How Flighting Works)
+    expect(result.suggestions).toEqual([
+      'Flighting group suggested: small (priority, 29 strips) + large (flighted, 26 strips)',
+    ])
   })
 
   it('tied pool counts → FLIGHTING_GROUP_MANUAL_NEEDED warning in result', () => {

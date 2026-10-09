@@ -179,11 +179,10 @@ export function deriveEventSchedule(
     const flightAEnd = poolStart + estimatePoolDuration(
       flightAPools, poolBaseline, flightAStrips, refs.refs_per_pool,
     ).actual_duration
-    // Flight B waits out the longer of the admin gap and the flight buffer.
-    const flightBStart = Math.max(
-      snapToSlot(flightAEnd + config.ADMIN_GAP_MINS),
-      snapToSlot(flightAEnd + config.FLIGHT_BUFFER_MINS),
-    )
+    // Flight B waits the flight buffer alone, which replaces the admin gap
+    // between the two flights – the scheduler's own successor rule
+    // (METHODOLOGY.md §Runtime Decomposition).
+    const flightBStart = snapToSlot(flightAEnd + config.FLIGHT_BUFFER_MINS)
     const flightBEnd = flightBStart + estimatePoolDuration(
       flightBPools, poolBaseline, flightBStrips, refs.refs_per_pool,
     ).actual_duration

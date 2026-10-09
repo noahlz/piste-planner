@@ -202,9 +202,14 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
 
       // Strip capacity: n_pools strips needed (one per pool running in parallel).
+      // An event that splits into Flight A and Flight B needs only Flight A's
+      // share, ceil(n_pools / 2) – the same split `buildPhaseNodes` makes
+      // (METHODOLOGY.md §Resource Preconditions, 'Strip minimum').
       // strips_total is a global scalar — no per-day strip availability model yet.
-      if (n_pools > config.strips_total) {
-        errors.push(policy('resource_precondition', `${comp.id}: requires ${n_pools} strips for pools but only ${config.strips_total} total strips configured`, mode, 'resource-precondition-strips', [comp.id]))
+      const splitsIntoFlights = comp.flighted && comp.flighting_group_id === null
+      const stripsNeeded = splitsIntoFlights ? Math.ceil(n_pools / 2) : n_pools
+      if (stripsNeeded > config.strips_total) {
+        errors.push(policy('resource_precondition', `${comp.id}: requires ${stripsNeeded} strips for pools but only ${config.strips_total} total strips configured`, mode, 'resource-precondition-strips', [comp.id]))
       }
 
     }

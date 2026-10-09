@@ -2119,6 +2119,141 @@ if ((await page.locator('[data-overflow-lane] [data-event-block]').count()) !== 
 }
 log('017 task S: Auto-assign cleared the row and the lane:', await footerCounts())
 
+// ── 021 T3: flighting follows the spec ──
+// On the fresh B1 board above. FLIGHT_B_DELAYED never reaches Findings (the store keeps no
+// scheduler bottlenecks), so there is no row to check for it. Two checks instead, on B1's strictly
+// largest event, found from the Events panel's fencer counts rather than named here:
+// (1) pressing "Flight" in the Selected-event strip draws FLIGHT_A and FLIGHT_B blocks, and Flight B
+//     starts FLIGHT_BUFFER_MINS (15) after Flight A ends, snapped to the 5-minute slot – the flight
+//     buffer replaces the 30-minute admin gap (METHODOLOGY §Runtime Decomposition).
+// (2) L15: with the event unflighted again, lower the strips one at a time until its
+//     `resource-precondition-strips` Blocking row appears, then press Flight: the strip minimum
+//     halves to ceil(pools / 2), so the row clears and Auto-assign is enabled again
+//     (METHODOLOGY §Resource Preconditions, 'Strip minimum'). The board is never settled while Blocking.
+// A reload ends the block, so the 018 T4 sender below starts from a fresh B1 as before.
+{
+  const FLIGHT_BUFFER_MINS = 15
+  const snap = (t) => Math.ceil(t / 5) * 5
+  await openPanel('Events')
+  const counts = []
+  for (const input of await page.getByRole('spinbutton', { name: /Fencer count for/ }).all()) {
+    counts.push({ label: (await input.getAttribute('aria-label')).replace('Fencer count for ', ''), fencers: Number(await input.inputValue()) })
+  }
+  counts.sort((x, y) => y.fencers - x.fencers)
+  const [largest, runnerUp] = counts
+  if (!largest || (runnerUp && runnerUp.fencers >= largest.fencers)) {
+    throw new Error(`021 T3: B1 has no strictly largest event (${JSON.stringify(counts.slice(0, 2))})`)
+  }
+  await closePanel()
+  const flightId = await page.$$eval(
+    '[data-event-block][data-phase="POOLS"]',
+    (els, label) => els.find((e) => (e.getAttribute('aria-label') ?? '').startsWith(`${label}, `))?.getAttribute('data-event-id') ?? null,
+    largest.label,
+  )
+  if (!flightId) throw new Error(`021 T3: no POOLS block for the largest event "${largest.label}"`)
+  const pools = Math.ceil(largest.fencers / 7)
+  log('021 T3: largest event', flightId, largest.fencers, 'fencers,', pools, 'pools; runner-up', runnerUp?.fencers)
+
+  const detail = page.getByRole('region', { name: 'Selected event' })
+  const flightButton = detail.getByRole('button', { name: 'Flight', exact: true })
+  const selectEvent = async (phase) => {
+    const blk = page.locator(`[data-event-block="${flightId}:${phase}"]`).first()
+    await blk.scrollIntoViewIfNeeded()
+    await blk.dispatchEvent('click')
+    await detail.waitFor()
+  }
+  const expectFlighted = async (want, what) => {
+    const pressed = await flightButton.getAttribute('aria-pressed')
+    if (pressed !== String(want)) throw new Error(`021 T3 ${what}: the Flight button reads aria-pressed="${pressed}", expected "${want}"`)
+  }
+
+  // (1) Flight B follows Flight A by the flight buffer alone.
+  await selectEvent('POOLS')
+  await expectFlighted(false, 'step 1')
+  await flightButton.click()
+  await settleBoard()
+  await expectFlighted(true, 'step 1')
+  const flightA = page.locator(`[data-event-block="${flightId}:FLIGHT_A"]`)
+  const flightB = page.locator(`[data-event-block="${flightId}:FLIGHT_B"]`)
+  if ((await flightA.count()) !== 1 || (await flightB.count()) !== 1) {
+    await shot('021-t3-no-flights')
+    throw new Error(`021 T3 step 1: expected one FLIGHT_A and one FLIGHT_B block for ${flightId}, found ${await flightA.count()} and ${await flightB.count()}`)
+  }
+  const aStart = Number(await flightA.getAttribute('data-start'))
+  const aEnd = Number(await flightA.getAttribute('data-end'))
+  const bStart = Number(await flightB.getAttribute('data-start'))
+  const wantB = snap(aEnd + FLIGHT_BUFFER_MINS)
+  if (bStart !== wantB) {
+    await shot('021-t3-flight-gap')
+    throw new Error(`021 T3 step 1: Flight B starts at ${formatMinutes(bStart)}, expected ${formatMinutes(wantB)} (Flight A ${formatMinutes(aStart)}–${formatMinutes(aEnd)} + ${FLIGHT_BUFFER_MINS}, snapped)`)
+  }
+  log('021 T3 step 1: Flight A', formatMinutes(aStart), '–', formatMinutes(aEnd), '| Flight B starts', formatMinutes(bStart), '= end + 15, snapped')
+  await shot('021-t3-flights')
+
+  // (2) Unflight it, then lower the strips until its strip-minimum row is Blocking.
+  await flightButton.click()
+  await settleBoard()
+  await expectFlighted(false, 'step 2')
+  await openPanel('Strips & referees')
+  const t3Strips = page.getByRole('spinbutton', { name: 'Number of strips' })
+  const t3Row = page
+    .getByRole('complementary', { name: 'Inspector panel' })
+    .locator(`[data-finding-id="resource-precondition-strips:${flightId}"]`)
+  const autoAssign = page.getByRole('button', { name: 'Auto-assign', exact: true })
+  let blockingAt = null
+  // Bounded: from the event's pool count down to its Flight A share, ceil(pools / 2).
+  for (let s = pools; s >= Math.ceil(pools / 2); s--) {
+    await t3Strips.fill(String(s))
+    await t3Strips.blur()
+    await openPanel('Findings')
+    await page.waitForTimeout(500)
+    if ((await t3Row.count()) === 1) {
+      blockingAt = s
+      break
+    }
+    // Not Blocking yet, so the re-run this edit armed can be settled before the next step down.
+    await settleBoard()
+    await openPanel('Strips & referees')
+  }
+  if (blockingAt === null) {
+    await shot('021-t3-no-blocking-row')
+    throw new Error(`021 T3 step 2: no resource-precondition-strips row for ${flightId} between ${pools} and ${Math.ceil(pools / 2)} strips`)
+  }
+  const rowSeverity = await t3Row.getAttribute('data-severity')
+  if (rowSeverity !== 'Blocking') throw new Error(`021 T3 step 2: the strip-minimum row for ${flightId} is "${rowSeverity}", not Blocking`)
+  if (!(await autoAssign.isDisabled())) throw new Error('021 T3 step 2: Auto-assign is enabled with a Blocking strip-minimum row')
+  log('021 T3 step 2: at', blockingAt, 'strips', flightId, 'draws the Blocking strip-minimum row')
+  await shot('021-t3-blocking')
+
+  // Flight it: the minimum halves, the row clears and Auto-assign is enabled.
+  await closePanel()
+  await selectEvent('POOLS')
+  await flightButton.click()
+  await expectFlighted(true, 'step 2')
+  await openPanel('Findings')
+  await t3Row.waitFor({ state: 'detached', timeout: 3000 }).catch(() => {})
+  if ((await t3Row.count()) !== 0) {
+    await shot('021-t3-row-stays')
+    throw new Error(`021 T3 step 2: the strip-minimum row for ${flightId} stays after Flight at ${blockingAt} strips (Flight A needs ${Math.ceil(pools / 2)})`)
+  }
+  if (await autoAssign.isDisabled()) {
+    const rows = await page.$$eval('aside [data-finding-id]', (els) => els.map((e) => `${e.getAttribute('data-severity')}:${e.getAttribute('data-finding-id')}`))
+    throw new Error(`021 T3 step 2: Auto-assign stays disabled after Flight; rows ${JSON.stringify(rows.slice(0, 8))}`)
+  }
+  log('021 T3 step 2: Flight cleared the row at', blockingAt, 'strips and Auto-assign is enabled')
+  await shot('021-t3-flighted-clears')
+  await closePanel()
+
+  await page.goto(BASE)
+  await page.getByRole('region', { name: 'Matrix canvas' }).waitFor()
+  await closePanel()
+  await page.getByRole('radio', { name: 'Matrix' }).click()
+  await page.waitForTimeout(500)
+  if (!(await footerCounts()).startsWith('24 placed · 0 unplaced')) {
+    throw new Error(`021 T3: the reload should boot a fresh B1 (24 placed · 0 unplaced), got "${await footerCounts()}"`)
+  }
+}
+
 // ── 018 T4: a refused link says why and still boots B1 ──
 // A fresh B1 sender's link, edited so one event's fencer_count is 0, is refused by the loader. The
 // receiver must still boot B1 (24 placed), and the notice at the top of the board must name the event

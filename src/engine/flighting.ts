@@ -18,10 +18,12 @@ interface FlightingGroupSuggestions {
  * when their combined pool count exceeds strips_total but each fits individually within
  * the per-event pool strip cap (poolStripCap).
  *
- * METHODOLOGY.md §Flighting Group Suggestion:
- * - The competition with more pools is designated priority; the other becomes flighted.
+ * METHODOLOGY.md §Flighting Pair Suggestion, §How Flighting Works:
+ * - The larger event, the one with more pools, is the one to flight. The smaller
+ *   event is the group's priority and runs unflighted beside the flights.
  * - When pool counts are tied, a FLIGHTING_GROUP_MANUAL_NEEDED warning is emitted and
- *   the suggestion is still created (with an arbitrary ordering by id for determinism).
+ *   the suggestion is still created (with an arbitrary ordering by id for determinism),
+ *   and the organizer picks which one to flight.
  *
  * A competition `isSizeableCount` rejects pairs with nothing (018 T4).
  * `bounds` defaults to the engine's own; `initialAnalysis` passes its config.
@@ -49,9 +51,9 @@ export function suggestFlightingGroups(
     if (c1Pools > poolStripCap || c2Pools > poolStripCap) return
 
     const tied = c1Pools === c2Pools
-    // Larger pool count becomes priority; on tie, fall back to id lexicographic order for determinism
-    const [priority, flighted] =
-      c1Pools > c2Pools || (tied && c1.id <= c2.id) ? [c1, c2] : [c2, c1]
+    // The larger pool count is flighted, and on a tie the later id is, for determinism
+    const [flighted, priority] =
+      c1Pools > c2Pools || (tied && c1.id > c2.id) ? [c1, c2] : [c2, c1]
 
     if (tied) {
       bottlenecks.push({
@@ -62,7 +64,7 @@ export function suggestFlightingGroups(
         subjects: [c1.id, c2.id].sort(),
         severity: BottleneckSeverity.WARN,
         delay_mins: 0,
-        message: `${c1.id} and ${c2.id} have equal pool counts (${c1Pools}); organiser must designate priority manually`,
+        message: `${c1.id} and ${c2.id} have equal pool counts (${c1Pools}), so the organizer picks which one to flight`,
       })
     }
 
@@ -88,11 +90,13 @@ export function suggestFlightingGroups(
 // ──────────────────────────────────────────────
 
 /**
- * Splits strips_total between a priority and flighted competition.
- *
- * METHODOLOGY.md §Flighting:
- * - Priority receives strips equal to its pool count, capped at strips_total.
+ * Splits strips_total between a group's priority competition – the smaller,
+ * unflighted event – and its flighted competition, the larger event
+ * (METHODOLOGY.md §How Flighting Works):
+ * - Priority receives strips equal to its pool count, capped at strips_total,
+ *   since an unflighted event runs all its pools at once.
  * - Flighted receives the remainder (strips_total − priority allocation).
+ * METHODOLOGY does not fix the split, and the suggestion is advisory text.
  *
  * Precondition: `priorityComp` has a count `isSizeableCount` accepts. Its one
  * production caller, `suggestFlightingGroups`, pairs only those (018 T4); a

@@ -45,12 +45,13 @@ describe('eventTimeSegments', () => {
 
   it('splits a flighted event into flight A, flight B and the DE block', () => {
     // pool_start/pool_end still span both flights on the result, so a naive
-    // implementation that checks pool_start first would emit an 540-746 block
-    // covering the gap between the flights.
+    // implementation that checks pool_start first would emit an 540-731 block
+    // covering the gap between the flights. Flight B waits the 15-minute flight
+    // buffer alone, snap(626 + 15) = 645 (021 T3, METHODOLOGY §Runtime Decomposition).
     expect(eventTimeSegments(derive({ id: 'flighted', flighted: true }))).toEqual([
       { phase: Phase.FLIGHT_A, startMinutes: 540, endMinutes: 626, stripCount: 2 },
-      { phase: Phase.FLIGHT_B, startMinutes: 660, endMinutes: 746, stripCount: 2 },
-      { phase: Phase.DE, startMinutes: 780, endMinutes: 860, stripCount: 16 },
+      { phase: Phase.FLIGHT_B, startMinutes: 645, endMinutes: 731, stripCount: 2 },
+      { phase: Phase.DE, startMinutes: 765, endMinutes: 845, stripCount: 16 },
     ])
   })
 

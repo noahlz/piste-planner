@@ -12,7 +12,7 @@ import { makeCompetition } from '../helpers/factories.ts'
 // ──────────────────────────────────────────────
 
 describe('suggestFlightingGroups', () => {
-  it('combined > strips, each fits alone → suggests group with larger as priority', () => {
+  it('combined > strips, each fits alone → suggests flighting the larger event (METHODOLOGY §How Flighting Works)', () => {
     // ceil(210/7)=30 pools, ceil(203/7)=29 pools; 30+29=59 > 55 strips, each alone fits
     // Each fits within poolStripCap (55), combined (59) exceeds stripsTotal (55)
     const c1 = makeCompetition({ id: 'large', fencer_count: 210 }) // 30 pools
@@ -22,11 +22,11 @@ describe('suggestFlightingGroups', () => {
     const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 55)
 
     expect(suggestions).toHaveLength(1)
-    expect(suggestions[0].priority_competition_id).toBe('large')
-    expect(suggestions[0].flighted_competition_id).toBe('small')
-    // Priority gets its pool count (30), flighted gets remainder (55-30=25)
-    expect(suggestions[0].strips_for_priority).toBe(30)
-    expect(suggestions[0].strips_for_flighted).toBe(25)
+    expect(suggestions[0].flighted_competition_id).toBe('large')
+    expect(suggestions[0].priority_competition_id).toBe('small')
+    // The unflighted event gets its pool count (29), the flighted one the remainder (55-29=26)
+    expect(suggestions[0].strips_for_priority).toBe(29)
+    expect(suggestions[0].strips_for_flighted).toBe(26)
     // No MANUAL_NEEDED bottleneck when pool counts differ
     expect(bottlenecks.some(b => b.cause === BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED)).toBe(false)
   })
@@ -72,6 +72,20 @@ describe('suggestFlightingGroups', () => {
     expect(manualNeeded?.severity).toBe(BottleneckSeverity.WARN)
     expect(manualNeeded?.rule).toBe(BottleneckRule.FLIGHTING_PRIORITY_TIE)
     expect(manualNeeded?.subjects).toEqual(['tied-a', 'tied-b'])
+  })
+
+  it('tied pool counts → flights the later id whatever the input order, and the WARN says the organizer picks', () => {
+    // Same tie as above, input order [tied-b, tied-a], so a choice that follows
+    // the pair order instead of the ids would flight tied-a.
+    const c1 = makeCompetition({ id: 'tied-a', fencer_count: 210 }) // 30 pools
+    const c2 = makeCompetition({ id: 'tied-b', fencer_count: 210 }) // 30 pools
+    const dayAssignments: Record<string, number> = { 'tied-a': 0, 'tied-b': 0 }
+
+    const { suggestions, bottlenecks } = suggestFlightingGroups([c2, c1], 55, dayAssignments, 55)
+
+    expect(suggestions.map(s => [s.flighted_competition_id, s.priority_competition_id])).toEqual([['tied-b', 'tied-a']])
+    expect(bottlenecks.find(b => b.cause === BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED)?.message)
+      .toBe('tied-b and tied-a have equal pool counts (30), so the organizer picks which one to flight')
   })
 
   it('each fits within poolStripCap but combined exceeds stripsTotal → suggests group', () => {
@@ -126,20 +140,21 @@ describe('suggestFlightingGroups', () => {
 
 describe('calculateFlightedStrips', () => {
   it('priority gets its pool count, flighted gets remainder', () => {
-    // Priority: 98 fencers → ceil(98/7)=14 pools; flighted: 84 fencers → ceil(84/7)=12 pools
-    // 24 strips total: priority gets 14, flighted gets 10
-    const priority = makeCompetition({ id: 'pri', fencer_count: 98 })  // 14 pools
-    const flighted = makeCompetition({ id: 'flt', fencer_count: 84 })  // 12 pools
+    // The flighted event is the larger one (METHODOLOGY §How Flighting Works).
+    // Priority: 84 fencers → ceil(84/7)=12 pools, and flighted: 98 fencers → ceil(98/7)=14 pools
+    // 22 strips total: priority gets 12, flighted gets 10
+    const priority = makeCompetition({ id: 'pri', fencer_count: 84 })  // 12 pools
+    const flighted = makeCompetition({ id: 'flt', fencer_count: 98 })  // 14 pools
 
-    const result = calculateFlightedStrips(priority, flighted, 24)
+    const result = calculateFlightedStrips(priority, flighted, 22)
 
-    expect(result.strips_for_priority).toBe(14)
+    expect(result.strips_for_priority).toBe(12)
     expect(result.strips_for_flighted).toBe(10)
   })
 
   it('strip split sums to strips_total', () => {
-    const priority = makeCompetition({ id: 'pri', fencer_count: 98 })  // 14 pools
-    const flighted = makeCompetition({ id: 'flt', fencer_count: 84 })  // 12 pools
+    const priority = makeCompetition({ id: 'pri', fencer_count: 84 })  // 12 pools
+    const flighted = makeCompetition({ id: 'flt', fencer_count: 98 })  // 14 pools
 
     const result = calculateFlightedStrips(priority, flighted, 24)
 

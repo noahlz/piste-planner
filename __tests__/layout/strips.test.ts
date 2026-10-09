@@ -474,8 +474,8 @@ describe('assignStrips: flighted events', () => {
     // Moved to its own day and start, the derived FLIGHT_B starts where the scheduler started it.
     const keptFlightB = board.kept.events[id].phases.find(p => p.phase === Phase.FLIGHT_B)
     expect(flightB!.startMinutes).toBe(keptFlightB?.startMinutes)
-    // Derive waits out the longer of the admin gap and the flight buffer, so the buffer is a floor.
-    expect(flightB!.startMinutes).toBeGreaterThanOrEqual(
+    // Derive waits the flight buffer alone between the flights (021 T3, METHODOLOGY §Runtime Decomposition).
+    expect(flightB!.startMinutes).toBe(
       snapToSlot(flightA!.endMinutes + board.config.FLIGHT_BUFFER_MINS))
     expect(mine.map(b => b.phase)).not.toContain(Phase.POOLS)
   })

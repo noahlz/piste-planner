@@ -64,12 +64,14 @@ export const DAY_LENGTH_MINS = 600
 // (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip Count Suggestion).
 export const COMPETITORS_PER_STRIP_PER_DAY = 14
 // Gap between a phase and its successor (pools to DE, DE prelims to the next
-// stage, Flight A to Flight B alongside FLIGHT_BUFFER_MINS, an older Vet
-// sibling to its younger one). Its floor is the results-review
+// stage, an older Vet sibling to its younger one). Flight A to Flight B is
+// exempt: FLIGHT_BUFFER_MINS replaces it there. Its floor is the results-review
 // period between rounds, 15 min national, 10 regional, 5 local (Ops Manual p.18,
 // METHODOLOGY §Timing Constants). No gap sits between DE rounds inside one DE
 // phase – the 5-minute changeover is already in the bout time.
 export const ADMIN_GAP_MINS = 30
+// Flight B is ready this long after Flight A ends, in place of the admin gap.
+// Unsourced (METHODOLOGY.md §Runtime Decomposition, Appendix B).
 export const FLIGHT_BUFFER_MINS = 15
 // Pool rounds run 60-120 min for a pool of 7 (see DEFAULT_POOL_ROUND_DURATION_TABLE), so a 60-min wave can't accommodate the second event starting inside the wave.
 export const MORNING_WAVE_WINDOW_MINS = 120

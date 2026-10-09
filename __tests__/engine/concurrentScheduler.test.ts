@@ -14,6 +14,7 @@ import {
   CutMode,
   Phase,
   ValidationMode,
+  dayStart,
   tailEstimateMins,
 } from '../../src/engine/types.ts'
 import type { Bottleneck, Competition, TournamentConfig } from '../../src/engine/types.ts'
@@ -26,7 +27,7 @@ import {
 import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { makeConfig, makeCompetition, makeStrips, makeBottleneck, makeScheduleResult } from '../helpers/factories.ts'
 import { checkInvariants } from '../helpers/bottleneckInvariants.ts'
-import { createGlobalState } from '../../src/engine/resources.ts'
+import { createGlobalState, snapToSlot } from '../../src/engine/resources.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
@@ -59,6 +60,12 @@ function smallConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfi
     max_de_strip_pct: 1.0,
     ...overrides,
   })
+}
+
+/** A schedule time that must be set, so a null never compares as a vacuous 0. */
+function required(value: number | null, field: string): number {
+  if (value === null) throw new Error(`${field} is null`)
+  return value
 }
 
 // ──────────────────────────────────────────────
@@ -1329,10 +1336,9 @@ describe('scheduleAllConcurrent — a bracket of 2 has no counted round', () => 
   })
 })
 
-describe('scheduleAllConcurrent — a pinned flighted event on 1 strip', () => {
-  it('(guard) keeps 1 strip for each flight and Flight B its full duration at 1 strip', () => {
-    // 24 fencers → 4 pools, 2 per flight. The pin's 1 strip splits as ceil/floor
-    // (1, 0); Flight B keeps the 1-strip floor, never a 0-strip, 0-minute block.
+describe('scheduleAllConcurrent – a pinned flighted event', () => {
+  /** 24 fencers → 4 pools, 2 per flight, pinned at day 0's start on `stripCount` strips. */
+  function schedulePinnedFlight(stripCount: number) {
     const competition = makeCompetition({
       id: 'pinned-flight',
       fencer_count: 24,
@@ -1343,10 +1349,17 @@ describe('scheduleAllConcurrent — a pinned flighted event on 1 strip', () => {
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
     const config = smallConfig()
-    const pin = { competition_id: competition.id, day: 0, start_time: config.DAY_START_MINS, strip_count: 1 }
+    const pin = { competition_id: competition.id, day: 0, start_time: config.DAY_START_MINS, strip_count: stripCount }
 
     const s = scheduleAllConcurrent([competition], config, [pin]).schedule[competition.id]
     if (!s) throw new Error('pinned-flight was not scheduled')
+    return { competition, config, s }
+  }
+
+  it('(guard) keeps 1 strip for each flight and Flight B its full duration at 1 strip', () => {
+    // The pin's 1 strip splits as ceil/floor (1, 0), and Flight B keeps the
+    // 1-strip floor, never a 0-strip, 0-minute block.
+    const { competition, config, s } = schedulePinnedFlight(1)
 
     const pools = computePoolStructure(competition.fencer_count)
     const baseline = weightedPoolDuration(pools, competition.weapon, config.pool_round_duration_table)
@@ -1356,6 +1369,161 @@ describe('scheduleAllConcurrent — a pinned flighted event on 1 strip', () => {
     expect(s.flight_a_strips).toBe(1)
     expect(s.flight_b_strips).toBe(1)
     expect((s.flight_b_end ?? 0) - (s.flight_b_start ?? 0)).toBe(flightBOnOneStrip.actual_duration)
+  })
+
+  it('starts Flight B FLIGHT_BUFFER_MINS after Flight A ends, snapped, on the pinned path', () => {
+    // 4 strips run 2 pools per flight, so Flight A ends off a slot boundary and
+    // the snap shows. `derive.ts` draws Flight B at the same time.
+    const { config, s } = schedulePinnedFlight(4)
+    const aEnd = required(s.flight_a_end, 'flight_a_end')
+
+    expect(aEnd, 'fixture: Flight A ends off a slot boundary').not.toBe(snapToSlot(aEnd))
+    expect(s.flight_b_start).toBe(snapToSlot(aEnd + config.FLIGHT_BUFFER_MINS))
+  })
+})
+
+// ──────────────────────────────────────────────
+// Flighting follows the spec (021 T3, METHODOLOGY.md §Resource Preconditions
+// 'Strip minimum', §Runtime Decomposition, §Within-Day Priority Order key 3,
+// §Bottlenecks Specific to the Concurrent Scheduler)
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent – flighting follows the spec (021 T3)', () => {
+  /** One day on `stripCount` plain strips, caps out of the way so only the strip total binds. */
+  function oneDayConfig(stripCount: number): TournamentConfig {
+    return smallConfig({
+      days_available: 1,
+      strips: makeStrips(stripCount, 0),
+      strips_total: stripCount,
+      video_strips_total: 0,
+    })
+  }
+
+  // 200 fencers → 29 pools. Unflighted the event needs all 29 strips at once.
+  // Flighted it needs Flight A's share, ceil(29 / 2) = 15 (L15). 29 is odd, so
+  // 14 against 15 strips tells ceil from floor and pins the divisor.
+  const big = (flighted: boolean) => comp('big', { fencer_count: 200, flighted })
+
+  it.each([
+    { flighted: true, strips: 14, messages: ['big: requires 15 strips for pools but only 14 total strips configured'] },
+    { flighted: true, strips: 15, messages: [] },
+    { flighted: false, strips: 20, messages: ['big: requires 29 strips for pools but only 20 total strips configured'] },
+  ])('strip minimum: a 200-fencer event (flighted $flighted) on $strips strips gets the ERRORs $messages', ({ flighted, strips, messages }) => {
+    const findings = validateConfig(oneDayConfig(strips), [big(flighted)], ValidationMode.BINDING)
+      .filter(f => f.rule === 'resource-precondition-strips')
+
+    expect(findings.map(f => f.severity)).toEqual(messages.map(() => BottleneckSeverity.ERROR))
+    expect(findings.map(f => f.message)).toEqual(messages)
+  })
+
+  it.each([
+    { flighted: true, strips: 14, placed: false },
+    { flighted: true, strips: 15, placed: true },
+    { flighted: false, strips: 20, placed: false },
+  ])('strip minimum: a 200-fencer event (flighted $flighted) on $strips strips is placed: $placed', ({ flighted, strips, placed }) => {
+    const { schedule } = scheduleAllConcurrent([big(flighted)], oneDayConfig(strips))
+
+    expect(schedule.big !== undefined).toBe(placed)
+  })
+
+  // 24 foil fencers → 4 pools, 2 per flight. Flight A ends at minute 86, off a
+  // 5-minute slot: under the old 30-minute admin gap Flight B started at 120 and
+  // the delay, measured from Flight A's end, read 34 – a false WARN.
+  const scheduleAlone = () => {
+    const config = oneDayConfig(20)
+    const result = scheduleAllConcurrent([comp('alone', { flighted: true })], config)
+    const s = result.schedule.alone
+    if (!s) throw new Error('alone was not scheduled')
+    return { config, result, s }
+  }
+
+  it('starts Flight B FLIGHT_BUFFER_MINS after Flight A ends, snapped', () => {
+    const { config, s } = scheduleAlone()
+    const aEnd = required(s.flight_a_end, 'flight_a_end')
+
+    expect(s.flight_a_start).toBe(dayStart(0, config))
+    expect(aEnd, 'fixture: Flight A ends off a slot boundary').not.toBe(snapToSlot(aEnd))
+    expect(s.flight_b_start).toBe(snapToSlot(aEnd + config.FLIGHT_BUFFER_MINS))
+  })
+
+  it('an uncontended flighted event draws no FLIGHT_B_DELAYED', () => {
+    const { result } = scheduleAlone()
+
+    expect(result.bottlenecks.filter(b => b.rule === BottleneckRule.FLIGHT_B_DELAYED)).toEqual([])
+  })
+
+  // 12 strips. The flighted event has 84 fencers → 12 pools, so its Flight A
+  // asks for 6. The co-day event has 70 fencers → 10 pools and asks for 10.
+  // 6 + 10 > 12, so only one first phase fits at day start. Without key 3 the
+  // larger ask (10) would win on key 5 and the flighted event would wait.
+  // These tests pin key 3's 'after Y8/Y10' and 'before the larger ask' halves
+  // only. Its 'before video-required' half is not observable here: only a STAGED
+  // R16 node is video-required, and it ties a Flight A on ready_time only after
+  // a defer bump.
+  const flightedEpee = () => comp('flighted', {
+    gender: Gender.MEN, weapon: Weapon.EPEE, fencer_count: 84, flighted: true,
+  })
+
+  it('under strip contention, Flight A takes day start ahead of a co-day event with a larger ask, which waits', () => {
+    const config = oneDayConfig(12)
+    const other = comp('other', { gender: Gender.WOMEN, weapon: Weapon.FOIL, fencer_count: 70 })
+    const { schedule } = scheduleAllConcurrent([flightedEpee(), other], config)
+    const f = schedule.flighted
+    const o = schedule.other
+    if (!f || !o) throw new Error('both events must be scheduled')
+
+    expect(f.flight_a_start, 'Flight A takes day start').toBe(dayStart(0, config))
+    expect(required(o.pool_start, 'other pool_start'), 'the co-day event waits for Flight A\'s strips')
+      .toBeGreaterThanOrEqual(required(f.flight_a_end, 'flight_a_end'))
+  })
+
+  it('(guard) a Y10 first phase still beats Flight A under the same contention – key 3 sits after Y8/Y10', () => {
+    const config = oneDayConfig(12)
+    const y10 = comp('y10', {
+      category: Category.Y10, gender: Gender.WOMEN, weapon: Weapon.FOIL, fencer_count: 70,
+    })
+    const { schedule } = scheduleAllConcurrent([flightedEpee(), y10], config)
+    const f = schedule.flighted
+    const y = schedule.y10
+    if (!f || !y) throw new Error('both events must be scheduled')
+
+    expect(y.pool_start, 'Y10 takes day start').toBe(dayStart(0, config))
+    expect(required(f.flight_a_start, 'flight_a_start'), 'Flight A waits for the Y10 pools\' strips')
+      .toBeGreaterThanOrEqual(required(y.pool_end, 'y10 pool_end'))
+  })
+
+  // FLIGHT_B_DELAYED measures from Flight B's own ready time, snap(Flight A end
+  // + FLIGHT_BUFFER_MINS), and fires above 30 minutes. Beside the 84-fencer epee
+  // event on 12 strips, a small sabre event's later phases hold the strips Flight
+  // B needs. Flight A runs 120 minutes from day start, so Flight B is ready at
+  // +135. Measured from Flight A's end instead, each delay below reads 15 more.
+  function scheduleBesideSabre(sabreFencers: number) {
+    const config = oneDayConfig(12)
+    const sabre = comp('other', { gender: Gender.WOMEN, weapon: Weapon.SABRE, fencer_count: sabreFencers })
+    const result = scheduleAllConcurrent([flightedEpee(), sabre], config)
+    const s = result.schedule.flighted
+    if (!s) throw new Error('flighted was not scheduled')
+    const readyTime = snapToSlot(required(s.flight_a_end, 'flight_a_end') + config.FLIGHT_BUFFER_MINS)
+    return {
+      heldFor: required(s.flight_b_start, 'flight_b_start') - readyTime,
+      delayed: result.bottlenecks.filter(b => b.rule === BottleneckRule.FLIGHT_B_DELAYED),
+    }
+  }
+
+  it('a Flight B held 45 minutes past its ready time by a co-day event draws one FLIGHT_B_DELAYED of 45 minutes', () => {
+    const { heldFor, delayed } = scheduleBesideSabre(56)
+
+    expect(heldFor, 'fixture: Flight B is held 45 minutes').toBe(45)
+    expect(delayed.map(b => ({ subjects: b.subjects, delay_mins: b.delay_mins, message: b.message }))).toEqual([
+      { subjects: ['flighted'], delay_mins: 45, message: 'flighted Flight B delayed 45min past its ready time' },
+    ])
+  })
+
+  it('a Flight B held 25 minutes past its ready time by a co-day event draws no FLIGHT_B_DELAYED – the WARN starts above 30', () => {
+    const { heldFor, delayed } = scheduleBesideSabre(14)
+
+    expect(heldFor, 'fixture: Flight B is held 25 minutes').toBe(25)
+    expect(delayed).toEqual([])
   })
 })
 

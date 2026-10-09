@@ -806,6 +806,17 @@ function firstPhaseReadyTime(event: EventState, config: TournamentConfig): numbe
   )
 }
 
+/**
+ * The wait between a phase's end and its successor's ready time. Flight A →
+ * Flight B waits `FLIGHT_BUFFER_MINS` alone – the flight buffer replaces the
+ * admin gap between the two flights – and every other successor waits
+ * `ADMIN_GAP_MINS` (METHODOLOGY.md §Runtime Decomposition, §Allocation,
+ * Deferral, and Failure). `derive.ts` places Flight B by the same rule.
+ */
+function successorGap(kind: PhaseKind, config: TournamentConfig): number {
+  return kind === PhaseKind.FLIGHT_A ? config.FLIGHT_BUFFER_MINS : config.ADMIN_GAP_MINS
+}
+
 const VET_AGE_WEIGHT: Partial<Record<VetAgeGroup, number>> = {
   [VetAgeGroup.VET80]: 0,
   [VetAgeGroup.VET70]: 1,
@@ -863,14 +874,7 @@ function preclaimPinnedEvents(
         node.ready_time = pin.start_time
       } else {
         // The loop's own successor rule (`runConcurrentLoop`, the 'ok' branch).
-        let readyTime = snapToSlot(prev.end_time + config.ADMIN_GAP_MINS)
-        if (prev.kind === PhaseKind.FLIGHT_A) {
-          readyTime = Math.max(
-            readyTime,
-            snapToSlot(prev.end_time + config.FLIGHT_BUFFER_MINS),
-          )
-        }
-        node.ready_time = readyTime
+        node.ready_time = snapToSlot(prev.end_time + successorGap(prev.kind, config))
       }
 
       // The pool ask is the pin's own strip budget, split across flights the
@@ -1004,15 +1008,8 @@ function runConcurrentLoop(
         const succ = event.phases[node.successor_index]
         succ.ready_time = Math.max(
           succ.ready_time,
-          snapToSlot(node.end_time + config.ADMIN_GAP_MINS),
+          snapToSlot(node.end_time + successorGap(node.kind, config)),
         )
-        // Flight A → Flight B uses FLIGHT_BUFFER_MINS gap, not ADMIN_GAP_MINS.
-        if (node.kind === PhaseKind.FLIGHT_A) {
-          succ.ready_time = Math.max(
-            succ.ready_time,
-            snapToSlot(node.end_time + config.FLIGHT_BUFFER_MINS),
-          )
-        }
         succ.state = PhaseState.READY
         ready.push(succ)
       } else {
@@ -1386,7 +1383,7 @@ function onPhaseAllocated(
   event: EventState,
   stripCount: number,
   state: GlobalState,
-  _config: TournamentConfig,
+  config: TournamentConfig,
 ): void {
   const r = event.result
   const startTime = node.ready_time
@@ -1420,9 +1417,11 @@ function onPhaseAllocated(
       r.pool_strip_count = (r.flight_a_strips ?? 0) + stripCount
       r.pool_refs_count = (r.flight_a_refs ?? 0) + refs
       r.pool_duration_actual = (r.pool_duration_actual ?? 0) + (endTime - startTime)
-      // FLIGHT_B_DELAYED diagnostic if delayed past Flight A's natural buffer.
-      const flightANaturalStart = (r.flight_a_end ?? 0) + 0
-      const idealStart = flightANaturalStart // already includes FLIGHT_BUFFER_MINS via successor.ready_time
+      // FLIGHT_B_DELAYED when Flight B starts more than 30 min after its own
+      // unblocked ready time, Flight A's end + the flight buffer snapped to a
+      // slot – the time the loop gives it – so an uncontended Flight B never
+      // draws it (METHODOLOGY.md §Bottlenecks Specific to the Concurrent Scheduler).
+      const idealStart = snapToSlot((r.flight_a_end ?? 0) + successorGap(PhaseKind.FLIGHT_A, config))
       const delay = startTime - idealStart
       if (delay > 30) {
         state.bottlenecks.push({
@@ -1433,7 +1432,7 @@ function onPhaseAllocated(
           subjects: [event.competition.id],
           severity: BottleneckSeverity.WARN,
           delay_mins: delay,
-          message: `${event.competition.id} Flight B delayed ${delay}min past Flight A end`,
+          message: `${event.competition.id} Flight B delayed ${delay}min past its ready time`,
           attempt_id: event.attempt_id,
         })
       }
@@ -1507,9 +1506,15 @@ function commitEventResult(
  *    events grab strip-time at day start and the small youth events get
  *    crowded out of their DE windows (METHODOLOGY §Within-Day Priority Order:
  *    Ops Manual p.20 – Group 2 asks for Y10 early, and Y8 is a departure).
- * 3. Video-required first
- * 4. Larger desired_strip_count first
- * 5. Higher constraint_score first
+ * 3. Flight A first – a flighted event's first flight claims its strips early,
+ *    so Flight B can follow while the day has time left. It sits after Y8/Y10,
+ *    so a youth first phase still wins, and before video-required, so it wins
+ *    even when its ask is smaller than a co-day phase's (METHODOLOGY
+ *    §Within-Day Priority Order key 3, §How Flighting Works).
+ * 4. Video-required first
+ * 5. Larger desired_strip_count first
+ * 6. Higher constraint_score first
+ * 7. Stable on event_id
  */
 function pickHighestPriorityIndex(ready: PhaseNode[], events: EventState[]): number {
   let bestIdx = 0
@@ -1532,6 +1537,10 @@ function compareNodes(a: PhaseNode, b: PhaseNode, events: EventState[]): number 
   const aYouth = aEvent !== null && isYouthPriorityCategory(aEvent.competition.category)
   const bYouth = bEvent !== null && isYouthPriorityCategory(bEvent.competition.category)
   if (aYouth !== bYouth) return aYouth ? -1 : 1
+  // Flight A wins next (key 3).
+  const aFlightA = a.kind === PhaseKind.FLIGHT_A
+  const bFlightA = b.kind === PhaseKind.FLIGHT_A
+  if (aFlightA !== bFlightA) return aFlightA ? -1 : 1
   // Video-required wins.
   if (a.video_required !== b.video_required) return a.video_required ? -1 : 1
   // Larger strip count wins (more negative comes first → return b - a).
