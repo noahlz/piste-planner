@@ -348,10 +348,6 @@ exports[`drift ledger > B1 digest is unchanged 1`] = `
       "pool_strip_count": 2,
     },
   },
-  "refRecommendation": {
-    "foil_epee": 46,
-    "three_weapon": 120,
-  },
   "refRequirementsByDay": [
     {
       "day": 0,
@@ -733,10 +729,6 @@ exports[`drift ledger > B2 digest is unchanged 1`] = `
       "pool_start": 3000,
       "pool_strip_count": 23,
     },
-  },
-  "refRecommendation": {
-    "foil_epee": 10,
-    "three_weapon": 160,
   },
   "refRequirementsByDay": [
     {
@@ -1120,10 +1112,6 @@ exports[`drift ledger > B3 digest is unchanged 1`] = `
       "pool_strip_count": 33,
     },
   },
-  "refRecommendation": {
-    "foil_epee": 8,
-    "three_weapon": 146,
-  },
   "refRequirementsByDay": [
     {
       "day": 0,
@@ -1505,10 +1493,6 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
       "pool_strip_count": 2,
     },
   },
-  "refRecommendation": {
-    "foil_epee": 0,
-    "three_weapon": 108,
-  },
   "refRequirementsByDay": [
     {
       "day": 0,
@@ -1718,10 +1702,6 @@ exports[`drift ledger > B5 digest is unchanged 1`] = `
       "pool_start": 1440,
       "pool_strip_count": 16,
     },
-  },
-  "refRecommendation": {
-    "foil_epee": 4,
-    "three_weapon": 68,
   },
   "refRequirementsByDay": [
     {
@@ -2474,10 +2454,6 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
       "pool_strip_count": 1,
     },
   },
-  "refRecommendation": {
-    "foil_epee": 1,
-    "three_weapon": 33,
-  },
   "refRequirementsByDay": [
     {
       "day": 0,
@@ -2771,10 +2747,6 @@ exports[`drift ledger > B7 digest is unchanged 1`] = `
       "pool_start": 3000,
       "pool_strip_count": 35,
     },
-  },
-  "refRecommendation": {
-    "foil_epee": 28,
-    "three_weapon": 156,
   },
   "refRequirementsByDay": [
     {
@@ -3563,10 +3535,6 @@ exports[`drift ledger > B8 digest is unchanged 1`] = `
       "pool_start": 120,
       "pool_strip_count": 5,
     },
-  },
-  "refRecommendation": {
-    "foil_epee": 30,
-    "three_weapon": 110,
   },
   "refRequirementsByDay": [
     {

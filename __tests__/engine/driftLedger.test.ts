@@ -24,9 +24,7 @@ import type {
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from '../../src/engine/refs.ts'
-import { recommendRefCount } from '../../src/engine/stripBudget.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
-import { resolveRefsPerPool } from '../../src/engine/pools.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
 
@@ -227,7 +225,6 @@ type ScenarioDigest = {
   warnCountsByCause: Partial<Record<BottleneckCause, number>>
   refRequirementsByDay: RefRequirementsByDay[] | undefined
   daySummaryPeaks: number[]
-  refRecommendation: { three_weapon: number; foil_epee: number }
   // The smallest strip count that places every event — what pressing **Suggest**
   // writes into the app (`stripSearch.ts`), and the only strip number a user
   // sees. `null` is the absence of an answer, never a recommendation of 0
@@ -281,24 +278,6 @@ function dayPeakRefDemands(
   return peaks
 }
 
-/**
- * Refs per pool for the scenario's `refRecommendation`, resolved from the
- * competitions' own `ref_policy`, through `resolveRefsPerPool(policy, 1)` as
- * `StripsPanel.tsx` does for **Suggest**. StripsPanel feeds it the store's
- * `TYPE_DEFAULTS[tournamentType].ref_policy` instead, and the two agree because
- * `factoryParity.test.ts` pins the factory's `ref_policy` to the store's. The
- * policy must be uniform across the scenario, since `recommendRefCount` takes a
- * single factor. A mixed scenario fails here, naming the policies seen, rather
- * than picking one silently.
- */
-function scenarioRefsPerPool(id: ScenarioId, competitions: Competition[]): number {
-  const policies = [...new Set(competitions.map(c => c.ref_policy))]
-  if (policies.length !== 1) {
-    throw new Error(`${id}: expected one ref_policy across the scenario, saw [${policies.join(', ')}]`)
-  }
-  return resolveRefsPerPool(policies[0], 1).refs_per_pool
-}
-
 /** WARN bottlenecks tallied by cause. Counts carry no times, so no message text leaks in. */
 function warnCountsByCause(bottlenecks: Bottleneck[]): Partial<Record<BottleneckCause, number>> {
   const counts: Partial<Record<BottleneckCause, number>> = {}
@@ -343,7 +322,7 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
       de_prelims_strip_count: sr.de_prelims_strip_count,
       de_round_of_16_strip_count: sr.de_round_of_16_strip_count,
       // The single number the pod-captain removal changes. Aggregate ref demand is
-      // dominated by the pool arm, so this never surfaces in the recommendations.
+      // dominated by the pool arm, so a change here would not show in the aggregates.
       peak_de_ref_demand: peakDeRefDemand(byId.get(eventId)!, config),
     }
   }
@@ -355,7 +334,6 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
     warnCountsByCause: warnCountsByCause(bottlenecks),
     refRequirementsByDay: ref_requirements_by_day,
     daySummaryPeaks: dayPeakRefDemands(competitions, config, schedule),
-    refRecommendation: recommendRefCount(competitions, scenarioRefsPerPool(id, competitions), config),
     stripRecommendation: searchStripCount(competitions, config),
     events,
   }

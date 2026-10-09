@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   computeStripCap,
-  recommendRefCount,
   flagFlightingCandidates,
   buildStrips,
   peakDeStripDemand,
 } from '../../src/engine/stripBudget.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
-import { Weapon, DeMode } from '../../src/engine/types.ts'
+import { DeMode } from '../../src/engine/types.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { resolveVideoStrips } from '../../src/store/typeDefaults.ts'
@@ -38,108 +37,6 @@ describe('computeStripCap', () => {
     expect(computeStripCap(10, 0.33)).toBe(3)
     // floor(7 * 0.80) = floor(5.6) = 5 (not 6)
     expect(computeStripCap(7, 0.80)).toBe(5)
-  })
-})
-
-// ──────────────────────────────────────────────
-// recommendRefCount
-// ──────────────────────────────────────────────
-
-describe('recommendRefCount', () => {
-  it('returns zeros for an empty competition list', () => {
-    expect(recommendRefCount([], 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 0 })
-  })
-
-  it('sabre-heavy: all refs are three-weapon, foil/epee surplus is zero', () => {
-    const comps = [
-      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 70 }), // 10 pools
-      makeCompetition({ id: 's2', weapon: Weapon.SABRE, fencer_count: 35 }), // 5 pools
-    ]
-    // peakSabrePools=15, peakSabreDe=10, max=15; peakFoilEpee=0 → three_weapon=15, foil_epee=0
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 15, foil_epee: 0 })
-  })
-
-  it('foil/epee only: three_weapon=0, all go to foil_epee', () => {
-    const comps = [
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 70 }), // 10 pools
-      makeCompetition({ id: 'e1', weapon: Weapon.EPEE, fencer_count: 35 }), // 5 pools
-    ]
-    // peakFoilEpeePools=15, peakFoilEpeeDe=10, max=15; peakSabre=0 → three_weapon=0, foil_epee=15
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 15 })
-  })
-
-  it('mixed weapons: foil/epee refs are the surplus beyond the sabre crew', () => {
-    const comps = [
-      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 70 }), // 10 pools
-      makeCompetition({ id: 's2', weapon: Weapon.SABRE, fencer_count: 35 }), // 5 pools
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 140 }), // 20 pools
-      makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 70 }),  // 10 pools
-    ]
-    // peakSabre: max(15 pools, 10 DE) = 15. peakFoilEpee: max(30 pools, 10 DE) = 30.
-    // three_weapon=15, foil_epee = 30 − 15 = 15
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 15, foil_epee: 15 })
-  })
-
-  it('uses only the top-2 events per weapon class', () => {
-    // Third-largest events should not contribute to peak
-    const comps = [
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 140 }), // 20 pools
-      makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 70 }),  // 10 pools
-      makeCompetition({ id: 'f3', weapon: Weapon.FOIL, fencer_count: 336 }), // 48 pools — 3rd! (MAX_FENCERS, so the largest real event)
-    ]
-    // Pool counts sorted desc: f3=48, f1=20, f2=10. Top-2 are f3 and f1; f2 is excluded.
-    // peak foil/epee = 48 + 20 = 68; three_weapon=0
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 68 })
-  })
-
-  it('scales with refsPerPool', () => {
-    const comps = [
-      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 35 }), // 5 pools
-    ]
-    // peakSabre: max(5*2=10 pools, 4 DE – bracket 64, video ask min(4, 32)) = 10 → three_weapon=10
-    expect(recommendRefCount(comps, 2, makeConfig())).toEqual({ three_weapon: 10, foil_epee: 0 })
-  })
-
-  it('DE demand exceeds pool demand when the video ask is high and fencer count is low', () => {
-    // 14 fencers = 2 pools → pool demand = 2
-    // DE: bracket 16, video ask min(4, 16/2) = 4 (METHODOLOGY.md §DE Modes).
-    // DE demand = DE_REFS(1) × 4 = 4 (one referee per strip, no pod captains).
-    const comps = [
-      makeCompetition({
-        id: 'de-heavy',
-        weapon: Weapon.FOIL,
-        fencer_count: 14,
-      }),
-    ]
-    // max(2 pools, 4 DE) = 4 → foil_epee=4
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 4 })
-  })
-
-  it('staged DE video-stage contention drives demand above per-class peaks', () => {
-    // 3 foil competitions with STAGED DEs, 14 fencers each: bracket 16, video ask min(4, 8) = 4
-    // Pool demand: 14 fencers = 2 pools each. Top-2 = 4.
-    // DE demand per comp: DE_REFS(1) × 4 = 4. Top-2 = 8.
-    // Per-class peak = max(4 pools, 8 DE) = 8
-    // Video-stage sum: 3 × 4 = 12 > 8 → bumps foil_epee to 12
-    const comps = [
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED }),
-      makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED }),
-      makeCompetition({ id: 'f3', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED }),
-    ]
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 12 })
-  })
-
-  it('mixed: one weapon class pool-dominant, another DE-dominant', () => {
-    const comps = [
-      // Sabre: 70 fencers = 10 pools (pool-dominant). DE demand = video ask min(4, 128/2) = 4.
-      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 70 }),
-      // Foil: 14 fencers = 2 pools, bracket 16 → DE demand = min(4, 8) = 4 (DE-dominant)
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 14 }),
-    ]
-    // peakSabre = max(10 pools, 4 DE) = 10
-    // peakFoilEpee = max(2 pools, 4 DE) = 4
-    // three_weapon=10, foil_epee = max(0, 4 - 10) = 0
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 10, foil_epee: 0 })
   })
 })
 

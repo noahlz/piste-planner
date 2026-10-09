@@ -10,11 +10,11 @@ import { isSizeableCount } from '../../src/engine/pools.ts'
 import { initialAnalysis } from '../../src/engine/analysis.ts'
 import { validateConfig } from '../../src/engine/validation.ts'
 import { deriveEventSchedule, estimateEventFootprint } from '../../src/engine/derive.ts'
-import { flagFlightingCandidates, recommendRefCount } from '../../src/engine/stripBudget.ts'
+import { flagFlightingCandidates } from '../../src/engine/stripBudget.ts'
 import { suggestFlightingGroups, validateFlightingGroup } from '../../src/engine/flighting.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { busiestDayCompetitors, scanStripCounts } from '../../src/engine/stripSearch.ts'
-import { BottleneckRule, CutMode, ValidationMode, Weapon } from '../../src/engine/types.ts'
+import { BottleneckRule, CutMode, ValidationMode } from '../../src/engine/types.ts'
 import type { Competition } from '../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makePlacement } from '../helpers/factories.ts'
 
@@ -127,15 +127,9 @@ describe('deriveEventSchedule and estimateEventFootprint give no result for an u
   })
 })
 
-describe('referee and flighting suggestions skip an unsizeable event', () => {
-  const sabre = (id: string, n: number) => event(id, n, { weapon: Weapon.SABRE })
+describe('flighting suggestions skip an unsizeable event', () => {
   // A pool strip cap of 0, so any sizeable event is a candidate.
   const zeroCap = { ...config, max_pool_strip_pct: 0 }
-
-  it.each(UNSIZEABLE)('recommendRefCount: an extra sabre event at %s changes nothing', (n) => {
-    const without = recommendRefCount([sabre('a', 40)], 1, config)
-    expect(recommendRefCount([sabre('a', 40), sabre('x', n)], 1, config)).toEqual(without)
-  })
 
   it.each(UNSIZEABLE)('flagFlightingCandidates: %s is never a candidate', (n) => {
     expect(flagFlightingCandidates([event('x', n)], zeroCap)).toEqual([])
