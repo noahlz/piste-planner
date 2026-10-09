@@ -109,8 +109,13 @@ describe('unseatedPhases against the engine\'s pinned-unclaimed warnings', () =>
   // §Weapon Balance) re-colours the day maps of B1, B3, B5, B6, B7 and B8, and
   // B6 places 53 events (from 51), so each re-run pins a different board. B1
   // and B7 hold although their day maps moved, and B2 and B4 are unchanged.
-  const ALL = [8, 14, 11, 18, 4, 53, 8, 47]
-  const HALF = [0, 1, 1, 5, 0, 8, 0, 13]
+  // 021 T6a (2026-10-09): pin-all B8 47 → 28 and pin-half B8 13 → 8. The Vet
+  // co-day stagger binds (METHODOLOGY §Cross-Event Dependency Edges, owner ruling
+  // O1), so B8's age-banded Vet bands start 60 minutes apart instead of
+  // together, and each re-run pins that less crowded board. No day map moves,
+  // and the other seven scenarios hold.
+  const ALL = [8, 14, 11, 18, 4, 53, 8, 28]
+  const HALF = [0, 1, 1, 5, 0, 8, 0, 8]
 
   it.each(SCENARIO_IDS.map((id, i) => [id, ALL[i], HALF[i]] as const))(
     '%s: matches the warnings after a pin-all (%i) and a pin-half (%i) re-run',
@@ -150,7 +155,10 @@ describe('zero-length and empty phases are never phases', () => {
     const r = none.schedule[V80]
     // 021 T4 (2026-10-09): 3570 → 635. Weapon balance moves V80's co-day group
     // from day 2 to day 0, and its round of 16 stays zero-length there.
-    expect([r.de_round_of_16_start, r.de_round_of_16_end]).toEqual([635, 635])
+    // 021 T6a (2026-10-09): 635 → 575. The Vet co-day stagger binds, so V80, the
+    // oldest band, starts its pools at day start (it started at day start + 60,
+    // with the younger bands it now leads), and every phase after moves 60 earlier.
+    expect([r.de_round_of_16_start, r.de_round_of_16_end]).toEqual([575, 575])
     expect(phaseSpans(r).map(s => s.phase)).toContain(Phase.POOLS)
     expect(phaseSpans(r).map(s => s.phase)).not.toContain(Phase.DE_ROUND_OF_16)
 
@@ -160,7 +168,7 @@ describe('zero-length and empty phases are never phases', () => {
     // still a zero-length window with no allocation, and only the guards in
     // `phaseSpans` and `unseatedPhases` keep it out.
     const r2 = all.schedule[V80]
-    expect([r2.de_round_of_16_start, r2.de_round_of_16_end]).toEqual([635, 635])
+    expect([r2.de_round_of_16_start, r2.de_round_of_16_end]).toEqual([575, 575])
     const seated = all.strip_allocations.flat().some(a => a.event_id === V80 && a.phase === Phase.DE_ROUND_OF_16)
     expect(seated).toBe(false)
     expect(unseatedPhases(all).has(phaseKey(V80, Phase.DE_ROUND_OF_16))).toBe(false)

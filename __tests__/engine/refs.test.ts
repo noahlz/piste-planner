@@ -344,6 +344,14 @@ describe('scheduleAll reports the peak of its own timeline (017 T9)', () => {
    * JR-W-SABRE-IND), day 2 156/70 → 158/64, B8 day 0 212/56 → 136/42, day 1
    * 146/60 → 158/48, day 2 136/48 → 158/100. B1 day 1, B2 and B4 hold. The rows
    * equal the drift ledger's `refRequirementsByDay`.
+   *
+   * 021 T6a (2026-10-09): the Vet co-day stagger binds (METHODOLOGY §Cross-Event
+   * Dependency Edges, owner ruling O1). On each B8 day the age-banded Vet bands
+   * of a gender and weapon no longer start together: each younger band's pools
+   * start 60 minutes after the next-older band's, so fewer pools overlap at the
+   * peak. B8 day 0 136/42 → 108/36, day 1 158/48 → 130/32, day 2 158/100 →
+   * 136/100. No day map moves, and every other row holds. The rows equal the
+   * drift ledger's `refRequirementsByDay`.
    */
   const MOVED: [ScenarioId, number, { total: number; sabre: number }][] = [
     ['B1', 1, { total: 210, sabre: 64 }], ['B1', 2, { total: 188, sabre: 54 }],
@@ -351,7 +359,7 @@ describe('scheduleAll reports the peak of its own timeline (017 T9)', () => {
     ['B4', 1, { total: 96, sabre: 44 }], ['B4', 2, { total: 94, sabre: 54 }],
     ['B6', 0, { total: 80, sabre: 26 }], ['B6', 1, { total: 64, sabre: 40 }], ['B6', 2, { total: 66, sabre: 32 }],
     ['B7', 0, { total: 216, sabre: 156 }], ['B7', 2, { total: 158, sabre: 64 }],
-    ['B8', 0, { total: 136, sabre: 42 }], ['B8', 1, { total: 158, sabre: 48 }], ['B8', 2, { total: 158, sabre: 100 }],
+    ['B8', 0, { total: 108, sabre: 36 }], ['B8', 1, { total: 130, sabre: 32 }], ['B8', 2, { total: 136, sabre: 100 }],
   ]
 
   it.each(MOVED)('%s day %i reads the spec\'s timeline peak', (id, day, expected) => {

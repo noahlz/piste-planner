@@ -67,7 +67,16 @@ import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand, refDemandFr
 import { phaseRequiresVideo, unseatedPhases } from './unseated.ts'
 import { compareIds } from './order.ts'
 import { findIndividualCounterpart } from './crossover.ts'
-import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS } from './constants.ts'
+import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS, VET_STAGGER_MINS } from './constants.ts'
+import {
+  WaitAnchor,
+  PredecessorState,
+  passOverFailed,
+  resolveWaits,
+  assertAcyclicWaits,
+  assertEveryEventResolved,
+} from './crossEventWaits.ts'
+import type { CrossEventWait, PredecessorStatus } from './crossEventWaits.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
 import { constraintScore } from './dayAssignment.ts'
@@ -141,6 +150,15 @@ interface EventState {
   // (absolute minutes), or null. Set by `applyCrossEventEdges` on the older
   // side of a pair; the loop's seed and the retry reset apply it.
   group1_window_floor: number | null
+  // The waits this event's first phase owes other events on its day (METHODOLOGY
+  // §Cross-Event Dependency Edges), set by `applyCrossEventEdges`. Topology,
+  // fixed for the run: a retry resets phases, not waits.
+  cross_event_waits: CrossEventWait[]
+  // The first phase's ready-time floor once every wait is resolved (absolute
+  // minutes, snapped) and the predecessors that set it, or null when the event
+  // has no wait or every wait lapsed. Stored here rather than on the node so the
+  // retry reset keeps it, as `group1_window_floor` is kept.
+  cross_event_floor: { time: number; binding: readonly string[] } | null
 }
 
 /** A regional Group 1 pair sharing a day, whose older side `applyCrossEventEdges` floored. */
@@ -152,7 +170,8 @@ interface RegionalWindowPair {
 /**
  * One node in the phase dependency DAG. Phase nodes are owned by a single event.
  * `successor_index` is the index of the next phase node in the same event's
- * `phases` array; -1 means terminal. Cross-event edges set `cross_event_predecessors`.
+ * `phases` array, and -1 means terminal. Cross-event waits live on the event
+ * (`EventState.cross_event_waits`) and bind its first node.
  */
 interface PhaseNode {
   event_id: string
@@ -176,9 +195,6 @@ interface PhaseNode {
   video_required: boolean
   // The cap to apply (pool_cap or de_cap).
   cap_kind: 'POOL' | 'DE'
-  // For Flight B and DE phases: explicit cross-event deps to enforce indv→team
-  // and Vet sibling order.
-  cross_event_predecessors: { event_id: string; min_gap: number }[]
 }
 
 const MAX_DEFERS_PER_PHASE = 16
@@ -304,7 +320,7 @@ export function scheduleAllConcurrent(
   // Build per-event state & phase nodes.
   const events = buildEventStates(remaining, dayMap, config)
 
-  // Wire cross-event dependency edges (indv→team, Vet sibling order) and the
+  // Wire the cross-event waits (indv→team, the Vet co-day stagger) and the
   // regional Group 1 window's floors.
   const windowPairs = applyCrossEventEdges(events, config)
 
@@ -481,6 +497,8 @@ function buildEventStates(
       constraint_score: constraintScore(comp, competitions, config),
       permanently_failed: false,
       group1_window_floor: null,
+      cross_event_waits: [],
+      cross_event_floor: null,
     })
   }
   return events
@@ -529,7 +547,6 @@ function buildPhaseNodes(
       de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
-      cross_event_predecessors: [],
     })
     nodes.push({
       event_id: comp.id,
@@ -546,7 +563,6 @@ function buildPhaseNodes(
       de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
-      cross_event_predecessors: [],
     })
   } else {
     // Standard non-flighted pools.
@@ -566,7 +582,6 @@ function buildPhaseNodes(
       de_rounds: [],
       video_required: false,
       cap_kind: 'POOL',
-      cross_event_predecessors: [],
     })
   }
 
@@ -591,7 +606,6 @@ function buildPhaseNodes(
       de_rounds: general,
       video_required: false, // SINGLE_STAGE never uses video
       cap_kind: 'DE',
-      cross_event_predecessors: [],
     })
   } else {
     // STAGED: prelims (only when the bracket is larger than the video-stage
@@ -612,7 +626,6 @@ function buildPhaseNodes(
         de_rounds: general,
         video_required: false,
         cap_kind: 'DE',
-        cross_event_predecessors: [],
       })
     }
 
@@ -632,7 +645,6 @@ function buildPhaseNodes(
       de_rounds: video,
       video_required: r16VideoRequired,
       cap_kind: 'DE',
-      cross_event_predecessors: [],
     })
   }
 
@@ -648,7 +660,7 @@ function buildPhaseNodes(
 }
 
 // ──────────────────────────────────────────────
-// Cross-event edges (indv→team, Vet sibling order, regional Group 1 window)
+// Cross-event edges (indv→team, the Vet co-day stagger, regional Group 1 window)
 // ──────────────────────────────────────────────
 
 const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
@@ -663,62 +675,82 @@ const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
  * Wires the cross-event dependencies of METHODOLOGY §Cross-Event Dependency
  * Edges and returns the regional Group 1 pairs it floored, for
  * `regionalWindowFindings` to judge once the loop has run.
+ *
+ * The two waits go on the waiter's `cross_event_waits`, and the loop's held set
+ * makes them bind whatever order it meets the events in (`runConcurrentLoop`).
+ * Only events in `events` can be waited on, so a predecessor that validation
+ * excluded, or one with no day, has no wait at all.
  */
 function applyCrossEventEdges(events: EventState[], config: TournamentConfig): RegionalWindowPair[] {
   const byId = new Map(events.map(e => [e.competition.id, e]))
+  const competitions = events.map(e => e.competition)
 
   for (const event of events) {
     const comp = event.competition
 
-    // Indv→team gap. When a TEAM event lands on the same day as its individual
-    // counterpart, force the team's first phase to start at indiv.last + INDIV_TEAM_MIN_GAP_MINS.
+    // Indv→team gap. A team sharing a day with its individual counterpart (only
+    // through a pin or the least-bad fallback) is not ready before the
+    // individual's last phase ends + INDIV_TEAM_MIN_GAP_MINS.
     if (comp.event_type === EventType.TEAM) {
-      const ind = findIndividualCounterpart(comp, events.map(e => e.competition))
-      if (ind) {
-        const indEvent = byId.get(ind.id)
-        if (indEvent && indEvent.assigned_day === event.assigned_day) {
-          event.phases[0].cross_event_predecessors.push({
-            event_id: ind.id,
-            min_gap: config.INDIV_TEAM_MIN_GAP_MINS,
-          })
-        }
+      const ind = findIndividualCounterpart(comp, competitions)
+      const indEvent = ind ? byId.get(ind.id) : undefined
+      if (indEvent && indEvent.assigned_day === event.assigned_day) {
+        event.cross_event_waits.push({
+          waiter_id: comp.id,
+          predecessor_id: indEvent.competition.id,
+          anchor: WaitAnchor.TERMINAL_END,
+          gap: config.INDIV_TEAM_MIN_GAP_MINS,
+        })
       }
     }
 
-    // Vet age-banded sibling order. The younger sibling's pools wait on the
-    // older sibling's last phase end + ADMIN_GAP_MINS.
-    if (
-      comp.category === Category.VETERAN &&
-      comp.event_type === EventType.INDIVIDUAL &&
-      comp.vet_age_group !== null &&
-      VET_AGE_BANDED_GROUPS.has(comp.vet_age_group)
-    ) {
-      const myAgeWeight = vetAgeWeight(comp.vet_age_group)
-      for (const other of events) {
-        const oc = other.competition
-        if (oc.id === comp.id) continue
-        if (oc.category !== Category.VETERAN) continue
-        if (oc.event_type !== EventType.INDIVIDUAL) continue
-        if (oc.vet_age_group === null) continue
-        if (!VET_AGE_BANDED_GROUPS.has(oc.vet_age_group)) continue
-        if (oc.gender !== comp.gender) continue
-        if (oc.weapon !== comp.weapon) continue
-        if (other.assigned_day !== event.assigned_day) continue
-
-        const otherWeight = vetAgeWeight(oc.vet_age_group)
-        // Younger has higher weight in this map (VET40 > VET80).
-        // The older one finishes first; younger waits on it.
-        if (myAgeWeight > otherWeight) {
-          event.phases[0].cross_event_predecessors.push({
-            event_id: oc.id,
-            min_gap: config.ADMIN_GAP_MINS,
-          })
-        }
-      }
+    // Vet co-day stagger (owner ruling O1). A band's pools are not ready before
+    // the pools of the next-older band present on its day start +
+    // VET_STAGGER_MINS. One wait, to that band only: the bands further up are
+    // ordered through it, and when it is never placed the wait passes up to
+    // them (`passOverFailed`).
+    const older = isAgeBandedVet(comp) ? nextOlderBandOnDay(event, events) : null
+    if (older) {
+      event.cross_event_waits.push({
+        waiter_id: comp.id,
+        predecessor_id: older.competition.id,
+        anchor: WaitAnchor.FIRST_POOL_START,
+        gap: VET_STAGGER_MINS,
+      })
     }
   }
 
+  assertAcyclicWaits(events.flatMap(e => e.cross_event_waits))
   return applyRegionalWindowFloors(events, config)
+}
+
+function isAgeBandedVet(comp: Competition): boolean {
+  return comp.category === Category.VETERAN
+    && comp.event_type === EventType.INDIVIDUAL
+    && comp.vet_age_group !== null
+    && VET_AGE_BANDED_GROUPS.has(comp.vet_age_group)
+}
+
+/**
+ * The age-banded Vet individual of the same gender and weapon on the event's
+ * day whose band is the closest older one, or null when the event is the oldest
+ * band present.
+ */
+function nextOlderBandOnDay(event: EventState, events: EventState[]): EventState | null {
+  const comp = event.competition
+  const myWeight = vetAgeWeight(comp.vet_age_group!)
+  let best: EventState | null = null
+  for (const other of events) {
+    const oc = other.competition
+    if (oc.id === comp.id || !isAgeBandedVet(oc)) continue
+    if (oc.gender !== comp.gender || oc.weapon !== comp.weapon) continue
+    if (other.assigned_day !== event.assigned_day) continue
+    // A lower weight is an older band (VET80 0 … VET40 4).
+    const w = vetAgeWeight(oc.vet_age_group!)
+    if (w >= myWeight) continue
+    if (best === null || w > vetAgeWeight(best.competition.vet_age_group!)) best = other
+  }
+  return best
 }
 
 /**
@@ -727,10 +759,9 @@ function applyCrossEventEdges(events: EventState[], config: TournamentConfig): R
  * pair of one weapon and gender shares a day, the older side's pools are not
  * ready before day start + 4 hours while the younger side starts from day start.
  *
- * The floor is fixed and stored on the event rather than pushed as a
- * `cross_event_predecessors` edge, so the seed and the retry reset apply it to
- * the first phase – a predecessor edge resolves only once its predecessor has
- * run, and the retry's reset to day start would undo it. Every pair sets the
+ * The floor is fixed from day start and stored on the event, so the seed and
+ * the retry reset apply it to the first phase. It is not a cross-event wait: it
+ * depends on no other event's placement. Every pair sets the
  * same floor, so windows do not stack. Keyed by category, weapon and gender
  * alone, for any mix of individual and team events (024 plan D10).
  */
@@ -791,15 +822,50 @@ function regionalWindowFindings(pairs: RegionalWindowPair[], state: GlobalState)
 }
 
 /**
- * The first phase's ready time at the seed and at a retry: day start, held
- * back by the event's earliest start and by its regional window floor.
+ * The first phase's ready time with no cross-event wait: day start, held back
+ * by the event's earliest start and by its regional window floor. This is also
+ * where a lapsed wait leaves the event (O8).
  */
-function firstPhaseReadyTime(event: EventState, config: TournamentConfig): number {
+function unwaitedReadyTime(event: EventState, config: TournamentConfig): number {
   return Math.max(
     dayStart(event.assigned_day, config),
     event.competition.earliest_start,
     event.group1_window_floor ?? -Infinity,
   )
+}
+
+/**
+ * The first phase's ready time when it enters the queue – at the seed, at a
+ * held event's release, and at a retry: `unwaitedReadyTime` held back by the
+ * resolved cross-event floor.
+ */
+function firstPhaseReadyTime(event: EventState, config: TournamentConfig): number {
+  return Math.max(unwaitedReadyTime(event, config), event.cross_event_floor?.time ?? -Infinity)
+}
+
+/**
+ * One `cross-event-dependency-delay` INFO when the cross-event floor pushed the
+ * first phase past where it would be with no wait, `delay_mins` equal to the
+ * push (METHODOLOGY §Cross-Event Dependency Edges). Called wherever the floor
+ * is applied – the seed, a release and a retry – and tagged with the attempt,
+ * so a rolled-back attempt takes its INFO with it.
+ */
+function crossEventDelayFinding(event: EventState, config: TournamentConfig): Bottleneck | null {
+  const delay = firstPhaseReadyTime(event, config) - unwaitedReadyTime(event, config)
+  if (delay <= 0 || event.cross_event_floor === null) return null
+  const id = event.competition.id
+  const binding = event.cross_event_floor.binding
+  return {
+    competition_id: id,
+    phase: Phase.SEQUENCING,
+    cause: BottleneckCause.SEQUENCING_CONSTRAINT,
+    rule: BottleneckRule.CROSS_EVENT_DEPENDENCY_DELAY,
+    subjects: [id, ...binding].sort(compareIds),
+    severity: BottleneckSeverity.INFO,
+    delay_mins: delay,
+    message: `${id} ${event.phases[0].phase_label}: delayed ${delay}min by its cross-event wait on ${binding.join(', ')}`,
+    attempt_id: event.attempt_id,
+  }
 }
 
 /**
@@ -929,23 +995,66 @@ function runConcurrentLoop(
   config: TournamentConfig,
   pinnedIds: ReadonlySet<string> = NO_PINNED_IDS,
 ): void {
-  // Seed the ready queue with each event's first phase node. Initial
-  // ready_time = max(dayStart, earliest_start, regional window floor) –
-  // `firstPhaseReadyTime`. Cross-event predecessors are
-  // resolved lazily inside the loop (the predecessor may not be RUNNING yet
-  // when we seed).
+  // Seed the ready queue with each event's first phase node, at
+  // `firstPhaseReadyTime`.
   //
   // A pinned event is already committed by `preclaimPinnedEvents`, so none of
   // its nodes enters `ready` — which is what keeps `handlePhaseFailure`, the
   // defer bump and the attempt-2 retry from ever seeing a pin. An empty
   // `pinnedIds` leaves the seed exactly as it was (FR-058).
+  //
+  // Cross-event waits (021 T6a). An event whose wait names an unplaced
+  // predecessor is held out of `ready` until that predecessor's anchor phase is
+  // placed or it fails for good, then queued at its floor. A predecessor that
+  // fails for good is treated as absent (O8): a Vet band's wait passes up to
+  // the next-older band still in play, and lapses only when none is left
+  // (`passOverFailed`). A pinned predecessor was placed before the loop, so its
+  // waiter is queued at the seed. Holding is what makes the wait bind: a
+  // re-queue at the same ready time would be re-picked every iteration
+  // (`compareNodes` has nothing that changes between them), and the defer path
+  // would spend `defer_count` into a false retry.
   const ready: PhaseNode[] = []
-  for (const event of events) {
-    if (pinnedIds.has(event.competition.id)) continue
+  const held = new Set<EventState>()
+  const allWaits = events.flatMap(e => e.cross_event_waits)
+  const failedForGood = (id: string): boolean => findEventState(events, id)?.permanently_failed ?? true
+  const statusOf = (wait: CrossEventWait): PredecessorStatus => predecessorStatus(wait, events)
+
+  /** Queues the event's first phase at its floor, or holds it while a wait is pending. */
+  const enqueueFirstPhase = (event: EventState): void => {
+    const waits = event.cross_event_waits
+      .map(w => passOverFailed(w, allWaits, failedForGood))
+      .filter((w): w is CrossEventWait => w !== null)
+    const resolution = resolveWaits(waits, statusOf)
+    if (resolution.held) {
+      held.add(event)
+      return
+    }
+    held.delete(event)
+    event.cross_event_floor = resolution.floor === null
+      ? null
+      : { time: snapToSlot(resolution.floor), binding: resolution.binding }
     const first = event.phases[0]
     first.ready_time = firstPhaseReadyTime(event, config)
     first.state = PhaseState.READY
     ready.push(first)
+    const finding = crossEventDelayFinding(event, config)
+    if (finding) state.bottlenecks.push(finding)
+  }
+
+  /**
+   * Re-checks every held event after an anchor phase was placed or an event
+   * failed for good. All of them, not only the direct waiters: a wait passed
+   * over a failed band now names a band further up, which may be the one just
+   * placed. One pass over a snapshot of the held set, so it is bounded by the
+   * event count.
+   */
+  const recheckHeld = (): void => {
+    for (const waiter of [...held]) enqueueFirstPhase(waiter)
+  }
+
+  for (const event of events) {
+    if (pinnedIds.has(event.competition.id)) continue
+    enqueueFirstPhase(event)
   }
 
   const totalPhaseCount = events.reduce((sum, e) => sum + e.phases.length, 0)
@@ -972,27 +1081,6 @@ function runConcurrentLoop(
       continue
     }
 
-    // Resolve cross-event predecessor wait times: a predecessor is "done" once
-    // its event's terminal phase is RUNNING with a known end_time, OR the
-    // predecessor's last phase has a non-zero end_time.
-    const predReady = predecessorReadyTime(node, events)
-    if (predReady !== null && predReady > node.ready_time) {
-      const oldReady = node.ready_time
-      node.ready_time = predReady
-      // Emit SEQUENCING_CONSTRAINT.
-      state.bottlenecks.push({
-        competition_id: event.competition.id,
-        phase: Phase.SEQUENCING,
-        cause: BottleneckCause.SEQUENCING_CONSTRAINT,
-        rule: BottleneckRule.CROSS_EVENT_DEPENDENCY_DELAY,
-        subjects: [event.competition.id],
-        severity: BottleneckSeverity.INFO,
-        delay_mins: predReady - oldReady,
-        message: `${event.competition.id} ${node.phase_label}: delayed ${predReady - oldReady}min by cross-event dependency`,
-        attempt_id: event.attempt_id,
-      })
-    }
-
     // Snap ready_time to slot boundary.
     node.ready_time = snapToSlot(node.ready_time)
 
@@ -1012,6 +1100,9 @@ function runConcurrentLoop(
         // Terminal phase succeeded — record the result.
         commitEventResult(event, state, config)
       }
+      // The two anchors a wait can name: the first pool phase's start and the
+      // last phase's end. Either placement may release a held waiter.
+      if (node.index === 0 || node.successor_index === -1) recheckHeld()
     } else if (allocated.outcome === 'defer') {
       // Push back with new ready_time. Monotonicity check.
       if (allocated.next_ready_time <= node.ready_time) {
@@ -1024,6 +1115,9 @@ function runConcurrentLoop(
       if (node.defer_count > MAX_DEFERS_PER_PHASE) {
         // Treat as failure cascade.
         handlePhaseFailure(node, event, ready, state, config)
+        // A predecessor that failed for good releases its waiters, which then
+        // wait as if it did not exist (O8).
+        if (event.permanently_failed) recheckHeld()
         continue
       }
       // Emit NO_WINDOW_DIAGNOSTIC.
@@ -1063,8 +1157,41 @@ function runConcurrentLoop(
     } else {
       // outcome === 'fail' — cascade and possibly retry.
       handlePhaseFailure(node, event, ready, state, config)
+      if (event.permanently_failed) recheckHeld()
     }
   }
+
+  // The post-loop bound (constitution IV): every event the loop owned is placed
+  // or failed for good, so a held event whose release never came cannot vanish
+  // as "unplaced" with no finding.
+  assertEveryEventResolved(
+    events
+      .filter(e => !pinnedIds.has(e.competition.id))
+      .map(e => ({
+        id: e.competition.id,
+        resolved: state.schedule[e.competition.id] !== undefined || e.permanently_failed,
+      })),
+    events.flatMap(e => e.cross_event_waits),
+  )
+}
+
+/**
+ * Where a wait's predecessor stands. Placed once its anchor phase is RUNNING –
+ * the first phase's start for `FIRST_POOL_START`, the last phase's end for
+ * `TERMINAL_END`. A RUNNING node's `ready_time` is its start
+ * (`onPhaseAllocated`). Called only after `passOverFailed`, so the predecessor
+ * is one the loop owns and has not failed for good.
+ */
+function predecessorStatus(wait: CrossEventWait, events: EventState[]): PredecessorStatus {
+  const predecessor = findEventState(events, wait.predecessor_id)
+  if (predecessor === null || predecessor.permanently_failed) {
+    throw new Error(`concurrentScheduler: ${wait.waiter_id} waits on ${wait.predecessor_id}, which is not in play`)
+  }
+  const phases = predecessor.phases
+  const anchor = wait.anchor === WaitAnchor.FIRST_POOL_START ? phases[0] : phases[phases.length - 1]
+  if (anchor.state !== PhaseState.RUNNING) return { state: PredecessorState.PENDING }
+  const time = wait.anchor === WaitAnchor.FIRST_POOL_START ? anchor.ready_time : anchor.end_time
+  return { state: PredecessorState.PLACED, time }
 }
 
 /**
@@ -1102,10 +1229,14 @@ function handlePhaseFailure(
       message: `${event.competition.id}: attempt 1 failed at ${node.phase_label}, retrying`,
       attempt_id: 1,
     })
-    // Reset all phases to PENDING/READY at dayStart.
+    // Reset all phases to PENDING/READY at the first phase's ready time, which
+    // keeps the cross-event floor. Attempt 1's dependency INFO went with the
+    // rollback above, so attempt 2 carries its own.
     event.attempt_id = 2
     resetEventPhases(event, config)
     ready.push(event.phases[0])
+    const finding = crossEventDelayFinding(event, config)
+    if (finding) state.bottlenecks.push(finding)
   } else {
     // Attempt 2 failed — permanent.
     releaseEventAllocations(state, event.competition.id, 2)
@@ -1126,8 +1257,9 @@ function handlePhaseFailure(
 
 /**
  * Resets an event's phase nodes to PENDING/READY for retry. The first node is
- * READY at dayStart, or at the event's regional window floor when it has one;
- * the rest are PENDING with cleared timestamps and defer counts.
+ * READY at `firstPhaseReadyTime` – day start, held back by the event's regional
+ * window floor and its cross-event floor when it has them – and the rest are
+ * PENDING with cleared timestamps and defer counts.
  */
 function resetEventPhases(event: EventState, config: TournamentConfig): void {
   for (let i = 0; i < event.phases.length; i++) {
@@ -1556,26 +1688,6 @@ function findEventState(events: EventState[], event_id: string): EventState | nu
   return null
 }
 
-/**
- * Computes the ready_time floor imposed by cross-event predecessors. Returns
- * null when no predecessor exists. Predecessor "done time" comes from the
- * event's terminal phase end_time (RUNNING) or its de_total_end on the schedule.
- */
-function predecessorReadyTime(node: PhaseNode, events: EventState[]): number | null {
-  if (node.cross_event_predecessors.length === 0) return null
-  let maxFloor = -Infinity
-  for (const dep of node.cross_event_predecessors) {
-    const depEvent = findEventState(events, dep.event_id)
-    if (depEvent === null) continue
-    // Predecessor must have all phases RUNNING for us to know its end.
-    const depEnd = depEvent.phases[depEvent.phases.length - 1].end_time
-    if (depEvent.phases[depEvent.phases.length - 1].state !== PhaseState.RUNNING) continue
-    const floor = depEnd + dep.min_gap
-    if (floor > maxFloor) maxFloor = floor
-  }
-  if (maxFloor === -Infinity) return null
-  return maxFloor
-}
 
 // ──────────────────────────────────────────────
 // postScheduleWarnings — METHODOLOGY.md §Phase 7: Post-Schedule Warnings

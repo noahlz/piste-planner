@@ -142,10 +142,18 @@ describe('eventTimeSegments on the reference tournaments', () => {
   // O7) re-colours their day maps, the same six scenarios the drift ledger
   // moves. B6 places 51 → 53 events (102 → 106 segments). B2 and B4 are
   // unchanged, and the other counts hold.
+  //
+  // 021 T6a (2026-10-09): the B8 digest moved on purpose. The Vet co-day
+  // stagger binds (METHODOLOGY §Cross-Event Dependency Edges, owner ruling O1),
+  // so B8's age-banded Vet bands start 60 minutes apart, and four D1 team events
+  // on the same days start earlier as a knock-on (none waits on anything). Eight
+  // events whose pool starts hold see their DE phases shift by strip contention
+  // (JR-W-FOIL-IND ends 70 minutes earlier, D1-W-FOIL-IND 65 later). No day map
+  // moves, B8 keeps its 148 segments, and B1–B7 are unchanged.
   const EXPECTED = {
     B1: ['2c69ff46cf84f560', 66], B2: ['38543891f24c5f71', 66], B3: ['7a643084a6030fbc', 72],
     B4: ['d2c0a3c4be181709', 48], B5: ['18197dd2e2268e2e', 24], B6: ['e5a90a710470baa3', 106],
-    B7: ['12848ca4621bcf3a', 54], B8: ['ec998d1f7c066d29', 148],
+    B7: ['12848ca4621bcf3a', 54], B8: ['70c2a3145dc7071a', 148],
   } as const
 
   it.each(SCENARIO_IDS)('%s: draws the same segments as before', (id) => {

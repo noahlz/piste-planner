@@ -64,7 +64,7 @@ export const DAY_LENGTH_MINS = 600
 // (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip Count Suggestion).
 export const COMPETITORS_PER_STRIP_PER_DAY = 14
 // Gap between a phase and its successor (pools to DE, DE prelims to the next
-// stage, an older Vet sibling to its younger one). Flight A to Flight B is
+// stage). Flight A to Flight B is
 // exempt: FLIGHT_BUFFER_MINS replaces it there. Its floor is the results-review
 // period between rounds, 15 min national, 10 regional, 5 local (Ops Manual p.18,
 // METHODOLOGY §Timing Constants). No gap sits between DE rounds inside one DE
@@ -481,6 +481,15 @@ export const GROUP_1_SOFT_TYPES: ReadonlySet<TournamentType> = new Set<Tournamen
 // day start + 4 hours (METHODOLOGY §Regional Types: Soft, With a Time-of-Day
 // Window, §Cross-Event Dependency Edges).
 export const REGIONAL_GROUP_1_WINDOW_MINS = 240
+
+// The Vet co-day stagger: on the co-day of the age-banded Veteran events of one
+// gender and weapon, each younger band's pools are not ready before the
+// next-older present band's pools start + 60 minutes, and no band waits for
+// another to finish (METHODOLOGY §Within-Day Age-Descending Order, §Cross-Event
+// Dependency Edges, Appendix A "Vet co-day stagger", owner ruling O1).
+// Piste Planner's own rule, unsourced (Appendix B). A plain constant, like
+// REGIONAL_GROUP_1_WINDOW_MINS, not a TournamentConfig field.
+export const VET_STAGGER_MINS = 60
 
 // Div 1 and Div 1A of one weapon and gender never share a day, at every type:
 // nearly the same fencers enter both. The manual does not list the pair

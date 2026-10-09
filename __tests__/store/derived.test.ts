@@ -212,10 +212,20 @@ describe('selectDerivedFindings', () => {
    * no longer warns on either day. B8's kept run now warns first 485 / 485 and
    * last 720 / 485, while derived times (no kept run) give the last day alone at
    * 590 / 450, so B8 still tells the kept run from derived times on both halves.
+   *
+   * 021 T6a (2026-10-09): the first-day case moved from B8 to B2. The Vet co-day
+   * stagger binds (METHODOLOGY §Cross-Event Dependency Edges, owner ruling O1)
+   * and lengthens B8's shortest middle day from 485 to 520 minutes, so its
+   * first day (485) no longer warns and its kept run warns on the last day
+   * alone (720 / 520). No scenario now warns on both days, so the halves are
+   * covered by two: B4 the last day (above), and B2 the first day, whose kept
+   * run warns 655 / 650 while derived times give 630 / 550. B1 also warns on
+   * its first day, but derived times give the same 570 / 490, so it cannot
+   * tell the two apart.
    */
   const FIRST_LAST_RULES: string[] = [BottleneckRule.FIRST_DAY_LONGER_THAN_MIDDLE, BottleneckRule.LAST_DAY_LONGER_THAN_MIDDLE]
 
-  function keptRunWarnings(preset: 'B4' | 'B8') {
+  function keptRunWarnings(preset: 'B2' | 'B4') {
     runPreset(preset)
     const state = useStore.getState()
     const { config, competitions } = buildTournamentConfig(state)
@@ -232,11 +242,10 @@ describe('selectDerivedFindings', () => {
     expect(app).toEqual(scheduler)
   })
 
-  it('measures the first and last day on the kept run, as the scheduler does (B8)', () => {
-    const { scheduler, app } = keptRunWarnings('B8')
-    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B8\'s first and last day').toEqual([
-      'First day (Day 1, 485 min) is not shorter than the shortest middle day (485 min)',
-      'Last day (Day 4, 720 min) is not shorter than the shortest middle day (485 min)',
+  it('measures the first day on the kept run, as the scheduler does (B2)', () => {
+    const { scheduler, app } = keptRunWarnings('B2')
+    expect(scheduler.map((b) => b.message), 'premise: the scheduler warns on B2\'s first day').toEqual([
+      'First day (Day 1, 655 min) is not shorter than the shortest middle day (650 min)',
     ])
     expect(app).toEqual(scheduler)
   })
