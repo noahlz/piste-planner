@@ -351,7 +351,7 @@ describe('checkPlacementRules: the regional Group 1 window', () => {
     // before day 1's 12:00 floor, so the window is not honoured even though a
     // later flight B would clear it.
     const flighted = [
-      comp('older-jun', { category: Category.JUNIOR, flighted: true, flighting_group_id: 'g1' }),
+      comp('older-jun', { category: Category.JUNIOR, flighted: true }),
       comp('young-cad', { category: Category.CADET }),
     ]
     const flightAStart = 690

@@ -53,9 +53,6 @@ function findingIdentity(finding: ValidationError): string {
 // D3-explicit: team-requires-individual (event_type),
 //   strip minimum shortfalls (resource_precondition), feasibility.
 // Self-classified:
-//   - flighting_group strip shortfalls — same resource-capacity class as
-//     resource_precondition's "strip minimum shortfalls", D3's explicit policy
-//     item; grouped with it rather than invented as a new bucket.
 //   - feasibility_video — not named separately in D3's text; produced by the
 //     same validateFeasibility() sub-validator as feasibility, on the
 //     identical FEASIBILITY_SLACK-tolerant resource-insufficiency computation
@@ -540,25 +537,6 @@ describe('validateConfig — team event cut_mode (notice: cut-on-team, FR-011)',
     expect(a!.severity).toBe(BottleneckSeverity.WARN)
     expect(b!.kind).toBe(RuleKind.NOTICE)
     expect(a!.kind).toBe(RuleKind.NOTICE)
-  })
-})
-
-describe('validateConfig — flighting group strips exceed strips_total (policy: strip minimum shortfalls)', () => {
-  it('binding ERROR / advisory WARN when flighting group strips_allocated sum exceeds strips_total', () => {
-    const config = makeConfig({ strips_total: 10 })
-    const c1 = makeCompetition({ id: 'fg-1', flighted: true, flighting_group_id: 'group-A', strips_allocated: 8 })
-    const c2 = makeCompetition({ id: 'fg-2', flighted: true, flighting_group_id: 'group-A', strips_allocated: 6 })
-    const { binding, advisory } = validateBoth(config, [c1, c2])
-    expectPolicyPair('flighting_group', binding, advisory)
-  })
-
-  it('does not error when flighting group strips fit within strips_total', () => {
-    const config = makeConfig({ strips_total: 24 })
-    const c1 = makeCompetition({ id: 'fg-1', flighted: true, flighting_group_id: 'group-A', strips_allocated: 8 })
-    const c2 = makeCompetition({ id: 'fg-2', flighted: true, flighting_group_id: 'group-A', strips_allocated: 8 })
-    const { binding, advisory } = validateBoth(config, [c1, c2])
-    expect(binding.filter(e => e.field === 'flighting_group')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'flighting_group')).toHaveLength(0)
   })
 })
 

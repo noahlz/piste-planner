@@ -1,8 +1,7 @@
 import { BottleneckCause, BottleneckRule, BottleneckSeverity, Phase } from './types.ts'
-import type { Competition, FlightingGroup, Bottleneck, TournamentType } from './types.ts'
+import type { Competition, FlightingGroup, Bottleneck } from './types.ts'
 import { ENGINE_FENCER_BOUNDS, computePoolStructure, isSizeableCount } from './pools.ts'
 import type { FencerCountBounds } from './pools.ts'
-import { crossoverPenalty } from './crossover.ts'
 import { forEachCompetitionPair } from './pairs.ts'
 // ──────────────────────────────────────────────
 // suggestFlightingGroups
@@ -122,104 +121,4 @@ export function calculateFlightedStrips(
     strips_for_priority,
     strips_for_flighted,
   }
-}
-
-// ──────────────────────────────────────────────
-// validateFlightingGroup
-// ──────────────────────────────────────────────
-
-/**
- * Validates a flighting group configuration against scheduling constraints.
- *
- * Checks (METHODOLOGY.md §Flighting):
- * 1. Warn if more than one competition on the same day is marked flighted.
- * 2. Warn (FLIGHTING_GROUP_NOT_LARGEST) if the flighted competition is not the
- *    largest by pool count among all competitions on that day.
- * 3. Warn (SAME_DAY_DEMOGRAPHIC_CONFLICT) if the grouped pair has a non-zero
- *    crossover penalty at `tournamentType` (a Group 1 pair is finite only at
- *    the regional types, Ops Manual p.20 – Group 1).
- *
- * Check 2 leaves out a competition `isSizeableCount` rejects, which has no
- * pools to compare (018 T4). `bounds` defaults to the engine's own.
- */
-export function validateFlightingGroup(
-  group: FlightingGroup,
-  competitions: Competition[],
-  dayAssignments: Record<string, number>,
-  tournamentType: TournamentType,
-  bounds: FencerCountBounds = ENGINE_FENCER_BOUNDS,
-): Bottleneck[] {
-  const bottlenecks: Bottleneck[] = []
-
-  const priorityComp = competitions.find(c => c.id === group.priority_competition_id)
-  const flightedComp = competitions.find(c => c.id === group.flighted_competition_id)
-
-  if (!priorityComp || !flightedComp) return bottlenecks
-
-  const flightedDay = dayAssignments[flightedComp.id]
-
-  // Check 1: multiple flighted competitions on the same day
-  const flightedOnDay = competitions.filter(
-    c => c.flighted && dayAssignments[c.id] === flightedDay,
-  )
-  if (flightedOnDay.length > 1) {
-    const flightedIds = flightedOnDay.map(c => c.id).sort()
-    for (const comp of flightedOnDay) {
-      bottlenecks.push({
-        competition_id: comp.id,
-        phase: Phase.FLIGHTING,
-        cause: BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY,
-        rule: BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY,
-        subjects: flightedIds,
-        severity: BottleneckSeverity.WARN,
-        delay_mins: 0,
-        message: `Multiple flighted competitions on day ${flightedDay}: ${flightedOnDay.map(c => c.id).join(', ')}`,
-      })
-    }
-  }
-
-  // Check 2: flighted should be the largest on its day
-  const compsOnDay = competitions.filter(
-    c => dayAssignments[c.id] === flightedDay && isSizeableCount(c.fencer_count, bounds),
-  )
-  const poolCounts = compsOnDay.map(c => ({
-    id: c.id,
-    pools: computePoolStructure(c.fencer_count, c.use_single_pool_override).n_pools,
-  }))
-  const maxPools = Math.max(...poolCounts.map(p => p.pools))
-  const flightedPools = poolCounts.find(p => p.id === flightedComp.id)?.pools ?? 0
-
-  // An unsizeable flighted event has no pool count to compare, not zero pools.
-  if (poolCounts.some(p => p.id === flightedComp.id) && flightedPools < maxPools) {
-    const largestComp = poolCounts.find(p => p.pools === maxPools)
-    bottlenecks.push({
-      competition_id: flightedComp.id,
-      phase: Phase.FLIGHTING,
-      cause: BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST,
-      rule: BottleneckRule.FLIGHTED_NOT_LARGEST,
-      subjects: [flightedComp.id, ...(largestComp ? [largestComp.id] : [])].sort(),
-      severity: BottleneckSeverity.WARN,
-      delay_mins: 0,
-      message: `Flighted competition ${flightedComp.id} (${flightedPools} pools) is not the largest on day ${flightedDay}; largest is ${largestComp?.id} (${maxPools} pools)`,
-    })
-  }
-
-  // Check 3: demographic conflict between the grouped pair
-  // Infinity = hard conflict (same gender/weapon/category) — handled as an error upstream,
-  // not a flighting-level warning. Only finite positive penalties warrant a soft warning here.
-  const penalty = crossoverPenalty(priorityComp, flightedComp, tournamentType)
-  if (penalty > 0 && penalty !== Infinity) {
-    bottlenecks.push({
-      competition_id: flightedComp.id,
-      phase: Phase.FLIGHTING,
-      cause: BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
-      rule: BottleneckRule.FLIGHTING_GROUP_CROSSOVER_PENALTY,
-      subjects: [priorityComp.id, flightedComp.id].sort(),
-      severity: BottleneckSeverity.WARN,
-      delay_mins: 0,
-      message: `Flighting group (${priorityComp.id}, ${flightedComp.id}) has a demographic crossover penalty of ${penalty.toFixed(2)}`,
-    })
-  }
-
-  return bottlenecks
 }

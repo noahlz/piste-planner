@@ -213,19 +213,16 @@ function buildCompetitions(state: StoreState): Competition[] {
       // day 7. Infinity can never be the minimum in
       // Math.min(dayHardEnd(day, config), latest_end), for any day count.
       latest_end: Infinity,
-      // The store's own flag. `flighted: true` with a null group is exactly the
-      // shape `derive.ts` splits into Flight A and Flight B, so the flag needs
-      // no further derivation (data-model §4). `flighting_group_id` stays null:
-      // the accept/reject flow that used to fill it in was retired (FR-028).
+      // The store's own flag. `flighted: true` is exactly the shape `derive.ts`
+      // splits into Flight A and Flight B, so the flag needs no further
+      // derivation (data-model §4).
       flighted: overrides.flighted,
-      flighting_group_id: null,
-      is_priority: false,
       // The fourth seam specs/006-day-axis-parity/parity-exceptions.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names. A `0` here once zeroed the DE
       // term of `estimateCompetitionStripHours`. Since 024 that term bills DE
-      // bouts × bout time and no longer reads this field, but referee demand
-      // (`peakDeRefDemand`) and flighting-group validation still do. This is
-      // the ledger factory's own pre-allocation (`__tests__/helpers/scenarios.ts`)
-      // — a default, not a decision.
+      // bouts × bout time and no longer reads this field. Its one reader is day
+      // assignment's packing footprint (`dayColoring.ts`). This is the ledger
+      // factory's own pre-allocation (`__tests__/helpers/scenarios.ts`) – a
+      // default, not a decision.
       strips_allocated: Math.max(2, Math.ceil(overrides.fencer_count / 7)),
 
       // Per-event strip budget overrides — always null until UI exposes them

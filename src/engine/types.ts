@@ -101,14 +101,12 @@ export type Phase = (typeof Phase)[keyof typeof Phase]
 export const BottleneckCause = {
   STRIP_CONTENTION: 'STRIP_CONTENTION',
   SEQUENCING_CONSTRAINT: 'SEQUENCING_CONSTRAINT',
-  SAME_DAY_DEMOGRAPHIC_CONFLICT: 'SAME_DAY_DEMOGRAPHIC_CONFLICT',
   UNAVOIDABLE_CROSSOVER_CONFLICT: 'UNAVOIDABLE_CROSSOVER_CONFLICT',
   DEADLINE_BREACH: 'DEADLINE_BREACH',
   DEADLINE_BREACH_UNRESOLVABLE: 'DEADLINE_BREACH_UNRESOLVABLE',
   FLIGHT_B_DELAYED: 'FLIGHT_B_DELAYED',
   STRIP_DEFICIT_NO_FLIGHTING: 'STRIP_DEFICIT_NO_FLIGHTING',
   VIDEO_STRIP_CONTENTION: 'VIDEO_STRIP_CONTENTION',
-  FLIGHTING_GROUP_NOT_LARGEST: 'FLIGHTING_GROUP_NOT_LARGEST',
   FLIGHTING_GROUP_MANUAL_NEEDED: 'FLIGHTING_GROUP_MANUAL_NEEDED',
   MULTIPLE_FLIGHTED_SAME_DAY: 'MULTIPLE_FLIGHTED_SAME_DAY',
   SAME_DAY_VIOLATION: 'SAME_DAY_VIOLATION',
@@ -162,8 +160,6 @@ export const BottleneckRule = {
   FLIGHTING_GROUP_BOTH_VIDEO: 'flighting-group-both-video',
   CUT_SUMMARY: 'cut-summary',
   FLIGHTING_PRIORITY_TIE: 'flighting-priority-tie',
-  FLIGHTED_NOT_LARGEST: 'flighted-not-largest',
-  FLIGHTING_GROUP_CROSSOVER_PENALTY: 'flighting-group-crossover-penalty',
 } as const
 export type BottleneckRule = (typeof BottleneckRule)[keyof typeof BottleneckRule]
 
@@ -219,8 +215,6 @@ export interface Competition {
   de_mode: DeMode
   de_video_policy: VideoPolicy
   flighted: boolean
-  flighting_group_id: string | null
-  is_priority: boolean
   strips_allocated: number
   max_pool_strip_pct_override: number | null
   max_de_strip_pct_override: number | null
@@ -309,8 +303,6 @@ export interface ScheduleResult {
   competition_id: string
   assigned_day: number
   use_flighting: boolean
-  is_priority: boolean
-  flighting_group_id: string | null
   pool_start: number | null
   pool_end: number | null
   pool_strip_count: number

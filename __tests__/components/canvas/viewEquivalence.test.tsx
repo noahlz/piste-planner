@@ -45,13 +45,10 @@ import { deriveSized } from '../../helpers/derive.ts'
 // minute values rather than two parallel expectations. One case additionally
 // pins the table's raw strings, so the formatter itself cannot drift unnoticed.
 //
-// A flighted event is built through the engine rather than through the store:
-// `buildConfig.ts` sets `flighted: false` on every competition and only ever
-// raises it together with a non-null `flighting_group_id`, while `derive.ts`
-// splits into FLIGHT_A/FLIGHT_B only for `flighted && flighting_group_id ===
-// null`. So no store state produces a flight pair, and both views are handed
-// the same committed `DerivedSchedule` object instead — which is exactly the
-// "one derived model, two views" arrangement the contract is about.
+// The matrix cases build every event, the flighted one included, through the
+// engine (`deriveSized`) and hand both views the same committed
+// `DerivedSchedule` object – which is exactly the "one derived model, two
+// views" arrangement the contract is about.
 
 const VIEWPORT_WIDTH = 900
 // 013 T026 removed the culling these two sized the window for: every day

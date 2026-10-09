@@ -180,8 +180,6 @@ describe('buildTournamentConfig', () => {
       // §DE Modes; 024 plan D6), so the bridge has no strip count to set.
       expect(comp).not.toHaveProperty('de_round_of_16_strips')
       expect(comp.flighted).toBe(false)
-      expect(comp.flighting_group_id).toBeNull()
-      expect(comp.is_priority).toBe(false)
       // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
       // the ledger factory (`__tests__/helpers/scenarios.ts`'s `buildCompetitions`,
       // `strips_allocated`). 64 fencers
@@ -455,8 +453,6 @@ describe('buildTournamentConfig', () => {
 
       for (const comp of competitions) {
         expect(comp.flighted).toBe(false)
-        expect(comp.flighting_group_id).toBeNull()
-        expect(comp.is_priority).toBe(false)
       }
 
       // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
@@ -520,7 +516,11 @@ describe('buildTournamentConfig', () => {
      *
      *  Edited again at 021 T1b (2026-10-08): `optional` and
      *  `de_round_of_16_requirement` left every row, with the Competition fields
-     *  that nothing read. */
+     *  that nothing read.
+     *
+     *  Edited again at 021 T3 (2026-10-08): the two flighting-group fields (the group
+     *  id and the priority flag) left every row with the group path, which no
+     *  app state could reach. */
     const FIXTURE: { NAC: Competition[]; ROC: Competition[] } = JSON.parse(
       readFileSync(
         `${process.cwd()}/__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json`,
@@ -621,12 +621,10 @@ describe('buildTournamentConfig', () => {
         },
       )
 
-      it('use_single_pool_override, flighting_group_id and is_priority default false/null/false for every competition', () => {
+      it('use_single_pool_override defaults false for every competition', () => {
         const { competitions } = buildTournamentConfig(derivedState(TournamentType.NAC))
         for (const comp of competitions) {
           expect(comp.use_single_pool_override, comp.id).toBe(false)
-          expect(comp.flighting_group_id, comp.id).toBeNull()
-          expect(comp.is_priority, comp.id).toBe(false)
         }
       })
 

@@ -41,36 +41,11 @@ export function findingIdentity(finding: ValidationError): string {
 
 // ── Sub-validators ─────────────────────────────────────────────────────────────
 
-function validateStripConfig(config: TournamentConfig, competitions: Competition[], mode: ValidationMode): ValidationError[] {
+function validateStripConfig(config: TournamentConfig): ValidationError[] {
   const errors: ValidationError[] = []
 
   if (config.strips_total === 0) {
     errors.push(structural('strips_total', 'strips_total must be > 0', 'strips-total-positive', ['strips_total']))
-  }
-
-  // Flighting group strips exceed strips_total — same resource-capacity class
-  // as resource_precondition's strip minimum shortfalls (research D3).
-  // Group competitions by their flighting_group_id, sum strips_allocated and
-  // collect member ids, check the sum against total.
-  const flightingGroups = new Map<string, { total: number; ids: string[] }>()
-  for (const comp of competitions) {
-    if (comp.flighted && comp.flighting_group_id) {
-      const group = flightingGroups.get(comp.flighting_group_id) ?? { total: 0, ids: [] }
-      group.total += comp.strips_allocated
-      group.ids.push(comp.id)
-      flightingGroups.set(comp.flighting_group_id, group)
-    }
-  }
-  for (const [groupId, group] of flightingGroups) {
-    if (group.total > config.strips_total) {
-      errors.push(policy(
-        'flighting_group',
-        `Flighting group "${groupId}" requires ${group.total} strips but strips_total is ${config.strips_total}`,
-        mode,
-        'flighting-group-strips',
-        [...group.ids].sort(),
-      ))
-    }
   }
 
   return errors
@@ -202,12 +177,11 @@ function validateCompetitionFields(config: TournamentConfig, competitions: Compe
       const { n_pools } = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
 
       // Strip capacity: n_pools strips needed (one per pool running in parallel).
-      // An event that splits into Flight A and Flight B needs only Flight A's
-      // share, ceil(n_pools / 2) – the same split `buildPhaseNodes` makes
-      // (METHODOLOGY.md §Resource Preconditions, 'Strip minimum').
+      // A flighted event needs only Flight A's share, ceil(n_pools / 2) – the
+      // same split `buildPhaseNodes` makes (METHODOLOGY.md §Resource
+      // Preconditions, 'Strip minimum').
       // strips_total is a global scalar — no per-day strip availability model yet.
-      const splitsIntoFlights = comp.flighted && comp.flighting_group_id === null
-      const stripsNeeded = splitsIntoFlights ? Math.ceil(n_pools / 2) : n_pools
+      const stripsNeeded = comp.flighted ? Math.ceil(n_pools / 2) : n_pools
       if (stripsNeeded > config.strips_total) {
         errors.push(policy('resource_precondition', `${comp.id}: requires ${stripsNeeded} strips for pools but only ${config.strips_total} total strips configured`, mode, 'resource-precondition-strips', [comp.id]))
       }
@@ -388,7 +362,7 @@ export function validateConfig(
 
   return [
     ...globalErrors,
-    ...validateStripConfig(config, competitions, mode),
+    ...validateStripConfig(config),
     ...validateCompetitionFields(config, competitions, mode),
     ...validateDependencies(competitions, mode),
     // Feasibility is notice-kind at its source (011 FR-001/FR-002): WARN in

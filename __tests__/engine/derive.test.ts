@@ -68,7 +68,7 @@ function scheduleIsolated(
 // Fields derive.ts must reproduce exactly from (placement, competition, config):
 // every key of ScheduleResult.
 const DERIVED_FIELDS = [
-  'competition_id', 'assigned_day', 'use_flighting', 'is_priority', 'flighting_group_id',
+  'competition_id', 'assigned_day', 'use_flighting',
   'pool_start', 'pool_end', 'pool_strip_count', 'pool_refs_count',
   'flight_a_start', 'flight_a_end', 'flight_a_strips', 'flight_a_refs',
   'flight_b_start', 'flight_b_end', 'flight_b_strips', 'flight_b_refs',
@@ -269,27 +269,6 @@ describe('deriveEventSchedule — flighted event', () => {
     expect(derived.result.flight_a_start).not.toBeNull()
     expect(derived.result.flight_b_start).not.toBeNull()
     expect(derived.day_out_of_range).toBe(false)
-  })
-
-  // Pins research D1's specific claim: use_flighting is `comp.flighted ||
-  // comp.flighting_group_id !== null` (concurrentScheduler.ts:306) — true even
-  // when a competition only carries a flighting_group_id and flighted=false,
-  // which the scheduler does NOT split into flight A/B pools on its own
-  // (isFlighted requires flighted===true with no group id). No oracle needed:
-  // this is a direct boolean derivation from competition inputs.
-  it('derives use_flighting=true from flighting_group_id alone, even when flighted=false', () => {
-    const config = isolatedConfig()
-    const competition = makeCompetition({
-      id: 'flighted-2', fencer_count: 24, flighted: false, flighting_group_id: 'group-1',
-    })
-    const placement: Placement = {
-      day: 0, start_time: 480, strip_count: 6, strips: null, source: PlacementSource.MANUAL, pinned: true,
-    }
-
-    const derived = deriveSized(placement, competition, config)
-
-    expect(derived.result.use_flighting).toBe(true)
-    expect(derived.result.flighting_group_id).toBe('group-1')
   })
 })
 

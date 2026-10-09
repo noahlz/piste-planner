@@ -17,8 +17,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -40,8 +38,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -63,8 +59,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -86,8 +80,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -109,8 +101,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -132,8 +122,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -155,8 +143,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -178,8 +164,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -201,8 +185,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -224,8 +206,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -247,8 +227,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -270,8 +248,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -293,8 +269,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -316,8 +290,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -339,8 +311,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -362,8 +332,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -385,8 +353,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -408,8 +374,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -431,8 +395,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -454,8 +416,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -477,8 +437,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -500,8 +458,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -523,8 +479,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -546,8 +500,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -569,8 +521,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -592,8 +542,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -615,8 +563,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -638,8 +584,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -661,8 +605,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -684,8 +626,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -707,8 +647,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -730,8 +668,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -753,8 +689,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -776,8 +710,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -799,8 +731,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -822,8 +752,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -845,8 +773,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -868,8 +794,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -891,8 +815,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -914,8 +836,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -937,8 +857,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -960,8 +878,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -983,8 +899,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1006,8 +920,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1029,8 +941,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1052,8 +962,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1075,8 +983,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1098,8 +1004,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1121,8 +1025,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1144,8 +1046,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1167,8 +1067,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1190,8 +1088,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1213,8 +1109,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1236,8 +1130,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1259,8 +1151,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1282,8 +1172,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1305,8 +1193,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1328,8 +1214,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1351,8 +1235,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1374,8 +1256,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1397,8 +1277,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1420,8 +1298,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1443,8 +1319,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1466,8 +1340,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1489,8 +1361,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1512,8 +1382,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1537,8 +1405,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1560,8 +1426,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1583,8 +1447,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1606,8 +1468,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1629,8 +1489,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1652,8 +1510,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1675,8 +1531,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1698,8 +1552,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1721,8 +1573,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1744,8 +1594,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1767,8 +1615,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1790,8 +1636,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1813,8 +1657,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1836,8 +1678,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1859,8 +1699,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1882,8 +1720,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1905,8 +1741,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1928,8 +1762,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1951,8 +1783,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1974,8 +1804,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -1997,8 +1825,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2020,8 +1846,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2043,8 +1867,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2066,8 +1888,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2089,8 +1909,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2112,8 +1930,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2135,8 +1951,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2158,8 +1972,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2181,8 +1993,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2204,8 +2014,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2227,8 +2035,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2250,8 +2056,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2273,8 +2077,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2296,8 +2098,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2319,8 +2119,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2342,8 +2140,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2365,8 +2161,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2388,8 +2182,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2411,8 +2203,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2434,8 +2224,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2457,8 +2245,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2480,8 +2266,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2503,8 +2287,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2526,8 +2308,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2549,8 +2329,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2572,8 +2350,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2595,8 +2371,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2618,8 +2392,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2641,8 +2413,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2664,8 +2434,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2687,8 +2455,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2710,8 +2476,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2733,8 +2497,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2756,8 +2518,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2779,8 +2539,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2802,8 +2560,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2825,8 +2581,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2848,8 +2602,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2871,8 +2623,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2894,8 +2644,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2917,8 +2665,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2940,8 +2686,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2963,8 +2707,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -2986,8 +2728,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -3009,8 +2749,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null
@@ -3032,8 +2770,6 @@
       "earliest_start": 0,
       "latest_end": "__Infinity__",
       "flighted": false,
-      "flighting_group_id": null,
-      "is_priority": false,
       "strips_allocated": 6,
       "max_pool_strip_pct_override": null,
       "max_de_strip_pct_override": null

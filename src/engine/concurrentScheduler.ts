@@ -430,9 +430,7 @@ function buildEventStates(
     const result: ScheduleResult = {
       competition_id: comp.id,
       assigned_day: day,
-      use_flighting: comp.flighted || comp.flighting_group_id !== null,
-      is_priority: comp.is_priority,
-      flighting_group_id: comp.flighting_group_id,
+      use_flighting: comp.flighted,
       pool_start: null,
       pool_end: null,
       pool_strip_count: 0,
@@ -509,10 +507,8 @@ function buildPhaseNodes(
     comp.max_pool_strip_pct_override,
   )
 
-  // Decide flighted: standalone-flighted events split pools into A/B.
-  const isFlighted = comp.flighted && comp.flighting_group_id === null
-
-  if (isFlighted) {
+  // A flighted event splits its pools into Flight A and Flight B.
+  if (comp.flighted) {
     const flightAPools = Math.ceil(poolStructure.n_pools / 2)
     const flightBPools = Math.floor(poolStructure.n_pools / 2)
     const flightADur = estimatePoolDuration(flightAPools, poolBaseline, poolCap, refRes.refs_per_pool).actual_duration

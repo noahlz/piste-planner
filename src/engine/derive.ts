@@ -117,9 +117,7 @@ export function deriveEventSchedule(
   const result: ScheduleResult = {
     competition_id: competition.id,
     assigned_day: placement.day,
-    use_flighting: competition.flighted || competition.flighting_group_id !== null,
-    is_priority: competition.is_priority,
-    flighting_group_id: competition.flighting_group_id,
+    use_flighting: competition.flighted,
     pool_start: null,
     pool_end: null,
     pool_strip_count: 0,
@@ -160,14 +158,12 @@ export function deriveEventSchedule(
     de_duration_actual: 0,
   }
 
-  // Pool block. A standalone flighted event splits its pools into A and B;
-  // an event that merely carries a flighting_group_id does not
-  // (concurrentScheduler.ts buildPhaseNodes), even though use_flighting is true.
+  // Pool block. A flighted event splits its pools into Flight A and Flight B,
+  // as concurrentScheduler.ts buildPhaseNodes does.
   const poolStart = snapToSlot(placement.start_time)
-  const splitsIntoFlights = competition.flighted && competition.flighting_group_id === null
   let poolEnd: number
 
-  if (splitsIntoFlights) {
+  if (competition.flighted) {
     const flightAPools = Math.ceil(poolStructure.n_pools / 2)
     const flightBPools = Math.floor(poolStructure.n_pools / 2)
     const flightAStrips = grantedStrips(
