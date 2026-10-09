@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   assignDaysByColoring,
-  capacityDemandedDays,
   capacityPenalty,
   crossWeaponSameDemographicPenalty,
   dayCapacityFactor,
@@ -9,12 +8,13 @@ import {
 import { FIRST_LAST_DAY_CAPACITY_FACTOR } from '../../src/engine/constants.ts'
 import { categoryWeight, estimateCompetitionStripHours } from '../../src/engine/capacity.ts'
 import type { ConstraintGraph } from '../../src/engine/constraintGraph.ts'
-import type { Competition } from '../../src/engine/types.ts'
+import type { Competition, TournamentConfig } from '../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { Category, Gender, Weapon, EventType, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
 import { buildConstraintGraph } from '../../src/engine/constraintGraph.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
+import { SCENARIO_IDS, SCENARIOS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 
 // ──────────────────────────────────────────────
 // Graph-building helpers
@@ -129,28 +129,29 @@ describe('assignDaysByColoring', () => {
   })
 
   it('soft conflicts prefer different days when enough colors available', () => {
-    // With load balancing, the new-day penalty outweighs soft conflicts for
-    // just 2 events. Use a hard edge to force day 0 open, then verify the
-    // soft conflict steers c3 away from c2's day.
+    // Two days, both opened by the hard c1–c2 edge. c2's larger footprint
+    // colours it first, onto day 0, and c1 takes day 1. Each day then holds
+    // one event, so without the soft edge c3 ties and takes the lowest day,
+    // c2's. The soft edge is what moves it.
     const c1 = makeCompetition({ id: 'c1' })
-    const c2 = makeCompetition({ id: 'c2' })
+    const c2 = makeCompetition({ id: 'c2', strips_allocated: 12 })
     const c3 = makeCompetition({ id: 'c3' })
     const graph = buildGraph([
       ['c1', 'c2', Infinity], // hard: c1 and c2 on different days
       ['c2', 'c3', 5.0],     // soft: c3 prefers not to share c2's day
     ])
-    const config = makeConfig({ days_available: 3 })
+    const config = makeConfig({ days_available: 2 })
 
-    const { dayMap, effectiveDays } = assignDaysByColoring(graph, [c1, c2, c3], config)
+    const { dayMap } = assignDaysByColoring(graph, [c1, c2, c3], config)
 
-    expect(effectiveDays).toBe(2)
-    // c3 should avoid c2's day due to soft penalty (both days already open)
-    expect(dayMap.get('c2')).not.toBe(dayMap.get('c3'))
+    expect(dayMap.get('c2')).toBe(0)
+    expect(dayMap.get('c3')).not.toBe(dayMap.get('c2'))
   })
 
-  it('load balancing spreads events across used days evenly', () => {
-    // c1 and c2 have a hard edge forcing 2 days. The remaining 4 events
-    // have no constraints. Phase 1 → effectiveDays=2, Phase 2 → ~3 per day.
+  it('load balancing spreads events across every chosen day evenly', () => {
+    // c1 and c2 have a hard edge, and the remaining 4 events have none. Six
+    // events on 4 days: each event already on a day adds a flat cost, so no
+    // day takes a second event while another day is empty.
     const comps = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'].map(id => makeCompetition({ id }))
     const graph = buildGraph([['c1', 'c2', Infinity]])
     // Add empty adjacency entries for c3-c6
@@ -161,11 +162,9 @@ describe('assignDaysByColoring', () => {
 
     const { dayMap, effectiveDays } = assignDaysByColoring(graph, comps, config)
 
-    expect(effectiveDays).toBe(2)
-    const day0Count = [...dayMap.values()].filter(d => d === 0).length
-    const day1Count = [...dayMap.values()].filter(d => d === 1).length
-    expect(day0Count).toBe(3)
-    expect(day1Count).toBe(3)
+    expect(effectiveDays).toBe(4)
+    const perDay = [0, 1, 2, 3].map(d => [...dayMap.values()].filter(day => day === d).length)
+    expect(perDay.sort((a, b) => a - b)).toEqual([1, 1, 2, 2])
   })
 
   it('tie-breaking: larger strips_allocated × categoryWeight event gets colored first (higher saturation priority is irrelevant at tie — packing footprint wins)', () => {
@@ -189,10 +188,10 @@ describe('assignDaysByColoring', () => {
   })
 
   // METHODOLOGY §Rest Day Preference, Ops Manual p.20 – Group 2. Junior is pinned
-  // to day 0 and two identical women's épée fillers to days 1 and 2, so every day
-  // carries the same load and pins switch off day compaction. The soft 0.5 edge
-  // rules out day 0 for the partner, leaving gap 1 (−0.4 PROXIMITY_1_DAY bonus at
-  // weight 1.0, plus 1.5 if a rest-day pair) against gap 2 (0).
+  // to day 0, so days 1 and 2 are both empty and load balancing cannot pick the
+  // gap. The soft 0.5 edge rules out day 0 for the partner, leaving gap 1 (−0.4
+  // PROXIMITY_1_DAY bonus at weight 1.0, plus 1.5 if a rest-day pair) against
+  // gap 2 (0).
   function restDayGap(other: Category, tournamentType: TournamentType): number {
     const junior = makeCompetition({
       id: 'junior',
@@ -206,18 +205,14 @@ describe('assignDaysByColoring', () => {
       gender: Gender.MEN,
       weapon: Weapon.FOIL,
     })
-    const filler1 = makeCompetition({ id: 'filler1', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE })
-    const filler2 = makeCompetition({ id: 'filler2', category: Category.JUNIOR, gender: Gender.WOMEN, weapon: Weapon.EPEE })
     const graph = buildGraph([['junior', 'partner', 0.5]])
     const config = makeConfig({ days_available: 3, tournament_type: tournamentType })
-    const pin = (competition_id: string, day: number) =>
-      ({ competition_id, day, start_time: config.DAY_START_MINS, strip_count: 1 })
 
     const { dayMap } = assignDaysByColoring(
       graph,
-      [junior, partner, filler1, filler2],
+      [junior, partner],
       config,
-      [pin('junior', 0), pin('filler1', 1), pin('filler2', 2)],
+      [{ competition_id: 'junior', day: 0, start_time: config.DAY_START_MINS, strip_count: 1 }],
     )
     expect(dayMap.get('junior')).toBe(0)
     return dayMap.get('partner')!
@@ -284,9 +279,9 @@ describe('assignDaysByColoring', () => {
     expect(dayMap.size).toBe(3)
   })
 
-  it('effectiveDays reports minimum days needed', () => {
-    // 3 mutually hard-conflicting events, 5 days available.
-    // Chromatic number = 3, so effectiveDays = 3.
+  it('with fewer events than days, effectiveDays counts the days used and the rest stay empty', () => {
+    // 3 mutually hard-conflicting events, 5 days available. Each takes the
+    // lowest open day, so days 3 and 4 hold nothing.
     const c1 = makeCompetition({ id: 'c1' })
     const c2 = makeCompetition({ id: 'c2' })
     const c3 = makeCompetition({ id: 'c3' })
@@ -300,58 +295,44 @@ describe('assignDaysByColoring', () => {
     const { dayMap, effectiveDays } = assignDaysByColoring(graph, [c1, c2, c3], config)
 
     expect(effectiveDays).toBe(3)
-    // All assignments compacted to [0, 3)
-    for (const day of dayMap.values()) {
-      expect(day).toBeGreaterThanOrEqual(0)
-      expect(day).toBeLessThan(3)
-    }
+    expect([...dayMap.values()].sort((a, b) => a - b)).toEqual([0, 1, 2])
   })
 
-  it('assigns all days within [0, effectiveDays)', () => {
-    // Tiny events so capacity-aware expansion never triggers. With no edges
-    // and low strip-hours the coloring collapses to a single day.
-    const comps = Array.from({ length: 5 }, (_, i) =>
-      makeCompetition({ id: `c${i}`, fencer_count: 2, strips_allocated: 2 }),
-    )
-    const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
+  it('does not renumber days: an empty middle day stays empty and effectiveDays counts only the days used', () => {
+    // Junior and a Div 1 partner of the same gender and weapon keep a rest
+    // day between them (METHODOLOGY §Rest Day Preference), and the soft edge
+    // keeps them off one day. On 3 days they take days 0 and 2. Each event
+    // keeps the day its penalty picked (METHODOLOGY §Phase 4, §Day Count), so
+    // day 1 stays empty and effectiveDays (2) is less than the highest day + 1.
+    const junior = makeCompetition({ id: 'junior', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.FOIL })
+    const partner = makeCompetition({ id: 'partner', category: Category.DIV1, gender: Gender.MEN, weapon: Weapon.FOIL })
+    const graph = buildGraph([['junior', 'partner', 0.5]])
     const config = makeConfig({ days_available: 3 })
+
+    const { dayMap, effectiveDays } = assignDaysByColoring(graph, [junior, partner], config)
+
+    expect(Object.fromEntries(dayMap)).toEqual({ partner: 0, junior: 2 })
+    expect(effectiveDays).toBe(2)
+  })
+
+  // METHODOLOGY.md §Day Count: the organizer picks the day count, and demand
+  // does not change it. Before 021 the tiny case collapsed to 1 day, and the
+  // heavy case reached 4 only through capacity expansion.
+  it.each([
+    { label: 'tiny', count: 5, days: 3, shape: { fencer_count: 2, strips_allocated: 2 } },
+    { label: 'heavy', count: 6, days: 4, shape: { fencer_count: 120, strips_allocated: 20 } },
+  ])('unconstrained $label events use every chosen day', ({ count, days, shape }) => {
+    const comps = Array.from({ length: count }, (_, i) => makeCompetition({ id: `c${i}`, ...shape }))
+    const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
+    const config = makeConfig({ days_available: days })
 
     const { dayMap, effectiveDays } = assignDaysByColoring(graph, comps, config)
 
-    // No constraints and negligible capacity demand → all on 1 day
-    expect(effectiveDays).toBe(1)
-    for (const [, day] of dayMap) {
-      expect(day).toBeGreaterThanOrEqual(0)
-      expect(day).toBeLessThan(effectiveDays)
-    }
+    expect(effectiveDays).toBe(days)
+    expect(new Set(dayMap.values())).toEqual(new Set(Array.from({ length: days }, (_, d) => d)))
   })
 
-  it('expands effectiveDays to the days_available cap when capacity heavily exceeds one day', () => {
-    // No edges → chromatic number = 1. Six large DIV1 events vastly exceed
-    // one day's capacity (dayCap = 24 strips × 14 h = 336 SH; each event's
-    // weighted SH is in the tens, so 6 × ~75 = ~450 SH easily saturates
-    // capacityDays beyond 4). Expansion should hit the min(days_available,
-    // MAX_EXPANDED_DAYS) = 4 cap and place every event.
-    const comps = Array.from({ length: 6 }, (_, i) =>
-      makeCompetition({
-        id: `big${i}`,
-        fencer_count: 120,
-        category: Category.DIV1,
-        strips_allocated: 20,
-      }),
-    )
-    const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
-    const config = makeConfig({ days_available: 4 })
-
-    const { effectiveDays, dayMap } = assignDaysByColoring(graph, comps, config)
-
-    expect(effectiveDays).toBe(4)
-    expect(dayMap.size).toBe(6)
-  })
-
-  it('days_available=1 suppresses expansion even when capacity demand is high', () => {
-    // Even with huge capacity pressure, expansionCap = min(1, 4) = 1 forces
-    // effectiveDays = max(chromaticN, min(capacityDays, 1)) = 1.
+  it('a 1-day board puts every event on day 0 however heavy the demand', () => {
     const comps = Array.from({ length: 6 }, (_, i) =>
       makeCompetition({
         id: `big${i}`,
@@ -363,35 +344,15 @@ describe('assignDaysByColoring', () => {
     const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
     const config = makeConfig({ days_available: 1 })
 
-    const { effectiveDays } = assignDaysByColoring(graph, comps, config)
+    const { dayMap, effectiveDays } = assignDaysByColoring(graph, comps, config)
 
+    expect([...dayMap.values()]).toEqual(Array(6).fill(0))
     expect(effectiveDays).toBe(1)
   })
 
-  it('chromatic number is a hard floor that expansion cannot lower', () => {
-    // 3 mutually hard-conflicting tiny events: chromaticN = 3. Their total
-    // strip-hours is negligible, so capacityDays ≈ 1 — but effectiveDays must
-    // stay at 3 because hard constraints require 3 distinct colors.
-    const comps = [
-      makeCompetition({ id: 'c1', fencer_count: 2, strips_allocated: 2 }),
-      makeCompetition({ id: 'c2', fencer_count: 2, strips_allocated: 2 }),
-      makeCompetition({ id: 'c3', fencer_count: 2, strips_allocated: 2 }),
-    ]
-    const graph = buildGraph([
-      ['c1', 'c2', Infinity],
-      ['c2', 'c3', Infinity],
-      ['c1', 'c3', Infinity],
-    ])
-    const config = makeConfig({ days_available: 5 })
-
-    const { effectiveDays } = assignDaysByColoring(graph, comps, config)
-
-    expect(effectiveDays).toBe(3)
-  })
-
-  it('Phase 2 load-balances unconstrained events away from non-empty days', () => {
+  it('load balancing steers unconstrained events away from non-empty days', () => {
     // Tight config: 2 strips × 10h = 20 SH/day. With a single big DIV1 event
-    // placed first, Phase 2's per-event flat LOAD_BALANCE_FULLNESS plus the
+    // placed first, the per-event flat LOAD_BALANCE_FULLNESS plus the
     // capacity penalty together steer an unconstrained candidate to the other
     // day. (This scenario alone does not isolate the capacity term — see
     // 'capacityPenalty ramp' below for that.)
@@ -1204,11 +1165,66 @@ describe('crossWeaponSameDemographicPenalty — Group 3', () => {
 })
 
 /**
+ * Day count (021 O3, METHODOLOGY.md §Day Count): day assignment works over every
+ * day the organizer chose. Before 021 a "fewest days" pass ran first and could
+ * leave chosen days empty – at 5 days, B5, B7 and RJCC Weekend used 4 (audit
+ * CAL-P1, CAL-CAP).
+ */
+describe('day count – every day the organizer chose (O3)', () => {
+  /** The distinct days `dayMap` uses, ascending, from the scheduler's own graph. */
+  function daysUsed(competitions: Competition[], config: TournamentConfig): number[] {
+    const graph = buildConstraintGraph(competitions, config.tournament_type)
+    const { dayMap } = assignDaysByColoring(graph, competitions, config)
+    return [...new Set(dayMap.values())].sort((a, b) => a - b)
+  }
+
+  const everyDay = (n: number) => Array.from({ length: n }, (_, i) => i)
+
+  function scenarioAt(id: (typeof SCENARIO_IDS)[number], days: number) {
+    const { fencerCounts, strips, videoStrips, tournamentType } = SCENARIOS[id]
+    return {
+      competitions: buildCompetitions(fencerCounts, tournamentType),
+      config: tournamentConfig(days, strips, videoStrips, tournamentType),
+    }
+  }
+
+  it('RJCC Weekend at NAC on a 5-day board built through the store uses all 5 days', () => {
+    // The audit's probe setup: days set before the template (5 is above its
+    // minimum, so applyTemplate keeps it), 80 strips, video at the type default.
+    useStore.setState(useStore.getInitialState(), true)
+    const state = () => useStore.getState()
+    state().setTournamentType(TournamentType.NAC)
+    state().setDays(5)
+    state().applyTemplate('RJCC Weekend')
+    state().setStrips(80)
+    const { config, competitions } = buildTournamentConfig(state())
+    expect(config.days_available).toBe(5)
+
+    expect(daysUsed(competitions, config)).toEqual(everyDay(5))
+  })
+
+  it('B5 at 5 days uses all 5 days', () => {
+    const { competitions, config } = scenarioAt('B5', 5)
+
+    expect(daysUsed(competitions, config)).toEqual(everyDay(5))
+  })
+
+  // Guard: passes before and after 021 T2. Every B1–B8 scenario already filled
+  // its native days, which is why removing the fewest-days pass leaves the
+  // drift ledger byte-identical.
+  it.each(SCENARIO_IDS)('%s at its native day count uses every day', (id) => {
+    const { competitions, config } = scenarioAt(id, SCENARIOS[id].days)
+
+    expect(daysUsed(competitions, config)).toEqual(everyDay(SCENARIOS[id].days))
+  })
+})
+
+/**
  * First and last day capacity (024 D10, METHODOLOGY.md §First and Last Day
  * Capacity, Appendix A §Capacity Model Constants – Ops Manual p.20, Group 2:
  * the first and last days should be planned shorter than the days between).
  * From 3 days up, colours 0 and N−1 get FIRST_LAST_DAY_CAPACITY_FACTOR (0.8)
- * of a middle day's strip-hours, in Phase 2's fill ratio and in day expansion.
+ * of a middle day's strip-hours in the capacity penalty's fill ratio.
  */
 describe('first and last day capacity', () => {
   it('is 0.8 of a middle day', () => {
@@ -1222,23 +1238,6 @@ describe('first and last day capacity', () => {
     [4, [0.8, 1, 1, 0.8]],
   ])('at %i days gives colours the factors %j', (nDays, factors) => {
     expect(Array.from({ length: nDays }, (_, c) => dayCapacityFactor(c, nDays))).toEqual(factors)
-  })
-
-  // x is what day expansion asks capacityDemandedDays for: the weighted
-  // strip-hour demand in middle days at the target fill, i.e. totalStripHours /
-  // (dayCapacity × CAPACITY_TARGET_FILL). Without the factor, expansion takes
-  // ceil(x). With the factor, N days hold N middle days below 3 days and
-  // N − 2 + 2 × 0.8 = N − 0.4 from 3 up, so 3 days hold 2.6 and 4 days 3.6:
-  // 2 / 2.0001 is the two-to-three edge (unchanged, no factor at 2 days) and
-  // 2.6 / 2.61 the three-to-four edge, which moves from 3 to 4.
-  it.each([
-    [0.5, 1],
-    [2, 2],
-    [2.0001, 3],
-    [2.6, 3],
-    [2.61, 4],
-  ])('expansion asks for %f middle days and gets %i days', (x, days) => {
-    expect(capacityDemandedDays(x)).toBe(days)
   })
 
   it('steers a 3-day colouring\'s fourth event to the middle day when the edge days would pass 0.85 fill', () => {
@@ -1266,38 +1265,6 @@ describe('first and last day capacity', () => {
     expect(effectiveDays).toBe(3)
     expect(['A', 'B', 'C'].map(id => dayMap.get(id))).toEqual([0, 1, 2])
     expect(dayMap.get('D')).toBe(1)
-  })
-
-  // Wiring: day expansion in assignDaysByColoring goes through
-  // capacityDemandedDays. Eight equal, unconstrained Y12 foil events on 4
-  // available days (chromatic number 1) sized so the weighted strip-hours fill
-  // `ratio` of one middle day: strips = round(total / (ratio × DAY_LENGTH hours)).
-  // x = ratio / CAPACITY_TARGET_FILL (0.3). At ratio 0.85, x ≈ 2.83: ceil(x) says
-  // 3 days but 3 days hold only 2.6 middle days, so the helper says 4. At ratio
-  // 0.70, x ≈ 2.33 sits under 2.6 and both say 3.
-  it.each([
-    [0.85, 4],
-    [0.7, 3],
-  ])('expands to the days capacityDemandedDays asks for at a middle-day fill of %f (%i days)', (ratio, days) => {
-    const comps = Array.from({ length: 8 }, (_, i) =>
-      makeCompetition({ id: `E${i}`, category: Category.Y12, weapon: Weapon.FOIL, fencer_count: 200 }),
-    )
-    const base = makeConfig({ days_available: 4 })
-    const totalSH = comps.reduce(
-      (sum, c) => sum + estimateCompetitionStripHours(c, base).total_strip_hours * categoryWeight(c),
-      0,
-    )
-    const dayHours = base.DAY_LENGTH_MINS / 60
-    const strips = Math.round(totalSH / (ratio * dayHours))
-    const config = makeConfig({ days_available: 4, strips: makeStrips(strips, 0) })
-    const actualRatio = totalSH / (strips * dayHours)
-    expect(actualRatio).toBeGreaterThan(ratio - 0.03)
-    expect(actualRatio).toBeLessThan(ratio + 0.03)
-
-    const graph: ConstraintGraph = new Map(comps.map(c => [c.id, []]))
-    const { effectiveDays } = assignDaysByColoring(graph, comps, config)
-
-    expect(effectiveDays).toBe(days)
   })
 })
 

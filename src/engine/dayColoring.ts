@@ -1,5 +1,6 @@
 /**
- * Two-phase DSatur graph coloring for tournament day assignment.
+ * DSatur graph coloring for tournament day assignment, one pass over every
+ * day the organizer chose.
  *
  * DSatur is a greedy graph-coloring heuristic that always colors the vertex
  * with the highest "saturation degree" next – that is, the uncolored vertex
@@ -15,23 +16,18 @@
  * without forbidding any assignment. For realistic tournament sizes (n <= 54
  * events), the O(n³) runtime is negligible.
  *
- * Standard DSatur minimizes chromatic number (fewest days) but does not
- * balance load across those days. This module uses two phases with a
- * capacity-aware expansion step between them:
- *   Phase 1 – run DSatur without load-balancing penalties to discover the
- *             minimum number of days (the effective chromatic number).
- *   Expand  – if total weighted strip-hours exceed what chromaticN days can
- *             absorb at CAPACITY_TARGET_FILL, raise the day count up to a
- *             cap of min(config.days_available, MAX_EXPANDED_DAYS). The
- *             chromatic number is always a floor so hard constraints remain
- *             satisfied.
- *   Phase 2 – rerun DSatur with capacity-aware load-balancing penalties
- *             active, capped to the expanded day count from the step above.
- *             A day's penalty rises with its fill ratio (strip-hours /
- *             day capacity), steering events toward less-loaded days. From
- *             3 days up the first and last colours hold 0.8 of a middle
- *             day's capacity, in this pass and in Expand (Ops Manual p.20 –
- *             Group 2).
+ * Standard DSatur looks for the fewest colours. Here the colour count is not
+ * searched for: it is the organizer's `days_available`, and one pass colours
+ * every event over all of those days (METHODOLOGY.md §Day Count). Load
+ * balancing spreads the events across them – every event already on a day
+ * adds a flat cost, and a day's capacity penalty rises with its fill ratio
+ * (strip-hours / day capacity). From 3 days up the first and last colours hold
+ * 0.8 of a middle day's capacity (Ops Manual p.20 – Group 2).
+ *
+ * 021 removed a "fewest days" pass that ran before this one. It ran at
+ * `days_available` with the soft terms on, so on B1–B8 at 2–4 days it
+ * returned every chosen day (at 5 days B5, B7 and RJCC Weekend got 4), and no
+ * target fill after it changed a board (audit CAL-P1, CAL-CAP).
  *
  * References:
  *   - DSatur algorithm: https://en.wikipedia.org/wiki/DSatur
@@ -64,30 +60,6 @@ import {
 const LOAD_BALANCE_FULLNESS = 0.5
 
 /**
- * Upper bound on how many days Phase 2 is allowed to use, independent of the
- * user's `days_available` setting. USA Fencing tournaments beyond 4 days are
- * uncommon; capping at 4 prevents runaway expansion.
- */
-const MAX_EXPANDED_DAYS = 4
-
-/**
- * "Target fill" used when estimating capacity-demanded days below: 0.3 means we
- * aim to keep each day's raw strip-hour fill at ~30% before expanding.
- *
- * Swept 0.3 / 0.4 / 0.5 / 0.6 / 0.7 / 0.8 across B1–B8 on 2026-08-29. Every
- * candidate produced byte-identical schedules — same scheduled counts, same
- * ERROR counts, same drift digests. The reason is structural: on all eight
- * scenarios `chromaticN` already equals `expansionCap`, so `effectiveDays`
- * collapses to `chromaticN` and `capacityDays` never binds (at 0.3 it lands at
- * 4–13 against a cap of 3–4, at 0.8 at 2–5 against the same cap). The drift
- * ledger therefore cannot measure this constant at all, and no candidate above
- * 0.3 has behavioral evidence behind it. 0.3 stands until a scenario exists
- * where the cap is slack — that scenario, not a number picked here, is what
- * would justify a change.
- */
-const CAPACITY_TARGET_FILL = 0.3
-
-/**
  * Capacity penalty for a candidate day's fill ratio. Exported for unit tests.
  *
  * We only penalize approaching / past 100% fill. Earlier-triggering curves
@@ -115,25 +87,6 @@ export function capacityPenalty(fillRatio: number): number {
 export function dayCapacityFactor(color: number, nDays: number): number {
   if (nDays < 3) return 1
   return color === 0 || color === nDays - 1 ? FIRST_LAST_DAY_CAPACITY_FACTOR : 1
-}
-
-/** Middle days of capacity that `nDays` days hold, first and last day shares included. */
-function plannedMiddleDays(nDays: number): number {
-  return nDays < 3 ? nDays : nDays - 2 + 2 * FIRST_LAST_DAY_CAPACITY_FACTOR
-}
-
-/**
- * Fewest days whose planned capacity covers `demand`, the weighted strip-hour
- * draw expressed in middle days at the target fill. Without the first and last
- * day shares this is `ceil(demand)`. From 3 days up those shares take 0.4 of a
- * middle day off, so the answer is `ceil(demand)` or one more – never further,
- * because ceil(demand) + 1 days hold ceil(demand) + 0.6 ≥ demand. Exported for
- * unit tests.
- */
-export function capacityDemandedDays(demand: number): number {
-  const n = Math.ceil(demand)
-  if (n < 3) return n
-  return plannedMiddleDays(n) >= demand ? n : n + 1
 }
 
 // ──────────────────────────────────────────────
@@ -316,6 +269,9 @@ export function crossWeaponSameDemographicPenalty(
  *   - individual/team ordering penalties
  *   - VET_COMBINED day-after preference (F3c)
  *   - the Group 3 cross-weapon preference
+ *   - saber pileup
+ *   - load balancing: a flat cost per event already on the day, plus the
+ *     capacity penalty for the day's fill
  */
 function colorPenalty(
   id: string,
@@ -324,7 +280,6 @@ function colorPenalty(
   coloring: Map<string, number>,
   compMap: Map<string, Competition>,
   competitions: Competition[],
-  loadBalance: boolean,
   stripHoursMap: Map<string, number>,
   dayCapacity: number, // a middle day's strip-hours
   nDays: number,
@@ -384,28 +339,25 @@ function colorPenalty(
   // Group 3 cross-weapon preference (Ops Manual p.20 – Group 3)
   total += crossWeaponSameDemographicPenalty(self, c, competitions, coloring)
 
-  // Saber pileup: discourage concentrating saber events on a single day.
-  // Always active (not gated by loadBalance) — structural concern.
+  // Saber pileup: discourage concentrating saber events on a single day, a
+  // structural staffing risk (METHODOLOGY.md §Saber Pileup).
   total += saberPileupPenalty(self, c, coloring, competitions)
 
   // Load balancing: per-event flat cost plus staged capacity-fill penalty.
-  // Only active in Phase 2.
-  if (loadBalance) {
-    let sumStripHours = 0
-    let eventsOnDay = 0
-    for (const [otherId, otherDay] of coloring) {
-      if (otherDay === c) {
-        sumStripHours += stripHoursMap.get(otherId) ?? 0
-        eventsOnDay++
-      }
+  let sumStripHours = 0
+  let eventsOnDay = 0
+  for (const [otherId, otherDay] of coloring) {
+    if (otherDay === c) {
+      sumStripHours += stripHoursMap.get(otherId) ?? 0
+      eventsOnDay++
     }
-    total += eventsOnDay * LOAD_BALANCE_FULLNESS
-    // The first and last colours hold 0.8 of a middle day from 3 days up
-    // (Ops Manual p.20 – Group 2, METHODOLOGY.md §First and Last Day Capacity).
-    const capacity = dayCapacity * dayCapacityFactor(c, nDays)
-    if (capacity > 0) {
-      total += capacityPenalty(sumStripHours / capacity)
-    }
+  }
+  total += eventsOnDay * LOAD_BALANCE_FULLNESS
+  // The first and last colours hold 0.8 of a middle day from 3 days up
+  // (Ops Manual p.20 – Group 2, METHODOLOGY.md §First and Last Day Capacity).
+  const capacity = dayCapacity * dayCapacityFactor(c, nDays)
+  if (capacity > 0) {
+    total += capacityPenalty(sumStripHours / capacity)
   }
 
   return total
@@ -466,11 +418,8 @@ function vetCoDayRequiredColor(
 export type HardEdgeViolation = { id: string; targetId: string }
 
 /**
- * Runs one pass of DSatur graph coloring over all competitions.
- *
- * When `loadBalance` is true, `colorPenalty` adds per-event fullness costs so
- * events spread evenly across used days. When false, the algorithm minimizes
- * chromatic number without caring about balance.
+ * Runs one pass of DSatur graph coloring over all competitions, choosing each
+ * one's colour in `[0, nDays)` by `colorPenalty`.
  *
  * `seed` fixes colours the caller has already decided — the pinned events
  * (013 research D1). Seeded ids start coloured and never enter `uncolored`,
@@ -484,7 +433,6 @@ function dsaturLoop(
   nDays: number,
   compMap: Map<string, Competition>,
   packingFootprint: Map<string, number>,
-  loadBalance: boolean,
   stripHoursMap: Map<string, number>,
   dayCapacity: number,
   seed: ReadonlyMap<string, number>,
@@ -559,9 +507,9 @@ function dsaturLoop(
     let chosenColor: number
     if (validColors.length > 0) {
       let bestColor = validColors[0]
-      let bestPenalty = colorPenalty(id, validColors[0], graph, coloring, compMap, competitions, loadBalance, stripHoursMap, dayCapacity, nDays)
+      let bestPenalty = colorPenalty(id, validColors[0], graph, coloring, compMap, competitions, stripHoursMap, dayCapacity, nDays)
       for (let ci = 1; ci < validColors.length; ci++) {
-        const p = colorPenalty(id, validColors[ci], graph, coloring, compMap, competitions, loadBalance, stripHoursMap, dayCapacity, nDays)
+        const p = colorPenalty(id, validColors[ci], graph, coloring, compMap, competitions, stripHoursMap, dayCapacity, nDays)
         if (p < bestPenalty) {
           bestPenalty = p
           bestColor = validColors[ci]
@@ -571,9 +519,9 @@ function dsaturLoop(
     } else {
       // No valid color — pick least-bad color
       chosenColor = 0
-      let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, loadBalance, stripHoursMap, dayCapacity, nDays)
+      let bestPenalty = colorPenalty(id, 0, graph, coloring, compMap, competitions, stripHoursMap, dayCapacity, nDays)
       for (let c = 1; c < nDays; c++) {
-        const p = colorPenalty(id, c, graph, coloring, compMap, competitions, loadBalance, stripHoursMap, dayCapacity, nDays)
+        const p = colorPenalty(id, c, graph, coloring, compMap, competitions, stripHoursMap, dayCapacity, nDays)
         if (p < bestPenalty) {
           bestPenalty = p
           chosenColor = c
@@ -603,15 +551,13 @@ function dsaturLoop(
 // ──────────────────────────────────────────────
 
 /**
- * Assigns each competition to a tournament day (0-indexed) using two-phase
- * DSatur graph coloring on the constraint graph.
+ * Assigns each competition to a tournament day (0-indexed) by one DSatur pass
+ * over the constraint graph, colouring with every day the organizer chose
+ * (METHODOLOGY.md §Day Count).
  *
- * Phase 1 discovers the minimum number of days (no load balancing).
- * Phase 2 rebalances events within that minimum day count.
- *
- * Returns `effectiveDays` – the actual number of distinct days used – and
- * `violations`, the hard edges phase 2's least-bad-color fallback broke to
- * produce `dayMap`.
+ * Returns `effectiveDays` – the number of distinct days `dayMap` uses – and
+ * `violations`, the hard edges the least-bad-color fallback broke to produce
+ * `dayMap`.
  */
 export function assignDaysByColoring(
   graph: ConstraintGraph,
@@ -638,82 +584,34 @@ export function assignDaysByColoring(
   // CADET) more effective footprint than their raw strip-hours, so capacity
   // scoring treats a 300-fencer DIV1 event as heavier than a 300-fencer DIV3.
   const stripHoursMap = new Map<string, number>()
-  let totalStripHours = 0
   for (const c of competitions) {
     const raw = estimateCompetitionStripHours(c, config).total_strip_hours
-    const weighted = raw * categoryWeight(c)
-    stripHoursMap.set(c.id, weighted)
-    totalStripHours += weighted
+    stripHoursMap.set(c.id, raw * categoryWeight(c))
   }
 
   // The 10-hour planning day, not the hard window (METHODOLOGY.md §Strip-Hour
   // Capacity, Ops Manual 2026-27 p.17).
   const dayCapacity = config.strips_total * (config.DAY_LENGTH_MINS / 60)
 
-  // The pins, as a colouring both passes start from. Empty when there are no
+  // The pins, as a colouring the pass starts from. Empty when there are no
   // pins, which is what keeps the no-pins path identical (013 FR-058).
   const seed = new Map<string, number>()
-  let maxPinnedDay = -1
-  for (const pin of pinned) {
-    seed.set(pin.competition_id, pin.day)
-    if (pin.day > maxPinnedDay) maxPinnedDay = pin.day
-  }
+  for (const pin of pinned) seed.set(pin.competition_id, pin.day)
 
-  // Phase 1: find minimum days (no load balancing). Passes stripHoursMap +
-  // dayCapacity for signature uniformity but they're unused when loadBalance=false.
-  const phase1 = dsaturLoop(
+  // A pin's day is the caller's to keep inside [0, days_available)
+  // (PinnedPlacement, and buildConfig drops one that is not), so the colours
+  // are exactly the organizer's days.
+  const { coloring, violations } = dsaturLoop(
     graph, competitions, config.days_available, compMap, packingFootprint,
-    false, stripHoursMap, dayCapacity, seed,
-  )
-  const chromaticN = new Set(phase1.coloring.values()).size
-
-  // Day expansion: if raw capacity demand exceeds what chromaticN days can
-  // absorb at a reasonable fill target, expand — capped at the user's
-  // days_available and at MAX_EXPANDED_DAYS. chromaticN is always a floor
-  // (hard constraints must be respected). The first and last days count at
-  // their reduced share from 3 days up (METHODOLOGY.md §First and Last Day
-  // Capacity).
-  const capacityDays = dayCapacity > 0
-    ? capacityDemandedDays(totalStripHours / (dayCapacity * CAPACITY_TARGET_FILL))
-    : chromaticN
-  const expansionCap = Math.min(config.days_available, MAX_EXPANDED_DAYS)
-  const effectiveDays = Math.max(chromaticN, Math.min(capacityDays, expansionCap))
-
-  // Phase 2: rebalance with capacity-aware fill-ratio penalty. A pin on day 3
-  // needs four colours to exist even when the packer would have used two, so
-  // with pins the pass runs at `max(effectiveDays, maxPinnedDay + 1)`.
-  const phase2Days = pinned.length > 0
-    ? Math.max(effectiveDays, maxPinnedDay + 1)
-    : effectiveDays
-  const phase2 = dsaturLoop(
-    graph, competitions, phase2Days, compMap, packingFootprint,
-    true, stripHoursMap, dayCapacity, seed,
+    stripHoursMap, dayCapacity, seed,
   )
 
-  const sortedUsed = [...new Set(phase2.coloring.values())].sort((a, b) => a - b)
-  let dayMap: Map<string, number>
-  if (pinned.length > 0) {
-    // Compaction renumbers days, which would move a pin off the day the caller
-    // fixed it to — the one thing a pin must not do. The colouring stands as
-    // phase 2 produced it (research D1).
-    dayMap = new Map(phase2.coloring)
-  } else {
-    // Compact day assignments to contiguous 0..k-1
-    const dayRemap = new Map<number, number>()
-    for (let i = 0; i < sortedUsed.length; i++) dayRemap.set(sortedUsed[i], i)
-    dayMap = new Map<string, number>()
-    for (const [id, day] of phase2.coloring) dayMap.set(id, dayRemap.get(day)!)
-  }
-
-  // Phase 1's coloring is discarded — only its chromatic number survives, and
-  // it runs at `days_available` rather than `effectiveDays`, so its breaks
-  // describe a day assignment nobody receives. `dayMap` comes from phase 2,
-  // and `violations` must come from the same pass or it would name pairs the
-  // returned map does not put together. Compaction remaps day numbers only, so
-  // pairs sharing a color still share the compacted day.
+  // The colouring is the day map: each event keeps the day its penalty picked,
+  // and no day is renumbered, so a pin stays on the day the caller fixed it to
+  // (research D1) and `violations` names pairs that share a day in `dayMap`.
   return {
-    dayMap,
-    effectiveDays: sortedUsed.length,
-    violations: phase2.violations,
+    dayMap: coloring,
+    effectiveDays: new Set(coloring.values()).size,
+    violations,
   }
 }

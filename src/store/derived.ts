@@ -670,9 +670,10 @@ function computeAllFindings(state: StoreState): Finding[] {
 
   /**
    * The store day a target sits on, or null when it has no placement or an
-   * out-of-range one. `state.placements` and `state.days_available` — the
-   * store's own day axis, never `config.days_available`, which carries the
-   * scheduler's compacted one (research D4/D5).
+   * out-of-range one. `state.placements` and `state.days_available` – the
+   * store's own day axis, which `buildConfig` passes to the engine unchanged
+   * and day assignment uses in full (METHODOLOGY.md §Day Count). Read from the
+   * store, not from the drawn schedule's config (research D4/D5).
    */
   function dayOf(target: string): number | null {
     const placement = state.placements[target]

@@ -67,7 +67,9 @@ function smallConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfi
 
 describe('scheduleAllConcurrent — concurrent pools on disjoint strips', () => {
   it('two same-day events run pools concurrently on different strip indices', () => {
-    // Two events, both small enough to share strips on day 0.
+    // Two events, both small enough to share strips on day 0. The board has 1
+    // day: day assignment uses every chosen day (METHODOLOGY.md §Day Count),
+    // so 2 days would put the two events on different days.
     const c1 = comp('e1', {
       gender: Gender.MEN, weapon: Weapon.EPEE, category: Category.VETERAN,
       fencer_count: 20,
@@ -76,26 +78,25 @@ describe('scheduleAllConcurrent — concurrent pools on disjoint strips', () => 
       gender: Gender.WOMEN, weapon: Weapon.FOIL, category: Category.VETERAN,
       fencer_count: 20,
     })
-    const config = smallConfig()
+    const config = smallConfig({ days_available: 1 })
     const result = scheduleAllConcurrent([c1, c2], config)
 
     const s1 = result.schedule['e1']
     const s2 = result.schedule['e2']
     expect(s1).toBeDefined()
     expect(s2).toBeDefined()
+    // True by construction on a 1-day board – a cheap check that the premise
+    // below still holds if the board's day count changes.
+    expect(s1.assigned_day).toBe(s2.assigned_day)
 
-    // If the day-coloring places them on the same day, their pool intervals
-    // should overlap in time and use disjoint strip indices.
-    if (s1.assigned_day === s2.assigned_day) {
-      const overlap =
-        (s1.pool_start ?? 0) < (s2.pool_end ?? 0) &&
-        (s2.pool_start ?? 0) < (s1.pool_end ?? 0)
-      expect(overlap, `e1 and e2 pool intervals must overlap when same-day`).toBe(true)
+    const overlap =
+      (s1.pool_start ?? 0) < (s2.pool_end ?? 0) &&
+      (s2.pool_start ?? 0) < (s1.pool_end ?? 0)
+    expect(overlap, `e1 and e2 pool intervals must overlap when same-day`).toBe(true)
 
-      // Disjoint strips: total strip_count is at most strips_total and
-      // intervals are independent (no exclusive serialization).
-      expect((s1.pool_strip_count ?? 0) + (s2.pool_strip_count ?? 0)).toBeLessThanOrEqual(config.strips_total)
-    }
+    // Disjoint strips: total strip_count is at most strips_total and
+    // intervals are independent (no exclusive serialization).
+    expect((s1.pool_strip_count ?? 0) + (s2.pool_strip_count ?? 0)).toBeLessThanOrEqual(config.strips_total)
   })
 })
 
@@ -510,7 +511,9 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
   it('two concurrent STAGED events emit independent per-strip DE_ROUND_OF_16 intervals that sum at their overlap', () => {
     // Symmetric competitions (same fencer_count/weapon/strip target, differing
     // only by gender) with abundant single-day capacity produce identical R16
-    // windows — the overlap guard below confirms that determinism.
+    // windows — the overlap guard below confirms that determinism. The board
+    // has 1 day: day assignment uses every chosen day (METHODOLOGY.md §Day
+    // Count), so 2 days would put the two events on different days.
     // Bracket 16 sits at Div 1's round-of-16 video stage, so each event is one
     // DE_ROUND_OF_16 block asking min(4, 16/2) = 4 strips, with no prelims
     // whose wider ask would set the peak instead.
@@ -528,13 +531,14 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
       cut_mode: CutMode.DISABLED,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
-    const config = smallConfig({ days_available: 2, strips: makeStrips(40, 8) })
+    const config = smallConfig({ days_available: 1, strips: makeStrips(40, 8) })
     const result = scheduleAllConcurrent([a, b], config)
     const s1 = result.schedule['r16A']
     const s2 = result.schedule['r16B']
     expect(s1).toBeDefined()
     expect(s2).toBeDefined()
-    // Guard: symmetric competitions with abundant capacity land on the same day.
+    // True by construction on a 1-day board – a cheap check that the premise
+    // below still holds if the board's day count changes.
     expect(s1.assigned_day).toBe(s2.assigned_day)
 
     // Guard: confirms the two R16 windows genuinely overlap in time.
@@ -1184,10 +1188,12 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
   )
 
   it('a board that fits emits no RESOURCE_RECOMMENDATION bottleneck', () => {
-    // Same shape as test 1 (lines 64-75): two comp(...) events of 20 fencers
-    // each on a plain smallConfig() (2 days, 20 strips). validateConfig is
-    // checked first so this pins "the board really fits," not merely "this
-    // gate stays quiet for some other reason."
+    // Test 1's two comp(...) events of 20 fencers each, on a plain
+    // smallConfig() (2 days, 20 strips) rather than test 1's 1-day board,
+    // which validateConfig's days_available range rejects. Day assignment uses
+    // both days, so each event has a day to itself. validateConfig is checked
+    // first so this pins "the board really fits," not merely "this check stays
+    // quiet for some other reason."
     const c1 = comp('e1', {
       gender: Gender.MEN, weapon: Weapon.EPEE, category: Category.VETERAN,
       fencer_count: 20,
