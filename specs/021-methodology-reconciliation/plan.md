@@ -39,9 +39,10 @@ Full text in `decisions.md` and in the amendment's blocks.
 | O5 | **Video strip count** is any count from 0 to the strip total at any type, default 8 at a NAC. Doc only. | A0 |
 | O6 | **Y8 with Y10.** A −0.4 same-day bonus for Y8↔Y10 of the same weapon and gender, and for Y10↔Div 3. The term needs its own lookup, because the constraint graph drops weight-0 edges. | T5 |
 | O7 | **Weapon balance reads "keeps"** (second round). The owner: "whichever option avoids having a day where only epee is scheduled on that day (we need to balance ROW weapons with epee)". An event that leaves its day one-class pays +0.5 (the first event on an empty day, and every later same-class event on a day that still holds one class), an event that brings the missing class earns −0.5, and an event on a day holding both classes pays 0. Chosen on the 49-board probe (see Measurements). | T4 |
-| O8 | **An unplaced predecessor** (second round). The wait lapses: the waiting event's pools are ready as if the event waited on did not exist, from day start or any other floor that applies to it, such as the regional Group 1 window. One identical clause in amendment Blocks 44, 87, 83 and 66. | T6a |
+| O8 | **An unplaced predecessor** (second round). The wait lapses: the waiting event's pools are ready as if the event waited on did not exist, from day start or any other floor that applies to it, such as the regional Group 1 window. One identical clause in amendment Blocks 44, 88, 83 and 66. | T6a |
 | O9 | **Y10↔Div 3** (second round). Same weapon and gender, as drafted. | T5 |
 | O10 | **The cutoff on the board** (second round). The store's board check emits `pool-start-after-cutoff` for engine-placed and hand-moved events, as drafted. | T7 |
+| O11 | **The Veteran co-day is not a departure** (owner annotation). Veteran age bands are one event split by age band, so the manual's adjacent-age rule never applies. Doc only: amendment Blocks 90, 85 and 3. | A0 |
 
 Standing decisions that bind every task: no hard pair is ever relaxed (019), no backwards compatibility,
 the engine follows the 2026-27 Ops Manual's planning figures, and every METHODOLOGY text change is
@@ -309,7 +310,7 @@ T4–T8 may also move B1–B8 `stripRecommendation`, which every drift J1 report
 ### A0: METHODOLOGY amendment (docs, owner-approved text)
 
 - **Before A0.** The owner's answers O7–O10 are in the K cluster files and in `amendment.md` (O7's
-  "keeps" in Blocks 69 and 16, O8's lapse clause in Blocks 44, 66, 83 and 87, O10's four hand-move clauses
+  "keeps" in Blocks 69 and 16, O8's lapse clause in Blocks 44, 66, 83 and 88, O10's four hand-move clauses
   kept), and `tmp/021-amend/apply.py` re-ran clean. The orchestrator records O7–O10 and the four notes'
   defaults in the plan commit's body. If the owner objects to a note's default, the K cluster files change,
   `apply.py` re-runs clean and `amendment.md` is regenerated before A0 applies anything. Note 4 can change
@@ -560,7 +561,7 @@ round and smoke before its commit (see the header).
     gap is a named constant `VET_STAGGER_MINS` (60) in `constants.ts`, the Appendix A "Vet co-day stagger"
     row. It follows `REGIONAL_GROUP_1_WINDOW_MINS`'s precedent: if that one is a `TournamentConfig` field,
     the stagger becomes one too, with the P3 file chain and one more `keptRun` `configFields` case. The
-    wiring stays in or under `applyCrossEventEdges`, which Blocks 44 and 87 name. If it cannot, the task
+    wiring stays in or under `applyCrossEventEdges`, which Blocks 44 and 88 name. If it cannot, the task
     stops for a one-line amendment follow-up.
   - *Held set.* A successor whose same-day predecessor is unpinned and pending is kept out of `ready`.
     A plain re-queue at the same `ready_time` is ruled out: `compareNodes` has no state that changes

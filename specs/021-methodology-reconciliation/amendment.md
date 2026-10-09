@@ -1,6 +1,6 @@
 # 021 METHODOLOGY amendment – draft for the owner's approval
 
-Reconciles METHODOLOGY.md with the owner's rulings O1–O10 of 2026-10-08 (O7–O10 from the second round of answers) and the fourteen defaults the 021 plan takes on the owner's behalf. Task A0 commits the approved text verbatim, alone, before any code.
+Reconciles METHODOLOGY.md with the owner's rulings O1–O11 of 2026-10-08 (O7–O10 from the second round of answers, O11 from the owner's review annotation) and the fourteen defaults the 021 plan takes on the owner's behalf. Task A0 commits the approved text verbatim, alone, before any code.
 
 Line numbers are `METHODOLOGY.md` at `5edbdf7712`, before any edit. The blocks are numbered in the order A0 applies them, bottom of the file first, so every line number holds when its block is applied. A block whose After is empty deletes its Before lines. A block whose After repeats its Before and adds lines inserts new text after that line.
 
@@ -13,14 +13,15 @@ Line numbers are `METHODOLOGY.md` at `5edbdf7712`, before any edit. The blocks a
 - **O5 – Video strip count.** Any count from 0 to the strip total at any type, 8 by default at a NAC, and best-effort elsewhere.
 - **O6 – Y8 with Y10.** A -0.4 same-day bonus for Y8↔Y10 and for Y10↔Div 3 of the same weapon and gender.
 - **O7 – Weapon balance reads "keeps".** The owner asked for "whichever option avoids having a day where only epee is scheduled on that day (we need to balance ROW weapons with epee)". Every event that leaves its day one-class costs +0.5, not only the first one on an empty day, and bringing the missing class earns -0.5. Over 49 boards (B1–B8 and the ten templates) no reading left an épée-only day, and "keeps" left 0 one-class days against 1 for the delta form and 7 with no term (Blocks 69, 16, 14).
-- **O8 – An unplaced predecessor.** When the event waited on is never placed, the wait lapses. One identical clause closes the wait in Blocks 44, 87, 83 and 66.
+- **O8 – An unplaced predecessor.** When the event waited on is never placed, the wait lapses. One identical clause closes the wait in Blocks 44, 88, 83 and 66.
 - **O9 – Y10↔Div 3.** Same weapon and gender, as drafted.
-- **O10 – The cutoff on the board.** The store's board check emits `pool-start-after-cutoff` for engine-placed and hand-moved events, as drafted (Blocks 97, 42, 76 and 43).
+- **O10 – The cutoff on the board.** The store's board check emits `pool-start-after-cutoff` for engine-placed and hand-moved events, as drafted (Blocks 99, 42, 76 and 43).
+- **O11 – The Veteran co-day is not a departure.** From the owner's review annotation: Veteran age bands are one Veteran event split into sub-events by age band, not separate age groups, so Ops Manual p.20 – Group 1 bullet 2's adjacent-age rule never applies to them and the bands always share a day. Block 90 states this in §Veteran Age-Group Co-Day Rule, Block 85 drops the co-day from §Departures From the Manual, and Block 3 retitles its Appendix B entry to the stagger, which stays Piste Planner's own unsourced rule.
 - **Defaults 1–14.** The eight time-of-day preferences are deleted and recorded under a new §Retired Time-of-Day Preferences (1). §Constraint Relaxation becomes §When Days Are Too Few: nothing is relaxed, an event with every day blocked takes the least-bad day, and each broken hard pair or split Vet co-day draws a WARN (2, 9). Stale code pointers are fixed without line numbers (3). The intro and §Scheduling Algorithm describe the app as it is, and the capacity curve states the running values and records the rejected one (4). Veteran → Div 1 is 0.1, and Group 1 pairs are not scored by the crossover graph (5). Larger events go first, and Flight A gets its own within-day priority key (6). §Phase 3 describes DSatur day order and the constraint score as a tie-break (7). The 120-minute individual→team wait applies to same-category pairs only (8). Single-Day Fit is enforced when phases are placed (10). Video strip preservation applies only on days with a `REQUIRED` video phase, the peak-concurrent video budget is retired, and a video block holds its strips through the semis (11). The larger event is the one to flight, flighting is an organizer toggle, the flight buffer replaces the admin gap, and flighting groups are gone (12). Pointers to deleted code are removed or re-pointed (13). Validation outcomes, cut handling, the feasibility WARN, per-day start and end times, the 2–4 day range, the Y8 weight row and the Strip Count Suggestion ceiling are corrected (14).
 
 ## Review record
 
-Seven Opus drafters each wrote one cluster (K1–K7) from [`decisions.md`](./decisions.md) and the 32-agent audit ([`audit.md`](./audit.md)), and seven independent checkers reviewed them against the base and the source. Revisers took the checkers' corrections. A cross-cluster critic then read all seven together and raised 16 findings (3 must-fix, 8 should-fix, 5 nits) and 4 missing items. All were taken: the weapon-balance wording now uses the delta form in both places, the flighting suggestion text no longer claims to reach Findings, the morning-wave boundary reads the same in both places, the per-event validation ERRORs include the cut values, the hard-pair WARN for a pin is credited to the hand-placement check only, Appendix B gains the Vet Combined offset and the crossover graph weights, the Y8↔Y10 value is marked unsourced, the intro matches §Scheduling Algorithm on re-runs, two §Video Replay Policy lines are brought in line with O5, and the §Flighting heading becomes "Flighting Pair Suggestion". `tmp/021-amend/apply.py` (run with `python3 -I`) parses every block, checks that each Before occurs exactly once in the base, applies all blocks to a copy and checks every `(#anchor)` link against the copy's heading slugs. Result: 97 blocks, 0 unmatched, 0 overlaps, 0 broken anchors, base 1137 lines, amended 1190 lines. The plan review (recorded in `plan.md`) then added the cutoff to the four lists of what a hand move is checked against (Open item 7) and reworded the lapse clause offered in Open item 3. The re-run gave the same counts. The owner's second round (O7–O10) then rewrote Block 69 and the Appendix A row in Block 16 to the "keeps" reading, put the lapse clause into Blocks 44, 87, 83 and 66, and retired the first round's Open items 1, 3 and 7. The re-run again gave 97 blocks, 0 unmatched, 0 overlaps and 0 broken anchors.
+Seven Opus drafters each wrote one cluster (K1–K7) from [`decisions.md`](./decisions.md) and the 32-agent audit ([`audit.md`](./audit.md)), and seven independent checkers reviewed them against the base and the source. Revisers took the checkers' corrections. A cross-cluster critic then read all seven together and raised 16 findings (3 must-fix, 8 should-fix, 5 nits) and 4 missing items. All were taken: the weapon-balance wording now uses the delta form in both places, the flighting suggestion text no longer claims to reach Findings, the morning-wave boundary reads the same in both places, the per-event validation ERRORs include the cut values, the hard-pair WARN for a pin is credited to the hand-placement check only, Appendix B gains the Vet Combined offset and the crossover graph weights, the Y8↔Y10 value is marked unsourced, the intro matches §Scheduling Algorithm on re-runs, two §Video Replay Policy lines are brought in line with O5, and the §Flighting heading becomes "Flighting Pair Suggestion". `tmp/021-amend/apply.py` (run with `python3 -I`) parses every block, checks that each Before occurs exactly once in the base, applies all blocks to a copy and checks every `(#anchor)` link against the copy's heading slugs. Result: 97 blocks, 0 unmatched, 0 overlaps, 0 broken anchors, base 1137 lines, amended 1190 lines. The plan review (recorded in `plan.md`) then added the cutoff to the four lists of what a hand move is checked against (Open item 7) and reworded the lapse clause offered in Open item 3. The re-run gave the same counts. The owner's second round (O7–O10) then rewrote Block 69 and the Appendix A row in Block 16 to the "keeps" reading, put the lapse clause into Blocks 44, 88, 83 and 66, and retired the first round's Open items 1, 3 and 7. The re-run again gave 97 blocks, 0 unmatched, 0 overlaps and 0 broken anchors. The owner reviewed the applied copy in Plannotator and annotated one line, which became O11 (two blocks added, one rewritten). The final run gives 99 blocks, 0 unmatched, 0 overlaps and 0 broken anchors, base 1137 lines, amended 1189 lines.
 
 ## Notes for the owner
 
@@ -29,7 +30,7 @@ The owner answered Open items 1, 3 and 7 of the first draft as O7, O8 and O10. E
 - **Note 2 – Default 12's premise.** [`decisions.md`](./decisions.md) says the flighting suggestion "reaches Findings through `initialAnalysis`". In the source nothing outside analysis.ts reads `suggestions`, and Findings show only `analysis.warnings`. Default: the text names the WARNs instead (Blocks 59, 40 and 32), and Findings do not show the suggestion text. Showing it is a UI change outside 021, and those three blocks would change together.
 - **Note 4 – The morning-wave boundary is provisional.** Both §Video Strip Preservation (Block 52) and the Timing Constants row (Block 10) say a pool phase starting at exactly day start + 120 min is in the wave. Default: `<=`, as written. The V26 engine task measures `<` against `<=` first, and if `<` wins both change together.
 - **Note 5 – `flagFlightingCandidates` signature (Block 63).** Default: the engine adopts the doc's `(competitions, config)` and computes each event's cap inside, because the per-event override and analysis Pass 1 are per-event today.
-- **Note 6 – Re-runs.** The intro (Block 97) and §Scheduling Algorithm (Block 42) say Auto-assign re-runs after every edit to an engine input. Default: feature 020's hold while a blocking error shows and its "Re-run automatically" switch stay out of the doc. If the owner wants them, the same clause goes into both.
+- **Note 6 – Re-runs.** The intro (Block 99) and §Scheduling Algorithm (Block 42) say Auto-assign re-runs after every edit to an engine input. Default: feature 020's hold while a blocking error shows and its "Re-run automatically" switch stay out of the doc. If the owner wants them, the same clause goes into both.
 
 ## Block 1 – Appendix B – Departures, :1124
 
@@ -66,7 +67,7 @@ After:
 
 ## Block 3 – Appendix B – Departures, :1113
 
-Sources (cluster block K7-16): O1; audit R9, DS-EDGE, L13, L8
+Sources (cluster block K7-16): O1; O11 (owner annotation, 2026-10-08); audit R9, DS-EDGE, L13, L8
 
 Before:
 ~~~
@@ -75,7 +76,7 @@ Before:
 
 After:
 ~~~
-- **Veteran age-group co-day.** Ops Manual p.20 – Group 1 keeps immediately adjacent age groups off the same day. The spec puts every age-banded Veteran individual event of one gender and weapon on one day (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)). Staffing, referees and venue setup are coordinated per weapon and gender, and nested age eligibility means one fencer often enters several of these events. On that day the bands start oldest first with a 60-minute stagger: each younger band's pools become ready 60 minutes after the next-older band's pools start, and no band waits for another to finish. The order and the stagger are Piste Planner's own rule, unsourced – the one reference found describes the 2026 NAC Veteran events as held "on the same day with different start times".
+- **Veteran co-day stagger.** The age-banded Veteran events of one gender and weapon share a day, and that is not a departure: they are one Veteran event split into sub-events by age band, so Ops Manual p.20 – Group 1 bullet 2's adjacent-age rule does not apply to them (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)). On that day the bands start oldest first with a 60-minute stagger: each younger band's pools become ready 60 minutes after the next-older band's pools start, and no band waits for another to finish. The order and the stagger are Piste Planner's own rule, unsourced – the one reference found describes the 2026 NAC Veteran events as held "on the same day with different start times".
 ~~~
 
 ## Block 4 – Appendix B – Departures, :1112
@@ -1486,7 +1487,18 @@ After:
 (see [`constants.ts`](src/engine/constants.ts) – `GROUP_1_MANDATORY`, `CROSSOVER_GRAPH`, and [`dayColoring.ts`](src/engine/dayColoring.ts) – `colorPenalty` for the two same-day bonuses)
 ~~~
 
-## Block 85 – Departures From the Manual, Y8 with Y10, :164
+## Block 85 – Departures From the Manual, Veteran co-day removed, :165
+
+Sources (cluster block K2-14): O11 (owner annotation, 2026-10-08)
+
+Before:
+~~~
+- **Age-banded Veteran events** of one gender and weapon share a day, although Vet 40–80 are adjacent age groups (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)).
+~~~
+
+After: nothing – the Before lines are deleted.
+
+## Block 86 – Departures From the Manual, Y8 with Y10, :164
 
 Sources (cluster block K2-06): O6; audit L9b
 
@@ -1500,7 +1512,7 @@ After:
 - **Y8 can and should share a day with Y10** of the same weapon and gender, although Ops Manual p.20 – Group 1 bullet 2 keeps immediately adjacent age groups apart. Day assignment gives the pair a -0.4 same-day bonus (see [Appendix A](#penalty-weights)).
 ~~~
 
-## Block 86 – Regional Types, Group 1 penalty, :150
+## Block 87 – Regional Types, Group 1 penalty, :150
 
 Sources (cluster block K2-05): default 2 (:150 names the cross-level ind/team exception); audit RX3
 
@@ -1514,7 +1526,7 @@ After:
 At ROC, RYC and RJCC fencers often enter several events in one day (Y14 in the morning, Div 2 in the afternoon). Every Group 1 pair is a soft preference there: day assignment adds the regional Group 1 pair penalty when a pair shares a day (see [Appendix A](#penalty-weights)). The exception is Div 1 individual ↔ Junior team and Junior individual ↔ Div 1 team, which stay hard at every type (see [Individual/Team Separation](#individualteam-separation)).
 ~~~
 
-## Block 87 – Within-Day Age-Descending Order, :116–118
+## Block 88 – Within-Day Age-Descending Order, :116–118
 
 Sources (cluster block K2-04): O1; O8 (the wait lapses when the event waited on is never placed); default 13 (daySequencing.ts deleted); audit DS, DS-EDGE (verifier correction), PT-9, R9 (verifier correction), L8, L13 (verifier correction)
 
@@ -1535,7 +1547,7 @@ After:
 - The stagger is Piste Planner's own rule and is unsourced – the one reference found by web research for the 2026-08-31 methodology review describes the 2026 NAC Veteran events as "scheduled on the same day with different start times" (see backlog §Vet co-day serialization is unsourced). It is listed in [Appendix B](#appendix-b-departures-from-the-operations-manual).
 ~~~
 
-## Block 88 – Veteran Age-Group Co-Day Rule, split co-day WARN, :112
+## Block 89 – Veteran Age-Group Co-Day Rule, split co-day WARN, :112
 
 Sources (cluster block K2-03): default 9 (R7b, `vet-co-day-split`); default 2 (a split Vet co-day draws its own WARN); audit R7b, R7c
 
@@ -1550,7 +1562,21 @@ After:
 - When a pin or the least-bad fallback (see [When Days Are Too Few](#when-days-are-too-few)) splits the age-banded events of one gender and weapon across days, the engine emits a WARN with rule `vet-co-day-split`, and so does the check that runs when the organizer moves an event by hand. Like the other broken hard rules it cannot be dismissed. The check reads the final day map, pins included.
 ~~~
 
-## Block 89 – Same-Population Conflicts, :90
+## Block 90 – Veteran Age-Group Co-Day Rule, not a departure, :110
+
+Sources (cluster block K2-13): O11 (owner annotation, 2026-10-08)
+
+Before:
+~~~
+- This departs from Ops Manual p.20 – Group 1 bullet 2, which keeps immediately adjacent age groups off the same day (see [Appendix B: Departures from the Operations Manual](#appendix-b-departures-from-the-operations-manual)).
+~~~
+
+After:
+~~~
+- Ops Manual p.20 – Group 1 bullet 2 keeps immediately adjacent age groups off the same day, and that rule does not reach the Veteran age bands. Vet 40, Vet 50, Vet 60, Vet 70 and Vet 80 are not separate age groups in the manual's sense: they are one Veteran event split into sub-events by age band. So the bands always share a day and carry no adjacent-age separation, and the co-day is not a departure from the manual (owner ruling, 2026-10-08).
+~~~
+
+## Block 91 – Same-Population Conflicts, :90
 
 Sources (cluster block K2-02): default 2 (:90 "hard at every tournament type"); audit RX2.2, C4 (verifier correction)
 
@@ -1564,7 +1590,7 @@ After:
 - Two competitions with **identical age category, gender, and weapon** cannot be on the same day. This includes individual + team pairs of the same category and weapon: Junior Men's Foil ind + Junior Men's Foil team, Cadet Women's Epee ind + Cadet Women's Epee team, **Vet Men's Foil ind + Vet Men's Foil team**, etc., all must be on different days. This is hard at every tournament type.
 ~~~
 
-## Block 90 – Hard Constraints, intro, :86
+## Block 92 – Hard Constraints, intro, :86
 
 Sources (cluster block K2-01): default 2 (RX2.1, :86 – the stopping rules are a different set from the day rules); default 3 (PT-1); default 9; default 10; default 14 (R2, R3); audit RX2.1 (verifier correction), PT-1, R7c, SEV-same-population
 
@@ -1583,7 +1609,7 @@ These rules are never traded for a soft preference, but they do not all act the 
 [Team Events Cannot Use Cuts](#team-events-cannot-use-cuts) draws only a WARN. The one exception by tournament type is [Overlapping-Population Separation (Group 1)](#overlapping-population-separation-group-1): it is hard at national types and soft at regional types. (see [`validation.ts`](src/engine/validation.ts) – `validateConfig`, [`concurrentScheduler.ts`](src/engine/concurrentScheduler.ts) – `scheduleAllConcurrent`, [`crossover.ts`](src/engine/crossover.ts), [`constraintGraph.ts`](src/engine/constraintGraph.ts), [`dayColoring.ts`](src/engine/dayColoring.ts))
 ~~~
 
-## Block 91 – Outputs, the time paragraph and the 4:00 PM pool cutoff, :80
+## Block 93 – Outputs, the time paragraph and the 4:00 PM pool cutoff, :80
 
 Sources (cluster block K1-07): O2; default 13 (`LATEST_START_MINS` is deleted, O2 uses the offset); audit AX-CUTOFF, K2 (verifier correction: offset, not clock 16:00), P2a
 
@@ -1597,7 +1623,7 @@ After:
 All times are minutes from midnight (e.g., 540 = 9:00 AM). The default scheduling day runs from 9:00 AM to 7:00 PM (10 hours), the planning day of Ops Manual p.17. 7:00 PM is a soft target: the engine may place work until the day's hard end at 10:00 PM, and a day that ends after 7:00 PM draws a warning. An event's last phase alone may end past the hard end, up to midnight, and draws a warning of its own (see [Same-Day Completion](#same-day-completion)). An event's first pool phase – its pools, or Flight A when it is flighted – should not start later than 7 hours after day start, which is 4:00 PM on a 9:00 AM day. An event whose first pool phase starts later is still placed, never dropped or moved, and draws a WARN (`pool-start-after-cutoff`) that carries its start time. Flight B is exempt. This cutoff is Piste Planner's own rule and unsourced, since no current USA Fencing source sets one (see [Pool Start Cutoff](#pool-start-cutoff), [Appendix B](#appendix-b-departures-from-the-operations-manual), and [`constants.ts`](src/engine/constants.ts) – `DAY_START_MINS`, `DAY_END_MINS`, `DAY_HARD_END_MINS`, `LATEST_START_OFFSET`).
 ~~~
 
-## Block 92 – Inputs, per-competition options (start time, latest end, flighting), :60–62
+## Block 94 – Inputs, per-competition options (start time, latest end, flighting), :60–62
 
 Sources (cluster block K1-06): default 14 (UV1c: start time and latest end move to the per-day input, see K1-05); default 12 (flighting is an organizer toggle the engine suggests, the suggestion stays advisory); audit UV1c, SC1c
 
@@ -1613,7 +1639,7 @@ After:
   - **Flighting**: a per-event toggle the organizer turns on. The engine suggests it when a competition's pool count exceeds the per-event strip cap, and the suggestion is advisory – the engine never flights an event itself (see [Strip Budget](#strip-budget) and [Flighting Suggestion](#flighting-suggestion))
 ~~~
 
-## Block 93 – Inputs, tournament duration and day times, :54–55
+## Block 95 – Inputs, tournament duration and day times, :54–55
 
 Sources (cluster block K1-05): default 14 (:54 states 2–4 days as the offered range, saved files accept 1–14 with a WARN outside 2–4; UV1c moves start time and latest end into a per-day input); O3 (day assignment uses every day the organizer chose); audit SEV-days-available-range, UV1a (verifier correction), CAL-CAP (verifier correction), UV1c
 
@@ -1632,7 +1658,7 @@ After:
   - **Latest end time**: defaults to 7:00 PM, a soft target with a 10:00 PM hard end. An event's last phase alone may run past the hard end, up to midnight, with a warning (see [Same-Day Completion](#same-day-completion))
 ~~~
 
-## Block 94 – Inputs, refs per pool, :53
+## Block 96 – Inputs, refs per pool, :53
 
 Sources (cluster block K1-04): default 13 (L16: "set by type", not "defaulted"); audit L16
 
@@ -1646,7 +1672,7 @@ After:
   - **Refs per pool**: 1 or 2, set by tournament type – two at NAC, SYC and SJCC, one at ROC, RYC and RJCC (unsourced, see [Refs Per Pool](#refs-per-pool-input-that-affects-the-output)). It is not a scheduling input (see [Not Scheduling Inputs](#not-scheduling-inputs))
 ~~~
 
-## Block 95 – Inputs, video strip count, :51
+## Block 97 – Inputs, video strip count, :51
 
 Sources (cluster block K1-03): O5; audit AX-VIDEO (with its verifier correction on "NACs only"), UV1b
 
@@ -1660,7 +1686,7 @@ After:
   - **Video strip count**: how many of the strips have video, any count from 0 to the strip total, at every tournament type – 8 by default at a NAC and 0 elsewhere. At a NAC these strips are used for the video stage of staged DEs. Each video stage asks for `min(4, bracketSize / 2)` video strips, so the default of 8 lets two events run their video stages at once. Multiple events in the video stage contend for these strips. At every other type video replay is best-effort, so no phase needs a video strip and any phase may use one after the plain strips (see [Video Replay Policy](#video-replay-policy)).
 ~~~
 
-## Block 96 – Table of Contents, :19
+## Block 98 – Table of Contents, :19
 
 Sources (cluster block K1-02): default 2 (rename §Constraint Relaxation to "When Days Are Too Few", fix the TOC); audit RX1
 
@@ -1674,7 +1700,7 @@ After:
 5. [When Days Are Too Few](#when-days-are-too-few)
 ~~~
 
-## Block 97 – Intro, :3
+## Block 99 – Intro, :3
 
 Sources (cluster block K1-01): default 4 (C10); default 9 (the hand-placement check also reports a split Vet co-day); audit C10. Worded to match default 4 and K5-06. Feature 020's blocking-error hold and "Re-run automatically" Settings switch are left out – if the owner wants them documented, the same clause goes into K1-01 and K5-06 together; O10 (2026-10-08: the store's board check emits `pool-start-after-cutoff` for engine-placed and hand-moved events, as drafted)
 

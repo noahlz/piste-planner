@@ -58,11 +58,17 @@ SHA-256 `32a4e0afb45abfbf8239f7bdbc15dda9eb1487c959893442b6029a6d0998b260`, B1�
 - **O8 – An unplaced predecessor.** When the event waited on (an older Vet band, or a team event's individual
   counterpart) is never placed, the wait lapses: the waiting event's pools are ready as if it did not exist, from
   day start or from any other floor that applies to it, such as the regional Group 1 window. One identical clause
-  goes into amendment Blocks 44, 87, 83 and 66, and T6a's release follows it.
+  goes into amendment Blocks 44, 88, 83 and 66, and T6a's release follows it.
 - **O9 – Y10↔Div 3.** The bonus needs the same weapon and gender, as drafted.
 - **O10 – The cutoff on the board.** The store's board check emits `pool-start-after-cutoff` for engine-placed and
   hand-moved events, as drafted. T7 builds both the engine WARN and the store board check, test-first, and the
   smoke asserts the Findings row.
+- **O11 – The Veteran co-day is not a departure** (the owner's annotation on the applied amendment). Veteran age
+  bands are one Veteran event split into sub-events by age band, not separate age groups, so Ops Manual p.20 – Group 1
+  bullet 2's adjacent-age rule never applies to them and the bands always share a day. Amendment Blocks 90 and 85
+  say so and drop the co-day from §Departures From the Manual, and Block 3 retitles the Appendix B entry to the
+  stagger, which stays Piste Planner's own unsourced rule. No engine change. Amendment Blocks 44, 88, 83 and 66 carry
+  O8's clause after the renumbering.
 
 Standing owner decisions: the eight time-of-day weights are retired as Phase D casualties (2026-10-04); no hard
 pair is ever relaxed (019); no backwards compatibility (product unreleased); the engine follows the 2026-27 Ops
