@@ -6,7 +6,7 @@ import {
   buildStrips,
   peakDeStripDemand,
 } from '../../src/engine/stripBudget.ts'
-import { makeCompetition, makeConfig } from '../helpers/factories.ts'
+import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { Weapon, DeMode } from '../../src/engine/types.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
@@ -148,12 +148,17 @@ describe('recommendRefCount', () => {
 // ──────────────────────────────────────────────
 
 describe('flagFlightingCandidates', () => {
+  /** A config whose global pool strip cap is `cap`: `cap` strips at 100%. */
+  const capConfig = (cap: number) => makeConfig({ strips: makeStrips(cap, 0), max_pool_strip_pct: 1 })
+  /** 10 strips at the factory's 0.80: a global cap of 8. */
+  const tenStrips = makeConfig({ strips: makeStrips(10, 0) })
+
   it('returns empty array when all events fit within the cap', () => {
     const comps = [
       makeCompetition({ id: 'a', fencer_count: 21 }), // 3 pools
       makeCompetition({ id: 'b', fencer_count: 14 }), // 2 pools
     ]
-    expect(flagFlightingCandidates(comps, 5)).toEqual([])
+    expect(flagFlightingCandidates(comps, capConfig(5))).toEqual([])
   })
 
   it('flags events whose pool count exceeds the cap', () => {
@@ -162,7 +167,7 @@ describe('flagFlightingCandidates', () => {
       makeCompetition({ id: 'small', fencer_count: 14 }), // 2 pools
     ]
     // cap=8: 10>8 → 'big' flagged; 2≤8 → 'small' not flagged
-    expect(flagFlightingCandidates(comps, 8)).toEqual(['big'])
+    expect(flagFlightingCandidates(comps, capConfig(8))).toEqual(['big'])
   })
 
   it('flags multiple events when several exceed the cap', () => {
@@ -172,19 +177,53 @@ describe('flagFlightingCandidates', () => {
       makeCompetition({ id: 'c', fencer_count: 14 }), // 2 pools
     ]
     // cap=7: 10>7, 8>7 → both flagged
-    expect(flagFlightingCandidates(comps, 7)).toEqual(['a', 'b'])
+    expect(flagFlightingCandidates(comps, capConfig(7))).toEqual(['a', 'b'])
   })
 
   it('does not flag an event exactly at the cap', () => {
     const comps = [makeCompetition({ id: 'exact', fencer_count: 56 })] // 8 pools
-    expect(flagFlightingCandidates(comps, 8)).toEqual([])
+    expect(flagFlightingCandidates(comps, capConfig(8))).toEqual([])
   })
 
   it('correctly computes n_pools=1 for small events (≤9 fencers), not ceil(9/7)=2', () => {
     // Without the poolCountFor fix, Math.ceil(9/7)=2 would incorrectly flag this
     // at a cap of 1, but the real pool count is 1 so it should not be flagged at cap=1.
     const comps = [makeCompetition({ id: 'tiny', fencer_count: 9 })]
-    expect(flagFlightingCandidates(comps, 1)).toEqual([])
+    expect(flagFlightingCandidates(comps, capConfig(1))).toEqual([])
+  })
+
+  // The cap is per event (METHODOLOGY §Strip Budget): computeStripCap with the
+  // event's own max_pool_strip_pct_override, the global percentage otherwise.
+
+  it('flags an event whose own override lowers its cap below its pools, though the global cap would not', () => {
+    // 8 pools: within the global cap of 8, over its own cap of floor(10 × 0.5) = 5.
+    const comps = [makeCompetition({ id: 'small', fencer_count: 56, max_pool_strip_pct_override: 0.5 })]
+    expect(flagFlightingCandidates(comps, tenStrips)).toEqual(['small'])
+  })
+
+  it('does not flag an event whose own override raises its cap to its pools, though the global cap would', () => {
+    // Both are 10 pools, over the global cap of 8. 'raised' has its own cap of
+    // floor(10 × 1.0) = 10, while 'global' keeps the global cap and is flagged.
+    const comps = [
+      makeCompetition({ id: 'raised', fencer_count: 70, max_pool_strip_pct_override: 1.0 }),
+      makeCompetition({ id: 'global', fencer_count: 70 }),
+    ]
+    expect(flagFlightingCandidates(comps, tenStrips)).toEqual(['global'])
+  })
+
+  it("skips an event over the config's MAX_FENCERS, as analysis Pass 1 does", () => {
+    // 70 fencers is sizeable at the engine's own bounds (336) but not under a
+    // config maximum of 64, so it has no pool round to flight.
+    const comps = [makeCompetition({ id: 'over', fencer_count: 70 })]
+    expect(flagFlightingCandidates(comps, makeConfig({ strips: makeStrips(10, 0), MAX_FENCERS: 64 }))).toEqual([])
+  })
+
+  it("skips an event under the config's MIN_FENCERS, as analysis Pass 1 does", () => {
+    // 5 fencers is sizeable at the engine's own minimum (2) and would be flagged
+    // over a cap of 0, but not under a config minimum of 8.
+    const comps = [makeCompetition({ id: 'under', fencer_count: 5 })]
+    const config = makeConfig({ strips: makeStrips(10, 0), max_pool_strip_pct: 0, MIN_FENCERS: 8 })
+    expect(flagFlightingCandidates(comps, config)).toEqual([])
   })
 })
 

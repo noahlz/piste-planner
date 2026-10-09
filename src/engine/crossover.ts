@@ -130,7 +130,7 @@ function group2SoftSeparationPenalty(c1: CompFields, c2: CompFields): number | u
  * Same-population check (METHODOLOGY §Same-Population Conflicts).
  *
  * Two competitions are same-population (must NOT share a day, hard at every
- * relaxation level) when they share category + gender + weapon, with one
+ * tournament type) when they share category + gender + weapon, with one
  * Veteran-specific refinement:
  *
  * - For non-Veteran categories: same category + gender + weapon is enough.

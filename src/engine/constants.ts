@@ -78,11 +78,8 @@ export const MORNING_WAVE_WINDOW_MINS = 120
 // DE / referee constants
 // ──────────────────────────────────────────────
 
-// Estimated minutes for the gold bout (and bronze for teams) that the scheduler does NOT allocate
-// strips for. Tournament organizers run these ad-hoc on whatever strip frees up next. Used by
-// ScheduleResult.de_total_end and ref-demand tail extension.
-export const INDIV_TAIL_MINS = 30
-export const TEAM_TAIL_MINS = 60
+// INDIV_TAIL_MINS and TEAM_TAIL_MINS live in types.ts beside tailEstimateMins,
+// their one reader, since this module imports types.ts.
 
 export const DE_REFS = 1
 // Cap on the strips a single-stage DE or prelims block asks for:
@@ -188,8 +185,8 @@ export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: n
 // ──────────────────────────────────────────────
 // Default fencer counts keyed by category × weapon × gender (individual events)
 // or category × TEAM (team events).
-// Derived from P75 of empirical NAC/Summer Nationals and regional data,
-// rounded to nearest 10, skewed towards larger events (METHODOLOGY Appendix A).
+// Means of the B1–B7 real-data scenarios (src/data/tournaments.ts) per
+// category, weapon and gender, rounded to nearest 10 (METHODOLOGY Appendix A).
 // ──────────────────────────────────────────────
 
 export type FencerDefaultKey =
@@ -430,9 +427,11 @@ export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>
   },
   [Category.JUNIOR]: { [Category.DIV1]: 0.8, [Category.DIV1A]: 0.8 },
   // Veteran ↔ Division crossover: divisions are rating-based (open to any age)
-  // but in practice only ~5–10% of vet fencers also enter Div events. Keep a
-  // small penalty so the scheduler avoids same-day pairing when it can, but
-  // make it very relaxable — these are not strong fencer-overlap edges.
+  // but in practice only ~5–10% of vet fencers also enter Div events. A small
+  // soft crossover edge, so day assignment avoids same-day pairing when it can
+  // but weighs it lightly – these are not strong fencer-overlap edges. The
+  // Vet individual ↔ Div 1A individual pair is scored by GROUP_2_SOFT_SEPARATIONS
+  // instead, which overrides this weight.
   [Category.VETERAN]: {
     [Category.DIV1]: 0.1,
     [Category.DIV2]: 0.1,

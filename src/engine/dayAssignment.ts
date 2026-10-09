@@ -1,8 +1,11 @@
 /**
- * Day Assignment Engine — METHODOLOGY.md §Scheduling Algorithm / §Capacity-Aware Day Assignment
+ * Day-assignment scoring helpers – METHODOLOGY.md §Scheduling Algorithm.
  *
- * Answers: which day should this competition be scheduled on?
- * Uses penalty scoring with constraint relaxation to find the best valid day.
+ * Holds `constraintScore` (the Phase 3 score, a late tie-break in the
+ * concurrent scheduler's within-day priority order) and `saberPileupPenalty`
+ * (a soft term in dayColoring.ts's day choice). Days themselves are assigned by
+ * DSatur coloring in dayColoring.ts, where hard rules block a day outright and
+ * soft weights only rank days, so nothing is relaxed (§When Days Are Too Few).
  */
 import { Weapon } from './types.ts'
 import type { Competition, TournamentConfig } from './types.ts'

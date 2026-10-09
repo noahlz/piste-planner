@@ -7,8 +7,7 @@
 
 import type { Competition, Strip, TournamentConfig } from './types.ts'
 import { Weapon, DeMode } from './types.ts'
-import { ENGINE_FENCER_BOUNDS, isSizeableCount, poolCountFor } from './pools.ts'
-import type { FencerCountBounds } from './pools.ts'
+import { isSizeableCount, poolCountFor } from './pools.ts'
 import { peakDeRefDemand } from './refs.ts'
 import { computeBracketSize, deVideoStripAsk } from './de.ts'
 
@@ -135,18 +134,23 @@ export function recommendRefCount(
 }
 
 /**
- * Returns the IDs of competitions whose pool round needs more strips than the
- * cap allows, making them candidates for flighting. A competition
- * `isSizeableCount` rejects has no pool round and is never a candidate
- * (018 T4). `bounds` defaults to the engine's own.
+ * Returns the IDs of competitions whose pool round needs more strips than
+ * their own cap allows, making them candidates for flighting (METHODOLOGY
+ * §Strip Budget). Each event's cap is `computeStripCap` with its own
+ * `max_pool_strip_pct_override`, the global percentage otherwise. A
+ * competition `isSizeableCount` rejects under the config's bounds has no pool
+ * round and is never a candidate (018 T4). Analysis Pass 1 reads its
+ * strip-deficit candidates from here.
  */
 export function flagFlightingCandidates(
   competitions: Competition[],
-  poolStripCap: number,
-  bounds: FencerCountBounds = ENGINE_FENCER_BOUNDS,
+  config: TournamentConfig,
 ): string[] {
   return competitions
-    .filter(comp => isSizeableCount(comp.fencer_count, bounds))
-    .filter(comp => poolCountFor(comp.fencer_count, comp.use_single_pool_override) > poolStripCap)
+    .filter(comp => isSizeableCount(comp.fencer_count, config))
+    .filter(comp => {
+      const cap = computeStripCap(config.strips_total, config.max_pool_strip_pct, comp.max_pool_strip_pct_override)
+      return poolCountFor(comp.fencer_count, comp.use_single_pool_override) > cap
+    })
     .map(comp => comp.id)
 }

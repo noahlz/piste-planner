@@ -129,6 +129,8 @@ describe('deriveEventSchedule and estimateEventFootprint give no result for an u
 
 describe('referee and flighting suggestions skip an unsizeable event', () => {
   const sabre = (id: string, n: number) => event(id, n, { weapon: Weapon.SABRE })
+  // A pool strip cap of 0, so any sizeable event is a candidate.
+  const zeroCap = { ...config, max_pool_strip_pct: 0 }
 
   it.each(UNSIZEABLE)('recommendRefCount: an extra sabre event at %s changes nothing', (n) => {
     const without = recommendRefCount([sabre('a', 40)], 1, config)
@@ -136,11 +138,11 @@ describe('referee and flighting suggestions skip an unsizeable event', () => {
   })
 
   it.each(UNSIZEABLE)('flagFlightingCandidates: %s is never a candidate', (n) => {
-    expect(flagFlightingCandidates([event('x', n)], 0)).toEqual([])
+    expect(flagFlightingCandidates([event('x', n)], zeroCap)).toEqual([])
   })
 
   it('guard: flagFlightingCandidates still flags a count of 2 over a cap of 0', () => {
-    expect(flagFlightingCandidates([event('two', 2)], 0)).toEqual(['two'])
+    expect(flagFlightingCandidates([event('two', 2)], zeroCap)).toEqual(['two'])
   })
 
   it.each(UNSIZEABLE)('suggestFlightingGroups: %s pairs with nothing', (n) => {

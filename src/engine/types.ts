@@ -508,13 +508,20 @@ export interface CatalogueEntry {
 // ──────────────────────────────────────────────
 
 /**
+ * Estimated minutes for the gold bout (and bronze for teams) that the scheduler
+ * does not allocate strips for – organizers run these ad hoc on whatever strip
+ * frees up next (METHODOLOGY.md §Scheduler Stops at Semis). Defined here rather than in
+ * constants.ts, which imports this module, so `tailEstimateMins` can read them.
+ */
+export const INDIV_TAIL_MINS = 30
+export const TEAM_TAIL_MINS = 60
+
+/**
  * Returns the estimated minutes for the gold (and bronze for team) bouts that follow the
  * scheduler's last allocated phase. See METHODOLOGY.md §Scheduler Stops at Semis.
  */
 export function tailEstimateMins(eventType: EventType): number {
-  // Import constants inline to avoid a circular-dependency (types.ts ← constants.ts ← types.ts).
-  // Values are duplicated from INDIV_TAIL_MINS / TEAM_TAIL_MINS and must stay in sync.
-  return eventType === EventType.TEAM ? 60 : 30
+  return eventType === EventType.TEAM ? TEAM_TAIL_MINS : INDIV_TAIL_MINS
 }
 
 /**

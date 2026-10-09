@@ -737,7 +737,6 @@ function applyCrossEventEdges(events: EventState[], config: TournamentConfig): R
  * run, and the retry's reset to day start would undo it. Every pair sets the
  * same floor, so windows do not stack. Keyed by category, weapon and gender
  * alone, for any mix of individual and team events (024 plan D10).
- * Relaxation-level suppression is not modelled (021).
  */
 function applyRegionalWindowFloors(events: EventState[], config: TournamentConfig): RegionalWindowPair[] {
   const pairs: RegionalWindowPair[] = []
@@ -1503,9 +1502,11 @@ function commitEventResult(
 /**
  * Picks the index in `ready` of the highest-priority node. Priority order:
  * 1. Earlier ready_time first
- * 2. Y8/Y10 first — must start in the first slot of the day (mirrors
- *    daySequencing.ts rule 1; without this, large events grab strip-time at
- *    dayStart and the small youth events get crowded out of their DE windows).
+ * 2. Y8/Y10 first among nodes ready at the same time – a tie-break after
+ *    ready_time, not a promise of the day's first slot. Without it, large
+ *    events grab strip-time at day start and the small youth events get
+ *    crowded out of their DE windows (METHODOLOGY §Within-Day Priority Order:
+ *    Ops Manual p.20 – Group 2 asks for Y10 early, and Y8 is a departure).
  * 3. Video-required first
  * 4. Larger desired_strip_count first
  * 5. Higher constraint_score first
@@ -1525,7 +1526,7 @@ function isYouthPriorityCategory(category: Category): boolean {
 function compareNodes(a: PhaseNode, b: PhaseNode, events: EventState[]): number {
   // Lower ready_time wins.
   if (a.ready_time !== b.ready_time) return a.ready_time - b.ready_time
-  // Y8/Y10 wins — youth-priority categories must start early in the day.
+  // Y8/Y10 wins among nodes ready at the same time (METHODOLOGY §Within-Day Priority Order).
   const aEvent = findEventState(events, a.event_id)
   const bEvent = findEventState(events, b.event_id)
   const aYouth = aEvent !== null && isYouthPriorityCategory(aEvent.competition.category)
