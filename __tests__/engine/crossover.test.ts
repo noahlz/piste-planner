@@ -4,6 +4,8 @@ import {
   crossoverPenalty,
   getProximityWeight,
   findIndividualCounterpart,
+  isAgeBandedVet,
+  vetBandRank,
 } from '../../src/engine/crossover.ts'
 import { Category, Gender, Weapon, EventType, TournamentType, VetAgeGroup } from '../../src/engine/types.ts'
 import { CROSSOVER_GRAPH } from '../../src/engine/constants.ts'
@@ -467,5 +469,32 @@ describe('findIndividualCounterpart', () => {
     const other = makeCompetition({ id: 'jr-ind', category: Category.JUNIOR, gender: Gender.MEN, weapon: Weapon.FOIL, event_type: EventType.INDIVIDUAL })
     const result = findIndividualCounterpart(team, [other])
     expect(result).toBeUndefined()
+  })
+})
+
+// The one co-day predicate and band order the Vet stagger, the hard pairs and
+// the split co-day check share (021 T6c).
+describe('isAgeBandedVet', () => {
+  const VET = Category.VETERAN
+  const IND = EventType.INDIVIDUAL
+  it.each<[string, Category, EventType, VetAgeGroup | null, boolean]>([
+    ['a Vet 40 individual', VET, IND, VetAgeGroup.VET40, true],
+    ['a Vet 50 individual', VET, IND, VetAgeGroup.VET50, true],
+    ['a Vet 60 individual', VET, IND, VetAgeGroup.VET60, true],
+    ['a Vet 70 individual', VET, IND, VetAgeGroup.VET70, true],
+    ['a Vet 80 individual', VET, IND, VetAgeGroup.VET80, true],
+    ['Vet Combined', VET, IND, VetAgeGroup.VET_COMBINED, false],
+    ['a Vet individual with no band', VET, IND, null, false],
+    ['a Vet 60 team', VET, EventType.TEAM, VetAgeGroup.VET60, false],
+    ['a Div 1 individual carrying a band', Category.DIV1, IND, VetAgeGroup.VET60, false],
+  ])('%s → %s', (_name, category, event_type, vet_age_group, expected) => {
+    expect(isAgeBandedVet(makeCompetition({ category, event_type, vet_age_group }))).toBe(expected)
+  })
+})
+
+describe('vetBandRank', () => {
+  it('ranks the bands oldest first', () => {
+    const youngestFirst = [VetAgeGroup.VET40, VetAgeGroup.VET50, VetAgeGroup.VET60, VetAgeGroup.VET70, VetAgeGroup.VET80] as const
+    expect(youngestFirst.map(vetBandRank)).toEqual([4, 3, 2, 1, 0])
   })
 })

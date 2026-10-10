@@ -66,6 +66,7 @@ function currentErrorFinding(): ValidationError | undefined {
 interface Finding {
   id: string
   severity: string
+  dismissable: boolean
 }
 
 /**
@@ -292,21 +293,45 @@ describe('dismissFinding — widened to the unified findings list (013 T030, con
 
 const HARD_PAIR_DAY_ONE = 'analysis:hard-separation-violated:CDT-M-FOIL-IND:CDT-M-FOIL-IND+JR-M-FOIL-IND:0'
 
-/** Junior and Cadet Men's Foil placed by hand together on Day 1 of a NAC: a hard pair (R1). */
-function hardPairOnDayOne(): void {
+/**
+ * Two 24-fencer events on a 3-day NAC (40 strips, 8 video), placed by hand at
+ * 9:00 (4 strips each) on the 0-based days given: the board every broken hard
+ * rule case below starts from.
+ */
+function twoPlacedByHand(a: string, aDay: number, b: string, bDay: number): void {
   useStore.setState(useStore.getInitialState(), true)
   const s = useStore.getState()
   s.setTournamentType('NAC')
   s.setDays(3)
   s.setStrips(40)
   s.setVideoStrips(8)
-  s.selectCompetitions(['JR-M-FOIL-IND', 'CDT-M-FOIL-IND'])
-  s.updateCompetition('JR-M-FOIL-IND', { fencer_count: 24 })
-  s.updateCompetition('CDT-M-FOIL-IND', { fencer_count: 24 })
+  s.selectCompetitions([a, b])
+  s.updateCompetition(a, { fencer_count: 24 })
+  s.updateCompetition(b, { fencer_count: 24 })
   s.setPlacementsFromAuto({
-    'JR-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
-    'CDT-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
+    [a]: makePlacement({ day: aDay, start_time: 540, strip_count: 4 }),
+    [b]: makePlacement({ day: bDay, start_time: 540, strip_count: 4 }),
   })
+}
+
+/**
+ * Reloads the board from a save that already carries `id` as dismissed. A save
+ * or shared URL can carry any dismissed id as a sticky record, so the read side
+ * must hold a broken hard rule too, not only `dismissFinding`.
+ */
+function loadSaveDismissing(id: string): void {
+  const parsed = JSON.parse(serializeState(useStore.getState())) as { dismissedFindings: string[] }
+  parsed.dismissedFindings = [id]
+  const result = deserializeState(JSON.stringify(parsed))
+  if ('error' in result) throw new Error(`deserializeState failed: ${result.error}`)
+
+  useStore.setState(result.state)
+  expect(useStore.getState().dismissedFindings, 'premise: the load kept the dismissal').toEqual({ [id]: true })
+}
+
+/** Junior and Cadet Men's Foil placed by hand together on Day 1 of a NAC: a hard pair (R1). */
+function hardPairOnDayOne(): void {
+  twoPlacedByHand('JR-M-FOIL-IND', 0, 'CDT-M-FOIL-IND', 0)
 }
 
 describe('dismissFinding — refuses a hard-separation row (016 R1)', () => {
@@ -323,21 +348,46 @@ describe('dismissFinding — refuses a hard-separation row (016 R1)', () => {
     expect(selectFindings(useStore.getState()).some((f) => f.id === id)).toBe(true)
   })
 
-  // A save or shared URL can carry any dismissed id as a sticky record, so the
-  // read side must hold R1 too, not only dismissFinding.
   it('stays shown when a loaded save already carries its id as dismissed', () => {
     hardPairOnDayOne()
-    const parsed = JSON.parse(serializeState(useStore.getState())) as { dismissedFindings: string[] }
-    parsed.dismissedFindings = [HARD_PAIR_DAY_ONE]
-    const result = deserializeState(JSON.stringify(parsed))
-    if ('error' in result) throw new Error(`deserializeState failed: ${result.error}`)
-
-    useStore.setState(result.state)
-    expect(useStore.getState().dismissedFindings, 'premise: the load kept the dismissal').toEqual({
-      [HARD_PAIR_DAY_ONE]: true,
-    })
-
+    loadSaveDismissing(HARD_PAIR_DAY_ONE)
     expect(selectFindings(useStore.getState()).some((f) => f.id === HARD_PAIR_DAY_ONE)).toBe(true)
+  })
+})
+
+// ──────────────────────────────────────────────
+// 021 T6c – a split Vet co-day cannot be dismissed either (METHODOLOGY
+// §Veteran Age-Group Co-Day Rule: like the other broken hard rules).
+// ──────────────────────────────────────────────
+
+const VET_SPLIT = 'analysis:vet-co-day-split:VET-M-FOIL-IND-V80:VET-M-FOIL-IND-V70+VET-M-FOIL-IND-V80:-'
+
+/** Men's Foil Vet 80 on Day 1 and Vet 70 on Day 3 of a NAC, placed by hand: a split co-day. */
+function splitVetCoDay(): void {
+  twoPlacedByHand('VET-M-FOIL-IND-V70', 2, 'VET-M-FOIL-IND-V80', 0)
+}
+
+describe('dismissFinding – refuses a split Vet co-day row (021 T6c)', () => {
+  it('marks the row not dismissable', () => {
+    splitVetCoDay()
+    const row = selectFindings(useStore.getState()).find((f) => f.id === VET_SPLIT)
+    expect(row && [row.severity, row.dismissable]).toEqual(['Warning', false])
+  })
+
+  it('records no dismissal and leaves the row in the list', () => {
+    splitVetCoDay()
+    expect(shownIds(), `premise: the hand-made split raises ${VET_SPLIT}`).toContain(VET_SPLIT)
+
+    useStore.getState().dismissFinding(VET_SPLIT)
+
+    expect(useStore.getState().dismissedFindings).toEqual({})
+    expect(shownIds()).toContain(VET_SPLIT)
+  })
+
+  it('stays shown when a loaded save already carries its id as dismissed', () => {
+    splitVetCoDay()
+    loadSaveDismissing(VET_SPLIT)
+    expect(shownIds()).toContain(VET_SPLIT)
   })
 })
 

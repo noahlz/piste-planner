@@ -24,7 +24,6 @@ import {
   BottleneckRule,
   BottleneckSeverity,
   Category,
-  VetAgeGroup,
   dayStart,
   clockOnDay,
   dayEnd,
@@ -66,7 +65,7 @@ import { computeStripCap, peakDeStripDemand } from './stripBudget.ts'
 import { computeRefRequirements, peakPoolRefDemand, peakDeRefDemand, refDemandFromSchedule } from './refs.ts'
 import { phaseRequiresVideo, unseatedPhases } from './unseated.ts'
 import { compareIds } from './order.ts'
-import { findIndividualCounterpart } from './crossover.ts'
+import { findIndividualCounterpart, isAgeBandedVet, vetBandRank } from './crossover.ts'
 import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS, VET_STAGGER_MINS } from './constants.ts'
 import {
   WaitAnchor,
@@ -79,6 +78,7 @@ import {
 import type { CrossEventWait, PredecessorStatus } from './crossEventWaits.ts'
 import { buildConstraintGraph } from './constraintGraph.ts'
 import { assignDaysByColoring } from './dayColoring.ts'
+import { vetCoDaySplitFindings } from './placementRules.ts'
 import { constraintScore } from './dayAssignment.ts'
 import { validateConfig, FeasibilityRule } from './validation.ts'
 import { dayConsumedCapacity } from './capacity.ts'
@@ -356,6 +356,11 @@ export function scheduleAllConcurrent(
       message: `${violation.id} and ${violation.targetId} share a day: a hard separation could not be honored within the available days`,
     })
   }
+
+  // A Vet co-day that a pin or the least-bad fallback split across days, judged
+  // on the final day map, pins included (METHODOLOGY §Veteran Age-Group Co-Day
+  // Rule). The same function serves the board's hand-placement check.
+  state.bottlenecks.push(...vetCoDaySplitFindings(remaining, id => dayMap.get(id)))
 
   // Post-schedule ref demand from the scheduler's own timeline (METHODOLOGY.md
   // §Ref Demand Derivation, 017 spec §7): each phase at the times and on the
@@ -663,14 +668,6 @@ function buildPhaseNodes(
 // Cross-event edges (indv→team, the Vet co-day stagger, regional Group 1 window)
 // ──────────────────────────────────────────────
 
-const VET_AGE_BANDED_GROUPS: ReadonlySet<VetAgeGroup> = new Set([
-  VetAgeGroup.VET40,
-  VetAgeGroup.VET50,
-  VetAgeGroup.VET60,
-  VetAgeGroup.VET70,
-  VetAgeGroup.VET80,
-])
-
 /**
  * Wires the cross-event dependencies of METHODOLOGY §Cross-Event Dependency
  * Edges and returns the regional Group 1 pairs it floored, for
@@ -709,7 +706,7 @@ function applyCrossEventEdges(events: EventState[], config: TournamentConfig): R
     // VET_STAGGER_MINS. One wait, to that band only: the bands further up are
     // ordered through it, and when it is never placed the wait passes up to
     // them (`passOverFailed`).
-    const older = isAgeBandedVet(comp) ? nextOlderBandOnDay(event, events) : null
+    const older = nextOlderBandOnDay(event, events)
     if (older) {
       event.cross_event_waits.push({
         waiter_id: comp.id,
@@ -724,31 +721,29 @@ function applyCrossEventEdges(events: EventState[], config: TournamentConfig): R
   return applyRegionalWindowFloors(events, config)
 }
 
-function isAgeBandedVet(comp: Competition): boolean {
-  return comp.category === Category.VETERAN
-    && comp.event_type === EventType.INDIVIDUAL
-    && comp.vet_age_group !== null
-    && VET_AGE_BANDED_GROUPS.has(comp.vet_age_group)
-}
-
 /**
  * The age-banded Vet individual of the same gender and weapon on the event's
  * day whose band is the closest older one, or null when the event is the oldest
- * band present.
+ * band present or is not an age-banded Vet individual.
  */
 function nextOlderBandOnDay(event: EventState, events: EventState[]): EventState | null {
   const comp = event.competition
-  const myWeight = vetAgeWeight(comp.vet_age_group!)
+  if (!isAgeBandedVet(comp)) return null
+  const myRank = vetBandRank(comp.vet_age_group)
   let best: EventState | null = null
+  let bestRank = -1
   for (const other of events) {
     const oc = other.competition
     if (oc.id === comp.id || !isAgeBandedVet(oc)) continue
     if (oc.gender !== comp.gender || oc.weapon !== comp.weapon) continue
     if (other.assigned_day !== event.assigned_day) continue
-    // A lower weight is an older band (VET80 0 … VET40 4).
-    const w = vetAgeWeight(oc.vet_age_group!)
-    if (w >= myWeight) continue
-    if (best === null || w > vetAgeWeight(best.competition.vet_age_group!)) best = other
+    // A lower rank is an older band (VET80 0 … VET40 4).
+    const rank = vetBandRank(oc.vet_age_group)
+    if (rank >= myRank) continue
+    if (best === null || rank > bestRank) {
+      best = other
+      bestRank = rank
+    }
   }
   return best
 }
@@ -877,17 +872,6 @@ function crossEventDelayFinding(event: EventState, config: TournamentConfig): Bo
  */
 function successorGap(kind: PhaseKind, config: TournamentConfig): number {
   return kind === PhaseKind.FLIGHT_A ? config.FLIGHT_BUFFER_MINS : config.ADMIN_GAP_MINS
-}
-
-const VET_AGE_WEIGHT: Partial<Record<VetAgeGroup, number>> = {
-  [VetAgeGroup.VET80]: 0,
-  [VetAgeGroup.VET70]: 1,
-  [VetAgeGroup.VET60]: 2,
-  [VetAgeGroup.VET50]: 3,
-  [VetAgeGroup.VET40]: 4,
-}
-function vetAgeWeight(g: VetAgeGroup): number {
-  return VET_AGE_WEIGHT[g] ?? 0
 }
 
 // ──────────────────────────────────────────────

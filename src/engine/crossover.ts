@@ -155,13 +155,40 @@ function isSamePopulation(c1: CompFields, c2: CompFields): boolean {
   return true
 }
 
-const VET_AGE_BANDED: ReadonlySet<VetAgeGroup> = new Set([
-  VetAgeGroup.VET40,
-  VetAgeGroup.VET50,
-  VetAgeGroup.VET60,
-  VetAgeGroup.VET70,
+/**
+ * The age-banded Vet bands, oldest first (METHODOLOGY §Veteran Age-Group Co-Day
+ * Rule). The one order the co-day stagger's next-older band and the split
+ * co-day's owner and message both read.
+ */
+export const VET_BANDS_OLDEST_FIRST = [
   VetAgeGroup.VET80,
-])
+  VetAgeGroup.VET70,
+  VetAgeGroup.VET60,
+  VetAgeGroup.VET50,
+  VetAgeGroup.VET40,
+] as const
+export type VetBand = (typeof VET_BANDS_OLDEST_FIRST)[number]
+
+const VET_AGE_BANDED: ReadonlySet<VetAgeGroup> = new Set(VET_BANDS_OLDEST_FIRST)
+
+/** A band's place in `VET_BANDS_OLDEST_FIRST`: a lower rank is an older band. */
+export function vetBandRank(band: VetBand): number {
+  return VET_BANDS_OLDEST_FIRST.indexOf(band)
+}
+
+/**
+ * An age-banded Veteran individual event (Vet 40–80): a member of a Vet co-day
+ * (METHODOLOGY §Veteran Age-Group Co-Day Rule). Vet Combined and team events
+ * are not.
+ */
+export function isAgeBandedVet<C extends Pick<Competition, 'category' | 'event_type' | 'vet_age_group'>>(
+  c: C,
+): c is C & { vet_age_group: VetBand } {
+  return c.category === CategoryEnum.VETERAN
+    && c.event_type === EventType.INDIVIDUAL
+    && c.vet_age_group !== null
+    && VET_AGE_BANDED.has(c.vet_age_group)
+}
 
 /**
  * Hard-blocks a VET_COMBINED individual event from sharing a day with any

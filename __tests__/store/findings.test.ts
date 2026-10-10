@@ -59,7 +59,7 @@ interface Finding {
   day: number | null
   message: string
   target: string | null
-  /** 016 Task C: false for Blocking, Note and `hard-separation-violated` rows. */
+  /** 016 Task C: false for Blocking, Note and `hard-separation-violated` rows (and `vet-co-day-split`, 021 T6c). */
   dismissable: boolean
   /** 016 Task D: every on-board competition the row names, sorted and unique. */
   subjects: string[]

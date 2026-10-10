@@ -1909,6 +1909,55 @@ for (const id of [junFoil, cadFoil]) {
 log('016 check 1: both events carry the findings marker (data-warned)')
 await shot('016-check1-hard-pair')
 
+// ── 021 T6c: a split Vet co-day is reported and cannot be dismissed ──
+// Move day pins the moved event, so moving one age-banded Vet band off its co-day is a
+// pinned split (METHODOLOGY §Veteran Age-Group Co-Day Rule). The board's hand-placement
+// check must show one `vet-co-day-split` Warning for that gender and weapon, naming the
+// moved band, with no "Dismiss finding" control (check 1's and 017 T7's stale-row pattern).
+await choosePreset('NAC Vet/Div1/Junior')
+await pressSuggest('021 T6c NAC Vet/Div1/Junior')
+await page.getByRole('button', { name: 'Auto-assign', exact: true }).click()
+await page.waitForTimeout(500)
+await closePanel()
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(300)
+// Matches only the age-banded individuals (not Vet Combined or a Vet team) and
+// captures gender, weapon and band in one step.
+const BAND_ID = /^VET-([MW])-([A-Z]+)-IND-V(40|50|60|70|80)$/
+const coDays = new Map()
+for (const id of await eventIds()) {
+  const m = id.match(BAND_ID)
+  if (!m) continue
+  const key = `${m[1]}-${m[2]}`
+  coDays.set(key, [...(coDays.get(key) ?? []), { id, band: Number(m[3]), day: await poolDayOf(id) }])
+}
+const coDay = [...coDays.values()].find((bands) => bands.length >= 2 && new Set(bands.map((b) => b.day)).size === 1)
+if (!coDay) throw new Error(`021 T6c: no gender and weapon has two or more age-banded Vet bands sharing one day (${JSON.stringify([...coDays.entries()])})`)
+const splitBand = coDay.reduce((youngest, b) => (b.band < youngest.band ? b : youngest))
+const splitTo = (splitBand.day + 1) % dayCount
+log('021 T6c: moving', splitBand.id, 'off its co-day, day', splitBand.day + 1, '->', splitTo + 1, '| bands', coDay.map((b) => b.id).join(','))
+await moveEventToDay(splitBand.id, splitTo)
+if ((await poolDayOf(splitBand.id)) !== splitTo) throw new Error(`021 T6c: the Move day did not put ${splitBand.id} on day ${splitTo + 1}`)
+
+await openPanel('Findings')
+const splitRows = page
+  .getByRole('complementary', { name: 'Inspector panel' })
+  .locator(`[data-finding-id^="analysis:vet-co-day-split:"][data-finding-id*="${splitBand.id}"]`)
+if ((await splitRows.count()) !== 1) {
+  await shot('021-t6c-no-split-row')
+  throw new Error(`021 T6c: expected one vet-co-day-split row naming ${splitBand.id}, found ${await splitRows.count()}`)
+}
+const splitSeverity = await splitRows.getAttribute('data-severity')
+if (!/warning/i.test(splitSeverity ?? '')) throw new Error(`021 T6c: the split row's severity is "${splitSeverity}", not Warning`)
+const splitMessage = ((await splitRows.locator('[data-message]').textContent()) ?? '').trim()
+if (!splitMessage.includes('split across days')) throw new Error(`021 T6c: the split row reads "${splitMessage}"`)
+if ((await splitRows.getByRole('button', { name: 'Dismiss finding' }).count()) !== 0) {
+  throw new Error('021 T6c: the split Vet co-day row carries a dismiss control')
+}
+log('021 T6c: one Warning row, no dismiss control:', splitMessage)
+await shot('021-t6c-vet-split')
+await closePanel()
+
 // Check 2: a ROC template, then the regional Group 1 window row. The soft
 // types read the pair as a Note when the younger event starts inside the
 // window ("regional-window-honoured") and as a Warning when it does not.

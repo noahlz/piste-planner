@@ -285,8 +285,9 @@ function labelResolver(competitionsById: ReadonlyMap<string, Competition>): (id:
 
 /**
  * Engine findings over the board as drawn (016 spec §1, §3, 017 spec §4): the
- * same-day rule check (`checkPlacementRules`) and the first/last day WARN
- * (`firstLastDayWarnings`, the scheduler's own function), and the last-phase
+ * same-day rule check (`checkPlacementRules`, the split Vet co-day included),
+ * the first/last day WARN (`firstLastDayWarnings`, the scheduler's own
+ * function), and the last-phase
  * overrun WARN (`lastPhaseOverrunWarnings`, 018 R3: one per event whose last
  * phase ends past its day's hard end, hand-moved events included), over the
  * drawn model's results. Right after a run those are the scheduler's own
@@ -611,8 +612,9 @@ export interface Finding {
   subjects: string[]
   /**
    * Whether the organizer may wave the row off: Warning and Unplaced rows, except
-   * a `hard-separation-violated` Warning (016 R1) and the stale row (017 P4 (b)).
-   * Blocking and Note rows never.
+   * the broken hard rules' Warnings – `hard-separation-violated` (016 R1) and
+   * `vet-co-day-split` (021 T6c) – and the stale row (017 P4 (b)). Blocking and
+   * Note rows never.
    * `dismissFinding` and the panel's dismiss control both read this.
    */
   dismissable: boolean
@@ -625,9 +627,15 @@ function severityOf(severity: BottleneckSeverity): FindingSeverity {
   return FindingSeverity.NOTE
 }
 
-/** Warning and Unplaced rows may be dismissed, unless their rule says otherwise (016 R1). */
+/** The rules of a broken hard rule, whose Warning is never dismissed (016 R1, 021 T6c). */
+const UNDISMISSABLE_RULES: ReadonlySet<string> = new Set([
+  BottleneckRule.HARD_SEPARATION_VIOLATED,
+  BottleneckRule.VET_CO_DAY_SPLIT,
+])
+
+/** Warning and Unplaced rows may be dismissed, unless their rule says otherwise (016 R1, 021 T6c). */
 function dismissableOf(severity: FindingSeverity, rule?: string): boolean {
-  if (rule === BottleneckRule.HARD_SEPARATION_VIOLATED) return false
+  if (rule !== undefined && UNDISMISSABLE_RULES.has(rule)) return false
   return severity === FindingSeverity.WARNING || severity === FindingSeverity.UNPLACED
 }
 
@@ -725,8 +733,12 @@ function computeAllFindings(state: StoreState): Finding[] {
   // so the id needs no tie-break: each `initialAnalysis` pass emits at most one
   // finding per day (venue passes), per competition, per competition and day,
   // or per unordered pair; `checkPlacementRules` one per pair and rule, owned
-  // by the older side for the window; `firstLastDayWarnings` one per rule;
-  // `lastPhaseOverrunWarnings` one per event.
+  // by the older side for the window, and one `vet-co-day-split` per gender and
+  // weapon (not per pair), owned by the oldest band, its subjects every band of
+  // that gender and weapon on the board; `firstLastDayWarnings` one per rule;
+  // `lastPhaseOverrunWarnings` one per event. A split co-day leaves
+  // `Bottleneck.day` unset (its id ends in `-`), so its row takes its day from
+  // the owner's placement, as below.
   //
   // `day` and `where` come from `Bottleneck.day` when it names a day the board
   // has, so a Day 2 venue warning reads "Day 2"; otherwise from the target's
@@ -975,8 +987,8 @@ function daySummaryDeps(state: StoreState): unknown[] {
 /**
  * A stored dismissal hides only a row that is dismissable now. A save or shared
  * URL may carry any id as a sticky record (`serialization.ts`), so the read side
- * holds 016 R1 too: a hard same-day rule break, a Blocking or a Note row stays
- * shown whatever `dismissedFindings` says.
+ * holds 016 R1 too: a hard same-day rule break, a split Vet co-day (021 T6c), a
+ * Blocking or a Note row stays shown whatever `dismissedFindings` says.
  */
 function computeFindings(state: StoreState): Finding[] {
   // While a re-run is due the board holds its last fresh layout and the run is

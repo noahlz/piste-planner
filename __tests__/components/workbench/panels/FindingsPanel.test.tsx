@@ -202,24 +202,37 @@ describe('FindingsPanel — dismiss finding (contract §3)', () => {
     }
   })
 
-  // 016 R1: a hand-made hard same-day pair is a Warning the organizer cannot dismiss.
-  it('offers no dismiss control on a hard-separation Warning, but still offers Show on grid', () => {
+  // A broken hard rule placed by hand is a Warning the organizer cannot dismiss:
+  // the hard same-day pair (016 R1) and the split Vet co-day (021 T6c).
+  it.each([
+    {
+      rule: 'a hard-separation',
+      a: ['JR-M-FOIL-IND', 0],
+      b: ['CDT-M-FOIL-IND', 0],
+      id: 'analysis:hard-separation-violated:CDT-M-FOIL-IND:CDT-M-FOIL-IND+JR-M-FOIL-IND:0',
+    },
+    {
+      rule: 'a split Vet co-day',
+      a: ['VET-M-FOIL-IND-V70', 2],
+      b: ['VET-M-FOIL-IND-V80', 0],
+      id: 'analysis:vet-co-day-split:VET-M-FOIL-IND-V80:VET-M-FOIL-IND-V70+VET-M-FOIL-IND-V80:-',
+    },
+  ] as const)('offers no dismiss control on $rule Warning, but still offers Show on grid', ({ a, b, id }) => {
     useStore.setState(useStore.getInitialState(), true)
     const s = useStore.getState()
     s.setTournamentType('NAC')
     s.setDays(3)
     s.setStrips(40)
     s.setVideoStrips(8)
-    s.selectCompetitions(['JR-M-FOIL-IND', 'CDT-M-FOIL-IND'])
-    s.updateCompetition('JR-M-FOIL-IND', { fencer_count: 24 })
-    s.updateCompetition('CDT-M-FOIL-IND', { fencer_count: 24 })
+    s.selectCompetitions([a[0], b[0]])
+    s.updateCompetition(a[0], { fencer_count: 24 })
+    s.updateCompetition(b[0], { fencer_count: 24 })
     s.setPlacementsFromAuto({
-      'JR-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
-      'CDT-M-FOIL-IND': makePlacement({ day: 0, start_time: 540, strip_count: 4 }),
+      [a[0]]: makePlacement({ day: a[1], start_time: 540, strip_count: 4 }),
+      [b[0]]: makePlacement({ day: b[1], start_time: 540, strip_count: 4 }),
     })
     const { container } = render(<FindingsPanel />)
 
-    const id = 'analysis:hard-separation-violated:CDT-M-FOIL-IND:CDT-M-FOIL-IND+JR-M-FOIL-IND:0'
     const li = container.querySelector(`[data-finding-id="${id}"]`) as HTMLElement | null
     expect(li, `expected a listitem for ${id}`).not.toBeNull()
     expect(li).toHaveAttribute('data-severity', 'Warning')

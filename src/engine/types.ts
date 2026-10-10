@@ -123,6 +123,12 @@ export const BottleneckCause = {
    * than resolved by moving the event.
    */
   PINNED_UNCLAIMED: 'PINNED_UNCLAIMED',
+  /**
+   * The age-banded Veteran individual events of one gender and weapon sit on
+   * more than one day (METHODOLOGY §Veteran Age-Group Co-Day Rule, 021 default
+   * 9). A pin or the least-bad fallback causes it.
+   */
+  VET_CO_DAY_SPLIT: 'VET_CO_DAY_SPLIT',
 } as const
 export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCause]
 
@@ -135,6 +141,7 @@ export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCa
 export const BottleneckRule = {
   PER_EVENT_EXCLUSION_SUMMARY: 'per-event-exclusion-summary',
   HARD_SEPARATION_VIOLATED: 'hard-separation-violated',
+  VET_CO_DAY_SPLIT: 'vet-co-day-split',
   PINNED_PHASE_UNCLAIMED: 'pinned-phase-unclaimed',
   CROSS_EVENT_DEPENDENCY_DELAY: 'cross-event-dependency-delay',
   REGIONAL_WINDOW_HONOURED: 'regional-window-honoured',

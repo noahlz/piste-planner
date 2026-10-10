@@ -14,10 +14,11 @@ import {
   CutMode,
   Phase,
   ValidationMode,
+  VetAgeGroup,
   dayStart,
   tailEstimateMins,
 } from '../../src/engine/types.ts'
-import type { Bottleneck, Competition, TournamentConfig } from '../../src/engine/types.ts'
+import type { Bottleneck, Competition, PinnedPlacement, TournamentConfig } from '../../src/engine/types.ts'
 import {
   computePoolStructure,
   estimatePoolDuration,
@@ -1548,5 +1549,49 @@ describe('postScheduleDayBreakdown – each summary carries its day (016 Task A)
       BottleneckRule.DAY_VIDEO_DE_REF_SUMMARY,
     ])
     expect(summaries.map(b => b.day)).toEqual([2, 2, 2])
+  })
+})
+
+// ──────────────────────────────────────────────
+// A split Vet co-day is reported (021 T6c, METHODOLOGY §Veteran Age-Group
+// Co-Day Rule, default 9): the check reads the final day map, pins included.
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent – a split Vet co-day (021 T6c)', () => {
+  /** Men's Foil Vet 60, 70 and 80 on a 3-day board, youngest first as the catalogue lists them. */
+  const bands = [
+    comp('VET-M-FOIL-IND-V60', { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET60 }),
+    comp('VET-M-FOIL-IND-V70', { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET70 }),
+    comp('VET-M-FOIL-IND-V80', { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET80 }),
+  ]
+  const config = smallConfig({ days_available: 3 })
+  const splitFindings = (bottlenecks: Bottleneck[]) =>
+    bottlenecks.filter(b => b.rule === BottleneckRule.VET_CO_DAY_SPLIT)
+
+  it('reports a pinned split as one WARN naming every band', () => {
+    const pins: PinnedPlacement[] = [
+      { competition_id: 'VET-M-FOIL-IND-V80', day: 0, start_time: dayStart(0, config), strip_count: 4 },
+      { competition_id: 'VET-M-FOIL-IND-V70', day: 2, start_time: dayStart(2, config), strip_count: 4 },
+    ]
+    const { schedule, bottlenecks } = scheduleAllConcurrent(bands, config, pins)
+    expect(schedule['VET-M-FOIL-IND-V70']?.assigned_day, 'premise: the pin holds the split').toBe(2)
+
+    const found = splitFindings(bottlenecks)
+    expect(found.map(b => [b.severity, b.cause, b.competition_id, b.subjects])).toEqual([
+      [
+        BottleneckSeverity.WARN,
+        BottleneckCause.VET_CO_DAY_SPLIT,
+        'VET-M-FOIL-IND-V80',
+        ['VET-M-FOIL-IND-V60', 'VET-M-FOIL-IND-V70', 'VET-M-FOIL-IND-V80'],
+      ],
+    ])
+    checkInvariants(found[0], bands.map(c => c.id), new Set(), config.days_available)
+  })
+
+  it('reports nothing when the co-day holds', () => {
+    const { schedule, bottlenecks } = scheduleAllConcurrent(bands, config)
+    const days = new Set(bands.map(c => schedule[c.id]?.assigned_day))
+    expect(days.size, 'premise: every band shares one day').toBe(1)
+    expect(splitFindings(bottlenecks)).toEqual([])
   })
 })

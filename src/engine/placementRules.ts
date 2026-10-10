@@ -1,4 +1,4 @@
-import { crossoverPenalty } from './crossover.ts'
+import { crossoverPenalty, isAgeBandedVet, vetBandRank } from './crossover.ts'
 import { GROUP_1_MANDATORY, GROUP_1_SOFT_TYPES, REGIONAL_GROUP_1_WINDOW_MINS } from './constants.ts'
 import {
   BottleneckCause,
@@ -18,11 +18,13 @@ export type PlacedEvent = { competition_id: string; day: number; pool_start: num
 
 /**
  * Judges hand placements against the same rules the scheduler enforces: hard
- * same-day separations (via `crossoverPenalty`) and the regional Group 1
- * window. The two checks are independent, so a pair can carry both findings.
+ * same-day separations (via `crossoverPenalty`), the regional Group 1 window
+ * and the Vet co-day (`vetCoDaySplitFindings`). The checks are independent, so
+ * a pair can carry both a hard and a window finding.
  * `labelOf` names events in messages (default: the id). The caller filters
  * out unplaced and out-of-range events. A placed id with no competition is
- * skipped. Output is sorted by day, then subjects, then rule.
+ * skipped. Output is sorted by day, then subjects, then rule, and a split
+ * co-day, which has no day, sorts as day 0.
  */
 export function checkPlacementRules(
   competitions: Competition[],
@@ -92,6 +94,9 @@ export function checkPlacementRules(
     }
   }
 
+  const dayById = new Map(known.map(p => [p.competition_id, p.day]))
+  findings.push(...vetCoDaySplitFindings(competitions, id => dayById.get(id), labelOf))
+
   const key = (f: Bottleneck) => f.subjects.join(',')
   return findings.sort(
     (a, b) =>
@@ -100,3 +105,54 @@ export function checkPlacementRules(
 }
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
+/**
+ * A split Vet co-day (METHODOLOGY §Veteran Age-Group Co-Day Rule, 021 default
+ * 9): one WARN per gender and weapon whose age-banded Veteran individual
+ * events sit on more than one day. A pin or the least-bad fallback causes it.
+ * `dayOf` is the final day map, pins included, and an event it gives no day is
+ * left out. The finding names every band of that gender and weapon that has a
+ * day, oldest first (`VET_BANDS_OLDEST_FIRST`) with its 1-based day, and is
+ * owned by the oldest. It has no `day`, since it spans several. The scheduler
+ * calls it over its day map and `checkPlacementRules` over the board's placed
+ * days, so the two apply one rule to their own input: the scheduler counts an
+ * event that has a day but later fails to place, while the board leaves out
+ * every unplaced event. Output is sorted by subjects. One pass over
+ * `competitions` and one over each group – the only loop bounds.
+ */
+export function vetCoDaySplitFindings(
+  competitions: Competition[],
+  dayOf: (competitionId: string) => number | undefined,
+  labelOf: (competition: Competition) => string = c => c.id,
+): Bottleneck[] {
+  const groups = new Map<string, { competition: Competition; day: number; rank: number }[]>()
+  for (const c of competitions) {
+    if (!isAgeBandedVet(c)) continue
+    const day = dayOf(c.id)
+    if (day === undefined) continue
+    const key = `${c.gender}|${c.weapon}`
+    const group = groups.get(key) ?? []
+    group.push({ competition: c, day, rank: vetBandRank(c.vet_age_group) })
+    groups.set(key, group)
+  }
+
+  const findings: Bottleneck[] = []
+  for (const group of groups.values()) {
+    if (new Set(group.map(g => g.day)).size < 2) continue
+    const oldestFirst = [...group].sort(
+      (a, b) => a.rank - b.rank || cmp(a.competition.id, b.competition.id),
+    )
+    const bands = oldestFirst.map(g => `${labelOf(g.competition)} on Day ${g.day + 1}`).join(', ')
+    findings.push({
+      competition_id: oldestFirst[0].competition.id,
+      phase: Phase.DAY_ASSIGNMENT,
+      cause: BottleneckCause.VET_CO_DAY_SPLIT,
+      rule: BottleneckRule.VET_CO_DAY_SPLIT,
+      subjects: group.map(g => g.competition.id).sort(),
+      severity: BottleneckSeverity.WARN,
+      delay_mins: 0,
+      message: `The age-banded Veteran events of one gender and weapon are split across days: ${bands}`,
+    })
+  }
+  return findings.sort((a, b) => cmp(a.subjects.join(','), b.subjects.join(',')))
+}

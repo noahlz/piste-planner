@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkPlacementRules } from '../../src/engine/placementRules.ts'
+import { checkPlacementRules, vetCoDaySplitFindings } from '../../src/engine/placementRules.ts'
 import type { PlacedEvent } from '../../src/engine/placementRules.ts'
 import {
   BottleneckCause,
@@ -466,5 +466,149 @@ describe('checkPlacementRules: messages name events by the supplied label', () =
     expect(f.message).toContain('Label for OLDER-JUN and Label for YOUNG-CAD share Day 2 and')
     expect(f.message).toContain("Label for YOUNG-CAD starts at 13:00 and Label for OLDER-JUN's pools")
     expect(f.message).not.toMatch(/older-jun|young-cad/)
+  })
+})
+
+// ──────────────────────────────────────────────
+// 021 T6c – a split Vet co-day (METHODOLOGY §Veteran Age-Group Co-Day Rule,
+// default 9): one WARN per gender and weapon whose age-banded Veteran
+// individual events sit on more than one day.
+// ──────────────────────────────────────────────
+
+const vet = (id: string, vet_age_group: VetAgeGroup, overrides: Partial<Competition> = {}) =>
+  comp(id, { category: Category.VETERAN, vet_age_group, ...overrides })
+const split = (findings: Bottleneck[]) => findings.filter(f => f.rule === BottleneckRule.VET_CO_DAY_SPLIT)
+
+/**
+ * Men's Foil Vet 60, 70 and 80, youngest first as the catalogue lists them, so
+ * the finding's oldest-first order and owner come from the check's own sort.
+ */
+const MENS_FOIL_BANDS = [vet('v60', VetAgeGroup.VET60), vet('v70', VetAgeGroup.VET70), vet('v80', VetAgeGroup.VET80)]
+
+describe('checkPlacementRules: a split Vet co-day (021 T6c)', () => {
+  it('reports a co-day split across days as one WARN naming every band and its day, owned by the oldest band', () => {
+    const findings = checkPlacementRules(
+      MENS_FOIL_BANDS,
+      [at('v60', 2), at('v80', 0), at('v70', 0)],
+      TournamentType.NAC,
+      dayStartClock,
+    )
+    expect(split(findings)).toEqual([
+      {
+        competition_id: 'v80',
+        phase: Phase.DAY_ASSIGNMENT,
+        cause: BottleneckCause.VET_CO_DAY_SPLIT,
+        rule: BottleneckRule.VET_CO_DAY_SPLIT,
+        subjects: ['v60', 'v70', 'v80'],
+        severity: BottleneckSeverity.WARN,
+        delay_mins: 0,
+        message:
+          'The age-banded Veteran events of one gender and weapon are split across days: ' +
+          'v80 on Day 1, v70 on Day 1, v60 on Day 3',
+      },
+    ])
+  })
+
+  it('reports one WARN per gender and weapon, not one per band pair, when every band sits on its own day', () => {
+    const findings = checkPlacementRules(
+      MENS_FOIL_BANDS,
+      [at('v80', 0), at('v70', 1), at('v60', 2)],
+      TournamentType.NAC,
+      dayStartClock,
+    )
+    expect(split(findings).map(f => f.subjects)).toEqual([['v60', 'v70', 'v80']])
+  })
+
+  it('reports each split gender and weapon on its own', () => {
+    const findings = checkPlacementRules(
+      [
+        vet('m80', VetAgeGroup.VET80), vet('m40', VetAgeGroup.VET40),
+        vet('w80', VetAgeGroup.VET80, { gender: Gender.WOMEN, weapon: Weapon.EPEE }),
+        vet('w40', VetAgeGroup.VET40, { gender: Gender.WOMEN, weapon: Weapon.EPEE }),
+      ],
+      [at('m80', 0), at('m40', 1), at('w80', 2), at('w40', 1)],
+      TournamentType.NAC,
+      dayStartClock,
+    )
+    expect(split(findings).map(f => f.subjects)).toEqual([['m40', 'm80'], ['w40', 'w80']])
+  })
+
+  it.each<[string, Competition[], PlacedEvent[]]>([
+    ['every band on one day', MENS_FOIL_BANDS, [at('v80', 1), at('v70', 1), at('v60', 1)]],
+    [
+      'Vet Combined and the Vet team on other days than the bands',
+      [
+        vet('v80', VetAgeGroup.VET80), vet('v70', VetAgeGroup.VET70),
+        vet('vcmb', VetAgeGroup.VET_COMBINED),
+        comp('vteam', { category: Category.VETERAN, event_type: EventType.TEAM, vet_age_group: VetAgeGroup.VET60 }),
+      ],
+      [at('v80', 0), at('v70', 0), at('vcmb', 1), at('vteam', 2)],
+    ],
+    [
+      'bands of another gender on another day',
+      [vet('m80', VetAgeGroup.VET80), vet('w70', VetAgeGroup.VET70, { gender: Gender.WOMEN })],
+      [at('m80', 0), at('w70', 1)],
+    ],
+    [
+      'bands of another weapon on another day',
+      [vet('f80', VetAgeGroup.VET80), vet('s70', VetAgeGroup.VET70, { weapon: Weapon.SABRE })],
+      [at('f80', 0), at('s70', 1)],
+    ],
+    ['a band that is not placed', MENS_FOIL_BANDS, [at('v80', 0), at('v70', 0)]],
+  ])('reports no split for %s', (_name, competitions, placed) => {
+    const findings = checkPlacementRules(competitions, placed, TournamentType.NAC, dayStartClock)
+    expect(split(findings)).toEqual([])
+  })
+
+  it.each([TournamentType.NAC, TournamentType.ROC, TournamentType.SYC])('reports the split at %s', type => {
+    const findings = checkPlacementRules(MENS_FOIL_BANDS, [at('v80', 0), at('v70', 1)], type, dayStartClock)
+    expect(split(findings)).toHaveLength(1)
+  })
+
+  it('names the bands by the supplied label, not id', () => {
+    const findings = split(
+      checkPlacementRules(
+        MENS_FOIL_BANDS,
+        [at('v80', 0), at('v70', 1)],
+        TournamentType.NAC,
+        dayStartClock,
+        c => `Label for ${c.id.toUpperCase()}`,
+      ),
+    )
+    expect(findings.map(f => [f.message, f.subjects])).toEqual([
+      [
+        'The age-banded Veteran events of one gender and weapon are split across days: ' +
+          'Label for V80 on Day 1, Label for V70 on Day 2',
+        ['v70', 'v80'],
+      ],
+    ])
+  })
+
+  it('sorts a split, which has no day, as day 0: ahead of a hard pair on Day 3', () => {
+    const findings = checkPlacementRules(
+      [comp('a-div1', { category: Category.DIV1 }), comp('b-div1a', { category: Category.DIV1A }), ...MENS_FOIL_BANDS],
+      [at('a-div1', 2), at('b-div1a', 2), at('v80', 0), at('v70', 1)],
+      TournamentType.NAC,
+      dayStartClock,
+    )
+    expect(findings.map(f => f.rule)).toEqual([
+      BottleneckRule.VET_CO_DAY_SPLIT,
+      BottleneckRule.HARD_SEPARATION_VIOLATED,
+    ])
+  })
+})
+
+describe('vetCoDaySplitFindings (021 T6c)', () => {
+  it('sorts its findings by subjects whatever order the groups arrive in', () => {
+    const days: Record<string, number> = { w80: 2, w40: 1, m80: 0, m40: 1 }
+    const findings = vetCoDaySplitFindings(
+      [
+        vet('w80', VetAgeGroup.VET80, { gender: Gender.WOMEN, weapon: Weapon.EPEE }),
+        vet('w40', VetAgeGroup.VET40, { gender: Gender.WOMEN, weapon: Weapon.EPEE }),
+        vet('m80', VetAgeGroup.VET80), vet('m40', VetAgeGroup.VET40),
+      ],
+      id => days[id],
+    )
+    expect(findings.map(f => f.subjects)).toEqual([['m40', 'm80'], ['w40', 'w80']])
   })
 })
