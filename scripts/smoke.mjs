@@ -2393,6 +2393,26 @@ for (const o of b4Overruns) {
   if (!/warning/i.test(sev ?? '')) throw new Error(`018 T3: the ${o.id} overrun row severity is "${sev}", not Warning`)
 }
 log('018 T3: B4 Findings shows the three overrun rows (23:10, 23:15, 23:30)')
+
+// ── 021 T7: the pool-start cutoff row for an engine-placed event (O2, O10) ──
+// B4's one pool phase that starts past the 4:00 PM cutoff (day start + 7 hours) is
+// Y12-M-SABRE-IND at 16:05 on Day 2 (store-path measurement, 021 T7). The auto-run
+// places it, so the Findings panel shows one dismissable Warning row for it.
+const cutoffRows = b4Panel.locator('[data-finding-id^="analysis:pool-start-after-cutoff:"]')
+const cutoffCount = await cutoffRows.count()
+if (cutoffCount !== 1) {
+  await shot('021-t7-cutoff-row-missing')
+  const texts = await b4Panel.locator('[data-finding-id] [data-message]').allTextContents()
+  throw new Error(`021 T7: expected one B4 pool-start-after-cutoff row, found ${cutoffCount}; rows: ${JSON.stringify(texts.slice(0, 12))}`)
+}
+const cutoffMessage = ((await cutoffRows.locator('[data-message]').textContent()) ?? '').trim()
+if (!cutoffMessage.includes("Y12 Men's Saber Individual pools start at 16:05 on Day 2")) {
+  throw new Error(`021 T7: the B4 cutoff row reads "${cutoffMessage}"`)
+}
+const cutoffSeverity = await cutoffRows.getAttribute('data-severity')
+if (!/warning/i.test(cutoffSeverity ?? '')) throw new Error(`021 T7: the B4 cutoff row severity is "${cutoffSeverity}", not Warning`)
+log('021 T7: B4 Findings shows one pool-start-after-cutoff Warning:', cutoffMessage)
+await shot('021-t7-b4-cutoff-row')
 await closePanel()
 await page.getByRole('radio', { name: 'Matrix' }).click()
 await page.waitForTimeout(200)

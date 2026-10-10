@@ -129,6 +129,12 @@ export const BottleneckCause = {
    * 9). A pin or the least-bad fallback causes it.
    */
   VET_CO_DAY_SPLIT: 'VET_CO_DAY_SPLIT',
+  /**
+   * An event's first pool phase (pools, or Flight A when flighted) starts later
+   * than its day's start + `LATEST_START_OFFSET`, 4:00 PM on a 9:00 AM day
+   * (METHODOLOGY §Pool Start Cutoff, 021 O2). The event stays placed.
+   */
+  POOL_START_AFTER_CUTOFF: 'POOL_START_AFTER_CUTOFF',
 } as const
 export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCause]
 
@@ -151,6 +157,7 @@ export const BottleneckRule = {
   FIRST_ATTEMPT_FAILED: 'first-attempt-failed',
   EVENT_UNSCHEDULED: 'event-unscheduled',
   PHASE_OVERRUNS_DAY_END: 'phase-overruns-day-end',
+  POOL_START_AFTER_CUTOFF: 'pool-start-after-cutoff',
   VIDEO_PHASE_DELAYED: 'video-phase-delayed',
   FLIGHT_B_DELAYED: 'flight-b-delayed',
   DAY_ENDS_PAST_TARGET: 'day-ends-past-target',

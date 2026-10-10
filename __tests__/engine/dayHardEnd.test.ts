@@ -8,6 +8,7 @@ import {
 } from '../../src/engine/resources.ts'
 import {
   lastPhaseOverrunWarnings,
+  poolStartAfterCutoffWarnings,
   postScheduleWarnings,
   scheduleAllConcurrent,
 } from '../../src/engine/concurrentScheduler.ts'
@@ -17,13 +18,16 @@ import {
   BottleneckRule,
   BottleneckSeverity,
   Category,
+  CutMode,
   DeMode,
   Gender,
   Phase,
+  RefPolicy,
+  VideoPolicy,
   Weapon,
 } from '../../src/engine/types.ts'
 import type { Bottleneck, Competition, DayWindow, ScheduleResult } from '../../src/engine/types.ts'
-import { makeConfig, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
+import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
 import { clock, lateEventCompetition, SEVEN_PM, TEN_PM, windowFrom } from '../helpers/lateEvent.ts'
 import { checkInvariants } from '../helpers/bottleneckInvariants.ts'
 
@@ -103,6 +107,9 @@ describe('findAvailableStripsInWindow day inference on the fallback axis', () =>
 })
 
 const NINE_AM = clock(9)
+
+/** The pool-start cutoff, 7 hours after a day's start (`LATEST_START_OFFSET`). */
+const CUTOFF = 7 * 60
 
 /** The app's axis: each day's window shifted by d × DAY_AXIS_SPACING_MINS, as `buildConfig.ts` does. */
 function appAxisConfig(days: number) {
@@ -307,6 +314,21 @@ describe('an event\'s last phase may run past the hard end, up to midnight (018 
     })
   })
 
+  // 021 T7: the pool-start cutoff WARN is not filtered by an overrun ERROR – an
+  // event that breaks its limit and also starts its pools late reports both.
+  it('keeps the pool-start cutoff WARN on an event that also drew the overrun ERROR', () => {
+    const opens = clock(19, 10)
+    const result = scheduleAllConcurrent([lateEventCompetition(100)], windowFrom(NINE_AM), [
+      { competition_id: 'late-evt', day: 0, start_time: opens, strip_count: 20 },
+    ])
+
+    const errors = result.bottlenecks.filter((b) =>
+      b.rule === BottleneckRule.PHASE_OVERRUNS_DAY_END && b.severity === BottleneckSeverity.ERROR)
+    const cutoff = result.bottlenecks.filter((b) => b.rule === BottleneckRule.POOL_START_AFTER_CUTOFF)
+    expect(errors.map((b) => b.message)).toEqual(['late-evt DE: ends at 00:30 past the last-phase limit 00:00'])
+    expect(cutoff.map((b) => [b.severity, b.delay_mins])).toEqual([[BottleneckSeverity.WARN, opens - NINE_AM - CUTOFF]])
+  })
+
   // The start edge: a last phase may start before, not at, the hard end. On a
   // 24-fencer event the DE starts 120 min after the window opens.
   describe('the start edge', () => {
@@ -463,6 +485,148 @@ describe('lastPhaseOverrunWarnings', () => {
 
     expect(warnings.map((b) => b.delay_mins)).toEqual([75])
     expect(warnings[0].message).toContain('23:15')
+  })
+})
+
+/**
+ * 021 T7 (O2 and O10, METHODOLOGY.md §Pool Start Cutoff): an event whose first
+ * pool phase – its pools, or Flight A when flighted – starts later than its
+ * day's start + `LATEST_START_OFFSET` (7 hours) draws one WARN carrying the
+ * start. Flight B is exempt and the event stays placed.
+ */
+describe('poolStartAfterCutoffWarnings', () => {
+  function starting(id: string, day: number, poolStart: number | null, flightAStart: number | null = null, flightBStart: number | null = null): ScheduleResult {
+    return {
+      ...makeScheduleResult(id, day),
+      use_flighting: flightAStart !== null,
+      pool_start: poolStart,
+      flight_a_start: flightAStart,
+      flight_b_start: flightBStart,
+    }
+  }
+
+  // Fallback axis: day 0 starts at 0 (standing for 9:00), so its cutoff is 420 (16:00).
+  const fallback = makeConfig({ days_available: 2 })
+  const warningsFor = (result: ScheduleResult, config = fallback) =>
+    poolStartAfterCutoffWarnings({ [result.competition_id]: result }, config)
+
+  it('draws nothing for pools starting exactly 7 hours after day start', () => {
+    expect(warningsFor(starting('X', 0, CUTOFF))).toEqual([])
+  })
+
+  it('draws one WARN for pools starting 5 minutes past 7 hours, carrying the start', () => {
+    const warnings = warningsFor(starting('X', 0, CUTOFF + 5))
+
+    expect(warnings).toHaveLength(1)
+    const [warning] = warnings
+    expect(warning).toMatchObject({
+      competition_id: 'X',
+      subjects: ['X'],
+      phase: Phase.POST_SCHEDULE,
+      cause: BottleneckCause.POOL_START_AFTER_CUTOFF,
+      rule: BottleneckRule.POOL_START_AFTER_CUTOFF,
+      severity: BottleneckSeverity.WARN,
+      delay_mins: 5,
+      day: 0,
+    })
+    expect(warning.message).toBe('X pools start at 16:05 on Day 1, 5 min past the pool-start cutoff 16:00')
+  })
+
+  it('measures from the day\'s own start, so a later day carries its own cutoff', () => {
+    expect(warningsFor(starting('X', 1, DAY_AXIS_SPACING_MINS + CUTOFF))).toEqual([])
+    expect(warningsFor(starting('X', 1, DAY_AXIS_SPACING_MINS + CUTOFF + 5)).map((b) => [b.day, b.delay_mins])).toEqual([[1, 5]])
+  })
+
+  it('follows the config\'s LATEST_START_OFFSET and not a fixed 7 hours', () => {
+    const fiveHours = makeConfig({ days_available: 1, LATEST_START_OFFSET: 300 })
+
+    expect(warningsFor(starting('X', 0, 300), fiveHours)).toEqual([])
+    expect(warningsFor(starting('X', 0, 305), fiveHours).map((b) => b.delay_mins)).toEqual([5])
+  })
+
+  it('moves the cutoff to 15:00 on a day that starts at 8:00', () => {
+    const eightAm = makeConfig({
+      days_available: 1,
+      dayConfigs: [{ day_start_time: clock(8), day_end_time: SEVEN_PM, day_hard_end_time: TEN_PM }],
+    })
+    const nineAm = appAxisConfig(1)
+
+    expect(warningsFor(starting('X', 0, clock(15)), eightAm)).toEqual([])
+    const late = warningsFor(starting('X', 0, clock(15, 5)), eightAm)
+    expect(late.map((b) => b.delay_mins)).toEqual([5])
+    expect(late[0].message).toContain('15:05')
+    // The same clock start is inside a 9:00 day's cutoff.
+    expect(warningsFor(starting('X', 0, clock(15, 5)), nineAm)).toEqual([])
+  })
+
+  it('reads Flight A as the first pool phase of a flighted event', () => {
+    const warnings = warningsFor(starting('X', 0, null, CUTOFF + 30, CUTOFF + 150))
+
+    expect(warnings.map((b) => b.delay_mins)).toEqual([30])
+    expect(warnings[0].message).toBe('X Flight A starts at 16:30 on Day 1, 30 min past the pool-start cutoff 16:00')
+  })
+
+  it('exempts Flight B: a flighted event whose Flight A starts in time draws nothing however late B starts', () => {
+    expect(warningsFor(starting('X', 0, null, CUTOFF - 60, CUTOFF + 150))).toEqual([])
+  })
+
+  it('skips an event with no pool phase placed', () => {
+    expect(warningsFor(starting('X', 0, null))).toEqual([])
+  })
+
+  it('names the event through labelOf, ordered by day and then id', () => {
+    const schedule: Record<string, ScheduleResult> = {
+      'B-DAY1': starting('B-DAY1', 1, DAY_AXIS_SPACING_MINS + CUTOFF + 10),
+      'Z-DAY0': starting('Z-DAY0', 0, CUTOFF + 20),
+      'A-DAY0': starting('A-DAY0', 0, CUTOFF + 10),
+      'OK': starting('OK', 0, 60),
+    }
+    const warnings = poolStartAfterCutoffWarnings(schedule, fallback, (id) => `Label ${id}`)
+
+    expect(warnings.map((b) => [b.competition_id, b.day, b.delay_mins])).toEqual([
+      ['A-DAY0', 0, 10],
+      ['Z-DAY0', 0, 20],
+      ['B-DAY1', 1, 10],
+    ])
+    expect(warnings[0].message).toContain('Label A-DAY0')
+  })
+
+  it('reads the clock on the app axis', () => {
+    const warnings = poolStartAfterCutoffWarnings(
+      { X: starting('X', 1, DAY_AXIS_SPACING_MINS + clock(17, 15)) },
+      appAxisConfig(2),
+    )
+
+    expect(warnings.map((b) => b.delay_mins)).toEqual([75])
+    expect(warnings[0].message).toContain('17:15')
+  })
+})
+
+describe('scheduleAllConcurrent – pools that start after the cutoff (021 T7)', () => {
+  /** Three 28-fencer events on 4 strips in one day. Measured: A pools start at day start and C waits on the DE strips until 520 (17:40). */
+  const events = ['A', 'B', 'C'].map((id) => makeCompetition({
+    id,
+    fencer_count: 28,
+    de_mode: DeMode.SINGLE_STAGE,
+    de_video_policy: VideoPolicy.BEST_EFFORT,
+    cut_mode: CutMode.DISABLED,
+    cut_value: 100,
+    ref_policy: RefPolicy.ONE,
+  }))
+  const config = makeConfig({ days_available: 1, strips: makeStrips(4, 0), max_pool_strip_pct: 1.0, max_de_strip_pct: 1.0 })
+
+  it('emits the WARN for an engine-placed event whose pools start late, and keeps it placed', () => {
+    const { schedule, bottlenecks } = scheduleAllConcurrent(events, config)
+    const cStart = schedule['C']?.pool_start ?? 0
+    expect(cStart, 'premise: C\'s pools start after the cutoff').toBeGreaterThan(CUTOFF)
+    expect(schedule['A']?.pool_start, 'premise: A starts at day start').toBe(0)
+
+    const found = bottlenecks.filter((b) => b.rule === BottleneckRule.POOL_START_AFTER_CUTOFF)
+    expect(found.map((b) => [b.severity, b.cause, b.competition_id, b.delay_mins])).toEqual([
+      [BottleneckSeverity.WARN, BottleneckCause.POOL_START_AFTER_CUTOFF, 'C', cStart - CUTOFF],
+    ])
+    checkInvariants(found[0], events.map((c) => c.id), new Set(), config.days_available)
+    expect(bottlenecks.filter((b) => b.severity === BottleneckSeverity.ERROR)).toEqual([])
   })
 })
 

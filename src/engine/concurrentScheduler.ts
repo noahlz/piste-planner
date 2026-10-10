@@ -395,6 +395,10 @@ export function scheduleAllConcurrent(
   state.bottlenecks.push(
     ...lastPhaseOverrunWarnings(state.schedule, config).filter((b) => !overrunErrorIds.has(b.competition_id)),
   )
+  // The pool-start cutoff WARN (021 O2) is computed here for the same reason.
+  // It never blocks placement, so an event that drew an ERROR still reports a
+  // late start.
+  state.bottlenecks.push(...poolStartAfterCutoffWarnings(state.schedule, config))
 
   const ref_requirements_by_day = computeRefRequirements(
     state.ref_demand_by_day,
@@ -1730,6 +1734,51 @@ export function lastPhaseOverrunWarnings(
     delay_mins: end - hardEnd,
     day,
     message: `${labelOf(id)} ends at ${clockOnDay(end, day, config)} on Day ${day + 1}, ${end - hardEnd} min past the day's hard end ${clockOnDay(hardEnd, day, config)}`,
+  }))
+}
+
+/**
+ * One `POOL_START_AFTER_CUTOFF` WARN per placed event whose first pool phase
+ * starts later than its day's start + `LATEST_START_OFFSET` – 4:00 PM on a
+ * 9:00 AM day (METHODOLOGY.md §Pool Start Cutoff, 021 O2). The first pool phase
+ * is Flight A for a flighted event and the pools otherwise, and Flight B is
+ * never checked. The event stays placed: nothing is dropped or moved for it.
+ * An event with no pool start placed is skipped.
+ *
+ * Each WARN names the event as its owner and only subject, carries the minutes
+ * past the cutoff as `delay_mins`, and gives the start as a clock time.
+ * `labelOf` turns an id into the name the message shows (the store passes its
+ * competition label).
+ *
+ * Pure, and it reads days only through `dayStart` and `clockOnDay`, so it works
+ * on every axis as long as the results and the config share one: the engine
+ * calls it after scheduling, and the store over the board as drawn (021 O10),
+ * where a hand-moved event is checked at once. Ordered by day, then id.
+ */
+export function poolStartAfterCutoffWarnings(
+  schedule: Record<string, ScheduleResult>,
+  config: TournamentConfig,
+  labelOf: (id: string) => string = (id) => id,
+): Bottleneck[] {
+  const late: { id: string; day: number; start: number; cutoff: number; flighted: boolean }[] = []
+  for (const [id, r] of Object.entries(schedule)) {
+    const start = r.flight_a_start ?? r.pool_start
+    if (start === null) continue
+    const cutoff = dayStart(r.assigned_day, config) + config.LATEST_START_OFFSET
+    if (start > cutoff) late.push({ id, day: r.assigned_day, start, cutoff, flighted: r.flight_a_start !== null })
+  }
+  late.sort((a, b) => a.day - b.day || compareIds(a.id, b.id))
+
+  return late.map(({ id, day, start, cutoff, flighted }) => ({
+    competition_id: id,
+    phase: Phase.POST_SCHEDULE,
+    cause: BottleneckCause.POOL_START_AFTER_CUTOFF,
+    rule: BottleneckRule.POOL_START_AFTER_CUTOFF,
+    subjects: [id],
+    severity: BottleneckSeverity.WARN,
+    delay_mins: start - cutoff,
+    day,
+    message: `${labelOf(id)} ${flighted ? 'Flight A starts' : 'pools start'} at ${clockOnDay(start, day, config)} on Day ${day + 1}, ${start - cutoff} min past the pool-start cutoff ${clockOnDay(cutoff, day, config)}`,
   }))
 }
 

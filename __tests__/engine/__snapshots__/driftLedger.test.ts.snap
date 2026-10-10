@@ -1517,6 +1517,7 @@ exports[`drift ledger > B4 digest is unchanged 1`] = `
   "stripRecommendation": 74,
   "warnCountsByCause": {
     "DEADLINE_BREACH": 6,
+    "POOL_START_AFTER_CUTOFF": 1,
     "RESOURCE_EXHAUSTION": 1,
     "SAME_DAY_VIOLATION": 3,
     "SCHEDULE_ACCEPTED_WITH_WARNINGS": 4,
@@ -2506,6 +2507,7 @@ exports[`drift ledger > B6 digest is unchanged 1`] = `
   "stripRecommendation": 64,
   "warnCountsByCause": {
     "DEADLINE_BREACH": 2,
+    "POOL_START_AFTER_CUTOFF": 9,
     "SAME_DAY_VIOLATION": 7,
     "SCHEDULE_ACCEPTED_WITH_WARNINGS": 3,
   },

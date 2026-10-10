@@ -1345,6 +1345,44 @@ describe('selectFindings — a last phase past the hard end, one Warning per eve
   })
 })
 
+describe('selectFindings – pools starting after the 4:00 PM cutoff, one Warning per event (021 T7, O2, O10)', () => {
+  const CUTOFF_ROWS = 'analysis:pool-start-after-cutoff:'
+
+  it('gives B4 one dismissable Warning for the engine-placed event whose pools start at 16:05', () => {
+    runPreset('B4')
+
+    const rows = analysisRows(CUTOFF_ROWS)
+
+    // Measured at 021 T7: Y12-M-SABRE-IND on Day 2 is the only B4 event whose first pool phase starts past 16:00.
+    expect(rows.map((r) => [r.id, r.severity, r.day, r.target, r.subjects, r.dismissable])).toEqual([
+      [`${CUTOFF_ROWS}Y12-M-SABRE-IND:Y12-M-SABRE-IND:1`, 'Warning', 1, 'Y12-M-SABRE-IND', ['Y12-M-SABRE-IND'], true],
+    ])
+    expect(rows[0].message).toContain("Y12 Men's Saber Individual")
+    expect(rows[0].message).toContain('16:05')
+    expect(rows[0].message).toContain('Day 2')
+  })
+
+  it('gives a hand move that starts the pools after the cutoff its row at once, and clears it on restoring the start', () => {
+    runPreset('B1')
+    const id = 'D1-M-EPEE-IND'
+    const start = useStore.getState().placements[id].start_time
+    expect(analysisRows(CUTOFF_ROWS), 'premise: a fresh B1 run starts every event\'s pools by 16:00').toEqual([])
+
+    // Day 1 opens at 9:00, so the cutoff is 16:00 (960). Exactly on it is fine.
+    useStore.getState().updatePlacement(id, { start_time: 960 })
+    expect(analysisRows(CUTOFF_ROWS)).toEqual([])
+
+    useStore.getState().updatePlacement(id, { start_time: 965 })
+    const rows = analysisRows(CUTOFF_ROWS)
+    expect(rows.map((r) => [r.target, r.severity, r.dismissable])).toEqual([[id, 'Warning', true]])
+    expect(rows[0].message).toContain("Div 1 Men's Epee Individual")
+    expect(rows[0].message).toContain('16:05')
+
+    useStore.getState().updatePlacement(id, { start_time: start })
+    expect(analysisRows(CUTOFF_ROWS)).toEqual([])
+  })
+})
+
 describe('selectFindings — a bottleneck row id survives its sibling disappearing (016 spec §2)', () => {
   it('keeps the Day 3 pools row at the same id when the Day 2 one goes away', () => {
     useStore.setState(useStore.getInitialState(), true)

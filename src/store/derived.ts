@@ -5,7 +5,7 @@ import { initialAnalysis } from '../engine/analysis.ts'
 import { computeRefRequirements, refDemandFromSchedule } from '../engine/refs.ts'
 import { checkPlacementRules } from '../engine/placementRules.ts'
 import type { PlacedEvent } from '../engine/placementRules.ts'
-import { firstLastDayWarnings, lastPhaseOverrunWarnings } from '../engine/concurrentScheduler.ts'
+import { firstLastDayWarnings, lastPhaseOverrunWarnings, poolStartAfterCutoffWarnings } from '../engine/concurrentScheduler.ts'
 import { phaseKey } from '../engine/unseated.ts'
 import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS, ValidationMode } from '../engine/types.ts'
 import type {
@@ -287,14 +287,16 @@ function labelResolver(competitionsById: ReadonlyMap<string, Competition>): (id:
  * Engine findings over the board as drawn (016 spec §1, §3, 017 spec §4): the
  * same-day rule check (`checkPlacementRules`, the split Vet co-day included),
  * the first/last day WARN (`firstLastDayWarnings`, the scheduler's own
- * function), and the last-phase
- * overrun WARN (`lastPhaseOverrunWarnings`, 018 R3: one per event whose last
- * phase ends past its day's hard end, hand-moved events included), over the
- * drawn model's results. Right after a run those are the scheduler's own
- * results, so the WARN is the scheduler's (017 T5b). Events with no
- * placement or with a day the tournament no longer has are left out of every
- * check (review focus 1). The engine's late-day finding is not run here: the store's
- * `late-finish:day:<n>` row is the app's late-day finding (R2).
+ * function), the last-phase overrun WARN (`lastPhaseOverrunWarnings`, 018 R3:
+ * one per event whose last phase ends past its day's hard end) and the
+ * pool-start cutoff WARN (`poolStartAfterCutoffWarnings`, 021 O2 and O10: one
+ * per event whose first pool phase starts more than 7 hours after its day's
+ * start), hand-moved events included in both, over the drawn model's results.
+ * Right after a run those are the scheduler's own results, so the WARN is the
+ * scheduler's (017 T5b). Events with no placement or with a day the tournament
+ * no longer has are left out of every check (review focus 1). The engine's
+ * late-day finding is not run here: the store's `late-finish:day:<n>` row is
+ * the app's late-day finding (R2).
  */
 function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentType): Bottleneck[] {
   const clockConfig = clockAxisConfig(schedule.config)
@@ -321,6 +323,7 @@ function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentTy
     ),
     ...firstLastDayWarnings(inRange, clockConfig),
     ...lastPhaseOverrunWarnings(inRange, clockConfig, labelOfId),
+    ...poolStartAfterCutoffWarnings(inRange, clockConfig, labelOfId),
   ]
 }
 
@@ -736,7 +739,8 @@ function computeAllFindings(state: StoreState): Finding[] {
   // by the older side for the window, and one `vet-co-day-split` per gender and
   // weapon (not per pair), owned by the oldest band, its subjects every band of
   // that gender and weapon on the board; `firstLastDayWarnings` one per rule;
-  // `lastPhaseOverrunWarnings` one per event. A split co-day leaves
+  // `lastPhaseOverrunWarnings` and `poolStartAfterCutoffWarnings` one per event
+  // each (different rules, so their ids differ). A split co-day leaves
   // `Bottleneck.day` unset (its id ends in `-`), so its row takes its day from
   // the owner's placement, as below.
   //

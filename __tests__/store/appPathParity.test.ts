@@ -727,24 +727,42 @@ describe('boot invariants: the drawn board is the scheduler\'s run (017 T5b)', (
     expect(app).toEqual(scheduler)
   })
 
-  // 018 R3: the app's overrun rows are the scheduler's phase-overruns-day-end
-  // WARNs. The one difference is the message, which names the event by its
-  // label in the app and by its id in the scheduler.
-  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s phase-overruns-day-end rows equal the scheduler\'s WARNs', (_, board) => {
+  // The app's rows for a per-event WARN rule are the scheduler's WARNs of that
+  // rule. The one difference is the message, which names the event by its label
+  // in the app and by its id in the scheduler.
+  function ruleRowsParity(board: { boot: () => void }, rule: BottleneckRule) {
     board.boot()
     const { competitions, run } = schedulerRun()
     const labels = new Map(competitions.map((c) => [c.id, competitionLabel(c)]))
     const scheduler = run.bottlenecks
-      .filter((b) => b.rule === BottleneckRule.PHASE_OVERRUNS_DAY_END && b.severity === BottleneckSeverity.WARN)
+      .filter((b) => b.rule === rule && b.severity === BottleneckSeverity.WARN)
       .map((b) => ({ rule: b.rule, target: b.competition_id, day: b.day, message: b.message }))
     const app = selectAllFindings(useStore.getState())
-      .filter((row) => row.id.split(':')[1] === BottleneckRule.PHASE_OVERRUNS_DAY_END)
+      .filter((row) => row.id.split(':')[1] === rule)
       .map((row) => ({
         rule: row.id.split(':')[1],
         target: row.target,
         day: row.day,
         message: row.message.replace(labels.get(row.target!)!, row.target!),
       }))
+    return { app, scheduler }
+  }
+
+  // 018 R3: the overrun rows.
+  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s phase-overruns-day-end rows equal the scheduler\'s WARNs', (_, board) => {
+    const { app, scheduler } = ruleRowsParity(board, BottleneckRule.PHASE_OVERRUNS_DAY_END)
     expect(app).toEqual(scheduler)
+  })
+
+  // 021 T7: the same holds for the pool-start cutoff (O10), and B4 and B6 are
+  // the boards where it is not vacuous.
+  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s pool-start-after-cutoff rows equal the scheduler\'s WARNs', (_, board) => {
+    const { app, scheduler } = ruleRowsParity(board, BottleneckRule.POOL_START_AFTER_CUTOFF)
+    expect(app).toEqual(scheduler)
+  })
+
+  it.each([['B4'], ['B6']])('%s: the cutoff rows are not empty, so the parity above compares something', (name) => {
+    const { app } = ruleRowsParity(BOARDS.find((b) => b.name === name)!, BottleneckRule.POOL_START_AFTER_CUTOFF)
+    expect(app.length).toBeGreaterThan(0)
   })
 })
