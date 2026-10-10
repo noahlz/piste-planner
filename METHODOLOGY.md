@@ -124,7 +124,7 @@ These rules are never traded for a soft preference, but they do not all act the 
 - Older bands start first because USA Fencing Veterans are nested-eligible: a VET80 fencer's primary event is under way before the younger bands they may also enter.
 - No band waits for another band to finish, so once started the bands may run side by side.
 - The stagger holds whatever order the events are placed in: a younger band's pools are not ready until 60 minutes after the next-older band's pools start, even when that band is placed later. The concurrent scheduler holds the stagger as a cross-event dependency edge (see [Cross-Event Dependency Edges](#cross-event-dependency-edges) and [`concurrentScheduler.ts`](src/engine/concurrentScheduler.ts) – `applyCrossEventEdges`). When the event waited on is never placed, the wait lapses and the waiting event's pools are ready as if it did not exist – from day start, or from any other floor that applies to it, such as the regional Group 1 window.
-- No age-banded band has a fixed start offset. The 2-hour start offset applies to Vet Combined only, which never shares the co-day (see [Age-Category Weights](#age-category-weights)).
+- No Veteran event has a fixed start offset – Vet Combined starts like every other event, and it never shares the co-day (see [Age-Category Weights](#age-category-weights)).
 - The stagger is Piste Planner's own rule and is unsourced – the one reference found by web research for the 2026-08-31 methodology review describes the 2026 NAC Veteran events as "scheduled on the same day with different start times" (see backlog §Vet co-day serialization is unsourced). It is listed in [Appendix B](#appendix-b-departures-from-the-operations-manual).
 
 #### Vet Combined Day-After Preference
@@ -171,9 +171,9 @@ A pair that shares a day with its window honoured produces an INFO finding. A WA
 
 These hold at every tournament type and are listed in [Appendix B: Departures from the Operations Manual](#appendix-b-departures-from-the-operations-manual):
 - **DIV1 and DIV1A** are always on different days, because nearly the same fencers enter both. The manual does not list this pair.
-- **Y8 can and should share a day with Y10** of the same weapon and gender, although Ops Manual p.20 – Group 1 bullet 2 keeps immediately adjacent age groups apart. Day assignment gives the pair a -0.4 same-day bonus (see [Appendix A](#penalty-weights)).
+- **Y8 can and should share a day with Y10** of the same weapon and gender, although Ops Manual p.20 – Group 1 bullet 2 keeps immediately adjacent age groups apart. Day assignment gives the pair a -0.3 same-day bonus (see [Appendix A](#penalty-weights)).
 
-**Affinity for unrelated events** on the same day is preferred – e.g., Y10 and Div 3 have no fencer overlap, which makes a good same-day pairing. Day assignment scores this one pairing, Y10 and Div 3 of the same weapon and gender, with the same -0.4 same-day bonus as Y8 and Y10 (see [Appendix A](#penalty-weights)).
+**Affinity for unrelated events** on the same day is preferred – e.g., Y10 and Div 3 have no fencer overlap, which makes a good same-day pairing. Day assignment scores this one pairing, Y10 and Div 3 of the same weapon and gender, with the same -0.3 same-day bonus as Y8 and Y10 (see [Appendix A](#penalty-weights)).
 
 (see [`constants.ts`](src/engine/constants.ts) – `GROUP_1_MANDATORY`, `CROSSOVER_GRAPH`, and [`dayColoring.ts`](src/engine/dayColoring.ts) – `colorPenalty` for the two same-day bonuses)
 
@@ -306,8 +306,8 @@ See Appendix A for exact values.
 | Soft Separation (DIV2↔DIV3) | 3.0 | Same weapon+gender on same day (per gender, as for Group 1 – Piste Planner's reading). Ops Manual p.20 – Group 2 |
 | Soft Separation (Y14/CADET/JUNIOR↔DIV1 team) | 3.0 | Same weapon+gender on same day (per gender, as for Group 1 – Piste Planner's reading), where the DIV1 side is the open (Div 1) team event. Matched by event type, so DIV1 individual events are not affected by this row. A pair that a hard block already separates stays blocked. Ops Manual p.20 – Group 2 ("open team") |
 | Cross-Weapon Same Demographic | 0.2 | Same category, gender and event type (for Veterans, the same age group), different weapon, same day. Every category. Ops Manual p.20 – Group 3 |
-| Y8↔Y10 same day | -0.4 (bonus) | Same weapon+gender on the same day. The spec asks Y8 to share a day with Y10 (see [Departures From the Manual](#departures-from-the-manual)). The value is unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
-| Y10↔DIV3 same day | -0.4 (bonus) | Same weapon+gender on the same day. The two draw no common fencers, which makes a good same-day pairing (see [Departures From the Manual](#departures-from-the-manual)). Unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
+| Y8↔Y10 same day | -0.3 (bonus) | Same weapon+gender on the same day. The spec asks Y8 to share a day with Y10 (see [Departures From the Manual](#departures-from-the-manual)). The value is unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
+| Y10↔DIV3 same day | -0.3 (bonus) | Same weapon+gender on the same day. The two draw no common fencers, which makes a good same-day pairing (see [Departures From the Manual](#departures-from-the-manual)). Unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
 
 ### Individual-Team Proximity
 
@@ -938,10 +938,10 @@ Not all events consume a day equally. A 310-fencer Div 1 with staged video DEs a
 | Y10 | 1.2 | Early start required |
 | Y8 | 1.0 | Baseline. It starts early with Y10 (see [Within-Day Priority Order](#within-day-priority-order)) but carries no extra weight. Including Y8 is a departure (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
 | Y12, Y14 | 1.0 | Baseline |
-| VET 40, VET 50 | 0.8 | Lighter; no start offset |
+| VET 40, VET 50 | 0.8 | Lighter |
 | DIV1A, DIV2, DIV3 | 0.7 | Lighter |
-| VET 60, VET 70, VET 80 | 0.6 | Lightest, with no start offset. They share the age-banded co-day with Vet 40 and Vet 50, oldest first, and an offset would start the older bands after the younger ones (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)) |
-| VET Combined | 0.6 | Lightest, with a 2-hour start offset from day start (medication timing for older athletes – unsourced, see [Appendix B](#appendix-b-departures-from-the-operations-manual)). Vet Combined never shares the age-banded co-day |
+| VET 60, VET 70, VET 80 | 0.6 | Lightest. They share the age-banded co-day with Vet 40 and Vet 50, oldest first (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)) |
+| VET Combined | 0.6 | Lightest. Vet Combined never shares the age-banded co-day |
 
 ### Capacity Penalty Curve
 
@@ -1043,8 +1043,8 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Proximity 1 day apart | -0.4 | **Bonus**: related categories on adjacent days |
 | Ind+team day after | -0.4 | **Bonus**: team event the day after individual |
 | Weapon balance, missing class | -0.5 | **Bonus**: an event that brings the missing weapon class to a one-class day. Skipped when the tournament has no event of one class |
-| Y8↔Y10 same day | -0.4 | **Bonus**: Y8 and Y10 of the same weapon+gender on the same day. Y8 with Y10 is a departure (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
-| Y10↔Div 3 same day | -0.4 | **Bonus**: Y10 and Div 3 of the same weapon+gender on the same day – no fencer overlap. Unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
+| Y8↔Y10 same day | -0.3 | **Bonus**: Y8 and Y10 of the same weapon+gender on the same day. Y8 with Y10 is a departure (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
+| Y10↔Div 3 same day | -0.3 | **Bonus**: Y10 and Div 3 of the same weapon+gender on the same day – no fencer overlap. Unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
 | Same population | ∞ | **Hard block**: identical age category + gender + weapon |
 | Group 1 mandatory separation | ∞ | **Hard block** at NAC, SYC and SJCC: Group 1 pairs, Div 1–Cadet included, must be on different days (Ops Manual p.20 – Group 1). DIV1↔DIV1A is a hard block at every type (departure) |
 | Ind/team cross-level block | ∞ | **Hard block** at every type: Div 1 ind ↔ Junior team and Junior ind ↔ Div 1 team, same weapon+gender, must be on different days (Ops Manual p.20 – Group 1 bullet 1). Hard at ROC, RYC and RJCC (departure) |
@@ -1140,8 +1140,8 @@ Sourced from integration test scenarios B1–B7 using real USA Fencing tournamen
 | Y12, Y14 weight | 1.0 | Baseline weight |
 | Div1A, Div2, Div3 weight | 0.7 | Lighter weight |
 | Veteran 40/50 weight | 0.8 | Lighter weight |
-| Veteran 60/70/80 weight | 0.6 | Lightest weight. No start offset – the co-day stagger orders the age bands (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)) |
-| Veteran Combined weight | 0.6 | Lightest weight, with a 120-min start offset from day start. Vet Combined never shares the age-banded co-day. Unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
+| Veteran 60/70/80 weight | 0.6 | Lightest weight. The co-day stagger orders the age bands (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)) |
+| Veteran Combined weight | 0.6 | Lightest weight. Vet Combined never shares the age-banded co-day |
 | First/last day capacity factor | 0.8 | Share of a middle day's strip-hours given to the first and the last day, from 3 days up (Ops Manual p.20 – Group 2) |
 | Capacity penalty curve | 0 up to fill 0.85, linear to 3.0 at fill 1.0, then 3.0 + 10 per unit of fill past 1.0, capped at 20.0 | Penalty on a candidate day's strip-hour fill, one of day assignment's load-balancing terms, beside the flat per-event cost (see [Capacity Penalty Curve](#capacity-penalty-curve)) |
 | Load-balance fullness | 0.5 per event | `LOAD_BALANCE_FULLNESS` in [`dayColoring.ts`](src/engine/dayColoring.ts): a flat penalty per event already on a candidate day, one of day assignment's load-balancing terms beside the capacity curve |
@@ -1155,7 +1155,7 @@ Where this spec departs from or extends the Operations Manual (S1), and the manu
 
 ### Departures
 
-- **Y8 with Y10.** Ops Manual p.20 – Group 1 keeps immediately adjacent age groups off the same day. The spec says Y8 CAN and SHOULD share a day with Y10, and Y8–Y10 is not a Group 1 pair (see [Overlapping-Population Separation (Group 1)](#overlapping-population-separation-group-1)). Day assignment gives Y8 and Y10 of the same weapon and gender a same-day bonus (see [Appendix A](#appendix-a-penalty--constant-defaults)). The bonus value, -0.4, is Piste Planner's own, unsourced.
+- **Y8 with Y10.** Ops Manual p.20 – Group 1 keeps immediately adjacent age groups off the same day. The spec says Y8 CAN and SHOULD share a day with Y10, and Y8–Y10 is not a Group 1 pair (see [Overlapping-Population Separation (Group 1)](#overlapping-population-separation-group-1)). Day assignment gives Y8 and Y10 of the same weapon and gender a same-day bonus (see [Appendix A](#appendix-a-penalty--constant-defaults)). The bonus value, -0.3, is Piste Planner's own, unsourced.
 - **Y10 with Div 3.** No USA Fencing source asks for it. The spec gives Y10 and Div 3 of the same weapon and gender a same-day bonus, because no fencer enters both. Piste Planner's own rule, unsourced.
 - **Veteran co-day stagger.** The age-banded Veteran events of one gender and weapon share a day, and that is not a departure: they are one Veteran event split into sub-events by age band, so Ops Manual p.20 – Group 1 bullet 2's adjacent-age rule does not apply to them (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)). On that day the bands start oldest first with a 60-minute stagger: each younger band's pools become ready 60 minutes after the next-older band's pools start, and no band waits for another to finish. The order and the stagger are Piste Planner's own rule, unsourced – the one reference found describes the 2026 NAC Veteran events as held "on the same day with different start times".
 - **Div 1 and Div 1A, hard.** Ops Manual p.20 – Group 1 names "the Div I, Junior, and Cadet competitions", not Div 1A. The spec keeps Div 1 and Div 1A of the same weapon and gender on different days as a hard block, because nearly the same fencers enter both.
@@ -1172,7 +1172,6 @@ Where this spec departs from or extends the Operations Manual (S1), and the manu
 - **Pool-start cutoff.** No USA Fencing source sets a latest pool start – the only clock time in the Ops Manual, on p.17, is "should complete no later than 7 p.m. if started by 9 a.m." Piste Planner keeps its own rule, unsourced, from the owner's requirements of 2026-03-24: an event whose first pool phase (its pools, or Flight A) starts later than day start + 7 hours (4:00 PM on a 9:00 AM day) is placed with a WARN (`pool-start-after-cutoff`) carrying the start, and no event is dropped or moved for it (see [Pool Start Cutoff](#pool-start-cutoff) and [Timing Constants](#timing-constants)).
 - **Feasibility slack.** The whole-tournament strip-hour WARN tolerates demand up to 15% over capacity before it fires, because the estimate is a worst case that overlaps scheduling slack. The 1.15 figure is Piste Planner's own, unsourced (see [Strip-Hour Feasibility](#strip-hour-feasibility)).
 - **Timing allowances.** No USA Fencing source gives the 15-minute wait from Flight A's end to Flight B's ready time, the 120-minute start-of-day pool wave that may use video strips, or the 120-minute wait between an individual event and its team event when the two share a day. All three are Piste Planner's own, unsourced (see [Timing Constants](#timing-constants) and [Resource Constants](#resource-constants)).
-- **Vet Combined start offset.** No USA Fencing source gives Vet Combined a 2-hour start offset from day start (medication timing for older athletes). It is Piste Planner's own rule, unsourced. The age-banded Vet 60, 70 and 80 events no longer carry it, because on their shared co-day it would start the older bands after the younger ones (see [Age-Category Weights](#age-category-weights) and [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)).
 - **Crossover graph weights.** The fractions in [Demographic Crossover](#demographic-crossover) are Piste Planner's own estimates, unsourced.
 
 ### Manual Criteria Not Modelled
