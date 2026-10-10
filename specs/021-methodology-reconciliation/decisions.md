@@ -70,6 +70,20 @@ SHA-256 `32a4e0afb45abfbf8239f7bdbc15dda9eb1487c959893442b6029a6d0998b260`, B1�
   stagger, which stays Piste Planner's own unsourced rule. No engine change. Amendment Blocks 44, 88, 83 and 66 carry
   O8's clause after the renumbering.
 
+## Owner rulings, 2026-10-10 (third round, METHODOLOGY follow-up "021 A1", `cb4c8deeb9`)
+
+Both rulings change approved values after measurement showed them costing events on B6. A1 carries the text.
+
+- **O12 – The Y8↔Y10 and Y10↔Div 3 same-day bonus is −0.3**, not O6's −0.4. Probe at `39c7145a63` (T4): B6
+  places 53 events at −0.05 through −0.3 and 51 at −0.4, so −0.3 is the strongest value that loses no event on
+  B1–B8. The other −0.4 values (proximity one day apart, Ind+team day after, Vet Combined day-after bonus) are
+  unchanged. T5 runs last, at −0.3.
+- **O13 – The Vet Combined start offset is retired**, so no Veteran event has a fixed start offset (O1 had already
+  removed it from Vet 60/70/80). Probe: B6 places 52 at offsets of 60–120 minutes, 51 at 30, and 53 only at 0.
+  Vet Combined starts like every other event and still never shares the age-banded co-day. T6b becomes a pure
+  removal: `CATEGORY_START_PREFERENCE` drops its never-read `earliest_start_offset` field and keeps its weights,
+  and no engine code applies a Veteran start offset.
+
 Standing owner decisions: the eight time-of-day weights are retired as Phase D casualties (2026-10-04); no hard
 pair is ever relaxed (019); no backwards compatibility (product unreleased); the engine follows the 2026-27 Ops
 Manual's planning figures; METHODOLOGY.md is the spec and every text change is owner-approved before commit.

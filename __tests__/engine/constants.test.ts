@@ -22,6 +22,7 @@ import {
   DIV1_DIV1A_HARD_PAIR,
   PENALTY_WEIGHTS,
   REST_DAY_PAIRS,
+  CATEGORY_START_PREFERENCE,
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
 
@@ -52,6 +53,20 @@ describe('day timing constants', () => {
 describe('MAX_DE_FIELD', () => {
   it('is 256', () => {
     expect(MAX_DE_FIELD).toBe(256)
+  })
+})
+
+// The table holds the capacity weights of METHODOLOGY.md §Age-Category Weights
+// and nothing else. No category has a start offset (§Within-Day Age-Descending
+// Order), since owner ruling O13 (2026-10-10) retired Vet Combined's 2-hour
+// offset, the last one.
+describe('CATEGORY_START_PREFERENCE', () => {
+  it('carries a weight and no other field on every row', () => {
+    const rowsWithOtherFields = Object.entries(CATEGORY_START_PREFERENCE)
+      .filter(([, row]) => Object.keys(row).join() !== 'weight')
+      .map(([key, row]) => `${key}: ${Object.keys(row).join(', ')}`)
+
+    expect(rowsWithOtherFields).toEqual([])
   })
 })
 

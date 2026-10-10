@@ -282,6 +282,43 @@ describe('the Vet co-day stagger binds', () => {
   })
 })
 
+// METHODOLOGY §Within-Day Age-Descending Order: no Veteran event has a fixed
+// start offset. Owner ruling O1 took the 2-hour offset from Vet 60/70/80 and
+// O13 (2026-10-10) retired Vet Combined's, so each starts at its own day's start
+// unless a cross-event wait holds it back.
+describe('no Veteran event has a fixed start offset (O1, O13)', () => {
+  it('starts Vet Combined and the oldest co-day band each at its own day\'s start', () => {
+    const NINE_AM = 9 * 60
+    const EIGHT_AM = 8 * 60
+    const window = (start: number) => ({ day_start_time: start, day_end_time: start + 600, day_hard_end_time: start + 780 })
+    const config = makeConfig({
+      tournament_type: TournamentType.NAC,
+      days_available: 2,
+      strips: makeStrips(40, 0),
+      max_pool_strip_pct: 1.0,
+      max_de_strip_pct: 1.0,
+      dayConfigs: [window(NINE_AM), window(1440 + EIGHT_AM)],
+    })
+    // Vet Combined is hard-separated from the co-day, so one of the two sits on
+    // day 2, whose 8:00 start differs from day 1's 9:00. The test does not fix
+    // which, since day assignment is not what it pins.
+    const competitions = [
+      vet(VetAgeGroup.VET60),
+      vet(VetAgeGroup.VET40),
+      vet(VetAgeGroup.VET_COMBINED),
+    ]
+    const result = scheduleAllConcurrent(competitions, config)
+    const combinedDay = placed(result, 'v-VET_COMBINED').assigned_day
+    const coDay = placed(result, 'v-VET60').assigned_day
+
+    expect([combinedDay, coDay].sort()).toEqual([0, 1])
+    expect(poolStart(result, 'v-VET_COMBINED')).toBe(dayStart(combinedDay, config))
+    expect(poolStart(result, 'v-VET60')).toBe(dayStart(coDay, config))
+    // Vet 40 still waits on Vet 60 (the stagger), so it alone starts later.
+    expect(poolStart(result, 'v-VET40')).toBe(dayStart(coDay, config) + 60)
+  })
+})
+
 describe('the individual→team wait binds', () => {
   it('starts the team\'s pools 120 minutes after the individual\'s last phase ends, with one INFO for the push', () => {
     const config = oneDay()

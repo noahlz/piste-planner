@@ -32,17 +32,19 @@ Full text in `decisions.md` and in the amendment's blocks.
 
 | # | Ruling | Task |
 |---|---|---|
-| O1 | **Vet co-day order.** Age-banded Vet bands of one gender and weapon start oldest first with a 60-minute stagger: each younger band's pools become ready 60 minutes after the next-older band's pools start. Strict end-to-end serialization leaves the spec. The 2-hour offset applies to Vet Combined only, and Vet 60/70/80 lose it. The wait must really bind. Unsourced, listed in Appendix B. | T6 |
+| O1 | **Vet co-day order.** Age-banded Vet bands of one gender and weapon start oldest first with a 60-minute stagger: each younger band's pools become ready 60 minutes after the next-older band's pools start. Strict end-to-end serialization leaves the spec. The 2-hour offset applies to Vet Combined only, and Vet 60/70/80 lose it. The wait must really bind. Unsourced, listed in Appendix B. *Superseded in part by O13: Vet Combined's offset is retired too.* | T6 |
 | O2 | **4:00 PM pool cutoff** stays as Piste Planner's own unsourced rule: an event whose first pool phase (pools or Flight A) starts later than day start + 7 hours is placed with a WARN carrying the start. Nothing is dropped or moved. | T7 |
 | O3 | **Day count.** Day assignment uses every day the organizer chose. The inert Phase 1 pass, `chromaticN`, `capacityDemandedDays`, `CAPACITY_TARGET_FILL` and `MAX_EXPANDED_DAYS` go. The calibration scenario is not added, and the backlog item closes with a written record. | T2, D |
 | O4 | **Weapon balance.** No day holds only one weapon class. Day-level, both genders and team events pooled, flat 0.5. Skipped when the tournament lacks a class entirely. O7 settles the reading. | T4 |
 | O5 | **Video strip count** is any count from 0 to the strip total at any type, default 8 at a NAC. Doc only. | A0 |
-| O6 | **Y8 with Y10.** A −0.4 same-day bonus for Y8↔Y10 of the same weapon and gender, and for Y10↔Div 3. The term needs its own lookup, because the constraint graph drops weight-0 edges. | T5 |
+| O6 | **Y8 with Y10.** A −0.4 same-day bonus for Y8↔Y10 of the same weapon and gender, and for Y10↔Div 3. The term needs its own lookup, because the constraint graph drops weight-0 edges. *O12 lowers the bonus to −0.3.* | T5 |
 | O7 | **Weapon balance reads "keeps"** (second round). The owner: "whichever option avoids having a day where only epee is scheduled on that day (we need to balance ROW weapons with epee)". An event that leaves its day one-class pays +0.5 (the first event on an empty day, and every later same-class event on a day that still holds one class), an event that brings the missing class earns −0.5, and an event on a day holding both classes pays 0. Chosen on the 49-board probe (see Measurements). | T4 |
 | O8 | **An unplaced predecessor** (second round). The wait lapses: the waiting event's pools are ready as if the event waited on did not exist, from day start or any other floor that applies to it, such as the regional Group 1 window. One identical clause in amendment Blocks 44, 88, 83 and 66. | T6a |
 | O9 | **Y10↔Div 3** (second round). Same weapon and gender, as drafted. | T5 |
 | O10 | **The cutoff on the board** (second round). The store's board check emits `pool-start-after-cutoff` for engine-placed and hand-moved events, as drafted. | T7 |
 | O11 | **The Veteran co-day is not a departure** (owner annotation). Veteran age bands are one event split by age band, so the manual's adjacent-age rule never applies. Doc only: amendment Blocks 90, 85 and 3. | A0 |
+| O12 | **The Y8↔Y10 and Y10↔Div 3 bonus is −0.3** (2026-10-10, METHODOLOGY follow-up A1). B6 places 53 at −0.05 through −0.3 and 51 at −0.4. T5 runs last. | A1, T5 |
+| O13 | **The Vet Combined start offset is retired** (2026-10-10, A1). No Veteran event has a fixed start offset. B6 places 53 only at offset 0. T6b becomes a pure removal of the never-read `earliest_start_offset` field. | A1, T6b |
 
 Standing decisions that bind every task: no hard pair is ever relaxed (019), no backwards compatibility,
 the engine follows the 2026-27 Ops Manual's planning figures, and every METHODOLOGY text change is
@@ -209,7 +211,8 @@ Each is the audit's `[M]` figure at `5edbdf7712` (verifier's figure where it cor
 - **Vet start offset** (L8). 25 of 35 scheduled old-Vet events start before day start + 120 (B1 3, B6 3,
   B8 19). +120 on all four bands kept every count and moved 8 / 37 / 42 events on B1 / B6 / B8, while +60
   dropped B6 to 50 (4 ERRORs), so B6 is sensitive to Vet start times. O1 keeps the offset for Vet
-  Combined only, and every measurement predates T4 and T5, which repack B6, so T6 re-measures.
+  Combined only, and every measurement predates T4 and T5, which repack B6, so T6 re-measures. *Superseded
+  by O13: re-measured at T4's head, B6 kept 53 only at offset 0, so the Vet Combined offset is retired.*
 - **Co-day splits** (R7b). Unpinned runs never split (0 of 6138 probes). A pin splits silently: v40 pinned
   with Vet team on day 0 sends v50 to day 2 with no violation and no WARN.
 - **Pools after 4:00 PM** (K2). B4: Y12-M-SABRE-IND at 16:05. B6: CDT-W-FOIL-IND at 16:25, JR-W-EPEE-IND and
@@ -299,7 +302,7 @@ against the previous task's head, with a control run where a mechanism must be i
 | T2, T3 | Byte-identical to T1c's recorded SHA (named in T1c's commit body). Any change halts the task for diagnosis. |
 | T4 | Day maps move on 6 of 8 scenarios (B2 and B4 unmoved). B6 rises to 53 (ERRORs 3 → 1), other counts hold. Measured for the keeps reading (O7). |
 | T5 | Unmeasured. Day maps can move on B4 and B6 only (see Measurements). Counts must hold. |
-| T6 | Pool starts move on B8 (stagger) and B1 / B6 / B8 (Vet Combined offset). Counts must hold, and B6 and B8 are the risks. |
+| T6 | Pool starts move on B8 (stagger). Counts must hold, and B6 and B8 are the risks. T6b (redefined by O13) is byte-identical to T6a's commit. |
 | T7 | `warnCountsByCause` gains the new cause on B4 and B6 (1 and 4 at base, re-measured on T6's head). Counts, ERRORs and every time unchanged. |
 | T8 | Times move on days with a required video phase (B2, B3, B8 at base). Counts must hold. WARN counts may move. |
 
@@ -583,11 +586,13 @@ round and smoke before its commit (see the header).
   - *Findings.* `SEQUENCING_CONSTRAINT` (rule `cross-event-dependency-delay`) emits once per node a wait
     pushes, with `delay_mins` equal to the push, wherever the floor is applied – not only at today's
     pop-time check.
-- **T6b – Vet Combined +120.** `firstPhaseReadyTime` adds the category's `earliest_start_offset` to the
-  assigned day's own start (not `buildConfig`'s absolute `earliest_start`). This makes
-  `CATEGORY_START_PREFERENCE`'s offset live for the first time: its Vet 60/70/80 rows drop to 0 and its
-  header comment ("older groups (weight 0.6, offset 120)") is rewritten. The retry path shares the
-  function.
+- **T6b – the start offset is removed (redefined by O13, 2026-10-10).** O13 retired the Vet Combined
+  offset, so this section's earlier "Vet Combined +120" design (`firstPhaseReadyTime` adding the
+  offset to the day's start) no longer applies.
+  `CATEGORY_START_PREFERENCE` drops its never-read `earliest_start_offset` member from every row and from
+  its row type and keeps its weights unchanged, and its header comment says weights only and cites O13. No
+  engine code applies a Veteran start offset. A pure removal of a field nothing read, so the ledger is
+  byte-identical to T6a's commit `bfdf295fca`.
 - **T6c – `vet-co-day-split` WARN** (default 9, cause `VET_CO_DAY_SPLIT`). After coloring, over the final
   day map with pins, one WARN per gender and weapon whose age-banded Vet individual events span more than
   one day. The same check in `placementRules.ts`'s `checkPlacementRules`, which reaches Findings through
@@ -611,31 +616,32 @@ round and smoke before its commit (see the header).
   and a successor that is also the older side of a regional Group 1 pair still waits for its window. A pinned older band sets the floor at seeding. The post-loop
   assertion throws on a constructed held node whose predecessor never resolves. The bound throws on a
   constructed cycle.
-- **Tests first (T6b).** Vet Combined on day 2 with an 8:00 start: pool start ≥ that day's start + 120
-  (an absolute offset would pass on day 0 only). A forced attempt 2 keeps the same floor. A *guard*
-  pins `CATEGORY_START_PREFERENCE` at 120 for Vet Combined and 0 for Vet 60/70/80, read through the
-  lookup. Vet 40/50 may start at day start.
+- **Tests first (T6b, redefined by O13).** A *guard* pins that every `CATEGORY_START_PREFERENCE` row
+  carries a weight and no other field (red against a tree with the offset). A scheduler case on a 2-day
+  board with 9:00 and 8:00 starts pins Vet Combined and the oldest co-day band each at its own day's
+  start, red when a 120-minute offset is re-added in `unwaitedReadyTime`.
 - **Tests first (T6c).** A pinned split draws one `vet-co-day-split` WARN from the engine and one from
   `checkPlacementRules`, and an unsplit co-day draws none. In `dismissals.test.ts`, the split row has
   `dismissable: false`, `dismissFinding` refuses it, and `selectFindings` keeps it.
-- **Ledger.** T6a moves B8's Vet starts, T6b moves B1 / B6 / B8. Counts must hold: B8's 53 and B6's raised
+- **Ledger.** T6a moves B8's Vet starts, and T6b (redefined by O13) moves nothing. Counts must hold: B8's 53 and B6's raised
   floor are the risks, since B6 is sensitive to Vet start times and was measured only before T4 and T5.
   T6c moves nothing (B1–B8 never split).
 - **Drift review, per commit.** After T6a: J1 (counts, ERRORs, floors, boot footers,
   `stripRecommendation`) and J2 (B8's 60 pairs and NAC Vet/Div1/Junior's 60 pairs ordered, the
-  dependency findings counted, and any order broken by an older band's retry). After T6b, against T6a's
-  head: J1 again and J3 (Vet Combined starts on B1 / B6 / B8, B6's VCMB events named). No control run is
-  needed, since T6a is committed. After T6c: J4 (Suggest for NAC Vet/Div1/Junior re-measured, prototype
+  dependency findings counted, and any order broken by an older band's retry). After T6b (redefined by
+  O13), against the previous 021 commit: one judge J1 – ledger SHA byte-identical to `bfdf295fca`, no
+  `earliest_start_offset` or `categoryStartOffset` in `src`, `__tests__` or `scripts`, counts unchanged.
+  J3 is dropped with the offset. No control run is needed, since T6a is committed. After T6c: J4 (Suggest for NAC Vet/Div1/Junior re-measured, prototype
   103 → 110, and the pinned-split WARN in the engine and on the board).
 - **Review.** Test quality and spec for each commit. React for T6c (the `FindingsPanel.tsx` docblock).
-- **Smoke.** T6a and T6b: read the POOLS `data-start` of each same-day age-banded Vet group on NAC
-  Vet/Div1/Junior and assert each younger band starts at or after the next-older band's start + 60, and
-  Vet Combined at or after day start + 120. T6c: a pinned split shows the new row with no "Dismiss
+- **Smoke.** T6a: read the POOLS `data-start` of each same-day age-banded Vet group on NAC
+  Vet/Div1/Junior and assert each younger band starts at or after the next-older band's start + 60. T6b
+  adds no step, since O13 retired the Vet Combined + 120 check. T6c: a pinned split shows the new row with no "Dismiss
   finding" button (the 017 T7 stale-row step's pattern). The Suggest pin, the B1 headline move and
   NAC Vet/Div1/Junior's block after 19:00 can move.
 - **Model.** Opus, high effort (a wait that does not bind fails silently).
-- **Commits:** "021 T6a: the Vet stagger and the ind→team wait bind", "021 T6b: Vet Combined starts two
-  hours in", "021 T6c: a split Vet co-day is reported".
+- **Commits:** "021 T6a: the Vet stagger and the ind→team wait bind", "021 T6b: no Veteran start
+  offset" (retitled under O13), "021 T6c: a split Vet co-day is reported".
 
 ### T7: `pool-start-after-cutoff` WARN (O2, O10)
 
@@ -718,7 +724,7 @@ The driver changes made in T3–T8 stand. A pin that moved since its task's smok
   Vet sibling and individual-to-team edges, §The 4:00 PM pool cutoff, the pattern-table rows L1 and L5,
   the penalty-weights census, and the §Global settings note that `TournamentConfig` keeps all seven
   settings. Mark the R6 clique WARN settled. Add a §What 021 deliberately left unfixed index (at least: hand
-  pins are not checked against the Vet Combined offset, an older Vet band's retry can break the stagger
+  pins are not checked against the Vet Combined offset – moot since O13 retired it, an older Vet band's retry can break the stagger
   after its younger band started (decision 8), a Veteran team event's ind→team wait points at the first
   matching Vet individual in list order (`findIndividualCounterpart` ignores `vet_age_group`), not at the
   bands as a group, the better least-bad fallback, the medal-tail WARN entries, and every "Not in 021"
@@ -757,7 +763,8 @@ handoff's Merge section. Commit: "021 M: record the merge-tree check".
   finding, and a retry reset drops a floor kept on the node. T6a fixes the mechanism against all four
   (held set, release on placement or permanent failure, the floor on `EventState`, a post-loop
   assertion), and each has its own test.
-- **Counts under T6.** The stagger's B8 53 is a pre-018 measurement, and T6b adds a second Vet move. B6 is
+- **Counts under T6.** The stagger's B8 53 is a pre-018 measurement. T6b added a second Vet move until
+  O13 made it a pure removal. B6 is
   sensitive to Vet start times (+60 on the old bands cost it an event) and sits at T4's raised floor. A
   drop on either halts and goes to the owner as a possible policy amendment.
 - **T8's boundary.** `<` and `<=` can differ on slot-aligned pools. The measurement comes first, and the

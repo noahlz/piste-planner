@@ -1,15 +1,20 @@
 import { Category, CutMode, EventType, Gender, TournamentType, VetAgeGroup, Weapon } from './types.ts'
 
 // ──────────────────────────────────────────────
-// Category start preferences and capacity weights.
+// Category capacity weights (METHODOLOGY.md §Age-Category Weights). Each row
+// holds a weight and nothing else.
 //
-// earliest_start_offset: minutes after DAY_START_MINS before this category may begin.
 // weight: multiplier applied to raw strip-hours in capacity-aware day assignment scoring.
 //   > 1.0 → heavier than raw (large fields, video DE serialization)
 //   < 1.0 → lighter than raw (small fields, flexible scheduling)
 //
+// No category has a start offset (METHODOLOGY.md §Within-Day Age-Descending
+// Order). The rows once carried a start-offset field that no code read, and
+// owner ruling O13 (2026-10-10) retired the last one, Vet Combined's 2 hours –
+// no event waits on its category alone.
+//
 // VETERAN lookups use a compound key (`${Category.VETERAN}:${VetAgeGroup}`) to
-// differentiate VET40/VET50 (weight 0.8, offset 0) from older groups (weight 0.6, offset 120).
+// differentiate VET40/VET50 (weight 0.8) from VET60/70/80 and Vet Combined (weight 0.6).
 // When vet_age_group is null (generic veteran), the plain VETERAN key resolves to weight 0.8.
 // ──────────────────────────────────────────────
 
@@ -18,25 +23,25 @@ type CategoryStartPreferenceKey = Category | `${typeof Category.VETERAN}:${VetAg
 // TS can't verify computed template literal property keys satisfy a union type (TS2740),
 // so we assert the type. All keys are present — checked by tests.
 export const CATEGORY_START_PREFERENCE = {
-  [Category.Y8]:    { earliest_start_offset: 0,   weight: 1.0 },
-  [Category.Y10]:   { earliest_start_offset: 0,   weight: 1.2 },
-  [Category.Y12]:   { earliest_start_offset: 0,   weight: 1.0 },
-  [Category.Y14]:   { earliest_start_offset: 0,   weight: 1.0 },
-  [Category.CADET]: { earliest_start_offset: 0,   weight: 1.3 },
-  [Category.JUNIOR]:  { earliest_start_offset: 0, weight: 1.3 },
+  [Category.Y8]:    { weight: 1.0 },
+  [Category.Y10]:   { weight: 1.2 },
+  [Category.Y12]:   { weight: 1.0 },
+  [Category.Y14]:   { weight: 1.0 },
+  [Category.CADET]: { weight: 1.3 },
+  [Category.JUNIOR]:  { weight: 1.3 },
   // Generic VETERAN key — used when vet_age_group is null; defaults to VET40/50 weight.
-  [Category.VETERAN]: { earliest_start_offset: 0, weight: 0.8 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: { earliest_start_offset: 0,   weight: 0.8 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET50}`]: { earliest_start_offset: 0,   weight: 0.8 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET60}`]: { earliest_start_offset: 120, weight: 0.6 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET70}`]: { earliest_start_offset: 120, weight: 0.6 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: { earliest_start_offset: 120, weight: 0.6 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: { earliest_start_offset: 120, weight: 0.6 },
-  [Category.DIV1]:  { earliest_start_offset: 0,   weight: 1.5 },
-  [Category.DIV1A]: { earliest_start_offset: 0,   weight: 0.7 },
-  [Category.DIV2]:  { earliest_start_offset: 0,   weight: 0.7 },
-  [Category.DIV3]:  { earliest_start_offset: 0,   weight: 0.7 },
-} as Record<CategoryStartPreferenceKey, { earliest_start_offset: number; weight: number }>
+  [Category.VETERAN]: { weight: 0.8 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: { weight: 0.8 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET50}`]: { weight: 0.8 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET60}`]: { weight: 0.6 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET70}`]: { weight: 0.6 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: { weight: 0.6 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: { weight: 0.6 },
+  [Category.DIV1]:  { weight: 1.5 },
+  [Category.DIV1A]: { weight: 0.7 },
+  [Category.DIV2]:  { weight: 0.7 },
+  [Category.DIV3]:  { weight: 0.7 },
+} as Record<CategoryStartPreferenceKey, { weight: number }>
 
 // ──────────────────────────────────────────────
 // Scheduling time constants (all values in minutes from midnight)
