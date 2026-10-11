@@ -45,7 +45,7 @@ Full text in `decisions.md` and in the amendment's blocks.
 | O11 | **The Veteran co-day is not a departure** (owner annotation). Veteran age bands are one event split by age band, so the manual's adjacent-age rule never applies. Doc only: amendment Blocks 90, 85 and 3. | A0 |
 | O12 | **The Y8↔Y10 and Y10↔Div 3 bonus is −0.3** (2026-10-10, METHODOLOGY follow-up A1). B6 places 53 at −0.05 through −0.3 and 51 at −0.4. T5 runs last. | A1, T5 |
 | O13 | **The Vet Combined start offset is retired** (2026-10-10, A1). No Veteran event has a fixed start offset. B6 places 53 only at offset 0. T6b becomes a pure removal of the never-read `earliest_start_offset` field. | A1, T6b |
-| O14 | **Video Strip Preservation keeps `<=` at the wave's end** (2026-10-10, during T8). A pool phase that starts at exactly 11:00 AM on a 9:00 day is still in the wave, as the amendment says, so METHODOLOGY does not change. T8 Step 1 tied on every board except NAC Vet/Div1/Junior (60/6 at base, 58/8 under `<=`, 59/7 under `<`), and the owner accepts that cost, since templates carry no floor. Full numbers in `decisions.md`. | T8 |
+| O14 | **Video Strip Preservation keeps `<=` at the wave's end** (2026-10-10, during T8). A pool phase that starts at exactly 11:00 AM on a 9:00 day is still in the wave, as the amendment says, so METHODOLOGY does not change. T8 Step 1 tied on counts on every board except NAC Vet/Div1/Junior (60/6 at base, 58/8 under `<=`, 59/7 under `<`), and the owner accepts that cost, since templates carry no floor. Full numbers in `decisions.md`. | T8 |
 
 Standing decisions that bind every task: no hard pair is ever relaxed (019), no backwards compatibility,
 the engine follows the 2026-27 Ops Manual's planning figures, and every METHODOLOGY text change is
@@ -746,7 +746,10 @@ The driver changes made in T3–T8 stand. A pin that moved since its task's smok
 measurements with the chain of measurements and the test-count chain, reviews, owner rulings and the
 decisions made on the owner's behalf with their cost, left unfixed, for later features, merge, and the
 resume prompt. The brief names 022 next, while the roadmap marks 022 "last", so the resume prompt names
-whichever row the roadmap puts next and says why. Commit: "021 H: the handoff".
+whichever row the roadmap puts next and says why. The handoff also carries the accepted effects T4's commit body
+marks "for the owner" (B5's new day-pools-exceed-strips WARN, B7 day 0's sabre ref peak 64 → 156, the per-gender
+one-class tiebreak re-measuring at 52 against the probe's 40) and Note 6's choice to leave 020's blocking-error hold
+and "Re-run automatically" switch out of METHODOLOGY. Commit: "021 H: the handoff".
 
 ### Task M: the merge check
 
@@ -817,7 +820,7 @@ adds these.
 7. **T8's boundary defaults to `<=`** unless the measurement favours `<`. Cost: a one-line amendment
    follow-up if it does not. *Settled 2026-10-10 by owner ruling O14. On counts the measurement favoured `<`
    on NAC Vet/Div1/Junior alone (59/7 against 58/8), while `<` raised the video delay on B2 and
-   NAC Youth. The owner kept `<=`, so no amendment follow-up was needed.*
+   NAC Youth and lowered it on B7 and the Vet template. The owner kept `<=`, so no amendment follow-up was needed.*
 8. **An older Vet band's retry may break the stagger.** If an older band fails late and restarts after
    its younger band was released, the younger band's placements stay. Holding the release until the
    older band can no longer roll back would come close to the end-to-end serialization O1 retired. Cost:

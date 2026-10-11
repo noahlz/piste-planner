@@ -675,7 +675,7 @@ failure is terminal.*
 
 ## Recommended sequence
 
-*2026-10-11, from 021: the waves below are history. 010 ran most of Wave 1, 018
+*2026-10-11, from 021: the waves below are history. 010 ran all seven of Wave 1, 018
 took R8, 024 settled L6 and L14, and 011 replaced L5's rule with the Suggest
 search. 021 settled the verdicts still open after them, R6 by declaring it
 settled rather than building it. The notes above name each 021 commit.*

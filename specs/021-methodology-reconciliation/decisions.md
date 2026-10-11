@@ -91,7 +91,7 @@ Both rulings change approved values after measurement showed them costing events
   B1–B8 and the four NAC templates at T7's head `8b23e1b964`. Every board tied on counts except NAC Vet/Div1/Junior
   (NAC, 4 days, 80 strips, the default 8 video strips): base 60 placed / 6 ERRORs, `<=` 58/8 (video delay 1525
   min), `<` 59/7 (1245 min). Totals over the 12 boards: base 364/13, `<=` 362/15, `<` 363/14. `<` also raised B2's
-  video delay 225 → 705 and NAC Youth's 1365 → 1515. The owner accepts the events the rule costs that template,
+  video delay 225 → 705 and NAC Youth's 1365 → 1515, and lowered it on B7 (450 → 260). The owner accepts the events the rule costs that template,
   since templates carry no floor.
 - **Measured after the ruling, for the owner (T8 fix round):** the same template loaded as `unseated.test.ts` and
   `strips.test.ts` load templates (B1 preset, then the template: 80 strips, 12 video strips, 4 days) goes 61/5 →
@@ -99,6 +99,17 @@ Both rulings change approved values after measurement showed them costing events
   VET-W-FOIL-IND-V40, VET-W-FOIL-IND-V50, VET-W-FOIL-IND-V60, VET-W-SABRE-IND-V40, VET-W-SABRE-IND-V50. In:
   VET-W-SABRE-IND-V70. The other three NAC templates hold 24/0 on both routes, and B1–B8 do not move. No floor
   applies, so this stands under O14 unless the owner reverses it.
+- **Open owner question – re-measured 2026-10-11 at the final head `0544ef1877`, commit by commit (Task D).** O14
+  named 1–2 events, and the route an organizer takes costs more. Through the app path (`bootstrap` for B1, then
+  `applyTemplate('NAC Vet/Div1/Junior')`, then `runScheduleAll`; the B1 preset sets 12 video strips and the template
+  keeps them) main places 60 and leaves 6, and the final head places 55 and leaves 11, so 5 events net (10 out, 5
+  in). The route series is 60 (main through T3-2), 62 (T4, +2), 61 (T6a, −1), 61 (A1 through T7), 55 (T8, −6) and 55
+  (the smoke commit and T5). T8 alone costs 6 on this route. On the 8-video-strip route that T8 Step 1 measured
+  (fresh store, NAC, 4 days, 80 strips) the series is 60, 62 (T4), 60 (T6a), 58 (T8), so T8 costs 2 there and that
+  is the figure O14 named. After Suggest and Apply every row places 66 of 66, at 103 strips on main and 104 at T8
+  and after, so the cost to an organizer who applies Suggest is one strip. The owner decides whether the 6-event
+  cost reopens O14, and until then it stands. The numbers are in backlog §Video strip preservation costs NAC
+  Vet/Div1/Junior events.
 
 Standing owner decisions: the eight time-of-day weights are retired as Phase D casualties (2026-10-04); no hard
 pair is ever relaxed (019); no backwards compatibility (product unreleased); the engine follows the 2026-27 Ops
@@ -207,5 +218,6 @@ Each follows a reconciliation verdict, the spec-wins rule, or an earlier owner r
 
 `cut-value-min-promotions` reading a percentage inverted (backlog §`validation.ts` reads a percentage cut…),
 `regional-cut-override` for non-store callers, `strips-total-positive` on NaN, the medal-tail WARN entries
-(backlog :623, :723), the better least-bad fallback (§Runtime failure is terminal), the R6 clique WARN (declined by
-019's R3 – mark settled).
+(backlog §The late-day WARN adds the medal tail… and §Events end past 22:00 only by their medal tail),
+the better least-bad fallback (§Runtime failure is terminal), the R6 clique WARN (declined by 019's R3 – mark
+settled).

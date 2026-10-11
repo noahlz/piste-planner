@@ -213,7 +213,7 @@ were written by 018, and every entry is unscheduled unless it says otherwise.*
   [§The referee sweep counts an instantaneous handoff twice](#the-referee-sweep-counts-an-instantaneous-handoff-twice).
   New, and the sweep entry is an owner call.
 - Five events that end past 22:00 only by their medal tail and draw no WARN –
-  [§Five events end past 22:00 only by their medal tail](#five-events-end-past-2200-only-by-their-medal-tail).
+  [§Events end past 22:00 only by their medal tail](#events-end-past-2200-only-by-their-medal-tail).
   New, plan decision 1.
 - `validateSameDayCompletion` measuring Single-Day Fit to the hard end –
   [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
@@ -347,7 +347,7 @@ unscheduled unless it says otherwise. The owner rulings O1–O14 are in
 - The medal-tail WARN entries –
   [§The late-day WARN adds the medal tail and wraps past midnight](#the-late-day-warn-adds-the-medal-tail-and-wraps-past-midnight)
   and
-  [§Five events end past 22:00 only by their medal tail](#five-events-end-past-2200-only-by-their-medal-tail).
+  [§Events end past 22:00 only by their medal tail](#events-end-past-2200-only-by-their-medal-tail).
   Existing entries. Not in 021 by decision.
 - `cut-value-min-promotions` reading a percentage as the share that advances –
   [§`validation.ts` reads a percentage cut as the share that advances](#validationts-reads-a-percentage-cut-as-the-share-that-advances).
@@ -364,7 +364,11 @@ unscheduled unless it says otherwise. The owner rulings O1–O14 are in
   [§The store's default day count is unsatisfiable for three templates](#the-stores-default-day-count-is-unsatisfiable-for-three-templates)).
 - The events video strip preservation costs the largest template under O14 –
   [§Video strip preservation costs NAC Vet/Div1/Junior events](#video-strip-preservation-costs-nac-vetdiv1junior-events).
-  New. An owner ruling.
+  New. An owner ruling, and an open owner question. Re-measured at the final
+  head on the route an organizer takes (B1 boot, then the template, 12 video
+  strips), main places 60 and leaves 6 while 021 places 55 and leaves 11, so 5
+  events net. T8 alone costs 6 there, where O14 named 1–2. Suggest and Apply
+  still place all 66, at 104 strips instead of 103.
 - The Y8↔Y10 and Y10↔Div 3 bonus on boards no template holds, its measured cost
   on a synthetic oversubscribed board, and the plan's wrong claim that the
   templates exercise the Div 3 half –
@@ -376,6 +380,9 @@ unscheduled unless it says otherwise. The owner rulings O1–O14 are in
 - The board and the engine counting a video day's events differently –
   [§The board and the engine count a video day's events differently](#the-board-and-the-engine-count-a-video-days-events-differently).
   New.
+- The flighting suggestion text never reaching Findings –
+  [§The flighting suggestion text never reaches Findings](#the-flighting-suggestion-text-never-reaches-findings).
+  New. Not in 021 by decision (a UI change).
 - Stale docblocks, a second Vet band set, a name that outlived its field, an
   unread return value and other small code leftovers –
   [§Code leftovers from 021](#code-leftovers-from-021).
@@ -796,13 +803,22 @@ which is an owner call.
 **Cost if ignored**: a future change near these figures looks like drift when it
 is only the tie or the boundary resolving the other way.
 
-## Five events end past 22:00 only by their medal tail
+## Events end past 22:00 only by their medal tail
 
 *Found during 018, 2026-10-08. Recorded, not fixed. It is plan decision 1.*
 
 The overrun rule binds the last phase's end and not the gold and bronze tail,
-which METHODOLOGY treats as a planning buffer. Five events therefore end past
-22:00 only by the tail and draw no hard-end WARN: B2 once, B4 once and B6 three times.
+which METHODOLOGY treats as a planning buffer. Five events therefore ended past
+22:00 only by the tail and drew no hard-end WARN: B2 once, B4 once and B6 three times.
+
+*2026-10-11, from 021: the behaviour is unchanged and still open, but the count
+is now two. Reading the drift ledger at 021's head (`de_total_end` less the
+30-minute individual or 60-minute team tail, against each day's 780-minute hard
+end), B4's `Y12-W-FOIL-IND` and B6's `D1A-W-EPEE-IND` end past 22:00 only by the
+tail. B2 already read none at `5edbdf7712`, so that part of the count was stale
+before 021. B6 fell from three to one because T4 (`39c7145a63`) and T5
+(`0544ef1877`) re-colored its days. The rule still reads the last phase's end and not
+the tail (`lastPhaseOverrunWarnings`).*
 
 **What it needs**: an owner call on whether the tail should count toward the
 hard-end WARN.
@@ -1107,7 +1123,7 @@ left unresolved, and each push draws one `cross-event-dependency-delay` INFO.
 B8 went from 1 of 60 same-day band pairs staggered and 22 younger-first to 60 of
 60 and none, with no count moved. The stagger prototype's Suggest of 110 for NAC
 Vet/Div1/Junior was not reproduced: T6c's judge read 103 before and after, and
-the Suggest is 104 only since T8's video rule. The text below is the record as
+the Suggest is 104 at 12 video strips only since T8's video rule. The text below is the record as
 it stood before the fix.*
 
 `applyCrossEventEdges` (`src/engine/concurrentScheduler.ts:654–707`) adds two
@@ -1208,13 +1224,14 @@ accepted the break.
 
 T6a's J2 measured it with a 252-run sweep below the Suggest (B8 at 20–110 strips
 on 4 and 5 days, NAC Vet/Div1/Junior at 20–120 strips on 2–5 days). 18 of 6372
-same-day band pairs ended under 60 minutes apart, 13 of them inverted: 15 from
+same-day band pairs ended under 60 minutes apart (13 of them inverted), 15 from
 an older band's retry and 3 from a middle band that never placed (O8). The
 stagger also costs placements on tight boards. NAC Vet/Div1/Junior went 62 → 61
 placed at 80 strips on 4 days and 49 → 41 at 60 strips, the sweep's total went
 8362 → 8346 (56 configurations lost events and 55 gained), and B8 at 45 strips
 went 52 → 51 against its Suggest of 56. No configuration at or above its
-Suggest lost an event, and no B1–B8 scenario is affected.
+Suggest lost an event, and none of the sweep's losses is at a B1–B8 ledger
+setting.
 
 **What it needs**: an owner call on whether a broken order after a retry should
 draw a finding, or the release should wait for the older band's second attempt.
@@ -1233,8 +1250,8 @@ gender and weapon and ignores `vet_age_group`. For a Veteran team event it
 returns the first matching Vet individual in list order, which can be any age
 band or Vet Combined, and the team waits only on that one event. A Vet team
 shares a day with a Vet individual only through a pin or the least-bad
-fallback, since the pair is a hard same-population block, so no unpinned run
-reaches it.
+fallback, since the pair is a hard same-population block, so only a pinned
+board or one with too few days reaches it.
 
 **What it needs**: a rule for what a Vet team waits on when it shares a day with
 several Vet individuals – every band, the last to finish, or none – then the
@@ -1285,11 +1302,37 @@ use video strips only while it starts no later than 2 hours after the day's
 start (`<=`, METHODOLOGY §Video Strip Preservation). T8 measured both boundaries
 before the owner chose. Every B1–B8 board and three NAC templates tied, and NAC
 Vet/Div1/Junior (NAC, 4 days, 80 strips, 8 video strips) went from 60 placed and
-6 ERRORs to 58/8 under `<=` and 59/7 under `<`. Loaded the way the template
-tests load it (the B1 preset, then the template, at 12 video strips), it goes
-61/5 → 55/11 under `<=`, 6 events net. The owner accepted the cost, since
-templates carry no floor (`specs/021-methodology-reconciliation/decisions.md`,
-O14). A later step re-measures it.
+6 ERRORs to 58/8 under `<=` and 59/7 under `<`. The owner kept `<=` and
+accepted that 1–2 event cost, since templates carry no floor
+(`specs/021-methodology-reconciliation/decisions.md`, O14).
+
+*2026-10-11, re-measured at the final head `0544ef1877` for the owner. This is
+an open owner question, because the cost is larger than O14 named.* An
+organizer who opens the app gets the B1 preset, which sets 80 strips, 12 video
+strips and 4 days, and `applyTemplate` leaves those alone. So the template runs
+with 12 video strips and not the 8 T8 measured. Through the app path (`bootstrap`
+for B1, then `applyTemplate('NAC Vet/Div1/Junior')`, then `runScheduleAll`) main
+places 60 and leaves 6 unplaced, and the final head places 55 and leaves 11. That
+is 5 events net. Ten go out and five come in.
+
+- Out (10): `JR-M-EPEE-TEAM`, `JR-W-EPEE-IND`, `JR-W-SABRE-IND`,
+  `VET-W-EPEE-IND-V40`, `VET-W-EPEE-IND-V50`, `VET-W-FOIL-IND-V40`,
+  `VET-W-FOIL-IND-V50`, `VET-W-FOIL-IND-V60`, `VET-W-SABRE-IND-V40`,
+  `VET-W-SABRE-IND-V50`.
+- In (5): `D1-W-FOIL-TEAM`, `JR-M-FOIL-IND`, `JR-W-EPEE-TEAM`, `JR-W-FOIL-IND`,
+  `JR-W-FOIL-TEAM`.
+
+Four commits change the placed set on this route, and every other 021 commit
+leaves it byte-identical: main through T3-2 place 60, T4 (`39c7145a63`) places
+62 (+2), T6a (`bfdf295fca`) 61 (−1), and T8 (`bad32530d9`) 55 (−6). T5 leaves it
+at 55. T8 alone costs 6 events here, not the 1–2 O14 named. The smaller figure
+belongs to the 8-video-strip route (80 strips, fresh store), where the series is
+60, 62 (T4), 60 (T6a) and 58 (T8), so T8 costs 2 there.
+
+If the organizer presses Suggest and Apply, all 66 events place at main (103
+strips) and at the final head (104), so the cost to that organizer is one strip.
+The 6-event cost stands under O14 unless the owner reverses it. Measured through the app path
+in Task D's fact-check round, not by a ledger scenario.
 
 **What it needs**: nothing unless the owner reverses O14. A floor on the largest
 template, or a change to its strips, would make the cost visible to the drift
@@ -1352,6 +1395,26 @@ events.
 **Cost if ignored**: rare. After a hand move a pool can be seated on video
 strips on the board where the engine would have refused them.
 
+## The flighting suggestion text never reaches Findings
+
+*Found by 021's plan review (amendment Note 2), 2026-10-08. Recorded, not fixed.
+Left out of 021 by decision.*
+
+`analysis.ts` builds a list of flighting suggestions, such as a pair of events
+that could split into flights. Nothing in `src/` outside `analysis.ts` reads
+that list, and the Findings panel shows only `analysis.warnings`. 021's first
+draft assumed the suggestion reached Findings, and its correction named the
+three flighting WARNs instead (Blocks 59, 40 and 32 of the amendment), which
+carry the signal. Showing the suggestion text is a UI change, so 021 left it out
+(`specs/021-methodology-reconciliation/decisions.md`, default 12 and its
+correction).
+
+**What it needs**: an owner call on whether Findings should show the suggestion
+text, then a row type for it.
+
+**Cost if ignored**: an organizer sees that flighting is needed but never reads
+the pair the engine would suggest.
+
 ## Code leftovers from 021
 
 *Found during 021, 2026-10-08 to 2026-10-10. Recorded, not fixed. Each item
@@ -1359,9 +1422,10 @@ was declined or deferred in the commit named.*
 
 - The `buildPhaseNodes` docblock in `concurrentScheduler.ts` says the first node
   is READY at day start, and `handlePhaseFailure`'s says attempt 1 "retries from
-  dayStart". Since T6a a first phase can be held, and its ready time also
-  follows the cross-event floor and the regional Group 1 window (T6b
-  `7c3bf6e61f`).
+  dayStart". Since T6a (`bfdf295fca`) a first phase can be held and its ready time
+  also follows the cross-event floor. It already followed the regional Group 1
+  window and `earliest_start` before 021. T6b (`7c3bf6e61f`) left both
+  docblocks alone.
 - `dayColoring.ts` keeps its own `VET_AGE_BANDED_GROUPS` set instead of
   importing `isAgeBandedVet` from `crossover.ts`, the one band order T6c built
   (`0df58dee46`).
@@ -1483,7 +1547,7 @@ the largest template, which reads as a broken tool.
 *Found by 024's group E review, 2026-10-06. Recorded, not fixed. A comment in
 `validation.ts` names the mismatch.*
 
-The cut-value-min-promotions check (`validation.ts`, near line 183) computes
+The cut-value-min-promotions check (`validation.ts`, near line 110) computes
 `round(fencer_count × cut_value / 100)` for a PERCENTAGE cut. That reads
 `cut_value` as the share that advances. `computeDeFencerCount` (`pools.ts`)
 computes `round(fencer_count × (1 − cut_value / 100))`, so it reads the same
@@ -1785,7 +1849,7 @@ eight time-of-day rules into METHODOLOGY §Retired Time-of-Day Preferences,
 weights and the `LAST_DAY_REF_SHORTAGE_*` trio. T4 (`39c7145a63`) wired
 `WEAPON_BALANCE` in the "keeps" reading (O4, O7), and T5 (`0544ef1877`) added
 `Y8_Y10_SAME_DAY` and `Y10_DIV3_SAME_DAY` (−0.3, O12). `PENALTY_WEIGHTS` now has
-11 keys. Nine are read outside `constants.ts` (eight in `dayColoring.ts`,
+11 keys (20 at 021's base). Nine are read outside `constants.ts` (eight in `dayColoring.ts`,
 `REGIONAL_GROUP_1_PAIR` in `crossover.ts`), and the two same-day bonuses are read
 through `SAME_DAY_BONUS_PAIRS`, which `dayColoring.ts`'s `sameDayBonus` reads.*
 
