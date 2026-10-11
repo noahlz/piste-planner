@@ -19,7 +19,7 @@ handoff. Four questions go to the owner, listed first below.
   leaves those alone, so the template runs with 12 video strips. On that route main
   places 60 and leaves 6, and 021 places 55 and leaves 11, so five fewer events are
   placed. Video Strip Preservation (T8) costs six of them by itself, and T4 (+2) and
-  T6a (−1) move the template a little the other way first. If the organizer presses
+  T6a (−1) net to +1 before it. If the organizer presses
   Suggest and Apply, all 66 events place before and after 021, at 103 strips on main
   and 104 now, so the cost there is one strip. No floor covers templates. The full
   series is under Measurements, §O14 on NAC Vet/Div1/Junior, and the backlog entry is
@@ -27,8 +27,10 @@ handoff. Four questions go to the owner, listed first below.
   Until the owner answers, the 6-event cost stands under O14.
 - **B – An older Vet band's retry can break the stagger** (plan decision 8). If an
   older band fails late and restarts after its younger band was released, the younger
-  band keeps its place, so the older band can start after it. T6a's J2 found 18 such
-  pairs out of 6372 in a sweep below the Suggest, and none at or above it. Should a
+  band keeps its place, so the older band can start after it. T6a's J2 found 18 of 6372
+  same-day pairs under 60 minutes apart in a 252-run sweep, 15 from an older band's
+  retry and 3 from a middle band that never placed. No configuration at or above its
+  Suggest lost an event. Should a
   broken order draw a finding, or should the release wait for the older band's second
   attempt? Backlog
   [§An older Vet band's retry can break the stagger](../../docs/design/backlog.md#an-older-vet-bands-retry-can-break-the-stagger).
@@ -45,8 +47,9 @@ handoff. Four questions go to the owner, listed first below.
 ## Session notes
 
 The orchestrator ran as one session, `da05b850-c940-41f6-92e4-801f66f7c45d`, from
-2026-10-08 to 2026-10-11. It was compacted once and then resumed from
-`<wt>/tmp/021-resume-prompt.txt`. It drove the worktree from the main checkout with
+2026-10-08 to 2026-10-11. It was compacted twice, once automatically after T6c on
+2026-10-10 and once by hand after the T6a smoke commit and before T5, and then resumed
+from `<wt>/tmp/021-resume-prompt.txt`. It drove the worktree from the main checkout with
 absolute paths, so its transcript sits under the main checkout's project directory
 (`~/.claude/projects/-Users-noahlz-projects-piste-planner/`). Background task outputs
 went under `a91cc939-e943-4ff6-a585-c52637ca30a0`, which 019 and 020 share, so the
@@ -59,16 +62,18 @@ measured-pin handling, then the commit. The workflow script is
 `~/.claude/projects/-Users-noahlz-projects-piste-planner/da05b850-c940-41f6-92e4-801f66f7c45d/workflows/scripts/021-impl-drift-rest.js`.
 T5 and Task S ran in one workflow after the resume, and its full record is
 `<wt>/tmp/021-t5/workflow-result.json`. The implementation dispatches for T6c, T7 and
-T8 had no agent-spawning tool, so their judges, reviews and smoke ran under the
-orchestrator afterwards, and T3-1's implementer ran a smoke of its own before the
+T8 had no agent-spawning tool. The judges, reviews and smoke of T7 and T8 ran under the
+orchestrator afterwards. For T6c the implementer ran the smoke itself, and its commit
+does not say who ran the judges. T3-1's implementer ran a smoke of its own before the
 subagent smoke that counts. Smoke logs (`smoke-<task>-*.log`), probes and audit logs
 sit git-ignored in `<wt>/tmp/` and go when the worktree is removed.
 
 ## What changed
 
-In product terms: METHODOLOGY.md and the engine now say the same thing. The owner
-approved one amendment and a follow-up after fourteen rulings, and everywhere else the
-engine moved to the spec.
+In product terms: METHODOLOGY.md and the engine now say the same thing, except for the
+items under Owner questions and Left unfixed. The owner approved one amendment (A0)
+after rulings O1–O11 and a follow-up (A1) after O12–O13, while O14 changed no spec text.
+Everywhere else the engine moved to the spec.
 
 - The eight time-of-day preferences, which day assignment could never score, are
   retired from the spec and the code, with their dead settings.
@@ -116,7 +121,7 @@ What each task does now:
   probe. The owner annotated the applied amendment in Plannotator, and that annotation
   became O11 (two blocks added, 99 in all).
 - **A0 – the amendment (`121394c92a`).** `amendment.md` applied verbatim to
-  METHODOLOGY.md (1137 → 1189 lines), with 0 unmatched blocks, 0 overlaps and 0 broken
+  METHODOLOGY.md (1136 → 1188 lines by `wc -l`), with 0 unmatched blocks, 0 overlaps and 0 broken
   anchors. Ledger unchanged.
 - **T1a – the time-of-day weights retired (`c4297a8bac`).** Pure deletion. The 8
   time-of-day `PENALTY_WEIGHTS` keys, the 3 `LAST_DAY_REF_SHORTAGE_*` keys, 5 orphan
@@ -230,7 +235,7 @@ What each task does now:
 | What | Value | Where |
 |---|---|---|
 | Unit suite | 97 files / 3349 tests, all pass (from 96 / 3252), `tmp/**` excluded | `0544ef1877`, re-run by Task D |
-| `tsc -b`, lint | clean, clean | every commit body |
+| `tsc -b`, lint | clean, clean | every code commit body, and Task D's check at its head |
 | Drift ledger snapshot SHA-256 | `5f0935202e54521e555d3d8feace4172d955a292ed8bce2a9c13e21a7d478341` (from `32a4e0afb45a…`) | `0544ef1877` |
 | B1–B8 scheduled | 24 / 24 / 24 / 24 / 12 / 53 / 18 / 53, B6 +2 by T4 | T4 judges J1, J1b |
 | ERRORs | 0 / 0 / 0 / 6 / 0 / 1 / 0 / 0, B6 −2 by T4 | T4 |
@@ -388,9 +393,9 @@ The deltas sum to 97 (3252 to 3349).
 **Planning.** The audit ran 16 auditors and 16 adversarial verifiers, and where a
 verifier corrected an item the correction won. The plan was read under four lenses
 (owner rulings, engine mechanism, drift and ledger, UI and smoke), and each finding went
-to a verifier: 49 findings, one refuted, and the other 48 folded in whole or in part (7
-must-fix, 29 should-fix, 12 nits). Plan §Plan review has the list and the parts
-declined. The owner reviewed the applied amendment in Plannotator, and the one
+to a verifier: 48 findings (7 must-fix, 29 should-fix, 12 nits), of which 42 were
+confirmed and 6 partly confirmed. None was refuted and all 48 were folded in whole or in
+part. Plan §Plan review has the list and the parts declined. The owner reviewed the applied amendment in Plannotator, and the one
 annotation became O11.
 
 Each code task got drift judges of at most four items where the engine moved, a spec
@@ -451,7 +456,7 @@ needed a code change ran in detached throwaway worktrees, each removed after.
   −0.3). Smoke: two passes.
 - **Task S – pass.** Two consecutive full passes on `0544ef1877`, 0 console errors, no
   pin moved, no locator repaired. The two logs differ only in 020 R1's click-gap
-  timings. The full check list is under `finalSmoke.details` in
+  timings. The full check list is under `result.finalSmoke.details` in
   `<wt>/tmp/021-t5/workflow-result.json`.
 - **Docs – four fact-checkers, defects fixed (`ae3439b75a`).** A must-fix on the
   medal-tail entry (two events now end past 22:00 only by the tail, four at the base),
@@ -587,8 +592,10 @@ plan's, which has them in full. 10 onward were made during implementation.
     (refs, unseated, segments, derived), T8 (unseated, `stripSearch` T033, segments,
     SC-008) and T5 (unseated pin-half B6 8 → 9). Cost: none, each names its cause.
 34. **Plan Note 6: 020's blocking-error hold and the "Re-run automatically" switch stay
-    out of METHODOLOGY.** Cost: the spec does not describe re-runs, and 020's handoff and
-    the workbench design are the only record.
+    out of METHODOLOGY.** Cost: the spec says Auto-assign re-runs after every
+    edit to an engine input, but it does not mention 020's hold while a blocking error
+    shows or the "Re-run automatically" switch. Those two are recorded only in 020's
+    handoff and the workbench design.
 
 Deliberate corrections recorded in commit bodies: T1b-1's `invalidState` expects 3
 items, and three examples moved from same-population to team-requires-individual. T2's
@@ -610,7 +617,7 @@ to D). The handoff does not restate them.
 handoff, For later features), which still hold:
 
 - **The ledger moved.** B6's floor is 53. `stripRecommendation` is now reported by every
-  drift judge, at 53 / 75 / 79 / 74 / 32 / 64 / 82 / 56.
+  drift review's J1, at 53 / 75 / 79 / 74 / 32 / 64 / 82 / 56.
 - **Day colouring has two more terms,** weapon balance and the same-day bonus. A new term
   churns most day maps, so attribute drift by mechanism with a term-off control in a
   throwaway worktree, as T4's J3 and T5's J3 did.
