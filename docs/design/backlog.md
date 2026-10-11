@@ -30,7 +30,7 @@ feature that owns it is in [`competition-planner-workbench.md`](./competition-pl
   Fixed by 017.
 - The two dead constants and the unwired `daySequencing.ts` –
   [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
-  Feature 021.
+  Closed by 021 (T1a `c4297a8bac`, T1b `87292a868e`).
 - The lane-packer overflow, including the two "Unplaced, needs N strips"
   figures for one event –
   [§The canvas calls events unplaced that the engine placed](#the-canvas-calls-events-unplaced-that-the-engine-placed).
@@ -69,7 +69,7 @@ and kept every user-visible surface unchanged.*
 - `validateFlightingGroup` and `validateSameDayCompletion` have no caller in
   `src/` –
   [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
-  Feature 021.
+  Both deleted by 021 (T1b `87292a868e`, T3 `7185168c98`).
 
 ## What 024 deliberately left unfixed
 
@@ -101,7 +101,8 @@ bracket's time and §The engine's rules predate the 2026-27 Operations Manual
   [§Day-level findings have no structured day](#day-level-findings-have-no-structured-day).
 - A penalty weight with no reader, `EARLY_START_CONSECUTIVE_HIGH_CROSSOVER` –
   [§Penalty weights: 5 of 19 are read](#penalty-weights-5-of-19-are-read).
-  Feature 021, and it predates 024.
+  Closed by 021: the owner retired the weight from METHODOLOGY (A0
+  `121394c92a`) and T1a (`c4297a8bac`) deleted it.
 
 ## What 016 deliberately left unfixed
 
@@ -116,7 +117,8 @@ peak-referee row and mostly closed §Day-level findings. Its handoff,
 - The Vet age-group co-day rule unchecked for hand placements, the regional Note
   unreachable by hand and the overflow block that never draws the findings edge –
   [§Hand-placed events are never checked against the crossover constraint graph](#hand-placed-events-are-never-checked-against-the-crossover-constraint-graph).
-  The overflow edge was fixed by 017.
+  The overflow edge was fixed by 017, and the Vet co-day check by 021 T6c
+  (`0df58dee46`).
 - Phase-repeating scheduler findings out of the panel, and the scheduler's own
   messages still printing ids –
   [§Day-level findings have no structured day](#day-level-findings-have-no-structured-day).
@@ -165,7 +167,7 @@ were written by 018, and every entry is unscheduled unless it says otherwise.*
 - The 4:00 PM pool cutoff that no engine code reads, and that the overrun now
   makes visible –
   [§The 4:00 PM pool cutoff is not enforced](#the-400-pm-pool-cutoff-is-not-enforced).
-  New. An owner call.
+  New. An owner call. Closed by 021 T7 (`8b23e1b964`, ruling O2).
 - The defer cap of 16 deciding which events are lost, and the retry's start
   estimate jumping past free windows –
   [§The defer cap decides which events are lost](#the-defer-cap-decides-which-events-are-lost).
@@ -215,12 +217,12 @@ were written by 018, and every entry is unscheduled unless it says otherwise.*
   New, plan decision 1.
 - `validateSameDayCompletion` measuring Single-Day Fit to the hard end –
   [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep).
-  Existing entry, feature 021's sweep.
+  Existing entry, feature 021's sweep. Deleted by 021 T1b (`87292a868e`).
 - `calculateFlightedStrips` and `validateSameDayCompletion` still throwing on an
   unsizeable count if called directly, and `selectCompetitions` still seeding a
   count of 0 –
   [§Two fencer-count corners 018 left open](#two-fencer-count-corners-018-left-open).
-  New.
+  New. 021 deleted `validateSameDayCompletion`, and the rest stands.
 
 ## What 019 deliberately left unfixed
 
@@ -260,7 +262,7 @@ otherwise.*
 - Ten METHODOLOGY lines the amendment left, for feature 021 –
   [§Left for 021 by 019's amendment](#left-for-021-by-019s-amendment), under
   [§METHODOLOGY.md and the engine have diverged, and the doc is the spec](#methodologymd-and-the-engine-have-diverged-and-the-doc-is-the-spec).
-  Existing entry, extended. Feature 021.
+  Existing entry, extended. Closed by 021 A0 (`121394c92a`).
 - Two hint copy nits, "the same age group" for Div 1 and the "a" before a type
   code –
   [§Two hint copy nits 019 left as owner copy](#two-hint-copy-nits-019-left-as-owner-copy).
@@ -315,6 +317,69 @@ Every entry is new and unscheduled unless it says otherwise.*
   raise –
   [§Picking a preset keeps the pins on events the two boards share](#picking-a-preset-keeps-the-pins-on-events-the-two-boards-share).
   Existing entry, extended.
+
+## What 021 deliberately left unfixed
+
+*Recorded by 021, 2026-10-11. It closed
+[§METHODOLOGY.md and the engine have diverged, and the doc is the spec](#methodologymd-and-the-engine-have-diverged-and-the-doc-is-the-spec)
+with its sub-sections, §Dead code held back from the 2026-09-01 sweep,
+§Calibration debt, §Vet co-day serialization is unsourced, §The Vet sibling and
+individual-to-team edges never hold an event back and §The 4:00 PM pool cutoff
+is not enforced. Its handoff, `specs/021-methodology-reconciliation/handoff.md`,
+has the rest. Entries marked "new" were written by 021, and every entry is
+unscheduled unless it says otherwise. The owner rulings O1–O14 are in
+`specs/021-methodology-reconciliation/decisions.md`.*
+
+- Hand pins are not checked against the Vet Combined start offset. Moot: O13
+  retired the offset, and T6b (`7c3bf6e61f`) removed the never-read field, so no
+  Veteran event has a fixed start offset to check. No entry.
+- An older Vet band's retry breaking the stagger after its younger band started
+  (plan decision 8), and what the stagger costs below the Suggest –
+  [§An older Vet band's retry can break the stagger](#an-older-vet-bands-retry-can-break-the-stagger).
+  New.
+- A Veteran team event's ind→team wait pointing at the first matching Vet
+  individual in list order, not at the bands as a group –
+  [§A Veteran team event waits on one Vet band, picked by list order](#a-veteran-team-event-waits-on-one-vet-band-picked-by-list-order).
+  New.
+- The better least-bad fallback –
+  [§Runtime failure is terminal – day assignment never re-colors](#runtime-failure-is-terminal--day-assignment-never-re-colors).
+  Existing entry. Not in 021 by decision.
+- The medal-tail WARN entries –
+  [§The late-day WARN adds the medal tail and wraps past midnight](#the-late-day-warn-adds-the-medal-tail-and-wraps-past-midnight)
+  and
+  [§Five events end past 22:00 only by their medal tail](#five-events-end-past-2200-only-by-their-medal-tail).
+  Existing entries. Not in 021 by decision.
+- `cut-value-min-promotions` reading a percentage as the share that advances –
+  [§`validation.ts` reads a percentage cut as the share that advances](#validationts-reads-a-percentage-cut-as-the-share-that-advances).
+  Existing entry. Not in 021 by decision.
+- `regional-cut-override` warning a non-store caller of a cut nothing applies –
+  [§The regional cut override is applied only on the store path](#the-regional-cut-override-is-applied-only-on-the-store-path).
+  New. Not in 021 by decision.
+- `strips-total-positive` passing a NaN or negative strip total –
+  [§`strips-total-positive` misses NaN and negative totals](#strips-total-positive-misses-nan-and-negative-totals).
+  New. Not in 021 by decision.
+- The R6 clique WARN. Settled, not open: 019's ruling R3 declined it in favour of
+  the per-template day minimums and the Days hint, and 021 marks it settled (see
+  the dated note in
+  [§The store's default day count is unsatisfiable for three templates](#the-stores-default-day-count-is-unsatisfiable-for-three-templates)).
+- The events video strip preservation costs the largest template under O14 –
+  [§Video strip preservation costs NAC Vet/Div1/Junior events](#video-strip-preservation-costs-nac-vetdiv1junior-events).
+  New. An owner ruling.
+- The Y8↔Y10 and Y10↔Div 3 bonus on boards no template holds, its measured cost
+  on a synthetic oversubscribed board, and the plan's wrong claim that the
+  templates exercise the Div 3 half –
+  [§No template exercises the Y8 and Div 3 same-day bonus](#no-template-exercises-the-y8-and-div-3-same-day-bonus).
+  New.
+- The pool strip cap counting video strips a late pool may no longer use –
+  [§The pool strip cap counts video strips a late pool cannot use](#the-pool-strip-cap-counts-video-strips-a-late-pool-cannot-use).
+  New.
+- The board and the engine counting a video day's events differently –
+  [§The board and the engine count a video day's events differently](#the-board-and-the-engine-count-a-video-days-events-differently).
+  New.
+- Stale docblocks, a second Vet band set, a name that outlived its field, an
+  unread return value and other small code leftovers –
+  [§Code leftovers from 021](#code-leftovers-from-021).
+  New.
 
 ## Day-level findings have no structured day
 
@@ -512,6 +577,17 @@ for events that cannot start at all.
 
 *Found during 018, 2026-10-08. Recorded, not fixed. The overrun made it
 visible, and it predates 018.*
+
+*Closed by 021, 2026-10-10 (T7 `8b23e1b964`, owner rulings O2 and O10). The
+owner kept the cutoff as Piste Planner's own unsourced rule (METHODOLOGY §Pool
+Start Cutoff, A0 `121394c92a`). An event whose first pool phase (its pools, or
+Flight A) starts later than day start + `LATEST_START_OFFSET` (7 hours, so 16:00
+on a 9:00 day) stays placed and draws one `pool-start-after-cutoff` WARN that
+names the start. The engine and the board's hand-move check share one function,
+so the Findings panel shows the row for run-placed and hand-moved events alike.
+T1a (`c4297a8bac`) deleted the unread `LATEST_START_MINS`. At 021's head the
+WARN fires on B4 once, B6 nine times and B8 three times. The text below is the
+record as it stood before the fix.*
 
 `LATEST_START_MINS` (960, `constants.ts`) is threaded into `TournamentConfig`
 through `buildConfig.ts` and read by no engine code. METHODOLOGY says pool
@@ -742,6 +818,8 @@ finding says so.
   unsizeable count if they are called directly. No production code reaches them
   (see the second bullet of
   [§Dead code held back from the 2026-09-01 sweep](#dead-code-held-back-from-the-2026-09-01-sweep)).
+  *2026-10-11, from 021: T1b (`87292a868e`) deleted `validateSameDayCompletion`.
+  `calculateFlightedStrips` stays, with its precondition in its docblock.*
 - `selectCompetitions` still seeds a fencer count of 0 for a newly selected
   event. `applyPreset` overwrites it at once, so no board holds a 0 for long.
 
@@ -892,6 +970,14 @@ board reports a break that a better color choice would have avoided, and the
 broken pair is chosen by tie-break order instead of by harm. The templates'
 own day minimums keep the default path clear of it.
 
+*2026-10-11, from 021: still open, and left out of 021 by decision
+(`specs/021-methodology-reconciliation/decisions.md` §Not in 021). METHODOLOGY
+now describes the fallback as it runs, in §When Days Are Too Few (A0
+`121394c92a`, default 2): the least-bad day, the first of them on a tie, one
+WARN per broken pair, and scheduling continues. It does not promise the better
+fallback. A split Vet co-day now draws its own `vet-co-day-split` WARN (T6c
+`0df58dee46`).*
+
 ## The store's default day count is unsatisfiable for three templates
 
 *Found by the 2026-08-31 methodology review, made visible (not fixed) by 010
@@ -937,6 +1023,11 @@ break visible going forward without repairing it.
   (gender, weapon) and need 4 days. The store defaults to **3**
   (the store's initial value, `src/store/store.ts:221`): the default configuration cannot satisfy its own
   hard constraints.
+  *2026-10-11, from 021: the audit's R6, a runtime clique WARN naming the days
+  a board needs, is settled and will not be built. 019's ruling R3 chose the
+  per-template day minimums and the Days hint instead, and the per-pair
+  `hard-separation-violated` WARNs report a hand-built board's shortfall. 021
+  marked it settled (decisions.md §Not in 021).*
 
 **010 made this visible and did not fix it.** `assignDaysByColoring` now
 returns the hard edges its fallback breaks, and `scheduleAllConcurrent` emits
@@ -952,6 +1043,21 @@ Record: `specs/010-wave-1-reconciliation/` (removed; git show 0ab5bd2dc9:specs/0
 ## Vet co-day serialization is unsourced and never fit-checked
 
 *Found by the 2026-08-31 methodology review. Recorded, not fixed.*
+
+*Closed by 021, 2026-10-09 (owner rulings O1 and O11, METHODOLOGY A0
+`121394c92a`, engine T6a `bfdf295fca`). Strict end-to-end serialization left
+the spec. Age-banded Vet bands of one gender and weapon now start oldest first
+with a 60-minute stagger (`VET_STAGGER_MINS`): each younger band's pools start
+60 minutes after the next-older band present on the day starts its first pool
+phase. The stagger stays Piste Planner's own unsourced rule (METHODOLOGY
+Appendix B), and the co-day itself is no longer called a departure, since the
+age bands are one Veteran event split by age (O11). No chain fit check was
+added: the stagger keeps the chain short, B8 still places 53, and NAC
+Vet/Div1/Junior at its Suggest of 103 placed 66 of 66 with all 60 same-day band
+pairs in order (T6a judge J2). The live smoke checks the stagger on that
+template (`fa6be94556`). What 021 left open is in
+[§What 021 deliberately left unfixed](#what-021-deliberately-left-unfixed). The
+text below is the record as it stood before the fix.*
 
 Two stacked problems with the Veteran Age-Group Co-Day Rule:
 
@@ -987,6 +1093,22 @@ not this co-day rule. A hand-split Vet co-day raises nothing – see
 ## The Vet sibling and individual-to-team edges never hold an event back
 
 *Found by 024 planning, 2026-10-05. Recorded, not fixed.*
+
+*Fixed by 021, 2026-10-09 (T6a `bfdf295fca`, owner rulings O1 and O8). Both
+waits now bind, whatever order the loop meets the events in. A waiting event
+whose predecessor is still pending is held out of the ready queue and released
+when the predecessor's anchor phase is placed (`src/engine/crossEventWaits.ts`,
+the held set in `runConcurrentLoop`). The Vet wait anchors on the next-older
+present band's first pool start + 60 minutes, not its last phase end. The
+ind→team wait anchors on the individual's last phase end + 120 minutes. The
+floor is kept on the event, so a retry keeps it. When the event waited on is
+never placed, the wait lapses (O8). A post-loop assertion throws on any event
+left unresolved, and each push draws one `cross-event-dependency-delay` INFO.
+B8 went from 1 of 60 same-day band pairs staggered and 22 younger-first to 60 of
+60 and none, with no count moved. The stagger prototype's Suggest of 110 for NAC
+Vet/Div1/Junior was not reproduced: T6c's judge read 103 before and after, and
+the Suggest is 104 only since T8's video rule. The text below is the record as
+it stood before the fix.*
 
 `applyCrossEventEdges` (`src/engine/concurrentScheduler.ts:654–707`) adds two
 waits. A younger age-banded Vet sibling waits for the older sibling's last
@@ -1072,6 +1194,196 @@ are double-booked with no finding. METHODOLOGY describes an order and a wait
 the engine never applies, which misleads anyone checking the board against
 the spec.
 
+## An older Vet band's retry can break the stagger
+
+*Found by 021's planning (plan decision 8) and measured by T6a's judge J2,
+2026-10-09. Recorded, not fixed.*
+
+A held younger band is released once its next-older band's pools are placed. If
+the older band then fails late and restarts on its second attempt, the younger
+band keeps the floor it was released with, so the older band can end up
+starting after it. Holding the release until the older band can no longer roll
+back would come close to the end-to-end serialization O1 retired, so the plan
+accepted the break.
+
+T6a's J2 measured it with a 252-run sweep below the Suggest (B8 at 20–110 strips
+on 4 and 5 days, NAC Vet/Div1/Junior at 20–120 strips on 2–5 days). 18 of 6372
+same-day band pairs ended under 60 minutes apart, 13 of them inverted: 15 from
+an older band's retry and 3 from a middle band that never placed (O8). The
+stagger also costs placements on tight boards. NAC Vet/Div1/Junior went 62 → 61
+placed at 80 strips on 4 days and 49 → 41 at 60 strips, the sweep's total went
+8362 → 8346 (56 configurations lost events and 55 gained), and B8 at 45 strips
+went 52 → 51 against its Suggest of 56. No configuration at or above its
+Suggest lost an event, and no B1–B8 scenario is affected.
+
+**What it needs**: an owner call on whether a broken order after a retry should
+draw a finding, or the release should wait for the older band's second attempt.
+
+**Cost if ignored**: on a board below its Suggest, an older Vet band can start
+after a younger one with no finding saying so.
+
+## A Veteran team event waits on one Vet band, picked by list order
+
+*Found by 021's plan review (mechanism-t6-vet-team-counterpart), 2026-10-08.
+Recorded, not fixed.*
+
+The ind→team wait finds the team's individual counterpart with
+`findIndividualCounterpart` (`src/engine/crossover.ts`), which matches category,
+gender and weapon and ignores `vet_age_group`. For a Veteran team event it
+returns the first matching Vet individual in list order, which can be any age
+band or Vet Combined, and the team waits only on that one event. A Vet team
+shares a day with a Vet individual only through a pin or the least-bad
+fallback, since the pair is a hard same-population block, so no unpinned run
+reaches it.
+
+**What it needs**: a rule for what a Vet team waits on when it shares a day with
+several Vet individuals – every band, the last to finish, or none – then the
+lookup to match it.
+
+**Cost if ignored**: on a pinned or too-short board the Vet team's start follows
+whichever Vet individual comes first in the list, not the bands its fencers
+entered.
+
+## The regional cut override is applied only on the store path
+
+*Found by 021's audit (G13, missed-by-auditor item 1), 2026-10-08. Recorded, not
+fixed. Left out of 021 by decision.*
+
+`REGIONAL_CUT_OVERRIDES` (no cut for Cadet, Junior and Div 1 at ROC, RYC, SYC,
+RJCC and SJCC, `constants.ts`) is applied only in `buildConfig.ts`. The engine never applies
+it. `validation.ts`'s `regional-cut-override` rule only warns that the cut "will
+be overridden". A caller that builds a regional config without `buildConfig`,
+such as a test or a future import path, keeps its cut, and the warning tells it
+something that does not happen. The app's store path is not affected.
+
+**What it needs**: apply the override in the engine, or reword the warning for a
+caller outside the store.
+
+**Cost if ignored**: none in the app today. A non-store caller gets a cut the
+spec forbids and a message that says otherwise.
+
+## `strips-total-positive` misses NaN and negative totals
+
+*Found by 021's audit (G13, missed-by-auditor item 2), 2026-10-08. Recorded, not
+fixed. Left out of 021 by decision.*
+
+The rule (`validation.ts`) tests `strips_total === 0` only. A strip total of NaN
+draws no finding at all, and a negative one falls through to the strip-minimum
+check. The store's controls probably cannot produce either.
+
+**What it needs**: test for a finite, positive whole number.
+
+**Cost if ignored**: low. A hand-built config with a bad strip total gets a
+misleading finding or none.
+
+## Video strip preservation costs NAC Vet/Div1/Junior events
+
+*Found by 021 T8, 2026-10-10. Recorded, not fixed. An owner ruling (O14).*
+
+On a day that holds a required video stage and more than one event, a pool may
+use video strips only while it starts no later than 2 hours after the day's
+start (`<=`, METHODOLOGY §Video Strip Preservation). T8 measured both boundaries
+before the owner chose. Every B1–B8 board and three NAC templates tied, and NAC
+Vet/Div1/Junior (NAC, 4 days, 80 strips, 8 video strips) went from 60 placed and
+6 ERRORs to 58/8 under `<=` and 59/7 under `<`. Loaded the way the template
+tests load it (the B1 preset, then the template, at 12 video strips), it goes
+61/5 → 55/11 under `<=`, 6 events net. The owner accepted the cost, since
+templates carry no floor (`specs/021-methodology-reconciliation/decisions.md`,
+O14). A later step re-measures it.
+
+**What it needs**: nothing unless the owner reverses O14. A floor on the largest
+template, or a change to its strips, would make the cost visible to the drift
+review.
+
+**Cost if ignored**: the largest template places fewer events than it did
+before 021, and no drift scenario guards it.
+
+## No template exercises the Y8 and Div 3 same-day bonus
+
+*Found by 021 T5's judges J2 and J4, 2026-10-10. Recorded, not fixed.*
+
+T5 scores −0.3 when a Y8 and a Y10, or a Y10 and a Div 3, of one weapon and
+gender share a day (O6, O9, O12). No catalogue template and no B1–B8 scenario
+holds a Div 3 event, and no template holds a Y8 event, so the Div 3 half is
+covered only by `dayColoring.test.ts`. The plan's Measurements said the Div 3
+half "runs only on the templates", which is wrong (a dated note in the plan
+corrects it). The bonus moved only B6, where two Y8 events swapped days to sit
+with their Y10s. J2 also found a sensitivity: on a synthetic oversubscribed
+board (NAC Youth, 2 days, 40 strips, with a Y8 and a Div 3 clone of every Y10)
+the bonus moved scheduled events 17 → 14 and ERRORs 19 → 22, while the same
+extension on NAC Youth at 4 days and 80 strips went 34 → 35.
+
+**What it needs**: measure the bonus again whenever a Y8 or Div 3 event joins a
+template or a drift scenario.
+
+**Cost if ignored**: a future template with Y8 or Div 3 events can lose events
+to the bonus on a tight board, and no floor would catch it.
+
+## The pool strip cap counts video strips a late pool cannot use
+
+*Found by 021 T8, 2026-10-10. Recorded, not fixed.*
+
+A pool's strip cap is `max_pool_strip_pct` of every strip (`computeStripCap`,
+`stripBudget.ts`), video strips included. After the morning wave on a
+multi-event video day a pool may use general strips only, so the cap can ask
+for more strips than the pool may take. It bites when the video share of the
+strips is above 1 − `max_pool_strip_pct`, as at candidates 53 to 55 in
+`stripSearch.test.ts`'s T033 case.
+
+**What it needs**: a cap computed over the strips the pool may use at its start.
+
+**Cost if ignored**: a late pool on a video-heavy board waits for strips it
+cannot get, which can push it later or fail it.
+
+## The board and the engine count a video day's events differently
+
+*Found by 021 T8, 2026-10-10. Recorded, not fixed.*
+
+Video strip preservation does not apply on a day that holds a single event. The
+engine counts every event assigned to the day, including one that later fails
+to place, while the board's re-seater (`src/layout/strips.ts`) counts the
+events drawn on it. After a hand move a day can read single-event on the board
+and multi-event to the engine, so the two can disagree about whether a late
+pool may take a video strip.
+
+**What it needs**: one count shared by both, or the engine counting only placed
+events.
+
+**Cost if ignored**: rare. After a hand move a pool can be seated on video
+strips on the board where the engine would have refused them.
+
+## Code leftovers from 021
+
+*Found during 021, 2026-10-08 to 2026-10-10. Recorded, not fixed. Each item
+was declined or deferred in the commit named.*
+
+- The `buildPhaseNodes` docblock in `concurrentScheduler.ts` says the first node
+  is READY at day start, and `handlePhaseFailure`'s says attempt 1 "retries from
+  dayStart". Since T6a a first phase can be held, and its ready time also
+  follows the cross-event floor and the regional Group 1 window (T6b
+  `7c3bf6e61f`).
+- `dayColoring.ts` keeps its own `VET_AGE_BANDED_GROUPS` set instead of
+  importing `isAgeBandedVet` from `crossover.ts`, the one band order T6c built
+  (`0df58dee46`).
+- `CATEGORY_START_PREFERENCE` (`constants.ts`) now holds category weights only,
+  since O13 removed its offset, but keeps its name. A rename to something like
+  `CATEGORY_WEIGHT` also touches its reader in `capacity.ts` (T6b).
+- `assignDaysByColoring` still returns `effectiveDays`, the count of days used,
+  which nothing in `src/` reads (T2 `6207c03b5f`).
+- Analysis Pass 1 works out each flighting candidate's strip cap a second time
+  for its message text (T1b `6bfdd597b4`).
+- `checkInvariants` (`__tests__/helpers/bottleneckInvariants.ts`) checks that a
+  message names every subject for engine rules only. Widening it to the
+  validation rules was left open when the flighting-group rule, its last
+  exception, went (T3 `7185168c98`).
+- Inert test data: the `'AUTO'` ref policy and `'same-population:…'` dismissal
+  strings in `serialization.test.ts`'s v2 fixtures, the `THRESHOLD_MINS` key
+  there (T1a, T1b), and a `flighted: true` that no assertion reads in
+  `placementRules.test.ts` (T3).
+
+**Cost if ignored**: low. Each misleads a reader or carries a little dead
+weight, and none changes a schedule.
+
 ## Policy tables are stale against USA Fencing 2025-26 changes
 
 *Found by the 2026-08-31 methodology review (policy research against
@@ -1134,6 +1446,10 @@ not happen, so their time and strip use is wrong.
 
 *Found by 024's measurement, 2026-10-06. Recorded, not fixed. Needs an owner
 call on what the app should say.*
+
+*2026-10-11, from 021: the answer is now 104 at 12 video strips, and 103 at the
+default 8. T8's video strip preservation (`bad32530d9`) moved it. The Vet
+stagger (T6a) left it at 103. The question below is unchanged.*
 
 Suggest answers 103 strips for the NAC Vet/Div1/Junior template (the 66-event
 template in `src/engine/catalogue.ts`) at 4 days, a 9:00–19:00 day and 12 video
@@ -1221,6 +1537,11 @@ entry with a note on the control keeps that and costs one more line of text.
 **Owner ruling 2026-10-06:** keep free entry, from 0 to the strip count. At a
 NAC with fewer than 4 video strips, show a note on the control saying
 individual events need at least 4.
+
+*2026-10-11, from 021: METHODOLOGY now matches the stepper. Owner ruling O5 made
+any count from 0 to the strip total valid at every type, 8 by default at a NAC
+(A0 `121394c92a`, §Inputs and §Resource Preconditions). The note on the control
+is still not built.*
 
 **Cost if ignored**: a NAC with fewer than 4 video strips loses every
 individual event, and the stepper gives no hint.
@@ -1330,6 +1651,23 @@ below – the eight time-of-day weights are retired from the doc. Roadmap
 feature 021. Most of its fixes edit `src/engine/`, so constitution III's B1–B8
 drift review applies.*
 
+*Closed by 021, 2026-10-11 (`specs/021-methodology-reconciliation/`). A 32-agent
+audit verdicted every item, the owner ruled O1–O14, and the owner-approved
+amendment went into METHODOLOGY.md as A0 (`121394c92a`) with the follow-up A1
+(`cb4c8deeb9`). Where a ruling or a default changed the spec, the doc moved, and
+everywhere else the engine moved to the doc: the time-of-day weights and their
+dead config are gone (T1a `c4297a8bac`), the dead engine code went (T1b
+`87292a868e`, T1c `e2b940dbfd`), day assignment uses every chosen day (T2
+`6207c03b5f`), flighting follows the spec (T3 `1797945660`, `7185168c98`),
+weapon balance is scored (T4 `39c7145a63`), the Vet stagger and the ind→team
+wait bind (T6a `bfdf295fca`), the Vet Combined offset is retired (T6b
+`7c3bf6e61f`), a split Vet co-day is reported (T6c `0df58dee46`), late pools
+draw a WARN (T7 `8b23e1b964`), video strips are kept for the video stage (T8
+`bad32530d9`) and the Y8/Y10 and Y10/Div 3 bonus is scored (T5 `0544ef1877`).
+Each sub-section below carries a dated note. What 021 left open is in
+[§What 021 deliberately left unfixed](#what-021-deliberately-left-unfixed). The
+text below is the record as it stood before 021.*
+
 **The analysis is done.** It ran on 2026-09-05 and its output is
 [`methodology-reconciliation.md`](./methodology-reconciliation.md) – the
 verdicted ledger, a satisfiability computation over all ten templates, and the
@@ -1368,6 +1706,24 @@ at NAC, SYC and SJCC and `REGIONAL_GROUP_1_PAIR` (5.0) at ROC, RYC and RJCC.
 The bout-delta row is gone: `YOUTH_VET_BOUT_DELTA` no longer exists, and
 `perBoutDuration` has a caller (`de.ts`) that picks the 10-touch, 15-touch or
 team-match time. The other three rows were not re-checked by 024.*
+
+*2026-10-11, from 021: the other three rows are settled too, so no row of this
+table describes the code any more.*
+
+- *Proximity (audit L1). 010 wired the 3+ day penalty in `dayColoring.ts`
+  (`39911b6940`). 021 T1b (`87292a868e`) deleted the dead duplicate,
+  `proximityPenalty` with `PROXIMITY_PENALTY_WEIGHTS`, and A0 (`121394c92a`)
+  points METHODOLOGY at `PENALTY_WEIGHTS.PROXIMITY_*`.*
+- *Capacity curve (audit L2, a DOC-WRONG verdict). METHODOLOGY §Capacity Penalty
+  Curve now states the curve that runs (0 up to fill 0.85, linear to 3.0 at 1.0,
+  then 3.0 + 10 per unit past 1.0, capped at 20.0) and records the rejected
+  0.60-start curve (A0). T1b deleted the five unread `CAPACITY_PENALTY_CURVE`
+  members.*
+- *Strip count suggestion (audit L5). `src/store/stripSuggestion.ts` was deleted
+  by 011 T012 (`b19761b0b3`). `suggestStripCount` is live as the Suggest
+  search's ceiling. A0 fixed METHODOLOGY's leftovers (L5a): the removed
+  `recommendStripCount` bullet, the ceiling bullet and "general strip-hours" for
+  the floor.*
 
 This is why the B1–B8 drift ledger never caught any of it: replacing a live
 hardcode with the constant it shadows *moves* numbers, so the divergence is
@@ -1423,6 +1779,16 @@ have no reader either. They are three of the eight the owner ruled to retire
 from the doc on 2026-10-04, so 021 either removes the section's bullets with
 the other time-of-day rules or wires the weights.*
 
+*2026-10-11, from 021: every key has a reader. A0 (`121394c92a`) retired the
+eight time-of-day rules into METHODOLOGY §Retired Time-of-Day Preferences,
+§Early-Start Conflicts included, and T1a (`c4297a8bac`) deleted the eight
+weights and the `LAST_DAY_REF_SHORTAGE_*` trio. T4 (`39c7145a63`) wired
+`WEAPON_BALANCE` in the "keeps" reading (O4, O7), and T5 (`0544ef1877`) added
+`Y8_Y10_SAME_DAY` and `Y10_DIV3_SAME_DAY` (−0.3, O12). `PENALTY_WEIGHTS` now has
+11 keys. Nine are read outside `constants.ts` (eight in `dayColoring.ts`,
+`REGIONAL_GROUP_1_PAIR` in `crossover.ts`), and the two same-day bonuses are read
+through `SAME_DAY_BONUS_PAIRS`, which `dayColoring.ts`'s `sameDayBonus` reads.*
+
 ### Where the doc is likely the wrong one
 
 Three cases argue against "conform the engine", and each has evidence:
@@ -1446,6 +1812,12 @@ Three cases argue against "conform the engine", and each has evidence:
   event splits at its category's tier (`videoStageRound` in `de.ts`), so the
   "every staged event splits at `DE_ROUND_OF_16`" sentence describes the code
   before 024.
+
+*2026-10-11, from 021: the first two are settled as the doc changing (A0
+`121394c92a`). METHODOLOGY states the running capacity curve and records the
+rejected one (default 4), and §Constraint Relaxation is replaced by §When Days
+Are Too Few: hard rules block a day, nothing is relaxed, and the least-bad
+fallback warns per broken pair (default 2).*
 
 ### The doc also contradicts itself
 
@@ -1473,7 +1845,10 @@ no blocking decision.*
 - **Flighting text conflicts with itself.** The Flighting section says Flight
   A/B start/end times are not tracked, while Runtime Decomposition says the
   concurrent scheduler decomposes them into two timed phase nodes. The former
-  predates Phase D and should be rewritten.
+  predates Phase D and should be rewritten. *Fixed by 021 (A0 `121394c92a`,
+  default 12): §Flighting no longer calls the flights untracked, and its
+  Runtime Decomposition makes Flight B wait the 15-minute flight buffer, which
+  T3 (`1797945660`) built.*
 - **Day-end severity wording** ("soft boundary", warning-level Same-Day
   Completion) contradicts the runtime's ERROR-severity `SAME_DAY_VIOLATION` –
   resolve whichever way §Day-end overrun lands, but the doc and engine should
@@ -1490,6 +1865,24 @@ no blocking decision.*
 (`specs/019-default-days-per-template/amendment.md`) changed only what R4 and the
 day table needed. These ten items it left, with line numbers in the amended
 METHODOLOGY.md.*
+
+*Closed by 021, 2026-10-11. Every item is settled in METHODOLOGY by A0
+(`121394c92a`), item by item:*
+
+- *Items 1–7: §Constraint Relaxation is replaced by §When Days Are Too Few
+  (default 2). The hard-rules paragraph says the least-bad fallback places the
+  event and warns instead of stopping, no relaxation levels remain, the
+  "suppressed at level >= 2" clauses and "constraint-relaxing" are gone, and the
+  section cites `dayColoring.ts`.*
+- *Item 8: the paragraph now gives the 120-minute ind→team gap for a
+  same-category pair that shares a day only through a pin or the fallback, with
+  no "4-hour separation required" and no "soft" (default 8). T6a (`bfdf295fca`)
+  makes the wait bind.*
+- *Item 9: a split Vet co-day draws a `vet-co-day-split` WARN that cannot be
+  dismissed (default 9), built by T6c (`0df58dee46`).*
+- *Item 10: the regional Group 1 pair rows name the exception, Div 1 ind ↔
+  Junior team and Junior ind ↔ Div 1 team, which stay hard at every type
+  (default 2).*
 
 1. **:86** says hard rules "cause scheduling to fail or produce errors" and "are
    never relaxed". The engine falls back to the least-bad day and emits a WARN
@@ -1533,11 +1926,36 @@ is `applyCrossEventEdges` – **that file is deliberately still in the tree**, s
 refs-per-pool claims; and the intro, which describes P4 drag-and-drop in the
 present tense.
 
+*2026-10-11, from 021: all verdicted and closed. Video Strip Preservation runs
+as the doc says on days that hold a required video stage, with
+`MORNING_WAVE_WINDOW_MINS` read and the boundary at `<=` (default 11, O14, T8
+`bad32530d9`). `validateSameDayCompletion` is deleted and §Single-Day Fit says
+the limit binds when phases are placed (default 10, T1b `87292a868e`).
+§Within-Day Age-Descending Order names the live wait, and `daySequencing.ts` is
+deleted (default 13, T1b). The Inputs section states the 2–4 day range, any
+video strip count (O5) and refs per pool set by type (L16), and the intro
+describes the app as it is (C10), all in A0 (`121394c92a`).*
+
 ## Dead code held back from the 2026-09-01 sweep
 
 *The sweep deleted `ScheduleView.tsx`, `RefRequirementsReport.tsx`,
 `ui/checkbox.tsx` and `ui/tabs.tsx` with their tests. Two things were left in
 the tree on purpose.*
+
+*Closed by 021, 2026-10-09. The evidence question is answered: the rule
+survived Phase D and the doc now names the live code, so 021's default 13
+overrode the "unused exports stay" note below for the symbols it lists
+(`specs/021-methodology-reconciliation/decisions.md`). Each one's doc rule is
+retired, re-pointed or matched by live code. T1a (`c4297a8bac`) deleted
+`SAME_TIME_WINDOW_MINS`, `MAX_RESCHEDULE_ATTEMPTS`, `THRESHOLD_MINS`,
+`EARLY_START_THRESHOLD` and `LATEST_START_MINS` with their `TournamentConfig`
+fields. T1b (`87292a868e`) deleted `daySequencing.ts` and its 14 tests,
+`validateSameDayCompletion`, `proximityPenalty`, `individualTeamProximityPenalty`,
+the unread `CAPACITY_PENALTY_CURVE` members and the rest of the audit's list,
+T1c (`e2b940dbfd`) deleted `recommendRefCount`, and T3 (`7185168c98`) deleted
+`validateFlightingGroup` with the flighting-group path. `asciiLaneRenderer.ts`
+stays, test-only by design. The text below is the record as it stood before
+021.*
 
 - **`src/engine/daySequencing.ts`** is unreachable — nothing imports it and
   `concurrentScheduler.ts:1119` names it only in a comment — but deleting it
@@ -1589,6 +2007,14 @@ surface returns. The one constant an organizer can still edit is
 default / override / reset / overrides-only-persistence pattern this entry
 would generalise.
 
+*2026-10-11, from 021: five of the seven are left. 024 removed
+`YOUTH_VET_BOUT_DELTA`, and 021 T1a (`c4297a8bac`) removed `THRESHOLD_MINS`
+with its `TournamentConfig` field. `buildConfig.ts` reads the other five
+(`ADMIN_GAP_MINS`, `FLIGHT_BUFFER_MINS`, `SLOT_MINS`, `DE_BOUT_DURATION`,
+`DEFAULT_DE_STRIP_FOOTPRINT`) from `constants.ts`, and `TournamentConfig` still
+carries each of them as a field. The dependency below is met: every
+`PENALTY_WEIGHTS` key now has a reader (§Penalty weights).*
+
 **One dependency worth naming**: many of those weights are the subject of
 §METHODOLOGY.md and the engine have diverged, which found fourteen of nineteen
 `PENALTY_WEIGHTS` unread. Promoting a constant to a user-editable setting before
@@ -1633,7 +2059,8 @@ wired up to read them:
   an event by counting pools against `strips_total`, never by minutes. This
   reads as a parameter left over from a design flighting no longer uses, not a
   hypothesis worth modelling. The open question is whether it should exist in
-  `TournamentConfig` at all, not how to wire it up.
+  `TournamentConfig` at all, not how to wire it up. *Answered by 021 T1a
+  (`c4297a8bac`): it does not, and the constant and the field are deleted.*
 - **`DEFAULT_DE_STRIP_FOOTPRINT` (DE strip footprint)** is the hardest case and
   the reason this whole entry is a what-if feature rather than a settings
   feature. See below – it is not merely inert like the other four, and any
@@ -1715,6 +2142,21 @@ from a measured number rather than a re-derived one.
 One item open. The two closed ones – the `CAPACITY_TARGET_FILL` re-tune and the
 integration-test floors, both done in 003 – were removed with the `# Closed`
 section (see git history at 0ab5bd2dc9).
+
+*Closed by 021, 2026-10-08, without the scenario (owner ruling O3, T2
+`6207c03b5f`). The scenario presupposed a "fewest days" pass that never worked,
+so it is not added. Day assignment now colors once at the organizer's
+`days_available`, and the Phase 1 pass, `chromaticN`, `capacityDemandedDays`,
+`CAPACITY_TARGET_FILL` and `MAX_EXPANDED_DAYS` are deleted. The written record,
+from 021's audit at `5edbdf7712`: `chromaticN` equalled `days_available` in all
+48 B1–B8 rows at 2–4 days and in 140 of 144 template rows (the 4 exceptions are
+RJCC Weekend at 5 days). Fill values from 0.2 to 1.0 changed no day map and no
+count. The exact hard chromatic numbers, 2 / 3 / 2 / 2 / 2 / 1 / 3 / 3, sit
+below every scenario's own day count, so all eight already ran above their
+chromatic number and none could tell one fill value from another. The ledger
+stayed byte-identical through T2. Only four boards at 5 days changed, each from
+4 days used to 5 with the same placed count (B5, B7 and RJCC Weekend at NAC and
+ROC types).*
 
 - A drift scenario with `days_available` set above the chromatic number, so a
   future `CAPACITY_TARGET_FILL` re-tune has a scenario the current B1–B8 set
@@ -1862,7 +2304,9 @@ Still open from this entry:
   [§Vet co-day serialization is unsourced and never fit-checked](#vet-co-day-serialization-is-unsourced-and-never-fit-checked).
   Cost if ignored: an organizer can split a Vet co-day by hand and hear
   nothing, the one same-day rule the two halves of the app still judge
-  differently.
+  differently. *Fixed by 021 T6c, 2026-10-10 (`0df58dee46`): a split co-day draws
+  one `vet-co-day-split` Warning per gender and weapon, from the engine and from
+  the hand-placement check, and it cannot be dismissed.*
 - **The regional Note cannot be reached by hand in the live app.** No control
   sets an event's start time (Move day keeps the start), so a hand move rarely
   lands a pair on a window the scheduler would call honoured. The live smoke

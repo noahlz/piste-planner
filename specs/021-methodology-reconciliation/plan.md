@@ -45,6 +45,7 @@ Full text in `decisions.md` and in the amendment's blocks.
 | O11 | **The Veteran co-day is not a departure** (owner annotation). Veteran age bands are one event split by age band, so the manual's adjacent-age rule never applies. Doc only: amendment Blocks 90, 85 and 3. | A0 |
 | O12 | **The Y8↔Y10 and Y10↔Div 3 bonus is −0.3** (2026-10-10, METHODOLOGY follow-up A1). B6 places 53 at −0.05 through −0.3 and 51 at −0.4. T5 runs last. | A1, T5 |
 | O13 | **The Vet Combined start offset is retired** (2026-10-10, A1). No Veteran event has a fixed start offset. B6 places 53 only at offset 0. T6b becomes a pure removal of the never-read `earliest_start_offset` field. | A1, T6b |
+| O14 | **Video Strip Preservation keeps `<=` at the wave's end** (2026-10-10, during T8). A pool phase that starts at exactly 11:00 AM on a 9:00 day is still in the wave, as the amendment says, so METHODOLOGY does not change. T8 Step 1 tied on every board except NAC Vet/Div1/Junior (60/6 at base, 58/8 under `<=`, 59/7 under `<`), and the owner accepts that cost, since templates carry no floor. Full numbers in `decisions.md`. | T8 |
 
 Standing decisions that bind every task: no hard pair is ever relaxed (019), no backwards compatibility,
 the engine follows the 2026-27 Ops Manual's planning figures, and every METHODOLOGY text change is
@@ -200,7 +201,10 @@ Each is the audit's `[M]` figure at `5edbdf7712` (verifier's figure where it cor
 - **Y8/Y10** (L9b). `getProximityWeight(Y8, Y10)` = 0 and Y10–Div 3 = 0 at all six types: nothing scores
   either pair. No count or day-map probe exists for T5. The ledger snapshot also limits where it can act:
   B3 holds no Y8 and no Div 3, and no B1–B8 scenario holds a Div 3 event, so only B4 and B6 (6 Y8 and
-  6 Y10 each) can move, and the Y10↔Div 3 half runs only on the templates.
+  6 Y10 each) can move, and the Y10↔Div 3 half runs only on the templates. *Correction
+  (2026-10-11, T5's spec review J4): no template holds a Div 3 event either, and none holds a Y8,
+  so no board exercises the Y10↔Div 3 half. Only the `dayColoring.test.ts` cases cover it (T5
+  `0544ef1877`).*
 - **Vet waits never bind** (DS-EDGE, L13, R9). B8: 60 same-day age-banded pairs, 0 ordered, 21 start
   younger first, 0 `CROSS_EVENT_DEPENDENCY_DELAY`. NAC Vet/Div1/Junior on B1's board: 0 of 60, 35
   inverted. Each sibling's first phase is seeded at day start and popped before the older sibling's
@@ -786,6 +790,8 @@ first draft's numbers, and each is settled by its default unless the owner objec
 - **Note 2 – Default 12's premise.** Name the WARNs, as the amendment does. Findings do not show the
   flighting suggestion text, and there is no UI change in 021.
 - **Note 4 – The morning-wave boundary.** Provisional `<=`, settled by T8's Step 1.
+  *Settled 2026-10-10 by owner ruling O14: `<=` stands and METHODOLOGY does not
+  change (T8 `bad32530d9`).*
 - **Note 5 – `flagFlightingCandidates` signature.** `(competitions, config)`, as T1b-2 builds.
 - **Note 6 – Re-runs.** Leave 020's hold and switch out of the doc.
 
@@ -809,7 +815,9 @@ adds these.
 6. **The cutoff WARN is one pure function called by the scheduler and by the store's
    `placementFindings`,** as the overrun WARN is, and O10 confirms the board check. Cost: none.
 7. **T8's boundary defaults to `<=`** unless the measurement favours `<`. Cost: a one-line amendment
-   follow-up if it does not.
+   follow-up if it does not. *Settled 2026-10-10 by owner ruling O14. On counts the measurement favoured `<`
+   on NAC Vet/Div1/Junior alone (59/7 against 58/8), while `<` raised the video delay on B2 and
+   NAC Youth. The owner kept `<=`, so no amendment follow-up was needed.*
 8. **An older Vet band's retry may break the stagger.** If an older band fails late and restarts after
    its younger band was released, the younger band's placements stay. Holding the release until the
    older band can no longer roll back would come close to the end-to-end serialization O1 retired. Cost:
