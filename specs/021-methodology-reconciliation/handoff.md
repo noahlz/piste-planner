@@ -2,8 +2,8 @@
 
 **Status: delivered 2026-10-11** on branch `021-methodology-reconciliation` (worktree
 `.claude/worktrees/021-methodology-reconciliation`, cut from `main` `5edbdf7712`, and
-`main` has not moved), awaiting Task M's merge check and then the user's
-`merge-with-costs`. Plan: [`plan.md`](./plan.md), with [`amendment.md`](./amendment.md),
+`main` has not moved), awaiting the user's `merge-with-costs`. Task M's merge check
+passed and is recorded under [Merge](#merge). Plan: [`plan.md`](./plan.md), with [`amendment.md`](./amendment.md),
 [`decisions.md`](./decisions.md) (owner rulings O1–O14 and defaults 1–14) and
 [`audit.md`](./audit.md) beside it. METHODOLOGY.md was amended twice, both times with
 the owner's approval before the commit: A0 (`121394c92a`) and the follow-up A1
