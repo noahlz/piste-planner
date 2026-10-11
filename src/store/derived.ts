@@ -7,7 +7,7 @@ import { checkPlacementRules } from '../engine/placementRules.ts'
 import type { PlacedEvent } from '../engine/placementRules.ts'
 import { firstLastDayWarnings, lastPhaseOverrunWarnings, poolStartAfterCutoffWarnings } from '../engine/concurrentScheduler.ts'
 import { phaseKey } from '../engine/unseated.ts'
-import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS, ValidationMode } from '../engine/types.ts'
+import { BottleneckRule, BottleneckSeverity, ValidationMode, clockAxisConfig } from '../engine/types.ts'
 import type {
   AnalysisResult,
   Bottleneck,
@@ -239,38 +239,6 @@ export function drawnScheduleFrom(
 
 /** The board as drawn: kept or derived events, their strips, and what counts as unplaced. */
 export const selectDrawnSchedule = memoizeOnDeps(scheduleDeps, computeDrawnSchedule)
-
-/**
- * The derived results (`deriveEventSchedule`) sit on the clock axis – minutes
- * from midnight of their own store day – while `buildTournamentConfig`'s
- * `dayConfigs` sit on the scheduler axis (day d shifted by
- * d × DAY_AXIS_SPACING_MINS, `buildConfig.ts`). This is the one place the two
- * meet: a copy of the config whose day windows are shifted back onto the clock
- * axis, so every engine function handed derived results reads a day start the
- * results can be measured from. A day with no window (no `setDays` yet) falls
- * back to the default clock hours.
- */
-function clockAxisConfig(config: TournamentConfig): TournamentConfig {
-  return {
-    ...config,
-    dayConfigs: Array.from({ length: config.days_available }, (_, d) => {
-      const window = config.dayConfigs[d]
-      if (window === undefined) {
-        return {
-          day_start_time: config.DAY_START_MINS,
-          day_end_time: config.DAY_END_MINS,
-          day_hard_end_time: config.DAY_HARD_END_MINS,
-        }
-      }
-      const shift = d * DAY_AXIS_SPACING_MINS
-      return {
-        day_start_time: window.day_start_time - shift,
-        day_end_time: window.day_end_time - shift,
-        day_hard_end_time: window.day_hard_end_time - shift,
-      }
-    }),
-  }
-}
 
 /**
  * Turns a competition id into its display label, or into itself when the board

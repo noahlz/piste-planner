@@ -546,6 +546,39 @@ export const DAY_AXIS_SPACING_MINS = 1440
 // DAY_START_MINS (600 and 780 by default – METHODOLOGY.md Appendix A §Timing
 // Constants).
 
+/**
+ * The board's derived results (`deriveEventSchedule`) sit on the clock axis –
+ * minutes from midnight of their own store day – while `buildTournamentConfig`'s
+ * `dayConfigs` sit on the scheduler axis (day d shifted by
+ * d × DAY_AXIS_SPACING_MINS, `buildConfig.ts`). This is where the two meet: a
+ * copy of the config whose day windows are shifted back onto the clock axis,
+ * so every engine function handed results on the clock axis reads a day start
+ * they can be measured from. A day with no window (no `setDays` yet) falls back
+ * to the default clock hours. Used by the store's findings (`derived.ts`) and
+ * the canvas re-seater (`src/layout/strips.ts`).
+ */
+export function clockAxisConfig(config: TournamentConfig): TournamentConfig {
+  return {
+    ...config,
+    dayConfigs: Array.from({ length: config.days_available }, (_, d) => {
+      const window = config.dayConfigs[d]
+      if (window === undefined) {
+        return {
+          day_start_time: config.DAY_START_MINS,
+          day_end_time: config.DAY_END_MINS,
+          day_hard_end_time: config.DAY_HARD_END_MINS,
+        }
+      }
+      const shift = d * DAY_AXIS_SPACING_MINS
+      return {
+        day_start_time: window.day_start_time - shift,
+        day_end_time: window.day_end_time - shift,
+        day_hard_end_time: window.day_hard_end_time - shift,
+      }
+    }),
+  }
+}
+
 /** Returns the absolute minute offset from T=0 for the start of the given day. */
 export function dayStart(d: number, config: TournamentConfig): number {
   if (config.dayConfigs && config.dayConfigs[d]) {

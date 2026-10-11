@@ -1452,6 +1452,15 @@ await page.waitForTimeout(200)
 //
 // `[M]` 024 task S, 2026-10-06: the live run read 103 for NAC Vet/Div1/Junior at
 // 12 video strips, matching the probe, in every run that day, and the template placed all 66.
+//
+// [M] 2026-10-10, 021 T8: 103 → 104, Video Strip Preservation (METHODOLOGY
+// §Video Strip Preservation). The live run read 104, and a store-path probe in
+// this driver's order (NAC, 4 days, 12 video strips) reads 104 under T8 against
+// 103 at T7's head 8b23e1b964 (both read 103 at the default 8 video strips).
+// Pools starting after 11:00 on a multi-event video day now run on general
+// strips only, and at 103 strips VET-W-EPEE-IND-V40 ends at 22:10 on Day 4,
+// 10 min past the hard end, which Suggest counts as not placed. All 66 events
+// still place at 103.
 await choosePreset('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior template applied')
 
@@ -1462,8 +1471,8 @@ log('NAC Vet/Div1/Junior video strips before Suggest =', vetVideoStrips)
 const vetStrips = await pressSuggest('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior suggested strips =', vetStrips)
 await shot('06d-vet-configured')
-if (Number(vetStrips) !== 103) {
-  throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 103 at ${vetVideoStrips} video strips (tmp/probe-t014-video.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
+if (Number(vetStrips) !== 104) {
+  throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 104 at ${vetVideoStrips} video strips (tmp/021-t8/probe-sc008.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
 }
 
 const vetGen = page.getByRole('button', { name: 'Auto-assign', exact: true })
@@ -1479,7 +1488,7 @@ await page.waitForTimeout(200)
 const vetRowCount = await page.locator('[data-schedule-row]').count()
 log('NAC Vet/Div1/Junior schedule table rows =', vetRowCount)
 // SC-008: the largest template places its whole 66-event field at its
-// suggested count (103 since 024 group B, was 80 on 2026-09-06). `[M]` live
+// suggested count (104 since 021 T8, 103 since 024 group B, was 80 on 2026-09-06). `[M]` live
 // run 2026-10-06: 103 strips, 66 of 66 rows placed.
 if (vetRowCount !== 66) {
   throw new Error(`NAC Vet/Div1/Junior schedule table rendered ${vetRowCount} rows, expected 66`)
@@ -1547,6 +1556,86 @@ if (lateBlock.axisEnd < 22 * 60) {
   throw new Error(`axis ends at ${lateBlock.axisEnd} min (last tick ${lateBlock.maxTick}), expected the axis to reach 22:00 (1320)`)
 }
 log('late blocks (> 19:00) =', lateBlock.lateCount, '| all', lateBlock.blockCount, 'blocks inside time grid | latest ends', lateBlock.latestEnd, 'min | axis last tick', lateBlock.maxTick, 'axis end', lateBlock.axisEnd, 'min')
+
+// ── 021 T8: video strips are kept for the video stage ──
+// METHODOLOGY §Video Strip Preservation: on a day that holds a REQUIRED video
+// phase (at a NAC, every day with a video-stage block) and more than one event,
+// a pool phase may hold a video strip only if it starts within
+// MORNING_WAVE_WINDOW_MINS (120) of day start, that minute included (owner
+// ruling O14 kept "<="). Read on this NAC Vet/Div1/Junior board: no pool phase
+// (POOLS or either flight) starting after 11:00 – the driver never edits the
+// default 9:00 day start – holds a strip index below the video strip count
+// (`buildStrips` makes strips 0 … video − 1 the video strips). Then one event
+// whose pools start after 11:00 is moved onto another such day, keeping its
+// start, and the canvas re-seater must keep its pools off the video strips or
+// leave them unseated. The engine and the re-seater share one predicate
+// (`poolMayUseVideoStrips`), so both halves read the same rule.
+const VSP_WAVE_END = 9 * 60 + 120
+const VSP_POOL_PHASES = ['POOLS', 'FLIGHT_A', 'FLIGHT_B']
+const vspVideoCount = Number(vetVideoStrips)
+if (!(vspVideoCount > 0)) throw new Error(`021 T8: NAC Vet/Div1/Junior reads ${vetVideoStrips} video strips, so there is nothing to keep`)
+async function vspBlocks() {
+  return page.$$eval('[data-event-block]', (els) => els.map((e) => ({
+    id: e.getAttribute('data-event-id'),
+    phase: e.getAttribute('data-phase'),
+    day: Number(e.getAttribute('data-day')),
+    start: Number(e.getAttribute('data-start')),
+    strips: (e.getAttribute('data-strips') ?? '').split(',').filter((s) => s !== '').map(Number),
+    unseated: e.getAttribute('data-unseated') === 'true',
+  })))
+}
+/** Days holding a video-stage block and more than one event: the days the reservation holds on. */
+function vspVideoDays(blocks) {
+  const byDay = new Map()
+  for (const b of blocks) {
+    const d = byDay.get(b.day) ?? { ids: new Set(), video: false }
+    d.ids.add(b.id)
+    if (b.phase === 'DE_ROUND_OF_16') d.video = true
+    byDay.set(b.day, d)
+  }
+  return new Set([...byDay].filter(([, d]) => d.video && d.ids.size > 1).map(([day]) => day))
+}
+const vspIsLatePool = (b, days) => VSP_POOL_PHASES.includes(b.phase) && days.has(b.day) && b.start > VSP_WAVE_END
+const vspOnVideo = (b) => b.strips.some((s) => s < vspVideoCount)
+
+const vspBefore = await vspBlocks()
+const vspDays = vspVideoDays(vspBefore)
+const vspLate = vspBefore.filter((b) => vspIsLatePool(b, vspDays))
+if (vspLate.length === 0) {
+  throw new Error(`021 T8: no pool phase starts after 11:00 on a multi-event video day (days ${[...vspDays].map((d) => d + 1).join(',')}), so the video-strip check has nothing to read`)
+}
+const vspOffenders = vspLate.filter(vspOnVideo)
+if (vspOffenders.length > 0) {
+  throw new Error(`021 T8: ${vspOffenders.length} pool phase(s) starting after 11:00 on a multi-event video day hold a video strip (< ${vspVideoCount}): ${JSON.stringify(vspOffenders.slice(0, 3))}`)
+}
+log('021 T8:', vspLate.length, 'pool phases start after 11:00 on video days', [...vspDays].map((d) => d + 1).join(','), '– none holds a video strip')
+
+// The hand move: the first (by id) event with a POOLS block after 11:00, onto
+// the next multi-event video day after its own.
+const vspMover = [...vspLate].filter((b) => b.phase === 'POOLS').sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0]
+if (!vspMover) throw new Error('021 T8: every pool phase after 11:00 is a flight, so there is no POOLS block to move')
+const vspTargets = [...vspDays].filter((d) => d !== vspMover.day).sort((a, b) => a - b)
+const vspTo = vspTargets.find((d) => d > vspMover.day) ?? vspTargets[0]
+if (vspTo === undefined) throw new Error(`021 T8: no other multi-event video day to move ${vspMover.id} onto`)
+await moveEventToDay(vspMover.id, vspTo)
+if ((await poolDayOf(vspMover.id)) !== vspTo) throw new Error(`021 T8: the Move day did not put ${vspMover.id} on day ${vspTo + 1}`)
+const vspMoved = (await vspBlocks()).find((b) => b.id === vspMover.id && b.phase === 'POOLS')
+if (!(vspMoved.start > VSP_WAVE_END)) {
+  throw new Error(`021 T8: ${vspMover.id}'s pools start at ${formatMinutes(vspMoved.start)} after the move, not after 11:00, so the re-seat check has nothing to read`)
+}
+if (!vspMoved.unseated && vspOnVideo(vspMoved)) {
+  throw new Error(`021 T8: the re-seater put ${vspMover.id}'s pools (${formatMinutes(vspMoved.start)}, day ${vspTo + 1}) on video strips ${vspMoved.strips.filter((s) => s < vspVideoCount).join(',')}`)
+}
+log('021 T8: moved', vspMover.id, 'day', vspMover.day + 1, '->', vspTo + 1, 'at', formatMinutes(vspMoved.start), '–', vspMoved.unseated ? 'pools unseated' : `pools on strips ${vspMoved.strips[0]}–${vspMoved.strips[vspMoved.strips.length - 1]}, no video strip`)
+await shot('06e-vet-video-strips')
+await moveEventToDay(vspMover.id, vspMover.day)
+if ((await poolDayOf(vspMover.id)) !== vspMover.day) throw new Error(`021 T8: moving ${vspMover.id} back to day ${vspMover.day + 1} did not take`)
+// A Move day pins the event, and the pin would follow the same id into the next
+// template (NAC Cadet/Junior holds JR events too), so unpin it here.
+await page.getByRole('region', { name: 'Selected event' }).getByRole('button', { name: 'Pinned', exact: true }).click()
+await page.waitForTimeout(300)
+const vspPinned = await page.locator(`[data-event-block="${vspMover.id}:POOLS"]`).first().getAttribute('data-pinned')
+if (vspPinned !== 'false') throw new Error(`021 T8: ${vspMover.id} is still pinned after pressing Pinned (data-pinned=${vspPinned})`)
 
 // ── Team event cut (008) ──
 // Before this feature, defaultCutForEntry gave every TEAM catalogue entry a

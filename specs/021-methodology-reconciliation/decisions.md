@@ -84,6 +84,22 @@ Both rulings change approved values after measurement showed them costing events
   removal: `CATEGORY_START_PREFERENCE` drops its never-read `earliest_start_offset` field and keeps its weights,
   and no engine code applies a Veteran start offset.
 
+## Owner ruling, 2026-10-10 (fourth round, during T8)
+
+- **O14 – Video Strip Preservation keeps `<=` at the wave's end**, as the amendment says ("a pool phase that starts
+  at exactly 11:00 AM is still in the wave"), so METHODOLOGY does not change. T8 Step 1 measured both boundaries on
+  B1–B8 and the four NAC templates at T7's head `8b23e1b964`. Every board tied on counts except NAC Vet/Div1/Junior
+  (NAC, 4 days, 80 strips, the default 8 video strips): base 60 placed / 6 ERRORs, `<=` 58/8 (video delay 1525
+  min), `<` 59/7 (1245 min). Totals over the 12 boards: base 364/13, `<=` 362/15, `<` 363/14. `<` also raised B2's
+  video delay 225 → 705 and NAC Youth's 1365 → 1515. The owner accepts the events the rule costs that template,
+  since templates carry no floor.
+- **Measured after the ruling, for the owner (T8 fix round):** the same template loaded as `unseated.test.ts` and
+  `strips.test.ts` load templates (B1 preset, then the template: 80 strips, 12 video strips, 4 days) goes 61/5 →
+  55/11 under `<=`, 6 events net, more than the 1–2 the ruling named. Out: JR-W-EPEE-IND, JR-W-SABRE-IND,
+  VET-W-FOIL-IND-V40, VET-W-FOIL-IND-V50, VET-W-FOIL-IND-V60, VET-W-SABRE-IND-V40, VET-W-SABRE-IND-V50. In:
+  VET-W-SABRE-IND-V70. The other three NAC templates hold 24/0 on both routes, and B1–B8 do not move. No floor
+  applies, so this stands under O14 unless the owner reverses it.
+
 Standing owner decisions: the eight time-of-day weights are retired as Phase D casualties (2026-10-04); no hard
 pair is ever relaxed (019); no backwards compatibility (product unreleased); the engine follows the 2026-27 Ops
 Manual's planning figures; METHODOLOGY.md is the spec and every text change is owner-approved before commit.

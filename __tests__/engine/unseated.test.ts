@@ -114,8 +114,15 @@ describe('unseatedPhases against the engine\'s pinned-unclaimed warnings', () =>
   // O1), so B8's age-banded Vet bands start 60 minutes apart instead of
   // together, and each re-run pins that less crowded board. No day map moves,
   // and the other seven scenarios hold.
-  const ALL = [8, 14, 11, 18, 4, 53, 8, 28]
-  const HALF = [0, 1, 1, 5, 0, 8, 0, 8]
+  // [M] 2026-10-10, 021 T8: pin-all B2 14 → 15, pin-all B8 28 → 22 and pin-half
+  // B8 8 → 2, Video Strip Preservation (METHODOLOGY §Video Strip Preservation).
+  // On a multi-event day holding a REQUIRED video phase a pool starting after the
+  // start-of-day wave takes general strips only, so B2's and B8's video days
+  // re-time and each re-run pins a different board, whose pinned pools claim
+  // under the same rule. No day map moves, B2 pin-half holds at 1, and B1 and
+  // B3–B7 hold (B3's re-timed days pin to the same counts).
+  const ALL = [8, 15, 11, 18, 4, 53, 8, 22]
+  const HALF = [0, 1, 1, 5, 0, 8, 0, 2]
 
   it.each(SCENARIO_IDS.map((id, i) => [id, ALL[i], HALF[i]] as const))(
     '%s: matches the warnings after a pin-all (%i) and a pin-half (%i) re-run',

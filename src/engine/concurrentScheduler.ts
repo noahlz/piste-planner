@@ -44,11 +44,12 @@ import type {
   DeBlocks,
   DeRound,
 } from './types.ts'
-import type { FindStripsInWindowResult } from './resources.ts'
+import type { FindStripsInWindowResult, PoolVideoDay } from './resources.ts'
 import {
   createGlobalState,
   findAvailableStripsInWindow,
   allocateInterval,
+  poolVideoDays,
   releaseEventAllocations,
   snapToSlot,
 } from './resources.ts'
@@ -159,6 +160,10 @@ interface EventState {
   // has no wait or every wait lapsed. Stored here rather than on the node so the
   // retry reset keeps it, as `group1_window_floor` is kept.
   cross_event_floor: { time: number; binding: readonly string[] } | null
+  // Its day's facts for Video Strip Preservation (021 T8), read by its pool
+  // phases' strip search. Computed once from every event's assigned day, pins
+  // included: day assignment is fixed for the run, and a retry keeps the day.
+  pool_video_day: PoolVideoDay
 }
 
 /** A regional Group 1 pair sharing a day, whose older side `applyCrossEventEdges` floored. */
@@ -428,6 +433,16 @@ function buildEventStates(
   config: TournamentConfig,
 ): EventState[] {
   const events: EventState[] = []
+  // The day facts count every competition with a day, so a day's facts are
+  // the same whichever of its events later fails (METHODOLOGY.md §Video Strip
+  // Preservation).
+  const videoDays = poolVideoDays(
+    competitions.flatMap(competition => {
+      const day = dayMap.get(competition.id)
+      return day === undefined ? [] : [{ day, competition }]
+    }),
+    d => dayStart(d, config),
+  )
   for (const comp of competitions) {
     const day = dayMap.get(comp.id)
     if (day === undefined) continue
@@ -508,6 +523,8 @@ function buildEventStates(
       group1_window_floor: null,
       cross_event_waits: [],
       cross_event_floor: null,
+      // Every day in dayMap has an entry: videoDays was built from the same map.
+      pool_video_day: videoDays.get(day)!,
     })
   }
   return events
@@ -1371,6 +1388,12 @@ function tryAllocate(
   const canDeferTo = (start: number | null, dur: number): start is number =>
     start !== null && start < hardEnd && fitsDay(start, dur)
 
+  // A pool phase (pools or either flight) carries its day's facts, so on a
+  // video day it takes video strips only in the start-of-day wave
+  // (METHODOLOGY.md §Video Strip Preservation). Pins reach here too, through
+  // `preclaimPinnedEvents`. DE phases pass none.
+  const poolVideoDay = node.cap_kind === 'POOL' ? event.pool_video_day : undefined
+
   // Strip cap.
   const cappedCount = cappedStripCount(node, event, config)
 
@@ -1391,7 +1414,7 @@ function tryAllocate(
     if (!fitsDay(node.ready_time, duration)) {
       // Try deferring once via window probe to confirm STRIPS vs TIME.
       const win = findAvailableStripsInWindow(
-        state, config, cappedCount, node.ready_time, duration, node.video_required, day,
+        state, config, cappedCount, node.ready_time, duration, node.video_required, day, poolVideoDay,
       )
       if (win.fit === 'none' && canDeferTo(win.earliest_next_start, duration)) {
         return { outcome: 'defer', next_ready_time: win.earliest_next_start, reason: win.reason }
@@ -1405,7 +1428,7 @@ function tryAllocate(
   const win: FindStripsInWindowResult = noCountedRound
     ? { fit: 'ok', strip_indices: [] }
     : findAvailableStripsInWindow(
-        state, config, cappedCount, node.ready_time, duration, node.video_required, day,
+        state, config, cappedCount, node.ready_time, duration, node.video_required, day, poolVideoDay,
       )
   if (win.fit === 'ok') {
     const startTime = node.ready_time

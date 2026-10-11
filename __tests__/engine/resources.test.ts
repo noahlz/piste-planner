@@ -8,11 +8,14 @@ import {
   releaseEventAllocations,
   nextFreeTime,
   snapToSlot,
+  poolMayUseVideoStrips,
+  poolVideoDays,
 } from '../../src/engine/resources.ts'
+import type { PoolVideoDay } from '../../src/engine/resources.ts'
 import * as resourcesModule from '../../src/engine/resources.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
-import { BottleneckCause, BottleneckRule, Phase } from '../../src/engine/types.ts'
-import { makeBottleneck, makeConfig, makeStrips } from '../helpers/factories.ts'
+import { BottleneckCause, BottleneckRule, DeMode, Phase, VideoPolicy } from '../../src/engine/types.ts'
+import { makeBottleneck, makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
 import { SCENARIOS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 
 // ──────────────────────────────────────────────
@@ -448,6 +451,139 @@ describe('findAvailableStripsInWindow', () => {
 })
 
 // ──────────────────────────────────────────────
+// Video Strip Preservation (021 T8, METHODOLOGY.md §Video Strip Preservation)
+//
+// The morning-wave, single-event-day and mid-day cases Phase D deleted
+// (4ef8fa96fa), rewritten so the day holds a REQUIRED video phase: the rule
+// first built (ff07f33476) had no video-day scope, and V26 leaves a day with no
+// REQUIRED phase open to pools all day.
+// ──────────────────────────────────────────────
+
+/** A pool phase's day on the fallback axis (day 0 starts at 0), by default a multi-event video day. */
+function poolDay(overrides: Partial<PoolVideoDay> = {}): PoolVideoDay {
+  return { holds_required_video: true, single_event: false, day_start: 0, ...overrides }
+}
+
+describe('poolMayUseVideoStrips', () => {
+  it.each([
+    ['a multi-event video day at its start', poolDay(), 0, true],
+    ['a multi-event video day inside the wave', poolDay(), 60, true],
+    ['a multi-event video day at exactly day start + 120 (the wave includes that minute)', poolDay(), 120, true],
+    ['a multi-event video day one minute after the wave', poolDay(), 121, false],
+    ['a multi-event video day after the wave', poolDay(), 125, false],
+    ['a multi-event video day after the wave, measured from a 9:00 day start', poolDay({ day_start: 540 }), 540 + 125, false],
+    ['a multi-event video day inside the wave, measured from a 9:00 day start', poolDay({ day_start: 540 }), 540 + 120, true],
+    ['a single-event video day after the wave', poolDay({ single_event: true }), 300, true],
+    ['a day with no REQUIRED video phase after the wave', poolDay({ holds_required_video: false }), 300, true],
+  ])('%s → %s', (_name, day, startTime, expected) => {
+    expect(poolMayUseVideoStrips(day, startTime)).toBe(expected)
+  })
+})
+
+describe('findAvailableStripsInWindow – a pool phase on a video day', () => {
+  // 22 strips: 4 video (0–3) and 18 general (4–21). Strips 4 and 5 are busy all
+  // day, so a 20-strip pool needs video strips: 16 general strips are free.
+  function busyGeneralBoard() {
+    const config = makeConfig({ strips: makeStrips(22, 4) })
+    const state = createGlobalState(config)
+    allocateInterval(state, 'evt-prior', Phase.POOLS, [4, 5], 0, 9999)
+    return { config, state }
+  }
+
+  const videoStripsIn = (config: ReturnType<typeof makeConfig>, indices: number[]) =>
+    indices.filter(i => config.strips[i].video_capable)
+
+  it('inside the start-of-day wave a pool may overflow onto video strips (guard)', () => {
+    const { config, state } = busyGeneralBoard()
+    const result = findAvailableStripsInWindow(state, config, 20, 30, 60, false, 0, poolDay())
+    expect(result.fit).toBe('ok')
+    if (result.fit === 'ok') expect(videoStripsIn(config, result.strip_indices)).toHaveLength(4)
+  })
+
+  it('after the wave on a multi-event day a pool is refused video strips, and too few general strips exist', () => {
+    const { config, state } = busyGeneralBoard()
+    const result = findAvailableStripsInWindow(state, config, 20, 180, 60, false, 0, poolDay())
+    expect(result).toEqual({ fit: 'none', earliest_next_start: null, reason: 'STRIPS' })
+  })
+
+  it('after the wave on a single-event day a pool may overflow onto video strips (guard)', () => {
+    const { config, state } = busyGeneralBoard()
+    const result = findAvailableStripsInWindow(state, config, 20, 180, 60, false, 0, poolDay({ single_event: true }))
+    expect(result.fit).toBe('ok')
+    if (result.fit === 'ok') expect(videoStripsIn(config, result.strip_indices)).toHaveLength(4)
+  })
+
+  it('after the wave on a day with no REQUIRED video phase a pool may overflow onto video strips (guard)', () => {
+    const { config, state } = busyGeneralBoard()
+    const result = findAvailableStripsInWindow(state, config, 20, 180, 60, false, 0, poolDay({ holds_required_video: false }))
+    expect(result.fit).toBe('ok')
+    if (result.fit === 'ok') expect(videoStripsIn(config, result.strip_indices)).toHaveLength(4)
+  })
+
+  // The boundary is inclusive ("<="), measured against "<" in 021 T8 Step 1.
+  it.each([
+    [120, 'ok'],
+    [125, 'none'],
+  ])('a pool starting at day start + %i takes video strips: %s', (startTime, fit) => {
+    const { config, state } = busyGeneralBoard()
+    expect(findAvailableStripsInWindow(state, config, 20, startTime, 60, false, 0, poolDay()).fit).toBe(fit)
+  })
+
+  it('a miss inside the wave whose strips free up only after it reports when the general strips free up', () => {
+    // Video 0–1 free at 200, general 2–3 free at 400. Two strips at 60: by 200 the
+    // wave (0–120) is over, so the video strips never count and the pool waits for 400.
+    const config = makeConfig({ strips: makeStrips(4, 2) })
+    const state = createGlobalState(config)
+    allocateInterval(state, 'evt-prior', Phase.POOLS, [0, 1], 0, 200)
+    allocateInterval(state, 'evt-prior', Phase.POOLS, [2, 3], 0, 400)
+    const result = findAvailableStripsInWindow(state, config, 2, 60, 60, false, 0, poolDay())
+    expect(result).toEqual({ fit: 'none', earliest_next_start: 400, reason: 'STRIPS' })
+  })
+
+  it('a miss after the wave reports when the general strips free up, not the video strips', () => {
+    const config = makeConfig({ strips: makeStrips(4, 2) })
+    const state = createGlobalState(config)
+    allocateInterval(state, 'evt-prior', Phase.POOLS, [2, 3], 0, 400)
+    const result = findAvailableStripsInWindow(state, config, 2, 180, 60, false, 0, poolDay())
+    expect(result).toEqual({ fit: 'none', earliest_next_start: 400, reason: 'STRIPS' })
+  })
+})
+
+describe('poolVideoDays', () => {
+  const staged = (id: string) => makeCompetition({ id, de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED })
+  const plain = (id: string) => makeCompetition({ id })
+
+  it('reads each day\'s REQUIRED video phase, event count and start', () => {
+    const days = poolVideoDays(
+      [
+        { day: 0, competition: staged('A') },
+        { day: 0, competition: plain('B') },
+        { day: 1, competition: staged('C') },
+        { day: 2, competition: plain('D') },
+        { day: 2, competition: plain('E') },
+      ],
+      d => 540 + d * 1440,
+    )
+    expect(Object.fromEntries(days)).toEqual({
+      0: { holds_required_video: true, single_event: false, day_start: 540 },
+      1: { holds_required_video: true, single_event: true, day_start: 1980 },
+      2: { holds_required_video: false, single_event: false, day_start: 3420 },
+    })
+  })
+
+  it('a STAGED event under BEST_EFFORT video and a REQUIRED one run Single Stage hold no REQUIRED video phase', () => {
+    const days = poolVideoDays(
+      [
+        { day: 0, competition: makeCompetition({ id: 'A', de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.BEST_EFFORT }) },
+        { day: 0, competition: makeCompetition({ id: 'B', de_mode: DeMode.SINGLE_STAGE, de_video_policy: VideoPolicy.REQUIRED }) },
+      ],
+      () => 0,
+    )
+    expect(days.get(0)?.holds_required_video).toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────
 // findAvailableStripsInWindow — day-inference precondition (T015)
 //
 // The day-end clamp's inference fallback (`floor(startTime / 1440)`, used only
@@ -472,21 +608,27 @@ describe('findAvailableStripsInWindow', () => {
 //   exactly two findAvailableStripsInWindow call sites in the file, so a
 //   third one added elsewhere is caught even if the spy never reaches it.
 //   Second, each call site's argument list is split at paren/bracket/brace
-//   depth 0 and its arity checked against the function's 7-parameter
+//   depth 0 and its arity checked against the function's 8-parameter
 //   signature (`state, config, count, startTime, duration, videoRequired,
-//   day` — `day` is index 6). Dropping the `day` argument at either site,
-//   including the STAGED-DE precheck (:902) the spy cannot reach, now drops
-//   arity to 6 and fails here. Both parts strip comments and do a
+//   day, poolVideoDay` – `day` is index 6, the pool video day of 021 T8 index
+//   7). Dropping an argument at either site, including the STAGED-DE precheck
+//   (:902) the spy cannot reach, drops arity below 8 and fails here. Both
+//   parts strip comments and do a
 //   balanced-paren scan rather than a lazy `)` match, so a trailing comment,
 //   a variable rename, or a nested call in an earlier argument (e.g.
 //   `Math.max(0, x)`) does not fool them. Arity checks structure, not
 //   identifier text, so renaming `day` to `dayIndex` still passes.
 //
+//   The pool video day (index 7) is also checked not to be the bare token
+//   `undefined` at either site, since that keeps arity at 8.
+//
 //   Residual gap: an explicit `undefined` passed in the `day` position keeps
-//   arity at 7 and slips past the backstop. The spy would catch that at the
-//   reachable site (:914-916) but not at the STAGED-DE precheck (:902) — the
-//   same reachability limit noted above. No static check distinguishes
-//   `undefined` from any other value in an argument position.
+//   arity at 8 and slips past the backstop. The spy would catch that at the
+//   reachable site (:914-916) but not at the STAGED-DE precheck (:902) – the
+//   same reachability limit noted above. Neither the spy nor the token check
+//   sees a pool video day that is `undefined` at run time through a variable
+//   (for example a `poolVideoDay` computed wrongly), which the behaviour tests
+//   in `videoStripPreservation.test.ts` cover instead.
 // ──────────────────────────────────────────────
 
 describe('findAvailableStripsInWindow — day-inference precondition (T015)', () => {
@@ -516,7 +658,7 @@ describe('findAvailableStripsInWindow — day-inference precondition (T015)', ()
     }
   })
 
-  it('backstop: exactly two findAvailableStripsInWindow call sites exist in concurrentScheduler.ts, each passing all 7 arguments (day is index 6)', () => {
+  it('backstop: exactly two findAvailableStripsInWindow call sites exist in concurrentScheduler.ts, each passing all 8 arguments (day is index 6, the pool phase\'s video day index 7)', () => {
     const source = readFileSync(SCHEDULER_PATH, 'utf-8')
     const stripped = source
       .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -530,38 +672,48 @@ describe('findAvailableStripsInWindow — day-inference precondition (T015)', ()
     // this count.
     expect(callSites).toHaveLength(2)
 
-    // Arity check: each site must pass all 7 parameters of
+    // Arity check: each site must pass all 8 parameters of
     // findAvailableStripsInWindow(state, config, count, startTime, duration,
-    // videoRequired, day). This catches a dropped `day` argument at the
-    // STAGED-DE precheck site (:902), which the spy above cannot reach — see
-    // the "residual gap" note in the block comment above this describe.
+    // videoRequired, day, poolVideoDay). This catches a dropped `day` argument
+    // at the STAGED-DE precheck site (:902), which the spy above cannot reach —
+    // see the "residual gap" note in the block comment above this describe —
+    // and a dropped pool video day (021 T8), which would let a pool take video
+    // strips mid-day on a video day. The pool video day is also checked not to
+    // be the bare token `undefined`, a structural check that a rename still
+    // passes.
     for (const site of callSites) {
-      const argsText = site.slice('findAvailableStripsInWindow('.length, -1)
-      const argCount = countTopLevelArgs(argsText)
-      expect(argCount, `expected 7 arguments (day at index 6) in call site: ${site}`).toBe(7)
+      const args = splitTopLevelArgs(site.slice('findAvailableStripsInWindow('.length, -1))
+      expect(args.length, `expected 8 arguments (day at index 6, pool video day at 7) in call site: ${site}`).toBe(8)
+      expect(args[7], `pool video day passed as a bare undefined in call site: ${site}`).not.toBe('undefined')
     }
   })
 })
 
 /**
- * Counts comma-separated arguments in a call's argument text at paren/
+ * Splits a call's argument text into its arguments, trimmed, at paren/
  * bracket/brace depth 0, so a nested call in one argument (e.g.
  * `Math.max(0, node.ready_time)`) is not mistaken for two arguments. A single
  * trailing comma before the closing paren does not count as an extra,
  * absent argument.
  */
-function countTopLevelArgs(argsText: string): number {
+function splitTopLevelArgs(argsText: string): string[] {
   const trimmed = argsText.trim()
-  if (trimmed === '') return 0
+  if (trimmed === '') return []
+  const args: string[] = []
   let depth = 0
-  let count = 1
+  let current = ''
   for (const ch of trimmed) {
     if (ch === '(' || ch === '[' || ch === '{') depth++
     else if (ch === ')' || ch === ']' || ch === '}') depth--
-    else if (ch === ',' && depth === 0) count++
+    if (ch === ',' && depth === 0) {
+      args.push(current.trim())
+      current = ''
+    } else {
+      current += ch
+    }
   }
-  if (/,\s*$/.test(trimmed)) count--
-  return count
+  if (current.trim() !== '') args.push(current.trim())
+  return args
 }
 
 /**

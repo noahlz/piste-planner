@@ -150,10 +150,20 @@ describe('eventTimeSegments on the reference tournaments', () => {
   // events whose pool starts hold see their DE phases shift by strip contention
   // (JR-W-FOIL-IND ends 70 minutes earlier, D1-W-FOIL-IND 65 later). No day map
   // moves, B8 keeps its 148 segments, and B1–B7 are unchanged.
+  //
+  // [M] 2026-10-10, 021 T8: B2 38543891f24c5f71 → e7978b38fbad00ac, B3
+  // 7a643084a6030fbc → 13da83d82cd966e0, B8 70c2a3145dc7071a → ab4193314a01eadb,
+  // Video Strip Preservation (METHODOLOGY §Video Strip Preservation). On a
+  // multi-event day holding a REQUIRED video phase a pool starting after the
+  // start-of-day wave takes general strips only, so some pools wait for them
+  // and some video stages move: B2 re-times 4 events (one pool start,
+  // CDT-M-SABRE-TEAM), B3 5 (two pool starts) and B8 27 (15 pool starts, the
+  // rest DE phases by strip contention). No day map moves, the segment counts
+  // hold, and B1 and B4–B7 are unchanged.
   const EXPECTED = {
-    B1: ['2c69ff46cf84f560', 66], B2: ['38543891f24c5f71', 66], B3: ['7a643084a6030fbc', 72],
+    B1: ['2c69ff46cf84f560', 66], B2: ['e7978b38fbad00ac', 66], B3: ['13da83d82cd966e0', 72],
     B4: ['d2c0a3c4be181709', 48], B5: ['18197dd2e2268e2e', 24], B6: ['e5a90a710470baa3', 106],
-    B7: ['12848ca4621bcf3a', 54], B8: ['70c2a3145dc7071a', 148],
+    B7: ['12848ca4621bcf3a', 54], B8: ['ab4193314a01eadb', 148],
   } as const
 
   it.each(SCENARIO_IDS)('%s: draws the same segments as before', (id) => {

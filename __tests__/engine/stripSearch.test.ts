@@ -481,6 +481,12 @@ describe('search and schedule threading pins (T033)', () => {
     // start), so the pin could never claim its video block at any count and the
     // search returned null. From 180 its pools end at 296, prelims run 330–610,
     // the video block 640–720 and the tail ends at 750, which fits that window.
+    // [M] 2026-10-10, 021 T8: the pinned answer 83 → 95, Video Strip
+    // Preservation (METHODOLOGY §Video Strip Preservation). Day 0 holds a
+    // REQUIRED video phase and other events, and day start + 180 is after the
+    // start-of-day wave, so the two pinned pools take general strips only: 83
+    // general strips plus the board's 12 video strips. At 94 the board is one
+    // general strip short and FOIL again cannot claim its pools.
     //
     // Four pins were tried first and can never have an answer: 45 + 38 + 30 +
     // 32 = 145 strips at one minute against a ceiling of 135.
@@ -534,7 +540,8 @@ describe('search and schedule threading pins (T033)', () => {
   // Characterisation (017 T1, must pass before and after): the search now
   // subtracts the events `unseatedPhases` names instead of reading
   // `PINNED_UNCLAIMED` itself. Captured at 114d99314b: the `placed` count of
-  // every candidate on the board above, from the floor (53) to the answer (83).
+  // every candidate on the board above, from the floor (53) to the answer (83,
+  // 95 since 021 T8 – see the entry at the assertion).
   /** The board of the characterisation below: EPEE and FOIL pinned to one minute of day 0. */
   function pinnedMinBoard() {
     const { comps, config } = minBoard()
@@ -556,9 +563,21 @@ describe('search and schedule threading pins (T033)', () => {
       placed.push(candidate.placed)
     }
 
+    // [M] 2026-10-10, 021 T8: 31 candidates (53–83) → 43 (53–95), and the
+    // first four 22, 22, 22, 22 → 23, 23, 23, 22, Video Strip Preservation
+    // (METHODOLOGY §Video Strip Preservation). Both pins start at day start +
+    // 180, after the start-of-day wave, on a day that holds a REQUIRED video
+    // phase and other events, so their 45 + 38 = 83 pool strips must all be
+    // general: the answer is 83 + the board's 12 video strips = 95. At 53–55
+    // only EPEE's pools go unseated (its capped ask outgrows the general
+    // strips, and FOIL's 38 fit them). At 56 EPEE's capped ask of 44 fits the
+    // 44 general strips, so FOIL's pools go unseated instead, while EPEE still
+    // ends at 22:55 past the day's hard end: two events not placed, so 22. From
+    // 57 EPEE ends in time and only FOIL is subtracted (measured 2026-10-10).
     expect(placed).toEqual([
-      22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
-      23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 24,
+      23, 23, 23, 22, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+      23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23,
+      23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 24,
     ])
   })
 
