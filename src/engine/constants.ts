@@ -412,10 +412,12 @@ export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>
   // the largest finite same-day penalty – applied against the one pairing the
   // specification asks for. The note above GROUP_1_MANDATORY below records the
   // intent correctly; this line contradicted it. Removing the edge makes "CAN"
-  // true. "SHOULD" would need a same-day bonus, and METHODOLOGY states the
-  // preference without a magnitude, so no number is invented here (010 L9,
-  // research.md D5). Y8→Y10 was Y8's only direct edge, so buildPenaltyMatrix's
-  // two-hop Y8↔Y12 derivation (0.3) goes with it.
+  // true (010 L9, research.md D5). Y8→Y10 was Y8's only direct edge, so
+  // buildPenaltyMatrix's two-hop Y8↔Y12 derivation (0.3) goes with it. "SHOULD"
+  // is now the −0.3 same-day bonus in SAME_DAY_BONUS_PAIRS
+  // (PENALTY_WEIGHTS.Y8_Y10_SAME_DAY), which dayColoring's sameDayBonus scores
+  // (021 T5, owner rulings O6 and O12). It lives outside this graph, because the
+  // constraint graph keeps no weight-0 or negative edge.
   [Category.Y8]: {},
   [Category.Y10]: { [Category.Y12]: 0.8 },
   [Category.Y12]: { [Category.Y14]: 0.8 },
@@ -684,7 +686,31 @@ export const PENALTY_WEIGHTS = {
   PROXIMITY_1_DAY: -0.4,
   /** Ind+team day after individual (bonus — negative) */
   INDIV_TEAM_DAY_AFTER: -0.4,
+  /**
+   * Y8 and Y10 of the same weapon and gender on the same day (bonus – negative).
+   * The spec asks Y8 to share a day with Y10. Unsourced (METHODOLOGY §Departures
+   * From the Manual, Appendix A and B, owner rulings O6 and O12)
+   */
+  Y8_Y10_SAME_DAY: -0.3,
+  /**
+   * Y10 and Div 3 of the same weapon and gender on the same day (bonus –
+   * negative). The two draw no common fencers. Unsourced (METHODOLOGY §Other
+   * Soft Preferences, Appendix A and B, owner rulings O6, O9 and O12)
+   */
+  Y10_DIV3_SAME_DAY: -0.3,
 } as const
+
+/**
+ * Category pairs that earn a same-day bonus when both events share a weapon and
+ * gender (METHODOLOGY Appendix A, "Y8↔Y10 same day" and "Y10↔DIV3 same day").
+ * Unordered: either side of a pair may be the event being coloured. Day
+ * colouring reads this list directly, because the constraint graph keeps no
+ * weight-0 edge and neither pair has a crossover weight.
+ */
+export const SAME_DAY_BONUS_PAIRS: readonly (readonly [Category, Category, number])[] = [
+  [Category.Y8, Category.Y10, PENALTY_WEIGHTS.Y8_Y10_SAME_DAY],
+  [Category.Y10, Category.DIV3, PENALTY_WEIGHTS.Y10_DIV3_SAME_DAY],
+]
 
 // ──────────────────────────────────────────────
 // Capacity penalty curve – the cap on dayColoring.ts's capacityPenalty. The live

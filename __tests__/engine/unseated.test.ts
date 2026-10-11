@@ -121,8 +121,12 @@ describe('unseatedPhases against the engine\'s pinned-unclaimed warnings', () =>
   // re-time and each re-run pins a different board, whose pinned pools claim
   // under the same rule. No day map moves, B2 pin-half holds at 1, and B1 and
   // B3–B7 hold (B3's re-timed days pin to the same counts).
+  // [M] 2026-10-10, 021 T5: pin-half B6 8 → 9, the Y8↔Y10 same-day bonus
+  // (METHODOLOGY Appendix A, owner rulings O6 and O12). B6's Y8-W-EPEE-IND and
+  // Y8-W-FOIL-IND swap days to join their Y10s, so the half-pinned re-run pins a
+  // different board. Pin-all B6 holds at 53, and the other seven scenarios hold.
   const ALL = [8, 15, 11, 18, 4, 53, 8, 22]
-  const HALF = [0, 1, 1, 5, 0, 8, 0, 2]
+  const HALF = [0, 1, 1, 5, 0, 9, 0, 2]
 
   it.each(SCENARIO_IDS.map((id, i) => [id, ALL[i], HALF[i]] as const))(
     '%s: matches the warnings after a pin-all (%i) and a pin-half (%i) re-run',

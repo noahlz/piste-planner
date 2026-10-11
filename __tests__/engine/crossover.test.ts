@@ -320,7 +320,8 @@ describe('crossoverPenalty – Group 1 by tournament type', () => {
 
   it.each(ALL_TYPES)('%s: Y8–Y10 is not a Group 1 pair and costs nothing (guard, Appendix B departure)', (type) => {
     // METHODOLOGY: Y8 CAN and SHOULD share a day with Y10, and CROSSOVER_GRAPH
-    // carries no Y8 edge (L9, research.md D5).
+    // carries no Y8 edge (L9, research.md D5). The SHOULD half is a same-day
+    // bonus, which lives in dayColoring's sameDayBonus (021 T5), not here.
     expect(bothOrders(Category.Y8, Category.Y10, type)).toEqual([0, 0])
   })
 

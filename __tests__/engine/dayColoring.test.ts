@@ -4,6 +4,7 @@ import {
   capacityPenalty,
   crossWeaponSameDemographicPenalty,
   dayCapacityFactor,
+  sameDayBonus,
   weaponBalancePenalty,
 } from '../../src/engine/dayColoring.ts'
 import { FIRST_LAST_DAY_CAPACITY_FACTOR } from '../../src/engine/constants.ts'
@@ -1298,6 +1299,143 @@ describe('weaponBalancePenalty – no day holds one weapon class (O4, O7)', () =
     expect(dayMap.get('epee')).toBe(0)
     expect(dayMap.get('foil')).toBe(1)
     expect(dayMap.get('free')).toBe(1)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Same-day bonus (021 O6, O9, O12 – METHODOLOGY Appendix A): Y8↔Y10 and
+// Y10↔Div 3 of the same weapon and gender earn −0.3 for sharing a day.
+// ──────────────────────────────────────────────
+
+describe('sameDayBonus – Y8 with Y10 and Y10 with Div 3 (O6, O9, O12)', () => {
+  // A literal, not PENALTY_WEIGHTS, so a drifted constant fails these pins (the
+  // −0.4 → −0.3 change of O12 is exactly such a drift).
+  const SAME_DAY_BONUS = -0.3 // owner ruling O12, METHODOLOGY Appendix A
+
+  const ev = (id: string, category: Category, overrides: Partial<Competition> = {}) =>
+    makeCompetition({ id, category, gender: Gender.MEN, weapon: Weapon.FOIL, ...overrides })
+
+  /**
+   * Scores `s` on day 0, with `onDay` coloured onto day 0, `elsewhere` coloured
+   * onto day 1, and `uncoloured` in the tournament but not yet coloured (as most
+   * events are while colouring runs).
+   */
+  function scoreOnDay0(
+    s: Competition,
+    onDay: Competition[],
+    elsewhere: Competition[] = [],
+    uncoloured: Competition[] = [],
+  ): number {
+    const coloring = new Map<string, number>([
+      ...onDay.map(o => [o.id, 0] as const),
+      ...elsewhere.map(o => [o.id, 1] as const),
+    ])
+    return sameDayBonus(s, 0, [s, ...onDay, ...elsewhere, ...uncoloured], coloring)
+  }
+
+  // Both sides of each pair, because DSatur may colour either event first.
+  const PAIRS = [
+    { self: Category.Y8, partner: Category.Y10 },
+    { self: Category.Y10, partner: Category.Y8 },
+    { self: Category.Y10, partner: Category.DIV3 },
+    { self: Category.DIV3, partner: Category.Y10 },
+  ]
+
+  it.each(PAIRS)(`a $self event earns ${SAME_DAY_BONUS} on a day holding its $partner partner of the same weapon and gender`, ({ self, partner }) => {
+    expect(scoreOnDay0(ev('self', self), [ev('partner', partner)])).toBe(SAME_DAY_BONUS)
+  })
+
+  it.each(PAIRS)('steers day colouring: a $self event with no edges joins its $partner partner\'s day', ({ self, partner }) => {
+    // x and the partner hard-conflict, so they take days 0 and 1 (x first, by
+    // packing footprint). The free event has no edges, the tournament is all
+    // men's foil (no weapon balance, Group 3 or saber-pileup term), and each day
+    // holds one event, so load balance ties the two days and the tie would go to
+    // day 0. Only the same-day bonus sends it to the partner's day 1.
+    const x = ev('x', Category.DIV1, { strips_allocated: 8 })
+    const p = ev('partner', partner, { strips_allocated: 6 })
+    const free = ev('free', self, { strips_allocated: 1 })
+    const graph = buildGraph([['x', 'partner', Infinity]])
+    graph.set('free', [])
+
+    const { dayMap } = assignDaysByColoring(graph, [x, p, free], makeConfig({ days_available: 2 }))
+
+    expect(dayMap.get('x')).toBe(0)
+    expect(dayMap.get('partner')).toBe(1)
+    expect(dayMap.get('free')).toBe(1)
+  })
+
+  it('weighs one bonus in colorPenalty: a Y8 does not follow its Y10 onto a day holding one more event', () => {
+    // As the steering case, but a filler shares the partner's day 1, so day 1
+    // costs one more flat load-balance unit (0.5). A single bonus (−0.3) does not
+    // cover that and the free Y8 stays on day 0, while a bonus counted twice
+    // (−0.6) would pull it to day 1. This pins the bonus's weight at the
+    // colorPenalty call site, which the exact-value cases above cannot see.
+    const x = ev('x', Category.DIV1, { strips_allocated: 8 })
+    const p = ev('partner', Category.Y10, { strips_allocated: 6 })
+    const filler = ev('filler', Category.CADET, { strips_allocated: 4 })
+    const free = ev('free', Category.Y8, { strips_allocated: 1 })
+    const graph = buildGraph([['x', 'partner', Infinity], ['x', 'filler', Infinity]])
+    graph.set('free', [])
+
+    const { dayMap } = assignDaysByColoring(graph, [x, p, filler, free], makeConfig({ days_available: 2 }))
+
+    expect(dayMap.get('x')).toBe(0)
+    expect(dayMap.get('partner')).toBe(1)
+    expect(dayMap.get('filler')).toBe(1)
+    expect(dayMap.get('free')).toBe(0)
+  })
+
+  it('a Y8 of another weapon or gender than its Y10 earns no bonus', () => {
+    const y10 = ev('y10', Category.Y10)
+    // guards
+    expect(scoreOnDay0(ev('self', Category.Y8, { weapon: Weapon.SABRE }), [y10])).toBe(0)
+    expect(scoreOnDay0(ev('self', Category.Y8, { gender: Gender.WOMEN }), [y10])).toBe(0)
+    // red pair: the same weapon and gender
+    expect(scoreOnDay0(ev('self', Category.Y8), [y10])).toBe(SAME_DAY_BONUS)
+  })
+
+  it('a Div 3 of another weapon or gender than its Y10 earns no bonus', () => {
+    const y10 = ev('y10', Category.Y10)
+    // guards
+    expect(scoreOnDay0(ev('self', Category.DIV3, { weapon: Weapon.EPEE }), [y10])).toBe(0)
+    expect(scoreOnDay0(ev('self', Category.DIV3, { gender: Gender.WOMEN }), [y10])).toBe(0)
+    // red pair: the same weapon and gender
+    expect(scoreOnDay0(ev('self', Category.DIV3), [y10])).toBe(SAME_DAY_BONUS)
+  })
+
+  it('scores exactly the two named pairs, in either order, across every category pair', () => {
+    // Sweeps every ordered category pair of the same weapon and gender. No
+    // ledger scenario or template holds a Div 3 event, so this sweep is the only
+    // guard against an extra pair (Div 3 with Div 2, say) joining the list.
+    const scored: string[] = []
+    for (const self of Object.values(Category)) {
+      for (const partner of Object.values(Category)) {
+        const score = scoreOnDay0(ev('self', self), [ev('partner', partner)])
+        if (score !== 0) scored.push(`${self}+${partner}=${score}`)
+      }
+    }
+    expect(scored.sort()).toEqual([
+      `${Category.DIV3}+${Category.Y10}=${SAME_DAY_BONUS}`,
+      `${Category.Y10}+${Category.DIV3}=${SAME_DAY_BONUS}`,
+      `${Category.Y10}+${Category.Y8}=${SAME_DAY_BONUS}`,
+      `${Category.Y8}+${Category.Y10}=${SAME_DAY_BONUS}`,
+    ].sort())
+  })
+
+  it('earns nothing when the partner is on another day', () => {
+    expect(scoreOnDay0(ev('self', Category.Y8), [], [ev('y10', Category.Y10)])).toBe(0)
+  })
+
+  it('earns nothing from a partner not yet coloured, which sits on no day', () => {
+    const self = ev('self', Category.Y10)
+    // guard: an uncoloured Y8 and an uncoloured Div 3 are in the tournament but on no day
+    expect(scoreOnDay0(self, [], [], [ev('y8', Category.Y8), ev('d3', Category.DIV3)])).toBe(0)
+    // red pair: the same Y8 coloured onto the day
+    expect(scoreOnDay0(self, [ev('y8', Category.Y8)], [], [ev('d3', Category.DIV3)])).toBe(SAME_DAY_BONUS)
+  })
+
+  it(`a Y10 sharing its day with both its Y8 and its Div 3 earns both bonuses (${2 * SAME_DAY_BONUS})`, () => {
+    expect(scoreOnDay0(ev('self', Category.Y10), [ev('y8', Category.Y8), ev('d3', Category.DIV3)])).toBeCloseTo(2 * SAME_DAY_BONUS, 10)
   })
 })
 

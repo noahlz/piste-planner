@@ -194,10 +194,11 @@ describe('DE bout times', () => {
 
 describe('CROSSOVER_GRAPH', () => {
   it('Y8 has no edges — METHODOLOGY §Departures From the Manual says Y8 can and should share a day with Y10 (L9)', () => {
-    // Y8→Y10 was Y8's only direct edge (0.8). Removing it is what research.md
-    // D5 calls "removes the edge and invents no bonus" — the specification
-    // states the preference, not a magnitude, so the fix is silence, not a
-    // negative weight.
+    // Y8→Y10 was Y8's only direct edge (0.8), applied against the one pairing
+    // the specification asks for (research.md D5). Y8 keeps no graph edge,
+    // because the Y8/Y10 preference is scored by dayColoring's sameDayBonus
+    // (021 T5, −0.3, owner rulings O6 and O12) and the constraint graph keeps no
+    // weight-0 or negative edge.
     expect(CROSSOVER_GRAPH[Category.Y8]).toEqual({})
   })
 })

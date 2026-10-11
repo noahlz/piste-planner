@@ -42,6 +42,7 @@ import { categoryWeight, estimateCompetitionStripHours } from './capacity.ts'
 import { getProximityWeight, findIndividualCounterpart } from './crossover.ts'
 import {
   REST_DAY_PAIRS,
+  SAME_DAY_BONUS_PAIRS,
   PENALTY_WEIGHTS,
   CAPACITY_PENALTY_CURVE,
   FIRST_LAST_DAY_CAPACITY_FACTOR,
@@ -307,6 +308,42 @@ export function weaponBalancePenalty(
   return PENALTY_WEIGHTS.WEAPON_BALANCE
 }
 
+/** The SAME_DAY_BONUS_PAIRS value for an unordered category pair, or 0 when it is not one. */
+function sameDayBonusWeight(cat1: Category, cat2: Category): number {
+  for (const [a, b, weight] of SAME_DAY_BONUS_PAIRS) {
+    if ((a === cat1 && b === cat2) || (a === cat2 && b === cat1)) return weight
+  }
+  return 0
+}
+
+/**
+ * Same-day bonus for Y8 with Y10 and Y10 with Div 3 (021 O6, O9, O12 –
+ * METHODOLOGY §Departures From the Manual, §Other Soft Preferences, Appendix A).
+ *
+ * For `competition` on `proposedDay`, adds the pair's (negative) weight for each
+ * event already coloured on that day that forms a SAME_DAY_BONUS_PAIRS pair with
+ * it in the same weapon and gender. The lookup is unordered, so the bonus is the
+ * same whichever event DSatur colours first. A Y10 sharing its day with both its
+ * Y8 and its Div 3 earns both. Lives here rather than in the constraint graph,
+ * which keeps no weight-0 edge.
+ */
+export function sameDayBonus(
+  competition: Competition,
+  proposedDay: number,
+  competitions: Competition[],
+  coloring: Map<string, number>,
+): number {
+  let total = 0.0
+  for (const other of competitions) {
+    if (other.id === competition.id) continue
+    if (coloring.get(other.id) !== proposedDay) continue
+    if (other.weapon !== competition.weapon) continue
+    if (other.gender !== competition.gender) continue
+    total += sameDayBonusWeight(competition.category, other.category)
+  }
+  return total
+}
+
 /**
  * Computes the soft penalty for assigning `id` color `c`, given current coloring.
  * Includes:
@@ -318,6 +355,7 @@ export function weaponBalancePenalty(
  *   - VET_COMBINED day-after preference (F3c)
  *   - the Group 3 cross-weapon preference
  *   - weapon balance (no day holds one weapon class)
+ *   - the Y8↔Y10 and Y10↔Div 3 same-day bonus
  *   - saber pileup
  *   - load balancing: a flat cost per event already on the day, plus the
  *     capacity penalty for the day's fill
@@ -389,6 +427,8 @@ function colorPenalty(
   total += crossWeaponSameDemographicPenalty(self, c, competitions, coloring)
   // Weapon balance: no day holds one weapon class (Ops Manual p.20 – Group 2)
   total += weaponBalancePenalty(self, c, competitions, coloring)
+  // Y8 with Y10 and Y10 with Div 3 share a day (bonus, 021 O6, O9, O12)
+  total += sameDayBonus(self, c, competitions, coloring)
 
   // Saber pileup: discourage concentrating saber events on a single day, a
   // structural staffing risk (METHODOLOGY.md §Saber Pileup).
