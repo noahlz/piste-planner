@@ -317,15 +317,15 @@ function sameDayBonusWeight(cat1: Category, cat2: Category): number {
 }
 
 /**
- * Same-day bonus for Y8 with Y10 and Y10 with Div 3 (021 O6, O9, O12 –
- * METHODOLOGY §Departures From the Manual, §Other Soft Preferences, Appendix A).
+ * Same-day bonus for Y8 with Y10 (021 O6, O12 – METHODOLOGY §Departures From the
+ * Manual, Appendix A). Y10 with Div 3 earns nothing – the two share no fencers
+ * and day assignment places them by its other terms (O15).
  *
  * For `competition` on `proposedDay`, adds the pair's (negative) weight for each
  * event already coloured on that day that forms a SAME_DAY_BONUS_PAIRS pair with
  * it in the same weapon and gender. The lookup is unordered, so the bonus is the
- * same whichever event DSatur colours first. A Y10 sharing its day with both its
- * Y8 and its Div 3 earns both. Lives here rather than in the constraint graph,
- * which keeps no weight-0 edge.
+ * same whichever event DSatur colours first. Lives here rather than in the
+ * constraint graph, which keeps no weight-0 edge.
  */
 export function sameDayBonus(
   competition: Competition,
@@ -355,7 +355,7 @@ export function sameDayBonus(
  *   - VET_COMBINED day-after preference (F3c)
  *   - the Group 3 cross-weapon preference
  *   - weapon balance (no day holds one weapon class)
- *   - the Y8↔Y10 and Y10↔Div 3 same-day bonus
+ *   - the Y8↔Y10 same-day bonus
  *   - saber pileup
  *   - load balancing: a flat cost per event already on the day, plus the
  *     capacity penalty for the day's fill
@@ -427,7 +427,7 @@ function colorPenalty(
   total += crossWeaponSameDemographicPenalty(self, c, competitions, coloring)
   // Weapon balance: no day holds one weapon class (Ops Manual p.20 – Group 2)
   total += weaponBalancePenalty(self, c, competitions, coloring)
-  // Y8 with Y10 and Y10 with Div 3 share a day (bonus, 021 O6, O9, O12)
+  // Y8 with Y10 share a day (bonus, 021 O6, O12)
   total += sameDayBonus(self, c, competitions, coloring)
 
   // Saber pileup: discourage concentrating saber events on a single day, a

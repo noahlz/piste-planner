@@ -8,7 +8,7 @@
 > this one session, driving the worktree from the main checkout with absolute paths.
 
 **Status:** draft, 2026-10-08. Waits on the owner's approval of [`amendment.md`](./amendment.md). The owner
-answered the first draft's Open items 1, 3 and 7 and confirmed the Y10↔Div 3 scope (O7–O10), and the
+answered the first draft's Open items 1, 3 and 7 and confirmed the Y10↔Div 3 scope (the second-round rulings O7–O10, of which O9 is moot under O15), and the
 amendment's four remaining notes are settled by their defaults unless the owner objects (see
 [Notes for the owner](#notes-for-the-owner)). No code task starts before A0 commits it.
 
@@ -37,15 +37,16 @@ Full text in `decisions.md` and in the amendment's blocks.
 | O3 | **Day count.** Day assignment uses every day the organizer chose. The inert Phase 1 pass, `chromaticN`, `capacityDemandedDays`, `CAPACITY_TARGET_FILL` and `MAX_EXPANDED_DAYS` go. The calibration scenario is not added, and the backlog item closes with a written record. | T2, D |
 | O4 | **Weapon balance.** No day holds only one weapon class. Day-level, both genders and team events pooled, flat 0.5. Skipped when the tournament lacks a class entirely. O7 settles the reading. | T4 |
 | O5 | **Video strip count** is any count from 0 to the strip total at any type, default 8 at a NAC. Doc only. | A0 |
-| O6 | **Y8 with Y10.** A −0.4 same-day bonus for Y8↔Y10 of the same weapon and gender, and for Y10↔Div 3. The term needs its own lookup, because the constraint graph drops weight-0 edges. *O12 lowers the bonus to −0.3.* | T5 |
+| O6 | **Y8 with Y10.** A −0.4 same-day bonus for Y8↔Y10 of the same weapon and gender, and for Y10↔Div 3. The term needs its own lookup, because the constraint graph drops weight-0 edges. *O12 lowers the bonus to −0.3, and O15 (2026-10-11) drops the Y10↔Div 3 half.* | T5 |
 | O7 | **Weapon balance reads "keeps"** (second round). The owner: "whichever option avoids having a day where only epee is scheduled on that day (we need to balance ROW weapons with epee)". An event that leaves its day one-class pays +0.5 (the first event on an empty day, and every later same-class event on a day that still holds one class), an event that brings the missing class earns −0.5, and an event on a day holding both classes pays 0. Chosen on the 49-board probe (see Measurements). | T4 |
 | O8 | **An unplaced predecessor** (second round). The wait lapses: the waiting event's pools are ready as if the event waited on did not exist, from day start or any other floor that applies to it, such as the regional Group 1 window. One identical clause in amendment Blocks 44, 88, 83 and 66. | T6a |
-| O9 | **Y10↔Div 3** (second round). Same weapon and gender, as drafted. | T5 |
+| O9 | **Y10↔Div 3** (second round). Same weapon and gender, as drafted. *Moot since 2026-10-11: O15 removed the bonus.* | T5 |
 | O10 | **The cutoff on the board** (second round). The store's board check emits `pool-start-after-cutoff` for engine-placed and hand-moved events, as drafted. | T7 |
 | O11 | **The Veteran co-day is not a departure** (owner annotation). Veteran age bands are one event split by age band, so the manual's adjacent-age rule never applies. Doc only: amendment Blocks 90, 85 and 3. | A0 |
-| O12 | **The Y8↔Y10 and Y10↔Div 3 bonus is −0.3** (2026-10-10, METHODOLOGY follow-up A1). B6 places 53 at −0.05 through −0.3 and 51 at −0.4. T5 runs last. | A1, T5 |
+| O12 | **The Y8↔Y10 bonus is −0.3** (it covered Y10↔Div 3 until O15) (2026-10-10, METHODOLOGY follow-up A1). B6 places 53 at −0.05 through −0.3 and 51 at −0.4. T5 runs last. | A1, T5 |
 | O13 | **The Vet Combined start offset is retired** (2026-10-10, A1). No Veteran event has a fixed start offset. B6 places 53 only at offset 0. T6b becomes a pure removal of the never-read `earliest_start_offset` field. | A1, T6b |
 | O14 | **Video Strip Preservation keeps `<=` at the wave's end** (2026-10-10, during T8). A pool phase that starts at exactly 11:00 AM on a 9:00 day is still in the wave, as the amendment says, so METHODOLOGY does not change. T8 Step 1 tied on counts on every board except NAC Vet/Div1/Junior (60/6 at base, 58/8 under `<=`, 59/7 under `<`), and the owner accepts that cost, since templates carry no floor. Full numbers in `decisions.md`. | T8 |
+| O15 | **Y10 with Div 3 is dropped** (2026-10-11, A2 `2f84c3e158`). The pairing was only an example of unrelated events and 021 over-corrected by scoring it. Events that share no fencers have no separation rule and no same-day bonus. O15 retires the Y10↔Div 3 half of O6 and O12, the Y8↔Y10 bonus (−0.3) is unchanged, and O9 is moot. T5b `b7866b61db` removed the code, and the ledger stayed byte-identical. | A2, T5b |
 
 Standing decisions that bind every task: no hard pair is ever relaxed (019), no backwards compatibility,
 the engine follows the 2026-27 Ops Manual's planning figures, and every METHODOLOGY text change is
@@ -204,7 +205,8 @@ Each is the audit's `[M]` figure at `5edbdf7712` (verifier's figure where it cor
   6 Y10 each) can move, and the Y10↔Div 3 half runs only on the templates. *Correction
   (2026-10-11, T5's spec review J4): no template holds a Div 3 event either, and none holds a Y8,
   so no board exercises the Y10↔Div 3 half. Only the `dayColoring.test.ts` cases cover it (T5
-  `0544ef1877`).*
+  `0544ef1877`).* *O15 (2026-10-11) retired the Y10↔Div 3 half, so Y10–Div 3 scores 0 again, and T5b
+  `b7866b61db` pins that with a `crossoverPenalty` guard at all six types.*
 - **Vet waits never bind** (DS-EDGE, L13, R9). B8: 60 same-day age-banded pairs, 0 ordered, 21 start
   younger first, 0 `CROSS_EVENT_DEPENDENCY_DELAY`. NAC Vet/Div1/Junior on B1's board: 0 of 60, 35
   inverted. Each sibling's first phase is seeded at day start and popped before the older sibling's
@@ -532,7 +534,12 @@ Two dispatches, each its own commit.
 - **Model.** Opus, high effort.
 - **Commit:** "021 T4: weapon balance".
 
-### T5: the Y8/Y10 and Y10/Div 3 same-day bonus (O6, O9, drift)
+### T5: the Y8/Y10 and Y10/Div 3 same-day bonus (O6, O9, drift – Y10/Div 3 half retired by O15)
+
+*Correction (2026-10-11, O15): the owner ruled that Y10 with Div 3 was only an example of unrelated events, so
+the Y10/Div 3 half of this task was removed after it shipped (A2 `2f84c3e158` for the text, then T5b `b7866b61db`
+for the code and tests, 97 / 3353, ledger byte-identical). T5 `0544ef1877` stays as history. Read every Y10↔Div 3 clause below as removed, and the bonus as
+Y8↔Y10 at −0.3 alone.*
 
 - **Intent.** A `colorPenalty` term of −0.4 for a candidate day that holds the event's Y8↔Y10 partner or
   its Y10↔Div 3 partner, each of the same weapon and gender. The lookup works from either side of a

@@ -2,6 +2,8 @@
 
 Reconciles METHODOLOGY.md with the owner's rulings O1–O11 of 2026-10-08 (O7–O10 from the second round of answers, O11 from the owner's review annotation) and the fourteen defaults the 021 plan takes on the owner's behalf. Task A0 commits the approved text verbatim, alone, before any code.
 
+*2026-10-11, O15: the owner ruled that the Y10 and Div 3 pairing was only an example of unrelated events. A2 (`2f84c3e158`) removed every Y10↔Div 3 clause this amendment added (in Blocks 4, 14, 67 and 84 and the O6 and O9 summaries below), and T5b (`b7866b61db`) removed the bonus from the code. The Y8↔Y10 bonus stays, at −0.3 since A1. This file is the record of what A0 applied.*
+
 Line numbers are `METHODOLOGY.md` at `5edbdf7712`, before any edit. The blocks are numbered in the order A0 applies them, bottom of the file first, so every line number holds when its block is applied. A block whose After is empty deletes its Before lines. A block whose After repeats its Before and adds lines inserts new text after that line.
 
 ## What this amendment does
@@ -11,10 +13,10 @@ Line numbers are `METHODOLOGY.md` at `5edbdf7712`, before any edit. The blocks a
 - **O3 – Day count.** Day assignment uses every day the organizer chose. The inert "fewest days" pass and its constants are recorded as removed under a new §Day Count.
 - **O4 – Weapon balance.** The goal is that no day holds only one weapon class. A flat day-level term, both genders and team events pooled, skipped when a tournament lacks one class. "Proportional to competition size" is dropped. O7 settles the reading.
 - **O5 – Video strip count.** Any count from 0 to the strip total at any type, 8 by default at a NAC, and best-effort elsewhere.
-- **O6 – Y8 with Y10.** A -0.4 same-day bonus for Y8↔Y10 and for Y10↔Div 3 of the same weapon and gender.
+- **O6 – Y8 with Y10.** A -0.4 same-day bonus for Y8↔Y10 and for Y10↔Div 3 of the same weapon and gender. *(A1 later set −0.3, and O15 retired the Y10↔Div 3 half on 2026-10-11.)*
 - **O7 – Weapon balance reads "keeps".** The owner asked for "whichever option avoids having a day where only epee is scheduled on that day (we need to balance ROW weapons with epee)". Every event that leaves its day one-class costs +0.5, not only the first one on an empty day, and bringing the missing class earns -0.5. Over 49 boards (B1–B8 and the ten templates) no reading left an épée-only day, and "keeps" left 0 one-class days against 1 for the delta form and 7 with no term (Blocks 69, 16, 14).
 - **O8 – An unplaced predecessor.** When the event waited on is never placed, the wait lapses. One identical clause closes the wait in Blocks 44, 88, 83 and 66.
-- **O9 – Y10↔Div 3.** Same weapon and gender, as drafted.
+- **O9 – Y10↔Div 3.** Same weapon and gender, as drafted. *(Moot since O15 retired the bonus on 2026-10-11.)*
 - **O10 – The cutoff on the board.** The store's board check emits `pool-start-after-cutoff` for engine-placed and hand-moved events, as drafted (Blocks 99, 42, 76 and 43).
 - **O11 – The Veteran co-day is not a departure.** From the owner's review annotation: Veteran age bands are one Veteran event split into sub-events by age band, not separate age groups, so Ops Manual p.20 – Group 1 bullet 2's adjacent-age rule never applies to them and the bands always share a day. Block 90 states this in §Veteran Age-Group Co-Day Rule, Block 85 drops the co-day from §Departures From the Manual, and Block 3 retitles its Appendix B entry to the stagger, which stays Piste Planner's own unsourced rule.
 - **Defaults 1–14.** The eight time-of-day preferences are deleted and recorded under a new §Retired Time-of-Day Preferences (1). §Constraint Relaxation becomes §When Days Are Too Few: nothing is relaxed, an event with every day blocked takes the least-bad day, and each broken hard pair or split Vet co-day draws a WARN (2, 9). Stale code pointers are fixed without line numbers (3). The intro and §Scheduling Algorithm describe the app as it is, and the capacity curve states the running values and records the rejected one (4). Veteran → Div 1 is 0.1, and Group 1 pairs are not scored by the crossover graph (5). Larger events go first, and Flight A gets its own within-day priority key (6). §Phase 3 describes DSatur day order and the constraint score as a tie-break (7). The 120-minute individual→team wait applies to same-category pairs only (8). Single-Day Fit is enforced when phases are placed (10). Video strip preservation applies only on days with a `REQUIRED` video phase, the peak-concurrent video budget is retired, and a video block holds its strips through the semis (11). The larger event is the one to flight, flighting is an organizer toggle, the flight buffer replaces the admin gap, and flighting groups are gone (12). Pointers to deleted code are removed or re-pointed (13). Validation outcomes, cut handling, the feasibility WARN, per-day start and end times, the 2–4 day range, the Y8 weight row and the Strip Count Suggestion ceiling are corrected (14).
@@ -82,6 +84,8 @@ After:
 ## Block 4 – Appendix B – Departures, :1112
 
 Sources (cluster block K7-15): O6; audit L9b
+
+*2026-10-11, O15: the owner ruled that Y10 with Div 3 was only an example of unrelated events, so A2 (`2f84c3e158`) removed this Y10↔Div 3 text from METHODOLOGY and T5b (`b7866b61db`) removed the bonus from the code. The block stays as A0 applied it, as history.*
 
 Before:
 ~~~
@@ -239,6 +243,8 @@ The eight time-of-day weights this table once listed are retired (see [Retired T
 ## Block 14 – Penalty Weights, :1007
 
 Sources (cluster block K7-05): O4; O6; O7; O9 (Y10↔Div 3 same weapon and gender, as drafted); audit WB, L9b
+
+*2026-10-11, O15: the owner ruled that Y10 with Div 3 was only an example of unrelated events, so A2 (`2f84c3e158`) removed this Y10↔Div 3 text from METHODOLOGY and T5b (`b7866b61db`) removed the bonus from the code. The block stays as A0 applied it, as history.*
 
 Before:
 ~~~
@@ -1204,6 +1210,8 @@ After:
 
 Sources (cluster block K3-12): default 1 (delete the :290 row); O6 (Y8↔Y10 and Y10↔Div 3 same-day bonus, −0.4); audit W1, C6, L9b
 
+*2026-10-11, O15: the owner ruled that Y10 with Div 3 was only an example of unrelated events, so A2 (`2f84c3e158`) removed this Y10↔Div 3 text from METHODOLOGY and T5b (`b7866b61db`) removed the bonus from the code. The block stays as A0 applied it, as history.*
+
 Before:
 ~~~
 | Y8/Y10 Early Scheduling | 0.3 | Y8/Y10 not starting at day start. Ops Manual p.20 – Group 2 names Y10 only, and including Y8 is a departure (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
@@ -1472,6 +1480,8 @@ After:
 ## Block 84 – Group 1, Y10 and Div 3 affinity and pointer, :167–169
 
 Sources (cluster block K2-07): O6; O9 (2026-10-08: the Y10↔Div 3 bonus needs the same weapon and gender, as drafted); audit L9b
+
+*2026-10-11, O15: A2 (`2f84c3e158`) replaced this paragraph with **Unrelated events** – events that share no fencers, such as Y10 and Div 3, have no separation rule and no same-day bonus – and T5b (`b7866b61db`) removed the bonus from the code. The block stays as A0 applied it, as history.*
 
 Before:
 ~~~

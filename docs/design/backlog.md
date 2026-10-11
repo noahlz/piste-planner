@@ -327,7 +327,7 @@ with its sub-sections, §Dead code held back from the 2026-09-01 sweep,
 individual-to-team edges never hold an event back and §The 4:00 PM pool cutoff
 is not enforced. Its handoff, `specs/021-methodology-reconciliation/handoff.md`,
 has the rest. Entries marked "new" were written by 021, and every entry is
-unscheduled unless it says otherwise. The owner rulings O1–O14 are in
+unscheduled unless it says otherwise. The owner rulings O1–O15 are in
 `specs/021-methodology-reconciliation/decisions.md`.*
 
 - Hand pins are not checked against the Vet Combined start offset. Moot: O13
@@ -369,11 +369,11 @@ unscheduled unless it says otherwise. The owner rulings O1–O14 are in
   strips), main places 60 and leaves 6 while 021 places 55 and leaves 11, so 5
   events net. T8 alone costs 6 there, where O14 named 1–2. Suggest and Apply
   still place all 66, at 104 strips instead of 103.
-- The Y8↔Y10 and Y10↔Div 3 bonus on boards no template holds, its measured cost
-  on a synthetic oversubscribed board, and the plan's wrong claim that the
-  templates exercise the Div 3 half –
-  [§No template exercises the Y8 and Div 3 same-day bonus](#no-template-exercises-the-y8-and-div-3-same-day-bonus).
-  New.
+- The Y8↔Y10 bonus on boards no template holds, with a note to measure it again
+  if a Y8 event ever joins a template –
+  [§No template exercises the Y8 same-day bonus](#no-template-exercises-the-y8-same-day-bonus).
+  New. The plan's wrong claim that the templates exercise the Y10↔Div 3 half is
+  moot, since O15 (2026-10-11) removed that half.
 - The pool strip cap counting video strips a late pool may no longer use –
   [§The pool strip cap counts video strips a late pool cannot use](#the-pool-strip-cap-counts-video-strips-a-late-pool-cannot-use).
   New.
@@ -1341,26 +1341,32 @@ review.
 **Cost if ignored**: the largest template places fewer events than it did
 before 021, and no drift scenario guards it.
 
-## No template exercises the Y8 and Div 3 same-day bonus
+## No template exercises the Y8 same-day bonus
 
 *Found by 021 T5's judges J2 and J4, 2026-10-10. Recorded, not fixed.*
 
-T5 scores −0.3 when a Y8 and a Y10, or a Y10 and a Div 3, of one weapon and
-gender share a day (O6, O9, O12). No catalogue template and no B1–B8 scenario
-holds a Div 3 event, and no template holds a Y8 event, so the Div 3 half is
-covered only by `dayColoring.test.ts`. The plan's Measurements said the Div 3
-half "runs only on the templates", which is wrong (a dated note in the plan
-corrects it). The bonus moved only B6, where two Y8 events swapped days to sit
-with their Y10s. J2 also found a sensitivity: on a synthetic oversubscribed
-board (NAC Youth, 2 days, 40 strips, with a Y8 and a Div 3 clone of every Y10)
-the bonus moved scheduled events 17 → 14 and ERRORs 19 → 22, while the same
-extension on NAC Youth at 4 days and 80 strips went 34 → 35.
+T5 scores −0.3 when a Y8 and a Y10 of one weapon and gender share a day (O6,
+O12). T5 also scored a Y10 and a Div 3 (O9), but the owner ruled on 2026-10-11
+that the pairing was only an example of unrelated events, so that half was
+removed (O15 – A2 `2f84c3e158` for the text, T5b `b7866b61db` for the code). No
+catalogue template holds a Y8 event, so no template exercises the bonus and
+`dayColoring.test.ts` covers it alone beside B6. The bonus moved only B6, where
+two Y8 events swapped days to sit with their Y10s.
 
-**What it needs**: measure the bonus again whenever a Y8 or Div 3 event joins a
+*2026-10-11, after O15:* the plan's Measurements said the Y10↔Div 3 half "runs
+only on the templates", which was wrong, and that point is now moot because the
+half is gone. J2's synthetic-board finding no longer says anything about the Y8
+bonus on its own. That run (NAC Youth, 2 days, 40 strips) added a Y8 clone and a
+Div 3 clone of every Y10 with both bonuses on, and moved scheduled events 17 →
+14 and ERRORs 19 → 22 (the same extension at 4 days and 80 strips went 34 →
+35). It was never repeated with the Y8 bonus alone, so how much of the loss the
+Y8 bonus caused is unknown. Keep it only as a reason to measure again.
+
+**What it needs**: measure the Y8↔Y10 bonus again whenever a Y8 event joins a
 template or a drift scenario.
 
-**Cost if ignored**: a future template with Y8 or Div 3 events can lose events
-to the bonus on a tight board, and no floor would catch it.
+**Cost if ignored**: a future template with Y8 events can lose events to the
+bonus on a tight board, and no floor would catch it.
 
 ## The pool strip cap counts video strips a late pool cannot use
 
@@ -1716,9 +1722,9 @@ feature 021. Most of its fixes edit `src/engine/`, so constitution III's B1–B8
 drift review applies.*
 
 *Closed by 021, 2026-10-11 (`specs/021-methodology-reconciliation/`). A 32-agent
-audit verdicted every item, the owner ruled O1–O14, and the owner-approved
-amendment went into METHODOLOGY.md as A0 (`121394c92a`) with the follow-up A1
-(`cb4c8deeb9`). Where a ruling or a default changed the spec, the doc moved, and
+audit verdicted every item, the owner ruled O1–O15, and the owner-approved
+amendment went into METHODOLOGY.md as A0 (`121394c92a`) with the follow-ups A1
+(`cb4c8deeb9`) and A2 (`2f84c3e158`). Where a ruling or a default changed the spec, the doc moved, and
 everywhere else the engine moved to the doc: the time-of-day weights and their
 dead config are gone (T1a `c4297a8bac`), the dead engine code went (T1b
 `87292a868e`, T1c `e2b940dbfd`), day assignment uses every chosen day (T2
@@ -1727,7 +1733,9 @@ weapon balance is scored (T4 `39c7145a63`), the Vet stagger and the ind→team
 wait bind (T6a `bfdf295fca`), the Vet Combined offset is retired (T6b
 `7c3bf6e61f`), a split Vet co-day is reported (T6c `0df58dee46`), late pools
 draw a WARN (T7 `8b23e1b964`), video strips are kept for the video stage (T8
-`bad32530d9`) and the Y8/Y10 and Y10/Div 3 bonus is scored (T5 `0544ef1877`).
+`bad32530d9`) and the Y8/Y10 bonus is scored (T5 `0544ef1877`). T5 also scored
+Y10 with Div 3, and O15 (2026-10-11) removed that half again (A2 `2f84c3e158`, T5b
+`b7866b61db`).
 Each sub-section below carries a dated note. What 021 left open is in
 [§What 021 deliberately left unfixed](#what-021-deliberately-left-unfixed). The
 text below is the record as it stood before 021.*
@@ -1848,9 +1856,11 @@ eight time-of-day rules into METHODOLOGY §Retired Time-of-Day Preferences,
 §Early-Start Conflicts included, and T1a (`c4297a8bac`) deleted the eight
 weights and the `LAST_DAY_REF_SHORTAGE_*` trio. T4 (`39c7145a63`) wired
 `WEAPON_BALANCE` in the "keeps" reading (O4, O7), and T5 (`0544ef1877`) added
-`Y8_Y10_SAME_DAY` and `Y10_DIV3_SAME_DAY` (−0.3, O12). `PENALTY_WEIGHTS` now has
-11 keys (20 at 021's base). Nine are read outside `constants.ts` (eight in `dayColoring.ts`,
-`REGIONAL_GROUP_1_PAIR` in `crossover.ts`), and the two same-day bonuses are read
+`Y8_Y10_SAME_DAY` (−0.3, O12) and `Y10_DIV3_SAME_DAY`. The owner ruled on
+2026-10-11 that Y10 with Div 3 was only an example, so O15 (A2 `2f84c3e158`,
+T5b `b7866b61db`) removed `Y10_DIV3_SAME_DAY` again. `PENALTY_WEIGHTS` now has 10 keys (20 at
+021's base). Nine are read outside `constants.ts` (eight in `dayColoring.ts`,
+`REGIONAL_GROUP_1_PAIR` in `crossover.ts`), and the one same-day bonus is read
 through `SAME_DAY_BONUS_PAIRS`, which `dayColoring.ts`'s `sameDayBonus` reads.*
 
 ### Where the doc is likely the wrong one

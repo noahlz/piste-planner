@@ -1,14 +1,23 @@
 # 021 METHODOLOGY reconciliation – handoff
 
 **Status: delivered 2026-10-11** on branch `021-methodology-reconciliation` (worktree
-`.claude/worktrees/021-methodology-reconciliation`, cut from `main` `5edbdf7712`, and
-`main` has not moved), awaiting the user's `merge-with-costs`. Task M's merge check
-passed and is recorded under [Merge](#merge). Plan: [`plan.md`](./plan.md), with [`amendment.md`](./amendment.md),
-[`decisions.md`](./decisions.md) (owner rulings O1–O14 and defaults 1–14) and
-[`audit.md`](./audit.md) beside it. METHODOLOGY.md was amended twice, both times with
-the owner's approval before the commit: A0 (`121394c92a`) and the follow-up A1
-(`cb4c8deeb9`). No other commit touches it. The branch holds 21 commits before this
-handoff. Four questions go to the owner, listed first below.
+`.claude/worktrees/021-methodology-reconciliation`, cut from `main` `5edbdf7712`). The
+user merged the branch through A2 (`2f84c3e158`) into `main` as `46eeed2d0c` and pushed
+it. T5b (`b7866b61db`, the O15 code change) and the two docs commits after it (`e941460c1c`
+and its fact-check correction) came after that merge, so they await a second
+`merge-with-costs`. Until then `main` holds A2's METHODOLOGY text
+while its engine still scores Y10 with Div 3. Task M re-ran the merge check after O15,
+recorded under [Merge](#merge), and the branch now awaits the user's second
+`merge-with-costs`. Plan: [`plan.md`](./plan.md), with [`amendment.md`](./amendment.md),
+[`decisions.md`](./decisions.md) (owner rulings O1–O15 and defaults 1–14) and
+[`audit.md`](./audit.md) beside it. METHODOLOGY.md was amended three times, each time with
+the owner's approval before the commit: A0 (`121394c92a`), the follow-up A1
+(`cb4c8deeb9`) and A2 (`2f84c3e158`, O15). No other commit touches it. *O15
+(2026-10-11) dropped the Y10 with Div 3 bonus after T5 shipped it, see
+[O15 below](#o15--y10-with-div-3-dropped-2026-10-11). Read any Y10↔Div 3 line in this
+handoff as history.* The branch holds 30 commits from `5edbdf7712`, this one
+included, and four of them (T5b, the two docs commits and the Task M record) are not yet on `main`. Four
+questions go to the owner, listed first below.
 
 ## Owner questions
 
@@ -72,7 +81,8 @@ sit git-ignored in `<wt>/tmp/` and go when the worktree is removed.
 
 In product terms: METHODOLOGY.md and the engine now say the same thing, except for the
 items under Owner questions and Left unfixed. The owner approved one amendment (A0)
-after rulings O1–O11 and a follow-up (A1) after O12–O13, while O14 changed no spec text.
+after rulings O1–O11, a follow-up (A1) after O12–O13 and a second follow-up (A2) after
+O15, while O14 changed no spec text.
 Everywhere else the engine moved to the spec.
 
 - The eight time-of-day preferences, which day assignment could never score, are
@@ -83,7 +93,8 @@ Everywhere else the engine moved to the spec.
   minutes after Flight A ends, and the larger event is the one suggested for flighting.
 - Day assignment prefers days that hold both épée and foil or sabre, and no B1–B8 day
   now holds only one weapon class (genders pooled). It also prefers to put a Y8 on its
-  Y10's day, and a Y10 on its Div 3's day.
+  Y10's day. Events that share no fencers, such as Y10 and Div 3, get no same-day bonus
+  (O15). T5 first put a Y10 on its Div 3's day too, and T5b removed that.
 - On a Veteran co-day the bands start oldest first, at least 60 minutes apart, and a
   team event that shares a day with its individual waits 120 minutes after it ends. No
   Veteran event has a fixed start offset.
@@ -92,8 +103,10 @@ Everywhere else the engine moved to the spec.
 - On a multi-event NAC video day, pools that start after the morning wave leave the
   video strips for the video stage.
 
-Headline, before to after (Base is `5edbdf7712`, After is `0544ef1877`, the last code
-commit):
+Headline, before to after (Base is `5edbdf7712`, After is T5 `0544ef1877`). The last code
+commit is T5b `b7866b61db`, which removes a term no B1–B8 scenario or template reaches.
+At T5b the ledger is byte-identical, the smoke re-read B1's boot, Suggest 104 and the row
+counts, and the suite reads 97 / 3353. The other rows are T5's and hold by that argument:
 
 | What | Before | After |
 |---|---|---|
@@ -109,7 +122,7 @@ commit):
 | A split Vet co-day | silent | one undismissable Warning per gender and weapon |
 | Suggest on NAC Vet/Div1/Junior (SC-008, 12 video strips) | 103 | 104 |
 | NAC Vet/Div1/Junior after the B1 boot, placed / unplaced | 60/6 | 55/11 (Owner question A) |
-| Unit suite | 96 files / 3252 tests | 97 files / 3349 tests |
+| Unit suite | 96 files / 3252 tests | 97 files / 3349 tests at T5, 3353 at T5b |
 
 What each task does now:
 
@@ -182,7 +195,7 @@ What each task does now:
   unresolved or cyclic wait (constitution IV). Only B8 moves: its 30 banded Vet events
   are staggered, and 4 D1 team events start earlier as a knock-on.
 - **A1 – METHODOLOGY follow-up (`cb4c8deeb9`, O12, O13).** The Y8↔Y10 and Y10↔Div 3
-  bonus becomes −0.3, and the Vet Combined start offset is retired. Both approved
+  bonus becomes −0.3 (O15 later dropped the Div 3 half), and the Vet Combined start offset is retired. Both approved
   values had cost B6 events in probes.
 - **T6b – the Vet Combined offset retired (`7c3bf6e61f`, O13).** A pure removal of the
   never-read `earliest_start_offset` field from `CATEGORY_START_PREFERENCE`, which now
@@ -213,11 +226,13 @@ What each task does now:
   `scripts/smoke.mjs` in place after T8. It reads each banded Vet band's pool start on
   NAC Vet/Div1/Junior and asserts each younger band starts at least 60 minutes after
   the next-older present band.
-- **T5 – Y8 with Y10 and Y10 with Div 3 share a day (`0544ef1877`, O6, O9, O12).** A
-  new `sameDayBonus` in `dayColoring.ts`, right after weapon balance, reads its own
+- **T5 – the Y8 with Y10 same-day bonus (`0544ef1877`, O6, O9, O12).** A new
+  `sameDayBonus` in `dayColoring.ts`, right after weapon balance, reads its own
   unordered lookup (`SAME_DAY_BONUS_PAIRS`) and scores −0.3 per partner of the same
   weapon and gender on the day. T5 ran last, after T8, as O12 directed. Only B6 moves:
-  two Y8 events swap days to sit with their Y10s.
+  two Y8 events swap days to sit with their Y10s. *T5 also paired a Y10 with a Div 3
+  (its subject still says so), and T5b removed that half under O15. The commit body
+  stays as history.*
 - **Task S – the final live smoke.** Two consecutive passes on `0544ef1877`, 0 console
   errors, no pin moved and no locator repaired (`<wt>/tmp/smoke-S-1a.log`,
   `smoke-S-1b.log`). No driver change, so no commit.
@@ -228,15 +243,32 @@ What each task does now:
   dated note against every verdict 021 applied. `plan.md` gains the O14 row and the Div
   3 correction. Four fact-checkers then read the docs, and the second commit corrects
   what they found and records the O14 re-measurement. METHODOLOGY.md was not touched.
-- **Task H – this handoff.**
+- **Task H – this handoff (`2e88073225`, `66ef5c3996`, `c9fc2deb4b`).** Task M's
+  merge-tree check (`02a5a7c1cd`) ran between them.
+- **A2 – METHODOLOGY follow-up (`2f84c3e158`, O15).** §Other Soft Preferences now says
+  events that share no fencers, such as Y10 and Div 3, have no separation rule and no
+  same-day bonus, so day assignment places them by load and weapon balance. The
+  Y10↔DIV3 rows left §Other Soft Preferences and Appendix A, and the "Y10 with Div 3"
+  departure left Appendix B. The owner approved the text before the commit.
+- **T5b – the Y10 with Div 3 bonus is gone (`b7866b61db`, O15).** `PENALTY_WEIGHTS`
+  loses `Y10_DIV3_SAME_DAY` (10 keys now) and `SAME_DAY_BONUS_PAIRS` keeps one row, Y8
+  with Y10 at −0.3, still read in either order. New tests pin `crossoverPenalty(Y10,
+  Div 3)` at 0 in both orders at all six tournament types, a Y8 with two Y10 partners
+  earning 2 × −0.3, and no bonus against an off-weapon or off-gender Y8. Ledger
+  byte-identical, so no B1–B8 count moved. Its fix round also wrote O15 into the
+  backlog, the reconciliation doc, `decisions.md`, `plan.md` and this handoff.
+- **Task D after O15 (this commit).** O15 gets its own round in `decisions.md` beside
+  O12–O14, `plan.md`'s O15 row and T5 note name T5b, the backlog marks the plan's Div 3
+  template claim moot and restates J2's synthetic-board finding, and row 021 counts
+  fifteen rulings and 3353 tests.
 
 ## Measurements
 
 | What | Value | Where |
 |---|---|---|
-| Unit suite | 97 files / 3349 tests, all pass (from 96 / 3252), `tmp/**` excluded | `0544ef1877`, re-run by Task D |
+| Unit suite | 97 files / 3353 tests, all pass (from 96 / 3252), `tmp/**` excluded. 3349 at T5 | `b7866b61db`, re-run by Task D after O15 |
 | `tsc -b`, lint | clean, clean | every code commit body, and Task D's check at its head |
-| Drift ledger snapshot SHA-256 | `5f0935202e54521e555d3d8feace4172d955a292ed8bce2a9c13e21a7d478341` (from `32a4e0afb45a…`) | `0544ef1877` |
+| Drift ledger snapshot SHA-256 | `5f0935202e54521e555d3d8feace4172d955a292ed8bce2a9c13e21a7d478341` (from `32a4e0afb45a…`) | `0544ef1877`, byte-identical at `b7866b61db` |
 | B1–B8 scheduled | 24 / 24 / 24 / 24 / 12 / 53 / 18 / 53, B6 +2 by T4 | T4 judges J1, J1b |
 | ERRORs | 0 / 0 / 0 / 6 / 0 / 1 / 0 / 0, B6 −2 by T4 | T4 |
 | `stripRecommendation` | 53 / 75 / 79 / 74 / 32 / 64 / 82 / 56 (B3 +3 by T4 and +3 by T8, B5 +3 and B6 +1 by T4) | T4, T8 |
@@ -244,10 +276,10 @@ What each task does now:
 | Boot footers through the app path | 24/0, 24/0, 24/0, 24/6, 12/0, 53/1, 18/0, 53/0 | T5's J1 |
 | Cutoff WARNs | B4 1, B6 9, B8 3, equal to an independent count of first pool starts after the cutoff | T7, T8 |
 | B8 Vet same-day band pairs | 60 before and after. 60 or more minutes apart 1 → 60, younger first 22 → 0, dependency INFOs 1 → 24 | T6a |
-| Y8↔Y10 same-day pairs | B6 0/6 → 2/6, B4 0/6 → 0/6. Y10↔Div 3 0 everywhere, since no scenario or template holds a Div 3 | T5 |
+| Y8↔Y10 same-day pairs | B6 0/6 → 2/6, B4 0/6 → 0/6. Y10↔Div 3 0 everywhere, since no scenario or template holds a Div 3 (and O15 later removed that half) | T5 |
 | SC-008 Suggest, NAC Vet/Div1/Junior | 103 → 104 at T8 (12 video strips). At the type default of 8 video strips both read 103 | T8 |
 | Templates plus B1–B8, 49 boards | pooled one-class days 7 → 0, scheduled / ERRORs 1050 / 107 → 1055 / 102 at T4, no count fell anywhere | T4's J4 |
-| Live smoke | **pass**, two consecutive full passes with 0 console errors after T2, T3-1, T3-2, T4, T6a, T6b, T6c, T7, T8, the T6a smoke, T5 and Task S | `<wt>/tmp/smoke-<task>-*.log`, `smoke-S-1a.log`, `smoke-S-1b.log` |
+| Live smoke | **pass**, two consecutive full passes with 0 console errors after T2, T3-1, T3-2, T4, T6a, T6b, T6c, T7, T8, the T6a smoke, T5, Task S and T5b | `<wt>/tmp/smoke-<task>-*.log`, `smoke-S-1a.log`, `smoke-S-1b.log`, `smoke-T5b-a.log`, `smoke-T5b-b.log` |
 
 Smoke command: `pnpm -C <wt> dev --port 5190 --strictPort`, then
 `SMOKE_BASE=http://localhost:5190/piste-planner/ timeout 240 node <wt>/scripts/smoke.mjs`.
@@ -356,12 +388,17 @@ Oldest first. Counts come from each commit's message body, with `tmp/**` exclude
 | T6a smoke | `fa6be94556` | 97 / 3334 | unchanged | unchanged | unchanged | unchanged |
 | T5 | `0544ef1877` | 97 / 3349 | `5f0935202e54…` | unchanged | unchanged | unchanged |
 | Task D | `edfe3addaf`, `ae3439b75a` | 97 / 3349, measured before the edits | unchanged | unchanged | unchanged | unchanged |
-| Task H | – | no run | – | – | – | – |
+| Task H | `2e88073225`, `66ef5c3996`, `c9fc2deb4b` | no run | – | – | – | – |
+| Task M | `02a5a7c1cd` | 97 / 3349 on the merge tree, before O15 | unchanged | – | – | – |
+| A2 | `2f84c3e158` | no run, METHODOLOGY only | unchanged | unchanged | unchanged | unchanged |
+| T5b | `b7866b61db` | 97 / 3353 | unchanged | unchanged | unchanged | unchanged |
+| Task D after O15 | this commit | 97 / 3353, measured after the edits | unchanged | – | – | – |
 
 What moved each SHA: T1c removed the `refRecommendation` digest field. T4 moved day
 maps on six scenarios and B6's count. T6a moved B8's pool starts. T7 added two
 `warnCountsByCause` lines (B4 1, B6 9), and with them removed the snapshot equals T6a's.
-T8 re-timed B2, B3 and B8. T5 moved one 20-line hunk in B6.
+T8 re-timed B2, B3 and B8. T5 moved one 20-line hunk in B6. A2 and T5b moved nothing,
+since no scenario holds a Div 3 event.
 
 ### Test count chain
 
@@ -384,9 +421,33 @@ T8 re-timed B2, B3 and B8. T5 moved one 20-line hunk in B6.
 | `bad32530d9` T8 | 3334 | +50 | resources +19, `videoStripPreservation.test.ts` (new, 96 → 97 files) +23, strips +8 |
 | `fa6be94556` T6a smoke | 3334 | 0 | driver only |
 | `0544ef1877` T5 | 3349 | +15 | dayColoring +13, then the fix round −1 and +3 |
-| Task D, Task H | 3349 | 0 | docs only |
+| Task D, Task H, Task M, A2 | 3349 | 0 | docs and METHODOLOGY only |
+| `b7866b61db` T5b | 3353 | +4 | dayColoring −4 in the implementation (two `it.each` blocks lose two rows each, and the Div 3 guard became the both-directions-zero test in place), then the fix round +1 a Y8 with two Y10 partners and +1 the off-weapon or off-gender Y8 guard, so dayColoring 104 → 102. crossover +6 (`crossoverPenalty(Y10, Div 3)` = 0 in both orders, one row per tournament type) |
+| Task D after O15 | 3353 | 0 | docs only |
 
-The deltas sum to 97 (3252 to 3349).
+The deltas sum to 101 (3252 to 3353).
+
+### O15 – Y10 with Div 3 dropped (2026-10-11)
+
+The owner said the Y10 and Div 3 pairing was only an example of unrelated events and that
+021 over-corrected by scoring it. A2 (`2f84c3e158`) carries the METHODOLOGY text: the
+Y10↔Div 3 rows left §Other Soft Preferences and Appendix A, and the "Y10 with Div 3"
+departure left Appendix B. T5b (`b7866b61db`) removes `PENALTY_WEIGHTS.Y10_DIV3_SAME_DAY`
+(`PENALTY_WEIGHTS` now has 10 keys) and its `SAME_DAY_BONUS_PAIRS` row, so Y8↔Y10 at −0.3
+is the only same-day bonus. O9 is moot. Measured at T5b:
+
+- B1–B8 scheduled 24/24/24/24/12/53/18/53, ERRORs 0/0/0/6/0/1/0/0, `stripRecommendation`
+  and floors unchanged, and the ledger SHA-256 `5f0935202e54…` byte-identical, since no
+  scenario or template holds a Div 3 event.
+- Red first: against the old source, the new `dayColoring.test.ts` gave 3 failures and 97
+  passes ("expected -0.3 to be +0", the sweep listing `DIV3+Y10=-0.3`, and "expected
+  -0.6 to be close to -0.3"). The summation test was checked by mutation: replacing the
+  running total with a first-match return fails it.
+- `dayColoring.test.ts` 104 → 102 tests and `crossover.test.ts` gains 6, so 97 files /
+  3349 → 3353 tests.
+- Smoke: two consecutive full passes, 0 console errors, no pin moved and no driver edit
+  (see Reviews, T5b).
+- Docs corrected by T5b's fix round, then by Task D after O15 (see What changed).
 
 ## Reviews
 
@@ -458,6 +519,22 @@ needed a code change ran in detached throwaway worktrees, each removed after.
   pin moved, no locator repaired. The two logs differ only in 020 R1's click-gap
   timings. The full check list is under `result.finalSmoke.details` in
   `<wt>/tmp/021-t5/workflow-result.json`.
+- **A2 – owner-approved.** The owner read and approved the METHODOLOGY text before the
+  commit. No code moved.
+- **T5b – pass, every judge.** J1 (drift: suite, `tsc -b` and lint green, ledger 19 of
+  19 with the SHA unchanged, nothing in B1–B8 moved), J2 (spec review against
+  METHODOLOGY as A2 amended it: `CROSSOVER_GRAPH` holds no Y10–Div 3 edge, direct or two
+  hop, so the engine does what A2 says and no more) and J3 (test quality: red first
+  reproduced independently, every Div 3 assertion fails if the row returns, only nits
+  left). Red reasons: against the old source the new `dayColoring.test.ts` gave 3
+  failures, and the fix round's summation test failed against a first-match-return
+  mutant. The fix round added three test groups and corrected the docs. Declined: more
+  source comment changes, since the two remaining Y10 with Div 3 comments explain the
+  removal. Smoke: two consecutive full passes on the uncommitted tree, 0 console
+  errors, port 5190, no pin moved and no driver edit (`<wt>/tmp/smoke-T5b-a.log`,
+  `smoke-T5b-b.log`, equal line for line except the run stamps and 020 R1's click
+  gaps). B1 placed 24 of 24 with peak referees 210, Suggest read 104 on NAC
+  Vet/Div1/Junior, and the B4 overrun trio 23:10 / 23:15 / 23:30 held.
 - **Docs – four fact-checkers, defects fixed (`ae3439b75a`).** A must-fix on the
   medal-tail entry (two events now end past 22:00 only by the tail, four at the base),
   the Vet team entry's reach, the stagger entry's wording, the O14 entry's claim that the
@@ -478,10 +555,10 @@ Full text in [`decisions.md`](./decisions.md), with the plan's table under §Own
    O3 day assignment uses every chosen day, and the calibration scenario is not added.
    O4 weapon balance is day-level, genders and teams pooled, a flat 0.5. O5 any video
    strip count from 0 to the strip total at any type (doc only). O6 a same-day bonus for
-   Y8↔Y10 and Y10↔Div 3.
+   Y8↔Y10 and Y10↔Div 3 (O15 dropped the Div 3 half).
 2. **2026-10-08, second round, O7–O10.** O7 weapon balance reads "keeps": no day holds
    only one weapon class. O8 a wait lapses when the event waited on never places. O9
-   Y10↔Div 3 needs the same weapon and gender. O10 the board check emits the cutoff WARN
+   Y10↔Div 3 needs the same weapon and gender (moot since O15). O10 the board check emits the cutoff WARN
    for hand-moved events too.
 3. **2026-10-08, O11** (the owner's annotation). Veteran bands are one event split by
    age, so the co-day is not a departure from the manual.
@@ -492,6 +569,12 @@ Full text in [`decisions.md`](./decisions.md), with the plan's table under §Own
    end, and METHODOLOGY does not change. The owner accepted the 1–2 events T8 Step 1
    measured on NAC Vet/Div1/Junior at 8 video strips. The cost at 12 video strips is 6,
    which is Owner question A.
+6. **2026-10-11, O15** (after the merge-tree check). The owner on Y10 with Div 3: "we
+   should remove it from the spec. We may be over correcting for that specific case when
+   it is just an example". Events that share no fencers have no separation rule and no
+   same-day bonus. A2 (`2f84c3e158`) carries the METHODOLOGY text and T5b (`b7866b61db`)
+   the code (see [O15](#o15--y10-with-div-3-dropped-2026-10-11)). O15 retires the
+   Y10↔Div 3 half of O6 and O12 and makes O9 moot. The Y8↔Y10 bonus (−0.3) is unchanged.
 
 ### Decisions the work made
 
@@ -500,9 +583,9 @@ owner in the amendment, and apply as written. Default 13 overrides the backlog's
 "unused exports stay as evidence" for every symbol it names. Decisions 1–9 are the
 plan's, which has them in full. 10 onward were made during implementation.
 
-1. **Order A0 → T1 → T2 → T3 → T4 → T6 → T7 → T8 → T5 → S → D → H → M.** The plan put T5
-   after T4, and O12 moved it last. Cost: T8 could and did move T7's counts (B8 gained 3
-   cutoff WARNs).
+1. **Order A0 → T1 → T2 → T3 → T4 → T6 → T7 → T8 → T5 → S → D → H → M, then A2 → T5b →
+   D → M after O15.** The plan put T5 after T4, and O12 moved it last. Cost: T8 could and
+   did move T7's counts (B8 gained 3 cutoff WARNs).
 2. **T1b, T3 and T6 split into commits, each with its own review and judges.** Cost: more
    commits and judge runs, each with a single cause.
 3. **Smoke after every task that changes what the app shows, before its commit.** Cost:
@@ -584,10 +667,13 @@ plan's, which has them in full. 10 onward were made during implementation.
 31. **The T6a smoke step was committed after T8** (`fa6be94556`), so its counts are T8's.
     The driver declares its own `VET_STAGGER_MINS`. Cost: the driver's 60 must follow the
     engine's by hand.
-32. **T5 has two named weights, no event-type filter, and one bonus per partner,** so a Y10
-    with both partners on its day earns −0.6. Cost: J2's synthetic oversubscribed board
-    (NAC Youth, 2 days, 40 strips, Y8 and Div 3 clones) lost 3 events, and no template
-    holds a Y8 or Div 3 today (backlog).
+32. **The same-day bonus has no event-type filter and scores one bonus per partner.** T5
+    had two named weights, and after O15 one is left (`Y8_Y10_SAME_DAY`), so the sum
+    over two partners (−0.6) is pinned by a unit test on a hand-built board, and no
+    catalogue board reaches it (one event per category, weapon and gender). Cost: J2's synthetic oversubscribed board
+    (NAC Youth, 2 days, 40 strips, Y8 and Div 3 clones, both bonuses on) lost 3 events.
+    After O15 how much of that the Y8 bonus caused alone is unknown, and no template
+    holds a Y8 today (backlog).
 33. **Measured pins re-taken with dated `[M]` entries,** following T4's precedent, in T6a
     (refs, unseated, segments, derived), T8 (unseated, `stripSearch` T033, segments,
     SC-008) and T5 (unseated pin-half B6 8 → 9). Cost: none, each names its cause.
@@ -596,13 +682,22 @@ plan's, which has them in full. 10 onward were made during implementation.
     edit to an engine input, but it does not mention 020's hold while a blocking error
     shows or the "Re-run automatically" switch. Those two are recorded only in 020's
     handoff and the workbench design.
+35. **T5b kept `SAME_DAY_BONUS_PAIRS` as a one-row list** instead of folding Y8↔Y10
+    into a single check, since the unordered lookup needed no change. Cost: a list for
+    one pair.
+36. **T5b pins the absence of a Y10–Div 3 rule in `crossover.test.ts`,** one row per
+    tournament type, and the same-day bonus guards sit in `dayColoring.test.ts` (the
+    both-directions-zero test and the all-pairs sweep). Cost: six crossover tests that fail
+    if anyone adds a separation edge between Y10 and Div 3 without an owner ruling, which
+    is the point.
 
 Deliberate corrections recorded in commit bodies: T1b-1's `invalidState` expects 3
 items, and three examples moved from same-population to team-requires-individual. T2's
 two scheduler cases moved to `days_available: 1`. T3-1's segments, viewEquivalence and
 strips pins each moved 15 minutes earlier, re-derived by hand. T4's 42 re-measured
 tests (decision 18). T6a's derived first-day case moved from B8 to B2. The pins in
-decision 33.
+decision 33. T5b rewrote T5's sweep, uncoloured-partner and two-partner cases in place
+for the Y8↔Y10 pair alone.
 
 ## Left unfixed
 
@@ -618,7 +713,10 @@ handoff, For later features), which still hold:
 
 - **The ledger moved.** B6's floor is 53. `stripRecommendation` is now reported by every
   drift review's J1, at 53 / 75 / 79 / 74 / 32 / 64 / 82 / 56.
-- **Day colouring has two more terms,** weapon balance and the same-day bonus. A new term
+- **Events that share no fencers get no same-day bonus** (O15). The Y8↔Y10 bonus is the
+  only one, and a new affinity term needs an owner ruling first.
+- **Day colouring has two more terms,** weapon balance and the same-day bonus (Y8↔Y10
+  alone since O15). A new term
   churns most day maps, so attribute drift by mechanism with a term-off control in a
   throwaway worktree, as T4's J3 and T5's J3 did.
 - **Cross-event waits go through `crossEventWaits.ts`.** A new wait between events is a
@@ -640,13 +738,15 @@ handoff, For later features), which still hold:
 
 ## Merge
 
-`git merge-tree --write-tree main 021-methodology-reconciliation` gives tree `dbdaa0b26c`
-with no conflicts. That equals the branch tree at `66ef5c3996`, because `main` has not
-moved from `5edbdf7712`, the commit 021 was cut from and also the merge-base. On that tree
-the full suite reads 97 files / 3349 tests, `tsc -b` and lint are clean, and the ledger
-SHA-256 is still
-`5f0935202e54521e555d3d8feace4172d955a292ed8bce2a9c13e21a7d478341`. Task S's two smoke
-passes ran on the last code change (`0544ef1877`). Everything after it is docs.
+Re-recorded by Task M after O15, against `main` at `46eeed2d0c`. That is the user's first
+merge, which took the branch through A2 (`2f84c3e158`), so `2f84c3e158` is also the
+merge-base and `main` is behind the branch by T5b, the two docs commits and this record.
+`git merge-tree --write-tree main 021-methodology-reconciliation` gives tree `57d5925688`
+with no conflicts, and that equals the branch tree at `a5b3b4cc61`, because everything
+`main` holds is already in the branch. On that tree the full suite reads 97 files / 3353
+tests, `tsc -b` and lint are clean, and the ledger SHA-256 is unchanged at
+`5f0935202e54521e555d3d8feace4172d955a292ed8bce2a9c13e21a7d478341`. The last code change
+is T5b (`b7866b61db`) and its live smoke passed twice. Everything after it is docs.
 
 Merge with `merge-with-costs` (never squash).
 
@@ -683,7 +783,7 @@ Measure against the ledger 021 left: B1-B8 scheduled 24 / 24 / 24 / 24 / 12 /
 53 / 18 / 53 (B6 floor 53), ERRORs 0 / 0 / 0 / 6 / 0 / 1 / 0 / 0,
 stripRecommendation 53 / 75 / 79 / 74 / 32 / 64 / 82 / 56, snapshot SHA-256
 5f0935202e54521e555d3d8feace4172d955a292ed8bce2a9c13e21a7d478341, 97 files /
-3349 tests, boot footers 24/0, 24/0, 24/0, 24/6, 12/0, 53/1, 18/0, 53/0. The
+3353 tests (after O15), boot footers 24/0, 24/0, 24/0, 24/6, 12/0, 53/1, 18/0, 53/0. The
 023 scope expects B1, B2 and B8 to move and B3-B7 to hold. The smoke's SC-008
 Suggest for NAC Vet/Div1/Junior reads 104. 020's and 021's rules for later
 features hold (021 handoff, For later features).
