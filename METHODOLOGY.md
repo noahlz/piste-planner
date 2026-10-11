@@ -173,9 +173,9 @@ These hold at every tournament type and are listed in [Appendix B: Departures fr
 - **DIV1 and DIV1A** are always on different days, because nearly the same fencers enter both. The manual does not list this pair.
 - **Y8 can and should share a day with Y10** of the same weapon and gender, although Ops Manual p.20 – Group 1 bullet 2 keeps immediately adjacent age groups apart. Day assignment gives the pair a -0.3 same-day bonus (see [Appendix A](#penalty-weights)).
 
-**Affinity for unrelated events** on the same day is preferred – e.g., Y10 and Div 3 have no fencer overlap, which makes a good same-day pairing. Day assignment scores this one pairing, Y10 and Div 3 of the same weapon and gender, with the same -0.3 same-day bonus as Y8 and Y10 (see [Appendix A](#penalty-weights)).
+**Unrelated events.** Events that share no fencers, such as Y10 and Div 3, have no separation rule and no same-day bonus between them, so day assignment places them by its other terms (load and weapon balance).
 
-(see [`constants.ts`](src/engine/constants.ts) – `GROUP_1_MANDATORY`, `CROSSOVER_GRAPH`, and [`dayColoring.ts`](src/engine/dayColoring.ts) – `colorPenalty` for the two same-day bonuses)
+(see [`constants.ts`](src/engine/constants.ts) – `GROUP_1_MANDATORY`, `CROSSOVER_GRAPH`, and [`dayColoring.ts`](src/engine/dayColoring.ts) – `colorPenalty` for the Y8 and Y10 same-day bonus)
 
 ### Single-Day Fit
 
@@ -307,7 +307,6 @@ See Appendix A for exact values.
 | Soft Separation (Y14/CADET/JUNIOR↔DIV1 team) | 3.0 | Same weapon+gender on same day (per gender, as for Group 1 – Piste Planner's reading), where the DIV1 side is the open (Div 1) team event. Matched by event type, so DIV1 individual events are not affected by this row. A pair that a hard block already separates stays blocked. Ops Manual p.20 – Group 2 ("open team") |
 | Cross-Weapon Same Demographic | 0.2 | Same category, gender and event type (for Veterans, the same age group), different weapon, same day. Every category. Ops Manual p.20 – Group 3 |
 | Y8↔Y10 same day | -0.3 (bonus) | Same weapon+gender on the same day. The spec asks Y8 to share a day with Y10 (see [Departures From the Manual](#departures-from-the-manual)). The value is unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
-| Y10↔DIV3 same day | -0.3 (bonus) | Same weapon+gender on the same day. The two draw no common fencers, which makes a good same-day pairing (see [Departures From the Manual](#departures-from-the-manual)). Unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
 
 ### Individual-Team Proximity
 
@@ -1044,7 +1043,6 @@ All numeric penalty values and scheduling constants used by the engine. Prose se
 | Ind+team day after | -0.4 | **Bonus**: team event the day after individual |
 | Weapon balance, missing class | -0.5 | **Bonus**: an event that brings the missing weapon class to a one-class day. Skipped when the tournament has no event of one class |
 | Y8↔Y10 same day | -0.3 | **Bonus**: Y8 and Y10 of the same weapon+gender on the same day. Y8 with Y10 is a departure (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
-| Y10↔Div 3 same day | -0.3 | **Bonus**: Y10 and Div 3 of the same weapon+gender on the same day – no fencer overlap. Unsourced (see [Appendix B](#appendix-b-departures-from-the-operations-manual)) |
 | Same population | ∞ | **Hard block**: identical age category + gender + weapon |
 | Group 1 mandatory separation | ∞ | **Hard block** at NAC, SYC and SJCC: Group 1 pairs, Div 1–Cadet included, must be on different days (Ops Manual p.20 – Group 1). DIV1↔DIV1A is a hard block at every type (departure) |
 | Ind/team cross-level block | ∞ | **Hard block** at every type: Div 1 ind ↔ Junior team and Junior ind ↔ Div 1 team, same weapon+gender, must be on different days (Ops Manual p.20 – Group 1 bullet 1). Hard at ROC, RYC and RJCC (departure) |
@@ -1156,7 +1154,6 @@ Where this spec departs from or extends the Operations Manual (S1), and the manu
 ### Departures
 
 - **Y8 with Y10.** Ops Manual p.20 – Group 1 keeps immediately adjacent age groups off the same day. The spec says Y8 CAN and SHOULD share a day with Y10, and Y8–Y10 is not a Group 1 pair (see [Overlapping-Population Separation (Group 1)](#overlapping-population-separation-group-1)). Day assignment gives Y8 and Y10 of the same weapon and gender a same-day bonus (see [Appendix A](#appendix-a-penalty--constant-defaults)). The bonus value, -0.3, is Piste Planner's own, unsourced.
-- **Y10 with Div 3.** No USA Fencing source asks for it. The spec gives Y10 and Div 3 of the same weapon and gender a same-day bonus, because no fencer enters both. Piste Planner's own rule, unsourced.
 - **Veteran co-day stagger.** The age-banded Veteran events of one gender and weapon share a day, and that is not a departure: they are one Veteran event split into sub-events by age band, so Ops Manual p.20 – Group 1 bullet 2's adjacent-age rule does not apply to them (see [Veteran Age-Group Co-Day Rule](#veteran-age-group-co-day-rule)). On that day the bands start oldest first with a 60-minute stagger: each younger band's pools become ready 60 minutes after the next-older band's pools start, and no band waits for another to finish. The order and the stagger are Piste Planner's own rule, unsourced – the one reference found describes the 2026 NAC Veteran events as held "on the same day with different start times".
 - **Div 1 and Div 1A, hard.** Ops Manual p.20 – Group 1 names "the Div I, Junior, and Cadet competitions", not Div 1A. The spec keeps Div 1 and Div 1A of the same weapon and gender on different days as a hard block, because nearly the same fencers enter both.
 - **Group 1 per gender.** Ops Manual p.20 – Group 1 applies "for any one weapon". The spec applies each Group 1 pair per weapon and gender, so a pair in different genders is not separated (see [Overlapping-Population Separation (Group 1)](#overlapping-population-separation-group-1)). The Group 2 soft separations in [Other Soft Preferences](#other-soft-preferences) are read the same way.
