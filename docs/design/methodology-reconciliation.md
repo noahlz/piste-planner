@@ -360,7 +360,8 @@ prefer.
 "should": a −0.3 same-day bonus for a Y8 and a Y10 of one weapon and gender
 (owner rulings O6 and O12, A1 `cb4c8deeb9`, T5 `0544ef1877`). T5 first scored a
 Y10 and a Div 3 too (O9), and the owner ruled on 2026-10-11 that it was only an
-example of unrelated events, so O15 (A2 `2f84c3e158`) removed that half.*
+example of unrelated events, so O15 (A2 `2f84c3e158` for the text, T5b
+`b7866b61db` for the code) removed that half.*
 
 #### 1.2.7 Over-precision without basis
 

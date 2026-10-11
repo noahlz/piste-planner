@@ -111,6 +111,20 @@ Both rulings change approved values after measurement showed them costing events
   cost reopens O14, and until then it stands. The numbers are in backlog §Video strip preservation costs NAC
   Vet/Div1/Junior events.
 
+## Owner ruling, 2026-10-11 (fifth round, METHODOLOGY follow-up "021 A2", `2f84c3e158`)
+
+The ruling came after the merge-tree check and takes back a value 021 had scored. A2 carries the text and T5b
+(`b7866b61db`) the code.
+
+- **O15 – Y10 with Div 3 is dropped.** The pairing was only an example of unrelated events, and 021 over-corrected
+  by scoring it. The owner: "we should remove it from the spec. We may be over correcting for that specific case
+  when it is just an example". Events that share no fencers, such as Y10 and Div 3, have no separation rule and no
+  same-day bonus, so day assignment places them by its other terms (load and weapon balance). A2 removed the
+  Y10↔Div 3 rows from §Other Soft Preferences and Appendix A, and the "Y10 with Div 3" departure from Appendix B.
+  T5b removed `PENALTY_WEIGHTS.Y10_DIV3_SAME_DAY` and its `SAME_DAY_BONUS_PAIRS` row. O15 retires the Y10↔Div 3
+  half of O6 and O12 and makes O9 moot. The Y8↔Y10 bonus (−0.3, O6, O12) is unchanged. No B1–B8 scenario or
+  template holds a Div 3 event, so the drift ledger stayed byte-identical (SHA `5f0935202e…`).
+
 Standing owner decisions: the eight time-of-day weights are retired as Phase D casualties (2026-10-04); no hard
 pair is ever relaxed (019); no backwards compatibility (product unreleased); the engine follows the 2026-27 Ops
 Manual's planning figures; METHODOLOGY.md is the spec and every text change is owner-approved before commit.
@@ -221,14 +235,3 @@ Each follows a reconciliation verdict, the spec-wins rule, or an earlier owner r
 (backlog §The late-day WARN adds the medal tail… and §Events end past 22:00 only by their medal tail),
 the better least-bad fallback (§Runtime failure is terminal), the R6 clique WARN (declined by 019's R3 – mark
 settled).
-
-## Owner ruling, 2026-10-11 (fifth round, after the merge-tree check)
-
-- **O15 – Y10 with Div 3 is dropped.** The pairing was only an example of unrelated events, and 021 over-corrected
-  by scoring it. The owner: "we should remove it from the spec. We may be over correcting for that specific case
-  when it is just an example". Events that share no fencers, such as Y10 and Div 3, have no separation rule and no
-  same-day bonus, so day assignment places them by its other terms (load and weapon balance). A2 (`2f84c3e158`)
-  carries the METHODOLOGY text: the Y10↔Div 3 rows left §Other Soft Preferences and Appendix A, and the "Y10 with
-  Div 3" departure left Appendix B. The code drops `PENALTY_WEIGHTS.Y10_DIV3_SAME_DAY` and its
-  `SAME_DAY_BONUS_PAIRS` row. The Y8↔Y10 bonus (−0.3, O6, O12) is unchanged. O9 is moot. No B1–B8 scenario or
-  template holds a Div 3 event, so the drift ledger stays byte-identical.

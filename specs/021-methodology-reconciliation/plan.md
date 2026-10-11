@@ -46,7 +46,7 @@ Full text in `decisions.md` and in the amendment's blocks.
 | O12 | **The Y8↔Y10 bonus is −0.3** (it covered Y10↔Div 3 until O15) (2026-10-10, METHODOLOGY follow-up A1). B6 places 53 at −0.05 through −0.3 and 51 at −0.4. T5 runs last. | A1, T5 |
 | O13 | **The Vet Combined start offset is retired** (2026-10-10, A1). No Veteran event has a fixed start offset. B6 places 53 only at offset 0. T6b becomes a pure removal of the never-read `earliest_start_offset` field. | A1, T6b |
 | O14 | **Video Strip Preservation keeps `<=` at the wave's end** (2026-10-10, during T8). A pool phase that starts at exactly 11:00 AM on a 9:00 day is still in the wave, as the amendment says, so METHODOLOGY does not change. T8 Step 1 tied on counts on every board except NAC Vet/Div1/Junior (60/6 at base, 58/8 under `<=`, 59/7 under `<`), and the owner accepts that cost, since templates carry no floor. Full numbers in `decisions.md`. | T8 |
-| O15 | **Y10 with Div 3 is dropped** (2026-10-11, A2 `2f84c3e158`). The pairing was only an example of unrelated events and 021 over-corrected by scoring it. Events that share no fencers have no separation rule and no same-day bonus. The Y8↔Y10 bonus (−0.3) is unchanged and O9 is moot. | A2, T5 |
+| O15 | **Y10 with Div 3 is dropped** (2026-10-11, A2 `2f84c3e158`). The pairing was only an example of unrelated events and 021 over-corrected by scoring it. Events that share no fencers have no separation rule and no same-day bonus. O15 retires the Y10↔Div 3 half of O6 and O12, the Y8↔Y10 bonus (−0.3) is unchanged, and O9 is moot. T5b `b7866b61db` removed the code, and the ledger stayed byte-identical. | A2, T5b |
 
 Standing decisions that bind every task: no hard pair is ever relaxed (019), no backwards compatibility,
 the engine follows the 2026-27 Ops Manual's planning figures, and every METHODOLOGY text change is
@@ -205,7 +205,8 @@ Each is the audit's `[M]` figure at `5edbdf7712` (verifier's figure where it cor
   6 Y10 each) can move, and the Y10↔Div 3 half runs only on the templates. *Correction
   (2026-10-11, T5's spec review J4): no template holds a Div 3 event either, and none holds a Y8,
   so no board exercises the Y10↔Div 3 half. Only the `dayColoring.test.ts` cases cover it (T5
-  `0544ef1877`).*
+  `0544ef1877`).* *O15 (2026-10-11) retired the Y10↔Div 3 half, so Y10–Div 3 scores 0 again, and T5b
+  `b7866b61db` pins that with a `crossoverPenalty` guard at all six types.*
 - **Vet waits never bind** (DS-EDGE, L13, R9). B8: 60 same-day age-banded pairs, 0 ordered, 21 start
   younger first, 0 `CROSS_EVENT_DEPENDENCY_DELAY`. NAC Vet/Div1/Junior on B1's board: 0 of 60, 35
   inverted. Each sibling's first phase is seeded at day start and popped before the older sibling's
@@ -533,11 +534,11 @@ Two dispatches, each its own commit.
 - **Model.** Opus, high effort.
 - **Commit:** "021 T4: weapon balance".
 
-### T5: the Y8/Y10 and Y10/Div 3 same-day bonus (O6, O9, drift)
+### T5: the Y8/Y10 and Y10/Div 3 same-day bonus (O6, O9, drift – Y10/Div 3 half retired by O15)
 
 *Correction (2026-10-11, O15): the owner ruled that Y10 with Div 3 was only an example of unrelated events, so
-the Y10/Div 3 half of this task was removed after it shipped (A2 `2f84c3e158` for the text, then the code and
-test change). T5 `0544ef1877` stays as history. Read every Y10↔Div 3 clause below as removed, and the bonus as
+the Y10/Div 3 half of this task was removed after it shipped (A2 `2f84c3e158` for the text, then T5b `b7866b61db`
+for the code and tests, 97 / 3353, ledger byte-identical). T5 `0544ef1877` stays as history. Read every Y10↔Div 3 clause below as removed, and the bonus as
 Y8↔Y10 at −0.3 alone.*
 
 - **Intent.** A `colorPenalty` term of −0.4 for a candidate day that holds the event's Y8↔Y10 partner or
