@@ -325,6 +325,13 @@ describe('crossoverPenalty – Group 1 by tournament type', () => {
     expect(bothOrders(Category.Y8, Category.Y10, type)).toEqual([0, 0])
   })
 
+  it.each(ALL_TYPES)('%s: Y10–Div 3 share no fencers and carry no separation rule (guard, owner ruling O15)', (type) => {
+    // METHODOLOGY §Other Soft Preferences: events that share no fencers, such as
+    // Y10 and Div 3, have no separation rule. CROSSOVER_GRAPH holds no edge
+    // between them, direct or derived by the two-hop pass.
+    expect(bothOrders(Category.Y10, Category.DIV3, type)).toEqual([0, 0])
+  })
+
   it.each([
     { label: 'a Group 1 pair', a: Category.JUNIOR, b: Category.CADET, gender: Gender.MEN },
     { label: 'a same-population pair', a: Category.JUNIOR, b: Category.JUNIOR, gender: Gender.MEN },

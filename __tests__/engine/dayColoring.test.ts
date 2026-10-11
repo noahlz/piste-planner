@@ -1303,11 +1303,12 @@ describe('weaponBalancePenalty – no day holds one weapon class (O4, O7)', () =
 })
 
 // ──────────────────────────────────────────────
-// Same-day bonus (021 O6, O9, O12 – METHODOLOGY Appendix A): Y8↔Y10 and
-// Y10↔Div 3 of the same weapon and gender earn −0.3 for sharing a day.
+// Same-day bonus (021 O6, O12 – METHODOLOGY Appendix A): Y8↔Y10 of the same
+// weapon and gender earn −0.3 for sharing a day. Y10 and Div 3 share no fencers
+// and carry no rule (O15) – they are an example of unrelated events, not a pair.
 // ──────────────────────────────────────────────
 
-describe('sameDayBonus – Y8 with Y10 and Y10 with Div 3 (O6, O9, O12)', () => {
+describe('sameDayBonus – Y8 with Y10 (O6, O12)', () => {
   // A literal, not PENALTY_WEIGHTS, so a drifted constant fails these pins (the
   // −0.4 → −0.3 change of O12 is exactly such a drift).
   const SAME_DAY_BONUS = -0.3 // owner ruling O12, METHODOLOGY Appendix A
@@ -1337,8 +1338,6 @@ describe('sameDayBonus – Y8 with Y10 and Y10 with Div 3 (O6, O9, O12)', () => 
   const PAIRS = [
     { self: Category.Y8, partner: Category.Y10 },
     { self: Category.Y10, partner: Category.Y8 },
-    { self: Category.Y10, partner: Category.DIV3 },
-    { self: Category.DIV3, partner: Category.Y10 },
   ]
 
   it.each(PAIRS)(`a $self event earns ${SAME_DAY_BONUS} on a day holding its $partner partner of the same weapon and gender`, ({ self, partner }) => {
@@ -1394,19 +1393,24 @@ describe('sameDayBonus – Y8 with Y10 and Y10 with Div 3 (O6, O9, O12)', () => 
     expect(scoreOnDay0(ev('self', Category.Y8), [y10])).toBe(SAME_DAY_BONUS)
   })
 
-  it('a Div 3 of another weapon or gender than its Y10 earns no bonus', () => {
-    const y10 = ev('y10', Category.Y10)
+  it('a Y10 earns no bonus from a Y8 of another weapon or gender', () => {
+    const self = ev('self', Category.Y10)
     // guards
-    expect(scoreOnDay0(ev('self', Category.DIV3, { weapon: Weapon.EPEE }), [y10])).toBe(0)
-    expect(scoreOnDay0(ev('self', Category.DIV3, { gender: Gender.WOMEN }), [y10])).toBe(0)
+    expect(scoreOnDay0(self, [ev('y8', Category.Y8, { weapon: Weapon.SABRE })])).toBe(0)
+    expect(scoreOnDay0(self, [ev('y8', Category.Y8, { gender: Gender.WOMEN })])).toBe(0)
     // red pair: the same weapon and gender
-    expect(scoreOnDay0(ev('self', Category.DIV3), [y10])).toBe(SAME_DAY_BONUS)
+    expect(scoreOnDay0(self, [ev('y8', Category.Y8)])).toBe(SAME_DAY_BONUS)
   })
 
-  it('scores exactly the two named pairs, in either order, across every category pair', () => {
-    // Sweeps every ordered category pair of the same weapon and gender. No
-    // ledger scenario or template holds a Div 3 event, so this sweep is the only
-    // guard against an extra pair (Div 3 with Div 2, say) joining the list.
+  it('a Y10 and its same-weapon, same-gender Div 3 earn no bonus in either direction (O15)', () => {
+    expect(scoreOnDay0(ev('self', Category.Y10), [ev('d3', Category.DIV3)])).toBe(0)
+    expect(scoreOnDay0(ev('self', Category.DIV3), [ev('y10', Category.Y10)])).toBe(0)
+  })
+
+  it('scores exactly Y8 with Y10, in either order, across every category pair', () => {
+    // Sweeps every ordered category pair of the same weapon and gender, so it
+    // catches an extra pair joining the list that no test names. Y10 with Div 3
+    // is pinned by name above (O15).
     const scored: string[] = []
     for (const self of Object.values(Category)) {
       for (const partner of Object.values(Category)) {
@@ -1415,8 +1419,6 @@ describe('sameDayBonus – Y8 with Y10 and Y10 with Div 3 (O6, O9, O12)', () => 
       }
     }
     expect(scored.sort()).toEqual([
-      `${Category.DIV3}+${Category.Y10}=${SAME_DAY_BONUS}`,
-      `${Category.Y10}+${Category.DIV3}=${SAME_DAY_BONUS}`,
       `${Category.Y10}+${Category.Y8}=${SAME_DAY_BONUS}`,
       `${Category.Y8}+${Category.Y10}=${SAME_DAY_BONUS}`,
     ].sort())
@@ -1428,14 +1430,22 @@ describe('sameDayBonus – Y8 with Y10 and Y10 with Div 3 (O6, O9, O12)', () => 
 
   it('earns nothing from a partner not yet coloured, which sits on no day', () => {
     const self = ev('self', Category.Y10)
-    // guard: an uncoloured Y8 and an uncoloured Div 3 are in the tournament but on no day
-    expect(scoreOnDay0(self, [], [], [ev('y8', Category.Y8), ev('d3', Category.DIV3)])).toBe(0)
+    // guard: an uncoloured Y8 is in the tournament but on no day
+    expect(scoreOnDay0(self, [], [], [ev('y8', Category.Y8)])).toBe(0)
     // red pair: the same Y8 coloured onto the day
-    expect(scoreOnDay0(self, [ev('y8', Category.Y8)], [], [ev('d3', Category.DIV3)])).toBe(SAME_DAY_BONUS)
+    expect(scoreOnDay0(self, [ev('y8', Category.Y8)])).toBe(SAME_DAY_BONUS)
   })
 
-  it(`a Y10 sharing its day with both its Y8 and its Div 3 earns both bonuses (${2 * SAME_DAY_BONUS})`, () => {
-    expect(scoreOnDay0(ev('self', Category.Y10), [ev('y8', Category.Y8), ev('d3', Category.DIV3)])).toBeCloseTo(2 * SAME_DAY_BONUS, 10)
+  it(`a Y10 sharing its day with both its Y8 and a Div 3 earns the Y8 bonus alone (${SAME_DAY_BONUS})`, () => {
+    expect(scoreOnDay0(ev('self', Category.Y10), [ev('y8', Category.Y8), ev('d3', Category.DIV3)])).toBeCloseTo(SAME_DAY_BONUS, 10)
+  })
+
+  it(`sums the bonus over every partner on the day (${2 * SAME_DAY_BONUS} for two)`, () => {
+    // The catalogue holds one event per category, weapon and gender, so two
+    // partners only arise on a hand-built board. The sum pins that the lookup
+    // adds each partner and does not stop at the first.
+    const partners = [ev('y10a', Category.Y10), ev('y10b', Category.Y10)]
+    expect(scoreOnDay0(ev('self', Category.Y8), partners)).toBeCloseTo(2 * SAME_DAY_BONUS, 10)
   })
 })
 

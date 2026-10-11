@@ -357,9 +357,10 @@ finite same-day penalty in the graph, applied against the pairing the doc says t
 prefer.
 
 *2026-10-11, from 021: 010 removed the 0.8 edge (`2bacf2aa8e`). 021 adds the
-"should": a −0.3 same-day bonus for a Y8 and a Y10 of one weapon and gender, and
-for a Y10 and a Div 3 (owner rulings O6, O9 and O12, A1 `cb4c8deeb9`, T5
-`0544ef1877`).*
+"should": a −0.3 same-day bonus for a Y8 and a Y10 of one weapon and gender
+(owner rulings O6 and O12, A1 `cb4c8deeb9`, T5 `0544ef1877`). T5 first scored a
+Y10 and a Div 3 too (O9), and the owner ruled on 2026-10-11 that it was only an
+example of unrelated events, so O15 (A2 `2f84c3e158`) removed that half.*
 
 #### 1.2.7 Over-precision without basis
 

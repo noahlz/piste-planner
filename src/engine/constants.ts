@@ -692,24 +692,18 @@ export const PENALTY_WEIGHTS = {
    * From the Manual, Appendix A and B, owner rulings O6 and O12)
    */
   Y8_Y10_SAME_DAY: -0.3,
-  /**
-   * Y10 and Div 3 of the same weapon and gender on the same day (bonus –
-   * negative). The two draw no common fencers. Unsourced (METHODOLOGY §Other
-   * Soft Preferences, Appendix A and B, owner rulings O6, O9 and O12)
-   */
-  Y10_DIV3_SAME_DAY: -0.3,
 } as const
 
 /**
  * Category pairs that earn a same-day bonus when both events share a weapon and
- * gender (METHODOLOGY Appendix A, "Y8↔Y10 same day" and "Y10↔DIV3 same day").
+ * gender (METHODOLOGY Appendix A, "Y8↔Y10 same day"). Y8 with Y10 is the only
+ * pair – Y10 and Div 3 share no fencers and carry no rule (owner ruling O15).
  * Unordered: either side of a pair may be the event being coloured. Day
  * colouring reads this list directly, because the constraint graph keeps no
- * weight-0 edge and neither pair has a crossover weight.
+ * weight-0 edge and the pair has no crossover weight.
  */
 export const SAME_DAY_BONUS_PAIRS: readonly (readonly [Category, Category, number])[] = [
   [Category.Y8, Category.Y10, PENALTY_WEIGHTS.Y8_Y10_SAME_DAY],
-  [Category.Y10, Category.DIV3, PENALTY_WEIGHTS.Y10_DIV3_SAME_DAY],
 ]
 
 // ──────────────────────────────────────────────

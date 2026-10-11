@@ -39,7 +39,7 @@ SHA-256 `32a4e0afb45abfbf8239f7bdbc15dda9eb1487c959893442b6029a6d0998b260`, B1�
   Amend METHODOLOGY :51 and :1077 (they say NAC-only, 4/8/12/16). At non-NAC types video strips are best-effort.
   No engine or UI change.
 - **O6 – Y8 with Y10.** A −0.4 same-day bonus for Y8↔Y10 of the same weapon and gender, and the same bonus for
-  Y10↔Div 3 (METHODOLOGY :167 "preferred"). Spec-wins: :164 says Y8 CAN and SHOULD share a day with Y10.
+  Y10↔Div 3 (METHODOLOGY :167 "preferred" – the Div 3 half was removed on 2026-10-11, O15). Spec-wins: :164 says Y8 CAN and SHOULD share a day with Y10.
   The constraint graph drops weight-0 edges, so the term needs its own lookup. Moves day assignment on B3, B4, B6.
 
 ## Owner rulings, 2026-10-08 (second round)
@@ -59,7 +59,7 @@ SHA-256 `32a4e0afb45abfbf8239f7bdbc15dda9eb1487c959893442b6029a6d0998b260`, B1�
   counterpart) is never placed, the wait lapses: the waiting event's pools are ready as if it did not exist, from
   day start or from any other floor that applies to it, such as the regional Group 1 window. One identical clause
   goes into amendment Blocks 44, 88, 83 and 66, and T6a's release follows it.
-- **O9 – Y10↔Div 3.** The bonus needs the same weapon and gender, as drafted.
+- **O9 – Y10↔Div 3.** The bonus needs the same weapon and gender, as drafted. *Moot since 2026-10-11: O15 removed the bonus.*
 - **O10 – The cutoff on the board.** The store's board check emits `pool-start-after-cutoff` for engine-placed and
   hand-moved events, as drafted. T7 builds both the engine WARN and the store board check, test-first, and the
   smoke asserts the Findings row.
@@ -74,7 +74,7 @@ SHA-256 `32a4e0afb45abfbf8239f7bdbc15dda9eb1487c959893442b6029a6d0998b260`, B1�
 
 Both rulings change approved values after measurement showed them costing events on B6. A1 carries the text.
 
-- **O12 – The Y8↔Y10 and Y10↔Div 3 same-day bonus is −0.3**, not O6's −0.4. Probe at `39c7145a63` (T4): B6
+- **O12 – The Y8↔Y10 same-day bonus is −0.3** (it covered Y10↔Div 3 too until O15), not O6's −0.4. Probe at `39c7145a63` (T4): B6
   places 53 events at −0.05 through −0.3 and 51 at −0.4, so −0.3 is the strongest value that loses no event on
   B1–B8. The other −0.4 values (proximity one day apart, Ind+team day after, Vet Combined day-after bonus) are
   unchanged. T5 runs last, at −0.3.
@@ -221,3 +221,14 @@ Each follows a reconciliation verdict, the spec-wins rule, or an earlier owner r
 (backlog §The late-day WARN adds the medal tail… and §Events end past 22:00 only by their medal tail),
 the better least-bad fallback (§Runtime failure is terminal), the R6 clique WARN (declined by 019's R3 – mark
 settled).
+
+## Owner ruling, 2026-10-11 (fifth round, after the merge-tree check)
+
+- **O15 – Y10 with Div 3 is dropped.** The pairing was only an example of unrelated events, and 021 over-corrected
+  by scoring it. The owner: "we should remove it from the spec. We may be over correcting for that specific case
+  when it is just an example". Events that share no fencers, such as Y10 and Div 3, have no separation rule and no
+  same-day bonus, so day assignment places them by its other terms (load and weapon balance). A2 (`2f84c3e158`)
+  carries the METHODOLOGY text: the Y10↔Div 3 rows left §Other Soft Preferences and Appendix A, and the "Y10 with
+  Div 3" departure left Appendix B. The code drops `PENALTY_WEIGHTS.Y10_DIV3_SAME_DAY` and its
+  `SAME_DAY_BONUS_PAIRS` row. The Y8↔Y10 bonus (−0.3, O6, O12) is unchanged. O9 is moot. No B1–B8 scenario or
+  template holds a Div 3 event, so the drift ledger stays byte-identical.
