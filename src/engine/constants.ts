@@ -1,15 +1,20 @@
 import { Category, CutMode, EventType, Gender, TournamentType, VetAgeGroup, Weapon } from './types.ts'
 
 // ──────────────────────────────────────────────
-// Category start preferences and capacity weights.
+// Category capacity weights (METHODOLOGY.md §Age-Category Weights). Each row
+// holds a weight and nothing else.
 //
-// earliest_start_offset: minutes after DAY_START_MINS before this category may begin.
 // weight: multiplier applied to raw strip-hours in capacity-aware day assignment scoring.
 //   > 1.0 → heavier than raw (large fields, video DE serialization)
 //   < 1.0 → lighter than raw (small fields, flexible scheduling)
 //
+// No category has a start offset (METHODOLOGY.md §Within-Day Age-Descending
+// Order). The rows once carried a start-offset field that no code read, and
+// owner ruling O13 (2026-10-10) retired the last one, Vet Combined's 2 hours –
+// no event waits on its category alone.
+//
 // VETERAN lookups use a compound key (`${Category.VETERAN}:${VetAgeGroup}`) to
-// differentiate VET40/VET50 (weight 0.8, offset 0) from older groups (weight 0.6, offset 120).
+// differentiate VET40/VET50 (weight 0.8) from VET60/70/80 and Vet Combined (weight 0.6).
 // When vet_age_group is null (generic veteran), the plain VETERAN key resolves to weight 0.8.
 // ──────────────────────────────────────────────
 
@@ -18,25 +23,25 @@ type CategoryStartPreferenceKey = Category | `${typeof Category.VETERAN}:${VetAg
 // TS can't verify computed template literal property keys satisfy a union type (TS2740),
 // so we assert the type. All keys are present — checked by tests.
 export const CATEGORY_START_PREFERENCE = {
-  [Category.Y8]:    { earliest_start_offset: 0,   weight: 1.0 },
-  [Category.Y10]:   { earliest_start_offset: 0,   weight: 1.2 },
-  [Category.Y12]:   { earliest_start_offset: 0,   weight: 1.0 },
-  [Category.Y14]:   { earliest_start_offset: 0,   weight: 1.0 },
-  [Category.CADET]: { earliest_start_offset: 0,   weight: 1.3 },
-  [Category.JUNIOR]:  { earliest_start_offset: 0, weight: 1.3 },
+  [Category.Y8]:    { weight: 1.0 },
+  [Category.Y10]:   { weight: 1.2 },
+  [Category.Y12]:   { weight: 1.0 },
+  [Category.Y14]:   { weight: 1.0 },
+  [Category.CADET]: { weight: 1.3 },
+  [Category.JUNIOR]:  { weight: 1.3 },
   // Generic VETERAN key — used when vet_age_group is null; defaults to VET40/50 weight.
-  [Category.VETERAN]: { earliest_start_offset: 0, weight: 0.8 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: { earliest_start_offset: 0,   weight: 0.8 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET50}`]: { earliest_start_offset: 0,   weight: 0.8 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET60}`]: { earliest_start_offset: 120, weight: 0.6 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET70}`]: { earliest_start_offset: 120, weight: 0.6 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: { earliest_start_offset: 120, weight: 0.6 },
-  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: { earliest_start_offset: 120, weight: 0.6 },
-  [Category.DIV1]:  { earliest_start_offset: 0,   weight: 1.5 },
-  [Category.DIV1A]: { earliest_start_offset: 0,   weight: 0.7 },
-  [Category.DIV2]:  { earliest_start_offset: 0,   weight: 0.7 },
-  [Category.DIV3]:  { earliest_start_offset: 0,   weight: 0.7 },
-} as Record<CategoryStartPreferenceKey, { earliest_start_offset: number; weight: number }>
+  [Category.VETERAN]: { weight: 0.8 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET40}`]: { weight: 0.8 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET50}`]: { weight: 0.8 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET60}`]: { weight: 0.6 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET70}`]: { weight: 0.6 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET80}`]: { weight: 0.6 },
+  [`${Category.VETERAN}:${VetAgeGroup.VET_COMBINED}`]: { weight: 0.6 },
+  [Category.DIV1]:  { weight: 1.5 },
+  [Category.DIV1A]: { weight: 0.7 },
+  [Category.DIV2]:  { weight: 0.7 },
+  [Category.DIV3]:  { weight: 0.7 },
+} as Record<CategoryStartPreferenceKey, { weight: number }>
 
 // ──────────────────────────────────────────────
 // Scheduling time constants (all values in minutes from midnight)
@@ -54,8 +59,7 @@ export const DAY_HARD_END_MINS = 1320 // 10:00 PM — no phase but an event's la
 export function clockHardEnd(dayEndTime: number): number {
   return Math.max(dayEndTime, DAY_HARD_END_MINS)
 }
-export const LATEST_START_MINS = 960 // 4:00 PM — pool rounds may not start after this (unsourced)
-export const LATEST_START_OFFSET = 420 // offset from DAY_START to LATEST_START
+export const LATEST_START_OFFSET = 420 // 7 hours after a day's start (4:00 PM on a 9:00 AM day) – the pool-start cutoff, Piste Planner's own rule (unsourced)
 export const SLOT_MINS = 5
 // The 10-hour planning day, DAY_START_MINS to DAY_END_MINS, that strip-hour
 // capacity counts (METHODOLOGY.md §Strip-Hour Capacity). Not the hard window.
@@ -65,14 +69,15 @@ export const DAY_LENGTH_MINS = 600
 // (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip Count Suggestion).
 export const COMPETITORS_PER_STRIP_PER_DAY = 14
 // Gap between a phase and its successor (pools to DE, DE prelims to the next
-// stage, Flight A to Flight B alongside FLIGHT_BUFFER_MINS, an older Vet
-// sibling to its younger one). Its floor is the results-review
+// stage). Flight A to Flight B is
+// exempt: FLIGHT_BUFFER_MINS replaces it there. Its floor is the results-review
 // period between rounds, 15 min national, 10 regional, 5 local (Ops Manual p.18,
 // METHODOLOGY §Timing Constants). No gap sits between DE rounds inside one DE
 // phase – the 5-minute changeover is already in the bout time.
 export const ADMIN_GAP_MINS = 30
+// Flight B is ready this long after Flight A ends, in place of the admin gap.
+// Unsourced (METHODOLOGY.md §Runtime Decomposition, Appendix B).
 export const FLIGHT_BUFFER_MINS = 15
-export const THRESHOLD_MINS = 10
 // Pool rounds run 60-120 min for a pool of 7 (see DEFAULT_POOL_ROUND_DURATION_TABLE), so a 60-min wave can't accommodate the second event starting inside the wave.
 export const MORNING_WAVE_WINDOW_MINS = 120
 
@@ -80,11 +85,8 @@ export const MORNING_WAVE_WINDOW_MINS = 120
 // DE / referee constants
 // ──────────────────────────────────────────────
 
-// Estimated minutes for the gold bout (and bronze for teams) that the scheduler does NOT allocate
-// strips for. Tournament organizers run these ad-hoc on whatever strip frees up next. Used by
-// ScheduleResult.de_total_end and ref-demand tail extension.
-export const INDIV_TAIL_MINS = 30
-export const TEAM_TAIL_MINS = 60
+// INDIV_TAIL_MINS and TEAM_TAIL_MINS live in types.ts beside tailEstimateMins,
+// their one reader, since this module imports types.ts.
 
 export const DE_REFS = 1
 // Cap on the strips a single-stage DE or prelims block asks for:
@@ -115,15 +117,12 @@ export const TEAM_MATCH_DURATION: Record<Weapon, number> = {
   [Weapon.FOIL]: 60,
   [Weapon.SABRE]: 30,
 }
-export const SAME_TIME_WINDOW_MINS = 30
 export const INDIV_TEAM_MIN_GAP_MINS = 120
 
 // ──────────────────────────────────────────────
-// Scheduling algorithm limits
+// Field-size limits
 // ──────────────────────────────────────────────
 
-export const EARLY_START_THRESHOLD = 10
-export const MAX_RESCHEDULE_ATTEMPTS = 3
 // 336 is the Athlete Handbook §2.2.5 (printed p.15) NAC cap for Div I, Junior and
 // Cadet: Elite 112 + Challenger 224. Only real tournaments are solved for.
 export const MAX_FENCERS = 336
@@ -193,8 +192,8 @@ export const DEFAULT_CUT_BY_CATEGORY: Record<Category, { mode: CutMode; value: n
 // ──────────────────────────────────────────────
 // Default fencer counts keyed by category × weapon × gender (individual events)
 // or category × TEAM (team events).
-// Derived from P75 of empirical NAC/Summer Nationals and regional data,
-// rounded to nearest 10, skewed towards larger events (METHODOLOGY Appendix A).
+// Means of the B1–B7 real-data scenarios (src/data/tournaments.ts) per
+// category, weapon and gender, rounded to nearest 10 (METHODOLOGY Appendix A).
 // ──────────────────────────────────────────────
 
 export type FencerDefaultKey =
@@ -413,10 +412,12 @@ export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>
   // the largest finite same-day penalty – applied against the one pairing the
   // specification asks for. The note above GROUP_1_MANDATORY below records the
   // intent correctly; this line contradicted it. Removing the edge makes "CAN"
-  // true. "SHOULD" would need a same-day bonus, and METHODOLOGY states the
-  // preference without a magnitude, so no number is invented here (010 L9,
-  // research.md D5). Y8→Y10 was Y8's only direct edge, so buildPenaltyMatrix's
-  // two-hop Y8↔Y12 derivation (0.3) goes with it.
+  // true (010 L9, research.md D5). Y8→Y10 was Y8's only direct edge, so
+  // buildPenaltyMatrix's two-hop Y8↔Y12 derivation (0.3) goes with it. "SHOULD"
+  // is now the −0.3 same-day bonus in SAME_DAY_BONUS_PAIRS
+  // (PENALTY_WEIGHTS.Y8_Y10_SAME_DAY), which dayColoring's sameDayBonus scores
+  // (021 T5, owner rulings O6 and O12). It lives outside this graph, because the
+  // constraint graph keeps no weight-0 or negative edge.
   [Category.Y8]: {},
   [Category.Y10]: { [Category.Y12]: 0.8 },
   [Category.Y12]: { [Category.Y14]: 0.8 },
@@ -435,9 +436,11 @@ export const CROSSOVER_GRAPH: Record<Category, Partial<Record<Category, number>>
   },
   [Category.JUNIOR]: { [Category.DIV1]: 0.8, [Category.DIV1A]: 0.8 },
   // Veteran ↔ Division crossover: divisions are rating-based (open to any age)
-  // but in practice only ~5–10% of vet fencers also enter Div events. Keep a
-  // small penalty so the scheduler avoids same-day pairing when it can, but
-  // make it very relaxable — these are not strong fencer-overlap edges.
+  // but in practice only ~5–10% of vet fencers also enter Div events. A small
+  // soft crossover edge, so day assignment avoids same-day pairing when it can
+  // but weighs it lightly – these are not strong fencer-overlap edges. The
+  // Vet individual ↔ Div 1A individual pair is scored by GROUP_2_SOFT_SEPARATIONS
+  // instead, which overrides this weight.
   [Category.VETERAN]: {
     [Category.DIV1]: 0.1,
     [Category.DIV2]: 0.1,
@@ -472,8 +475,8 @@ export const GROUP_1_MANDATORY: readonly { older: Category; younger: Category }[
 ]
 
 // Tournament types where Group 1 is soft, with a time-of-day window (METHODOLOGY
-// §Regional Types: Soft, With a Time-of-Day Window). Not REGIONAL_QUALIFIER_TYPES:
-// SYC and SJCC take the national criteria here (Appendix B).
+// §Regional Types: Soft, With a Time-of-Day Window). SYC and SJCC are regional
+// but take the national criteria here (Appendix B).
 export const GROUP_1_SOFT_TYPES: ReadonlySet<TournamentType> = new Set<TournamentType>([
   TournamentType.ROC,
   TournamentType.RYC,
@@ -485,6 +488,15 @@ export const GROUP_1_SOFT_TYPES: ReadonlySet<TournamentType> = new Set<Tournamen
 // day start + 4 hours (METHODOLOGY §Regional Types: Soft, With a Time-of-Day
 // Window, §Cross-Event Dependency Edges).
 export const REGIONAL_GROUP_1_WINDOW_MINS = 240
+
+// The Vet co-day stagger: on the co-day of the age-banded Veteran events of one
+// gender and weapon, each younger band's pools are not ready before the
+// next-older present band's pools start + 60 minutes, and no band waits for
+// another to finish (METHODOLOGY §Within-Day Age-Descending Order, §Cross-Event
+// Dependency Edges, Appendix A "Vet co-day stagger", owner ruling O1).
+// Piste Planner's own rule, unsourced (Appendix B). A plain constant, like
+// REGIONAL_GROUP_1_WINDOW_MINS, not a TournamentConfig field.
+export const VET_STAGGER_MINS = 60
 
 // Div 1 and Div 1A of one weapon and gender never share a day, at every type:
 // nearly the same fencers enter both. The manual does not list the pair
@@ -559,17 +571,6 @@ export const PROXIMITY_GRAPH: { cat1: Category; cat2: Category; weight: number }
 ]
 
 // ──────────────────────────────────────────────
-// Proximity penalty weights by scheduling distance (days apart)
-// ──────────────────────────────────────────────
-
-export const PROXIMITY_PENALTY_WEIGHTS: Record<number, number> = {
-  0: 0.0,
-  1: -0.4,
-  2: 0.0,
-  3: 0.5,
-}
-
-// ──────────────────────────────────────────────
 // REST_DAY_PAIRS: category pairs that should have a rest day between them
 // (Ops Manual p.20 – Group 2, METHODOLOGY §Rest Day Preference). Junior–Cadet
 // is absent: the manual asks for that rest day only at the Junior Olympic
@@ -579,18 +580,6 @@ export const PROXIMITY_PENALTY_WEIGHTS: Record<number, number> = {
 export const REST_DAY_PAIRS: [Category, Category][] = [
   [Category.JUNIOR, Category.DIV1],
 ]
-
-// ──────────────────────────────────────────────
-// Regional qualifier tournament types — cannot cap fencer registrations per handbook.
-// ──────────────────────────────────────────────
-
-export const REGIONAL_QUALIFIER_TYPES: ReadonlySet<string> = new Set<string>([
-  TournamentType.RYC,
-  TournamentType.RJCC,
-  TournamentType.ROC,
-  TournamentType.SYC,
-  TournamentType.SJCC,
-])
 
 // ──────────────────────────────────────────────
 // Video stage round: the DE round at which video replay begins per category
@@ -668,36 +657,23 @@ export const REGIONAL_CUT_TOURNAMENT_TYPES: ReadonlySet<string> = new Set<string
 // ──────────────────────────────────────────────
 
 export const PENALTY_WEIGHTS = {
-  /** Same-time high crossover (edge >= 0.8) */
-  SAME_TIME_HIGH_CROSSOVER: 10.0,
-  /** Same-time low crossover (edge < 0.8) */
-  SAME_TIME_LOW_CROSSOVER: 4.0,
-  /** Ind+team same-time or wrong order on same day */
-  INDIV_TEAM_SAME_TIME_OR_WRONG_ORDER: 8.0,
-  /** Ind+team gap < 120 min on same day */
-  INDIV_TEAM_GAP_UNDER_MIN: 3.0,
-  /** Early start consecutive days, high crossover */
-  EARLY_START_CONSECUTIVE_HIGH_CROSSOVER: 5.0,
-  /** Early start same day, high crossover */
-  EARLY_START_SAME_DAY_HIGH_CROSSOVER: 2.0,
-  /** Early start consecutive days, ind+team same demographic */
-  EARLY_START_CONSECUTIVE_INDIV_TEAM: 2.0,
   /** Regional Group 1 pair on one day: ROC, RYC and RJCC only (Ops Manual p.20 – Group 1) */
   REGIONAL_GROUP_1_PAIR: 5.0,
   /** Rest day violation (consecutive-day penalty for JUNIOR/DIV1, Ops Manual p.20 – Group 2) */
   REST_DAY_VIOLATION: 1.5,
   /** Team scheduled before individual (wrong order, proximity) */
   TEAM_BEFORE_INDIVIDUAL: 1.0,
-  /** Weapon balance — minority group absent on a day */
+  /**
+   * Weapon balance, so that no day holds only one weapon class (right-of-way –
+   * foil and sabre – or épée): +0.5 when an event leaves its day one-class,
+   * −0.5 when it brings the missing class, 0 on a day already holding both.
+   * Both genders and team events count together, and a tournament with no event
+   * of one class is not scored (Ops Manual p.20 – Group 2, METHODOLOGY §Weapon
+   * Balance)
+   */
   WEAPON_BALANCE: 0.5,
-  /** Last-day ref shortage: large NAC (300+ fencers) */
-  LAST_DAY_REF_SHORTAGE_LARGE_NAC: 0.5,
   /** Proximity 3+ days apart */
   PROXIMITY_3_PLUS_DAYS: 0.5,
-  /** Y10 non-first-slot penalty */
-  Y10_NON_FIRST_SLOT: 0.3,
-  /** Last-day ref shortage: large ROC (100+ fencers) */
-  LAST_DAY_REF_SHORTAGE_LARGE_ROC: 0.3,
   /** Ind+team 2+ days apart (proximity) */
   INDIV_TEAM_2_PLUS_DAYS: 0.3,
   /**
@@ -706,30 +682,44 @@ export const PENALTY_WEIGHTS = {
    * (Ops Manual p.20 – Group 3, METHODOLOGY §Other Soft Preferences)
    */
   CROSS_WEAPON_SAME_DEMOGRAPHIC: 0.2,
-  /** Last-day ref shortage: medium tournament (50-100 fencers) */
-  LAST_DAY_REF_SHORTAGE_MEDIUM: 0.2,
   /** Proximity 1 day apart (bonus — negative) */
   PROXIMITY_1_DAY: -0.4,
   /** Ind+team day after individual (bonus — negative) */
   INDIV_TEAM_DAY_AFTER: -0.4,
+  /**
+   * Y8 and Y10 of the same weapon and gender on the same day (bonus – negative).
+   * The spec asks Y8 to share a day with Y10. Unsourced (METHODOLOGY §Departures
+   * From the Manual, Appendix A and B, owner rulings O6 and O12)
+   */
+  Y8_Y10_SAME_DAY: -0.3,
+  /**
+   * Y10 and Div 3 of the same weapon and gender on the same day (bonus –
+   * negative). The two draw no common fencers. Unsourced (METHODOLOGY §Other
+   * Soft Preferences, Appendix A and B, owner rulings O6, O9 and O12)
+   */
+  Y10_DIV3_SAME_DAY: -0.3,
 } as const
 
+/**
+ * Category pairs that earn a same-day bonus when both events share a weapon and
+ * gender (METHODOLOGY Appendix A, "Y8↔Y10 same day" and "Y10↔DIV3 same day").
+ * Unordered: either side of a pair may be the event being coloured. Day
+ * colouring reads this list directly, because the constraint graph keeps no
+ * weight-0 edge and neither pair has a crossover weight.
+ */
+export const SAME_DAY_BONUS_PAIRS: readonly (readonly [Category, Category, number])[] = [
+  [Category.Y8, Category.Y10, PENALTY_WEIGHTS.Y8_Y10_SAME_DAY],
+  [Category.Y10, Category.DIV3, PENALTY_WEIGHTS.Y10_DIV3_SAME_DAY],
+]
+
 // ──────────────────────────────────────────────
-// Capacity penalty curve — fill-ratio thresholds and ramps
+// Capacity penalty curve – the cap on dayColoring.ts's capacityPenalty. The live
+// curve is 0 up to fill 0.85, linear to 3.0 at fill 1.0, then 3.0 + 10 per unit
+// of fill past 1.0, capped at OVERFLOW_PENALTY (20.0).
 // ──────────────────────────────────────────────
 
 export const CAPACITY_PENALTY_CURVE = {
-  /** Fill ratio below which no capacity penalty applies */
-  LOW_THRESHOLD: 0.6,
-  /** Fill ratio at which the moderate ramp begins */
-  MID_THRESHOLD: 0.8,
-  /** Fill ratio at which the steep ramp ends and max penalty applies */
-  HIGH_THRESHOLD: 0.95,
-  /** Maximum penalty for the low-to-mid band */
-  LOW_BAND_MAX: 3.0,
-  /** Additional penalty added across the mid-to-high band */
-  MID_BAND_DELTA: 7.0,
-  /** Flat penalty when fill ratio exceeds the high threshold */
+  /** Cap on the past-capacity penalty */
   OVERFLOW_PENALTY: 20.0,
 } as const
 

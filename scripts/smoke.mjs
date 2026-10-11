@@ -1452,6 +1452,15 @@ await page.waitForTimeout(200)
 //
 // `[M]` 024 task S, 2026-10-06: the live run read 103 for NAC Vet/Div1/Junior at
 // 12 video strips, matching the probe, in every run that day, and the template placed all 66.
+//
+// [M] 2026-10-10, 021 T8: 103 → 104, Video Strip Preservation (METHODOLOGY
+// §Video Strip Preservation). The live run read 104, and a store-path probe in
+// this driver's order (NAC, 4 days, 12 video strips) reads 104 under T8 against
+// 103 at T7's head 8b23e1b964 (both read 103 at the default 8 video strips).
+// Pools starting after 11:00 on a multi-event video day now run on general
+// strips only, and at 103 strips VET-W-EPEE-IND-V40 ends at 22:10 on Day 4,
+// 10 min past the hard end, which Suggest counts as not placed. All 66 events
+// still place at 103.
 await choosePreset('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior template applied')
 
@@ -1462,8 +1471,8 @@ log('NAC Vet/Div1/Junior video strips before Suggest =', vetVideoStrips)
 const vetStrips = await pressSuggest('NAC Vet/Div1/Junior')
 log('NAC Vet/Div1/Junior suggested strips =', vetStrips)
 await shot('06d-vet-configured')
-if (Number(vetStrips) !== 103) {
-  throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 103 at ${vetVideoStrips} video strips (tmp/probe-t014-video.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
+if (Number(vetStrips) !== 104) {
+  throw new Error(`SC-008: NAC Vet/Div1/Junior suggested ${vetStrips} strips, expected 104 at ${vetVideoStrips} video strips (tmp/021-t8/probe-sc008.test.ts) — this is measured, not adjustable; report the number rather than changing the assertion`)
 }
 
 const vetGen = page.getByRole('button', { name: 'Auto-assign', exact: true })
@@ -1479,7 +1488,7 @@ await page.waitForTimeout(200)
 const vetRowCount = await page.locator('[data-schedule-row]').count()
 log('NAC Vet/Div1/Junior schedule table rows =', vetRowCount)
 // SC-008: the largest template places its whole 66-event field at its
-// suggested count (103 since 024 group B, was 80 on 2026-09-06). `[M]` live
+// suggested count (104 since 021 T8, 103 since 024 group B, was 80 on 2026-09-06). `[M]` live
 // run 2026-10-06: 103 strips, 66 of 66 rows placed.
 if (vetRowCount !== 66) {
   throw new Error(`NAC Vet/Div1/Junior schedule table rendered ${vetRowCount} rows, expected 66`)
@@ -1547,6 +1556,86 @@ if (lateBlock.axisEnd < 22 * 60) {
   throw new Error(`axis ends at ${lateBlock.axisEnd} min (last tick ${lateBlock.maxTick}), expected the axis to reach 22:00 (1320)`)
 }
 log('late blocks (> 19:00) =', lateBlock.lateCount, '| all', lateBlock.blockCount, 'blocks inside time grid | latest ends', lateBlock.latestEnd, 'min | axis last tick', lateBlock.maxTick, 'axis end', lateBlock.axisEnd, 'min')
+
+// ── 021 T8: video strips are kept for the video stage ──
+// METHODOLOGY §Video Strip Preservation: on a day that holds a REQUIRED video
+// phase (at a NAC, every day with a video-stage block) and more than one event,
+// a pool phase may hold a video strip only if it starts within
+// MORNING_WAVE_WINDOW_MINS (120) of day start, that minute included (owner
+// ruling O14 kept "<="). Read on this NAC Vet/Div1/Junior board: no pool phase
+// (POOLS or either flight) starting after 11:00 – the driver never edits the
+// default 9:00 day start – holds a strip index below the video strip count
+// (`buildStrips` makes strips 0 … video − 1 the video strips). Then one event
+// whose pools start after 11:00 is moved onto another such day, keeping its
+// start, and the canvas re-seater must keep its pools off the video strips or
+// leave them unseated. The engine and the re-seater share one predicate
+// (`poolMayUseVideoStrips`), so both halves read the same rule.
+const VSP_WAVE_END = 9 * 60 + 120
+const VSP_POOL_PHASES = ['POOLS', 'FLIGHT_A', 'FLIGHT_B']
+const vspVideoCount = Number(vetVideoStrips)
+if (!(vspVideoCount > 0)) throw new Error(`021 T8: NAC Vet/Div1/Junior reads ${vetVideoStrips} video strips, so there is nothing to keep`)
+async function vspBlocks() {
+  return page.$$eval('[data-event-block]', (els) => els.map((e) => ({
+    id: e.getAttribute('data-event-id'),
+    phase: e.getAttribute('data-phase'),
+    day: Number(e.getAttribute('data-day')),
+    start: Number(e.getAttribute('data-start')),
+    strips: (e.getAttribute('data-strips') ?? '').split(',').filter((s) => s !== '').map(Number),
+    unseated: e.getAttribute('data-unseated') === 'true',
+  })))
+}
+/** Days holding a video-stage block and more than one event: the days the reservation holds on. */
+function vspVideoDays(blocks) {
+  const byDay = new Map()
+  for (const b of blocks) {
+    const d = byDay.get(b.day) ?? { ids: new Set(), video: false }
+    d.ids.add(b.id)
+    if (b.phase === 'DE_ROUND_OF_16') d.video = true
+    byDay.set(b.day, d)
+  }
+  return new Set([...byDay].filter(([, d]) => d.video && d.ids.size > 1).map(([day]) => day))
+}
+const vspIsLatePool = (b, days) => VSP_POOL_PHASES.includes(b.phase) && days.has(b.day) && b.start > VSP_WAVE_END
+const vspOnVideo = (b) => b.strips.some((s) => s < vspVideoCount)
+
+const vspBefore = await vspBlocks()
+const vspDays = vspVideoDays(vspBefore)
+const vspLate = vspBefore.filter((b) => vspIsLatePool(b, vspDays))
+if (vspLate.length === 0) {
+  throw new Error(`021 T8: no pool phase starts after 11:00 on a multi-event video day (days ${[...vspDays].map((d) => d + 1).join(',')}), so the video-strip check has nothing to read`)
+}
+const vspOffenders = vspLate.filter(vspOnVideo)
+if (vspOffenders.length > 0) {
+  throw new Error(`021 T8: ${vspOffenders.length} pool phase(s) starting after 11:00 on a multi-event video day hold a video strip (< ${vspVideoCount}): ${JSON.stringify(vspOffenders.slice(0, 3))}`)
+}
+log('021 T8:', vspLate.length, 'pool phases start after 11:00 on video days', [...vspDays].map((d) => d + 1).join(','), '– none holds a video strip')
+
+// The hand move: the first (by id) event with a POOLS block after 11:00, onto
+// the next multi-event video day after its own.
+const vspMover = [...vspLate].filter((b) => b.phase === 'POOLS').sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0]
+if (!vspMover) throw new Error('021 T8: every pool phase after 11:00 is a flight, so there is no POOLS block to move')
+const vspTargets = [...vspDays].filter((d) => d !== vspMover.day).sort((a, b) => a - b)
+const vspTo = vspTargets.find((d) => d > vspMover.day) ?? vspTargets[0]
+if (vspTo === undefined) throw new Error(`021 T8: no other multi-event video day to move ${vspMover.id} onto`)
+await moveEventToDay(vspMover.id, vspTo)
+if ((await poolDayOf(vspMover.id)) !== vspTo) throw new Error(`021 T8: the Move day did not put ${vspMover.id} on day ${vspTo + 1}`)
+const vspMoved = (await vspBlocks()).find((b) => b.id === vspMover.id && b.phase === 'POOLS')
+if (!(vspMoved.start > VSP_WAVE_END)) {
+  throw new Error(`021 T8: ${vspMover.id}'s pools start at ${formatMinutes(vspMoved.start)} after the move, not after 11:00, so the re-seat check has nothing to read`)
+}
+if (!vspMoved.unseated && vspOnVideo(vspMoved)) {
+  throw new Error(`021 T8: the re-seater put ${vspMover.id}'s pools (${formatMinutes(vspMoved.start)}, day ${vspTo + 1}) on video strips ${vspMoved.strips.filter((s) => s < vspVideoCount).join(',')}`)
+}
+log('021 T8: moved', vspMover.id, 'day', vspMover.day + 1, '->', vspTo + 1, 'at', formatMinutes(vspMoved.start), '–', vspMoved.unseated ? 'pools unseated' : `pools on strips ${vspMoved.strips[0]}–${vspMoved.strips[vspMoved.strips.length - 1]}, no video strip`)
+await shot('06e-vet-video-strips')
+await moveEventToDay(vspMover.id, vspMover.day)
+if ((await poolDayOf(vspMover.id)) !== vspMover.day) throw new Error(`021 T8: moving ${vspMover.id} back to day ${vspMover.day + 1} did not take`)
+// A Move day pins the event, and the pin would follow the same id into the next
+// template (NAC Cadet/Junior holds JR events too), so unpin it here.
+await page.getByRole('region', { name: 'Selected event' }).getByRole('button', { name: 'Pinned', exact: true }).click()
+await page.waitForTimeout(300)
+const vspPinned = await page.locator(`[data-event-block="${vspMover.id}:POOLS"]`).first().getAttribute('data-pinned')
+if (vspPinned !== 'false') throw new Error(`021 T8: ${vspMover.id} is still pinned after pressing Pinned (data-pinned=${vspPinned})`)
 
 // ── Team event cut (008) ──
 // Before this feature, defaultCutForEntry gave every TEAM catalogue entry a
@@ -1909,6 +1998,95 @@ for (const id of [junFoil, cadFoil]) {
 log('016 check 1: both events carry the findings marker (data-warned)')
 await shot('016-check1-hard-pair')
 
+// ── 021 T6c: a split Vet co-day is reported and cannot be dismissed ──
+// Move day pins the moved event, so moving one age-banded Vet band off its co-day is a
+// pinned split (METHODOLOGY §Veteran Age-Group Co-Day Rule). The board's hand-placement
+// check must show one `vet-co-day-split` Warning for that gender and weapon, naming the
+// moved band, with no "Dismiss finding" control (check 1's and 017 T7's stale-row pattern).
+// The `coDays` map built here also feeds the 021 T6a stagger check right after it.
+await choosePreset('NAC Vet/Div1/Junior')
+await pressSuggest('021 T6c NAC Vet/Div1/Junior')
+await page.getByRole('button', { name: 'Auto-assign', exact: true }).click()
+await page.waitForTimeout(500)
+await closePanel()
+await page.getByRole('radio', { name: 'Matrix' }).click()
+await page.waitForTimeout(300)
+// Matches only the age-banded individuals (not Vet Combined or a Vet team) and
+// captures gender, weapon and band in one step.
+const BAND_ID = /^VET-([MW])-([A-Z]+)-IND-V(40|50|60|70|80)$/
+const coDays = new Map()
+for (const id of await eventIds()) {
+  const m = id.match(BAND_ID)
+  if (!m) continue
+  const key = `${m[1]}-${m[2]}`
+  coDays.set(key, [...(coDays.get(key) ?? []), { id, band: Number(m[3]), day: await poolDayOf(id) }])
+}
+// ── 021 T6a: the Vet stagger binds (owner ruling O1) ──
+// METHODOLOGY §Veteran Age-Group Co-Day Rule: age-banded Vet bands of one gender and
+// weapon that share a day start oldest first, each younger band's pools no earlier than
+// the next-older present band's pool start + VET_STAGGER_MINS (60, `constants.ts`). Read
+// on the board just auto-assigned, before the split move below pins anything. The anchor
+// is the band's POOLS block, the same one `poolDayOf` reads for the day, so the check
+// relies on unflighted Vet bands. A band absent from a day is skipped, and so is a band
+// whose POOLS block is unseated (O8 lapses the wait over a predecessor that never
+// places), so each band waits on the next-older band that is present and placed there.
+const VET_STAGGER_MINS = 60
+const vetPool = async (id) => {
+  const blk = page.locator(`[data-event-block="${id}:POOLS"]`).first()
+  const start = await blk.getAttribute('data-start')
+  if (start === null) throw new Error(`021 T6a: ${id} has no POOLS block with a data-start`)
+  return { start: Number(start), unseated: (await blk.getAttribute('data-unseated')) === 'true' }
+}
+let staggerPairs = 0
+for (const [key, bands] of coDays) {
+  const byDay = new Map()
+  for (const b of bands) {
+    const pool = await vetPool(b.id)
+    if (pool.unseated) continue
+    byDay.set(b.day, [...(byDay.get(b.day) ?? []), { ...b, start: pool.start }])
+  }
+  for (const [day, sameDay] of byDay) {
+    const oldestFirst = [...sameDay].sort((a, b) => b.band - a.band)
+    for (let i = 1; i < oldestFirst.length; i++) {
+      const older = oldestFirst[i - 1]
+      const younger = oldestFirst[i]
+      staggerPairs++
+      if (!(younger.start >= older.start + VET_STAGGER_MINS)) {
+        throw new Error(`021 T6a: ${younger.id} pools start at ${formatMinutes(younger.start)} (${younger.start} min) on day ${day + 1}, less than ${VET_STAGGER_MINS} min after ${older.id} at ${formatMinutes(older.start)} (${older.start} min), the stagger does not bind for ${key}`)
+      }
+    }
+  }
+}
+if (staggerPairs === 0) throw new Error('021 T6a: no gender and weapon has two age-banded Vet bands sharing a day, so the stagger check has nothing to read')
+log('021 T6a: Vet stagger holds across', staggerPairs, 'same-day band pairs (each younger band starts >=', VET_STAGGER_MINS, 'min after the next-older band)')
+
+const coDay = [...coDays.values()].find((bands) => bands.length >= 2 && new Set(bands.map((b) => b.day)).size === 1)
+if (!coDay) throw new Error(`021 T6c: no gender and weapon has two or more age-banded Vet bands sharing one day (${JSON.stringify([...coDays.entries()])})`)
+const splitBand = coDay.reduce((youngest, b) => (b.band < youngest.band ? b : youngest))
+const splitTo = (splitBand.day + 1) % dayCount
+log('021 T6c: moving', splitBand.id, 'off its co-day, day', splitBand.day + 1, '->', splitTo + 1, '| bands', coDay.map((b) => b.id).join(','))
+await moveEventToDay(splitBand.id, splitTo)
+if ((await poolDayOf(splitBand.id)) !== splitTo) throw new Error(`021 T6c: the Move day did not put ${splitBand.id} on day ${splitTo + 1}`)
+
+await openPanel('Findings')
+const splitRows = page
+  .getByRole('complementary', { name: 'Inspector panel' })
+  .locator(`[data-finding-id^="analysis:vet-co-day-split:"][data-finding-id*="${splitBand.id}"]`)
+if ((await splitRows.count()) !== 1) {
+  await shot('021-t6c-no-split-row')
+  throw new Error(`021 T6c: expected one vet-co-day-split row naming ${splitBand.id}, found ${await splitRows.count()}`)
+}
+const splitSeverity = await splitRows.getAttribute('data-severity')
+if (!/warning/i.test(splitSeverity ?? '')) throw new Error(`021 T6c: the split row's severity is "${splitSeverity}", not Warning`)
+const splitMessage = ((await splitRows.locator('[data-message]').textContent()) ?? '').trim()
+if (!splitMessage.includes('split across days')) throw new Error(`021 T6c: the split row reads "${splitMessage}"`)
+if ((await splitRows.getByRole('button', { name: 'Dismiss finding' }).count()) !== 0) {
+  throw new Error('021 T6c: the split Vet co-day row carries a dismiss control')
+}
+log('021 T6c: one Warning row, no dismiss control:', splitMessage)
+await shot('021-t6c-vet-split')
+await closePanel()
+
 // Check 2: a ROC template, then the regional Group 1 window row. The soft
 // types read the pair as a Note when the younger event starts inside the
 // window ("regional-window-honoured") and as a Warning when it does not.
@@ -1936,44 +2114,54 @@ for (const w of ['FOIL', 'EPEE', 'SABRE']) {
 }
 log('016 check 2: candidate pairs', pairs.slice(0, 4).map((p) => p.join('~')).join(' | '))
 if (!pairs.length) throw new Error(`016 check 2: no Group 1 pair among ${rocIds.join(',')}`)
-// Like check 1, only a pair on different days counts, so the hand move always
-// changes the placement and cannot pass on one the auto-run made.
-let rocPick = null
+// `[M]` 021 T4: the weapon-balance term moved the ROC Mega day map, so the first pair on different
+// days can now hold a Cadet start that already honours the window once Move day puts the pair on one
+// day (Move day keeps each event's start time, so the outcome depends on the pair). The assertion
+// stays strict on the pair finally used: each pair on different days is tried in turn, an honoured
+// Note moves on to the next pair, and no pair reaching the not-honoured Warning fails the step.
+let regionalPair = null
+const regionalSeen = []
 for (const [x, y] of pairs) {
   const dx = await poolDayOf(x)
   const dy = await poolDayOf(y)
   log('016 check 2: candidate', x, 'day', dx + 1, '|', y, 'day', dy + 1)
-  if (dx !== dy) {
-    rocPick = [x, y, dx]
+  // Like check 1, only a pair on different days counts, so the hand move always
+  // changes the placement and cannot pass on one the auto-run made.
+  if (dx === dy) continue
+  const a = x
+  const b = y
+  log('016 check 2: using', a, 'day', dx + 1, '|', b, 'day', dy + 1, 'before the move')
+  await moveEventToDay(b, dx)
+  if ((await poolDayOf(b)) !== dx) throw new Error(`016 check 2: the Move day did not put ${b} on ${a}'s day`)
+  await openPanel('Findings')
+  const pairRows = page
+    .getByRole('complementary', { name: 'Inspector panel' })
+    .locator(`[data-finding-id*="${a}"][data-finding-id*="${b}"]`)
+    .filter({ hasText: 'regional Group 1 window' })
+  if ((await pairRows.count()) === 0) {
+    await shot('016-check2-no-row')
+    throw new Error(`016 check 2: no regional Group 1 window row for ${a}~${b} with the pair on one day`)
+  }
+  const regionalSeverity = await pairRows.first().getAttribute('data-severity')
+  const regionalMessage = (await pairRows.first().locator('[data-message]').textContent()) ?? ''
+  log('016 check 2: regional row severity =', regionalSeverity, '|', regionalMessage)
+  // The app has no control for an event's start time (Move day keeps the
+  // placement's start_time and nothing else sets it), so the honoured Note
+  // ("inside the regional Group 1 window") is not chosen by hand. The
+  // not-honoured Warning is asserted strictly on the pair that reaches it.
+  if (/warning/i.test(regionalSeverity ?? '') && regionalMessage.includes('not honoured')) {
+    regionalPair = [a, b]
     break
   }
+  regionalSeen.push(`${a}~${b}=${regionalSeverity}`)
+  await closePanel()
 }
-if (!rocPick) throw new Error('016 check 2: no Group 1 pair with pools on different days, so the hand move cannot be proven')
-const [a, b, target] = rocPick
-log('016 check 2: using', a, 'day', target + 1, '|', b, 'day', (await poolDayOf(b)) + 1, 'before the move')
-await moveEventToDay(b, target)
-if ((await poolDayOf(b)) !== target) throw new Error(`016 check 2: the Move day did not put ${b} on ${a}'s day`)
-await openPanel('Findings')
-const pairRows = page
-  .getByRole('complementary', { name: 'Inspector panel' })
-  .locator(`[data-finding-id*="${a}"][data-finding-id*="${b}"]`)
-  .filter({ hasText: 'regional Group 1 window' })
-const regionalSeen = await pairRows.count()
-if (regionalSeen === 0) {
-  await shot('016-check2-no-row')
-  throw new Error(`016 check 2: no regional Group 1 window row for ${a}~${b} with the pair on one day`)
+if (!regionalPair) {
+  await shot('016-check2-no-warning')
+  throw new Error(`016 check 2: no Group 1 pair reached the not-honoured Warning when put on one day (${regionalSeen.join(', ') || 'no pair on different days'})`)
 }
-const regionalSeverity = await pairRows.first().getAttribute('data-severity')
-const regionalMessage = (await pairRows.first().locator('[data-message]').textContent()) ?? ''
-log('016 check 2: regional row severity =', regionalSeverity, '|', regionalMessage)
-// The app has no control for an event's start time (Move day keeps the
-// placement's start_time and nothing else sets it), so the honoured Note
-// ("inside the regional Group 1 window") cannot be reached by hand. The
-// not-honoured Warning is the reachable state and is asserted strictly.
-if (!/warning/i.test(regionalSeverity ?? '') || !regionalMessage.includes('not honoured')) {
-  throw new Error(`016 check 2: regional row for ${a}~${b} is not the not-honoured Warning: ${regionalSeverity} "${regionalMessage}"`)
-}
-log('016 check 2: saw the Warning (regional-window-not-honoured) for the hand-moved pair')
+const [a, b] = regionalPair
+log('016 check 2: saw the Warning (regional-window-not-honoured) for the hand-moved pair', a + '~' + b)
 await shot('016-check2-regional')
 
 // ── 017 T8: a shared link replays the sender's run ──
@@ -2119,6 +2307,141 @@ if ((await page.locator('[data-overflow-lane] [data-event-block]').count()) !== 
 }
 log('017 task S: Auto-assign cleared the row and the lane:', await footerCounts())
 
+// ── 021 T3: flighting follows the spec ──
+// On the fresh B1 board above. FLIGHT_B_DELAYED never reaches Findings (the store keeps no
+// scheduler bottlenecks), so there is no row to check for it. Two checks instead, on B1's strictly
+// largest event, found from the Events panel's fencer counts rather than named here:
+// (1) pressing "Flight" in the Selected-event strip draws FLIGHT_A and FLIGHT_B blocks, and Flight B
+//     starts FLIGHT_BUFFER_MINS (15) after Flight A ends, snapped to the 5-minute slot – the flight
+//     buffer replaces the 30-minute admin gap (METHODOLOGY §Runtime Decomposition).
+// (2) L15: with the event unflighted again, lower the strips one at a time until its
+//     `resource-precondition-strips` Blocking row appears, then press Flight: the strip minimum
+//     halves to ceil(pools / 2), so the row clears and Auto-assign is enabled again
+//     (METHODOLOGY §Resource Preconditions, 'Strip minimum'). The board is never settled while Blocking.
+// A reload ends the block, so the 018 T4 sender below starts from a fresh B1 as before.
+{
+  const FLIGHT_BUFFER_MINS = 15
+  const snap = (t) => Math.ceil(t / 5) * 5
+  await openPanel('Events')
+  const counts = []
+  for (const input of await page.getByRole('spinbutton', { name: /Fencer count for/ }).all()) {
+    counts.push({ label: (await input.getAttribute('aria-label')).replace('Fencer count for ', ''), fencers: Number(await input.inputValue()) })
+  }
+  counts.sort((x, y) => y.fencers - x.fencers)
+  const [largest, runnerUp] = counts
+  if (!largest || (runnerUp && runnerUp.fencers >= largest.fencers)) {
+    throw new Error(`021 T3: B1 has no strictly largest event (${JSON.stringify(counts.slice(0, 2))})`)
+  }
+  await closePanel()
+  const flightId = await page.$$eval(
+    '[data-event-block][data-phase="POOLS"]',
+    (els, label) => els.find((e) => (e.getAttribute('aria-label') ?? '').startsWith(`${label}, `))?.getAttribute('data-event-id') ?? null,
+    largest.label,
+  )
+  if (!flightId) throw new Error(`021 T3: no POOLS block for the largest event "${largest.label}"`)
+  const pools = Math.ceil(largest.fencers / 7)
+  log('021 T3: largest event', flightId, largest.fencers, 'fencers,', pools, 'pools; runner-up', runnerUp?.fencers)
+
+  const detail = page.getByRole('region', { name: 'Selected event' })
+  const flightButton = detail.getByRole('button', { name: 'Flight', exact: true })
+  const selectEvent = async (phase) => {
+    const blk = page.locator(`[data-event-block="${flightId}:${phase}"]`).first()
+    await blk.scrollIntoViewIfNeeded()
+    await blk.dispatchEvent('click')
+    await detail.waitFor()
+  }
+  const expectFlighted = async (want, what) => {
+    const pressed = await flightButton.getAttribute('aria-pressed')
+    if (pressed !== String(want)) throw new Error(`021 T3 ${what}: the Flight button reads aria-pressed="${pressed}", expected "${want}"`)
+  }
+
+  // (1) Flight B follows Flight A by the flight buffer alone.
+  await selectEvent('POOLS')
+  await expectFlighted(false, 'step 1')
+  await flightButton.click()
+  await settleBoard()
+  await expectFlighted(true, 'step 1')
+  const flightA = page.locator(`[data-event-block="${flightId}:FLIGHT_A"]`)
+  const flightB = page.locator(`[data-event-block="${flightId}:FLIGHT_B"]`)
+  if ((await flightA.count()) !== 1 || (await flightB.count()) !== 1) {
+    await shot('021-t3-no-flights')
+    throw new Error(`021 T3 step 1: expected one FLIGHT_A and one FLIGHT_B block for ${flightId}, found ${await flightA.count()} and ${await flightB.count()}`)
+  }
+  const aStart = Number(await flightA.getAttribute('data-start'))
+  const aEnd = Number(await flightA.getAttribute('data-end'))
+  const bStart = Number(await flightB.getAttribute('data-start'))
+  const wantB = snap(aEnd + FLIGHT_BUFFER_MINS)
+  if (bStart !== wantB) {
+    await shot('021-t3-flight-gap')
+    throw new Error(`021 T3 step 1: Flight B starts at ${formatMinutes(bStart)}, expected ${formatMinutes(wantB)} (Flight A ${formatMinutes(aStart)}–${formatMinutes(aEnd)} + ${FLIGHT_BUFFER_MINS}, snapped)`)
+  }
+  log('021 T3 step 1: Flight A', formatMinutes(aStart), '–', formatMinutes(aEnd), '| Flight B starts', formatMinutes(bStart), '= end + 15, snapped')
+  await shot('021-t3-flights')
+
+  // (2) Unflight it, then lower the strips until its strip-minimum row is Blocking.
+  await flightButton.click()
+  await settleBoard()
+  await expectFlighted(false, 'step 2')
+  await openPanel('Strips & referees')
+  const t3Strips = page.getByRole('spinbutton', { name: 'Number of strips' })
+  const t3Row = page
+    .getByRole('complementary', { name: 'Inspector panel' })
+    .locator(`[data-finding-id="resource-precondition-strips:${flightId}"]`)
+  const autoAssign = page.getByRole('button', { name: 'Auto-assign', exact: true })
+  let blockingAt = null
+  // Bounded: from the event's pool count down to its Flight A share, ceil(pools / 2).
+  for (let s = pools; s >= Math.ceil(pools / 2); s--) {
+    await t3Strips.fill(String(s))
+    await t3Strips.blur()
+    await openPanel('Findings')
+    await page.waitForTimeout(500)
+    if ((await t3Row.count()) === 1) {
+      blockingAt = s
+      break
+    }
+    // Not Blocking yet, so the re-run this edit armed can be settled before the next step down.
+    await settleBoard()
+    await openPanel('Strips & referees')
+  }
+  if (blockingAt === null) {
+    await shot('021-t3-no-blocking-row')
+    throw new Error(`021 T3 step 2: no resource-precondition-strips row for ${flightId} between ${pools} and ${Math.ceil(pools / 2)} strips`)
+  }
+  const rowSeverity = await t3Row.getAttribute('data-severity')
+  if (rowSeverity !== 'Blocking') throw new Error(`021 T3 step 2: the strip-minimum row for ${flightId} is "${rowSeverity}", not Blocking`)
+  if (!(await autoAssign.isDisabled())) throw new Error('021 T3 step 2: Auto-assign is enabled with a Blocking strip-minimum row')
+  log('021 T3 step 2: at', blockingAt, 'strips', flightId, 'draws the Blocking strip-minimum row')
+  await shot('021-t3-blocking')
+
+  // Flight it: the minimum halves, the row clears and Auto-assign is enabled.
+  await closePanel()
+  await selectEvent('POOLS')
+  await flightButton.click()
+  await expectFlighted(true, 'step 2')
+  await openPanel('Findings')
+  await t3Row.waitFor({ state: 'detached', timeout: 3000 }).catch(() => {})
+  if ((await t3Row.count()) !== 0) {
+    await shot('021-t3-row-stays')
+    throw new Error(`021 T3 step 2: the strip-minimum row for ${flightId} stays after Flight at ${blockingAt} strips (Flight A needs ${Math.ceil(pools / 2)})`)
+  }
+  if (await autoAssign.isDisabled()) {
+    const rows = await page.$$eval('aside [data-finding-id]', (els) => els.map((e) => `${e.getAttribute('data-severity')}:${e.getAttribute('data-finding-id')}`))
+    throw new Error(`021 T3 step 2: Auto-assign stays disabled after Flight; rows ${JSON.stringify(rows.slice(0, 8))}`)
+  }
+  log('021 T3 step 2: Flight cleared the row at', blockingAt, 'strips and Auto-assign is enabled')
+  await shot('021-t3-flighted-clears')
+  await closePanel()
+
+  await page.goto(BASE)
+  await page.getByRole('region', { name: 'Matrix canvas' }).waitFor()
+  await closePanel()
+  await page.getByRole('radio', { name: 'Matrix' }).click()
+  await page.waitForTimeout(500)
+  if (!(await footerCounts()).startsWith('24 placed · 0 unplaced')) {
+    throw new Error(`021 T3: the reload should boot a fresh B1 (24 placed · 0 unplaced), got "${await footerCounts()}"`)
+  }
+}
+
 // ── 018 T4: a refused link says why and still boots B1 ──
 // A fresh B1 sender's link, edited so one event's fencer_count is 0, is refused by the loader. The
 // receiver must still boot B1 (24 placed), and the notice at the top of the board must name the event
@@ -2199,6 +2522,26 @@ for (const o of b4Overruns) {
   if (!/warning/i.test(sev ?? '')) throw new Error(`018 T3: the ${o.id} overrun row severity is "${sev}", not Warning`)
 }
 log('018 T3: B4 Findings shows the three overrun rows (23:10, 23:15, 23:30)')
+
+// ── 021 T7: the pool-start cutoff row for an engine-placed event (O2, O10) ──
+// B4's one pool phase that starts past the 4:00 PM cutoff (day start + 7 hours) is
+// Y12-M-SABRE-IND at 16:05 on Day 2 (store-path measurement, 021 T7). The auto-run
+// places it, so the Findings panel shows one dismissable Warning row for it.
+const cutoffRows = b4Panel.locator('[data-finding-id^="analysis:pool-start-after-cutoff:"]')
+const cutoffCount = await cutoffRows.count()
+if (cutoffCount !== 1) {
+  await shot('021-t7-cutoff-row-missing')
+  const texts = await b4Panel.locator('[data-finding-id] [data-message]').allTextContents()
+  throw new Error(`021 T7: expected one B4 pool-start-after-cutoff row, found ${cutoffCount}; rows: ${JSON.stringify(texts.slice(0, 12))}`)
+}
+const cutoffMessage = ((await cutoffRows.locator('[data-message]').textContent()) ?? '').trim()
+if (!cutoffMessage.includes("Y12 Men's Saber Individual pools start at 16:05 on Day 2")) {
+  throw new Error(`021 T7: the B4 cutoff row reads "${cutoffMessage}"`)
+}
+const cutoffSeverity = await cutoffRows.getAttribute('data-severity')
+if (!/warning/i.test(cutoffSeverity ?? '')) throw new Error(`021 T7: the B4 cutoff row severity is "${cutoffSeverity}", not Warning`)
+log('021 T7: B4 Findings shows one pool-start-after-cutoff Warning:', cutoffMessage)
+await shot('021-t7-b4-cutoff-row')
 await closePanel()
 await page.getByRole('radio', { name: 'Matrix' }).click()
 await page.waitForTimeout(200)

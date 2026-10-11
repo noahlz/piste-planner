@@ -22,6 +22,7 @@ import {
   DIV1_DIV1A_HARD_PAIR,
   PENALTY_WEIGHTS,
   REST_DAY_PAIRS,
+  CATEGORY_START_PREFERENCE,
 } from '../../src/engine/constants.ts'
 import { Category, CutMode, TournamentType, VetAgeGroup, Weapon } from '../../src/engine/types.ts'
 
@@ -52,6 +53,20 @@ describe('day timing constants', () => {
 describe('MAX_DE_FIELD', () => {
   it('is 256', () => {
     expect(MAX_DE_FIELD).toBe(256)
+  })
+})
+
+// The table holds the capacity weights of METHODOLOGY.md §Age-Category Weights
+// and nothing else. No category has a start offset (§Within-Day Age-Descending
+// Order), since owner ruling O13 (2026-10-10) retired Vet Combined's 2-hour
+// offset, the last one.
+describe('CATEGORY_START_PREFERENCE', () => {
+  it('carries a weight and no other field on every row', () => {
+    const rowsWithOtherFields = Object.entries(CATEGORY_START_PREFERENCE)
+      .filter(([, row]) => Object.keys(row).join() !== 'weight')
+      .map(([key, row]) => `${key}: ${Object.keys(row).join(', ')}`)
+
+    expect(rowsWithOtherFields).toEqual([])
   })
 })
 
@@ -179,10 +194,11 @@ describe('DE bout times', () => {
 
 describe('CROSSOVER_GRAPH', () => {
   it('Y8 has no edges — METHODOLOGY §Departures From the Manual says Y8 can and should share a day with Y10 (L9)', () => {
-    // Y8→Y10 was Y8's only direct edge (0.8). Removing it is what research.md
-    // D5 calls "removes the edge and invents no bonus" — the specification
-    // states the preference, not a magnitude, so the fix is silence, not a
-    // negative weight.
+    // Y8→Y10 was Y8's only direct edge (0.8), applied against the one pairing
+    // the specification asks for (research.md D5). Y8 keeps no graph edge,
+    // because the Y8/Y10 preference is scored by dayColoring's sameDayBonus
+    // (021 T5, −0.3, owner rulings O6 and O12) and the constraint graph keeps no
+    // weight-0 or negative edge.
     expect(CROSSOVER_GRAPH[Category.Y8]).toEqual({})
   })
 })

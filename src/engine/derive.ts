@@ -12,10 +12,6 @@
  * stale (017). After a run, kept events draw the scheduler's own times, waits
  * included, so the DE here starts at pool end plus the admin gap, earlier than
  * the scheduler's on a busy day.
- *
- * Two `ScheduleResult` fields have no input derivation and are left neutral:
- * `conflict_score` and `accepted_warnings`. They are scheduler diagnostics
- * about contention, not geometry.
  */
 
 import { DAY_AXIS_SPACING_MINS, DeMode, PlacementSource, tailEstimateMins } from './types.ts'
@@ -121,9 +117,7 @@ export function deriveEventSchedule(
   const result: ScheduleResult = {
     competition_id: competition.id,
     assigned_day: placement.day,
-    use_flighting: competition.flighted || competition.flighting_group_id !== null,
-    is_priority: competition.is_priority,
-    flighting_group_id: competition.flighting_group_id,
+    use_flighting: competition.flighted,
     pool_start: null,
     pool_end: null,
     pool_strip_count: 0,
@@ -158,22 +152,18 @@ export function deriveEventSchedule(
     de_round_of_16_end: null,
     de_round_of_16_strip_count: 0,
     de_total_end: null,
-    conflict_score: 0,
     pool_duration_baseline: poolBaseline,
     pool_duration_actual: 0,
     de_duration_baseline: deBlocks.baselineMinutes,
     de_duration_actual: 0,
-    accepted_warnings: [],
   }
 
-  // Pool block. A standalone flighted event splits its pools into A and B;
-  // an event that merely carries a flighting_group_id does not
-  // (concurrentScheduler.ts buildPhaseNodes), even though use_flighting is true.
+  // Pool block. A flighted event splits its pools into Flight A and Flight B,
+  // as concurrentScheduler.ts buildPhaseNodes does.
   const poolStart = snapToSlot(placement.start_time)
-  const splitsIntoFlights = competition.flighted && competition.flighting_group_id === null
   let poolEnd: number
 
-  if (splitsIntoFlights) {
+  if (competition.flighted) {
     const flightAPools = Math.ceil(poolStructure.n_pools / 2)
     const flightBPools = Math.floor(poolStructure.n_pools / 2)
     const flightAStrips = grantedStrips(
@@ -185,11 +175,10 @@ export function deriveEventSchedule(
     const flightAEnd = poolStart + estimatePoolDuration(
       flightAPools, poolBaseline, flightAStrips, refs.refs_per_pool,
     ).actual_duration
-    // Flight B waits out the longer of the admin gap and the flight buffer.
-    const flightBStart = Math.max(
-      snapToSlot(flightAEnd + config.ADMIN_GAP_MINS),
-      snapToSlot(flightAEnd + config.FLIGHT_BUFFER_MINS),
-    )
+    // Flight B waits the flight buffer alone, which replaces the admin gap
+    // between the two flights – the scheduler's own successor rule
+    // (METHODOLOGY.md §Runtime Decomposition).
+    const flightBStart = snapToSlot(flightAEnd + config.FLIGHT_BUFFER_MINS)
     const flightBEnd = flightBStart + estimatePoolDuration(
       flightBPools, poolBaseline, flightBStrips, refs.refs_per_pool,
     ).actual_duration

@@ -307,9 +307,13 @@ function staleB1Board(): DrawnSchedule {
 // the detail strip does today. The owner decides the wording, and changing it
 // means changing these on purpose.
 describe('DetailStrip strip label on a stale board (P4 (a))', () => {
+  // 021 T4 (2026-10-09): the event changed from JR-W-EPEE-IND. Weapon balance
+  // (METHODOLOGY §Weapon Balance) re-colours B1, and on the stale board only
+  // JR-W-FOIL-IND, VET-M-FOIL-IND-VCMB and VET-W-EPEE-IND-VCMB still have
+  // unseated pools with both DE phases seated (measured).
   it('names the strips the seated phases hold, not "Unplaced", when the pools are unseated', () => {
     const schedule = staleB1Board()
-    const id = 'JR-W-EPEE-IND'
+    const id = 'JR-W-FOIL-IND'
     expect(schedule.runState, 'premise: the settings edit makes the board stale').toBe(RunState.STALE)
     expect(
       schedule.blocks.filter((b) => b.competitionId === id).map((b) => [b.phase, b.unseated]),
@@ -319,10 +323,10 @@ describe('DetailStrip strip label on a stale board (P4 (a))', () => {
 
     render(<DetailStrip schedule={schedule} detailCollapsed={false} onToggleDetailCollapsed={noop} />)
 
-    // DE_PRELIMS holds 0-based strips 12-27 and DE_ROUND_OF_16 holds 4-7.
+    // DE_PRELIMS holds 0-based strips 60-75 and DE_ROUND_OF_16 holds 4-7.
     expect(screen.getByRole('region', { name: 'Selected event' })).toHaveAttribute(
       'data-selected-strips',
-      'Strips 5–8, 13–28',
+      'Strips 5–8, 61–76',
     )
   })
 

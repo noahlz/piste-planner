@@ -17,16 +17,14 @@
  * ERROR and WARN *counts* are in, the messages are out.
  */
 import { describe, it, expect } from 'vitest'
-import { BottleneckSeverity, Phase, ValidationMode } from '../../src/engine/types.ts'
+import { BottleneckSeverity, Phase, ValidationMode, Weapon } from '../../src/engine/types.ts'
 import type {
   Bottleneck, BottleneckCause, Competition, RefRequirementsByDay, ScheduleResult, TournamentConfig,
 } from '../../src/engine/types.ts'
 import { scheduleAll } from '../../src/engine/scheduler.ts'
 import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { peakPoolRefDemand, peakDeRefDemand } from '../../src/engine/refs.ts'
-import { recommendRefCount } from '../../src/engine/stripBudget.ts'
 import { searchStripCount } from '../../src/engine/stripSearch.ts'
-import { resolveRefsPerPool } from '../../src/engine/pools.ts'
 import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
 import type { ScenarioId } from '../helpers/scenarios.ts'
 
@@ -163,7 +161,22 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
   // after a defer-cap failure on attempt 1) and VET-M-EPEE-IND-VCMB (DE start
   // +15). Both equal the app path's counts (24 and 51). The other six scenarios
   // are byte-identical.
-  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 51, B7: 18, B8: 53,
+  //
+  // 021 T4, 2026-10-09 – B6 raised 51 → 53, a deliberate raise under the rule
+  // above (plan decision 4), so a later 021 task cannot lose these events
+  // silently. Weapon balance (METHODOLOGY §Weapon Balance, owner rulings O4 and
+  // O7: no day holds only one weapon class) re-colours B6's day map. B6 gains
+  // JR-M-SABRE-IND, JR-W-SABRE-IND and VET-M-FOIL-IND-VCMB and loses
+  // Y12-W-SABRE-IND, ERRORs 3 → 1. Equal to the app path's 53. Day maps also
+  // move on B1, B3, B5, B7 and B8 with their counts held, and B2 and B4 are
+  // byte-identical, as the plan's O7 probe measured.
+  // B6's `stripRecommendation` moved 63 → 64 alongside its count, and the
+  // pairing was examined (2026-10-09) – it does not halt. Both follow from the
+  // re-coloured day map. The count is scheduleAll at the preset's fixed strips,
+  // scheduleAll never calls the Suggest search, `searchStripCount` has no caller
+  // in src/ outside stripSearch.ts, and the app's Suggest runs `scanStripCounts`
+  // only from the store's `computeSuggestedStrips`.
+  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 53, B7: 18, B8: 53,
 }
 
 /**
@@ -197,6 +210,10 @@ const SCHEDULED_FLOORS: Record<ScenarioId, number> = {
  * B6 used to drop are placed on their days and enter this sum: B4's day peaks
  * 152 / 168 / 190 → 152 / 228 / 230 and B6's 112 / 106 / 118 → 132 / 126 / 131.
  *
+ * 021 T4, 2026-10-09 – membership holds (B6 keeps one ERROR), B6's peaks move.
+ * Weapon balance (METHODOLOGY §Weapon Balance) re-colours B6 and places two
+ * more events: 132 / 126 / 131 → 137 / 147 / 131. B4 is byte-identical.
+ *
  * Membership is asserted in both directions: the day-peaks test below fails if a
  * listed scenario emits no summary line or an unlisted one emits any.
  */
@@ -227,7 +244,6 @@ type ScenarioDigest = {
   warnCountsByCause: Partial<Record<BottleneckCause, number>>
   refRequirementsByDay: RefRequirementsByDay[] | undefined
   daySummaryPeaks: number[]
-  refRecommendation: { three_weapon: number; foil_epee: number }
   // The smallest strip count that places every event — what pressing **Suggest**
   // writes into the app (`stripSearch.ts`), and the only strip number a user
   // sees. `null` is the absence of an answer, never a recommendation of 0
@@ -281,24 +297,6 @@ function dayPeakRefDemands(
   return peaks
 }
 
-/**
- * Refs per pool for the scenario's `refRecommendation`, resolved from the
- * competitions' own `ref_policy`, through `resolveRefsPerPool(policy, 1)` as
- * `StripsPanel.tsx` does for **Suggest**. StripsPanel feeds it the store's
- * `TYPE_DEFAULTS[tournamentType].ref_policy` instead, and the two agree because
- * `factoryParity.test.ts` pins the factory's `ref_policy` to the store's. The
- * policy must be uniform across the scenario, since `recommendRefCount` takes a
- * single factor. A mixed scenario fails here, naming the policies seen, rather
- * than picking one silently.
- */
-function scenarioRefsPerPool(id: ScenarioId, competitions: Competition[]): number {
-  const policies = [...new Set(competitions.map(c => c.ref_policy))]
-  if (policies.length !== 1) {
-    throw new Error(`${id}: expected one ref_policy across the scenario, saw [${policies.join(', ')}]`)
-  }
-  return resolveRefsPerPool(policies[0], 1).refs_per_pool
-}
-
 /** WARN bottlenecks tallied by cause. Counts carry no times, so no message text leaks in. */
 function warnCountsByCause(bottlenecks: Bottleneck[]): Partial<Record<BottleneckCause, number>> {
   const counts: Partial<Record<BottleneckCause, number>> = {}
@@ -343,7 +341,7 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
       de_prelims_strip_count: sr.de_prelims_strip_count,
       de_round_of_16_strip_count: sr.de_round_of_16_strip_count,
       // The single number the pod-captain removal changes. Aggregate ref demand is
-      // dominated by the pool arm, so this never surfaces in the recommendations.
+      // dominated by the pool arm, so a change here would not show in the aggregates.
       peak_de_ref_demand: peakDeRefDemand(byId.get(eventId)!, config),
     }
   }
@@ -355,7 +353,6 @@ function buildDigest(id: ScenarioId): ScenarioDigest {
     warnCountsByCause: warnCountsByCause(bottlenecks),
     refRequirementsByDay: ref_requirements_by_day,
     daySummaryPeaks: dayPeakRefDemands(competitions, config, schedule),
-    refRecommendation: recommendRefCount(competitions, scenarioRefsPerPool(id, competitions), config),
     stripRecommendation: searchStripCount(competitions, config),
     events,
   }
@@ -485,5 +482,36 @@ describe('drift ledger', () => {
 
     // Without this the test passes vacuously if the message format ever changes.
     expect(compared).toBeGreaterThan(0)
+  })
+
+  /**
+   * Weapon balance's board-level outcome (METHODOLOGY §Weapon Balance, owner
+   * rulings O4 and O7): no scheduled day holds only one weapon class, with
+   * right-of-way (foil and sabre) against épée and both genders and team events
+   * pooled. Asserted rather than left to the day-map snapshot, which `vitest -u`
+   * re-accepts. Every B1–B8 board holds both classes, so the rule applies to all
+   * eight. Per-gender one-class days are the plan's tiebreak, not the goal, and
+   * stay out of this test (2 / 1 / 1 / 3 / 3 / 0 / 2 / 0 at 021 T4).
+   *
+   * 021 T4, 2026-10-09 – added with the term. Before it, B7's day 3 held
+   * right-of-way events only.
+   */
+  it('no scheduled day holds only one weapon class', () => {
+    const oneClassDays: string[] = []
+    for (const id of SCENARIO_IDS) {
+      const { competitions, schedule } = runScenario(id)
+      const byId = new Map(competitions.map(c => [c.id, c]))
+      const classesByDay = new Map<number, Set<'epee' | 'row'>>()
+      for (const sr of Object.values(schedule)) {
+        const cls = byId.get(sr.competition_id)!.weapon === Weapon.EPEE ? 'epee' : 'row'
+        const classes = classesByDay.get(sr.assigned_day) ?? new Set()
+        classes.add(cls)
+        classesByDay.set(sr.assigned_day, classes)
+      }
+      for (const [day, classes] of classesByDay) {
+        if (classes.size === 1) oneClassDays.push(`${id} day ${day} (${[...classes][0]} only)`)
+      }
+    }
+    expect(oneClassDays).toEqual([])
   })
 })

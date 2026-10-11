@@ -32,7 +32,9 @@ const BADGE_CLASSES: Record<FindingSeverity, string> = {
  * "Show on grid" jumps the canvas to the row's target (`jumpToCompetition`,
  * store contract §2.1). "Dismiss finding" waves off a row marked `dismissable`
  * (`dismissFinding`, contract §2.2). Those are Warning and Unplaced rows,
- * except the hard same-day rule break (`hard-separation-violated`, 016 R1).
+ * except the broken hard rules: the hard same-day pair
+ * (`hard-separation-violated`, 016 R1) and the split Vet co-day
+ * (`vet-co-day-split`, 021 T6c).
  * `dismissFinding` refuses every other row, so the button is not offered for
  * those.
  */

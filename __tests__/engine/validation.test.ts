@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateConfig, validateSameDayCompletion, validateFeasibility } from '../../src/engine/validation.ts'
+import { validateConfig, validateFeasibility } from '../../src/engine/validation.ts'
 import * as validationEngine from '../../src/engine/validation.ts'
 import type { TournamentConfig, ValidationError, Competition } from '../../src/engine/types.ts'
 import {
@@ -7,7 +7,6 @@ import {
   BottleneckSeverity, RuleKind, ValidationMode,
 } from '../../src/engine/types.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
-import { deBlocksFor } from '../../src/engine/de.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { useStore, type StoreState } from '../../src/store/store.ts'
 
@@ -51,12 +50,9 @@ function findingIdentity(finding: ValidationError): string {
 //     hand-built config carrying a second DE model for one event.
 //
 // POLICY — advisable, not physically blocking; ERROR(binding) / WARN(advisory).
-// D3-explicit: same_population, team-requires-individual (event_type),
+// D3-explicit: team-requires-individual (event_type),
 //   strip minimum shortfalls (resource_precondition), feasibility.
 // Self-classified:
-//   - flighting_group strip shortfalls — same resource-capacity class as
-//     resource_precondition's "strip minimum shortfalls", D3's explicit policy
-//     item; grouped with it rather than invented as a new bucket.
 //   - feasibility_video — not named separately in D3's text; produced by the
 //     same validateFeasibility() sub-validator as feasibility, on the
 //     identical FEASIBILITY_SLACK-tolerant resource-insufficiency computation
@@ -96,10 +92,10 @@ function findingIdentity(finding: ValidationError): string {
 // video dead-config rule fires on B4 (6x), B5 (12x) and B6 (12x).
 // 024 group C, 2026-10-06 – the video dead-config rule no longer fires on B4, B5 or B6: regional individual events are BEST_EFFORT (D9).
 //
-// OUT OF SCOPE for this catalogue: `validateSameDayCompletion` is exported
-// and directly tested, but has zero callers anywhere in src/ (confirmed by
-// grep) — it is not wired into validateConfig's pipeline, so the kind/mode
-// split does not reach it. Its existing direct-call tests are left as-is.
+// The same_population rule went in 021: the app builds one individual event
+// per population key, so it fired only on hand-built configs or beside the
+// days_available bounds ERROR.
+
 // `validateFeasibility` is a sub-validator assembled into validateConfig's
 // pipeline, called with the 2-arg signature since only validateConfig's
 // signature is contractually stated to gain the mode parameter (research
@@ -544,59 +540,6 @@ describe('validateConfig — team event cut_mode (notice: cut-on-team, FR-011)',
   })
 })
 
-describe('validateConfig — same population individuals exceed days_available (policy: same-population)', () => {
-  it('binding ERROR / advisory WARN when same-population individuals > days_available', () => {
-    // Same category + gender + weapon, 4 individual events but only 3 days
-    const config = makeConfig({ days_available: 3 })
-    const comps = [1, 2, 3, 4].map(i =>
-      makeCompetition({
-        id: `indiv-${i}`,
-        gender: Gender.MEN,
-        category: Category.DIV1,
-        weapon: Weapon.FOIL,
-        event_type: EventType.INDIVIDUAL,
-      }),
-    )
-    const { binding, advisory } = validateBoth(config, comps)
-    expectPolicyPair('same_population', binding, advisory)
-  })
-
-  it('does not error when same-population count <= days_available', () => {
-    const config = makeConfig({ days_available: 3 })
-    const comps = [1, 2, 3].map(i =>
-      makeCompetition({
-        id: `indiv-${i}`,
-        gender: Gender.MEN,
-        category: Category.DIV1,
-        weapon: Weapon.FOIL,
-        event_type: EventType.INDIVIDUAL,
-      }),
-    )
-    const { binding, advisory } = validateBoth(config, comps)
-    expect(binding.filter(e => e.field === 'same_population')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'same_population')).toHaveLength(0)
-  })
-})
-
-describe('validateConfig — flighting group strips exceed strips_total (policy: strip minimum shortfalls)', () => {
-  it('binding ERROR / advisory WARN when flighting group strips_allocated sum exceeds strips_total', () => {
-    const config = makeConfig({ strips_total: 10 })
-    const c1 = makeCompetition({ id: 'fg-1', flighted: true, flighting_group_id: 'group-A', strips_allocated: 8 })
-    const c2 = makeCompetition({ id: 'fg-2', flighted: true, flighting_group_id: 'group-A', strips_allocated: 6 })
-    const { binding, advisory } = validateBoth(config, [c1, c2])
-    expectPolicyPair('flighting_group', binding, advisory)
-  })
-
-  it('does not error when flighting group strips fit within strips_total', () => {
-    const config = makeConfig({ strips_total: 24 })
-    const c1 = makeCompetition({ id: 'fg-1', flighted: true, flighting_group_id: 'group-A', strips_allocated: 8 })
-    const c2 = makeCompetition({ id: 'fg-2', flighted: true, flighting_group_id: 'group-A', strips_allocated: 8 })
-    const { binding, advisory } = validateBoth(config, [c1, c2])
-    expect(binding.filter(e => e.field === 'flighting_group')).toHaveLength(0)
-    expect(advisory.filter(e => e.field === 'flighting_group')).toHaveLength(0)
-  })
-})
-
 describe('validateConfig — video dead-config warning (notice: video-dead-config)', () => {
   it('WARN in both modes for REQUIRED video policy with SINGLE_STAGE de_mode', () => {
     const comp = makeCompetition({
@@ -925,23 +868,16 @@ describe('validateConfig — rule catalogue is equal across modes', () => {
 
 describe('finding identity — stable across recomputes (US3, research D4)', () => {
   it('is equal across two recomputes of the same config for the same finding', () => {
-    const config = makeConfig({ days_available: 3 })
-    const comps = [1, 2, 3, 4].map(i =>
-      makeCompetition({
-        id: `indiv-${i}`,
-        gender: Gender.MEN,
-        category: Category.DIV1,
-        weapon: Weapon.FOIL,
-        event_type: EventType.INDIVIDUAL,
-      }),
-    )
-    const first = validateConfig(config, comps, ValidationMode.BINDING)
-    const second = validateConfig(config, comps, ValidationMode.BINDING)
+    // A team event with no matching individual fires team-requires-individual.
+    const config = makeConfig()
+    const { team } = makeIndividualTeamPair()
+    const first = validateConfig(config, [team], ValidationMode.BINDING)
+    const second = validateConfig(config, [team], ValidationMode.BINDING)
 
-    const firstFinding = first.find(e => e.field === 'same_population')
-    const secondFinding = second.find(e => e.field === 'same_population')
-    expect(firstFinding, 'first recompute should still fire same_population').toBeDefined()
-    expect(secondFinding, 'second recompute should still fire same_population').toBeDefined()
+    const firstFinding = first.find(e => e.rule === 'team-requires-individual')
+    const secondFinding = second.find(e => e.rule === 'team-requires-individual')
+    expect(firstFinding, 'first recompute should still fire team-requires-individual').toBeDefined()
+    expect(secondFinding, 'second recompute should still fire team-requires-individual').toBeDefined()
     expect(findingIdentity(firstFinding!)).toBe(findingIdentity(secondFinding!))
   })
 
@@ -997,24 +933,14 @@ describe('finding identity — rule and subjects per kind (US3, data-model.md §
     expect(f1!.subjects).toEqual(['bad-fencer-count'])
   })
 
-  // specs/003-p2-derived-state/contracts/serialization-v2.md (removed; git show 0ab5bd2dc9:specs/003-p2-derived-state/contracts/serialization-v2.md)
-  it('policy: same-population rule id is exactly "same-population" — already pinned by serialization-v2 and placements.test.ts dismissal fixtures', () => {
-    const config = makeConfig({ days_available: 3 })
-    const comps = [1, 2, 3, 4].map(i =>
-      makeCompetition({
-        id: `indiv-${i}`,
-        gender: Gender.MEN,
-        category: Category.DIV1,
-        weapon: Weapon.FOIL,
-        event_type: EventType.INDIVIDUAL,
-      }),
-    )
-    const findings = validateConfig(config, comps, ValidationMode.BINDING)
-    const finding = findings.find(e => e.field === 'same_population')
+  it('policy: a lone team event fires team-requires-individual, kebab-case, with the team event as its subject', () => {
+    const { team } = makeIndividualTeamPair()
+    const findings = validateConfig(makeConfig(), [team], ValidationMode.BINDING)
+    const finding = findings.find(e => e.rule === 'team-requires-individual')
     expect(finding).toBeDefined()
     expect(finding!.kind).toBe(RuleKind.POLICY)
-    expect(finding!.rule).toBe('same-population')
-    expect(finding!.subjects).toEqual(['indiv-1', 'indiv-2', 'indiv-3', 'indiv-4'])
+    expect(finding!.rule).toMatch(KEBAB_CASE)
+    expect(finding!.subjects).toEqual(['team'])
   })
 
   it('notice: days_available rule is kebab-case, stable, and subjects is [field] for this global rule', () => {
@@ -1029,72 +955,6 @@ describe('finding identity — rule and subjects per kind (US3, data-model.md §
     expect(f1!.rule).toMatch(KEBAB_CASE)
     expect(f1!.rule).toBe(f2!.rule)
     expect(f1!.subjects).toEqual(['days_available'])
-  })
-})
-
-// ──────────────────────────────────────────────
-// validateSameDayCompletion — exported but not wired into validateConfig's
-// pipeline (no callers in src/, 024 D14); out of scope for the kind/mode split.
-//
-// 024 D7: Single-Day Fit measures the worst case (pool round + admin gap + full
-// DE) against the day's hard window, start to hard end – 9:00 to 22:00, 780
-// minutes, at default hours – or the widest day's when the organizer edits
-// hours. Running past the 19:00 soft target is a warning elsewhere, not a
-// Single-Day Fit failure (METHODOLOGY.md §Single-Day Fit, §Same-Day Completion).
-// ──────────────────────────────────────────────
-
-describe('validateSameDayCompletion — the hard window (024 D7)', () => {
-  const ID = 'X-M-FOIL-IND'
-
-  /**
-   * A competition whose worst case is exactly `total` minutes. Seven fencers
-   * make one pool of 7, which takes the table's own entry (§Pool Duration
-   * Estimation), so the foil entry is set to `total` less the admin gap and
-   * the DE's full-ask minutes.
-   */
-  function worstCaseOf(total: number, overrides: Partial<TournamentConfig> = {}) {
-    const base = makeConfig(overrides)
-    const competition = makeCompetition({
-      id: ID, fencer_count: 7, weapon: Weapon.FOIL, cut_mode: CutMode.DISABLED, de_mode: DeMode.SINGLE_STAGE,
-    })
-    const de = deBlocksFor(competition, base).baselineMinutes
-    const config: TournamentConfig = {
-      ...base,
-      pool_round_duration_table: { ...base.pool_round_duration_table, [Weapon.FOIL]: total - base.ADMIN_GAP_MINS - de },
-    }
-    return validateSameDayCompletion(competition, config)
-  }
-
-  // Day 2 opens at 9:00 and ends at 23:00, which is also its hard end:
-  // an 840-minute window, the widest of the two.
-  const WIDENED = {
-    days_available: 2,
-    dayConfigs: [
-      { day_start_time: 540, day_end_time: 1140, day_hard_end_time: 1320 },
-      { day_start_time: 1980, day_end_time: 2820, day_hard_end_time: 2820 },
-    ],
-  }
-
-  it('passes a 700-minute worst case at default hours, past the 600-minute target day', () => {
-    expect(worstCaseOf(700)).toBeNull()
-  })
-
-  it('fails a 790-minute worst case at default hours, naming the 780-minute hard window', () => {
-    const result = worstCaseOf(790)
-    expect(result).not.toBeNull()
-    expect(result?.severity).toBe(BottleneckSeverity.ERROR)
-    expect(result?.field).toBe('same_day_completion')
-    expect(result?.rule).toBe('same-day-completion')
-    expect(result?.subjects).toEqual([ID])
-    expect(result?.message).toMatch(/\b790 min\b.*\b780 min\b/)
-  })
-
-  it('allows more when the organizer widens a day: 830 minutes fit the widest day\'s 840', () => {
-    expect(worstCaseOf(830, WIDENED)).toBeNull()
-  })
-
-  it('still fails past the widest day\'s hard window', () => {
-    expect(worstCaseOf(850, WIDENED)?.message).toMatch(/\b850 min\b.*\b840 min\b/)
   })
 })
 

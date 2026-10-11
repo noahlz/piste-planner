@@ -264,12 +264,6 @@ describe('resolveRefsPerPool', () => {
     expect(result.refs_needed).toBe(8)
   })
 
-  it('Policy AUTO, 4 pools → refs_per_pool=2, refs_needed=8 (no fallback)', () => {
-    const result = resolveRefsPerPool(RefPolicy.AUTO, 4)
-    expect(result.refs_per_pool).toBe(2)
-    expect(result.refs_needed).toBe(8)
-  })
-
   it('Policy ONE, 1 pool → refs_per_pool=1, refs_needed=1', () => {
     const result = resolveRefsPerPool(RefPolicy.ONE, 1)
     expect(result.refs_per_pool).toBe(1)

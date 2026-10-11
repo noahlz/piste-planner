@@ -1,4 +1,4 @@
-import type { Category, Competition, ScheduleResult } from './types.ts'
+import type { Category, Competition } from './types.ts'
 import { Category as CategoryEnum, EventType, TournamentType, VetAgeGroup } from './types.ts'
 import {
   CROSSOVER_GRAPH,
@@ -9,7 +9,6 @@ import {
   INDIV_TEAM_CROSS_LEVEL_BLOCKS,
   PENALTY_WEIGHTS,
   PROXIMITY_GRAPH,
-  PROXIMITY_PENALTY_WEIGHTS,
   SOFT_SEPARATION_PAIRS,
 } from './constants.ts'
 import type { Group2Side } from './constants.ts'
@@ -131,7 +130,7 @@ function group2SoftSeparationPenalty(c1: CompFields, c2: CompFields): number | u
  * Same-population check (METHODOLOGY §Same-Population Conflicts).
  *
  * Two competitions are same-population (must NOT share a day, hard at every
- * relaxation level) when they share category + gender + weapon, with one
+ * tournament type) when they share category + gender + weapon, with one
  * Veteran-specific refinement:
  *
  * - For non-Veteran categories: same category + gender + weapon is enough.
@@ -156,13 +155,40 @@ function isSamePopulation(c1: CompFields, c2: CompFields): boolean {
   return true
 }
 
-const VET_AGE_BANDED: ReadonlySet<VetAgeGroup> = new Set([
-  VetAgeGroup.VET40,
-  VetAgeGroup.VET50,
-  VetAgeGroup.VET60,
-  VetAgeGroup.VET70,
+/**
+ * The age-banded Vet bands, oldest first (METHODOLOGY §Veteran Age-Group Co-Day
+ * Rule). The one order the co-day stagger's next-older band and the split
+ * co-day's owner and message both read.
+ */
+export const VET_BANDS_OLDEST_FIRST = [
   VetAgeGroup.VET80,
-])
+  VetAgeGroup.VET70,
+  VetAgeGroup.VET60,
+  VetAgeGroup.VET50,
+  VetAgeGroup.VET40,
+] as const
+export type VetBand = (typeof VET_BANDS_OLDEST_FIRST)[number]
+
+const VET_AGE_BANDED: ReadonlySet<VetAgeGroup> = new Set(VET_BANDS_OLDEST_FIRST)
+
+/** A band's place in `VET_BANDS_OLDEST_FIRST`: a lower rank is an older band. */
+export function vetBandRank(band: VetBand): number {
+  return VET_BANDS_OLDEST_FIRST.indexOf(band)
+}
+
+/**
+ * An age-banded Veteran individual event (Vet 40–80): a member of a Vet co-day
+ * (METHODOLOGY §Veteran Age-Group Co-Day Rule). Vet Combined and team events
+ * are not.
+ */
+export function isAgeBandedVet<C extends Pick<Competition, 'category' | 'event_type' | 'vet_age_group'>>(
+  c: C,
+): c is C & { vet_age_group: VetBand } {
+  return c.category === CategoryEnum.VETERAN
+    && c.event_type === EventType.INDIVIDUAL
+    && c.vet_age_group !== null
+    && VET_AGE_BANDED.has(c.vet_age_group)
+}
 
 /**
  * Hard-blocks a VET_COMBINED individual event from sharing a day with any
@@ -256,48 +282,7 @@ export function getProximityWeight(cat1: Category, cat2: Category): number {
 }
 
 // ──────────────────────────────────────────────
-// Proximity penalty
-// ──────────────────────────────────────────────
-
-/**
- * Returns the total proximity penalty for scheduling `competition` on `proposedDay`
- * relative to already-scheduled competitions.
- *
- * Negative values are bonuses (preferred scheduling distance).
- */
-export function proximityPenalty(
-  competition: CompFields,
-  proposedDay: number,
-  schedule: Record<string, ScheduleResult>,
-  competitions: Competition[],
-): number {
-  let total = 0.0
-
-  for (const c2 of competitions) {
-    if (c2.id === competition.id) continue
-    if (c2.gender !== competition.gender) continue
-    if (c2.weapon !== competition.weapon) continue
-
-    const sr = schedule[c2.id]
-    if (!sr) continue
-
-    const proxWeight = getProximityWeight(competition.category, c2.category)
-    if (proxWeight === 0.0) continue
-
-    const dayGap = Math.abs(proposedDay - sr.assigned_day)
-    if (dayGap === 0) continue
-
-    // Clamp day gap at 3 for the weights table lookup
-    const clampedGap = Math.min(dayGap, 3)
-    const rawPenalty = PROXIMITY_PENALTY_WEIGHTS[clampedGap] * proxWeight
-    total += rawPenalty
-  }
-
-  return total
-}
-
-// ──────────────────────────────────────────────
-// Individual/team proximity
+// Individual counterpart
 // ──────────────────────────────────────────────
 
 export function findIndividualCounterpart(
@@ -312,36 +297,4 @@ export function findIndividualCounterpart(
       c.weapon === competition.weapon &&
       c.event_type === EventType.INDIVIDUAL,
   )
-}
-
-/**
- * For a TEAM competition, returns a scheduling incentive/penalty based on
- * how far the individual counterpart is from the proposed day.
- *
- * - gap=+1 (team day after individual): -0.4 bonus (ideal ordering)
- * - gap=0 (same day): 0.0 (handled elsewhere)
- * - gap=-1 (team before individual): 1.0 penalty (wrong order)
- * - |gap|>=2 (too far apart in either direction): 0.3 penalty
- */
-export function individualTeamProximityPenalty(
-  competition: Competition,
-  proposedDay: number,
-  schedule: Record<string, ScheduleResult>,
-  competitions: Competition[],
-): number {
-  if (competition.event_type !== EventType.TEAM) return 0.0
-
-  const ind = findIndividualCounterpart(competition, competitions)
-  if (!ind) return 0.0
-
-  const sr = schedule[ind.id]
-  if (!sr) return 0.0
-
-  const gap = proposedDay - sr.assigned_day
-
-  if (gap === 1) return PENALTY_WEIGHTS.INDIV_TEAM_DAY_AFTER
-  if (gap === 0) return 0.0
-  if (gap === -1) return PENALTY_WEIGHTS.TEAM_BEFORE_INDIVIDUAL
-  // |gap| >= 2: too far apart in either direction
-  return PENALTY_WEIGHTS.INDIV_TEAM_2_PLUS_DAYS
 }

@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   computeStripCap,
-  recommendRefCount,
   flagFlightingCandidates,
   buildStrips,
   peakDeStripDemand,
 } from '../../src/engine/stripBudget.ts'
-import { makeCompetition, makeConfig } from '../helpers/factories.ts'
-import { Weapon, DeMode } from '../../src/engine/types.ts'
+import { makeCompetition, makeConfig, makeStrips } from '../helpers/factories.ts'
+import { DeMode } from '../../src/engine/types.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 import { resolveVideoStrips } from '../../src/store/typeDefaults.ts'
@@ -42,118 +41,21 @@ describe('computeStripCap', () => {
 })
 
 // ──────────────────────────────────────────────
-// recommendRefCount
-// ──────────────────────────────────────────────
-
-describe('recommendRefCount', () => {
-  it('returns zeros for an empty competition list', () => {
-    expect(recommendRefCount([], 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 0 })
-  })
-
-  it('sabre-heavy: all refs are three-weapon, foil/epee surplus is zero', () => {
-    const comps = [
-      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 70 }), // 10 pools
-      makeCompetition({ id: 's2', weapon: Weapon.SABRE, fencer_count: 35 }), // 5 pools
-    ]
-    // peakSabrePools=15, peakSabreDe=10, max=15; peakFoilEpee=0 → three_weapon=15, foil_epee=0
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 15, foil_epee: 0 })
-  })
-
-  it('foil/epee only: three_weapon=0, all go to foil_epee', () => {
-    const comps = [
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 70 }), // 10 pools
-      makeCompetition({ id: 'e1', weapon: Weapon.EPEE, fencer_count: 35 }), // 5 pools
-    ]
-    // peakFoilEpeePools=15, peakFoilEpeeDe=10, max=15; peakSabre=0 → three_weapon=0, foil_epee=15
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 15 })
-  })
-
-  it('mixed weapons: foil/epee refs are the surplus beyond the sabre crew', () => {
-    const comps = [
-      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 70 }), // 10 pools
-      makeCompetition({ id: 's2', weapon: Weapon.SABRE, fencer_count: 35 }), // 5 pools
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 140 }), // 20 pools
-      makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 70 }),  // 10 pools
-    ]
-    // peakSabre: max(15 pools, 10 DE) = 15. peakFoilEpee: max(30 pools, 10 DE) = 30.
-    // three_weapon=15, foil_epee = 30 − 15 = 15
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 15, foil_epee: 15 })
-  })
-
-  it('uses only the top-2 events per weapon class', () => {
-    // Third-largest events should not contribute to peak
-    const comps = [
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 140 }), // 20 pools
-      makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 70 }),  // 10 pools
-      makeCompetition({ id: 'f3', weapon: Weapon.FOIL, fencer_count: 336 }), // 48 pools — 3rd! (MAX_FENCERS, so the largest real event)
-    ]
-    // Pool counts sorted desc: f3=48, f1=20, f2=10. Top-2 are f3 and f1; f2 is excluded.
-    // peak foil/epee = 48 + 20 = 68; three_weapon=0
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 68 })
-  })
-
-  it('scales with refsPerPool', () => {
-    const comps = [
-      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 35 }), // 5 pools
-    ]
-    // peakSabre: max(5*2=10 pools, 4 DE – bracket 64, video ask min(4, 32)) = 10 → three_weapon=10
-    expect(recommendRefCount(comps, 2, makeConfig())).toEqual({ three_weapon: 10, foil_epee: 0 })
-  })
-
-  it('DE demand exceeds pool demand when the video ask is high and fencer count is low', () => {
-    // 14 fencers = 2 pools → pool demand = 2
-    // DE: bracket 16, video ask min(4, 16/2) = 4 (METHODOLOGY.md §DE Modes).
-    // DE demand = DE_REFS(1) × 4 = 4 (one referee per strip, no pod captains).
-    const comps = [
-      makeCompetition({
-        id: 'de-heavy',
-        weapon: Weapon.FOIL,
-        fencer_count: 14,
-      }),
-    ]
-    // max(2 pools, 4 DE) = 4 → foil_epee=4
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 4 })
-  })
-
-  it('staged DE video-stage contention drives demand above per-class peaks', () => {
-    // 3 foil competitions with STAGED DEs, 14 fencers each: bracket 16, video ask min(4, 8) = 4
-    // Pool demand: 14 fencers = 2 pools each. Top-2 = 4.
-    // DE demand per comp: DE_REFS(1) × 4 = 4. Top-2 = 8.
-    // Per-class peak = max(4 pools, 8 DE) = 8
-    // Video-stage sum: 3 × 4 = 12 > 8 → bumps foil_epee to 12
-    const comps = [
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED }),
-      makeCompetition({ id: 'f2', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED }),
-      makeCompetition({ id: 'f3', weapon: Weapon.FOIL, fencer_count: 14, de_mode: DeMode.STAGED }),
-    ]
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 0, foil_epee: 12 })
-  })
-
-  it('mixed: one weapon class pool-dominant, another DE-dominant', () => {
-    const comps = [
-      // Sabre: 70 fencers = 10 pools (pool-dominant). DE demand = video ask min(4, 128/2) = 4.
-      makeCompetition({ id: 's1', weapon: Weapon.SABRE, fencer_count: 70 }),
-      // Foil: 14 fencers = 2 pools, bracket 16 → DE demand = min(4, 8) = 4 (DE-dominant)
-      makeCompetition({ id: 'f1', weapon: Weapon.FOIL, fencer_count: 14 }),
-    ]
-    // peakSabre = max(10 pools, 4 DE) = 10
-    // peakFoilEpee = max(2 pools, 4 DE) = 4
-    // three_weapon=10, foil_epee = max(0, 4 - 10) = 0
-    expect(recommendRefCount(comps, 1, makeConfig())).toEqual({ three_weapon: 10, foil_epee: 0 })
-  })
-})
-
-// ──────────────────────────────────────────────
 // flagFlightingCandidates
 // ──────────────────────────────────────────────
 
 describe('flagFlightingCandidates', () => {
+  /** A config whose global pool strip cap is `cap`: `cap` strips at 100%. */
+  const capConfig = (cap: number) => makeConfig({ strips: makeStrips(cap, 0), max_pool_strip_pct: 1 })
+  /** 10 strips at the factory's 0.80: a global cap of 8. */
+  const tenStrips = makeConfig({ strips: makeStrips(10, 0) })
+
   it('returns empty array when all events fit within the cap', () => {
     const comps = [
       makeCompetition({ id: 'a', fencer_count: 21 }), // 3 pools
       makeCompetition({ id: 'b', fencer_count: 14 }), // 2 pools
     ]
-    expect(flagFlightingCandidates(comps, 5)).toEqual([])
+    expect(flagFlightingCandidates(comps, capConfig(5))).toEqual([])
   })
 
   it('flags events whose pool count exceeds the cap', () => {
@@ -162,7 +64,7 @@ describe('flagFlightingCandidates', () => {
       makeCompetition({ id: 'small', fencer_count: 14 }), // 2 pools
     ]
     // cap=8: 10>8 → 'big' flagged; 2≤8 → 'small' not flagged
-    expect(flagFlightingCandidates(comps, 8)).toEqual(['big'])
+    expect(flagFlightingCandidates(comps, capConfig(8))).toEqual(['big'])
   })
 
   it('flags multiple events when several exceed the cap', () => {
@@ -172,19 +74,53 @@ describe('flagFlightingCandidates', () => {
       makeCompetition({ id: 'c', fencer_count: 14 }), // 2 pools
     ]
     // cap=7: 10>7, 8>7 → both flagged
-    expect(flagFlightingCandidates(comps, 7)).toEqual(['a', 'b'])
+    expect(flagFlightingCandidates(comps, capConfig(7))).toEqual(['a', 'b'])
   })
 
   it('does not flag an event exactly at the cap', () => {
     const comps = [makeCompetition({ id: 'exact', fencer_count: 56 })] // 8 pools
-    expect(flagFlightingCandidates(comps, 8)).toEqual([])
+    expect(flagFlightingCandidates(comps, capConfig(8))).toEqual([])
   })
 
   it('correctly computes n_pools=1 for small events (≤9 fencers), not ceil(9/7)=2', () => {
     // Without the poolCountFor fix, Math.ceil(9/7)=2 would incorrectly flag this
     // at a cap of 1, but the real pool count is 1 so it should not be flagged at cap=1.
     const comps = [makeCompetition({ id: 'tiny', fencer_count: 9 })]
-    expect(flagFlightingCandidates(comps, 1)).toEqual([])
+    expect(flagFlightingCandidates(comps, capConfig(1))).toEqual([])
+  })
+
+  // The cap is per event (METHODOLOGY §Strip Budget): computeStripCap with the
+  // event's own max_pool_strip_pct_override, the global percentage otherwise.
+
+  it('flags an event whose own override lowers its cap below its pools, though the global cap would not', () => {
+    // 8 pools: within the global cap of 8, over its own cap of floor(10 × 0.5) = 5.
+    const comps = [makeCompetition({ id: 'small', fencer_count: 56, max_pool_strip_pct_override: 0.5 })]
+    expect(flagFlightingCandidates(comps, tenStrips)).toEqual(['small'])
+  })
+
+  it('does not flag an event whose own override raises its cap to its pools, though the global cap would', () => {
+    // Both are 10 pools, over the global cap of 8. 'raised' has its own cap of
+    // floor(10 × 1.0) = 10, while 'global' keeps the global cap and is flagged.
+    const comps = [
+      makeCompetition({ id: 'raised', fencer_count: 70, max_pool_strip_pct_override: 1.0 }),
+      makeCompetition({ id: 'global', fencer_count: 70 }),
+    ]
+    expect(flagFlightingCandidates(comps, tenStrips)).toEqual(['global'])
+  })
+
+  it("skips an event over the config's MAX_FENCERS, as analysis Pass 1 does", () => {
+    // 70 fencers is sizeable at the engine's own bounds (336) but not under a
+    // config maximum of 64, so it has no pool round to flight.
+    const comps = [makeCompetition({ id: 'over', fencer_count: 70 })]
+    expect(flagFlightingCandidates(comps, makeConfig({ strips: makeStrips(10, 0), MAX_FENCERS: 64 }))).toEqual([])
+  })
+
+  it("skips an event under the config's MIN_FENCERS, as analysis Pass 1 does", () => {
+    // 5 fencers is sizeable at the engine's own minimum (2) and would be flagged
+    // over a cap of 0, but not under a config minimum of 8.
+    const comps = [makeCompetition({ id: 'under', fencer_count: 5 })]
+    const config = makeConfig({ strips: makeStrips(10, 0), max_pool_strip_pct: 0, MIN_FENCERS: 8 })
+    expect(flagFlightingCandidates(comps, config)).toEqual([])
   })
 })
 

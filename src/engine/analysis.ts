@@ -4,16 +4,7 @@ import { ENGINE_FENCER_BOUNDS, computePoolStructure, computeDeFencerCount, isSiz
 import type { FencerCountBounds } from './pools.ts'
 import { computeBracketSize, demandsVideoStage } from './de.ts'
 import { suggestFlightingGroups } from './flighting.ts'
-import { REGIONAL_QUALIFIER_TYPES } from './constants.ts'
-import { computeStripCap } from './stripBudget.ts'
-
-/**
- * Returns true when the tournament is a regional qualifier (RYC, RJCC, ROC, SYC, SJCC).
- * Tournament type lives on the config, not on individual competitions.
- */
-export function isRegionalQualifier(config: TournamentConfig): boolean {
-  return REGIONAL_QUALIFIER_TYPES.has(config.tournament_type)
-}
+import { computeStripCap, flagFlightingCandidates } from './stripBudget.ts'
 
 /**
  * The **ceiling** of the strip search (`stripSearch.ts`): the strips the venue
@@ -92,23 +83,6 @@ export function busiestDayLoad(loads: readonly number[], daysAvailable: number):
 }
 
 /**
- * Returns the maximum allowable pool count difference between men's and women's
- * events sharing the same age/weapon group (METHODOLOGY.md §Phase 2: Pre-Scheduling Analysis).
- *
- * Threshold is based on the LARGER pool count of the two events:
- *   ≤3 pools → 0  (must be equal)
- *   4–7      → 1
- *   8–11     → 2
- *   12+      → 3
- */
-export function genderEquityAllowableDiff(largerPools: number): number {
-  if (largerPools <= 3) return 0
-  if (largerPools <= 7) return 1
-  if (largerPools <= 11) return 2
-  return 3
-}
-
-/**
  * Performs pre-scheduling analysis across all 7 passes defined in METHODOLOGY.md §Phase 2: Pre-Scheduling Analysis.
  * Pure function — no global state, identical output for identical input.
  *
@@ -153,33 +127,34 @@ export function initialAnalysis(
   }
 
   // ── Pass 1: strip deficit → flighting suggestions ────────────────────────
+  // flagFlightingCandidates decides which events exceed their own cap, and
+  // this pass recomputes the cap and pool count only for the message text.
+  const candidates = new Set(flagFlightingCandidates(competitions, config))
   for (const comp of competitions) {
-    if (!sizeable(comp)) continue
+    if (!candidates.has(comp.id)) continue
     const effectiveCap = computeStripCap(
       config.strips_total,
       config.max_pool_strip_pct,
       comp.max_pool_strip_pct_override,
     )
     const ps = computePoolStructure(comp.fencer_count, comp.use_single_pool_override)
-    if (ps.n_pools > effectiveCap) {
-      if (!comp.flighted) {
-        warnings.push({
-          competition_id: comp.id,
-          phase: Phase.POOLS,
-          cause: BottleneckCause.STRIP_DEFICIT_NO_FLIGHTING,
-          rule: BottleneckRule.POOLS_EXCEED_STRIP_CAP_UNFLIGHTED,
-          subjects: [comp.id],
-          severity: BottleneckSeverity.WARN,
-          delay_mins: 0,
-          message: `${comp.id}: ${ps.n_pools} pools but only ${effectiveCap} strips available; flighting not enabled`,
-        })
-      }
-      // Suggest splitting into two flights regardless of current flighting state
-      const poolsPerFlight = Math.ceil(ps.n_pools / 2)
-      suggestions.push(
-        `${comp.id}: consider flighting (${poolsPerFlight} pools per flight) — ${ps.n_pools} pools exceeds ${effectiveCap} strips`,
-      )
+    if (!comp.flighted) {
+      warnings.push({
+        competition_id: comp.id,
+        phase: Phase.POOLS,
+        cause: BottleneckCause.STRIP_DEFICIT_NO_FLIGHTING,
+        rule: BottleneckRule.POOLS_EXCEED_STRIP_CAP_UNFLIGHTED,
+        subjects: [comp.id],
+        severity: BottleneckSeverity.WARN,
+        delay_mins: 0,
+        message: `${comp.id}: ${ps.n_pools} pools but only ${effectiveCap} strips available; flighting not enabled`,
+      })
     }
+    // Suggest splitting into two flights regardless of current flighting state
+    const poolsPerFlight = Math.ceil(ps.n_pools / 2)
+    suggestions.push(
+      `${comp.id}: consider flighting (${poolsPerFlight} pools per flight) — ${ps.n_pools} pools exceeds ${effectiveCap} strips`,
+    )
   }
 
   // ── Pass 2: flighting group suggestions ──────────────────────────────────

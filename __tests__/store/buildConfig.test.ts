@@ -7,11 +7,10 @@ import { defaultCutForEntry } from '../../src/store/competitionDefaults.ts'
 import { findCompetition } from '../../src/engine/catalogue.ts'
 import type { Strip, Competition } from '../../src/engine/types.ts'
 import {
-  DAY_START_MINS, DAY_END_MINS, LATEST_START_MINS, LATEST_START_OFFSET,
-  ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS, THRESHOLD_MINS,
+  DAY_START_MINS, DAY_END_MINS, LATEST_START_OFFSET,
+  ADMIN_GAP_MINS, FLIGHT_BUFFER_MINS,
   SLOT_MINS, DAY_LENGTH_MINS, DE_REFS,
-  SAME_TIME_WINDOW_MINS, INDIV_TEAM_MIN_GAP_MINS,
-  EARLY_START_THRESHOLD, MAX_RESCHEDULE_ATTEMPTS,
+  INDIV_TEAM_MIN_GAP_MINS,
   MAX_FENCERS, MIN_FENCERS,
   DEFAULT_POOL_ROUND_DURATION_TABLE,
   DE_BOUT_DURATION, DE_BOUT_DURATION_10_TOUCH, TEAM_MATCH_DURATION, DEFAULT_DE_STRIP_FOOTPRINT,
@@ -19,7 +18,7 @@ import {
 } from '../../src/engine/constants.ts'
 import {
   Category, Gender, Weapon, EventType,
-  CutMode, DeMode, VideoPolicy, RefPolicy, DeStripRequirement,
+  CutMode, DeMode, VideoPolicy, RefPolicy,
   TournamentType,
 } from '../../src/engine/types.ts'
 
@@ -176,15 +175,11 @@ describe('buildTournamentConfig', () => {
 
       expect(comp.earliest_start).toBe(0)
       expect(comp.latest_end).toBe(Infinity)
-      expect(comp.optional).toBe(false)
       // `de_round_of_16_strips` is gone since 024 group A: the video block asks
       // `min(4, bracketSize / 2)` through one engine function (METHODOLOGY.md
       // §DE Modes; 024 plan D6), so the bridge has no strip count to set.
       expect(comp).not.toHaveProperty('de_round_of_16_strips')
-      expect(comp.de_round_of_16_requirement).toBe(DeStripRequirement.HARD)
       expect(comp.flighted).toBe(false)
-      expect(comp.flighting_group_id).toBeNull()
-      expect(comp.is_priority).toBe(false)
       // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
       // the ledger factory (`__tests__/helpers/scenarios.ts`'s `buildCompetitions`,
       // `strips_allocated`). 64 fencers
@@ -263,7 +258,6 @@ describe('buildTournamentConfig', () => {
 
       expect(config.ADMIN_GAP_MINS).toBe(ADMIN_GAP_MINS)
       expect(config.FLIGHT_BUFFER_MINS).toBe(FLIGHT_BUFFER_MINS)
-      expect(config.THRESHOLD_MINS).toBe(THRESHOLD_MINS)
       expect(config.SLOT_MINS).toBe(SLOT_MINS)
       expect(config.DE_BOUT_DURATION).toEqual(DE_BOUT_DURATION)
       // 024 group A: the 10-touch and team-match times a DE is derived from
@@ -322,15 +316,11 @@ describe('buildTournamentConfig', () => {
 
       expect(config.DAY_START_MINS).toBe(DAY_START_MINS)
       expect(config.DAY_END_MINS).toBe(DAY_END_MINS)
-      expect(config.LATEST_START_MINS).toBe(LATEST_START_MINS)
       expect(config.LATEST_START_OFFSET).toBe(LATEST_START_OFFSET)
       expect(config.SLOT_MINS).toBe(SLOT_MINS)
       expect(config.DAY_LENGTH_MINS).toBe(DAY_LENGTH_MINS)
       expect(config.DE_REFS).toBe(DE_REFS)
-      expect(config.SAME_TIME_WINDOW_MINS).toBe(SAME_TIME_WINDOW_MINS)
       expect(config.INDIV_TEAM_MIN_GAP_MINS).toBe(INDIV_TEAM_MIN_GAP_MINS)
-      expect(config.EARLY_START_THRESHOLD).toBe(EARLY_START_THRESHOLD)
-      expect(config.MAX_RESCHEDULE_ATTEMPTS).toBe(MAX_RESCHEDULE_ATTEMPTS)
       expect(config.MAX_FENCERS).toBe(MAX_FENCERS)
       expect(config.MIN_FENCERS).toBe(MIN_FENCERS)
       expect(config.pool_round_duration_table).toEqual(DEFAULT_POOL_ROUND_DURATION_TABLE)
@@ -463,8 +453,6 @@ describe('buildTournamentConfig', () => {
 
       for (const comp of competitions) {
         expect(comp.flighted).toBe(false)
-        expect(comp.flighting_group_id).toBeNull()
-        expect(comp.is_priority).toBe(false)
       }
 
       // T061a: the app pre-allocates `max(2, ceil(fencer_count / 7))`, matching
@@ -524,7 +512,15 @@ describe('buildTournamentConfig', () => {
      *  BEST_EFFORT.
      *
      *  Edited again at 018 T1 (2026-10-07), only `cut_value`: the six NAC Div 1
-     *  individual events went 20 → 25 (R4, S8 p.37). Junior stays 20. */
+     *  individual events went 20 → 25 (R4, S8 p.37). Junior stays 20.
+     *
+     *  Edited again at 021 T1b (2026-10-08): `optional` and
+     *  `de_round_of_16_requirement` left every row, with the Competition fields
+     *  that nothing read.
+     *
+     *  Edited again at 021 T3 (2026-10-08): the two flighting-group fields (the group
+     *  id and the priority flag) left every row with the group path, which no
+     *  app state could reach. */
     const FIXTURE: { NAC: Competition[]; ROC: Competition[] } = JSON.parse(
       readFileSync(
         `${process.cwd()}/__tests__/fixtures/buildConfig-preShrink-nac-vet-div1-junior.json`,
@@ -625,12 +621,10 @@ describe('buildTournamentConfig', () => {
         },
       )
 
-      it('use_single_pool_override, flighting_group_id and is_priority default false/null/false for every competition', () => {
+      it('use_single_pool_override defaults false for every competition', () => {
         const { competitions } = buildTournamentConfig(derivedState(TournamentType.NAC))
         for (const comp of competitions) {
           expect(comp.use_single_pool_override, comp.id).toBe(false)
-          expect(comp.flighting_group_id, comp.id).toBeNull()
-          expect(comp.is_priority, comp.id).toBe(false)
         }
       })
 

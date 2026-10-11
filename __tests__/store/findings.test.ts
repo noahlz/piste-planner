@@ -59,7 +59,7 @@ interface Finding {
   day: number | null
   message: string
   target: string | null
-  /** 016 Task C: false for Blocking, Note and `hard-separation-violated` rows. */
+  /** 016 Task C: false for Blocking, Note and `hard-separation-violated` rows (and `vet-co-day-split`, 021 T6c). */
   dismissable: boolean
   /** 016 Task D: every on-board competition the row names, sorted and unique. */
   subjects: string[]
@@ -835,6 +835,11 @@ describe('selectFindings — late finish reads a hand-moved event on a fresh boa
    * mover 30 minutes later on day 1 shifts its derived end to 1110 (18:30), inside
    * the lead, while the kept events on day 1 still end by 1060, outside it. So
    * only the mover makes day 1 late.
+   *
+   * 021 T4 (2026-10-09): the kept events on day 1 end at 1000, not 1060. Weapon
+   * balance (METHODOLOGY §Weapon Balance) re-colours B1, so day 1 holds
+   * different events. 1000 is further outside the lead, and the mover's 1080 and
+   * 1110 hold.
    */
   it('names the mover when only its derived end makes the day late', () => {
     const { id, day } = runAndMoveHeadline('B1')
@@ -851,8 +856,8 @@ describe('selectFindings — late finish reads a hand-moved event on a fresh boa
     expect(selectDrawnSchedule(state).runState, 'premise: a hand move keeps the board fresh').toBe(RunState.FRESH)
     expect(selectDrawnSchedule(state).events[id].source, 'premise: the nudged mover is still derived').toBe('derived')
     const kept = othersLatest(id, day)
-    expect(kept, 'premise: the kept events on the day end at 1060').toBe(1060)
-    expect(kept, 'premise: 1060 is outside the lead, so not late').toBeLessThanOrEqual(limit)
+    expect(kept, 'premise: the kept events on the day end at 1000').toBe(1000)
+    expect(kept, 'premise: 1000 is outside the lead, so not late').toBeLessThanOrEqual(limit)
 
     const row = lateRow(day)
     expect(row?.target).toBe('D1-M-EPEE-IND')
@@ -1337,6 +1342,44 @@ describe('selectFindings — a last phase past the hard end, one Warning per eve
 
     useStore.getState().updatePlacement(id, { start_time: start })
     expect(analysisRows(OVERRUN)).toEqual([])
+  })
+})
+
+describe('selectFindings – pools starting after the 4:00 PM cutoff, one Warning per event (021 T7, O2, O10)', () => {
+  const CUTOFF_ROWS = 'analysis:pool-start-after-cutoff:'
+
+  it('gives B4 one dismissable Warning for the engine-placed event whose pools start at 16:05', () => {
+    runPreset('B4')
+
+    const rows = analysisRows(CUTOFF_ROWS)
+
+    // Measured at 021 T7: Y12-M-SABRE-IND on Day 2 is the only B4 event whose first pool phase starts past 16:00.
+    expect(rows.map((r) => [r.id, r.severity, r.day, r.target, r.subjects, r.dismissable])).toEqual([
+      [`${CUTOFF_ROWS}Y12-M-SABRE-IND:Y12-M-SABRE-IND:1`, 'Warning', 1, 'Y12-M-SABRE-IND', ['Y12-M-SABRE-IND'], true],
+    ])
+    expect(rows[0].message).toContain("Y12 Men's Saber Individual")
+    expect(rows[0].message).toContain('16:05')
+    expect(rows[0].message).toContain('Day 2')
+  })
+
+  it('gives a hand move that starts the pools after the cutoff its row at once, and clears it on restoring the start', () => {
+    runPreset('B1')
+    const id = 'D1-M-EPEE-IND'
+    const start = useStore.getState().placements[id].start_time
+    expect(analysisRows(CUTOFF_ROWS), 'premise: a fresh B1 run starts every event\'s pools by 16:00').toEqual([])
+
+    // Day 1 opens at 9:00, so the cutoff is 16:00 (960). Exactly on it is fine.
+    useStore.getState().updatePlacement(id, { start_time: 960 })
+    expect(analysisRows(CUTOFF_ROWS)).toEqual([])
+
+    useStore.getState().updatePlacement(id, { start_time: 965 })
+    const rows = analysisRows(CUTOFF_ROWS)
+    expect(rows.map((r) => [r.target, r.severity, r.dismissable])).toEqual([[id, 'Warning', true]])
+    expect(rows[0].message).toContain("Div 1 Men's Epee Individual")
+    expect(rows[0].message).toContain('16:05')
+
+    useStore.getState().updatePlacement(id, { start_time: start })
+    expect(analysisRows(CUTOFF_ROWS)).toEqual([])
   })
 })
 

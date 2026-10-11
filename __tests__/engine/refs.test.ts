@@ -334,14 +334,32 @@ describe('scheduleAll reports the peak of its own timeline (017 T9)', () => {
    * 44 and 54 hold). The last phase may now end past the 22:00 hard end (R1), so
    * three events the scheduler used to drop (CDT-W-FOIL, CDT-W-SABRE and
    * Y14-W-EPEE) are placed and their DE refs enter the sweep. Day 0 (88) holds.
+   *
+   * 021 T4 (2026-10-09): weapon balance (METHODOLOGY §Weapon Balance, owner
+   * rulings O4 and O7) re-colours the day maps of the scenarios in this table
+   * (B1, B6, B7, B8 – B3 and B5 move too but have no row here), so these days
+   * hold different events: B1 day 2 134/56 → 188/54, B6 day 0 78/48 →
+   * 80/26, day 1 68/20 → 64/40, day 2 64/32 → 66/32 (53 events placed, from
+   * 51), B7 day 0 156/64 → 216/156 (it now holds JR-M-SABRE-IND and
+   * JR-W-SABRE-IND), day 2 156/70 → 158/64, B8 day 0 212/56 → 136/42, day 1
+   * 146/60 → 158/48, day 2 136/48 → 158/100. B1 day 1, B2 and B4 hold. The rows
+   * equal the drift ledger's `refRequirementsByDay`.
+   *
+   * 021 T6a (2026-10-09): the Vet co-day stagger binds (METHODOLOGY §Cross-Event
+   * Dependency Edges, owner ruling O1). On each B8 day the age-banded Vet bands
+   * of a gender and weapon no longer start together: each younger band's pools
+   * start 60 minutes after the next-older band's, so fewer pools overlap at the
+   * peak. B8 day 0 136/42 → 108/36, day 1 158/48 → 130/32, day 2 158/100 →
+   * 136/100. No day map moves, and every other row holds. The rows equal the
+   * drift ledger's `refRequirementsByDay`.
    */
   const MOVED: [ScenarioId, number, { total: number; sabre: number }][] = [
-    ['B1', 1, { total: 210, sabre: 64 }], ['B1', 2, { total: 134, sabre: 56 }],
+    ['B1', 1, { total: 210, sabre: 64 }], ['B1', 2, { total: 188, sabre: 54 }],
     ['B2', 0, { total: 228, sabre: 90 }], ['B2', 3, { total: 136, sabre: 70 }],
     ['B4', 1, { total: 96, sabre: 44 }], ['B4', 2, { total: 94, sabre: 54 }],
-    ['B6', 0, { total: 78, sabre: 48 }], ['B6', 1, { total: 68, sabre: 20 }], ['B6', 2, { total: 64, sabre: 32 }],
-    ['B7', 0, { total: 156, sabre: 64 }], ['B7', 2, { total: 156, sabre: 70 }],
-    ['B8', 0, { total: 212, sabre: 56 }], ['B8', 1, { total: 146, sabre: 60 }], ['B8', 2, { total: 136, sabre: 48 }],
+    ['B6', 0, { total: 80, sabre: 26 }], ['B6', 1, { total: 64, sabre: 40 }], ['B6', 2, { total: 66, sabre: 32 }],
+    ['B7', 0, { total: 216, sabre: 156 }], ['B7', 2, { total: 158, sabre: 64 }],
+    ['B8', 0, { total: 108, sabre: 36 }], ['B8', 1, { total: 130, sabre: 32 }], ['B8', 2, { total: 136, sabre: 100 }],
   ]
 
   it.each(MOVED)('%s day %i reads the spec\'s timeline peak', (id, day, expected) => {

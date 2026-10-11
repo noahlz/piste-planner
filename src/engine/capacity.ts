@@ -33,11 +33,6 @@ interface DayConsumedCapacity {
   video_strip_hours_consumed: number
 }
 
-interface DayRemainingCapacity {
-  strip_hours_remaining: number
-  video_strip_hours_remaining: number
-}
-
 /** Strip-hours `rounds` bill: one strip for one bout time per bout. */
 function deBoutStripHours(rounds: readonly DeRound[], boutMinutes: number): number {
   return rounds.reduce((sum, { bouts }) => sum + bouts, 0) * boutMinutes / 60
@@ -145,34 +140,6 @@ export function dayConsumedCapacity(
 }
 
 /**
- * Returns the strip-hours remaining on `day` after subtracting consumed capacity
- * from the total available capacity.
- *
- * Total capacity: strips_total × DAY_LENGTH_MINS / 60
- * Video capacity: video_strips_total × DAY_LENGTH_MINS / 60
- *
- * DAY_LENGTH_MINS is the 10-hour planning day, 9:00 to the 7:00 PM soft target
- * (Ops Manual 2026-27 p.17, METHODOLOGY.md §Strip-Hour Capacity). Capacity
- * plans to the target, not to the 10:00 PM hard end the scheduler may use.
- */
-export function dayRemainingCapacity(
-  day: number,
-  state: GlobalState,
-  allCompetitions: Competition[],
-  config: TournamentConfig,
-): DayRemainingCapacity {
-  const total_capacity = config.strips_total * (config.DAY_LENGTH_MINS / 60)
-  const video_capacity = config.video_strips_total * (config.DAY_LENGTH_MINS / 60)
-
-  const consumed = dayConsumedCapacity(day, state, allCompetitions, config)
-
-  return {
-    strip_hours_remaining: total_capacity - consumed.strip_hours_consumed,
-    video_strip_hours_remaining: video_capacity - consumed.video_strip_hours_consumed,
-  }
-}
-
-/**
  * Returns the capacity weight for a competition's age category.
  *
  * For VETERAN competitions, a compound key (`VETERAN:${vet_age_group}`) is used when
@@ -186,13 +153,4 @@ export function categoryWeight(competition: Competition): number {
     return CATEGORY_START_PREFERENCE[key].weight
   }
   return CATEGORY_START_PREFERENCE[competition.category].weight
-}
-
-/**
- * Returns the estimated strip-hours for a competition scaled by its category weight.
- * Used in capacity-aware day assignment to treat heavyweight events (DIV1, JUNIOR)
- * as occupying more effective scheduling capacity than their raw strip-hours suggest.
- */
-export function weightedStripHours(competition: Competition, config: TournamentConfig): number {
-  return estimateCompetitionStripHours(competition, config).total_strip_hours * categoryWeight(competition)
 }

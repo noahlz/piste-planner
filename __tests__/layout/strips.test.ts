@@ -22,7 +22,7 @@ import { compareIds } from '../../src/engine/order.ts'
 import { snapToSlot } from '../../src/engine/resources.ts'
 import { TEMPLATES } from '../../src/engine/catalogue.ts'
 import { SCENARIO_IDS, type ScenarioId } from '../../src/data/tournaments.ts'
-import { Phase, PlacementSource, VideoPolicy } from '../../src/engine/types.ts'
+import { DeMode, Phase, PlacementSource, VideoPolicy } from '../../src/engine/types.ts'
 import type { Competition, ScheduleResult, TournamentConfig } from '../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makeScheduleResult, makeStrips } from '../helpers/factories.ts'
 import { loadFlightedFixture } from '../helpers/flightedFixtures.ts'
@@ -271,6 +271,65 @@ describe('assignStrips: derived phases take the engine\'s candidate order', () =
   })
 })
 
+describe('assignStrips: video strips are kept for the video stage (021 T8)', () => {
+  // smallConfig(6, 4): strips 0–3 video, 4–5 general. The factory config has no
+  // day windows, so day 0 starts at 9:00 (540) on the clock axis and the wave
+  // ends at 11:00 (660), that minute included.
+  const config = smallConfig(6, 4)
+  const stagedRequired = (id: string) =>
+    makeCompetition({ id, de_mode: DeMode.STAGED, de_video_policy: VideoPolicy.REQUIRED })
+
+  /** A kept REQUIRED event: pools 540–590 on strip 4, its video stage 900–1000 on 0–1. */
+  const keptRequired: DrawnEventInput = {
+    result: {
+      ...poolResult('REQ', 0, 540, 590, 1),
+      de_round_of_16_start: 900, de_round_of_16_end: 1000, de_round_of_16_strip_count: 2,
+    },
+    day_out_of_range: false,
+    keptStrips: { [Phase.POOLS]: [4], [Phase.DE_ROUND_OF_16]: [0, 1] },
+  }
+
+  /** A derived 3-strip pool: the two general strips and one video strip when video is open to it. */
+  const movedPool = (start: number) => derived(poolResult('D', 0, start, start + 80, 3))
+
+  const videoDay = [stagedRequired('REQ'), makeCompetition({ id: 'D' })]
+
+  it.each([
+    ['inside the wave on a multi-event video day', [0, 4, 5], { REQ: keptRequired, D: movedPool(600) }, videoDay],
+    ['at exactly 11:00 on a multi-event video day', [0, 4, 5], { REQ: keptRequired, D: movedPool(660) }, videoDay],
+    ['after the wave on a multi-event video day', [], { REQ: keptRequired, D: movedPool(665) }, videoDay],
+    ['after the wave on a single-event video day', [0, 4, 5], { D: movedPool(720) }, [stagedRequired('D')]],
+    ['after the wave on a day with no REQUIRED video phase', [0, 4, 5], { REQ: keptRequired, D: movedPool(720) }, comps('REQ', 'D')],
+  ])('a derived pool %s holds strips %j', (_name, strips, events, competitions) => {
+    const block = only(assignStrips(events, config, competitions), 'D')
+    expect(block.strips).toEqual(strips)
+    expect(block.unseated).toBe(strips.length === 0)
+  })
+
+  /** A derived result for D on day 0 holding only the phase spans `spans` sets. */
+  const derivedSpans = (spans: Partial<ScheduleResult>) => derived({ ...makeScheduleResult('D', 0), ...spans })
+
+  // Both flights are pool phases, and a DE prelim is not: it keeps video strips
+  // as overflow all day (METHODOLOGY.md §Video Strip Preservation, its
+  // phase-level rules).
+  it.each([
+    ['Flight A after the wave', { [Phase.FLIGHT_A]: [] }, derivedSpans({
+      flight_a_start: 665, flight_a_end: 745, flight_a_strips: 3,
+    })],
+    ['Flight A inside the wave and Flight B after it', { [Phase.FLIGHT_A]: [0, 4, 5], [Phase.FLIGHT_B]: [] }, derivedSpans({
+      flight_a_start: 600, flight_a_end: 650, flight_a_strips: 3,
+      flight_b_start: 665, flight_b_end: 745, flight_b_strips: 3,
+    })],
+    ['a DE prelim after the wave (guard)', { [Phase.DE_PRELIMS]: [0, 4, 5] }, derivedSpans({
+      de_prelims_start: 720, de_prelims_end: 800, de_prelims_strip_count: 3,
+    })],
+  ])('on a multi-event video day, %s holds strips %j', (_name, expected, input) => {
+    const blocks = blocksOf(assignStrips({ REQ: keptRequired, D: input }, config, videoDay), 'D')
+    expect(Object.fromEntries(blocks.map(b => [b.phase, b.strips]))).toEqual(expected)
+    for (const block of blocks) expect(block.unseated).toBe(block.strips.length === 0)
+  })
+})
+
 describe('assignStrips: collateral (spec §3)', () => {
   /** Boards whose sweep seats none of the moved phases (B5 seated 0 of 48 when T3 was reviewed). */
   const BOARDS_SEATING_NO_MOVE: ReadonlySet<string> = new Set(['B5'])
@@ -474,8 +533,8 @@ describe('assignStrips: flighted events', () => {
     // Moved to its own day and start, the derived FLIGHT_B starts where the scheduler started it.
     const keptFlightB = board.kept.events[id].phases.find(p => p.phase === Phase.FLIGHT_B)
     expect(flightB!.startMinutes).toBe(keptFlightB?.startMinutes)
-    // Derive waits out the longer of the admin gap and the flight buffer, so the buffer is a floor.
-    expect(flightB!.startMinutes).toBeGreaterThanOrEqual(
+    // Derive waits the flight buffer alone between the flights (021 T3, METHODOLOGY §Runtime Decomposition).
+    expect(flightB!.startMinutes).toBe(
       snapToSlot(flightA!.endMinutes + board.config.FLIGHT_BUFFER_MINS))
     expect(mine.map(b => b.phase)).not.toContain(Phase.POOLS)
   })

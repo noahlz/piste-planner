@@ -189,7 +189,6 @@ export function computeDeFencerCount(
  * METHODOLOGY.md §Refs Per Pool:
  * - ONE: 1 ref/pool, refs_needed = nPools
  * - TWO: 2 refs/pool, refs_needed = 2 * nPools (no fallback — refs always sufficient)
- * - AUTO: 2 refs/pool, refs_needed = 2 * nPools (no fallback — refs always sufficient)
  */
 export function resolveRefsPerPool(
   refPolicy: RefPolicy,
@@ -199,6 +198,6 @@ export function resolveRefsPerPool(
     return { refs_per_pool: 1, refs_needed: nPools }
   }
 
-  // TWO and AUTO both use 2 refs/pool; no fallback to 1 since refs are always assumed available
+  // TWO uses 2 refs/pool, with no fallback to 1 since refs are always assumed available
   return { refs_per_pool: 2, refs_needed: nPools * 2 }
 }

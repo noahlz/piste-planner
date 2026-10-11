@@ -6,10 +6,10 @@ import type {
 
 /**
  * Per-type resolved defaults — METHODOLOGY.md §Tournament-Type Policies,
- * transcribed row for row. `ref_policy: RefPolicy.AUTO` and a `null` video
- * strip count are the *unset* markers a competition config carries before
- * resolution (research D5, D6, D7); this table holds only resolved values,
- * so `ref_policy` here is never `AUTO`.
+ * transcribed row for row. This table holds only resolved values, and every
+ * competition takes its `ref_policy` from its type's row here. The store's
+ * `video_strips_total: null` is the unset marker that resolves to this
+ * table's value.
  *
  * `individual_video_policy` is what an individual event plans with: REQUIRED at
  * a NAC and BEST_EFFORT at every other type (Ops Manual 2026-27 p.19; 024 plan

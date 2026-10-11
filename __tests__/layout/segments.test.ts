@@ -45,12 +45,13 @@ describe('eventTimeSegments', () => {
 
   it('splits a flighted event into flight A, flight B and the DE block', () => {
     // pool_start/pool_end still span both flights on the result, so a naive
-    // implementation that checks pool_start first would emit an 540-746 block
-    // covering the gap between the flights.
+    // implementation that checks pool_start first would emit an 540-731 block
+    // covering the gap between the flights. Flight B waits the 15-minute flight
+    // buffer alone, snap(626 + 15) = 645 (021 T3, METHODOLOGY §Runtime Decomposition).
     expect(eventTimeSegments(derive({ id: 'flighted', flighted: true }))).toEqual([
       { phase: Phase.FLIGHT_A, startMinutes: 540, endMinutes: 626, stripCount: 2 },
-      { phase: Phase.FLIGHT_B, startMinutes: 660, endMinutes: 746, stripCount: 2 },
-      { phase: Phase.DE, startMinutes: 780, endMinutes: 860, stripCount: 16 },
+      { phase: Phase.FLIGHT_B, startMinutes: 645, endMinutes: 731, stripCount: 2 },
+      { phase: Phase.DE, startMinutes: 765, endMinutes: 845, stripCount: 16 },
     ])
   })
 
@@ -135,10 +136,34 @@ describe('eventTimeSegments on the reference tournaments', () => {
   // may now run past the 22:00 hard end (R1), so events the scheduler used to
   // drop are placed and drawn: B4 21 → 24 events (42 → 48 segments, two each)
   // and B6 45 → 51 (90 → 102). B1–B3, B5, B7 and B8 are unchanged.
+  //
+  // 021 T4 (2026-10-09): the B1, B3, B5, B6, B7 and B8 digests moved on
+  // purpose. Weapon balance (METHODOLOGY §Weapon Balance, owner rulings O4 and
+  // O7) re-colours their day maps, the same six scenarios the drift ledger
+  // moves. B6 places 51 → 53 events (102 → 106 segments). B2 and B4 are
+  // unchanged, and the other counts hold.
+  //
+  // 021 T6a (2026-10-09): the B8 digest moved on purpose. The Vet co-day
+  // stagger binds (METHODOLOGY §Cross-Event Dependency Edges, owner ruling O1),
+  // so B8's age-banded Vet bands start 60 minutes apart, and four D1 team events
+  // on the same days start earlier as a knock-on (none waits on anything). Eight
+  // events whose pool starts hold see their DE phases shift by strip contention
+  // (JR-W-FOIL-IND ends 70 minutes earlier, D1-W-FOIL-IND 65 later). No day map
+  // moves, B8 keeps its 148 segments, and B1–B7 are unchanged.
+  //
+  // [M] 2026-10-10, 021 T8: B2 38543891f24c5f71 → e7978b38fbad00ac, B3
+  // 7a643084a6030fbc → 13da83d82cd966e0, B8 70c2a3145dc7071a → ab4193314a01eadb,
+  // Video Strip Preservation (METHODOLOGY §Video Strip Preservation). On a
+  // multi-event day holding a REQUIRED video phase a pool starting after the
+  // start-of-day wave takes general strips only, so some pools wait for them
+  // and some video stages move: B2 re-times 4 events (one pool start,
+  // CDT-M-SABRE-TEAM), B3 5 (two pool starts) and B8 27 (15 pool starts, the
+  // rest DE phases by strip contention). No day map moves, the segment counts
+  // hold, and B1 and B4–B7 are unchanged.
   const EXPECTED = {
-    B1: ['1972f1b8ff40deeb', 66], B2: ['38543891f24c5f71', 66], B3: ['1f23028d76cd460e', 72],
-    B4: ['d2c0a3c4be181709', 48], B5: ['3dcb38014ee7022f', 24], B6: ['55b1994525d67043', 102],
-    B7: ['da10924b4af05090', 54], B8: ['dc00d9d378193f5b', 148],
+    B1: ['2c69ff46cf84f560', 66], B2: ['e7978b38fbad00ac', 66], B3: ['13da83d82cd966e0', 72],
+    B4: ['d2c0a3c4be181709', 48], B5: ['18197dd2e2268e2e', 24], B6: ['e5a90a710470baa3', 106],
+    B7: ['12848ca4621bcf3a', 54], B8: ['ab4193314a01eadb', 148],
   } as const
 
   it.each(SCENARIO_IDS)('%s: draws the same segments as before', (id) => {

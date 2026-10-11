@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { initialAnalysis, genderEquityAllowableDiff, isRegionalQualifier, suggestStripCount } from '../../src/engine/analysis.ts'
+import { describe, it, expect, afterEach } from 'vitest'
+import { initialAnalysis, suggestStripCount } from '../../src/engine/analysis.ts'
 import { makeConfig, makeCompetition, makeStrips } from '../helpers/factories.ts'
 import {
   BottleneckCause,
@@ -7,38 +7,20 @@ import {
   Category,
   Gender,
   TournamentType,
-  Weapon,
   CutMode,
   DeMode,
   EventType,
   VideoPolicy,
   BottleneckRule,
 } from '../../src/engine/types.ts'
-import type { Competition, Bottleneck } from '../../src/engine/types.ts'
-
-// ──────────────────────────────────────────────
-// genderEquityAllowableDiff
-// ──────────────────────────────────────────────
-
-describe('genderEquityAllowableDiff', () => {
-  it.each([
-    // [larger_pools, expectedDiff] — table from PRD Section 9.1
-    [1,  0],
-    [2,  0],
-    [3,  0],
-    [4,  1],
-    [5,  1],
-    [7,  1],
-    [8,  2],
-    [10, 2],
-    [11, 2],
-    [12, 3],
-    [15, 3],
-    [20, 3],
-  ])('larger_pools=%i → allowable diff %i', (largerPools: number, expected: number) => {
-    expect(genderEquityAllowableDiff(largerPools)).toBe(expected)
-  })
-})
+import type { Competition, Bottleneck, TournamentConfig } from '../../src/engine/types.ts'
+import { computePoolStructure, isSizeableCount } from '../../src/engine/pools.ts'
+import { computeStripCap } from '../../src/engine/stripBudget.ts'
+import { TEMPLATES } from '../../src/engine/catalogue.ts'
+import { SCENARIOS, SCENARIO_IDS, buildCompetitions, tournamentConfig } from '../helpers/scenarios.ts'
+import type { ScenarioId } from '../helpers/scenarios.ts'
+import { useStore } from '../../src/store/store.ts'
+import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -153,6 +135,117 @@ describe('initialAnalysis — Pass 1: strip deficit', () => {
     )
     expect(deficit).toBeUndefined()
   })
+
+  // The cap is per event (METHODOLOGY §Strip Budget): 10 strips at the
+  // factory's 0.80 is a global cap of 8, an override of 0.5 lowers it to 5 and
+  // an override of 1.0 raises it to 10. No board below carries an override, so
+  // this case is the one that pins Pass 1 to each event's own cap.
+  it('judges each event against its own cap and suggests flighting even for a flighted event', () => {
+    const config = makeConfig({ strips: makeStrips(10, 0) })
+    const competitions = [
+      makeBigComp('low', 56, { max_pool_strip_pct_override: 0.5 }), // 8 pools > 5
+      makeBigComp('high', 70, { max_pool_strip_pct_override: 1.0 }), // 10 pools ≤ 10
+      makeBigComp('plain', 70), // 10 pools > 8
+      makeBigComp('flown', 70, { flighted: true }), // 10 pools > 8, already flighted
+    ]
+    const result = initialAnalysis(config, competitions, {})
+
+    expect(
+      result.warnings
+        .filter((w) => w.rule === BottleneckRule.POOLS_EXCEED_STRIP_CAP_UNFLIGHTED)
+        .map((w) => w.message),
+    ).toEqual([
+      'low: 8 pools but only 5 strips available; flighting not enabled',
+      'plain: 10 pools but only 8 strips available; flighting not enabled',
+    ])
+    expect(result.suggestions.filter((s) => s.includes(': consider flighting ('))).toEqual([
+      'low: consider flighting (4 pools per flight) — 8 pools exceeds 5 strips',
+      'plain: consider flighting (5 pools per flight) — 10 pools exceeds 8 strips',
+      'flown: consider flighting (5 pools per flight) — 10 pools exceeds 8 strips',
+    ])
+  })
+})
+
+// Pass 1 on the real boards. The expectation restates the rule from
+// METHODOLOGY §Strip Budget: an event the engine can size whose pools exceed
+// its own cap is suggested for flighting, and warned about when it is not
+// flighted. None of these boards carries a per-event override, so here the cap
+// is always the global one – the synthetic case above covers the override.
+// Each board runs at its own strips and at FIRING_STRIPS.
+describe('initialAnalysis — Pass 1 on B1–B8 and the templates', () => {
+  type Board = { config: TournamentConfig; competitions: Competition[] }
+
+  /** A strip count small enough that some board has a pool deficit. */
+  const FIRING_STRIPS = 20
+
+  // templateBoard applies a template to the shared store, so leave it clean.
+  afterEach(() => {
+    useStore.setState(useStore.getInitialState(), true)
+  })
+
+  function atStrips(config: TournamentConfig, strips: number): TournamentConfig {
+    const video = Math.min(config.video_strips_total, strips)
+    return { ...config, strips: makeStrips(strips, video), strips_total: strips, video_strips_total: video }
+  }
+
+  function scenarioBoard(id: ScenarioId): Board {
+    const { fencerCounts, days, strips, videoStrips, tournamentType } = SCENARIOS[id]
+    return {
+      config: tournamentConfig(days, strips, videoStrips, tournamentType),
+      competitions: buildCompetitions(fencerCounts, tournamentType),
+    }
+  }
+
+  function templateBoard(name: string): Board {
+    useStore.setState(useStore.getInitialState(), true)
+    useStore.getState().applyTemplate(name)
+    return buildTournamentConfig(useStore.getState())
+  }
+
+  function expectedPass1({ config, competitions }: Board) {
+    const warnings: string[] = []
+    const suggestions: string[] = []
+    for (const comp of competitions) {
+      if (!isSizeableCount(comp.fencer_count, config)) continue
+      const cap = computeStripCap(config.strips_total, config.max_pool_strip_pct, comp.max_pool_strip_pct_override)
+      const pools = computePoolStructure(comp.fencer_count, comp.use_single_pool_override).n_pools
+      if (pools <= cap) continue
+      if (!comp.flighted) warnings.push(`${comp.id}: ${pools} pools but only ${cap} strips available; flighting not enabled`)
+      suggestions.push(`${comp.id}: consider flighting (${Math.ceil(pools / 2)} pools per flight) — ${pools} pools exceeds ${cap} strips`)
+    }
+    return { warnings, suggestions }
+  }
+
+  function actualPass1({ config, competitions }: Board) {
+    const result = initialAnalysis(config, competitions, {})
+    return {
+      warnings: result.warnings
+        .filter(w => w.rule === BottleneckRule.POOLS_EXCEED_STRIP_CAP_UNFLIGHTED)
+        .map(w => w.message),
+      suggestions: result.suggestions.filter(s => s.includes(': consider flighting (')),
+    }
+  }
+
+  const boards: [string, () => Board][] = [
+    ...SCENARIO_IDS.map((id): [string, () => Board] => [id, () => scenarioBoard(id)]),
+    ...Object.keys(TEMPLATES).map((name): [string, () => Board] => [name, () => templateBoard(name)]),
+  ]
+
+  it.each(boards)('%s: Pass 1 flags exactly the sizeable events whose pools exceed their cap', (_, build) => {
+    const board = build()
+    for (const strips of [board.config.strips_total, FIRING_STRIPS]) {
+      const atCount = { ...board, config: atStrips(board.config, strips) }
+      expect(actualPass1(atCount), `${strips} strips`).toEqual(expectedPass1(atCount))
+    }
+  })
+
+  it('Pass 1 warns on some board at FIRING_STRIPS, so the cases above are not vacuous', () => {
+    const warned = boards.reduce((sum, [, build]) => {
+      const board = build()
+      return sum + actualPass1({ ...board, config: atStrips(board.config, FIRING_STRIPS) }).warnings.length
+    }, 0)
+    expect(warned).toBeGreaterThan(0)
+  })
 })
 
 // ──────────────────────────────────────────────
@@ -169,8 +262,10 @@ describe('initialAnalysis — Pass 2: flighting group suggestions', () => {
     const result = initialAnalysis(config, [c1, c2], { large: 0, small: 0 })
 
     // Suggestions from suggestFlightingGroups are added as strings
-    expect(result.suggestions).toHaveLength(1)
-    expect(result.suggestions.some((s: string) => s.includes('large') || s.includes('small'))).toBe(true)
+    // The larger event is the one flighted (METHODOLOGY §How Flighting Works)
+    expect(result.suggestions).toEqual([
+      'Flighting group suggested: small (priority, 29 strips) + large (flighted, 26 strips)',
+    ])
   })
 
   it('tied pool counts → FLIGHTING_GROUP_MANUAL_NEEDED warning in result', () => {
@@ -370,53 +465,6 @@ describe('initialAnalysis — Pass 6: cut summary', () => {
       (w: Bottleneck) => w.competition_id === 'no-cuts' && w.severity === BottleneckSeverity.INFO,
     )
     expect(cutInfo).toBeUndefined()
-  })
-})
-
-// ──────────────────────────────────────────────
-// Pass 7 — gender equity cap validation (removed from pipeline; genderEquityAllowableDiff still exported)
-// ──────────────────────────────────────────────
-
-describe('initialAnalysis — Pass 7: gender equity', () => {
-  it('equal fencer counts (both 128) → no GENDER_EQUITY_CAP_VIOLATION', () => {
-    const config = makeConfig({ tournament_type: TournamentType.NAC })
-    const mens = makeCompetition({
-      id: 'men-foil',
-      gender: Gender.MEN,
-      weapon: Weapon.FOIL,
-      category: Category.DIV1,
-      fencer_count: 128,
-    })
-    const womens = makeCompetition({
-      id: 'women-foil',
-      gender: Gender.WOMEN,
-      weapon: Weapon.FOIL,
-      category: Category.DIV1,
-      fencer_count: 128,
-    })
-    const result = initialAnalysis(config, [mens, womens], { 'men-foil': 0, 'women-foil': 0 })
-
-    const violation = result.warnings.find(
-      (w: Bottleneck) => w.cause === BottleneckCause.GENDER_EQUITY_CAP_VIOLATION,
-    )
-    expect(violation).toBeUndefined()
-  })
-})
-
-// ──────────────────────────────────────────────
-// isRegionalQualifier
-// ──────────────────────────────────────────────
-
-describe('isRegionalQualifier', () => {
-  it.each([
-    ['RYC', true],
-    ['RJCC', true],
-    ['ROC', true],
-    ['SYC', true],
-    ['SJCC', true],
-    ['NAC', false],
-  ] as const)('%s → %s', (tournamentType, expected) => {
-    expect(isRegionalQualifier(makeConfig({ tournament_type: tournamentType }))).toBe(expected)
   })
 })
 

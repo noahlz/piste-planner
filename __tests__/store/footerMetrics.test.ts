@@ -58,6 +58,14 @@ import { SCENARIO_IDS } from '../../src/data/tournaments.ts'
  * day 2 CDT-M-SABRE, CDT-W-FOIL, JR-M-FOIL, JR-W-EPEE. No event's start, strip
  * budget or duration moved, so the finish and utilization numbers hold; the
  * ref peak and the overflow counts move with the day membership.
+ *
+ * 021 T4, 2026-10-09 – B5 is re-coloured by weapon balance (METHODOLOGY.md
+ * §Weapon Balance, owner rulings O4 and O7): day 0 CDT-M-FOIL, JR-M-EPEE,
+ * JR-W-FOIL, JR-W-SABRE; day 1 CDT-M-EPEE, CDT-M-SABRE, CDT-W-EPEE, JR-M-FOIL;
+ * day 2 CDT-W-FOIL, CDT-W-SABRE, JR-M-SABRE, JR-W-EPEE. Day 1's pools ask for
+ * more strips than it has at 9:00, so CDT-W-EPEE-IND waits and the finish,
+ * the ref peak and the stale-board numbers move. Each event's strip-minutes
+ * hold, so utilization does not.
  */
 
 // ──────────────────────────────────────────────
@@ -186,21 +194,30 @@ describe('selectFooterMetrics — the three rows', () => {
    * 109 minutes in one wave on 18 strips, pools 540–649, the DE from 680, a
    * bracket of 128 with R128 (4 waves on 16 strips), R64 (2) and R32 through
    * the semis (1 each), 10 × 20 = 200 minutes to 880, plus the tail.
+   *
+   * 021 T4 (2026-10-09) – 920 → 940, still CDT-W-EPEE-IND on day 1. Weapon
+   * balance (METHODOLOGY §Weapon Balance) re-colours B5, and day 1 now holds
+   * JR-M-FOIL-IND, CDT-M-EPEE-IND and CDT-M-SABRE-IND beside it, whose pools
+   * take 18 + 18 + 15 = 51 of the 60 strips at 540. Its 12 pools find 9 free,
+   * so they wait for CDT-M-SABRE-IND's pools to end and run 595–704, and its
+   * DE runs 770–940 (measured off the drawn model).
    */
   it('finish:tournament is the latest de_total_end', () => {
     b5()
-    expect(metric('finish:tournament').value).toBe(920)
+    expect(metric('finish:tournament').value).toBe(940)
   })
 
   /**
-   * `selectDerivedRefRequirements` for B5 peaks at 118, on day 0 at 9:00 (116
-   * before 024 group D). SJCC resolves two refs per pool, and day 0's four pool
-   * blocks all start at 540 on 13 + 18 + 18 + 10 = 59 strips: 59 × 2 = 118.
-   * Days 1 and 2 hold 58 and 55 pool strips at 9:00, so 116 and 110.
+   * `selectDerivedRefRequirements` for B5 peaks at 112, on day 0 at 9:00 (118
+   * before 021 T4, 116 before 024 group D). SJCC resolves two refs per pool,
+   * and day 0's four pool blocks all start at 540 on 10 + 18 + 12 + 16 = 56
+   * strips: 56 × 2 = 112. Days 1 and 2 hold 51 and 53 pool strips at 9:00, so
+   * 102 and 106. Weapon balance (021 T4, METHODOLOGY §Weapon Balance) moved the
+   * day membership.
    */
   it('refs:peak-total is the peak across days', () => {
     b5()
-    expect(metric('refs:peak-total').value).toBe(118)
+    expect(metric('refs:peak-total').value).toBe(112)
   })
 
   /**
@@ -316,15 +333,20 @@ describe('selectFooterMetrics — a placement pushed out of range', () => {
    * run, so each step reads the next finish down, and moving one of the tied
    * three leaves 910. Before T5b the derived times tied those three at the top
    * and dropped to 860.
+   *
+   * 021 T4 (2026-10-09): weapon balance (METHODOLOGY §Weapon Balance)
+   * re-colours B5. CDT-W-EPEE-IND 940 alone at the top, then JR-W-FOIL-IND 920
+   * (its DE starts at 750 on day 0), then the same three-way tie at 910.
+   * CDT-W-FOIL-IND now ends at 905.
    */
   it('drops finish:tournament to the next in-range finish once every event at the top has moved', () => {
     b5()
-    expect(metric('finish:tournament').value).toBe(920)
+    expect(metric('finish:tournament').value).toBe(940)
 
     useStore.getState().updatePlacement('CDT-W-EPEE-IND', { day: 3 })
-    expect(metric('finish:tournament').value).toBe(915)
+    expect(metric('finish:tournament').value).toBe(920)
 
-    useStore.getState().updatePlacement('CDT-W-FOIL-IND', { day: 3 })
+    useStore.getState().updatePlacement('JR-W-FOIL-IND', { day: 3 })
     expect(metric('finish:tournament').value).toBe(910)
 
     useStore.getState().updatePlacement('JR-M-EPEE-IND', { day: 3 })
@@ -463,6 +485,10 @@ describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () =>
    * its derived DE_ROUND_OF_16 ends at 1080 and its DE at 1110 with the tail,
    * above every kept event's 1090 (measured 2026-10-07, from 1100 / 1130 by
    * 018 T1 when Div 1 went from 80% to 75% promoted).
+   *
+   * 021 T4 (2026-10-09): the kept events finish at 1065 (D1-M-FOIL-IND), not
+   * 1090. Weapon balance (METHODOLOGY §Weapon Balance) re-colours B1, and the
+   * mover's 1110 holds.
    */
   it('finish reads a hand-moved event\'s derived DE end on a fresh board', () => {
     const { id } = runAndMoveHeadline('B1')
@@ -475,7 +501,7 @@ describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () =>
       if (event.source !== 'kept' || event.result.de_total_end === null) continue
       keptLatest = Math.max(keptLatest, event.result.de_total_end)
     }
-    expect(keptLatest, 'premise: the kept events finish at 1090').toBe(1090)
+    expect(keptLatest, 'premise: the kept events finish at 1065').toBe(1065)
 
     expect(metric('finish:tournament').value).toBe(1110)
   })
@@ -487,6 +513,11 @@ describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () =>
    * board lays out derived times on 30 strips, where 15 phases find no free
    * run. Measured 2026-10-07: the blocks hold 13983 strip-minutes against the
    * 43975 they request, over 3 days × 30 strips × 600 minutes.
+   *
+   * 021 T4 (2026-10-09): the blocks hold 16187 strip-minutes. Weapon balance
+   * (METHODOLOGY §Weapon Balance) re-colours B5, so each day lays out a
+   * different set of events on 30 strips. The 15 unseated phases and the 43975
+   * requested hold.
    */
   it('never counts an unseated block\'s strips on a stale board', () => {
     runPreset('B5')
@@ -498,9 +529,9 @@ describe('selectFooterMetrics — the scheduler\'s run at boot (017 T5b)', () =>
 
     const held = blocks.reduce((sum, b) => sum + (b.endMinutes - b.startMinutes) * b.strips.length, 0)
     const requested = blocks.reduce((sum, b) => sum + (b.endMinutes - b.startMinutes) * b.stripCount, 0)
-    expect([held, requested], 'premise: measured strip-minutes held and requested').toEqual([13983, 43975])
+    expect([held, requested], 'premise: measured strip-minutes held and requested').toEqual([16187, 43975])
 
-    expect(metric('strips:utilization').value).toBeCloseTo((13983 / (3 * 30 * 600)) * 100, 10)
+    expect(metric('strips:utilization').value).toBeCloseTo((16187 / (3 * 30 * 600)) * 100, 10)
   })
 })
 

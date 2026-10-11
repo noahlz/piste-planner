@@ -1,11 +1,13 @@
-import { Phase } from './types.ts'
+import { DeMode, Phase } from './types.ts'
 import type {
+  Competition,
   GlobalState,
   TournamentConfig,
   StripAllocation,
 } from './types.ts'
 import { dayHardEnd, DAY_AXIS_SPACING_MINS } from './types.ts'
-import { SLOT_MINS } from './constants.ts'
+import { MORNING_WAVE_WINDOW_MINS, SLOT_MINS } from './constants.ts'
+import { phaseRequiresVideo } from './unseated.ts'
 
 // ──────────────────────────────────────────────
 // Return types for strip selection
@@ -21,6 +23,69 @@ import { SLOT_MINS } from './constants.ts'
 export type FindStripsInWindowResult =
   | { fit: 'ok'; strip_indices: number[] }
   | { fit: 'none'; earliest_next_start: number | null; reason: 'STRIPS' | 'TIME' }
+
+// ──────────────────────────────────────────────
+// Video Strip Preservation (METHODOLOGY.md §Video Strip Preservation)
+// ──────────────────────────────────────────────
+
+/** The facts about a pool phase's day that §Video Strip Preservation reads. */
+export interface PoolVideoDay {
+  /** The day holds a `REQUIRED` video phase: a STAGED individual event under REQUIRED video. */
+  holds_required_video: boolean
+  /** Exactly one competition sits on the day. */
+  single_event: boolean
+  /** The day's start, on the caller's time axis. */
+  day_start: number
+}
+
+/**
+ * Whether a pool phase starting at `startTime` may take video strips. On a day
+ * that holds a REQUIRED video phase and more than one event, only inside the
+ * start-of-day wave: a start no later than day start + MORNING_WAVE_WINDOW_MINS,
+ * that minute included. `<=` was measured against `<` on B1–B8 and the four
+ * NAC templates in 021 T8 Step 1 (`specs/021-methodology-reconciliation/`) and
+ * matches the amendment's text. On a single-event day, or a day with no
+ * REQUIRED video phase, always (METHODOLOGY.md §Video Strip Preservation).
+ *
+ * The one rule the scheduler's strip search and the canvas re-seater share,
+ * both through `findAvailableStripsInWindow`.
+ */
+export function poolMayUseVideoStrips(day: PoolVideoDay, startTime: number): boolean {
+  if (!day.holds_required_video || day.single_event) return true
+  return startTime - day.day_start <= MORNING_WAVE_WINDOW_MINS
+}
+
+/**
+ * Whether a competition brings a REQUIRED video phase to its day: a STAGED DE
+ * whose video stage requires video. REQUIRED under Single Stage is dead config
+ * (`video-dead-config`) and builds no video phase.
+ */
+function holdsRequiredVideoPhase(competition: Competition): boolean {
+  return competition.de_mode === DeMode.STAGED && phaseRequiresVideo(Phase.DE_ROUND_OF_16, competition)
+}
+
+/**
+ * Each day's facts for `poolMayUseVideoStrips`, from the competitions that sit
+ * on it. The scheduler passes every event with an assigned day, pins included,
+ * on its own axis. The re-seater passes the drawn board's events, on the
+ * clock axis.
+ */
+export function poolVideoDays(
+  entries: Iterable<{ day: number; competition: Competition }>,
+  dayStartOf: (day: number) => number,
+): Map<number, PoolVideoDay> {
+  const days = new Map<number, PoolVideoDay>()
+  const counts = new Map<number, number>()
+  for (const { day, competition } of entries) {
+    const count = (counts.get(day) ?? 0) + 1
+    counts.set(day, count)
+    const facts = days.get(day) ?? { holds_required_video: false, single_event: true, day_start: dayStartOf(day) }
+    facts.single_event = count === 1
+    if (holdsRequiredVideoPhase(competition)) facts.holds_required_video = true
+    days.set(day, facts)
+  }
+  return days
+}
 
 // ──────────────────────────────────────────────
 // nextFreeTime — bridge between interval list and "is this strip free at T?"
@@ -171,6 +236,13 @@ function earliestFreeStartFor(state: GlobalState, stripIdx: number, startTime: n
   return Math.max(startTime, nextFreeTime(state, stripIdx))
 }
 
+/** The count-th smallest `earliestFreeStartFor` across `candidates` (the caller checks there are at least `count`). */
+function countthEarliestStart(state: GlobalState, candidates: number[], startTime: number, count: number): number {
+  const earliestPerStrip = candidates.map(i => earliestFreeStartFor(state, i, startTime))
+  earliestPerStrip.sort((a, b) => a - b)
+  return earliestPerStrip[count - 1]
+}
+
 /**
  * Find `count` strips simultaneously available for `[startTime, startTime+duration]`,
  * honoring video preferences.
@@ -195,6 +267,13 @@ function earliestFreeStartFor(state: GlobalState, stripIdx: number, startTime: n
  * strip-claim call every phase kind uses) always pass it explicitly — `day` is
  * optional for direct callers only, such as this file's own tests.
  *
+ * `poolVideoDay` is passed for a pool phase only (pools and both flights) and
+ * carries its day's facts for §Video Strip Preservation: when
+ * `poolMayUseVideoStrips` refuses video strips at `startTime`, only general
+ * strips are candidates, and a miss inside the wave reports when general
+ * strips come free if the video strips would only come free after it. Omitted
+ * (every DE phase, and direct callers), video strips are overflow as before.
+ *
  * When `day` is omitted, the helper falls back to inferring the day as
  * `floor(startTime / DAY_AXIS_SPACING_MINS)` and clamping at that day's
  * `dayHardEnd`. The inference holds on the 1440-spaced axis that both the
@@ -212,20 +291,20 @@ export function findAvailableStripsInWindow(
   duration: number,
   videoRequired: boolean,
   day?: number,
+  poolVideoDay?: PoolVideoDay,
 ): FindStripsInWindowResult {
   const endTime = startTime + duration
   const strips = config.strips
+  const nonVideo = strips.map((s, i) => !s.video_capable ? i : -1).filter(i => i >= 0)
+  const video = strips.map((s, i) => s.video_capable ? i : -1).filter(i => i >= 0)
 
-  // Build the candidate strip set per video preference rules.
-  let candidatesAll: number[]
-  if (videoRequired) {
-    candidatesAll = strips.map((s, i) => s.video_capable ? i : -1).filter(i => i >= 0)
-  } else {
-    // Non-video preferred — split so we can prefer non-video first
-    const nonVideo = strips.map((s, i) => !s.video_capable ? i : -1).filter(i => i >= 0)
-    const video = strips.map((s, i) => s.video_capable ? i : -1).filter(i => i >= 0)
-    candidatesAll = [...nonVideo, ...video]
-  }
+  // Build the candidate strip set per video preference rules. A pool phase
+  // refused video strips at this start runs on general strips only.
+  const videoOpen = !videoRequired
+    && (poolVideoDay === undefined || poolMayUseVideoStrips(poolVideoDay, startTime))
+  const candidatesAll: number[] = videoRequired
+    ? video
+    : videoOpen ? [...nonVideo, ...video] : nonVideo
 
   // Hit: pick the first `count` candidates whose interval lists do not overlap
   // [startTime, endTime].
@@ -243,9 +322,21 @@ export function findAvailableStripsInWindow(
     return { fit: 'none', earliest_next_start: null, reason: 'STRIPS' }
   }
 
-  const earliestPerStrip = candidatesAll.map(i => earliestFreeStartFor(state, i, startTime))
-  earliestPerStrip.sort((a, b) => a - b)
-  const candidate = earliestPerStrip[count - 1]
+  let candidate = countthEarliestStart(state, candidatesAll, startTime, count)
+
+  // A pool phase inside the wave counts video strips only while the wave
+  // lasts. When `count` strips first come free after it, the video strips no
+  // longer count, so the answer is when `count` general strips come free –
+  // never earlier than `candidate`, so also after the wave. The engine defers
+  // straight to the soonest moment enough strips the phase may use are free
+  // (METHODOLOGY.md §Resource Windows), and the earlier time is not one: the
+  // pool would only miss again there and spend a deferral.
+  if (videoOpen && poolVideoDay !== undefined && !poolMayUseVideoStrips(poolVideoDay, candidate)) {
+    if (nonVideo.length < count) {
+      return { fit: 'none', earliest_next_start: null, reason: 'STRIPS' }
+    }
+    candidate = countthEarliestStart(state, nonVideo, startTime, count)
+  }
 
   if (!isFinite(candidate)) {
     return { fit: 'none', earliest_next_start: null, reason: 'STRIPS' }
@@ -264,56 +355,6 @@ export function findAvailableStripsInWindow(
   const reason: 'STRIPS' | 'TIME' = candidate + duration > hardEnd ? 'TIME' : 'STRIPS'
 
   return { fit: 'none', earliest_next_start: candidate, reason }
-}
-
-// ──────────────────────────────────────────────
-// peakConcurrentStrips — sweep-line over allocation intervals
-// ──────────────────────────────────────────────
-
-/**
- * Returns the peak concurrent strip occupancy within `window`, separated into
- * total strips and the video-strip subset. Walks every allocation across every
- * strip in the state; small N keeps this cheap.
- *
- * Used by Phase B's referee-staffing layer (replaces the existing sweep-line on
- * RefDemandInterval[]) and by post-schedule capacity reporting.
- */
-export function peakConcurrentStrips(
-  state: GlobalState,
-  config: TournamentConfig,
-  window: { start: number; end: number },
-): { total: number; video: number } {
-  type Event = { time: number; deltaTotal: number; deltaVideo: number }
-  const events: Event[] = []
-
-  for (let i = 0; i < state.strip_allocations.length; i++) {
-    const isVideo = config.strips[i]?.video_capable === true
-    const list = state.strip_allocations[i]
-    for (const a of list) {
-      // Allocation overlaps window?
-      if (a.start_time >= window.end || a.end_time <= window.start) continue
-      const start = Math.max(a.start_time, window.start)
-      const end = Math.min(a.end_time, window.end)
-      events.push({ time: start, deltaTotal: 1, deltaVideo: isVideo ? 1 : 0 })
-      events.push({ time: end, deltaTotal: -1, deltaVideo: isVideo ? -1 : 0 })
-    }
-  }
-
-  // Sort: ascending by time. End events (negative delta) before start events at
-  // the same instant so touching intervals do not double-count.
-  events.sort((a, b) => a.time - b.time || a.deltaTotal - b.deltaTotal)
-
-  let curTotal = 0
-  let curVideo = 0
-  let peakTotal = 0
-  let peakVideo = 0
-  for (const e of events) {
-    curTotal += e.deltaTotal
-    curVideo += e.deltaVideo
-    if (curTotal > peakTotal) peakTotal = curTotal
-    if (curVideo > peakVideo) peakVideo = curVideo
-  }
-  return { total: peakTotal, video: peakVideo }
 }
 
 // ──────────────────────────────────────────────

@@ -45,13 +45,10 @@ import { deriveSized } from '../../helpers/derive.ts'
 // minute values rather than two parallel expectations. One case additionally
 // pins the table's raw strings, so the formatter itself cannot drift unnoticed.
 //
-// A flighted event is built through the engine rather than through the store:
-// `buildConfig.ts` sets `flighted: false` on every competition and only ever
-// raises it together with a non-null `flighting_group_id`, while `derive.ts`
-// splits into FLIGHT_A/FLIGHT_B only for `flighted && flighting_group_id ===
-// null`. So no store state produces a flight pair, and both views are handed
-// the same committed `DerivedSchedule` object instead — which is exactly the
-// "one derived model, two views" arrangement the contract is about.
+// The matrix cases build every event, the flighted one included, through the
+// engine (`deriveSized`) and hand both views the same committed
+// `DerivedSchedule` object – which is exactly the "one derived model, two
+// views" arrangement the contract is about.
 
 const VIEWPORT_WIDTH = 900
 // 013 T026 removed the culling these two sized the window for: every day
@@ -294,9 +291,14 @@ function matrixTuples(): string[] {
  * 86 min (was 105) and the 24-fencer DE runs 4 waves of 20 min on 16 strips, 80
  * min (was 84). The staged event's prelims are R64 and R32 on 16 strips, 3
  * waves, and its video phase is R16 to the semis on 4 strips, 80 min.
+ *
+ * 021 T3, 2026-10-08: re-read after Flight B came to wait the 15-minute flight
+ * buffer alone (METHODOLOGY §Runtime Decomposition). Flight A ends at 566, so
+ * Flight B starts at snap(581) = 585 (was 600) and the flighted event's tuple
+ * moves 15 minutes earlier from Flight B on.
  */
 const EXPECTED_TUPLES = [
-  tuple('flighted', 1, 480, 686, 720, 800, 4),
+  tuple('flighted', 1, 480, 671, 705, 785, 4),
   tuple('plain', 0, 480, 566, 600, 680, 4),
   tuple('staged', 0, 480, 780, 810, 980, 4),
 ].sort()
@@ -370,8 +372,8 @@ describe('the matrix and the schedule table cannot disagree (FR-023)', () => {
     const blocks = blocksFor('flighted')
     expect(Array.from(blocks.keys()).sort()).toEqual(['DE', 'FLIGHT_A', 'FLIGHT_B'])
     expect(blocks.get('FLIGHT_A')).toEqual({ day: 1, start: 480, end: 566, strips: 2 })
-    expect(blocks.get('FLIGHT_B')).toEqual({ day: 1, start: 600, end: 686, strips: 2 })
-    // No single POOLS block covering 480-686: that would paint the 566-600 gap
+    expect(blocks.get('FLIGHT_B')).toEqual({ day: 1, start: 585, end: 671, strips: 2 })
+    // No single POOLS block covering 480-671: that would paint the 566-585 gap
     // between the flights as pool time.
     expect(blocks.get('POOLS')).toBeUndefined()
   })

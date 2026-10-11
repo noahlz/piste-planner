@@ -98,6 +98,12 @@ import { unseatedPhases } from '../../src/engine/unseated.ts'
  * CDT-W-SABRE-IND and Y14-W-EPEE-IND, B6 six events. Every entry still equals
  * its app-path pin.
  *
+ * 021 T4, 2026-10-09 – B6 51 → 53, read from the drift ledger's re-taken
+ * snapshot after weapon balance (METHODOLOGY §Weapon Balance, owner rulings O4
+ * and O7) re-coloured its day map: JR-M-SABRE-IND, JR-W-SABRE-IND and
+ * VET-M-FOIL-IND-VCMB in, Y12-W-SABRE-IND out. Every entry still equals its
+ * app-path pin.
+ *
  * The table is still typed out, but it is no longer trusted as typed: the
  * "matches the live drift ledger" test below re-measures every entry by the
  * drift ledger's own route. Until 015 it was a hand-typed copy that nothing
@@ -105,7 +111,7 @@ import { unseatedPhases } from '../../src/engine/unseated.ts'
  * ledger's real counts had moved.
  */
 const LEDGER_SCHEDULED_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 51, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 53, B7: 18, B8: 53,
 }
 
 interface ParityException {
@@ -185,9 +191,13 @@ const PARITY_EXCEPTIONS: Partial<Record<ScenarioId, ParityException>> = {}
  * the ledger's after R1 (the last phase may run past the hard end, placed with
  * a WARN). Their copies in `appPath.test.ts` move with them in the same commit.
  * No other pin moved.
+ *
+ * 021 T4, 2026-10-09 – B6 re-measured 51 → 53, the same move as the ledger's
+ * under weapon balance (METHODOLOGY §Weapon Balance). Its copy in
+ * `appPath.test.ts` moves with it in the same commit. No other pin moved.
  */
 const PINNED_APP_PATH_COUNTS: Record<ScenarioId, number> = {
-  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 51, B7: 18, B8: 53,
+  B1: 24, B2: 24, B3: 24, B4: 24, B5: 12, B6: 53, B7: 18, B8: 53,
 }
 
 // specs/006-day-axis-parity/contracts/day-axis.md C5 (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/contracts/day-axis.md)
@@ -559,7 +569,7 @@ describe('the footer counts the engine\'s placements at boot (017 T5a)', () => {
     B3: { placed: 24, unplaced: 0 },
     B4: { placed: 24, unplaced: 6 },
     B5: { placed: 12, unplaced: 0 },
-    B6: { placed: 51, unplaced: 3 },
+    B6: { placed: 53, unplaced: 1 }, // 021 T4, 2026-10-09 – 51/3 → 53/1 under weapon balance
     B7: { placed: 18, unplaced: 0 },
     B8: { placed: 53, unplaced: 0 },
   }
@@ -587,9 +597,14 @@ describe('the footer counts the engine\'s placements at boot (017 T5a)', () => {
    * events past the old day end (a last phase may run past the 22:00 hard end),
    * and their referees count: B4's day 1 total went 80 → 96 and day 2 80 → 94
    * in `refs.test.ts`. B6's six new events add no peak (78 holds).
+   *
+   * 021 T4, 2026-10-09 – B3 226 → 224, B5 118 → 112, B6 78 → 80, B7 228 → 222
+   * and B8 212 → 196, B1, B2 and B4 held. Weapon balance (METHODOLOGY §Weapon
+   * Balance) re-colours the day maps of B1, B3, B5, B6, B7 and B8, so each day
+   * holds a different set of events. B1's 210 holds although its day map moved.
    */
   const BOOT_REF_PEAKS: Record<ScenarioId, number> = {
-    B1: 210, B2: 240, B3: 226, B4: 96, B5: 118, B6: 78, B7: 228, B8: 212,
+    B1: 210, B2: 240, B3: 224, B4: 96, B5: 112, B6: 80, B7: 222, B8: 196,
   }
 
   it.each(SCENARIO_IDS)('%s keeps its boot referee peak', (id) => {
@@ -712,24 +727,42 @@ describe('boot invariants: the drawn board is the scheduler\'s run (017 T5b)', (
     expect(app).toEqual(scheduler)
   })
 
-  // 018 R3: the app's overrun rows are the scheduler's phase-overruns-day-end
-  // WARNs. The one difference is the message, which names the event by its
-  // label in the app and by its id in the scheduler.
-  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s phase-overruns-day-end rows equal the scheduler\'s WARNs', (_, board) => {
+  // The app's rows for a per-event WARN rule are the scheduler's WARNs of that
+  // rule. The one difference is the message, which names the event by its label
+  // in the app and by its id in the scheduler.
+  function ruleRowsParity(board: { boot: () => void }, rule: BottleneckRule) {
     board.boot()
     const { competitions, run } = schedulerRun()
     const labels = new Map(competitions.map((c) => [c.id, competitionLabel(c)]))
     const scheduler = run.bottlenecks
-      .filter((b) => b.rule === BottleneckRule.PHASE_OVERRUNS_DAY_END && b.severity === BottleneckSeverity.WARN)
+      .filter((b) => b.rule === rule && b.severity === BottleneckSeverity.WARN)
       .map((b) => ({ rule: b.rule, target: b.competition_id, day: b.day, message: b.message }))
     const app = selectAllFindings(useStore.getState())
-      .filter((row) => row.id.split(':')[1] === BottleneckRule.PHASE_OVERRUNS_DAY_END)
+      .filter((row) => row.id.split(':')[1] === rule)
       .map((row) => ({
         rule: row.id.split(':')[1],
         target: row.target,
         day: row.day,
         message: row.message.replace(labels.get(row.target!)!, row.target!),
       }))
+    return { app, scheduler }
+  }
+
+  // 018 R3: the overrun rows.
+  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s phase-overruns-day-end rows equal the scheduler\'s WARNs', (_, board) => {
+    const { app, scheduler } = ruleRowsParity(board, BottleneckRule.PHASE_OVERRUNS_DAY_END)
     expect(app).toEqual(scheduler)
+  })
+
+  // 021 T7: the same holds for the pool-start cutoff (O10), and B4 and B6 are
+  // the boards where it is not vacuous.
+  it.each(BOARDS.map((b) => [b.name, b] as const))('%s: the app\'s pool-start-after-cutoff rows equal the scheduler\'s WARNs', (_, board) => {
+    const { app, scheduler } = ruleRowsParity(board, BottleneckRule.POOL_START_AFTER_CUTOFF)
+    expect(app).toEqual(scheduler)
+  })
+
+  it.each([['B4'], ['B6']])('%s: the cutoff rows are not empty, so the parity above compares something', (name) => {
+    const { app } = ruleRowsParity(BOARDS.find((b) => b.name === name)!, BottleneckRule.POOL_START_AFTER_CUTOFF)
+    expect(app.length).toBeGreaterThan(0)
   })
 })

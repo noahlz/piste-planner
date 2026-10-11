@@ -82,9 +82,11 @@ export interface CompetitionConfig {
 
 // The `GlobalOverrides` slice lived here until 013 T022 (research D7): seven
 // engine constants the retired gears panel could retune. Two of them had rows,
-// the other five were carried but unreachable, and `buildConfig.ts` now reads
-// all seven from `constants.ts` directly. Retuning any of them again is engine
-// work first — see "Global settings" in `docs/design/backlog.md`.
+// the other five were carried but unreachable, and `buildConfig.ts` reads the
+// five that remain from `constants.ts` directly (024 removed
+// `YOUTH_VET_BOUT_DELTA` and 021 T1a removed `THRESHOLD_MINS`). Retuning any of
+// them again is engine work first – see "Global settings" in
+// `docs/design/backlog.md`.
 
 export interface CompetitionSlice {
   selectedCompetitions: Record<string, CompetitionConfig>
@@ -525,9 +527,10 @@ function createDismissalsSlice(set: SetState, get: GetState): DismissalsSlice {
     // Advisory-only guard (data-model.md §Dismissals, spec clarification
     // 2026-08-28, widened by 013 T031 / research D6): an id only takes effect
     // when it currently matches a row of the findings list marked
-    // `dismissable` — Warning and Unplaced rows, less the hard same-day rule
-    // break (016 R1). Blocking and Note rows, the hard-separation Warning and
-    // unknown ids are silent no-ops, no state change.
+    // `dismissable` – Warning and Unplaced rows, less the broken hard rules:
+    // the hard same-day pair (016 R1) and the split Vet co-day (021 T6c).
+    // Blocking and Note rows, those two Warnings and unknown ids are silent
+    // no-ops, no state change.
     //
     // The guard reads `selectAllFindings`, the *unfiltered* list, because
     // `selectFindings` has already dropped every dismissed row: reading the

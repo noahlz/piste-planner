@@ -3,7 +3,7 @@ import type {
   TournamentConfig,
   PinnedPlacement,
 } from '../engine/types.ts'
-import { DAY_AXIS_SPACING_MINS, DeStripRequirement } from '../engine/types.ts'
+import { DAY_AXIS_SPACING_MINS } from '../engine/types.ts'
 import { findCompetition } from '../engine/catalogue.ts'
 import { compareIds } from '../engine/order.ts'
 import {
@@ -11,21 +11,16 @@ import {
   DAY_END_MINS,
   DAY_HARD_END_MINS,
   clockHardEnd,
-  LATEST_START_MINS,
   LATEST_START_OFFSET,
   DAY_LENGTH_MINS,
   DE_REFS,
-  SAME_TIME_WINDOW_MINS,
   INDIV_TEAM_MIN_GAP_MINS,
-  EARLY_START_THRESHOLD,
-  MAX_RESCHEDULE_ATTEMPTS,
   MAX_FENCERS,
   MIN_FENCERS,
   REGIONAL_CUT_OVERRIDES,
   REGIONAL_CUT_TOURNAMENT_TYPES,
   ADMIN_GAP_MINS,
   FLIGHT_BUFFER_MINS,
-  THRESHOLD_MINS,
   SLOT_MINS,
   DE_BOUT_DURATION,
   DE_BOUT_DURATION_10_TOUCH,
@@ -90,7 +85,6 @@ export function buildTournamentConfig(state: StoreState): {
     // `docs/design/backlog.md` records what each would need first.
     ADMIN_GAP_MINS,
     FLIGHT_BUFFER_MINS,
-    THRESHOLD_MINS,
     SLOT_MINS,
     // Copied so no consumer spreading the config can reach the module constants.
     DE_BOUT_DURATION: { ...DE_BOUT_DURATION },
@@ -102,14 +96,10 @@ export function buildTournamentConfig(state: StoreState): {
     DAY_START_MINS,
     DAY_END_MINS,
     DAY_HARD_END_MINS,
-    LATEST_START_MINS,
     LATEST_START_OFFSET,
     DAY_LENGTH_MINS,
     DE_REFS,
-    SAME_TIME_WINDOW_MINS,
     INDIV_TEAM_MIN_GAP_MINS,
-    EARLY_START_THRESHOLD,
-    MAX_RESCHEDULE_ATTEMPTS,
     MAX_FENCERS,
     MIN_FENCERS,
     pool_round_duration_table: state.pool_round_duration_table,
@@ -223,21 +213,16 @@ function buildCompetitions(state: StoreState): Competition[] {
       // day 7. Infinity can never be the minimum in
       // Math.min(dayHardEnd(day, config), latest_end), for any day count.
       latest_end: Infinity,
-      optional: false,
-      de_round_of_16_requirement: DeStripRequirement.HARD,
-      // The store's own flag. `flighted: true` with a null group is exactly the
-      // shape `derive.ts` splits into Flight A and Flight B, so the flag needs
-      // no further derivation (data-model §4). `flighting_group_id` stays null:
-      // the accept/reject flow that used to fill it in was retired (FR-028).
+      // The store's own flag. `flighted: true` is exactly the shape `derive.ts`
+      // splits into Flight A and Flight B, so the flag needs no further
+      // derivation (data-model §4).
       flighted: overrides.flighted,
-      flighting_group_id: null,
-      is_priority: false,
       // The fourth seam specs/006-day-axis-parity/parity-exceptions.md (removed; git show 0ab5bd2dc9:specs/006-day-axis-parity/parity-exceptions.md) names. A `0` here once zeroed the DE
       // term of `estimateCompetitionStripHours`. Since 024 that term bills DE
-      // bouts × bout time and no longer reads this field, but referee demand
-      // (`peakDeRefDemand`) and flighting-group validation still do. This is
-      // the ledger factory's own pre-allocation (`__tests__/helpers/scenarios.ts`)
-      // — a default, not a decision.
+      // bouts × bout time and no longer reads this field. Its one reader is day
+      // assignment's packing footprint (`dayColoring.ts`). This is the ledger
+      // factory's own pre-allocation (`__tests__/helpers/scenarios.ts`) – a
+      // default, not a decision.
       strips_allocated: Math.max(2, Math.ceil(overrides.fencer_count / 7)),
 
       // Per-event strip budget overrides — always null until UI exposes them

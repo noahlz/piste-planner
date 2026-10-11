@@ -239,18 +239,23 @@ from the Claude Design mockup, is delivered and merged (`83168c7f2a`). 014,
 structured bottlenecks, is merged (`24d19f7ed6`). 015, the ledger converging
 with the store, is merged (`7975e4efea`). 024, the 2026-27 Operations Manual
 conformance, is merged (`b84be7e291`). 016, hand placements obey the rules, is
-delivered on branch `016-hand-placement-rules`
-(`specs/016-hand-placement-rules/handoff.md`), awaiting the user's merge.
+merged (`114d99314b`), and so are 017 (`d4f545736c`), 018 (`8de0d5a12b`), 019
+(`7a7e503f4d`) and 020 (`5edbdf7712`). 021, METHODOLOGY reconciliation, is
+delivered on branch `021-methodology-reconciliation`
+(`specs/021-methodology-reconciliation/handoff.md`), awaiting the user's merge.
 The original P1–P4 rows are all delivered: P1 as 001, P2 as 003, P3 as 004,
 and P4's manual placement and pre-seeded scheduling as 013 (pins, Move day,
 Auto-assign around pins – the pinned events are excluded from the loop's
 seed, not from `buildEventStates`, per 013 research D1). P5 (FLUID) stays
 deferred with no owner.
 
-Baseline (after 019): `tsc -b` and lint clean, 93 files / 3133 tests. Drift
-ledger B1–B8 scheduled 24 / 24 / 24 / 24 / 12 / 51 / 18 / 53, equal to the app
-path on all eight, with 0 / 0 / 0 / 6 / 0 / 3 / 0 / 0 ERRORs. Snapshot SHA-256
-`32a4e0afb45a…`. (After 018 it was 89 files / 3031 tests and `903cd991fbca…`,
+Baseline (after 021): `tsc -b` and lint clean, 97 files / 3349 tests. Drift
+ledger B1–B8 scheduled 24 / 24 / 24 / 24 / 12 / 53 / 18 / 53, equal to the app
+path on all eight, with 0 / 0 / 0 / 6 / 0 / 1 / 0 / 0 ERRORs, and the B6 floor
+raised to 53. Snapshot SHA-256 `5f0935202e54…`. (After 020 it was 96 files /
+3252 tests, 24 / 24 / 24 / 24 / 12 / 51 / 18 / 53, 0 / 0 / 0 / 6 / 0 / 3 / 0 / 0
+ERRORs and `32a4e0afb45a…`, and after 019 93 files / 3133 tests with the same
+counts, ERRORs and SHA. After 018 it was 89 files / 3031 tests and `903cd991fbca…`,
 the same counts and ERRORs. 019 moved only the snapshot's text, by deleting the
 `constraint_relaxation_level` field. Before 018 it was 87 files / 2795 tests, 24
 / 24 / 24 / 21 / 12 / 45 / 18 / 53, 0 / 0 / 0 / 9 / 0 / 9 / 0 / 0 ERRORs and
@@ -258,7 +263,8 @@ the same counts and ERRORs. 019 moved only the snapshot's text, by deleting the
 after 024 it was 81 files / 2148 tests and `7e2db75c38bb…`, and after 015 it was
 78 files / 1830 tests, 24 / 24 / 24 / 18 / 12 / 40 / 18 / 53 and
 `a4a71e333c77…`.) 018 moved B4 and B6 by the overrun and the Div 1 timings on
-B1, B2, B7 and B8.
+B1, B2, B7 and B8. 021 moved B6 51 → 53 by weapon balance and moved day maps or
+start times on every scenario but B4 (row 021 below).
 
 ### Owner decisions, 2026-10-04
 
@@ -290,7 +296,7 @@ Kit feature when picked up; numbers after 013 are provisional. Detail lives in
 | **018** | **Delivered 2026-10-08** – engine correctness: an event's last phase (its DE, or a staged DE's round-of-16 video stage) may now end past the day's 22:00 hard end when it starts before it and ends by midnight. It is placed with one Warning that carries the finish, the Findings panel shows that Warning for run-placed and hand-moved events alike, and the canvas grows to show the late finish, so B4 now places 24 events (it placed 21) and B6 51 (it placed 45). Div 1 promotes 75 % at a NAC (the cut is 25 %), per the 2026-27 handbook. A fencer count must be a whole number from 2 to 336 (the handbook's cap, not 500): a link or file with anything else opens on B1 with a dismissable notice that names the event and the reason, and the engine skips such an event instead of crashing the page. The 0-or-1 link path was real and wider than the audit said. `specs/018-engine-correctness/handoff.md` | closed. Leftovers in §What 018 deliberately left unfixed | M | 024 | B4 21→24 and B6 45→51 by the overrun, Div 1 timings moved on B1, B2, B7 and B8, fencer bounds no movement |
 | **019** | **Delivered 2026-10-08** – default days per template: picking a template raises the board's days to the fewest its own hard same-day rules need, read from the board's tournament type (4 for the three K₄ templates at a national type, 2 or 3 at a regional one), and never lowers them or touches the day hours. When the days are lowered below a minimum of 3 or more, a hint under the Days pills says how many the template needs and why. Div 1 and Junior team events now never share a day at any type, so the Div 1 ↔ Junior relaxation is gone and NAC Div1/Junior and NAC Vet/Div1/Junior no longer relax at 3 days. They break the pair and the Findings panel says so, as NAC Cadet/Junior already did. `specs/019-default-days-per-template/handoff.md` | closed. Leftovers in §What 019 deliberately left unfixed | S | 024 | ledger moved only by the deleted `constraint_relaxation_level` field, counts and ERRORs unmoved |
 | **020** | **Delivered 2026-10-08** – re-run on parameter change: a change to the engine's inputs re-runs the schedule 300 ms after the last edit (017's `configKey` says when a re-run is due), with an "Updating…" indicator that shows only after a run has been due for 500 ms, a Settings switch, "Re-run automatically", on by default and remembered per browser, to turn it off, loads that open stale, and a hold that keeps the Findings panel's Unplaced rows and the footer's counts and metrics at the last run's values until the run lands. A run between a lower and a raise of the days now drops a pin left on the lowered-away day (ruling R4). The suite is 96 files / 3252 tests (it was 93 / 3133) and the ledger is byte-identical. `specs/020-rerun-on-parameter-change/handoff.md` | closed. Leftovers in §What 020 deliberately left unfixed | M | 013, independent of 014–019 | none, ledger unchanged |
-| **021** | METHODOLOGY reconciliation – retire the eight time-of-day weights, the last cheap weight fix (`WEAPON_BALANCE` – 010 wired the proximity one and 024 the cross-weapon one as Group 3), the doc's self-contradictions, the verdicts in [`methodology-reconciliation.md`](./methodology-reconciliation.md) (minus L6 and L14, the video tiers and the DE prelims split, which 024 settled), delete `daySequencing.ts` and the dead constants, and add the calibration scenario | §METHODOLOGY.md and the engine have diverged, §Dead code held back, §Calibration debt | M–L | 018 (day-end wording, delivered) | yes |
+| **021** | **Delivered 2026-10-11** – METHODOLOGY reconciliation: METHODOLOGY.md and the engine now say the same thing. The owner approved one amendment and a follow-up after fourteen rulings, and everywhere else the engine moved to the spec. The eight time-of-day weights and their dead settings are retired, and the dead engine code, `daySequencing.ts` included, is gone. Day assignment uses every day the organizer chose. A flighted event needs half the strips, Flight B starts 15 minutes after Flight A ends, and the larger event is the one suggested for flighting. Day assignment prefers days that hold both épée and foil/sabre, and no day in B1–B8 holds only one weapon class (genders pooled), and it prefers to put a Y8 on its Y10's day. On a Veteran co-day the bands start oldest first, at least 60 minutes apart, and a team event that shares a day with its individual waits 120 minutes after it. No Veteran event has a fixed start offset. A split Vet co-day draws a Warning the organizer cannot dismiss, and pools that start after 4:00 PM draw a Warning, both for run-placed and hand-moved events. On a multi-event NAC video day, pools that start after the morning wave leave the video strips for the video stage. That costs the largest NAC template (Vet/Div1/Junior, loaded after the B1 preset) 5 events, and the owner has not yet ruled on the size of that cost (§What 021 deliberately left unfixed). The calibration scenario was closed by ruling O3 rather than added. The suite is 97 files / 3349 tests (it was 96 / 3252), B1–B8 place 24 / 24 / 24 / 24 / 12 / 53 / 18 / 53 with 0 / 0 / 0 / 6 / 0 / 1 / 0 / 0 ERRORs, and the ledger SHA is `5f0935202e54…`. `specs/021-methodology-reconciliation/handoff.md` | closed. Leftovers in §What 021 deliberately left unfixed | M–L | 018 (day-end wording, delivered) | B6 51→53 and ERRORs 3→1 by weapon balance (floor raised to 53), stripRecommendation B3 73→79 (weapon balance and video preservation), B5 29→32 and B6 63→64, day maps moved on B1, B3, B5–B8, B8's Vet bands staggered, B2, B3 and B8 re-timed by video preservation, B6's day map by the Y8 bonus (two Y8 events swap days), cutoff WARNs B4 1, B6 9, B8 3 |
 | **022** | Release housekeeping – README, dev port, stale settings, stale citations | §Release housekeeping | S | last | no |
 | **023** | Team events go straight to DE – see the scope below | §Team events are scheduled with a pool round | L | 015, 024 | B1, B2, B8 move, B3–B7 must not |
 | **024** | **Delivered 2026-10-06** – 2026-27 Operations Manual conformance, one commit per rule group with its drift record: pool and DE times from the manual (A), a 9:00–19:00 day with a 22:00 hard end and a ÷ 14 strip baseline (B), the Y14 and RYC cuts and the 256-fencer DE cap (E), video required for every NAC individual event with team events Single Stage and best-effort (C), and the same-day rules by tournament type (D): Group 1, which now includes Div 1–Cadet, is hard at NAC, SYC and SJCC and soft at ROC, RYC and RJCC with a time-of-day window that holds the older side's pools until day start + 4 hours (METHODOLOGY §Overlapping-Population Separation (Group 1)), plus new Group 2 and 3 soft rules and shorter first and last days. `specs/024-ops-manual-conformance/handoff.md` | closed. Leftovers in §What 024 deliberately left unfixed | L | 015 | re-baseline, measured per group |
@@ -345,10 +351,11 @@ One ledger move covers what is left, including the B1/B2 count replacement.
 Recorded in `backlog.md`, not needed to call the product finished, and not
 scheduled: global settings as a config file, a what-if scenario mode, the
 bounded re-colour repair for runtime failure, the test-comment fixture audit,
-P5 (FLUID), and the experimental mode (rejected in 012). Five of them wait on
-an owner decision or on data first: vet co-day serialization, per-event entry
-caps, the strip non-monotonicity warning, youth pool calibration, and real
-2026-27 templates with the Elite/National split. The policy-tables entry's
+P5 (FLUID), and the experimental mode (rejected in 012). Four of them wait on
+an owner decision or on data first: per-event entry caps, the strip
+non-monotonicity warning, youth pool calibration, and real 2026-27 templates
+with the Elite/National split. Vet co-day serialization, once a fifth, was
+settled by 021's ruling O1 (a 60-minute stagger). The policy-tables entry's
 rows other than the Div 1 cut sit here too, since 018 delivered the Div 1 cut
 and 024 the Y14 and RYC cuts.
 

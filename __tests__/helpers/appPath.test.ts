@@ -86,13 +86,19 @@ describe('runAppPath', () => {
   // ends by midnight (METHODOLOGY.md §Same-Day Completion), so the events that
   // lost only to a late finish are placed with a SAME_DAY_VIOLATION WARN. Nothing
   // else moved.
+  //
+  // 021 T4, 2026-10-09 – B6's placed count moved 51 → 53, with the parity
+  // file's pins and the ledger's count in the same commit. Weapon balance
+  // (METHODOLOGY §Weapon Balance, owner rulings O4 and O7) re-colours B6's day
+  // map: JR-M-SABRE-IND, JR-W-SABRE-IND and VET-M-FOIL-IND-VCMB in,
+  // Y12-W-SABRE-IND out. Nothing else moved.
   const BASELINE: Record<string, { selected: number; placed: number }> = {
     B1: { selected: 24, placed: 24 }, // pre-fix: 11
     B2: { selected: 24, placed: 24 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis)
     B3: { selected: 24, placed: 24 }, // pre-fix: 9
     B4: { selected: 30, placed: 24 }, // pre-fix: 8; 16 until T061a fired the upfront gate; 0 until 011 T004 demoted it; 18 until 024 group A; 19 until 024 group D; 21 until 018 T2 – the ledger reads the same since 015 (see above)
     B5: { selected: 12, placed: 12 }, // pre-fix: 9
-    B6: { selected: 54, placed: 51 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A; 50 until 024 group D (seven out, two in); 45 until 018 T2 (six placed past the hard end)
+    B6: { selected: 54, placed: 53 }, // pre-fix: 19; 43 until T061a re-packed it at the capacity margin (8 out, 4 in, validateFeasibility clean either side — commit 29aabc9031); 39 until 010 T019 removed the Y8→Y10 penalty; 40 until 024 group A; 50 until 024 group D (seven out, two in); 45 until 018 T2 (six placed past the hard end); 51 until 021 T4 (weapon balance, three in, one out)
     B7: { selected: 18, placed: 18 }, // pre-fix: 3
     B8: { selected: 53, placed: 53 }, // pre-fix: 0 (closed by 008-team-event-cut, not the day axis); unmoved by US4; 53 until 024 group B (JR-W-EPEE-IND lost to the 9:00 start); 52 until 024 group D placed it again
   }
@@ -181,13 +187,19 @@ describe('runAppPath', () => {
     // 017, spec §7), and the footer counts the drawn board, which right after a
     // run is that timeline. drawnRefDemand is gone.
     //
+    // 021 T4, 2026-10-09 – day 0's sabre peak 62 → 68 and day 2 134/56 at 3480
+    // → 188/54 at 3535, days 1 and 3 held. Weapon balance (METHODOLOGY §Weapon
+    // Balance, owner rulings O4 and O7) moves 10 of B1's 24 events to another
+    // day, so days 0 and 2 hold different events. The drift ledger's B1 digest
+    // reads the same numbers (day 2 at 2995 on the engine's own axis).
+    //
     // What this case asserts is unchanged: four days, four disjoint peak times
     // in four different day windows, none of them zero.
     const result = runAppPath('B1')
     expect(result.refRequirementsByDay).toEqual([
-      { day: 0, peak_total_refs: 154, peak_saber_refs: 62, peak_time: 540 },
+      { day: 0, peak_total_refs: 154, peak_saber_refs: 68, peak_time: 540 },
       { day: 1, peak_total_refs: 210, peak_saber_refs: 64, peak_time: 2040 },
-      { day: 2, peak_total_refs: 134, peak_saber_refs: 56, peak_time: 3480 },
+      { day: 2, peak_total_refs: 188, peak_saber_refs: 54, peak_time: 3535 },
       { day: 3, peak_total_refs: 186, peak_saber_refs: 72, peak_time: 4920 },
     ])
   })

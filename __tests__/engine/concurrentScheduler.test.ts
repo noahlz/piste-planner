@@ -12,12 +12,13 @@ import {
   Weapon,
   RefPolicy,
   CutMode,
-  DeStripRequirement,
   Phase,
   ValidationMode,
+  VetAgeGroup,
+  dayStart,
   tailEstimateMins,
 } from '../../src/engine/types.ts'
-import type { Bottleneck, Competition, TournamentConfig } from '../../src/engine/types.ts'
+import type { Bottleneck, Competition, PinnedPlacement, TournamentConfig } from '../../src/engine/types.ts'
 import {
   computePoolStructure,
   estimatePoolDuration,
@@ -27,7 +28,7 @@ import {
 import { validateConfig, FeasibilityRule } from '../../src/engine/validation.ts'
 import { makeConfig, makeCompetition, makeStrips, makeBottleneck, makeScheduleResult } from '../helpers/factories.ts'
 import { checkInvariants } from '../helpers/bottleneckInvariants.ts'
-import { createGlobalState } from '../../src/engine/resources.ts'
+import { createGlobalState, snapToSlot } from '../../src/engine/resources.ts'
 import { useStore } from '../../src/store/store.ts'
 import { buildTournamentConfig } from '../../src/store/buildConfig.ts'
 
@@ -47,7 +48,6 @@ function comp(id: string, overrides: Partial<Competition> = {}): Competition {
     de_mode: DeMode.SINGLE_STAGE,
     cut_mode: CutMode.DISABLED,
     cut_value: 100,
-    de_round_of_16_requirement: DeStripRequirement.IF_AVAILABLE,
     ref_policy: RefPolicy.ONE,
     ...overrides,
   })
@@ -63,13 +63,21 @@ function smallConfig(overrides: Partial<TournamentConfig> = {}): TournamentConfi
   })
 }
 
+/** A schedule time that must be set, so a null never compares as a vacuous 0. */
+function required(value: number | null, field: string): number {
+  if (value === null) throw new Error(`${field} is null`)
+  return value
+}
+
 // ──────────────────────────────────────────────
 // Test 1: Concurrent pools — disjoint strips, overlapping time
 // ──────────────────────────────────────────────
 
 describe('scheduleAllConcurrent — concurrent pools on disjoint strips', () => {
   it('two same-day events run pools concurrently on different strip indices', () => {
-    // Two events, both small enough to share strips on day 0.
+    // Two events, both small enough to share strips on day 0. The board has 1
+    // day: day assignment uses every chosen day (METHODOLOGY.md §Day Count),
+    // so 2 days would put the two events on different days.
     const c1 = comp('e1', {
       gender: Gender.MEN, weapon: Weapon.EPEE, category: Category.VETERAN,
       fencer_count: 20,
@@ -78,26 +86,25 @@ describe('scheduleAllConcurrent — concurrent pools on disjoint strips', () => 
       gender: Gender.WOMEN, weapon: Weapon.FOIL, category: Category.VETERAN,
       fencer_count: 20,
     })
-    const config = smallConfig()
+    const config = smallConfig({ days_available: 1 })
     const result = scheduleAllConcurrent([c1, c2], config)
 
     const s1 = result.schedule['e1']
     const s2 = result.schedule['e2']
     expect(s1).toBeDefined()
     expect(s2).toBeDefined()
+    // True by construction on a 1-day board – a cheap check that the premise
+    // below still holds if the board's day count changes.
+    expect(s1.assigned_day).toBe(s2.assigned_day)
 
-    // If the day-coloring places them on the same day, their pool intervals
-    // should overlap in time and use disjoint strip indices.
-    if (s1.assigned_day === s2.assigned_day) {
-      const overlap =
-        (s1.pool_start ?? 0) < (s2.pool_end ?? 0) &&
-        (s2.pool_start ?? 0) < (s1.pool_end ?? 0)
-      expect(overlap, `e1 and e2 pool intervals must overlap when same-day`).toBe(true)
+    const overlap =
+      (s1.pool_start ?? 0) < (s2.pool_end ?? 0) &&
+      (s2.pool_start ?? 0) < (s1.pool_end ?? 0)
+    expect(overlap, `e1 and e2 pool intervals must overlap when same-day`).toBe(true)
 
-      // Disjoint strips: total strip_count is at most strips_total and
-      // intervals are independent (no exclusive serialization).
-      expect((s1.pool_strip_count ?? 0) + (s2.pool_strip_count ?? 0)).toBeLessThanOrEqual(config.strips_total)
-    }
+    // Disjoint strips: total strip_count is at most strips_total and
+    // intervals are independent (no exclusive serialization).
+    expect((s1.pool_strip_count ?? 0) + (s2.pool_strip_count ?? 0)).toBeLessThanOrEqual(config.strips_total)
   })
 })
 
@@ -512,7 +519,9 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
   it('two concurrent STAGED events emit independent per-strip DE_ROUND_OF_16 intervals that sum at their overlap', () => {
     // Symmetric competitions (same fencer_count/weapon/strip target, differing
     // only by gender) with abundant single-day capacity produce identical R16
-    // windows — the overlap guard below confirms that determinism.
+    // windows — the overlap guard below confirms that determinism. The board
+    // has 1 day: day assignment uses every chosen day (METHODOLOGY.md §Day
+    // Count), so 2 days would put the two events on different days.
     // Bracket 16 sits at Div 1's round-of-16 video stage, so each event is one
     // DE_ROUND_OF_16 block asking min(4, 16/2) = 4 strips, with no prelims
     // whose wider ask would set the peak instead.
@@ -530,13 +539,14 @@ describe('scheduleAllConcurrent — per-strip DE referee demand (US1)', () => {
       cut_mode: CutMode.DISABLED,
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
-    const config = smallConfig({ days_available: 2, strips: makeStrips(40, 8) })
+    const config = smallConfig({ days_available: 1, strips: makeStrips(40, 8) })
     const result = scheduleAllConcurrent([a, b], config)
     const s1 = result.schedule['r16A']
     const s2 = result.schedule['r16B']
     expect(s1).toBeDefined()
     expect(s2).toBeDefined()
-    // Guard: symmetric competitions with abundant capacity land on the same day.
+    // True by construction on a 1-day board – a cheap check that the premise
+    // below still holds if the board's day count changes.
     expect(s1.assigned_day).toBe(s2.assigned_day)
 
     // Guard: confirms the two R16 windows genuinely overlap in time.
@@ -772,9 +782,8 @@ describe('scheduleAllConcurrent — a per-event finding excludes one event, not 
     // reads this competition's derived fields — isolated to one finding.
     // category/gender/weapon deliberately differ from validTrio()'s
     // 'valid-1' (DIV1/MEN/FOIL) so this event does not share its
-    // same-population key — smallConfig()'s 2-day default sits exactly at
-    // the same-population rule's threshold, so a collision here would pass
-    // by accident rather than by isolation.
+    // same-population key, and no rule tied to that key can touch it – only
+    // fencer-count-bounds explains its exclusion.
     const bad = comp('bad-fencer-count', {
       fencer_count: 1, category: Category.CADET, gender: Gender.WOMEN, weapon: Weapon.EPEE,
     })
@@ -1039,7 +1048,7 @@ describe('scheduleAllConcurrent — the demoted feasibility finding (011 T006)',
 describe('postScheduleDiagnostics — the recommendation survives a WARN-only feasibility finding, and its message names four levers in order with no strip count (T005, T009)', () => {
   it('a configuration whose only finding is feasibility-strip-hours (WARN) still emits the post-schedule RESOURCE_RECOMMENDATION INFO', () => {
     // 13 events, one strip-hour-hungry combination per category/gender/weapon
-    // so `same-population` never fires. max_pool_strip_pct is deliberately
+    // so the crossover same-population block never binds. max_pool_strip_pct is deliberately
     // below 1.0 so each event's own pool count (7, from 48 fencers) stays
     // under strips_total (8) — no per-event resource-precondition-strips
     // ERROR — while suggestStripCount's ceiling still exceeds it, which is
@@ -1187,10 +1196,12 @@ describe('postScheduleDiagnostics — the recommendation survives a WARN-only fe
   )
 
   it('a board that fits emits no RESOURCE_RECOMMENDATION bottleneck', () => {
-    // Same shape as test 1 (lines 64-75): two comp(...) events of 20 fencers
-    // each on a plain smallConfig() (2 days, 20 strips). validateConfig is
-    // checked first so this pins "the board really fits," not merely "this
-    // gate stays quiet for some other reason."
+    // Test 1's two comp(...) events of 20 fencers each, on a plain
+    // smallConfig() (2 days, 20 strips) rather than test 1's 1-day board,
+    // which validateConfig's days_available range rejects. Day assignment uses
+    // both days, so each event has a day to itself. validateConfig is checked
+    // first so this pins "the board really fits," not merely "this check stays
+    // quiet for some other reason."
     const c1 = comp('e1', {
       gender: Gender.MEN, weapon: Weapon.EPEE, category: Category.VETERAN,
       fencer_count: 20,
@@ -1326,10 +1337,9 @@ describe('scheduleAllConcurrent — a bracket of 2 has no counted round', () => 
   })
 })
 
-describe('scheduleAllConcurrent — a pinned flighted event on 1 strip', () => {
-  it('(guard) keeps 1 strip for each flight and Flight B its full duration at 1 strip', () => {
-    // 24 fencers → 4 pools, 2 per flight. The pin's 1 strip splits as ceil/floor
-    // (1, 0); Flight B keeps the 1-strip floor, never a 0-strip, 0-minute block.
+describe('scheduleAllConcurrent – a pinned flighted event', () => {
+  /** 24 fencers → 4 pools, 2 per flight, pinned at day 0's start on `stripCount` strips. */
+  function schedulePinnedFlight(stripCount: number) {
     const competition = makeCompetition({
       id: 'pinned-flight',
       fencer_count: 24,
@@ -1340,10 +1350,17 @@ describe('scheduleAllConcurrent — a pinned flighted event on 1 strip', () => {
       de_video_policy: VideoPolicy.BEST_EFFORT,
     })
     const config = smallConfig()
-    const pin = { competition_id: competition.id, day: 0, start_time: config.DAY_START_MINS, strip_count: 1 }
+    const pin = { competition_id: competition.id, day: 0, start_time: config.DAY_START_MINS, strip_count: stripCount }
 
     const s = scheduleAllConcurrent([competition], config, [pin]).schedule[competition.id]
     if (!s) throw new Error('pinned-flight was not scheduled')
+    return { competition, config, s }
+  }
+
+  it('(guard) keeps 1 strip for each flight and Flight B its full duration at 1 strip', () => {
+    // The pin's 1 strip splits as ceil/floor (1, 0), and Flight B keeps the
+    // 1-strip floor, never a 0-strip, 0-minute block.
+    const { competition, config, s } = schedulePinnedFlight(1)
 
     const pools = computePoolStructure(competition.fencer_count)
     const baseline = weightedPoolDuration(pools, competition.weapon, config.pool_round_duration_table)
@@ -1353,6 +1370,161 @@ describe('scheduleAllConcurrent — a pinned flighted event on 1 strip', () => {
     expect(s.flight_a_strips).toBe(1)
     expect(s.flight_b_strips).toBe(1)
     expect((s.flight_b_end ?? 0) - (s.flight_b_start ?? 0)).toBe(flightBOnOneStrip.actual_duration)
+  })
+
+  it('starts Flight B FLIGHT_BUFFER_MINS after Flight A ends, snapped, on the pinned path', () => {
+    // 4 strips run 2 pools per flight, so Flight A ends off a slot boundary and
+    // the snap shows. `derive.ts` draws Flight B at the same time.
+    const { config, s } = schedulePinnedFlight(4)
+    const aEnd = required(s.flight_a_end, 'flight_a_end')
+
+    expect(aEnd, 'fixture: Flight A ends off a slot boundary').not.toBe(snapToSlot(aEnd))
+    expect(s.flight_b_start).toBe(snapToSlot(aEnd + config.FLIGHT_BUFFER_MINS))
+  })
+})
+
+// ──────────────────────────────────────────────
+// Flighting follows the spec (021 T3, METHODOLOGY.md §Resource Preconditions
+// 'Strip minimum', §Runtime Decomposition, §Within-Day Priority Order key 3,
+// §Bottlenecks Specific to the Concurrent Scheduler)
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent – flighting follows the spec (021 T3)', () => {
+  /** One day on `stripCount` plain strips, caps out of the way so only the strip total binds. */
+  function oneDayConfig(stripCount: number): TournamentConfig {
+    return smallConfig({
+      days_available: 1,
+      strips: makeStrips(stripCount, 0),
+      strips_total: stripCount,
+      video_strips_total: 0,
+    })
+  }
+
+  // 200 fencers → 29 pools. Unflighted the event needs all 29 strips at once.
+  // Flighted it needs Flight A's share, ceil(29 / 2) = 15 (L15). 29 is odd, so
+  // 14 against 15 strips tells ceil from floor and pins the divisor.
+  const big = (flighted: boolean) => comp('big', { fencer_count: 200, flighted })
+
+  it.each([
+    { flighted: true, strips: 14, messages: ['big: requires 15 strips for pools but only 14 total strips configured'] },
+    { flighted: true, strips: 15, messages: [] },
+    { flighted: false, strips: 20, messages: ['big: requires 29 strips for pools but only 20 total strips configured'] },
+  ])('strip minimum: a 200-fencer event (flighted $flighted) on $strips strips gets the ERRORs $messages', ({ flighted, strips, messages }) => {
+    const findings = validateConfig(oneDayConfig(strips), [big(flighted)], ValidationMode.BINDING)
+      .filter(f => f.rule === 'resource-precondition-strips')
+
+    expect(findings.map(f => f.severity)).toEqual(messages.map(() => BottleneckSeverity.ERROR))
+    expect(findings.map(f => f.message)).toEqual(messages)
+  })
+
+  it.each([
+    { flighted: true, strips: 14, placed: false },
+    { flighted: true, strips: 15, placed: true },
+    { flighted: false, strips: 20, placed: false },
+  ])('strip minimum: a 200-fencer event (flighted $flighted) on $strips strips is placed: $placed', ({ flighted, strips, placed }) => {
+    const { schedule } = scheduleAllConcurrent([big(flighted)], oneDayConfig(strips))
+
+    expect(schedule.big !== undefined).toBe(placed)
+  })
+
+  // 24 foil fencers → 4 pools, 2 per flight. Flight A ends at minute 86, off a
+  // 5-minute slot: under the old 30-minute admin gap Flight B started at 120 and
+  // the delay, measured from Flight A's end, read 34 – a false WARN.
+  const scheduleAlone = () => {
+    const config = oneDayConfig(20)
+    const result = scheduleAllConcurrent([comp('alone', { flighted: true })], config)
+    const s = result.schedule.alone
+    if (!s) throw new Error('alone was not scheduled')
+    return { config, result, s }
+  }
+
+  it('starts Flight B FLIGHT_BUFFER_MINS after Flight A ends, snapped', () => {
+    const { config, s } = scheduleAlone()
+    const aEnd = required(s.flight_a_end, 'flight_a_end')
+
+    expect(s.flight_a_start).toBe(dayStart(0, config))
+    expect(aEnd, 'fixture: Flight A ends off a slot boundary').not.toBe(snapToSlot(aEnd))
+    expect(s.flight_b_start).toBe(snapToSlot(aEnd + config.FLIGHT_BUFFER_MINS))
+  })
+
+  it('an uncontended flighted event draws no FLIGHT_B_DELAYED', () => {
+    const { result } = scheduleAlone()
+
+    expect(result.bottlenecks.filter(b => b.rule === BottleneckRule.FLIGHT_B_DELAYED)).toEqual([])
+  })
+
+  // 12 strips. The flighted event has 84 fencers → 12 pools, so its Flight A
+  // asks for 6. The co-day event has 70 fencers → 10 pools and asks for 10.
+  // 6 + 10 > 12, so only one first phase fits at day start. Without key 3 the
+  // larger ask (10) would win on key 5 and the flighted event would wait.
+  // These tests pin key 3's 'after Y8/Y10' and 'before the larger ask' halves
+  // only. Its 'before video-required' half is not observable here: only a STAGED
+  // R16 node is video-required, and it ties a Flight A on ready_time only after
+  // a defer bump.
+  const flightedEpee = () => comp('flighted', {
+    gender: Gender.MEN, weapon: Weapon.EPEE, fencer_count: 84, flighted: true,
+  })
+
+  it('under strip contention, Flight A takes day start ahead of a co-day event with a larger ask, which waits', () => {
+    const config = oneDayConfig(12)
+    const other = comp('other', { gender: Gender.WOMEN, weapon: Weapon.FOIL, fencer_count: 70 })
+    const { schedule } = scheduleAllConcurrent([flightedEpee(), other], config)
+    const f = schedule.flighted
+    const o = schedule.other
+    if (!f || !o) throw new Error('both events must be scheduled')
+
+    expect(f.flight_a_start, 'Flight A takes day start').toBe(dayStart(0, config))
+    expect(required(o.pool_start, 'other pool_start'), 'the co-day event waits for Flight A\'s strips')
+      .toBeGreaterThanOrEqual(required(f.flight_a_end, 'flight_a_end'))
+  })
+
+  it('(guard) a Y10 first phase still beats Flight A under the same contention – key 3 sits after Y8/Y10', () => {
+    const config = oneDayConfig(12)
+    const y10 = comp('y10', {
+      category: Category.Y10, gender: Gender.WOMEN, weapon: Weapon.FOIL, fencer_count: 70,
+    })
+    const { schedule } = scheduleAllConcurrent([flightedEpee(), y10], config)
+    const f = schedule.flighted
+    const y = schedule.y10
+    if (!f || !y) throw new Error('both events must be scheduled')
+
+    expect(y.pool_start, 'Y10 takes day start').toBe(dayStart(0, config))
+    expect(required(f.flight_a_start, 'flight_a_start'), 'Flight A waits for the Y10 pools\' strips')
+      .toBeGreaterThanOrEqual(required(y.pool_end, 'y10 pool_end'))
+  })
+
+  // FLIGHT_B_DELAYED measures from Flight B's own ready time, snap(Flight A end
+  // + FLIGHT_BUFFER_MINS), and fires above 30 minutes. Beside the 84-fencer epee
+  // event on 12 strips, a small sabre event's later phases hold the strips Flight
+  // B needs. Flight A runs 120 minutes from day start, so Flight B is ready at
+  // +135. Measured from Flight A's end instead, each delay below reads 15 more.
+  function scheduleBesideSabre(sabreFencers: number) {
+    const config = oneDayConfig(12)
+    const sabre = comp('other', { gender: Gender.WOMEN, weapon: Weapon.SABRE, fencer_count: sabreFencers })
+    const result = scheduleAllConcurrent([flightedEpee(), sabre], config)
+    const s = result.schedule.flighted
+    if (!s) throw new Error('flighted was not scheduled')
+    const readyTime = snapToSlot(required(s.flight_a_end, 'flight_a_end') + config.FLIGHT_BUFFER_MINS)
+    return {
+      heldFor: required(s.flight_b_start, 'flight_b_start') - readyTime,
+      delayed: result.bottlenecks.filter(b => b.rule === BottleneckRule.FLIGHT_B_DELAYED),
+    }
+  }
+
+  it('a Flight B held 45 minutes past its ready time by a co-day event draws one FLIGHT_B_DELAYED of 45 minutes', () => {
+    const { heldFor, delayed } = scheduleBesideSabre(56)
+
+    expect(heldFor, 'fixture: Flight B is held 45 minutes').toBe(45)
+    expect(delayed.map(b => ({ subjects: b.subjects, delay_mins: b.delay_mins, message: b.message }))).toEqual([
+      { subjects: ['flighted'], delay_mins: 45, message: 'flighted Flight B delayed 45min past its ready time' },
+    ])
+  })
+
+  it('a Flight B held 25 minutes past its ready time by a co-day event draws no FLIGHT_B_DELAYED – the WARN starts above 30', () => {
+    const { heldFor, delayed } = scheduleBesideSabre(14)
+
+    expect(heldFor, 'fixture: Flight B is held 25 minutes').toBe(25)
+    expect(delayed).toEqual([])
   })
 })
 
@@ -1377,5 +1549,49 @@ describe('postScheduleDayBreakdown – each summary carries its day (016 Task A)
       BottleneckRule.DAY_VIDEO_DE_REF_SUMMARY,
     ])
     expect(summaries.map(b => b.day)).toEqual([2, 2, 2])
+  })
+})
+
+// ──────────────────────────────────────────────
+// A split Vet co-day is reported (021 T6c, METHODOLOGY §Veteran Age-Group
+// Co-Day Rule, default 9): the check reads the final day map, pins included.
+// ──────────────────────────────────────────────
+
+describe('scheduleAllConcurrent – a split Vet co-day (021 T6c)', () => {
+  /** Men's Foil Vet 60, 70 and 80 on a 3-day board, youngest first as the catalogue lists them. */
+  const bands = [
+    comp('VET-M-FOIL-IND-V60', { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET60 }),
+    comp('VET-M-FOIL-IND-V70', { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET70 }),
+    comp('VET-M-FOIL-IND-V80', { category: Category.VETERAN, vet_age_group: VetAgeGroup.VET80 }),
+  ]
+  const config = smallConfig({ days_available: 3 })
+  const splitFindings = (bottlenecks: Bottleneck[]) =>
+    bottlenecks.filter(b => b.rule === BottleneckRule.VET_CO_DAY_SPLIT)
+
+  it('reports a pinned split as one WARN naming every band', () => {
+    const pins: PinnedPlacement[] = [
+      { competition_id: 'VET-M-FOIL-IND-V80', day: 0, start_time: dayStart(0, config), strip_count: 4 },
+      { competition_id: 'VET-M-FOIL-IND-V70', day: 2, start_time: dayStart(2, config), strip_count: 4 },
+    ]
+    const { schedule, bottlenecks } = scheduleAllConcurrent(bands, config, pins)
+    expect(schedule['VET-M-FOIL-IND-V70']?.assigned_day, 'premise: the pin holds the split').toBe(2)
+
+    const found = splitFindings(bottlenecks)
+    expect(found.map(b => [b.severity, b.cause, b.competition_id, b.subjects])).toEqual([
+      [
+        BottleneckSeverity.WARN,
+        BottleneckCause.VET_CO_DAY_SPLIT,
+        'VET-M-FOIL-IND-V80',
+        ['VET-M-FOIL-IND-V60', 'VET-M-FOIL-IND-V70', 'VET-M-FOIL-IND-V80'],
+      ],
+    ])
+    checkInvariants(found[0], bands.map(c => c.id), new Set(), config.days_available)
+  })
+
+  it('reports nothing when the co-day holds', () => {
+    const { schedule, bottlenecks } = scheduleAllConcurrent(bands, config)
+    const days = new Set(bands.map(c => schedule[c.id]?.assigned_day))
+    expect(days.size, 'premise: every band shares one day').toBe(1)
+    expect(splitFindings(bottlenecks)).toEqual([])
   })
 })

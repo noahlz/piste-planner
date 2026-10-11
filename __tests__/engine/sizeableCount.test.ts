@@ -10,11 +10,11 @@ import { isSizeableCount } from '../../src/engine/pools.ts'
 import { initialAnalysis } from '../../src/engine/analysis.ts'
 import { validateConfig } from '../../src/engine/validation.ts'
 import { deriveEventSchedule, estimateEventFootprint } from '../../src/engine/derive.ts'
-import { flagFlightingCandidates, recommendRefCount } from '../../src/engine/stripBudget.ts'
-import { suggestFlightingGroups, validateFlightingGroup } from '../../src/engine/flighting.ts'
+import { flagFlightingCandidates } from '../../src/engine/stripBudget.ts'
+import { suggestFlightingGroups } from '../../src/engine/flighting.ts'
 import { suggestStripCount } from '../../src/engine/analysis.ts'
 import { busiestDayCompetitors, scanStripCounts } from '../../src/engine/stripSearch.ts'
-import { BottleneckRule, CutMode, ValidationMode, Weapon } from '../../src/engine/types.ts'
+import { BottleneckRule, CutMode, ValidationMode } from '../../src/engine/types.ts'
 import type { Competition } from '../../src/engine/types.ts'
 import { makeCompetition, makeConfig, makePlacement } from '../helpers/factories.ts'
 
@@ -127,20 +127,16 @@ describe('deriveEventSchedule and estimateEventFootprint give no result for an u
   })
 })
 
-describe('referee and flighting suggestions skip an unsizeable event', () => {
-  const sabre = (id: string, n: number) => event(id, n, { weapon: Weapon.SABRE })
-
-  it.each(UNSIZEABLE)('recommendRefCount: an extra sabre event at %s changes nothing', (n) => {
-    const without = recommendRefCount([sabre('a', 40)], 1, config)
-    expect(recommendRefCount([sabre('a', 40), sabre('x', n)], 1, config)).toEqual(without)
-  })
+describe('flighting suggestions skip an unsizeable event', () => {
+  // A pool strip cap of 0, so any sizeable event is a candidate.
+  const zeroCap = { ...config, max_pool_strip_pct: 0 }
 
   it.each(UNSIZEABLE)('flagFlightingCandidates: %s is never a candidate', (n) => {
-    expect(flagFlightingCandidates([event('x', n)], 0)).toEqual([])
+    expect(flagFlightingCandidates([event('x', n)], zeroCap)).toEqual([])
   })
 
   it('guard: flagFlightingCandidates still flags a count of 2 over a cap of 0', () => {
-    expect(flagFlightingCandidates([event('two', 2)], 0)).toEqual(['two'])
+    expect(flagFlightingCandidates([event('two', 2)], zeroCap)).toEqual(['two'])
   })
 
   it.each(UNSIZEABLE)('suggestFlightingGroups: %s pairs with nothing', (n) => {
@@ -148,21 +144,6 @@ describe('referee and flighting suggestions skip an unsizeable event', () => {
     // come from the unsizeable event's pools.
     const result = suggestFlightingGroups([event('a', 70), event('x', n)], 10, { a: 0, x: 0 }, 10)
     expect(result).toEqual({ suggestions: [], bottlenecks: [] })
-  })
-
-  it.each(UNSIZEABLE)('validateFlightingGroup: an event at %s on the day changes nothing', (n) => {
-    const pair = [event('a', 70), event('b', 35, { flighted: true })]
-    const days = { a: 0, b: 0, x: 0 }
-    const group = { priority_competition_id: 'a', flighted_competition_id: 'b', strips_for_priority: 10, strips_for_flighted: 0 }
-    const without = validateFlightingGroup(group, pair, days, config.tournament_type)
-    expect(validateFlightingGroup(group, [...pair, event('x', n)], days, config.tournament_type)).toEqual(without)
-  })
-
-  it.each(UNSIZEABLE)('validateFlightingGroup: the flighted event itself at %s gets no "0 pools" not-largest finding', (n) => {
-    const pair = [event('a', 70), event('b', n, { flighted: true })]
-    const group = { priority_competition_id: 'a', flighted_competition_id: 'b', strips_for_priority: 10, strips_for_flighted: 0 }
-    const result = validateFlightingGroup(group, pair, { a: 0, b: 0 }, config.tournament_type)
-    expect(result.filter((b) => b.rule === BottleneckRule.FLIGHTED_NOT_LARGEST)).toEqual([])
   })
 })
 

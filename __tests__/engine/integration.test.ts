@@ -319,7 +319,7 @@ describe('Realistic tournament integration', () => {
     it('schedules events with hard constraints respected', () => {
       const { schedule, bottlenecks, ref_requirements_by_day, strip_allocations } = scheduleAll(competitions, config)
       assertScheduleIntegrity(schedule, bottlenecks, competitions, 3, tournamentType)
-      // B6: 51 of 54 events, the app path's measured count.
+      // B6: 53 of 54 events, the app path's measured count.
       // T024 re-baseline 2026-08-29 — floor raised from 28 to the then-measured 44 (research.md D7).
       // 015, 2026-10-05 – floor lowered 44 → 40 under the input-correction rule in
       // driftLedger.test.ts's SCHEDULED_FLOORS docblock: the old count came from a
@@ -339,7 +339,11 @@ describe('Realistic tournament integration', () => {
       // §Same-Day Completion), placing six events (JR-M-FOIL-IND, JR-W-EPEE-IND,
       // JR-W-FOIL-IND, Y12-M-EPEE-IND, Y12-W-EPEE-IND, Y12-W-FOIL-IND) and losing
       // none. Equal to the app path's 51.
-      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(51)
+      // 021 T4, 2026-10-09 – floor raised 51 → 53, a deliberate raise under the
+      // same rule: weapon balance (METHODOLOGY §Weapon Balance, owner rulings O4
+      // and O7) re-colours B6's days. JR-M-SABRE-IND, JR-W-SABRE-IND and
+      // VET-M-FOIL-IND-VCMB in, Y12-W-SABRE-IND out. Equal to the app path's 53.
+      expect(Object.keys(schedule).length).toBeGreaterThanOrEqual(53)
 
       // Ref requirements output
       expect(ref_requirements_by_day).toBeDefined()

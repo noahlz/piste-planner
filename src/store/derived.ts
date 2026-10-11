@@ -5,9 +5,9 @@ import { initialAnalysis } from '../engine/analysis.ts'
 import { computeRefRequirements, refDemandFromSchedule } from '../engine/refs.ts'
 import { checkPlacementRules } from '../engine/placementRules.ts'
 import type { PlacedEvent } from '../engine/placementRules.ts'
-import { firstLastDayWarnings, lastPhaseOverrunWarnings } from '../engine/concurrentScheduler.ts'
+import { firstLastDayWarnings, lastPhaseOverrunWarnings, poolStartAfterCutoffWarnings } from '../engine/concurrentScheduler.ts'
 import { phaseKey } from '../engine/unseated.ts'
-import { BottleneckRule, BottleneckSeverity, DAY_AXIS_SPACING_MINS, ValidationMode } from '../engine/types.ts'
+import { BottleneckRule, BottleneckSeverity, ValidationMode, clockAxisConfig } from '../engine/types.ts'
 import type {
   AnalysisResult,
   Bottleneck,
@@ -241,38 +241,6 @@ export function drawnScheduleFrom(
 export const selectDrawnSchedule = memoizeOnDeps(scheduleDeps, computeDrawnSchedule)
 
 /**
- * The derived results (`deriveEventSchedule`) sit on the clock axis – minutes
- * from midnight of their own store day – while `buildTournamentConfig`'s
- * `dayConfigs` sit on the scheduler axis (day d shifted by
- * d × DAY_AXIS_SPACING_MINS, `buildConfig.ts`). This is the one place the two
- * meet: a copy of the config whose day windows are shifted back onto the clock
- * axis, so every engine function handed derived results reads a day start the
- * results can be measured from. A day with no window (no `setDays` yet) falls
- * back to the default clock hours.
- */
-function clockAxisConfig(config: TournamentConfig): TournamentConfig {
-  return {
-    ...config,
-    dayConfigs: Array.from({ length: config.days_available }, (_, d) => {
-      const window = config.dayConfigs[d]
-      if (window === undefined) {
-        return {
-          day_start_time: config.DAY_START_MINS,
-          day_end_time: config.DAY_END_MINS,
-          day_hard_end_time: config.DAY_HARD_END_MINS,
-        }
-      }
-      const shift = d * DAY_AXIS_SPACING_MINS
-      return {
-        day_start_time: window.day_start_time - shift,
-        day_end_time: window.day_end_time - shift,
-        day_hard_end_time: window.day_hard_end_time - shift,
-      }
-    }),
-  }
-}
-
-/**
  * Turns a competition id into its display label, or into itself when the board
  * has no such competition, so a stray id still reads as something.
  */
@@ -285,15 +253,18 @@ function labelResolver(competitionsById: ReadonlyMap<string, Competition>): (id:
 
 /**
  * Engine findings over the board as drawn (016 spec §1, §3, 017 spec §4): the
- * same-day rule check (`checkPlacementRules`) and the first/last day WARN
- * (`firstLastDayWarnings`, the scheduler's own function), and the last-phase
- * overrun WARN (`lastPhaseOverrunWarnings`, 018 R3: one per event whose last
- * phase ends past its day's hard end, hand-moved events included), over the
- * drawn model's results. Right after a run those are the scheduler's own
- * results, so the WARN is the scheduler's (017 T5b). Events with no
- * placement or with a day the tournament no longer has are left out of every
- * check (review focus 1). The engine's late-day finding is not run here: the store's
- * `late-finish:day:<n>` row is the app's late-day finding (R2).
+ * same-day rule check (`checkPlacementRules`, the split Vet co-day included),
+ * the first/last day WARN (`firstLastDayWarnings`, the scheduler's own
+ * function), the last-phase overrun WARN (`lastPhaseOverrunWarnings`, 018 R3:
+ * one per event whose last phase ends past its day's hard end) and the
+ * pool-start cutoff WARN (`poolStartAfterCutoffWarnings`, 021 O2 and O10: one
+ * per event whose first pool phase starts more than 7 hours after its day's
+ * start), hand-moved events included in both, over the drawn model's results.
+ * Right after a run those are the scheduler's own results, so the WARN is the
+ * scheduler's (017 T5b). Events with no placement or with a day the tournament
+ * no longer has are left out of every check (review focus 1). The engine's
+ * late-day finding is not run here: the store's `late-finish:day:<n>` row is
+ * the app's late-day finding (R2).
  */
 function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentType): Bottleneck[] {
   const clockConfig = clockAxisConfig(schedule.config)
@@ -320,6 +291,7 @@ function placementFindings(schedule: DrawnSchedule, tournamentType: TournamentTy
     ),
     ...firstLastDayWarnings(inRange, clockConfig),
     ...lastPhaseOverrunWarnings(inRange, clockConfig, labelOfId),
+    ...poolStartAfterCutoffWarnings(inRange, clockConfig, labelOfId),
   ]
 }
 
@@ -611,8 +583,9 @@ export interface Finding {
   subjects: string[]
   /**
    * Whether the organizer may wave the row off: Warning and Unplaced rows, except
-   * a `hard-separation-violated` Warning (016 R1) and the stale row (017 P4 (b)).
-   * Blocking and Note rows never.
+   * the broken hard rules' Warnings – `hard-separation-violated` (016 R1) and
+   * `vet-co-day-split` (021 T6c) – and the stale row (017 P4 (b)). Blocking and
+   * Note rows never.
    * `dismissFinding` and the panel's dismiss control both read this.
    */
   dismissable: boolean
@@ -625,9 +598,15 @@ function severityOf(severity: BottleneckSeverity): FindingSeverity {
   return FindingSeverity.NOTE
 }
 
-/** Warning and Unplaced rows may be dismissed, unless their rule says otherwise (016 R1). */
+/** The rules of a broken hard rule, whose Warning is never dismissed (016 R1, 021 T6c). */
+const UNDISMISSABLE_RULES: ReadonlySet<string> = new Set([
+  BottleneckRule.HARD_SEPARATION_VIOLATED,
+  BottleneckRule.VET_CO_DAY_SPLIT,
+])
+
+/** Warning and Unplaced rows may be dismissed, unless their rule says otherwise (016 R1, 021 T6c). */
 function dismissableOf(severity: FindingSeverity, rule?: string): boolean {
-  if (rule === BottleneckRule.HARD_SEPARATION_VIOLATED) return false
+  if (rule !== undefined && UNDISMISSABLE_RULES.has(rule)) return false
   return severity === FindingSeverity.WARNING || severity === FindingSeverity.UNPLACED
 }
 
@@ -670,9 +649,10 @@ function computeAllFindings(state: StoreState): Finding[] {
 
   /**
    * The store day a target sits on, or null when it has no placement or an
-   * out-of-range one. `state.placements` and `state.days_available` — the
-   * store's own day axis, never `config.days_available`, which carries the
-   * scheduler's compacted one (research D4/D5).
+   * out-of-range one. `state.placements` and `state.days_available` – the
+   * store's own day axis, which `buildConfig` passes to the engine unchanged
+   * and day assignment uses in full (METHODOLOGY.md §Day Count). Read from the
+   * store, not from the drawn schedule's config (research D4/D5).
    */
   function dayOf(target: string): number | null {
     const placement = state.placements[target]
@@ -724,8 +704,13 @@ function computeAllFindings(state: StoreState): Finding[] {
   // so the id needs no tie-break: each `initialAnalysis` pass emits at most one
   // finding per day (venue passes), per competition, per competition and day,
   // or per unordered pair; `checkPlacementRules` one per pair and rule, owned
-  // by the older side for the window; `firstLastDayWarnings` one per rule;
-  // `lastPhaseOverrunWarnings` one per event.
+  // by the older side for the window, and one `vet-co-day-split` per gender and
+  // weapon (not per pair), owned by the oldest band, its subjects every band of
+  // that gender and weapon on the board; `firstLastDayWarnings` one per rule;
+  // `lastPhaseOverrunWarnings` and `poolStartAfterCutoffWarnings` one per event
+  // each (different rules, so their ids differ). A split co-day leaves
+  // `Bottleneck.day` unset (its id ends in `-`), so its row takes its day from
+  // the owner's placement, as below.
   //
   // `day` and `where` come from `Bottleneck.day` when it names a day the board
   // has, so a Day 2 venue warning reads "Day 2"; otherwise from the target's
@@ -974,8 +959,8 @@ function daySummaryDeps(state: StoreState): unknown[] {
 /**
  * A stored dismissal hides only a row that is dismissable now. A save or shared
  * URL may carry any id as a sticky record (`serialization.ts`), so the read side
- * holds 016 R1 too: a hard same-day rule break, a Blocking or a Note row stays
- * shown whatever `dismissedFindings` says.
+ * holds 016 R1 too: a hard same-day rule break, a split Vet co-day (021 T6c), a
+ * Blocking or a Note row stays shown whatever `dismissedFindings` says.
  */
 function computeFindings(state: StoreState): Finding[] {
   // While a re-run is due the board holds its last fresh layout and the run is

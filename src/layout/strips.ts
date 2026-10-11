@@ -15,7 +15,11 @@
  * offered to the engine's `findAvailableStripsInWindow` over a resource state
  * holding everything seated so far that day, and a hit is claimed with the
  * engine's `allocateInterval`. The candidate rule (non-video first, video
- * only for a video-required phase) is the engine's, never a copy. A miss
+ * only for a video-required phase, and on a day holding a REQUIRED video phase
+ * no video strip for a pool starting after the start-of-day wave unless the
+ * day holds one event – METHODOLOGY.md §Video Strip Preservation) is the
+ * engine's, never a copy: the day facts come from the drawn board's events
+ * per day, on the clock axis. A miss
  * leaves the phase **unseated**: it holds no strips and records no occupancy,
  * so one phase with no room cannot push any other out of place.
  *
@@ -40,13 +44,17 @@
  */
 
 import type { DerivedEventSchedule } from '../engine/derive.ts'
-import type { Competition, GlobalState, Phase, TournamentConfig } from '../engine/types.ts'
-import { allocateInterval, createGlobalState, findAvailableStripsInWindow } from '../engine/resources.ts'
+import type { Competition, GlobalState, TournamentConfig } from '../engine/types.ts'
+import { Phase, clockAxisConfig, dayStart } from '../engine/types.ts'
+import { allocateInterval, createGlobalState, findAvailableStripsInWindow, poolVideoDays } from '../engine/resources.ts'
 import { phaseRequiresVideo, phaseSpans } from '../engine/unseated.ts'
 import { compareIds } from '../engine/order.ts'
 import { runsOf, type StripRun } from './runs.ts'
 
 export type { StripRun }
+
+/** The phases Video Strip Preservation calls pool phases: pools and both flights. */
+const POOL_PHASES: ReadonlySet<Phase> = new Set([Phase.POOLS, Phase.FLIGHT_A, Phase.FLIGHT_B])
 
 /** One event to draw: its result on the clock axis, plus the strips its run kept, or `null` when derived. */
 export type DrawnEventInput = DerivedEventSchedule & {
@@ -166,6 +174,18 @@ export function assignStrips(
     return state
   }
 
+  // Each day's facts for Video Strip Preservation (021 T8), from the board's
+  // drawn events on the clock axis, so a derived pool is refused the video
+  // strips the scheduler would refuse it. `config` sits on the scheduler axis.
+  const clockConfig = clockAxisConfig(config)
+  const videoDays = poolVideoDays(
+    Object.entries(events).flatMap(([competitionId, input]) => {
+      const competition = competitionById.get(competitionId)
+      return input.day_out_of_range || !competition ? [] : [{ day: input.result.assigned_day, competition }]
+    }),
+    (day) => dayStart(day, clockConfig),
+  )
+
   const seated = new Map<Candidate, readonly number[]>()
 
   // Kept phases first, so no derived phase can take a strip a kept one holds.
@@ -192,6 +212,7 @@ export function assignStrips(
       state, config, candidate.stripCount, candidate.startMinutes,
       candidate.endMinutes - candidate.startMinutes,
       phaseRequiresVideo(candidate.phase, competition), candidate.day,
+      POOL_PHASES.has(candidate.phase) ? videoDays.get(candidate.day) : undefined,
     )
     if (fit.fit !== 'ok') {
       seated.set(candidate, [])

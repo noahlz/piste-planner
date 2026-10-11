@@ -38,7 +38,6 @@ export type EventType = (typeof EventType)[keyof typeof EventType]
 export const RefPolicy = {
   ONE: 'ONE',
   TWO: 'TWO',
-  AUTO: 'AUTO',
 } as const
 export type RefPolicy = (typeof RefPolicy)[keyof typeof RefPolicy]
 
@@ -47,12 +46,6 @@ export const DeMode = {
   STAGED: 'STAGED',
 } as const
 export type DeMode = (typeof DeMode)[keyof typeof DeMode]
-
-export const DeStripRequirement = {
-  HARD: 'HARD',
-  IF_AVAILABLE: 'IF_AVAILABLE',
-} as const
-export type DeStripRequirement = (typeof DeStripRequirement)[keyof typeof DeStripRequirement]
 
 export const VideoPolicy = {
   REQUIRED: 'REQUIRED',
@@ -100,7 +93,6 @@ export const Phase = {
   FLIGHTING: 'FLIGHTING',
   CUT: 'CUT',
   VALIDATION: 'VALIDATION',
-  SCHEDULING: 'SCHEDULING',
   POST_SCHEDULE: 'POST_SCHEDULE',
   DEADLINE_CHECK: 'DEADLINE_CHECK',
 } as const
@@ -108,29 +100,15 @@ export type Phase = (typeof Phase)[keyof typeof Phase]
 
 export const BottleneckCause = {
   STRIP_CONTENTION: 'STRIP_CONTENTION',
-  REFEREE_CONTENTION: 'REFEREE_CONTENTION',
-  STRIP_AND_REFEREE_CONTENTION: 'STRIP_AND_REFEREE_CONTENTION',
   SEQUENCING_CONSTRAINT: 'SEQUENCING_CONSTRAINT',
-  SAME_DAY_DEMOGRAPHIC_CONFLICT: 'SAME_DAY_DEMOGRAPHIC_CONFLICT',
   UNAVOIDABLE_CROSSOVER_CONFLICT: 'UNAVOIDABLE_CROSSOVER_CONFLICT',
-  SAME_TIME_CROSSOVER: 'SAME_TIME_CROSSOVER',
-  SCHEDULED_8AM_SAME_DAY_CROSSOVER: 'SCHEDULED_8AM_SAME_DAY_CROSSOVER',
-  SCHEDULED_8AM_CONSECUTIVE_DAYS: 'SCHEDULED_8AM_CONSECUTIVE_DAYS',
-  SCHEDULED_8AM_INDV_TEAM: 'SCHEDULED_8AM_INDV_TEAM',
-  INDIV_TEAM_ORDERING: 'INDIV_TEAM_ORDERING',
   DEADLINE_BREACH: 'DEADLINE_BREACH',
   DEADLINE_BREACH_UNRESOLVABLE: 'DEADLINE_BREACH_UNRESOLVABLE',
-  AUTO_REF_FALLBACK: 'AUTO_REF_FALLBACK',
-  TWO_REF_FALLBACK: 'TWO_REF_FALLBACK',
   FLIGHT_B_DELAYED: 'FLIGHT_B_DELAYED',
   STRIP_DEFICIT_NO_FLIGHTING: 'STRIP_DEFICIT_NO_FLIGHTING',
   VIDEO_STRIP_CONTENTION: 'VIDEO_STRIP_CONTENTION',
-  PROXIMITY_PREFERENCE_UNMET: 'PROXIMITY_PREFERENCE_UNMET',
-  FLIGHTING_GROUP_NOT_LARGEST: 'FLIGHTING_GROUP_NOT_LARGEST',
   FLIGHTING_GROUP_MANUAL_NEEDED: 'FLIGHTING_GROUP_MANUAL_NEEDED',
   MULTIPLE_FLIGHTED_SAME_DAY: 'MULTIPLE_FLIGHTED_SAME_DAY',
-  GENDER_EQUITY_CAP_VIOLATION: 'GENDER_EQUITY_CAP_VIOLATION',
-  REFEREE_INSUFFICIENT_ACCEPTED: 'REFEREE_INSUFFICIENT_ACCEPTED',
   SAME_DAY_VIOLATION: 'SAME_DAY_VIOLATION',
   SCHEDULE_ACCEPTED_WITH_WARNINGS: 'SCHEDULE_ACCEPTED_WITH_WARNINGS',
   CUT_SUMMARY: 'CUT_SUMMARY',
@@ -145,6 +123,18 @@ export const BottleneckCause = {
    * than resolved by moving the event.
    */
   PINNED_UNCLAIMED: 'PINNED_UNCLAIMED',
+  /**
+   * The age-banded Veteran individual events of one gender and weapon sit on
+   * more than one day (METHODOLOGY §Veteran Age-Group Co-Day Rule, 021 default
+   * 9). A pin or the least-bad fallback causes it.
+   */
+  VET_CO_DAY_SPLIT: 'VET_CO_DAY_SPLIT',
+  /**
+   * An event's first pool phase (pools, or Flight A when flighted) starts later
+   * than its day's start + `LATEST_START_OFFSET`, 4:00 PM on a 9:00 AM day
+   * (METHODOLOGY §Pool Start Cutoff, 021 O2). The event stays placed.
+   */
+  POOL_START_AFTER_CUTOFF: 'POOL_START_AFTER_CUTOFF',
 } as const
 export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCause]
 
@@ -157,6 +147,7 @@ export type BottleneckCause = (typeof BottleneckCause)[keyof typeof BottleneckCa
 export const BottleneckRule = {
   PER_EVENT_EXCLUSION_SUMMARY: 'per-event-exclusion-summary',
   HARD_SEPARATION_VIOLATED: 'hard-separation-violated',
+  VET_CO_DAY_SPLIT: 'vet-co-day-split',
   PINNED_PHASE_UNCLAIMED: 'pinned-phase-unclaimed',
   CROSS_EVENT_DEPENDENCY_DELAY: 'cross-event-dependency-delay',
   REGIONAL_WINDOW_HONOURED: 'regional-window-honoured',
@@ -166,6 +157,7 @@ export const BottleneckRule = {
   FIRST_ATTEMPT_FAILED: 'first-attempt-failed',
   EVENT_UNSCHEDULED: 'event-unscheduled',
   PHASE_OVERRUNS_DAY_END: 'phase-overruns-day-end',
+  POOL_START_AFTER_CUTOFF: 'pool-start-after-cutoff',
   VIDEO_PHASE_DELAYED: 'video-phase-delayed',
   FLIGHT_B_DELAYED: 'flight-b-delayed',
   DAY_ENDS_PAST_TARGET: 'day-ends-past-target',
@@ -182,8 +174,6 @@ export const BottleneckRule = {
   FLIGHTING_GROUP_BOTH_VIDEO: 'flighting-group-both-video',
   CUT_SUMMARY: 'cut-summary',
   FLIGHTING_PRIORITY_TIE: 'flighting-priority-tie',
-  FLIGHTED_NOT_LARGEST: 'flighted-not-largest',
-  FLIGHTING_GROUP_CROSSOVER_PENALTY: 'flighting-group-crossover-penalty',
 } as const
 export type BottleneckRule = (typeof BottleneckRule)[keyof typeof BottleneckRule]
 
@@ -232,17 +222,13 @@ export interface Competition {
   ref_policy: RefPolicy
   earliest_start: number
   latest_end: number
-  optional: boolean
   vet_age_group: VetAgeGroup | null
   use_single_pool_override: boolean
   cut_mode: CutMode
   cut_value: number
   de_mode: DeMode
   de_video_policy: VideoPolicy
-  de_round_of_16_requirement: DeStripRequirement
   flighted: boolean
-  flighting_group_id: string | null
-  is_priority: boolean
   strips_allocated: number
   max_pool_strip_pct_override: number | null
   max_de_strip_pct_override: number | null
@@ -279,18 +265,13 @@ export interface TournamentConfig {
   DAY_START_MINS: number
   DAY_END_MINS: number
   DAY_HARD_END_MINS: number
-  LATEST_START_MINS: number
   LATEST_START_OFFSET: number
   SLOT_MINS: number
   DAY_LENGTH_MINS: number
   ADMIN_GAP_MINS: number
   FLIGHT_BUFFER_MINS: number
-  THRESHOLD_MINS: number
   DE_REFS: number
-  SAME_TIME_WINDOW_MINS: number
   INDIV_TEAM_MIN_GAP_MINS: number
-  EARLY_START_THRESHOLD: number
-  MAX_RESCHEDULE_ATTEMPTS: number
   MAX_FENCERS: number
   MIN_FENCERS: number
   pool_round_duration_table: Record<Weapon, number>
@@ -332,18 +313,10 @@ export interface RefRequirementsByDay {
   peak_time: number
 }
 
-export interface AcceptedWarning {
-  cause: BottleneckCause
-  severity: BottleneckSeverity
-  message: string
-}
-
 export interface ScheduleResult {
   competition_id: string
   assigned_day: number
   use_flighting: boolean
-  is_priority: boolean
-  flighting_group_id: string | null
   pool_start: number | null
   pool_end: number | null
   pool_strip_count: number
@@ -373,12 +346,10 @@ export interface ScheduleResult {
   de_round_of_16_end: number | null
   de_round_of_16_strip_count: number
   de_total_end: number | null
-  conflict_score: number
   pool_duration_baseline: number
   pool_duration_actual: number
   de_duration_baseline: number
   de_duration_actual: number
-  accepted_warnings: AcceptedWarning[]
 }
 
 /**
@@ -489,7 +460,7 @@ export interface ValidationError {
   field: string
   message: string
   severity: BottleneckSeverity
-  /** Stable kebab-case rule id, e.g. 'same-population'. */
+  /** Stable kebab-case rule id, e.g. 'team-requires-individual'. */
   rule: string
   kind?: RuleKind
   /** Sorted competition ids, or [field] for global rules. */
@@ -543,13 +514,20 @@ export interface CatalogueEntry {
 // ──────────────────────────────────────────────
 
 /**
+ * Estimated minutes for the gold bout (and bronze for teams) that the scheduler
+ * does not allocate strips for – organizers run these ad hoc on whatever strip
+ * frees up next (METHODOLOGY.md §Scheduler Stops at Semis). Defined here rather than in
+ * constants.ts, which imports this module, so `tailEstimateMins` can read them.
+ */
+export const INDIV_TAIL_MINS = 30
+export const TEAM_TAIL_MINS = 60
+
+/**
  * Returns the estimated minutes for the gold (and bronze for team) bouts that follow the
  * scheduler's last allocated phase. See METHODOLOGY.md §Scheduler Stops at Semis.
  */
 export function tailEstimateMins(eventType: EventType): number {
-  // Import constants inline to avoid a circular-dependency (types.ts ← constants.ts ← types.ts).
-  // Values are duplicated from INDIV_TAIL_MINS / TEAM_TAIL_MINS and must stay in sync.
-  return eventType === EventType.TEAM ? 60 : 30
+  return eventType === EventType.TEAM ? TEAM_TAIL_MINS : INDIV_TAIL_MINS
 }
 
 /**
@@ -567,6 +545,39 @@ export const DAY_AXIS_SPACING_MINS = 1440
 // offsets from that start as DAY_END_MINS and DAY_HARD_END_MINS do from
 // DAY_START_MINS (600 and 780 by default – METHODOLOGY.md Appendix A §Timing
 // Constants).
+
+/**
+ * The board's derived results (`deriveEventSchedule`) sit on the clock axis –
+ * minutes from midnight of their own store day – while `buildTournamentConfig`'s
+ * `dayConfigs` sit on the scheduler axis (day d shifted by
+ * d × DAY_AXIS_SPACING_MINS, `buildConfig.ts`). This is where the two meet: a
+ * copy of the config whose day windows are shifted back onto the clock axis,
+ * so every engine function handed results on the clock axis reads a day start
+ * they can be measured from. A day with no window (no `setDays` yet) falls back
+ * to the default clock hours. Used by the store's findings (`derived.ts`) and
+ * the canvas re-seater (`src/layout/strips.ts`).
+ */
+export function clockAxisConfig(config: TournamentConfig): TournamentConfig {
+  return {
+    ...config,
+    dayConfigs: Array.from({ length: config.days_available }, (_, d) => {
+      const window = config.dayConfigs[d]
+      if (window === undefined) {
+        return {
+          day_start_time: config.DAY_START_MINS,
+          day_end_time: config.DAY_END_MINS,
+          day_hard_end_time: config.DAY_HARD_END_MINS,
+        }
+      }
+      const shift = d * DAY_AXIS_SPACING_MINS
+      return {
+        day_start_time: window.day_start_time - shift,
+        day_end_time: window.day_end_time - shift,
+        day_hard_end_time: window.day_hard_end_time - shift,
+      }
+    }),
+  }
+}
 
 /** Returns the absolute minute offset from T=0 for the start of the given day. */
 export function dayStart(d: number, config: TournamentConfig): number {
@@ -639,20 +650,4 @@ export function clockOnDay(t: number, d: number, config: TournamentConfig): stri
 export function formatClockMins(clockMins: number): string {
   const m = ((Math.round(clockMins) % 1440) + 1440) % 1440
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-}
-
-/**
- * Returns the day index d such that dayStart(d) <= t < dayHardEnd(d), or null
- * when no day in [0, days_available) contains t. It reads the hard end because
- * the scheduler places work past the soft target (METHODOLOGY.md §Same-Day
- * Completion), and that work still belongs to its day. Every phase of positive
- * length starts before the hard end, so its start finds its day. An event's last
- * phase may end past the hard end, up to `dayMidnight` (018 R1), and a minute
- * in that overrun belongs to no day here.
- */
-export function findDayForTime(config: TournamentConfig, t: number): number | null {
-  for (let d = 0; d < config.days_available; d++) {
-    if (dayStart(d, config) <= t && t < dayHardEnd(d, config)) return d
-  }
-  return null
 }

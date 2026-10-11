@@ -187,13 +187,15 @@ describe('CenterView dimmed-invalid rule', () => {
     const overlay = screen.getByRole('region', { name: 'Blocking findings' })
     expect(overlay.textContent).toContain('strips_total: strips_total must be > 0')
     expect(overlay.textContent).toContain('days_available: days_available must be 1–14, got 0')
-    // strips_total=0 and days_available=0 don't stay isolated to their own
-    // two rules against this seeded (placed, same-population) competition —
-    // strips_total=0 also trips resource_precondition (n_pools > 0 strips)
-    // and days_available=0 also trips same_population (1 event > 0 days), so
-    // four ERRORs land at once here, not two. Distinct <li> lines for all
-    // four, not one <ul> whose textContent happens to concatenate them.
-    expect(within(overlay).getAllByRole('listitem')).toHaveLength(4)
+    // strips_total=0 doesn't stay isolated to its own rule against this
+    // seeded (placed) competition – it also trips resource_precondition
+    // (n_pools > 0 strips), so three ERRORs show at once here, not two.
+    // Distinct <li> lines for all three, not one <ul> whose textContent
+    // happens to concatenate them.
+    expect(overlay.textContent).toContain(
+      'resource_precondition: Y10-M-FOIL-IND: requires 5 strips for pools but only 0 total strips configured',
+    )
+    expect(within(overlay).getAllByRole('listitem')).toHaveLength(3)
   })
 })
 

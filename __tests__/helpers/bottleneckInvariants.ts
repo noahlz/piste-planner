@@ -13,6 +13,7 @@ const ID_CHAR = /[A-Za-z0-9_-]/
 export const CAUSE_OF_RULE: Record<BottleneckRule, BottleneckCause> = {
   [BottleneckRule.PER_EVENT_EXCLUSION_SUMMARY]: BottleneckCause.RESOURCE_EXHAUSTION,
   [BottleneckRule.HARD_SEPARATION_VIOLATED]: BottleneckCause.UNAVOIDABLE_CROSSOVER_CONFLICT,
+  [BottleneckRule.VET_CO_DAY_SPLIT]: BottleneckCause.VET_CO_DAY_SPLIT,
   [BottleneckRule.PINNED_PHASE_UNCLAIMED]: BottleneckCause.PINNED_UNCLAIMED,
   [BottleneckRule.CROSS_EVENT_DEPENDENCY_DELAY]: BottleneckCause.SEQUENCING_CONSTRAINT,
   [BottleneckRule.REGIONAL_WINDOW_HONOURED]: BottleneckCause.SEQUENCING_CONSTRAINT,
@@ -22,6 +23,7 @@ export const CAUSE_OF_RULE: Record<BottleneckRule, BottleneckCause> = {
   [BottleneckRule.FIRST_ATTEMPT_FAILED]: BottleneckCause.DEADLINE_BREACH,
   [BottleneckRule.EVENT_UNSCHEDULED]: BottleneckCause.DEADLINE_BREACH_UNRESOLVABLE,
   [BottleneckRule.PHASE_OVERRUNS_DAY_END]: BottleneckCause.SAME_DAY_VIOLATION,
+  [BottleneckRule.POOL_START_AFTER_CUTOFF]: BottleneckCause.POOL_START_AFTER_CUTOFF,
   [BottleneckRule.VIDEO_PHASE_DELAYED]: BottleneckCause.VIDEO_STRIP_CONTENTION,
   [BottleneckRule.FLIGHT_B_DELAYED]: BottleneckCause.FLIGHT_B_DELAYED,
   [BottleneckRule.DAY_ENDS_PAST_TARGET]: BottleneckCause.SCHEDULE_ACCEPTED_WITH_WARNINGS,
@@ -38,8 +40,6 @@ export const CAUSE_OF_RULE: Record<BottleneckRule, BottleneckCause> = {
   [BottleneckRule.FLIGHTING_GROUP_BOTH_VIDEO]: BottleneckCause.VIDEO_STRIP_CONTENTION,
   [BottleneckRule.CUT_SUMMARY]: BottleneckCause.CUT_SUMMARY,
   [BottleneckRule.FLIGHTING_PRIORITY_TIE]: BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED,
-  [BottleneckRule.FLIGHTED_NOT_LARGEST]: BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST,
-  [BottleneckRule.FLIGHTING_GROUP_CROSSOVER_PENALTY]: BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
 }
 
 /** True when `id` appears in `message` as a whole token, not inside a longer id. */
@@ -91,9 +91,7 @@ export function checkInvariants(
 
   const named = competitionIds.filter(id => namesCompetition(b.message, id))
   for (const id of named) expect(b.subjects, `${id} named by ${where}`).toContain(id)
-  // Subjects -> message holds for engine-native rules only. Two validation rules
-  // list ids their message never names: same-population (the message names the
-  // [category|gender|weapon] group) and flighting-group-strips (it names the group id).
+  // Subjects -> message is checked for engine-native rules only.
   if (!CATALOGUE.has(b.rule)) return
   for (const s of b.subjects) {
     if (competitionIds.includes(s)) expect(namesCompetition(b.message, s), `${s} in ${where}`).toBe(true)

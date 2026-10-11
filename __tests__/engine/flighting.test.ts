@@ -2,9 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   suggestFlightingGroups,
   calculateFlightedStrips,
-  validateFlightingGroup,
 } from '../../src/engine/flighting.ts'
-import { BottleneckCause, BottleneckRule, BottleneckSeverity, Category, Gender, TournamentType, Weapon } from '../../src/engine/types.ts'
+import { BottleneckCause, BottleneckRule, BottleneckSeverity, Category } from '../../src/engine/types.ts'
 import { makeCompetition } from '../helpers/factories.ts'
 
 // ──────────────────────────────────────────────
@@ -12,7 +11,7 @@ import { makeCompetition } from '../helpers/factories.ts'
 // ──────────────────────────────────────────────
 
 describe('suggestFlightingGroups', () => {
-  it('combined > strips, each fits alone → suggests group with larger as priority', () => {
+  it('combined > strips, each fits alone → suggests flighting the larger event (METHODOLOGY §How Flighting Works)', () => {
     // ceil(210/7)=30 pools, ceil(203/7)=29 pools; 30+29=59 > 55 strips, each alone fits
     // Each fits within poolStripCap (55), combined (59) exceeds stripsTotal (55)
     const c1 = makeCompetition({ id: 'large', fencer_count: 210 }) // 30 pools
@@ -22,11 +21,11 @@ describe('suggestFlightingGroups', () => {
     const { suggestions, bottlenecks } = suggestFlightingGroups([c1, c2], 55, dayAssignments, 55)
 
     expect(suggestions).toHaveLength(1)
-    expect(suggestions[0].priority_competition_id).toBe('large')
-    expect(suggestions[0].flighted_competition_id).toBe('small')
-    // Priority gets its pool count (30), flighted gets remainder (55-30=25)
-    expect(suggestions[0].strips_for_priority).toBe(30)
-    expect(suggestions[0].strips_for_flighted).toBe(25)
+    expect(suggestions[0].flighted_competition_id).toBe('large')
+    expect(suggestions[0].priority_competition_id).toBe('small')
+    // The unflighted event gets its pool count (29), the flighted one the remainder (55-29=26)
+    expect(suggestions[0].strips_for_priority).toBe(29)
+    expect(suggestions[0].strips_for_flighted).toBe(26)
     // No MANUAL_NEEDED bottleneck when pool counts differ
     expect(bottlenecks.some(b => b.cause === BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED)).toBe(false)
   })
@@ -72,6 +71,20 @@ describe('suggestFlightingGroups', () => {
     expect(manualNeeded?.severity).toBe(BottleneckSeverity.WARN)
     expect(manualNeeded?.rule).toBe(BottleneckRule.FLIGHTING_PRIORITY_TIE)
     expect(manualNeeded?.subjects).toEqual(['tied-a', 'tied-b'])
+  })
+
+  it('tied pool counts → flights the later id whatever the input order, and the WARN says the organizer picks', () => {
+    // Same tie as above, input order [tied-b, tied-a], so a choice that follows
+    // the pair order instead of the ids would flight tied-a.
+    const c1 = makeCompetition({ id: 'tied-a', fencer_count: 210 }) // 30 pools
+    const c2 = makeCompetition({ id: 'tied-b', fencer_count: 210 }) // 30 pools
+    const dayAssignments: Record<string, number> = { 'tied-a': 0, 'tied-b': 0 }
+
+    const { suggestions, bottlenecks } = suggestFlightingGroups([c2, c1], 55, dayAssignments, 55)
+
+    expect(suggestions.map(s => [s.flighted_competition_id, s.priority_competition_id])).toEqual([['tied-b', 'tied-a']])
+    expect(bottlenecks.find(b => b.cause === BottleneckCause.FLIGHTING_GROUP_MANUAL_NEEDED)?.message)
+      .toBe('tied-b and tied-a have equal pool counts (30), so the organizer picks which one to flight')
   })
 
   it('each fits within poolStripCap but combined exceeds stripsTotal → suggests group', () => {
@@ -126,20 +139,21 @@ describe('suggestFlightingGroups', () => {
 
 describe('calculateFlightedStrips', () => {
   it('priority gets its pool count, flighted gets remainder', () => {
-    // Priority: 98 fencers → ceil(98/7)=14 pools; flighted: 84 fencers → ceil(84/7)=12 pools
-    // 24 strips total: priority gets 14, flighted gets 10
-    const priority = makeCompetition({ id: 'pri', fencer_count: 98 })  // 14 pools
-    const flighted = makeCompetition({ id: 'flt', fencer_count: 84 })  // 12 pools
+    // The flighted event is the larger one (METHODOLOGY §How Flighting Works).
+    // Priority: 84 fencers → ceil(84/7)=12 pools, and flighted: 98 fencers → ceil(98/7)=14 pools
+    // 22 strips total: priority gets 12, flighted gets 10
+    const priority = makeCompetition({ id: 'pri', fencer_count: 84 })  // 12 pools
+    const flighted = makeCompetition({ id: 'flt', fencer_count: 98 })  // 14 pools
 
-    const result = calculateFlightedStrips(priority, flighted, 24)
+    const result = calculateFlightedStrips(priority, flighted, 22)
 
-    expect(result.strips_for_priority).toBe(14)
+    expect(result.strips_for_priority).toBe(12)
     expect(result.strips_for_flighted).toBe(10)
   })
 
   it('strip split sums to strips_total', () => {
-    const priority = makeCompetition({ id: 'pri', fencer_count: 98 })  // 14 pools
-    const flighted = makeCompetition({ id: 'flt', fencer_count: 84 })  // 12 pools
+    const priority = makeCompetition({ id: 'pri', fencer_count: 84 })  // 12 pools
+    const flighted = makeCompetition({ id: 'flt', fencer_count: 98 })  // 14 pools
 
     const result = calculateFlightedStrips(priority, flighted, 24)
 
@@ -168,102 +182,5 @@ describe('calculateFlightedStrips', () => {
     expect(result.strips_for_priority).toBe(24)
     expect(result.strips_for_flighted).toBe(0)
     expect(result.strips_for_priority + result.strips_for_flighted).toBe(24)
-  })
-})
-
-// ──────────────────────────────────────────────
-// validateFlightingGroup
-// ──────────────────────────────────────────────
-
-describe('validateFlightingGroup', () => {
-  it('two flighted competitions on same day → warning', () => {
-    const c1 = makeCompetition({ id: 'pri', fencer_count: 140, flighted: false, is_priority: true })
-    const c2 = makeCompetition({ id: 'flt1', fencer_count: 105, flighted: true })
-    const c3 = makeCompetition({ id: 'flt2', fencer_count: 84, flighted: true })
-
-    const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt1', strips_for_priority: 14, strips_for_flighted: 10 }
-    const dayAssignments: Record<string, number> = { pri: 0, flt1: 0, flt2: 0 }
-
-    // construction order differs from sorted order so a dropped sort() fails
-    const bottlenecks = validateFlightingGroup(group, [c1, c3, c2], dayAssignments, TournamentType.NAC)
-
-    // Implementation emits one bottleneck per flighted competition on the day
-    const multipleFlighted = bottlenecks.filter(b => b.cause === BottleneckCause.MULTIPLE_FLIGHTED_SAME_DAY)
-    expect(multipleFlighted).toHaveLength(2)
-    expect(multipleFlighted.map(b => b.competition_id).sort()).toEqual(['flt1', 'flt2'])
-    for (const b of multipleFlighted) {
-      expect(b.rule).toBe(BottleneckRule.MULTIPLE_FLIGHTED_SAME_DAY)
-      expect(b.subjects).toEqual(['flt1', 'flt2'])
-    }
-  })
-
-  it('flighted competition is not largest by pool count on the day → FLIGHTING_GROUP_NOT_LARGEST warning', () => {
-    // largest: 20 pools (not flighted), flighted: 15 pools
-    // construction order differs from sorted order so a dropped sort() fails:
-    // the producer lists the flighted id first, and 'big' sorts before 'flt'
-    const big = makeCompetition({ id: 'big', fencer_count: 140, flighted: false, is_priority: false })
-    const priority = makeCompetition({ id: 'pri', fencer_count: 105, flighted: false, is_priority: true })
-    const flighted = makeCompetition({ id: 'flt', fencer_count: 98, flighted: true, is_priority: false })
-
-    const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
-    const dayAssignments: Record<string, number> = { big: 0, pri: 0, flt: 0 }
-
-    const bottlenecks = validateFlightingGroup(group, [big, priority, flighted], dayAssignments, TournamentType.NAC)
-
-    const notLargest = bottlenecks.find(b => b.cause === BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST)
-    expect(notLargest).toBeDefined()
-    expect(notLargest?.severity).toBe(BottleneckSeverity.WARN)
-    expect(notLargest?.rule).toBe(BottleneckRule.FLIGHTED_NOT_LARGEST)
-    expect(notLargest?.subjects).toEqual(['big', 'flt'])
-  })
-
-  it('no warning when flighted competition is the largest on the day', () => {
-    const priority = makeCompetition({ id: 'pri', fencer_count: 84, flighted: false, is_priority: true })
-    // flighted has more pools than priority
-    const flighted = makeCompetition({ id: 'flt', fencer_count: 140, flighted: true, is_priority: false })
-
-    const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 12, strips_for_flighted: 12 }
-    const dayAssignments: Record<string, number> = { pri: 0, flt: 0 }
-
-    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments, TournamentType.NAC)
-
-    const notLargest = bottlenecks.find(b => b.cause === BottleneckCause.FLIGHTING_GROUP_NOT_LARGEST)
-    expect(notLargest).toBeUndefined()
-  })
-
-  it('demographic conflict between grouped pair → warning with crossover score', () => {
-    // CADET + DIV2: direct crossover edge (1.0), same gender and weapon → penalty > 0
-    // CADET→DIV2 is in CROSSOVER_GRAPH[CADET] and is not GROUP_1_MANDATORY
-    const priority = makeCompetition({ id: 'pri', gender: Gender.MEN, weapon: Weapon.FOIL, category: Category.CADET, fencer_count: 105 })
-    const flighted = makeCompetition({ id: 'flt', gender: Gender.MEN, weapon: Weapon.FOIL, category: Category.DIV2, fencer_count: 84, flighted: true })
-
-    const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
-    const dayAssignments: Record<string, number> = { pri: 0, flt: 0 }
-
-    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments, TournamentType.NAC)
-
-    const conflictWarning = bottlenecks.find(
-      b => b.cause === BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
-    )
-    expect(conflictWarning).toBeDefined()
-    expect(conflictWarning?.severity).toBe(BottleneckSeverity.WARN)
-    expect(conflictWarning?.message).toMatch(/crossover/i)
-    expect(conflictWarning?.rule).toBe(BottleneckRule.FLIGHTING_GROUP_CROSSOVER_PENALTY)
-    expect(conflictWarning?.subjects).toEqual(['flt', 'pri'])
-  })
-
-  it('no demographic warning for different genders', () => {
-    const priority = makeCompetition({ id: 'pri', gender: Gender.MEN, weapon: Weapon.FOIL, category: Category.DIV1, fencer_count: 105 })
-    const flighted = makeCompetition({ id: 'flt', gender: Gender.WOMEN, weapon: Weapon.FOIL, category: Category.DIV1, fencer_count: 84, flighted: true })
-
-    const group = { priority_competition_id: 'pri', flighted_competition_id: 'flt', strips_for_priority: 14, strips_for_flighted: 10 }
-    const dayAssignments: Record<string, number> = { pri: 0, flt: 0 }
-
-    const bottlenecks = validateFlightingGroup(group, [priority, flighted], dayAssignments, TournamentType.NAC)
-
-    const conflictWarning = bottlenecks.find(
-      b => b.cause === BottleneckCause.SAME_DAY_DEMOGRAPHIC_CONFLICT,
-    )
-    expect(conflictWarning).toBeUndefined()
   })
 })
