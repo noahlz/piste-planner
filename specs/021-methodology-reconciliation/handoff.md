@@ -3,8 +3,9 @@
 **Status: delivered 2026-10-11** on branch `021-methodology-reconciliation` (worktree
 `.claude/worktrees/021-methodology-reconciliation`, cut from `main` `5edbdf7712`). The
 user merged the branch through A2 (`2f84c3e158`) into `main` as `46eeed2d0c` and pushed
-it. T5b (`b7866b61db`, the O15 code change) and this docs commit came after that merge,
-so they await a second `merge-with-costs`. Until then `main` holds A2's METHODOLOGY text
+it. T5b (`b7866b61db`, the O15 code change) and the two docs commits after it (`e941460c1c`
+and its fact-check correction) came after that merge, so they await a second
+`merge-with-costs`. Until then `main` holds A2's METHODOLOGY text
 while its engine still scores Y10 with Div 3. Task M re-runs the merge check after O15,
 under [Merge](#merge). Plan: [`plan.md`](./plan.md), with [`amendment.md`](./amendment.md),
 [`decisions.md`](./decisions.md) (owner rulings O1–O15 and defaults 1–14) and
@@ -13,8 +14,9 @@ the owner's approval before the commit: A0 (`121394c92a`), the follow-up A1
 (`cb4c8deeb9`) and A2 (`2f84c3e158`, O15). No other commit touches it. *O15
 (2026-10-11) dropped the Y10 with Div 3 bonus after T5 shipped it, see
 [O15 below](#o15--y10-with-div-3-dropped-2026-10-11). Read any Y10↔Div 3 line in this
-handoff as history.* The branch holds 28 commits from `5edbdf7712`, this one
-included, and two of them (T5b and this one) are not yet on `main`. Four questions go to the owner, listed first below.
+handoff as history.* The branch holds 29 commits from `5edbdf7712`, this one
+included, and three of them (T5b and the two docs commits) are not yet on `main`. Four
+questions go to the owner, listed first below.
 
 ## Owner questions
 
@@ -517,7 +519,7 @@ needed a code change ran in detached throwaway worktrees, each removed after.
   timings. The full check list is under `result.finalSmoke.details` in
   `<wt>/tmp/021-t5/workflow-result.json`.
 - **A2 – owner-approved.** The owner read and approved the METHODOLOGY text before the
-  commit. No code moved, so no judges ran.
+  commit. No code moved.
 - **T5b – pass, every judge.** J1 (drift: suite, `tsc -b` and lint green, ledger 19 of
   19 with the SHA unchanged, nothing in B1–B8 moved), J2 (spec review against
   METHODOLOGY as A2 amended it: `CROSSOVER_GRAPH` holds no Y10–Div 3 edge, direct or two
@@ -581,8 +583,8 @@ owner in the amendment, and apply as written. Default 13 overrides the backlog's
 plan's, which has them in full. 10 onward were made during implementation.
 
 1. **Order A0 → T1 → T2 → T3 → T4 → T6 → T7 → T8 → T5 → S → D → H → M, then A2 → T5b →
-   D → M after O15.** The plan put T5 after T4, and O12 moved it last. Cost: T8 could and did move T7's counts (B8 gained 3
-   cutoff WARNs).
+   D → M after O15.** The plan put T5 after T4, and O12 moved it last. Cost: T8 could and
+   did move T7's counts (B8 gained 3 cutoff WARNs).
 2. **T1b, T3 and T6 split into commits, each with its own review and judges.** Cost: more
    commits and judge runs, each with a single cause.
 3. **Smoke after every task that changes what the app shows, before its commit.** Cost:
@@ -665,8 +667,9 @@ plan's, which has them in full. 10 onward were made during implementation.
     The driver declares its own `VET_STAGGER_MINS`. Cost: the driver's 60 must follow the
     engine's by hand.
 32. **The same-day bonus has no event-type filter and scores one bonus per partner.** T5
-    had two named weights, and after O15 one is left (`Y8_Y10_SAME_DAY`), so a Y8 with
-    two Y10 partners on its day earns −0.6. Cost: J2's synthetic oversubscribed board
+    had two named weights, and after O15 one is left (`Y8_Y10_SAME_DAY`), so the sum
+    over two partners (−0.6) is pinned by a unit test on a hand-built board, and no
+    catalogue board reaches it (one event per category, weapon and gender). Cost: J2's synthetic oversubscribed board
     (NAC Youth, 2 days, 40 strips, Y8 and Div 3 clones, both bonuses on) lost 3 events.
     After O15 how much of that the Y8 bonus caused alone is unknown, and no template
     holds a Y8 today (backlog).
@@ -682,8 +685,10 @@ plan's, which has them in full. 10 onward were made during implementation.
     into a single check, since the unordered lookup needed no change. Cost: a list for
     one pair.
 36. **T5b pins the absence of a Y10–Div 3 rule in `crossover.test.ts`,** one row per
-    tournament type. Cost: six tests that fail if anyone adds an affinity for unrelated
-    events without an owner ruling, which is the point.
+    tournament type, and the same-day bonus guards sit in `dayColoring.test.ts` (the
+    both-directions-zero test and the all-pairs sweep). Cost: six crossover tests that fail
+    if anyone adds a separation edge between Y10 and Div 3 without an owner ruling, which
+    is the point.
 
 Deliberate corrections recorded in commit bodies: T1b-1's `invalidState` expects 3
 items, and three examples moved from same-population to team-requires-individual. T2's
@@ -732,7 +737,9 @@ handoff, For later features), which still hold:
 
 ## Merge
 
-Re-recorded by Task M after O15.
+To be re-recorded by Task M against `main` at `46eeed2d0c` after O15. Task M replaces this line with
+the merge-tree id, the suite, `tsc -b`, lint and ledger SHA readings, and the line to merge
+with `merge-with-costs`, never squash.
 
 ## Resume prompt (after the merge)
 

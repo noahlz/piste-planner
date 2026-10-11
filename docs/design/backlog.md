@@ -327,7 +327,7 @@ with its sub-sections, §Dead code held back from the 2026-09-01 sweep,
 individual-to-team edges never hold an event back and §The 4:00 PM pool cutoff
 is not enforced. Its handoff, `specs/021-methodology-reconciliation/handoff.md`,
 has the rest. Entries marked "new" were written by 021, and every entry is
-unscheduled unless it says otherwise. The owner rulings O1–O14 are in
+unscheduled unless it says otherwise. The owner rulings O1–O15 are in
 `specs/021-methodology-reconciliation/decisions.md`.*
 
 - Hand pins are not checked against the Vet Combined start offset. Moot: O13
@@ -1722,9 +1722,9 @@ feature 021. Most of its fixes edit `src/engine/`, so constitution III's B1–B8
 drift review applies.*
 
 *Closed by 021, 2026-10-11 (`specs/021-methodology-reconciliation/`). A 32-agent
-audit verdicted every item, the owner ruled O1–O14, and the owner-approved
-amendment went into METHODOLOGY.md as A0 (`121394c92a`) with the follow-up A1
-(`cb4c8deeb9`). Where a ruling or a default changed the spec, the doc moved, and
+audit verdicted every item, the owner ruled O1–O15, and the owner-approved
+amendment went into METHODOLOGY.md as A0 (`121394c92a`) with the follow-ups A1
+(`cb4c8deeb9`) and A2 (`2f84c3e158`). Where a ruling or a default changed the spec, the doc moved, and
 everywhere else the engine moved to the doc: the time-of-day weights and their
 dead config are gone (T1a `c4297a8bac`), the dead engine code went (T1b
 `87292a868e`, T1c `e2b940dbfd`), day assignment uses every chosen day (T2

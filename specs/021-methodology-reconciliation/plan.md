@@ -8,7 +8,7 @@
 > this one session, driving the worktree from the main checkout with absolute paths.
 
 **Status:** draft, 2026-10-08. Waits on the owner's approval of [`amendment.md`](./amendment.md). The owner
-answered the first draft's Open items 1, 3 and 7 and confirmed the Y10↔Div 3 scope (O7–O10, later dropped by O15), and the
+answered the first draft's Open items 1, 3 and 7 and confirmed the Y10↔Div 3 scope (the second-round rulings O7–O10, of which O9 is moot under O15), and the
 amendment's four remaining notes are settled by their defaults unless the owner objects (see
 [Notes for the owner](#notes-for-the-owner)). No code task starts before A0 commits it.
 

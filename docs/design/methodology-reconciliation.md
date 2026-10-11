@@ -8,7 +8,7 @@ Its `METHODOLOGY:<line>` citations refer to METHODOLOGY.md as of `a2dc363e45`
 edition, both as they stood before feature 024.*
 
 *2026-10-11, from 021: feature 021 (`specs/021-methodology-reconciliation/`)
-re-audited every verdict below at `5edbdf7712`, took owner rulings O1–O14, put
+re-audited every verdict below at `5edbdf7712`, took owner rulings O1–O15, put
 the owner-approved amendment into METHODOLOGY.md as A0 (`121394c92a`) with the
 follow-up A1 (`cb4c8deeb9`), and changed the engine where the spec won. Each
 verdict 021 applied carries a dated note naming its commit. The text around the
