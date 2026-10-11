@@ -640,7 +640,15 @@ handoff, For later features), which still hold:
 
 ## Merge
 
-Recorded by Task M.
+`git merge-tree --write-tree main 021-methodology-reconciliation` gives tree `dbdaa0b26c`
+with no conflicts. That equals the branch tree at `66ef5c3996`, because `main` has not
+moved from `5edbdf7712`, the commit 021 was cut from and also the merge-base. On that tree
+the full suite reads 97 files / 3349 tests, `tsc -b` and lint are clean, and the ledger
+SHA-256 is still
+`5f0935202e54521e555d3d8feace4172d955a292ed8bce2a9c13e21a7d478341`. Task S's two smoke
+passes ran on the last code change (`0544ef1877`). Everything after it is docs.
+
+Merge with `merge-with-costs` (never squash).
 
 ## Resume prompt (after the merge)
 
