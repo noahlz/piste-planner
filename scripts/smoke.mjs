@@ -2003,6 +2003,7 @@ await shot('016-check1-hard-pair')
 // pinned split (METHODOLOGY §Veteran Age-Group Co-Day Rule). The board's hand-placement
 // check must show one `vet-co-day-split` Warning for that gender and weapon, naming the
 // moved band, with no "Dismiss finding" control (check 1's and 017 T7's stale-row pattern).
+// The `coDays` map built here also feeds the 021 T6a stagger check right after it.
 await choosePreset('NAC Vet/Div1/Junior')
 await pressSuggest('021 T6c NAC Vet/Div1/Junior')
 await page.getByRole('button', { name: 'Auto-assign', exact: true }).click()
@@ -2020,6 +2021,45 @@ for (const id of await eventIds()) {
   const key = `${m[1]}-${m[2]}`
   coDays.set(key, [...(coDays.get(key) ?? []), { id, band: Number(m[3]), day: await poolDayOf(id) }])
 }
+// ── 021 T6a: the Vet stagger binds (owner ruling O1) ──
+// METHODOLOGY §Veteran Age-Group Co-Day Rule: age-banded Vet bands of one gender and
+// weapon that share a day start oldest first, each younger band's pools no earlier than
+// the next-older present band's pool start + VET_STAGGER_MINS (60, `constants.ts`). Read
+// on the board just auto-assigned, before the split move below pins anything. The anchor
+// is the band's POOLS block, the same one `poolDayOf` reads for the day, so the check
+// relies on unflighted Vet bands. A band absent from a day is skipped, and so is a band
+// whose POOLS block is unseated (O8 lapses the wait over a predecessor that never
+// places), so each band waits on the next-older band that is present and placed there.
+const VET_STAGGER_MINS = 60
+const vetPool = async (id) => {
+  const blk = page.locator(`[data-event-block="${id}:POOLS"]`).first()
+  const start = await blk.getAttribute('data-start')
+  if (start === null) throw new Error(`021 T6a: ${id} has no POOLS block with a data-start`)
+  return { start: Number(start), unseated: (await blk.getAttribute('data-unseated')) === 'true' }
+}
+let staggerPairs = 0
+for (const [key, bands] of coDays) {
+  const byDay = new Map()
+  for (const b of bands) {
+    const pool = await vetPool(b.id)
+    if (pool.unseated) continue
+    byDay.set(b.day, [...(byDay.get(b.day) ?? []), { ...b, start: pool.start }])
+  }
+  for (const [day, sameDay] of byDay) {
+    const oldestFirst = [...sameDay].sort((a, b) => b.band - a.band)
+    for (let i = 1; i < oldestFirst.length; i++) {
+      const older = oldestFirst[i - 1]
+      const younger = oldestFirst[i]
+      staggerPairs++
+      if (!(younger.start >= older.start + VET_STAGGER_MINS)) {
+        throw new Error(`021 T6a: ${younger.id} pools start at ${formatMinutes(younger.start)} (${younger.start} min) on day ${day + 1}, less than ${VET_STAGGER_MINS} min after ${older.id} at ${formatMinutes(older.start)} (${older.start} min), the stagger does not bind for ${key}`)
+      }
+    }
+  }
+}
+if (staggerPairs === 0) throw new Error('021 T6a: no gender and weapon has two age-banded Vet bands sharing a day, so the stagger check has nothing to read')
+log('021 T6a: Vet stagger holds across', staggerPairs, 'same-day band pairs (each younger band starts >=', VET_STAGGER_MINS, 'min after the next-older band)')
+
 const coDay = [...coDays.values()].find((bands) => bands.length >= 2 && new Set(bands.map((b) => b.day)).size === 1)
 if (!coDay) throw new Error(`021 T6c: no gender and weapon has two or more age-banded Vet bands sharing one day (${JSON.stringify([...coDays.entries()])})`)
 const splitBand = coDay.reduce((youngest, b) => (b.band < youngest.band ? b : youngest))
