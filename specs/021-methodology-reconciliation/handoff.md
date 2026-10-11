@@ -6,16 +6,17 @@ user merged the branch through A2 (`2f84c3e158`) into `main` as `46eeed2d0c` and
 it. T5b (`b7866b61db`, the O15 code change) and the two docs commits after it (`e941460c1c`
 and its fact-check correction) came after that merge, so they await a second
 `merge-with-costs`. Until then `main` holds A2's METHODOLOGY text
-while its engine still scores Y10 with Div 3. Task M re-runs the merge check after O15,
-under [Merge](#merge). Plan: [`plan.md`](./plan.md), with [`amendment.md`](./amendment.md),
+while its engine still scores Y10 with Div 3. Task M re-ran the merge check after O15,
+recorded under [Merge](#merge), and the branch now awaits the user's second
+`merge-with-costs`. Plan: [`plan.md`](./plan.md), with [`amendment.md`](./amendment.md),
 [`decisions.md`](./decisions.md) (owner rulings O1–O15 and defaults 1–14) and
 [`audit.md`](./audit.md) beside it. METHODOLOGY.md was amended three times, each time with
 the owner's approval before the commit: A0 (`121394c92a`), the follow-up A1
 (`cb4c8deeb9`) and A2 (`2f84c3e158`, O15). No other commit touches it. *O15
 (2026-10-11) dropped the Y10 with Div 3 bonus after T5 shipped it, see
 [O15 below](#o15--y10-with-div-3-dropped-2026-10-11). Read any Y10↔Div 3 line in this
-handoff as history.* The branch holds 29 commits from `5edbdf7712`, this one
-included, and three of them (T5b and the two docs commits) are not yet on `main`. Four
+handoff as history.* The branch holds 30 commits from `5edbdf7712`, this one
+included, and four of them (T5b, the two docs commits and the Task M record) are not yet on `main`. Four
 questions go to the owner, listed first below.
 
 ## Owner questions
@@ -737,9 +738,17 @@ handoff, For later features), which still hold:
 
 ## Merge
 
-To be re-recorded by Task M against `main` at `46eeed2d0c` after O15. Task M replaces this line with
-the merge-tree id, the suite, `tsc -b`, lint and ledger SHA readings, and the line to merge
-with `merge-with-costs`, never squash.
+Re-recorded by Task M after O15, against `main` at `46eeed2d0c`. That is the user's first
+merge, which took the branch through A2 (`2f84c3e158`), so `2f84c3e158` is also the
+merge-base and `main` is behind the branch by T5b, the two docs commits and this record.
+`git merge-tree --write-tree main 021-methodology-reconciliation` gives tree `57d5925688`
+with no conflicts, and that equals the branch tree at `a5b3b4cc61`, because everything
+`main` holds is already in the branch. On that tree the full suite reads 97 files / 3353
+tests, `tsc -b` and lint are clean, and the ledger SHA-256 is unchanged at
+`5f0935202e54521e555d3d8feace4172d955a292ed8bce2a9c13e21a7d478341`. The last code change
+is T5b (`b7866b61db`) and its live smoke passed twice. Everything after it is docs.
+
+Merge with `merge-with-costs` (never squash).
 
 ## Resume prompt (after the merge)
 
